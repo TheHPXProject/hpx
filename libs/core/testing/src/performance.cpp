@@ -35,6 +35,7 @@ namespace hpx::util {
         {
             detailed_ = true;
         }
+        test_name_ = test_name;
     }
 
     namespace detail {
@@ -173,6 +174,9 @@ average: {{average(elapsed)}}{{^-last}}
                     strm << std::scientific << "average: " << average / series
                          << "\n\n";
                 }
+                strm <<
+                    "<CTestMeasurementFile type=\"image/jpg\" name=\"perftests\">" <<
+                    "./" << test_name_ << ".jpg</CTestMeasurementFile>\n";
             }
             return strm;
         }

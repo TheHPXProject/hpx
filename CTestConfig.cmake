@@ -12,17 +12,38 @@
 #    ENABLE_TESTING()
 #    INCLUDE(CTest)
 #
-set(CTEST_PROJECT_NAME "HPX")
-set(CTEST_NIGHTLY_START_TIME "00:00:00 GMT")
+# set(CTEST_PROJECT_NAME "HPX")
+# set(CTEST_NIGHTLY_START_TIME "00:00:00 GMT")
+
+# if(CMAKE_VERSION VERSION_GREATER 3.14)
+#   set(CTEST_SUBMIT_URL
+#       "https://cdash.rostam.cct.lsu.edu//submit.php?project=${CTEST_PROJECT_NAME}"
+#   )
+# else()
+#   set(CTEST_DROP_METHOD "https")
+#   set(CTEST_DROP_SITE "cdash.rostam.cct.lsu.edu")
+#   set(CTEST_DROP_LOCATION "/submit.php?project=${CTEST_PROJECT_NAME}")
+# endif()
+
+# set(CTEST_DROP_SITE_CDASH TRUE)
+
+## This file should be placed in the root directory of your project.
+## Then modify the CMakeLists.txt file in the root directory of your
+## project to incorporate the testing dashboard.
+##
+## # The following are required to submit to the CDash dashboard:
+##   ENABLE_TESTING()
+##   INCLUDE(CTest)
+
+set(CTEST_PROJECT_NAME perftest_test)
+set(CTEST_NIGHTLY_START_TIME 01:00:00 UTC)
 
 if(CMAKE_VERSION VERSION_GREATER 3.14)
-  set(CTEST_SUBMIT_URL
-      "https://cdash.rostam.cct.lsu.edu//submit.php?project=${CTEST_PROJECT_NAME}"
-  )
+  set(CTEST_SUBMIT_URL https://my.cdash.org/submit.php?project=perftest_test)
 else()
   set(CTEST_DROP_METHOD "https")
-  set(CTEST_DROP_SITE "cdash.rostam.cct.lsu.edu")
-  set(CTEST_DROP_LOCATION "/submit.php?project=${CTEST_PROJECT_NAME}")
+  set(CTEST_DROP_SITE "my.cdash.org")
+  set(CTEST_DROP_LOCATION "/submit.php?project=perftest_test")
 endif()
 
 set(CTEST_DROP_SITE_CDASH TRUE)
