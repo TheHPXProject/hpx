@@ -14,12 +14,12 @@
 #include <string>
 
 namespace hpx::util {
-
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline bool detailed_;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline std::string test_name_;
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_cfg(
         hpx::program_options::options_description& cmdline);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_init(
-        hpx::program_options::variables_map const& vm);
+        hpx::program_options::variables_map const& vm, const std::string test_name);
 #if defined(HPX_HAVE_NANOBENCH)
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_report(
         std::string const& name, std::string const& exec,
