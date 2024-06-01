@@ -35,7 +35,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t repeat = vm["test_count"].as<std::size_t>();
     std::size_t size = vm["vector_size"].as<std::size_t>();
 
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "small_vector_benchmark");
 
     // int
 
