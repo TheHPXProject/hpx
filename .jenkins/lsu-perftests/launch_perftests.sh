@@ -76,19 +76,9 @@ set -ex
 #     }
 
 hpx_targets=(
-    "foreach_report_test"
-    "future_overhead_report_test"
-    "stream_report_test")
-hpx_test_options=(
-    "--hpx:ini=hpx.thread_queue.init_threads_count=100 \
-    --hpx:threads=4 --vector_size=104857 --work_delay=1 \
-    --chunk_size=0 --test_count=200 --detailed_bench"
-    "--hpx:ini=hpx.thread_queue.init_threads_count=100 \
-    --hpx:queuing=local-priority --hpx:threads=4 --test-all \
-    --repetitions=40 --futures=207270 --detailed_bench"
-    "--hpx:ini=hpx.thread_queue.init_threads_count=100 \
-    --vector_size=518176 --hpx:threads=4 --iterations=200 \
-    --warmup_iterations=20 --detailed_bench")
+    "minmax_element_performance"
+    "small_vector_benchmark"
+)
 
 # cmake -S . -GNinja -Bbuild -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_C_COMPILER=/usr/bin/clang
 cd build
@@ -98,9 +88,11 @@ for executable in "${hpx_targets[@]}"; do
     cmake --build . --target ${executable}_test -- -j2
     ./bin/${executable}_test --detailed_bench > ${executable}.json
     python3 ../tools/perftests_plot.py ./${executable}.json ./${executable}.json ${executable}
-    regex+=${executable}\|
 done
 
-regex=`echo $regex | sed 's/.$//'`
-ctest -R ${regex} -D Experimental --parallel 2
+ctest \
+    --output-on-failure \
+    -S ../.jenkins/lsu-perftests/ctest.cmake \
+    -DCTEST_SOURCE_DIRECTORY="../" \
+    -DCTEST_BINARY_DIRECTORY="./"
 

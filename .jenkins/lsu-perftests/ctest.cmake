@@ -12,8 +12,9 @@ cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
 # set(CTEST_BUILD_PARALLELISM 20)
 # set(CTEST_TEST_PARALLELISM 4)
 set(CTEST_CMAKE_GENERATOR Ninja)
-# set(CTEST_SITE "lsu(rostam)")
+set(CTEST_SITE "verve")
 set(CTEST_UPDATE_COMMAND "git")
+set(CTEST_BUILD_NAME "Linux, C++17")
 # set(CTEST_UPDATE_VERSION_ONLY "ON")
 # set(CTEST_SUBMIT_RETRY_COUNT 5)
 # set(CTEST_SUBMIT_RETRY_DELAY 60)
@@ -33,7 +34,15 @@ set(ctest_submission_result ${ctest_submission_result} "Configure: "
                             ${__configure_result} "\n"
 )
 
-ctest_build(TARGET minmax_element_performance FLAGS)
+set(benchmarks
+  minmax_element_performance
+  small_vector_benchmark
+)
+
+foreach(benchmark ${benchmarks})
+  ctest_build(TARGET ${benchmark}_test FLAGS)
+endforeach()
+
 ctest_submit(
   PARTS Build
   BUILD_ID __ctest_build_id
@@ -46,7 +55,9 @@ set(ctest_submission_result ${ctest_submission_result} "Build: "
                             ${__build_result} "\n"
 )
 
-ctest_test(INCLUDE "minmax_element_performance_test")
+string(JOIN "|" bench_regex ${benchmarks})
+
+ctest_test(INCLUDE ${bench_regex})
 ctest_submit(
   PARTS Test
   BUILD_ID __ctest_build_id
