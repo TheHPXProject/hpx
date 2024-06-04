@@ -21,6 +21,13 @@ set(CTEST_BUILD_NAME "Linux, C++17")
 
 ctest_start(Experimental TRACK "${CTEST_TRACK}")
 
+ctest_update()
+ctest_submit(
+  PARTS Update
+  BUILD_ID __ctest_build_id
+  RETURN_VALUE __update_result
+)
+
 ctest_configure()
 ctest_submit(
   PARTS Configure
@@ -39,8 +46,18 @@ set(benchmarks
   small_vector_benchmark
 )
 
+find_package(Python)
+
 foreach(benchmark ${benchmarks})
   ctest_build(TARGET ${benchmark}_test FLAGS)
+  execute_process(COMMAND 
+    sh -c
+    "${CTEST_BINARY_DIRECTORY}/bin/${benchmark}_test --detailed_bench > ${benchmark}.json"
+  )
+  execute_process(COMMAND
+    ${PYTHON_EXECUTABLE}
+    "${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py ./${benchmark}.json ./${benchmark}.json"
+  )
 endforeach()
 
 ctest_submit(
