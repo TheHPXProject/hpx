@@ -52,11 +52,11 @@ foreach(benchmark ${benchmarks})
   ctest_build(TARGET ${benchmark}_test FLAGS)
   execute_process(COMMAND 
     sh -c
-    "${CTEST_BINARY_DIRECTORY}/bin/${benchmark}_test --detailed_bench > ${benchmark}.json"
+    "${CTEST_BINARY_DIRECTORY}/bin/${benchmark}_test --detailed_bench > ${CTEST_BINARY_DIRECTORY}/${benchmark}.json"
   )
   execute_process(COMMAND
     ${PYTHON_EXECUTABLE}
-    "${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py ./${benchmark}.json ./${benchmark}.json"
+    "${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py ${CTEST_BINARY_DIRECTORY}/${benchmark}.json ${CTEST_BINARY_DIRECTORY}/${benchmark}.json"
   )
 endforeach()
 
