@@ -7,8 +7,6 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set -ex
-
 # hpx_targets=(
 #     "foreach_report_test"
 #     "future_overhead_report_test"
@@ -75,24 +73,17 @@ set -ex
 #         exit 1
 #     }
 
-hpx_targets=(
-    "minmax_element_performance"
-    "small_vector_benchmark"
-)
+set -eux
 
-# cmake -S . -GNinja -Bbuild -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -DCMAKE_C_COMPILER=/usr/bin/clang
-cd build
-regex=""
+src_dir="$(pwd)"
+build_dir="${src_dir}/build"
 
-for executable in "${hpx_targets[@]}"; do
-    cmake --build . --target ${executable}_test -- -j2
-    ./bin/${executable}_test --detailed_bench > ${executable}.json
-    python3 ../tools/perftests_plot.py ./${executable}.json ./${executable}.json ${executable}
-done
+# rm -rf "${build_dir}"
+# mkdir -p "${build_dir}"
 
 ctest \
     --output-on-failure \
-    -S ../.jenkins/lsu-perftests/ctest.cmake \
-    -DCTEST_SOURCE_DIRECTORY="../" \
-    -DCTEST_BINARY_DIRECTORY="./"
+    -S ${src_dir}/.jenkins/lsu-perftests/ctest.cmake \
+    -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
+    -DCTEST_BINARY_DIRECTORY="${build_dir}"
 
