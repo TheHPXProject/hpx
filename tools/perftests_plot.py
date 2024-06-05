@@ -23,6 +23,5 @@ else:
     bp = ax.boxplot(samples, showfliers=False)
     plt.setp(ax.set_xticklabels(test_names), fontsize=7)
     plt.ylabel("Execution time")
-    # plt.show()
     plt.savefig(sys.argv[3] + ".jpg")
     

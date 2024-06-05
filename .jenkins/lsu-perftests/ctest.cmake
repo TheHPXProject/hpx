@@ -55,8 +55,11 @@ foreach(benchmark ${benchmarks})
     "${CTEST_BINARY_DIRECTORY}/bin/${benchmark}_test --detailed_bench > ${CTEST_BINARY_DIRECTORY}/${benchmark}.json"
   )
   execute_process(COMMAND
-    ${PYTHON_EXECUTABLE}
-    "${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py ${CTEST_BINARY_DIRECTORY}/${benchmark}.json ${CTEST_BINARY_DIRECTORY}/${benchmark}.json"
+    ${Python_EXECUTABLE}
+    ${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py 
+    ${CTEST_BINARY_DIRECTORY}/${benchmark}.json 
+    ${CTEST_BINARY_DIRECTORY}/${benchmark}.json 
+    ${CTEST_BINARY_DIRECTORY}/${benchmark}
   )
 endforeach()
 
@@ -80,6 +83,7 @@ ctest_submit(
   BUILD_ID __ctest_build_id
   RETURN_VALUE __test_result
 )
+
 if(NOT CTEST_BUILD_ID AND __ctest_build_id)
   set(CTEST_BUILD_ID ${__ctest_build_id})
 endif()
