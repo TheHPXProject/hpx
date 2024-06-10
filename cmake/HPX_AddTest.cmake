@@ -317,6 +317,19 @@ function(add_hpx_performance_test subcategory name)
   add_test_and_deps_test(
     "performance" "${subcategory}" ${name} ${ARGN} RUN_SERIAL
   )
+  find_package(Python REQUIRED)
+  add_custom_target(
+    ${name}_cdash
+    COMMAND
+    sh -c "${CMAKE_BINARY_DIR}/bin/${name}_test --detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
+    COMMAND
+    ${Python_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py 
+    ${CMAKE_BINARY_DIR}/${name}.json 
+    ${CMAKE_BINARY_DIR}/${name}.json 
+    ${CMAKE_BINARY_DIR}/${name}
+  )
+  add_dependencies(${name}_cdash ${name}_test)
 endfunction(add_hpx_performance_test)
 
 function(add_hpx_example_test subcategory name)

@@ -46,21 +46,8 @@ set(benchmarks
   small_vector_benchmark
 )
 
-find_package(Python)
-
 foreach(benchmark ${benchmarks})
-  ctest_build(TARGET ${benchmark}_test FLAGS)
-  execute_process(COMMAND 
-    sh -c
-    "${CTEST_BINARY_DIRECTORY}/bin/${benchmark}_test --detailed_bench > ${CTEST_BINARY_DIRECTORY}/${benchmark}.json"
-  )
-  execute_process(COMMAND
-    ${Python_EXECUTABLE}
-    ${CTEST_SOURCE_DIRECTORY}/tools/perftests_plot.py 
-    ${CTEST_BINARY_DIRECTORY}/${benchmark}.json 
-    ${CTEST_BINARY_DIRECTORY}/${benchmark}.json 
-    ${CTEST_BINARY_DIRECTORY}/${benchmark}
-  )
+  ctest_build(TARGET ${benchmark}_cdash FLAGS)
 endforeach()
 
 ctest_submit(
