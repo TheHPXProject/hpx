@@ -28,6 +28,10 @@ ctest_submit(
   RETURN_VALUE __update_result
 )
 
+set(CTEST_CONFIGURE_COMMAND
+    "${CTEST_CONFIGURE_COMMAND} -DHPX_WITH_NANOBENCH=ON"
+)
+
 ctest_configure()
 ctest_submit(
   PARTS Configure
@@ -47,7 +51,7 @@ set(benchmarks
 )
 
 foreach(benchmark ${benchmarks})
-  ctest_build(TARGET ${benchmark}_cdash FLAGS)
+  ctest_build(TARGET ${benchmark}_cdash_results FLAGS)
 endforeach()
 
 ctest_submit(
