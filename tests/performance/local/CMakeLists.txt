@@ -28,6 +28,10 @@ set(benchmarks
     shared_mutex_overhead
 )
 
+set(perftest_reports
+    future_overhead_report  
+)
+
 set(timed_task_spawn_SOURCES activate_counters.cpp)
 set(timed_task_spawn_HEADERS activate_counters.hpp)
 
@@ -129,6 +133,9 @@ set(partitioned_vector_foreach_FLAGS DEPENDENCIES iostreams_component
 
 set(future_overhead_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_overhead_report_PARAMETERS THREADS_PER_LOCALITY 4)
+set(future_overhead_report_perftest_PARAMETERS
+    ${future_overhead_PARAMETERS} --hpx:ini=hpx.thread_queue.init_threads_count=100 --hpx:queuing=local-priority --test-all --repetitions=40 --futures=207270
+)
 set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
 
 # These tests do not run on hpx threads, so we don't want to pass hpx params
@@ -177,6 +184,16 @@ foreach(benchmark ${benchmarks})
     add_hpx_performance_test("local" ${benchmark} ${${benchmark}_PARAMETERS})
   endif()
 
+  if (${benchmark} IN_LIST perftest_reports)
+    add_hpx_executable(
+      ${benchmark}_perftest_test INTERNAL_FLAGS
+      SOURCES ${sources} ${${benchmark}_FLAGS} ${${benchmark}_HEADERS}
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Benchmarks/Local"
+    )
+    add_hpx_performance_report_test("local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
+  endif()
 endforeach()
 
 if(HPX_WITH_LIBCDS)

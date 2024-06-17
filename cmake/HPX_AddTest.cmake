@@ -317,11 +317,21 @@ function(add_hpx_performance_test subcategory name)
   add_test_and_deps_test(
     "performance" "${subcategory}" ${name} ${ARGN} RUN_SERIAL
   )
+endfunction(add_hpx_performance_test)
+
+function(add_hpx_performance_report_test subcategory name)
+  add_test_and_deps_test(
+    "performance" "${subcategory}" ${name} ${ARGN} RUN_SERIAL
+  )
   find_package(Python REQUIRED)
+  hpx_info("Args before: ${ARGN}")
+  string(REPLACE "THREADS_PER_LOCALITY" "--hpx:threads=" ARGN ${ARGN})
+  string(REGEX REPLACE "--*" " --" ARGN ${ARGN})
+  hpx_info("Args: ${ARGN}")
   add_custom_target(
     ${name}_cdash
     COMMAND
-    sh -c "${CMAKE_BINARY_DIR}/bin/${name}_test --detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
+    sh -c "${CMAKE_BINARY_DIR}/bin/${name}_test ${ARGN} --detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
     COMMAND
     ${Python_EXECUTABLE}
     ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py 
@@ -330,7 +340,7 @@ function(add_hpx_performance_test subcategory name)
     ${CMAKE_BINARY_DIR}/${name}
   )
   add_dependencies(${name}_cdash ${name}_test)
-endfunction(add_hpx_performance_test)
+endfunction(add_hpx_performance_report_test)
 
 function(add_hpx_example_test subcategory name)
   add_test_and_deps_test("examples" "${subcategory}" ${name} ${ARGN})
