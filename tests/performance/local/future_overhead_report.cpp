@@ -172,7 +172,7 @@ int hpx_main(variables_map& vm)
 
         std::uint64_t const count = vm["futures"].as<std::uint64_t>();
 
-        hpx::util::perftests_init(vm);
+        hpx::util::perftests_init(vm, "future_overhead_report");
 
         if (HPX_UNLIKELY(0 == count))
             throw std::logic_error("error: count of 0 futures specified\n");
@@ -210,6 +210,7 @@ int main(int argc, char* argv[])
     // clang-format on
 
     // Initialize and run HPX.
+    hpx::util::perftests_cfg(cmdline);
     hpx::util::perftests_cfg(cmdline);
     hpx::local::init_params init_args;
     init_args.desc_cmdline = cmdline;
