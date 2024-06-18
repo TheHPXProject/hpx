@@ -6,6 +6,11 @@
 
 set(tests small_vector_benchmark)
 
+set(small_vector_benchmark_perftest_PARAMETERS
+  EXECUTABLE small_vector_benchmark
+  PSEUDO_DEPS_NAME small_vector_benchmark
+)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
@@ -23,5 +28,9 @@ foreach(test ${tests})
 
   add_hpx_performance_test(
     "modules.datastructures" ${test} ${${test}_PARAMETERS}
+  )
+
+  add_hpx_performance_report_test(
+    "modules.datastructures" ${test}_perftest ${${test}_perftest_PARAMETERS}
   )
 endforeach()
