@@ -213,6 +213,8 @@ average: {{average(elapsed)}}{{^-last}}
     void perftests_print_times(char const* templ, std::ostream& strm)
     {
         detail::bench().render(templ, strm);
+        strm << "<CTestMeasurementFile type=\"image/jpg\" name=\"perftests\">" <<
+                    "./" << test_name_ << ".jpg</CTestMeasurementFile>\n";
     }
 
     // Overload that uses a default nanobench template
