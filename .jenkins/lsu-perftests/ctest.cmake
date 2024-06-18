@@ -21,12 +21,12 @@ set(CTEST_BUILD_NAME "Linux, C++17")
 
 ctest_start(Experimental TRACK "${CTEST_TRACK}")
 
-ctest_update()
-ctest_submit(
-  PARTS Update
-  BUILD_ID __ctest_build_id
-  RETURN_VALUE __update_result
-)
+# ctest_update()
+# ctest_submit(
+#   PARTS Update
+#   BUILD_ID __ctest_build_id
+#   RETURN_VALUE __update_result
+# )
 
 set(CTEST_CONFIGURE_COMMAND
     "${CTEST_CONFIGURE_COMMAND} -DHPX_WITH_NANOBENCH=ON"
@@ -48,6 +48,7 @@ set(ctest_submission_result ${ctest_submission_result} "Configure: "
 set(benchmarks
   minmax_element_performance
   small_vector_benchmark
+  future_overhead_report
 )
 
 foreach(benchmark ${benchmarks})
@@ -66,7 +67,13 @@ set(ctest_submission_result ${ctest_submission_result} "Build: "
                             ${__build_result} "\n"
 )
 
-string(JOIN "|" bench_regex ${benchmarks})
+set(bench_regex_list "")
+
+foreach(benchmark ${benchmarks})
+  set(bench_regex_list ${bench_regex_list} ${benchmark}_perftest)
+endforeach()
+
+string(JOIN "|" bench_regex ${bench_regex_list})
 
 ctest_test(INCLUDE ${bench_regex})
 ctest_submit(

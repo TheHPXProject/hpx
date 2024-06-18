@@ -78,10 +78,10 @@ set -eux
 src_dir="$(pwd)"
 build_dir="${src_dir}/build"
 
-rm -rf "${build_dir}"
-mkdir -p "${build_dir}"
+# rm -rf "${build_dir}"
+# mkdir -p "${build_dir}"
 
-ctest \
+ctest -VV\
     --output-on-failure \
     -S ${src_dir}/.jenkins/lsu-perftests/ctest.cmake \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
