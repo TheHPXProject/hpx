@@ -21,12 +21,12 @@ set(CTEST_BUILD_NAME "Linux, C++17")
 
 ctest_start(Experimental TRACK "${CTEST_TRACK}")
 
-# ctest_update()
-# ctest_submit(
-#   PARTS Update
-#   BUILD_ID __ctest_build_id
-#   RETURN_VALUE __update_result
-# )
+ctest_update()
+ctest_submit(
+  PARTS Update
+  BUILD_ID __ctest_build_id
+  RETURN_VALUE __update_result
+)
 
 set(CTEST_CONFIGURE_COMMAND
     "${CTEST_CONFIGURE_COMMAND} -DHPX_WITH_NANOBENCH=ON"
