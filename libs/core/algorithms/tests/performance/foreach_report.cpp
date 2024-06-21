@@ -41,7 +41,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     disable_stealing = vm.count("disable_stealing");
     fast_idle_mode = vm.count("fast_idle_mode");
 
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "foreach_report");
 
     // verify that input is within domain of program
     if (test_count == 0 || test_count < 0)
