@@ -446,7 +446,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t iterations = vm["iterations"].as<std::size_t>();
     std::size_t warmup_iterations = vm["warmup_iterations"].as<std::size_t>();
     std::size_t chunk_size = vm["chunk_size"].as<std::size_t>();
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "stream_report");
     std::size_t executor;
     header = vm.count("header") > 0;
 
