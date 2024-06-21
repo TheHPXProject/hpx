@@ -211,7 +211,6 @@ int main(int argc, char* argv[])
 
     // Initialize and run HPX.
     hpx::util::perftests_cfg(cmdline);
-    hpx::util::perftests_cfg(cmdline);
     hpx::local::init_params init_args;
     init_args.desc_cmdline = cmdline;
 
