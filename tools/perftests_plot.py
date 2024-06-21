@@ -1,5 +1,4 @@
 import sys
-import subprocess
 import json
 import matplotlib.pyplot as plt
 
@@ -14,9 +13,14 @@ else:
     test_names = []
     samples = []
 
-    for test in json_obj["outputs"]:
-        test_names.append(test["name"] + ",\n" + test["executor"])
-        samples.append(test["series"])
+    for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
+        if test1["name"] == test2["name"]:
+            test_names.append(test1["name"] + " (current),\n" + test1["executor"])
+            samples.append(test1["series"])
+            test_names.append(test2["name"] + ",\n" + test2["executor"])
+            samples.append(test2["series"])
+        else:
+            exit(1)
 
     fig = plt.figure(figsize=(20, 6))
     ax = fig.add_subplot()
