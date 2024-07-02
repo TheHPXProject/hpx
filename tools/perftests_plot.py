@@ -22,10 +22,11 @@ else:
         else:
             exit(1)
 
-    fig = plt.figure(figsize=(20, 6))
+    fig = plt.figure(figsize=(25, 16))
     ax = fig.add_subplot()
     bp = ax.boxplot(samples, showfliers=False)
-    plt.setp(ax.set_xticklabels(test_names), fontsize=7)
+    plt.setp(ax.set_xticklabels(test_names), fontsize=7, rotation=30, horizontalalignment='right')
     plt.ylabel("Execution time")
-    plt.savefig(sys.argv[3] + ".jpg")
+    plt.grid(True)
+    plt.savefig(sys.argv[3] + ".png")
     

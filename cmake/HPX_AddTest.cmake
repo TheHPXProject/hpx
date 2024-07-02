@@ -344,7 +344,7 @@ function(add_hpx_performance_report_test subcategory name)
     ${Python_EXECUTABLE}
     ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py 
     ${CMAKE_BINARY_DIR}/${name}.json 
-    ${CMAKE_BINARY_DIR}/${name}.json 
+    ${CMAKE_SOURCE_DIR}/tools/perftests_ci/perftest/references/lsu_default/${name}.json 
     ${CMAKE_BINARY_DIR}/${name}
   )
   add_dependencies(${name}_cdash_results ${name}_test)

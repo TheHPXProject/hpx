@@ -30,6 +30,7 @@ set(benchmarks
 
 set(perftest_reports
     future_overhead_report  
+    stream_report
 )
 
 set(timed_task_spawn_SOURCES activate_counters.cpp)
@@ -142,6 +143,14 @@ set(future_overhead_report_perftest_PARAMETERS
 )
 set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
 
+set(stream_report_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE stream_report
+    PSEUDO_DEPS_NAME stream_report 
+    --hpx:ini=hpx.thread_queue.init_threads_count=100 
+    --vector_size=518176 --iterations=200 --warmup_iterations=20
+)
+
 # These tests do not run on hpx threads, so we don't want to pass hpx params
 # into them
 set(delay_baseline_PARAMETERS NO_HPX_MAIN)
@@ -187,13 +196,6 @@ foreach(benchmark ${benchmarks})
   if(NOT "${${benchmark}_PARAMETERS}" MATCHES NO_HPX_MAIN)
     add_hpx_performance_test("local" ${benchmark} ${${benchmark}_PARAMETERS})
     if (${benchmark} IN_LIST perftest_reports)
-      # add_hpx_executable(
-      #   ${benchmark}_perftest_test INTERNAL_FLAGS
-      #   SOURCES ${sources} ${${benchmark}_FLAGS} ${${benchmark}_HEADERS}
-      #   EXCLUDE_FROM_ALL
-      #   HPX_PREFIX ${HPX_BUILD_PREFIX}
-      #   FOLDER "Benchmarks/Local"
-      # )
       add_hpx_performance_report_test("local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
     endif()
   endif()

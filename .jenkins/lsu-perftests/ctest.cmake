@@ -56,6 +56,10 @@ set(benchmarks
   minmax_element_performance
   small_vector_benchmark
   future_overhead_report
+  stream_report
+  foreach_report
+  transform_reduce_scaling
+  benchmark_is_heap_until
 )
 
 foreach(benchmark ${benchmarks})
