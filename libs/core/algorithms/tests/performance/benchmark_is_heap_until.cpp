@@ -150,22 +150,24 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t vector_size = vm["vector_size"].as<std::size_t>();
     std::size_t break_pos = vm["break_pos"].as<std::size_t>();
     int test_count = vm["test_count"].as<int>();
+    hpx::util::perftests_init(vm, "benchmark_is_heap_until");
 
     std::size_t const os_threads = hpx::get_os_thread_count();
+    HPX_UNUSED(os_threads);
 
     if (break_pos > vector_size)
         break_pos = vector_size;
 
-    std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    std::cout << "seed        : " << seed << std::endl;
-    std::cout << "vector_size : " << vector_size << std::endl;
-    std::cout << "break_pos   : " << break_pos << std::endl;
-    std::cout << "test_count  : " << test_count << std::endl;
-    std::cout << "os threads  : " << os_threads << std::endl;
-    std::cout << "----------------------------------------------\n"
-              << std::endl;
+    // std::cout << "-------------- Benchmark Config --------------" << std::endl;
+    // std::cout << "seed        : " << seed << std::endl;
+    // std::cout << "vector_size : " << vector_size << std::endl;
+    // std::cout << "break_pos   : " << break_pos << std::endl;
+    // std::cout << "test_count  : " << test_count << std::endl;
+    // std::cout << "os threads  : " << os_threads << std::endl;
+    // std::cout << "----------------------------------------------\n"
+    //           << std::endl;
 
-    std::cout << "* Preparing Benchmark..." << std::endl;
+    // std::cout << "* Preparing Benchmark..." << std::endl;
     std::vector<int> v(vector_size);
 
     // initialize data
@@ -177,22 +179,34 @@ int hpx_main(hpx::program_options::variables_map& vm)
         v[break_pos] =
             static_cast<int>((std::numeric_limits<std::size_t>::max)());
 
-    std::cout << "* Running Benchmark..." << std::endl;
-    double time_std = run_is_heap_until_benchmark_std(test_count, v);
-    double time_seq = run_is_heap_until_benchmark_seq(test_count, v);
-    double time_par = run_is_heap_until_benchmark_par(test_count, v);
-    double time_par_unseq =
-        run_is_heap_until_benchmark_par_unseq(test_count, v);
+    // std::cout << "* Running Benchmark..." << std::endl;
+    // double time_std = run_is_heap_until_benchmark_std(test_count, v);
+    // double time_seq = run_is_heap_until_benchmark_seq(test_count, v);
+    // double time_par = run_is_heap_until_benchmark_par(test_count, v);
+    // double time_par_unseq =
+    //     run_is_heap_until_benchmark_par_unseq(test_count, v);
 
-    std::cout << "\n-------------- Benchmark Result --------------"
-              << std::endl;
-    auto fmt = "is_heap_until ({1}) : {2}(sec)";
-    hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
-        << std::endl;
-    std::cout << "----------------------------------------------" << std::endl;
+    hpx::util::perftests_report("std::heap_until", "seq", test_count, [&]
+    {
+        decltype(std::begin(v)) result = std::is_heap_until(std::begin(v), std::end(v));
+    });
+
+    hpx::util::perftests_report("hpx::heap_until", "seq", test_count, [&]
+    {
+        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::seq, std::begin(v), std::end(v));
+    });
+
+    hpx::util::perftests_report("hpx::heap_until", "par", test_count, [&]
+    {
+        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::par, std::begin(v), std::end(v));
+    });
+
+    hpx::util::perftests_report("hpx::heap_until", "par_unseq", test_count, [&]
+    {
+        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::par_unseq, std::begin(v), std::end(v));
+    });
+
+    hpx::util::perftests_print_times();
 
     return hpx::local::finalize();
 }
@@ -221,6 +235,7 @@ int main(int argc, char* argv[])
     hpx::local::init_params init_args;
     init_args.desc_cmdline = desc_commandline;
     init_args.cfg = cfg;
+    hpx::util::perftests_cfg(desc_commandline);
 
     HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv, init_args), 0,
         "HPX main exited with non-zero status");

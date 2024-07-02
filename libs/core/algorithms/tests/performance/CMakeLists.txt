@@ -30,6 +30,32 @@ set(benchmarks
     transform_reduce_scaling
 )
 
+set(perftest_reports
+    foreach_report
+    transform_reduce_scaling
+    benchmark_is_heap_until
+)
+
+set(foreach_report_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE foreach_report
+    PSEUDO_DEPS_NAME foreach_report 
+    --hpx:ini=hpx.thread_queue.init_threads_count=100 --vector_size=104857
+    --work_delay=1 --chunk_size=0 --test_count=200
+)
+
+set(transform_reduce_scaling_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE transform_reduce_scaling
+    PSEUDO_DEPS_NAME transform_reduce_scaling
+)
+
+set(benchmark_is_heap_until_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE benchmark_is_heap_until
+    PSEUDO_DEPS_NAME benchmark_is_heap_until
+)
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
@@ -46,4 +72,8 @@ foreach(benchmark ${benchmarks})
   add_hpx_performance_test(
     "modules.algorithms" ${benchmark} ${${benchmark}_PARAMETERS}
   )
+
+  if (${benchmark} IN_LIST perftest_reports)
+      add_hpx_performance_report_test("modules.algorithms" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
+    endif()
 endforeach()
