@@ -175,8 +175,8 @@ average: {{average(elapsed)}}{{^-last}}
                          << "\n\n";
                 }
                 strm <<
-                    "<CTestMeasurementFile type=\"image/jpg\" name=\"perftests\">" <<
-                    "./" << test_name_ << ".jpg</CTestMeasurementFile>\n";
+                    "<CTestMeasurementFile type=\"image/png\" name=\"perftests\" >" <<
+                    "./" << test_name_ << ".png</CTestMeasurementFile>\n";
             }
             return strm;
         }
@@ -214,8 +214,8 @@ average: {{average(elapsed)}}{{^-last}}
     {
         detail::bench().render(templ, strm);
         if (!detailed_)
-            strm << "<CTestMeasurementFile type=\"image/jpg\" name=\"perftests\">" <<
-                    "./" << test_name_ << ".jpg</CTestMeasurementFile>\n";
+            strm << "<CTestMeasurementFile type=\"image/png\" name=\"perftests\">" <<
+                    "./" << test_name_ << ".png</CTestMeasurementFile>\n";
     }
 
     // Overload that uses a default nanobench template
