@@ -278,100 +278,48 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     std::cout << "* Running Benchmark... (" << type << ")" << std::endl;
     std::cout << "--- run_merge_benchmark_std ---" << std::endl;
 
-    double const time_std =
-        run_merge_benchmark_std(test_count, first1, last1, first2, last2, dest);
+    // std::cout << "* Running Benchmark..." << std::endl;
+    // std::cout << "--- run_merge_benchmark_std ---" << std::endl;
+    // double time_std =
+    //     run_merge_benchmark_std(test_count, first1, last1, first2, last2, dest);
 
-    hpx::this_thread::sleep_for(std::chrono::seconds(1));
+    // hpx::this_thread::sleep_for(std::chrono::seconds(1));
+    // std::cout << "--- run_merge_benchmark_seq ---" << std::endl;
+    // double const time_seq = run_merge_benchmark_hpx(
+    //    test_count, seq, first1, last1, first2, last2, dest);
 
-    std::cout << "--- run_merge_benchmark_seq ---" << std::endl;
+    // std::cout << "--- run_merge_benchmark_par ---" << std::endl;
+    // double time_par = run_merge_benchmark_hpx(
+    //     test_count, par, first1, last1, first2, last2, dest);
 
-    double const time_seq = run_merge_benchmark_hpx(
-        test_count, seq, first1, last1, first2, last2, dest);
+    // std::cout << "--- run_merge_benchmark_par_unseq ---" << std::endl;
+    // double time_par_unseq = run_merge_benchmark_hpx(
+    //     test_count, par_unseq, first1, last1, first2, last2, dest);
 
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // std::cout << "\n-------------- Benchmark Result --------------"
+    //           << std::endl;
+    // auto const fmt = "merge ({1}) : {2}(sec)";
+    // hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "par_stackless", time_par_stackless)
+    //     << std::endl;
+    // hpx::util::format_to(
+    //     std::cout, fmt, "par_stackless_fast_idle", time_par_stackless_fast_idle)
 
-    std::cout << "--- run_merge_benchmark_par ---" << std::endl;
+    hpx::util::perftests_report("hpx::merge", "seq", test_count, [&] {
+        hpx::merge(seq, first1, last1, first2, last2, dest);
+    });
 
-    HPX_ITT_RESUME();
+    hpx::util::perftests_report("hpx::merge", "par", test_count, [&] {
+        hpx::merge(par, first1, last1, first2, last2, dest);
+    });
 
-    //hpx::threads::thread_schedule_hint hint(
-    //    hpx::threads::thread_sharing_hint::do_not_share_function);
-    //auto policy = hpx::execution::experimental::with_hint(par, hint);
+    hpx::util::perftests_report("hpx::merge", "par_unseq", test_count, [&] {
+        hpx::merge(par_unseq, first1, last1, first2, last2, dest);
+    });
 
-    auto const policy = hpx::execution::experimental::with_priority(
-        par, hpx::threads::thread_priority::initially_bound);
-
-    compute_chunk_size ccs(num_chunks);
-    double const time_par = run_merge_benchmark_hpx(
-        test_count, policy.with(ccs), first1, last1, first2, last2, dest);
-
-    HPX_ITT_PAUSE();
-
-    std::cout << "--- run_merge_benchmark_par_stackless ---" << std::endl;
-
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    HPX_ITT_RESUME();
-
-    double time_par_stackless = 0;
-    {
-        auto const stackless_policy =
-            hpx::execution::experimental::with_stacksize(
-                policy, hpx::threads::thread_stacksize::nostack);
-        time_par_stackless = run_merge_benchmark_hpx(test_count,
-            stackless_policy.with(ccs), first1, last1, first2, last2, dest);
-    }
-
-    HPX_ITT_PAUSE();
-
-    std::cout << "--- run_merge_benchmark_par_stackless_fast_idle ---"
-              << std::endl;
-
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    HPX_ITT_RESUME();
-
-    double time_par_stackless_fast_idle = 0;
-    {
-        enable_fast_idle_mode efim;
-        auto const stackless_policy =
-            hpx::execution::experimental::with_stacksize(
-                policy, hpx::threads::thread_stacksize::nostack);
-        time_par_stackless_fast_idle = run_merge_benchmark_hpx(test_count,
-            stackless_policy.with(ccs, efim), first1, last1, first2, last2,
-            dest);
-    }
-
-    HPX_ITT_PAUSE();
-
-    std::cout << "--- run_merge_benchmark_par_fork_join ---" << std::endl;
-    double time_par_fork_join = 0;
-    {
-        hpx::execution::experimental::fork_join_executor exec;
-        time_par_fork_join = run_merge_benchmark_hpx(test_count,
-            policy.on(exec).with(ccs), first1, last1, first2, last2, dest);
-    }
-
-    std::cout << "--- run_merge_benchmark_par_unseq ---" << std::endl;
-    double const time_par_unseq = run_merge_benchmark_hpx(
-        test_count, par_unseq, first1, last1, first2, last2, dest);
-
-    std::cout << "\n-------------- Benchmark Result --------------"
-              << std::endl;
-    auto const fmt = "merge ({1}) : {2}(sec)";
-    hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_stackless", time_par_stackless)
-        << std::endl;
-    hpx::util::format_to(
-        std::cout, fmt, "par_stackless_fast_idle", time_par_stackless_fast_idle)
-        << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_fork_join", time_par_fork_join)
-        << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
-        << std::endl;
-    std::cout << "----------------------------------------------" << std::endl;
+    hpx::util::perftests_print_times();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -390,42 +338,51 @@ int hpx_main(hpx::program_options::variables_map& vm)
     int const num_chunks = vm["num_chunks"].as<int>();
 
     std::size_t const os_threads = hpx::get_os_thread_count();
+    HPX_UNUSED(os_threads);
 
     std::size_t const vector_size1 = static_cast<std::size_t>(
         static_cast<double>(vector_size) * vector_ratio);
     std::size_t const vector_size2 = vector_size - vector_size1;
 
-    std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    std::cout << "seed         : " << seed << std::endl;
-    std::cout << "entropy      : " << entropy << std::endl;
-    std::cout << "vector_size1 : " << vector_size1 << std::endl;
-    std::cout << "vector_size2 : " << vector_size2 << std::endl;
-    std::cout << "test_count   : " << test_count << std::endl;
-    std::cout << "os threads   : " << os_threads << std::endl;
-    std::cout << "num chunks   : " << num_chunks * os_threads << std::endl;
-    std::cout << "----------------------------------------------\n"
-              << std::endl;
+    // std::cout << "-------------- Benchmark Config --------------" << std::endl;
+    // std::cout << "seed         : " << seed << std::endl;
+    // std::cout << "vector_size1 : " << vector_size1 << std::endl;
+    // std::cout << "vector_size2 : " << vector_size2 << std::endl;
+    // std::cout << "random_range : " << random_range << std::endl;
+    // std::cout << "iterator_tag : " << iterator_tag_str << std::endl;
+    // std::cout << "test_count   : " << test_count << std::endl;
+    // std::cout << "os threads   : " << os_threads << std::endl;
+    // std::cout << "----------------------------------------------\n"
+    //           << std::endl;
 
-    {
-        using allocator_type = std::allocator<int>;
-        allocator_type alloc;
+    hpx::util::perftests_init(vm, "benchmark_merge");
 
-        run_benchmark(vector_size1, vector_size2, test_count,
-            std::random_access_iterator_tag(), alloc, "std::vector", entropy,
-            num_chunks);
-    }
+    if (iterator_tag_str == "random")
+        run_benchmark(vector_size1, vector_size2, test_count, random_range,
+            std::random_access_iterator_tag());
+    //else if (iterator_tag_str == "bidirectional")
+    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
+    //        std::bidirectional_iterator_tag());
+    //else // forward
+    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
+    //        std::forward_iterator_tag());
 
-    {
-        auto policy = hpx::execution::par;
-        using allocator_type =
-            hpx::compute::host::detail::policy_allocator<data_type,
-                decltype(policy)>;
-        allocator_type alloc(policy);
+    //     run_benchmark(vector_size1, vector_size2, test_count,
+    //         std::random_access_iterator_tag(), alloc, "std::vector", entropy,
+    //         num_chunks);
+    // }
 
-        run_benchmark(vector_size1, vector_size2, test_count,
-            std::random_access_iterator_tag(), alloc, "hpx::compute::vector",
-            entropy, num_chunks);
-    }
+    // {
+    //     auto policy = hpx::execution::par;
+    //     using allocator_type =
+    //         hpx::compute::host::detail::policy_allocator<data_type,
+    //             decltype(policy)>;
+    //     allocator_type alloc(policy);
+    // 
+    //     run_benchmark(vector_size1, vector_size2, test_count,
+    //         std::random_access_iterator_tag(), alloc, "hpx::compute::vector",
+    //         entropy, num_chunks);
+    // }
 
     return hpx::local::finalize();
 }
@@ -465,6 +422,8 @@ int main(int const argc, char* argv[])
 
     // initialize program
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+
+    hpx::util::perftests_cfg(desc_commandline);
 
     // Initialize and run HPX
     hpx::local::init_params init_args;
