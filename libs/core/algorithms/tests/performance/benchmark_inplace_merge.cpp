@@ -91,8 +91,6 @@ template <typename IteratorTag>
 void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
     int test_count, std::size_t random_range, IteratorTag)
 {
-    std::cout << "* Preparing Benchmark..." << std::endl;
-
     typedef test_container<IteratorTag> test_container;
     typedef typename test_container::type container;
 
@@ -115,32 +113,32 @@ void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
     auto org_first = std::begin(org_c);
     auto org_last = std::end(org_c);
 
-    std::cout << "* Running Benchmark..." << std::endl;
-    std::cout << "--- run_inplace_merge_benchmark_std ---" << std::endl;
-    double time_std = run_inplace_merge_benchmark_std(
-        test_count, org_first, org_last, first, middle, last);
+    hpx::util::perftests_report("hpx::inplace_merge", "seq", test_count, [&] {
+        hpx::copy(par, org_first, org_last, first);
+        hpx::inplace_merge(seq, first, middle, last);
+    });
 
-    std::cout << "--- run_inplace_merge_benchmark_seq ---" << std::endl;
-    double time_seq = run_inplace_merge_benchmark_hpx(
-        test_count, seq, org_first, org_last, first, middle, last);
+    hpx::util::perftests_report("hpx::inplace_merge", "par", test_count, [&] {
+        hpx::copy(par, org_first, org_last, first);
+        hpx::inplace_merge(par, first, middle, last);
+    });
 
-    std::cout << "--- run_inplace_merge_benchmark_par ---" << std::endl;
-    double time_par = run_inplace_merge_benchmark_hpx(
-        test_count, par, org_first, org_last, first, middle, last);
+    hpx::util::perftests_report("hpx::inplace_merge", "seq", test_count, [&] {
+        hpx::copy(par, org_first, org_last, first);
+        hpx::inplace_merge(par_unseq, first, middle, last);
+    });
 
-    std::cout << "--- run_inplace_merge_benchmark_par_unseq ---" << std::endl;
-    double time_par_unseq = run_inplace_merge_benchmark_hpx(
-        test_count, par_unseq, org_first, org_last, first, middle, last);
+    hpx::util::perftests_print_times();
 
-    std::cout << "\n-------------- Benchmark Result --------------"
-              << std::endl;
-    auto fmt = "inplace_merge ({1}) : {2}(sec)";
-    hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
-        << std::endl;
-    std::cout << "----------------------------------------------" << std::endl;
+    // std::cout << "\n-------------- Benchmark Result --------------"
+    //           << std::endl;
+    // auto fmt = "inplace_merge ({1}) : {2}(sec)";
+    // hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
+    // hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
+    //     << std::endl;
+    // std::cout << "----------------------------------------------" << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -171,6 +169,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
         correct_iterator_tag_str(vm["iterator_tag"].as<std::string>());
 
     std::size_t const os_threads = hpx::get_os_thread_count();
+    HPX_UNUSED(os_threads);
+
+    hpx::util::perftests_init(vm, "benchmark_inplace_merge");
 
     if (random_range < 1)
         random_range = 1;
@@ -179,16 +180,16 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::size_t(static_cast<double>(vector_size) * vector_ratio);
     std::size_t vector_right_size = vector_size - vector_left_size;
 
-    std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    std::cout << "seed              : " << seed << std::endl;
-    std::cout << "vector_left_size  : " << vector_left_size << std::endl;
-    std::cout << "vector_right_size : " << vector_right_size << std::endl;
-    std::cout << "random_range      : " << random_range << std::endl;
-    std::cout << "iterator_tag      : " << iterator_tag_str << std::endl;
-    std::cout << "test_count        : " << test_count << std::endl;
-    std::cout << "os threads        : " << os_threads << std::endl;
-    std::cout << "----------------------------------------------\n"
-              << std::endl;
+    // std::cout << "-------------- Benchmark Config --------------" << std::endl;
+    // std::cout << "seed              : " << seed << std::endl;
+    // std::cout << "vector_left_size  : " << vector_left_size << std::endl;
+    // std::cout << "vector_right_size : " << vector_right_size << std::endl;
+    // std::cout << "random_range      : " << random_range << std::endl;
+    // std::cout << "iterator_tag      : " << iterator_tag_str << std::endl;
+    // std::cout << "test_count        : " << test_count << std::endl;
+    // std::cout << "os threads        : " << os_threads << std::endl;
+    // std::cout << "----------------------------------------------\n"
+    //           << std::endl;
 
     if (iterator_tag_str == "random")
         run_benchmark(vector_left_size, vector_right_size, test_count,
@@ -223,6 +224,8 @@ int main(int argc, char* argv[])
 
     // initialize program
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+
+    hpx::util::perftests_cfg(desc_commandline);
 
     // Initialize and run HPX
     hpx::local::init_params init_args;

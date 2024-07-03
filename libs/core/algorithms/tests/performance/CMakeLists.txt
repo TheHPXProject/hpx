@@ -34,6 +34,8 @@ set(perftest_reports
     foreach_report
     transform_reduce_scaling
     benchmark_is_heap_until
+    benchmark_merge
+    benchmark_inplace_merge
 )
 
 set(foreach_report_perftest_PARAMETERS
@@ -56,6 +58,18 @@ set(benchmark_is_heap_until_perftest_PARAMETERS
     PSEUDO_DEPS_NAME benchmark_is_heap_until
 )
 
+set(benchmark_merge_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE benchmark_merge
+    PSEUDO_DEPS_NAME benchmark_merge
+)
+
+set(benchmark_inplace_merge_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE benchmark_inplace_merge
+    PSEUDO_DEPS_NAME benchmark_inplace_merge
+)
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
@@ -74,6 +88,6 @@ foreach(benchmark ${benchmarks})
   )
 
   if (${benchmark} IN_LIST perftest_reports)
-      add_hpx_performance_report_test("modules.algorithms" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
-    endif()
+    add_hpx_performance_report_test("modules.algorithms" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
+  endif()
 endforeach()

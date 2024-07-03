@@ -60,6 +60,8 @@ set(benchmarks
   foreach_report
   transform_reduce_scaling
   benchmark_is_heap_until
+  benchmark_merge
+  benchmark_inplace_merge
 )
 
 foreach(benchmark ${benchmarks})
