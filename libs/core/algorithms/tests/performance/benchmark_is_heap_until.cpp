@@ -186,10 +186,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // double time_par_unseq =
     //     run_is_heap_until_benchmark_par_unseq(test_count, v);
 
-    hpx::util::perftests_report("std::heap_until", "seq", test_count, [&]
-    {
-        decltype(std::begin(v)) result = std::is_heap_until(std::begin(v), std::end(v));
-    });
+    // hpx::util::perftests_report("std::heap_until", "seq", test_count, [&]
+    // {
+    //     decltype(std::begin(v)) result = std::is_heap_until(std::begin(v), std::end(v));
+    // });
 
     hpx::util::perftests_report("hpx::heap_until", "seq", test_count, [&]
     {

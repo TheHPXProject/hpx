@@ -15,10 +15,10 @@ else:
 
     for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
         if test1["name"] == test2["name"]:
-            test_names.append(test1["name"] + " (current),\n" + test1["executor"])
-            samples.append(test1["series"])
-            test_names.append(test2["name"] + ",\n" + test2["executor"])
+            test_names.append(test2["name"] + " (baseline),\n" + test2["executor"])
             samples.append(test2["series"])
+            test_names.append(test1["name"] + ",\n" + test1["executor"])
+            samples.append(test1["series"])
         else:
             exit(1)
 
