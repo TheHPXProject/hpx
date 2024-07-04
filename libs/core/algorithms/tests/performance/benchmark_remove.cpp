@@ -115,14 +115,14 @@ void run_benchmark(std::size_t vector_size, int test_count,
         (void) hpx::remove(seq, first, last, value);
     });
 
-    hpx::util::perftests_report("hpx::remove", "seq", test_count, [&] {
+    hpx::util::perftests_report("hpx::remove", "par", test_count, [&] {
         // Restore [first, last) with original data.
         hpx::copy(hpx::execution::par, org_first, org_last, first);
 
         (void) hpx::remove(par, first, last, value);
     });
 
-    hpx::util::perftests_report("hpx::remove", "seq", test_count, [&] {
+    hpx::util::perftests_report("hpx::remove", "par_unseq", test_count, [&] {
         // Restore [first, last) with original data.
         hpx::copy(hpx::execution::par, org_first, org_last, first);
 

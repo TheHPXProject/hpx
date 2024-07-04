@@ -38,6 +38,7 @@ set(perftest_reports
     benchmark_inplace_merge
     benchmark_is_heap
     benchmark_remove
+    benchmark_remove_if
 )
 
 set(foreach_report_perftest_PARAMETERS
@@ -82,6 +83,12 @@ set(benchmark_remove_perftest_PARAMETERS
     THREADS_PER_LOCALITY 4
     EXECUTABLE benchmark_remove
     PSEUDO_DEPS_NAME benchmark_remove
+)
+
+set(benchmark_remove_if_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    EXECUTABLE benchmark_remove_if
+    PSEUDO_DEPS_NAME benchmark_remove_if
 )
 
 foreach(benchmark ${benchmarks})
