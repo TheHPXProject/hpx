@@ -123,22 +123,12 @@ void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
         hpx::inplace_merge(par, first, middle, last);
     });
 
-    hpx::util::perftests_report("hpx::inplace_merge", "seq", test_count, [&] {
+    hpx::util::perftests_report("hpx::inplace_merge", "par_unseq", test_count, [&] {
         hpx::copy(par, org_first, org_last, first);
         hpx::inplace_merge(par_unseq, first, middle, last);
     });
 
     hpx::util::perftests_print_times();
-
-    // std::cout << "\n-------------- Benchmark Result --------------"
-    //           << std::endl;
-    // auto fmt = "inplace_merge ({1}) : {2}(sec)";
-    // hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
-    //     << std::endl;
-    // std::cout << "----------------------------------------------" << std::endl;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

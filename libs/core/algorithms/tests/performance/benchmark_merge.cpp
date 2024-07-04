@@ -278,35 +278,6 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     std::cout << "* Running Benchmark... (" << type << ")" << std::endl;
     std::cout << "--- run_merge_benchmark_std ---" << std::endl;
 
-    // std::cout << "* Running Benchmark..." << std::endl;
-    // std::cout << "--- run_merge_benchmark_std ---" << std::endl;
-    // double time_std =
-    //     run_merge_benchmark_std(test_count, first1, last1, first2, last2, dest);
-
-    // hpx::this_thread::sleep_for(std::chrono::seconds(1));
-    // std::cout << "--- run_merge_benchmark_seq ---" << std::endl;
-    // double const time_seq = run_merge_benchmark_hpx(
-    //    test_count, seq, first1, last1, first2, last2, dest);
-
-    // std::cout << "--- run_merge_benchmark_par ---" << std::endl;
-    // double time_par = run_merge_benchmark_hpx(
-    //     test_count, par, first1, last1, first2, last2, dest);
-
-    // std::cout << "--- run_merge_benchmark_par_unseq ---" << std::endl;
-    // double time_par_unseq = run_merge_benchmark_hpx(
-    //     test_count, par_unseq, first1, last1, first2, last2, dest);
-
-    // std::cout << "\n-------------- Benchmark Result --------------"
-    //           << std::endl;
-    // auto const fmt = "merge ({1}) : {2}(sec)";
-    // hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    // hpx::util::format_to(std::cout, fmt, "par_stackless", time_par_stackless)
-    //     << std::endl;
-    // hpx::util::format_to(
-    //     std::cout, fmt, "par_stackless_fast_idle", time_par_stackless_fast_idle)
-
     hpx::util::perftests_report("hpx::merge", "seq", test_count, [&] {
         hpx::merge(seq, first1, last1, first2, last2, dest);
     });
