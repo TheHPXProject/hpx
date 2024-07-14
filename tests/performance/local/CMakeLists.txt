@@ -138,7 +138,7 @@ set(future_overhead_report_perftest_PARAMETERS
     THREADS_PER_LOCALITY 4
     EXECUTABLE future_overhead_report
     PSEUDO_DEPS_NAME future_overhead_report 
-    --hpx:ini=hpx.thread_queue.init_threads_count=100 --hpx:queuing=local-priority 
+    --hpx:ini=hpx.thread_queue.init_threads_count=100 
     --test-all --repetitions=40 --futures=207270
 )
 set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
