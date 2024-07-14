@@ -20,3 +20,7 @@ ctest -VV\
     -S ${src_dir}/.jenkins/lsu-perftests/ctest.cmake \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
+
+if [ -s $build_dir/index.html ]; then
+   cd $build_dir && sh test.sh
+fi
