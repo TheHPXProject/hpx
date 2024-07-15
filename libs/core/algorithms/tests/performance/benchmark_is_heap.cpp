@@ -83,17 +83,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
         v[break_pos] =
             static_cast<int>((std::numeric_limits<std::size_t>::max)());
 
-    hpx::util::perftests_report("hpx::is_heap", "seq", test_count, [&] {
-        (void) hpx::is_heap(seq, std::begin(v), std::end(v));
-    });
+    hpx::util::perftests_report("hpx::is_heap", "seq", test_count,
+        [&] { (void) hpx::is_heap(seq, std::begin(v), std::end(v)); });
 
-    hpx::util::perftests_report("hpx::is_heap", "par", test_count, [&] {
-        (void) hpx::is_heap(par, std::begin(v), std::end(v));
-    });
+    hpx::util::perftests_report("hpx::is_heap", "par", test_count,
+        [&] { (void) hpx::is_heap(par, std::begin(v), std::end(v)); });
 
-    hpx::util::perftests_report("hpx::is_heap", "par_unseq", test_count, [&] {
-        (void) hpx::is_heap(par_unseq, std::begin(v), std::end(v));
-    });
+    hpx::util::perftests_report("hpx::is_heap", "par_unseq", test_count,
+        [&] { (void) hpx::is_heap(par_unseq, std::begin(v), std::end(v)); });
 
     hpx::util::perftests_print_times();
 

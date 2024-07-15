@@ -7,9 +7,9 @@
 
 #include <hpx/chrono.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/testing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/numeric.hpp>
-#include <hpx/modules/testing.hpp>
 
 #include "worker_timed.hpp"
 
@@ -71,15 +71,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
     else
     {
-        hpx::util::perftests_report("transform_reduce", "par", test_count, [&]
-        {
-            transform_reduce(vector_size);
-        });
+        hpx::util::perftests_report("transform_reduce", "par", test_count,
+            [&] { transform_reduce(vector_size); });
 
-        hpx::util::perftests_report("transform_reduce_old", "par", test_count, [&]
-        {
-            transform_reduce_old(vector_size);
-        });
+        hpx::util::perftests_report("transform_reduce_old", "par", test_count,
+            [&] { transform_reduce_old(vector_size); });
 
         hpx::util::perftests_print_times();
     }
@@ -97,8 +93,7 @@ int main(int argc, char* argv[])
         hpx::program_options::value<std::size_t>()->default_value(1000),
         "size of vector")
 
-        ("test_count",
-            hpx::program_options::value<int>()->default_value(100),
+        ("test_count", hpx::program_options::value<int>()->default_value(100),
             "number of tests to take average from");
 
     hpx::local::init_params init_args;

@@ -123,10 +123,11 @@ void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
         hpx::inplace_merge(par, first, middle, last);
     });
 
-    hpx::util::perftests_report("hpx::inplace_merge", "par_unseq", test_count, [&] {
-        hpx::copy(par, org_first, org_last, first);
-        hpx::inplace_merge(par_unseq, first, middle, last);
-    });
+    hpx::util::perftests_report(
+        "hpx::inplace_merge", "par_unseq", test_count, [&] {
+            hpx::copy(par, org_first, org_last, first);
+            hpx::inplace_merge(par_unseq, first, middle, last);
+        });
 
     hpx::util::perftests_print_times();
 }

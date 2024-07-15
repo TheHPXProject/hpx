@@ -29,13 +29,14 @@ namespace hpx::util {
             "time taken for each epoch");
     }
 
-    void perftests_init(hpx::program_options::variables_map const& vm)
+    void perftests_init(hpx::program_options::variables_map const& vm,
+        std::string test_name)
     {
         if (vm.count("detailed_bench"))
         {
             detailed_ = true;
         }
-        test_name_ = test_name;
+        test_name_ = HPX_MOVE(test_name);
     }
 
     namespace detail {
@@ -174,9 +175,9 @@ average: {{average(elapsed)}}{{^-last}}
                     strm << std::scientific << "average: " << average / series
                          << "\n\n";
                 }
-                strm <<
-                    "<CTestMeasurementFile type=\"image/png\" name=\"perftests\" >" <<
-                    "./" << test_name_ << ".png</CTestMeasurementFile>\n";
+                strm << "<CTestMeasurementFile type=\"image/png\" "
+                        "name=\"perftests\" >"
+                     << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
             }
             return strm;
         }
@@ -214,8 +215,9 @@ average: {{average(elapsed)}}{{^-last}}
     {
         detail::bench().render(templ, strm);
         if (!detailed_)
-            strm << "<CTestMeasurementFile type=\"image/png\" name=\"perftests\">" <<
-                    "./" << test_name_ << ".png</CTestMeasurementFile>\n";
+            strm << "<CTestMeasurementFile type=\"image/png\" "
+                    "name=\"perftests\">"
+                 << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
     }
 
     // Overload that uses a default nanobench template

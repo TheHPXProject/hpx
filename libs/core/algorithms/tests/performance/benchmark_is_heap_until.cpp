@@ -191,20 +191,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
     //     decltype(std::begin(v)) result = std::is_heap_until(std::begin(v), std::end(v));
     // });
 
-    hpx::util::perftests_report("hpx::heap_until", "seq", test_count, [&]
-    {
-        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::seq, std::begin(v), std::end(v));
+    hpx::util::perftests_report("hpx::heap_until", "seq", test_count, [&] {
+        decltype(std::begin(v)) result =
+            hpx::is_heap_until(hpx::execution::seq, std::begin(v), std::end(v));
     });
 
-    hpx::util::perftests_report("hpx::heap_until", "par", test_count, [&]
-    {
-        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::par, std::begin(v), std::end(v));
+    hpx::util::perftests_report("hpx::heap_until", "par", test_count, [&] {
+        decltype(std::begin(v)) result =
+            hpx::is_heap_until(hpx::execution::par, std::begin(v), std::end(v));
     });
 
-    hpx::util::perftests_report("hpx::heap_until", "par_unseq", test_count, [&]
-    {
-        decltype(std::begin(v)) result = hpx::is_heap_until(hpx::execution::par_unseq, std::begin(v), std::end(v));
-    });
+    hpx::util::perftests_report(
+        "hpx::heap_until", "par_unseq", test_count, [&] {
+            decltype(std::begin(v)) result = hpx::is_heap_until(
+                hpx::execution::par_unseq, std::begin(v), std::end(v));
+        });
 
     hpx::util::perftests_print_times();
 
