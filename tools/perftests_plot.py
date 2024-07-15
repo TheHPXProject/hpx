@@ -1,7 +1,8 @@
 import sys
 import json
 import matplotlib.pyplot as plt
-from scipy import stats
+import scipy
+import scipy.stats
 import numpy as np
 import os 
 
@@ -30,7 +31,7 @@ else:
             samples.append(test2["series"])
             test_names.append(test1["name"] + ",\n" + test1["executor"])
             samples.append(test1["series"])
-            ks_stat, pvalue = stats.ks_2samp(test1["series"], test2["series"])
+            ks_stat, pvalue = scipy.stats.ks_2samp(test1["series"], test2["series"])
             
             mean2 = np.mean(test2["series"])
             mean1 = np.mean(test1["series"])
