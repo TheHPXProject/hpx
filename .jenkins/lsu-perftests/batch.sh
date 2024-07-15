@@ -48,7 +48,7 @@ plot_errors=0
 wait
 
 # Build and Run the perftests
-# source "${src_dir}/.jenkins/lsu-perftests/launch_perftests.sh"
+source "${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh"
 
 # Dummy ctest to upload the html report of the perftest
 set +e
