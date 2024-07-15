@@ -56,6 +56,7 @@ ctest \
     --verbose --output-on-failure \
     -S "${src_dir}/.jenkins/lsu-perftests/ctest.cmake" \
     -DCTEST_BUILD_CONFIGURATION_NAME="${configuration_name}" \
+    -DCTEST_CONFIGURE_EXTRA_OPTIONS="${configure_extra_options}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
 set -e
