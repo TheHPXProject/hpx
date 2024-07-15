@@ -14,19 +14,19 @@ cmake_minimum_required(VERSION 3.19 FATAL_ERROR)
 set(CTEST_CMAKE_GENERATOR Ninja)
 set(CTEST_SITE "verve")
 set(CTEST_UPDATE_COMMAND "git")
-set(CTEST_BUILD_NAME "Linux, C++17")
+set(CTEST_BUILD_NAME "Linux (perftest), C++17")
 # set(CTEST_UPDATE_VERSION_ONLY "ON")
 # set(CTEST_SUBMIT_RETRY_COUNT 5)
 # set(CTEST_SUBMIT_RETRY_DELAY 60)
 
 ctest_start(Experimental TRACK "${CTEST_TRACK}")
 
-# ctest_update()
-# ctest_submit(
-#   PARTS Update
-#   BUILD_ID __ctest_build_id
-#   RETURN_VALUE __update_result
-# )
+ctest_update()
+ctest_submit(
+  PARTS Update
+  BUILD_ID __ctest_build_id
+  RETURN_VALUE __update_result
+)
 
 set(CTEST_CONFIGURE_COMMAND "${CMAKE_COMMAND} ${CTEST_SOURCE_DIRECTORY}")
 set(CTEST_CONFIGURE_COMMAND
