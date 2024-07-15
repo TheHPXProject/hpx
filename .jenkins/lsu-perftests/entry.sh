@@ -62,6 +62,13 @@ status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
 #     ./.jenkins/lsu-perftests/comment_github.sh
 # fi
 
+src_dir="$(pwd)"
+build_dir="${src_dir}/build/${configuration_name}"
+
+if [ -s $build_dir/index.html ]; then
+    cat $build_dir/index.html
+    cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
+fi
 
 # set -e
 # exit $(cat ${status_file})

@@ -59,7 +59,3 @@ ctest \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
 set -e
-
-if [ -s $build_dir/index.html ]; then
-   cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
-fi
