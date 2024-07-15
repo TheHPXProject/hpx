@@ -38,7 +38,6 @@ logfile=${build_dir}/reports/jenkins-hpx-${configuration_name}.log
 
 # Load python packages
 source /home/pansysk75/virtual_envs/perftests_env/bin/activate
-pip install --user scipy
 
 # Things went alright by default
 configure_build_errors=0
