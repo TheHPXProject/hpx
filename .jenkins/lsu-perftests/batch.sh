@@ -50,7 +50,7 @@ wait
 # Build and Run the perftests
 source "${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh"
 
-# Dummy ctest to upload the html report of the perftest
+# CTest to upload the images to CDash
 set +e
 ctest \
     --verbose --output-on-failure \
