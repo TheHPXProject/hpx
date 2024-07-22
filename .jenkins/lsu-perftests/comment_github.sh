@@ -23,6 +23,6 @@ curl \
   -X POST \
   -H "Authorization: token ${GITHUB_TOKEN}" \
   "https://api.github.com/repos/TheHPXProject/hpx/issues/${ghprbPullId}/comments" \
-  -d "{\"body\": \"<details><summary>Performance test report</summary>${report}<\/details>\"}"
+  -d "{\"body\": \"<details><summary>Performance test report</summary><table><tr><th>Test name</th><th>Executor</th><th>Better/Worse, Mean Percentage diff.</th><th>P-value</th></tr>${report}<\/table><\/details>\"}"
 
 # popd
