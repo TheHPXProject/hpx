@@ -58,10 +58,10 @@ cat jenkins-hpx-${configuration_name}.err
 status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
 
 # Comment on the PR if any failures
-if [[ -f "${status_file}" && "$(cat ${status_file})" -eq "0" ]]; then
-    github_commit_status="success"
-else
+if [[ $(cat ${status_file}) != 0 ]]; then
     github_commit_status="failure"
+else
+    github_commit_status="success"
 fi
 
 cdash_build_id="$(cat jenkins-hpx-${configuration_name}-cdash-build-id.txt)"
