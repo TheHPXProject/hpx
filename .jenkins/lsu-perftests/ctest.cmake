@@ -83,7 +83,7 @@ set(benchmarks
 )
 
 foreach(benchmark ${benchmarks})
-  ctest_build(TARGET ${benchmark}_cdash_results FLAGS)
+  ctest_build(TARGET ${benchmark}_cdash_results FLAGS "-k0 -j ${CTEST_BUILD_PARALLELISM}")
 endforeach()
 
 ctest_submit(
@@ -106,7 +106,10 @@ endforeach()
 
 string(JOIN "|" bench_regex ${bench_regex_list})
 
-ctest_test(INCLUDE ${bench_regex})
+ctest_test(
+  INCLUDE ${bench_regex}
+  PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}"
+)
 ctest_submit(
   PARTS Test
   BUILD_ID __ctest_build_id
@@ -118,4 +121,11 @@ if(NOT CTEST_BUILD_ID AND __ctest_build_id)
 endif()
 set(ctest_submission_result ${ctest_submission_result} "Tests: "
                             ${__test_result} "\n"
+)
+
+file(WRITE "jenkins-hpx-${CTEST_BUILD_CONFIGURATION_NAME}-cdash-build-id.txt"
+     "${CTEST_BUILD_ID}"
+)
+file(WRITE "jenkins-hpx-${CTEST_BUILD_CONFIGURATION_NAME}-cdash-submission.txt"
+     ${ctest_submission_result}
 )
