@@ -41,22 +41,20 @@ else:
             
             if pvalue < alpha:
                 if header_flag:
-                    html_file.writelines("<tr>\n<th scope=\"row\" colspan=\"5\">{}</th>\n</tr>\n".format(sys.argv[3].split('/')[-1]))
+                    html_file.writelines("<tr><th scope=\"row\" colspan=\"5\">{}</th></tr>".format(sys.argv[3].split('/')[-1]))
                     header_flag = False
                 if flag:
-                    html_file.writelines("<tr>\n<th>{}</th>\n".format(test1["name"]))
+                    html_file.writelines("<tr><th>{}</th>".format(test1["name"]))
                     flag = False
-                html_file.writelines("<td>{}</td>\n".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
+                html_file.writelines("<td>{}</td>".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
                 if mean1 < mean2:
-                    # html_file.writelines(", {}: Performance is better by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), percentage_diff, ks_stat))
-                    html_file.writelines("<td>{}, {:.2f} %</td>\n".format("Better", percentage_diff))
-                    html_file.writelines("<td>{:.2f}</td>\n".format(1 - pvalue))
+                    html_file.writelines("<td>{}, {:.2f} %</td>".format("Better", percentage_diff))
+                    html_file.writelines("<td>{:.2f}</td>".format(1 - pvalue))
                 else:
-                    # html_file.writelines(", {}: Performance is worse by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), -percentage_diff, ks_stat))
-                    html_file.writelines("<td>{}, {:.2f} %</td>\n".format("Worse", -percentage_diff))
-                    html_file.writelines("<td>{:.2f}</td>\n".format(1 - pvalue))
+                    html_file.writelines("<td>{}, {:.2f} %</td>".format("Worse", -percentage_diff))
+                    html_file.writelines("<td>{:.2f}</td>".format(1 - pvalue))
             if not flag:
-                html_file.writelines("</tr>\n")
+                html_file.writelines("</tr>")
         else:
             print("Tests are not the same")
             exit(1)
