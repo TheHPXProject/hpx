@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import scipy
 import scipy.stats
 import numpy as np
-import os 
+import os
 
 if len(sys.argv) != 4:
     print("Usage: python perftests_plot.py [path_to_first_result.json] [path_to_second_result.json] [perftest_name]")
@@ -15,7 +15,7 @@ else:
     curr_path = '/'.join(sys.argv[3].split('/')[:-1])
     
     html_file = open(f'{curr_path}/index.html', "a+")
-    
+            
     json_obj1 = json.loads(f1.read())
     json_obj2 = json.loads(f2.read())
 
@@ -36,29 +36,33 @@ else:
             mean2 = np.mean(test2["series"])
             mean1 = np.mean(test1["series"])
             
-            alpha = 1e-7
+            alpha = 0.05
             percentage_diff = ((mean2 - mean1) / mean2) * 100
             
             if pvalue < alpha:
                 if header_flag:
-                    html_file.writelines("<h3>{}</h3>".format(sys.argv[3].split('/')[-1]))
-                    html_file.writelines("<ol>")
+                    html_file.writelines("<tr>\n<th scope=\"row\" colspan=\"5\">{}</th>\n</tr>\n".format(sys.argv[3].split('/')[-1]))
                     header_flag = False
                 if flag:
-                    html_file.writelines("<li><b>{}</b>".format(test1["name"]))
+                    html_file.writelines("<tr>\n<th>{}</th>\n".format(test1["name"]))
                     flag = False
+                html_file.writelines("<td>{}</td>\n".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
                 if mean1 < mean2:
-                    html_file.writelines(", {}: Performance is better by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), percentage_diff, ks_stat))
+                    # html_file.writelines(", {}: Performance is better by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), percentage_diff, ks_stat))
+                    html_file.writelines("<td>{}, {:.2f} %</td>\n".format("Better", percentage_diff))
+                    html_file.writelines("<td>{:.2f}</td>\n".format(1 - pvalue))
                 else:
-                    html_file.writelines(", {}: Performance is worse by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), -percentage_diff, ks_stat))
+                    # html_file.writelines(", {}: Performance is worse by {:.2f} % (KS-stat: {})</li>".format(test2["executor"].replace('<', '&lt;').replace('>', '&gt;'), -percentage_diff, ks_stat))
+                    html_file.writelines("<td>{}, {:.2f} %</td>\n".format("Worse", -percentage_diff))
+                    html_file.writelines("<td>{:.2f}</td>\n".format(1 - pvalue))
             if not flag:
-                html_file.writelines("</li>")
+                html_file.writelines("</tr>\n")
         else:
-            print("ERROR")
+            print("Tests are not the same")
             exit(1)
             
-    if not header_flag:
-        html_file.writelines("</ol>")
+    # if not header_flag:
+    #     html_file.writelines("</tr>")
 
     fig = plt.figure(figsize=(25, 16))
     ax = fig.add_subplot()
