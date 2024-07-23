@@ -16,13 +16,13 @@ status_computation_and_artifacts_storage() {
 
     # Copy the testing directory for saving as an artifact
     cp -r ${build_dir}/Testing ${src_dir}/${configuration_name}-Testing
-    cp -r ${build_dir}/reports ${src_dir}/${configuration_name}-reports
+    # cp -r ${build_dir}/reports ${src_dir}/${configuration_name}-reports
 
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
-    exit $ctest_status
+    # exit $ctest_status
 }
 
-trap "status_computation_and_artifacts_storage" EXIT
+# trap "status_computation_and_artifacts_storage" EXIT
 
 src_dir="$(pwd)"
 build_dir="${src_dir}/build/${configuration_name}"
@@ -60,6 +60,8 @@ ctest \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
 set -e
+
+status_computation_and_artifacts_storage
 
 if [ -s $build_dir/index.html ]; then
    cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh

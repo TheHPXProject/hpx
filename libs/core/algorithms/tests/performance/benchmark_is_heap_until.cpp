@@ -51,93 +51,6 @@ struct random_fill
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-double run_is_heap_until_benchmark_std(
-    int test_count, std::vector<int> const& v)
-{
-    std::cout << "--- run_is_heap_until_benchmark_std ---" << std::endl;
-    decltype(std::begin(v)) result;
-    std::uint64_t time = hpx::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        result = std::is_heap_until(std::begin(v), std::end(v));
-    }
-
-    time = hpx::chrono::high_resolution_clock::now() - time;
-
-    auto heap_range = std::distance(std::begin(v), result);
-    std::cout << "Heap Range : " << heap_range << std::endl;
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-double run_is_heap_until_benchmark_seq(
-    int test_count, std::vector<int> const& v)
-{
-    std::cout << "--- run_is_heap_until_benchmark_seq ---" << std::endl;
-    decltype(std::begin(v)) result;
-    std::uint64_t time = hpx::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        using namespace hpx::execution;
-        result = hpx::is_heap_until(seq, std::begin(v), std::end(v));
-    }
-
-    time = hpx::chrono::high_resolution_clock::now() - time;
-
-    auto heap_range = std::distance(std::begin(v), result);
-    std::cout << "Heap Range : " << heap_range << std::endl;
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-double run_is_heap_until_benchmark_par(
-    int test_count, std::vector<int> const& v)
-{
-    std::cout << "--- run_is_heap_until_benchmark_par ---" << std::endl;
-    decltype(std::begin(v)) result;
-    std::uint64_t time = hpx::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        using namespace hpx::execution;
-        result = hpx::is_heap_until(par, std::begin(v), std::end(v));
-    }
-
-    time = hpx::chrono::high_resolution_clock::now() - time;
-
-    auto heap_range = std::distance(std::begin(v), result);
-    std::cout << "Heap Range : " << heap_range << std::endl;
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-double run_is_heap_until_benchmark_par_unseq(
-    int test_count, std::vector<int> const& v)
-{
-    std::cout << "--- run_is_heap_until_benchmark_par_unseq ---" << std::endl;
-    decltype(std::begin(v)) result;
-    std::uint64_t time = hpx::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        using namespace hpx::execution;
-        result = hpx::is_heap_until(par_unseq, std::begin(v), std::end(v));
-    }
-
-    time = hpx::chrono::high_resolution_clock::now() - time;
-
-    auto heap_range = std::distance(std::begin(v), result);
-    std::cout << "Heap Range : " << heap_range << std::endl;
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -158,16 +71,6 @@ int hpx_main(hpx::program_options::variables_map& vm)
     if (break_pos > vector_size)
         break_pos = vector_size;
 
-    // std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    // std::cout << "seed        : " << seed << std::endl;
-    // std::cout << "vector_size : " << vector_size << std::endl;
-    // std::cout << "break_pos   : " << break_pos << std::endl;
-    // std::cout << "test_count  : " << test_count << std::endl;
-    // std::cout << "os threads  : " << os_threads << std::endl;
-    // std::cout << "----------------------------------------------\n"
-    //           << std::endl;
-
-    // std::cout << "* Preparing Benchmark..." << std::endl;
     std::vector<int> v(vector_size);
 
     // initialize data
@@ -179,32 +82,23 @@ int hpx_main(hpx::program_options::variables_map& vm)
         v[break_pos] =
             static_cast<int>((std::numeric_limits<std::size_t>::max)());
 
-    // std::cout << "* Running Benchmark..." << std::endl;
-    // double time_std = run_is_heap_until_benchmark_std(test_count, v);
-    // double time_seq = run_is_heap_until_benchmark_seq(test_count, v);
-    // double time_par = run_is_heap_until_benchmark_par(test_count, v);
-    // double time_par_unseq =
-    //     run_is_heap_until_benchmark_par_unseq(test_count, v);
-
-    // hpx::util::perftests_report("std::heap_until", "seq", test_count, [&]
-    // {
-    //     decltype(std::begin(v)) result = std::is_heap_until(std::begin(v), std::end(v));
-    // });
-
     hpx::util::perftests_report("hpx::heap_until", "seq", test_count, [&] {
         decltype(std::begin(v)) result =
             hpx::is_heap_until(hpx::execution::seq, std::begin(v), std::end(v));
+        HPX_UNUSED(result);
     });
 
     hpx::util::perftests_report("hpx::heap_until", "par", test_count, [&] {
         decltype(std::begin(v)) result =
             hpx::is_heap_until(hpx::execution::par, std::begin(v), std::end(v));
+        HPX_UNUSED(result);
     });
 
     hpx::util::perftests_report(
         "hpx::heap_until", "par_unseq", test_count, [&] {
             decltype(std::begin(v)) result = hpx::is_heap_until(
                 hpx::execution::par_unseq, std::begin(v), std::end(v));
+            HPX_UNUSED(result);
         });
 
     hpx::util::perftests_print_times();

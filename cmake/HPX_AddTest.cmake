@@ -333,19 +333,19 @@ function(add_hpx_performance_report_test subcategory name)
   string(REPLACE "LOCALITIES" "--hpx:localities=" ARGN ${ARGN})
   string(REPLACE "EXECUTABLE${name}" "" ARGN ${ARGN})
   string(REPLACE "PSEUDO_DEPS_NAME${name}" "" ARGN ${ARGN})
-  if (NOT ARGN STREQUAL "")
+  if(NOT ARGN STREQUAL "")
     string(REPLACE "--" " --" ARGN ${ARGN})
   endif()
   add_custom_target(
     ${name}_cdash_results
     COMMAND
-    sh -c "${CMAKE_BINARY_DIR}/bin/${name}_test ${ARGN} --detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
+      sh -c
+      "${CMAKE_BINARY_DIR}/bin/${name}_test ${ARGN} --detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
     COMMAND
-    ${Python_EXECUTABLE}
-    ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py 
-    ${CMAKE_BINARY_DIR}/${name}.json 
-    ${CMAKE_SOURCE_DIR}/tools/perftests_ci/perftest/references/lsu_default/${name}.json 
-    ${CMAKE_BINARY_DIR}/${name}
+      ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py
+      ${CMAKE_BINARY_DIR}/${name}.json
+      ${CMAKE_SOURCE_DIR}/tools/perftests_ci/perftest/references/lsu_default/${name}.json
+      ${CMAKE_BINARY_DIR}/${name}
   )
   add_dependencies(${name}_cdash_results ${name}_test)
 endfunction(add_hpx_performance_report_test)
