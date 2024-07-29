@@ -42,53 +42,52 @@ set(perftest_reports
 )
 
 set(foreach_report_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE foreach_report
-    PSEUDO_DEPS_NAME foreach_report 
-    --hpx:ini=hpx.thread_queue.init_threads_count=100 --vector_size=104857
-    --work_delay=1 --chunk_size=0 --test_count=200
+    THREADS_PER_LOCALITY
+    4
+    EXECUTABLE
+    foreach_report
+    PSEUDO_DEPS_NAME
+    foreach_report
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --vector_size=104857
+    --work_delay=1
+    --chunk_size=0
+    --test_count=200
 )
 
 set(transform_reduce_scaling_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE transform_reduce_scaling
-    PSEUDO_DEPS_NAME transform_reduce_scaling
+    THREADS_PER_LOCALITY 4 EXECUTABLE transform_reduce_scaling PSEUDO_DEPS_NAME
+    transform_reduce_scaling
 )
 
 set(benchmark_is_heap_until_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_is_heap_until
-    PSEUDO_DEPS_NAME benchmark_is_heap_until
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_is_heap_until PSEUDO_DEPS_NAME
+    benchmark_is_heap_until
 )
 
 set(benchmark_merge_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_merge
-    PSEUDO_DEPS_NAME benchmark_merge
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_merge PSEUDO_DEPS_NAME
+    benchmark_merge
 )
 
 set(benchmark_inplace_merge_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_inplace_merge
-    PSEUDO_DEPS_NAME benchmark_inplace_merge
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_inplace_merge PSEUDO_DEPS_NAME
+    benchmark_inplace_merge
 )
 
 set(benchmark_is_heap_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_is_heap
-    PSEUDO_DEPS_NAME benchmark_is_heap
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_is_heap PSEUDO_DEPS_NAME
+    benchmark_is_heap
 )
 
 set(benchmark_remove_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_remove
-    PSEUDO_DEPS_NAME benchmark_remove
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_remove PSEUDO_DEPS_NAME
+    benchmark_remove
 )
 
 set(benchmark_remove_if_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE benchmark_remove_if
-    PSEUDO_DEPS_NAME benchmark_remove_if
+    THREADS_PER_LOCALITY 4 EXECUTABLE benchmark_remove_if PSEUDO_DEPS_NAME
+    benchmark_remove_if
 )
 
 foreach(benchmark ${benchmarks})
@@ -108,7 +107,10 @@ foreach(benchmark ${benchmarks})
     "modules.algorithms" ${benchmark} ${${benchmark}_PARAMETERS}
   )
 
-  if (${benchmark} IN_LIST perftest_reports)
-    add_hpx_performance_report_test("modules.algorithms" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
+  if(${benchmark} IN_LIST perftest_reports)
+    add_hpx_performance_report_test(
+      "modules.algorithms" ${benchmark}_perftest
+      ${${benchmark}_perftest_PARAMETERS}
+    )
   endif()
 endforeach()

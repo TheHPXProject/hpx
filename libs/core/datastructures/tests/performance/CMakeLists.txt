@@ -7,8 +7,7 @@
 set(tests small_vector_benchmark)
 
 set(small_vector_benchmark_perftest_PARAMETERS
-  EXECUTABLE small_vector_benchmark
-  PSEUDO_DEPS_NAME small_vector_benchmark
+    EXECUTABLE small_vector_benchmark PSEUDO_DEPS_NAME small_vector_benchmark
 )
 
 foreach(test ${tests})
