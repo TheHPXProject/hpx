@@ -26,7 +26,9 @@ namespace hpx::util {
     {
         cmdline.add_options()("detailed_bench",
             "Use if detailed benchmarks are required, showing the execution "
-            "time taken for each epoch");
+            "time taken for each epoch")
+            ("print_cdash_img_path",
+            "Print the path to the images to be uploaded, in CDash XML format");
     }
 
     void perftests_init(hpx::program_options::variables_map const& vm,
@@ -35,6 +37,10 @@ namespace hpx::util {
         if (vm.count("detailed_bench"))
         {
             detailed_ = true;
+        }
+        if (vm.count("print_cdash_img_path"))
+        {
+            print_cdash_img = true;
         }
         test_name_ = HPX_MOVE(test_name);
     }
@@ -175,9 +181,10 @@ average: {{average(elapsed)}}{{^-last}}
                     strm << std::scientific << "average: " << average / series
                          << "\n\n";
                 }
-                strm << "<CTestMeasurementFile type=\"image/png\" "
-                        "name=\"perftests\" >"
-                     << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
+                if (print_cdash_img)
+                    strm << "<CTestMeasurementFile type=\"image/png\" "
+                            "name=\"perftests\" >"
+                        << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
             }
             return strm;
         }
@@ -214,7 +221,7 @@ average: {{average(elapsed)}}{{^-last}}
     void perftests_print_times(char const* templ, std::ostream& strm)
     {
         detail::bench().render(templ, strm);
-        if (!detailed_)
+        if (!detailed_ && print_cdash_img)
             strm << "<CTestMeasurementFile type=\"image/png\" "
                     "name=\"perftests\">"
                  << "./" << test_name_ << ".png</CTestMeasurementFile>\n";

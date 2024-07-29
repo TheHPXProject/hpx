@@ -16,13 +16,13 @@ status_computation_and_artifacts_storage() {
 
     # Copy the testing directory for saving as an artifact
     cp -r ${build_dir}/Testing ${src_dir}/${configuration_name}-Testing
-    # cp -r ${build_dir}/reports ${src_dir}/${configuration_name}-reports
+    cp -r ${build_dir}/*.json ${src_dir}/${configuration_name}-reports
 
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
-    # exit $ctest_status
+    exit $ctest_status
 }
 
-# trap "status_computation_and_artifacts_storage" EXIT
+trap "status_computation_and_artifacts_storage" EXIT
 
 src_dir="$(pwd)"
 build_dir="${src_dir}/build/${configuration_name}"
@@ -33,7 +33,7 @@ cp -r "${src_dir}/tools/perftests_ci" "${build_dir}/tools"
 # Variables
 perftests_dir=${build_dir}/tools/perftests_ci
 envfile=${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh
-mkdir -p ${build_dir}/reports
+mkdir -p ${src_dir}/${configuration_name}-reports
 logfile=${build_dir}/reports/jenkins-hpx-${configuration_name}.log
 
 # Load python packages
@@ -51,7 +51,6 @@ wait
 source "${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh"
 
 # CTest to upload the images to CDash
-set +e
 ctest \
     --verbose --output-on-failure \
     -S "${src_dir}/.jenkins/lsu-perftests/ctest.cmake" \
@@ -59,8 +58,7 @@ ctest \
     -DCTEST_CONFIGURE_EXTRA_OPTIONS="${configure_extra_options}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
-set -e
-
+    
 status_computation_and_artifacts_storage
 
 if [ -s $build_dir/index.html ]; then
