@@ -28,10 +28,7 @@ set(benchmarks
     shared_mutex_overhead
 )
 
-set(perftest_reports
-    future_overhead_report  
-    stream_report
-)
+set(perftest_reports future_overhead_report stream_report)
 
 set(timed_task_spawn_SOURCES activate_counters.cpp)
 set(timed_task_spawn_HEADERS activate_counters.hpp)
@@ -135,20 +132,30 @@ set(partitioned_vector_foreach_FLAGS DEPENDENCIES iostreams_component
 set(future_overhead_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_overhead_report_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_overhead_report_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE future_overhead_report
-    PSEUDO_DEPS_NAME future_overhead_report 
-    --hpx:ini=hpx.thread_queue.init_threads_count=100 
-    --test-all --repetitions=40 --futures=207270
+    THREADS_PER_LOCALITY
+    4
+    EXECUTABLE
+    future_overhead_report
+    PSEUDO_DEPS_NAME
+    future_overhead_report
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --test-all
+    --repetitions=40
+    --futures=207270
 )
 set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
 
 set(stream_report_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-    EXECUTABLE stream_report
-    PSEUDO_DEPS_NAME stream_report 
-    --hpx:ini=hpx.thread_queue.init_threads_count=100 
-    --vector_size=518176 --iterations=200 --warmup_iterations=20
+    THREADS_PER_LOCALITY
+    4
+    EXECUTABLE
+    stream_report
+    PSEUDO_DEPS_NAME
+    stream_report
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --vector_size=518176
+    --iterations=200
+    --warmup_iterations=20
 )
 
 # These tests do not run on hpx threads, so we don't want to pass hpx params
@@ -195,8 +202,10 @@ foreach(benchmark ${benchmarks})
 
   if(NOT "${${benchmark}_PARAMETERS}" MATCHES NO_HPX_MAIN)
     add_hpx_performance_test("local" ${benchmark} ${${benchmark}_PARAMETERS})
-    if (${benchmark} IN_LIST perftest_reports)
-      add_hpx_performance_report_test("local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS})
+    if(${benchmark} IN_LIST perftest_reports)
+      add_hpx_performance_report_test(
+        "local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS}
+      )
     endif()
   endif()
 endforeach()
