@@ -15,6 +15,7 @@
 
 namespace hpx::util {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline bool detailed_;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline bool print_cdash_img;
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline std::string test_name_;
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_cfg(
         hpx::program_options::options_description& cmdline);
