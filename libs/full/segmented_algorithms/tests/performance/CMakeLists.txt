@@ -7,8 +7,8 @@
 set(benchmarks minmax_element_performance)
 
 set(minmax_element_performance_perftest_PARAMETERS
-  EXECUTABLE minmax_element_performance
-  PSEUDO_DEPS_NAME minmax_element_performance 
+    EXECUTABLE minmax_element_performance PSEUDO_DEPS_NAME
+    minmax_element_performance
 )
 
 foreach(benchmark ${benchmarks})
@@ -31,6 +31,7 @@ foreach(benchmark ${benchmarks})
   )
 
   add_hpx_performance_report_test(
-    "modules.segmented_algorithms" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS}
+    "modules.segmented_algorithms" ${benchmark}_perftest
+    ${${benchmark}_perftest_PARAMETERS}
   )
 endforeach()

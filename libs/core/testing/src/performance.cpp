@@ -26,8 +26,7 @@ namespace hpx::util {
     {
         cmdline.add_options()("detailed_bench",
             "Use if detailed benchmarks are required, showing the execution "
-            "time taken for each epoch")
-            ("print_cdash_img_path",
+            "time taken for each epoch")("print_cdash_img_path",
             "Print the path to the images to be uploaded, in CDash XML format");
     }
 
@@ -184,7 +183,8 @@ average: {{average(elapsed)}}{{^-last}}
                 if (print_cdash_img)
                     strm << "<CTestMeasurementFile type=\"image/png\" "
                             "name=\"perftests\" >"
-                        << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
+                         << "./" << test_name_
+                         << ".png</CTestMeasurementFile>\n";
             }
             return strm;
         }

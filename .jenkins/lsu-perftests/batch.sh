@@ -19,6 +19,11 @@ status_computation_and_artifacts_storage() {
     cp -r ${build_dir}/*.json ${src_dir}/${configuration_name}-reports
 
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
+
+    if [ -s $build_dir/index.html ]; then
+        cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
+    fi
+    
     exit $ctest_status
 }
 
@@ -60,7 +65,3 @@ ctest \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
     
 status_computation_and_artifacts_storage
-
-if [ -s $build_dir/index.html ]; then
-   cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
-fi
