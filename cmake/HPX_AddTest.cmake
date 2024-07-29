@@ -320,8 +320,10 @@ function(add_hpx_performance_test subcategory name)
 endfunction(add_hpx_performance_test)
 
 function(add_hpx_performance_report_test subcategory name)
+  # set(ARGN "${ARGN} ")
   add_test_and_deps_test(
     "performance" "${subcategory}" ${name} ${ARGN} RUN_SERIAL
+    "--print_cdash_img_path"
   )
   find_package(Python REQUIRED)
   string(REPLACE "_perftest" "" name ${name})
