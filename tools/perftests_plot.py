@@ -47,12 +47,8 @@ else:
                     html_file.writelines("<tr><th>{}</th>".format(test1["name"]))
                     flag = False
                 html_file.writelines("<td>{}</td>".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
-                if mean1 < mean2:
-                    html_file.writelines("<td>{}, {:.2f} %</td>".format("Better", percentage_diff))
-                    html_file.writelines("<td>{:.2f}</td>".format(1 - pvalue))
-                else:
-                    html_file.writelines("<td>{}, {:.2f} %</td>".format("Worse", -percentage_diff))
-                    html_file.writelines("<td>{:.2f}</td>".format(1 - pvalue))
+                html_file.writelines("<td>{:.2f} %</td>".format(percentage_diff))
+                html_file.writelines("<td>{:.5f}</td>".format(1 - pvalue))
             if not flag:
                 html_file.writelines("</tr>")
         else:
