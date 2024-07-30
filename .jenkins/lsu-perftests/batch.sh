@@ -20,7 +20,7 @@ status_computation_and_artifacts_storage() {
 
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
 
-    if [[ ctest_status == 0 && -s $build_dir/index.html ]]; then
+    if [[ -s $build_dir/index.html ]]; then
         cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
     fi
 
