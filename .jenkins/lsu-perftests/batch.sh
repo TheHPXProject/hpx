@@ -20,10 +20,10 @@ status_computation_and_artifacts_storage() {
 
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
 
-    if [ -s $build_dir/index.html ]; then
+    if [[ ctest_status == 0 && -s $build_dir/index.html ]]; then
         cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
     fi
-    
+
     exit $ctest_status
 }
 
@@ -55,7 +55,7 @@ wait
 # Build and Run the perftests
 source "${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh"
 
-# CTest to upload the images to CDash
+# CTest to upload the results to CDash
 ctest \
     --verbose --output-on-failure \
     -S "${src_dir}/.jenkins/lsu-perftests/ctest.cmake" \
@@ -63,5 +63,3 @@ ctest \
     -DCTEST_CONFIGURE_EXTRA_OPTIONS="${configure_extra_options}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
-    
-status_computation_and_artifacts_storage
