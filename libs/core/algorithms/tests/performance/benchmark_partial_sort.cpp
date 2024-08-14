@@ -7,6 +7,7 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/testing.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -131,11 +132,49 @@ int hpx_main(hpx::program_options::variables_map& vm)
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
-    std::cout << "using seed: " << seed << std::endl;
-    gen.seed(seed);
+    hpx::util::perftests_init(vm, "benchmark_partial_sort");
 
-    function01();
-    function02();
+    typedef std::less<std::uint64_t> compare_t;
+
+    std::uint32_t NELEM = 1000;
+
+    std::vector<uint64_t> A, B;
+    A.reserve(NELEM);
+    B.reserve(NELEM);
+
+    for (std::uint64_t i = 0; i < NELEM; ++i)
+    {
+        A.emplace_back(i);
+    }
+    std::shuffle(A.begin(), A.end(), gen);
+    
+    hpx::util::perftests_report("hpx::partial_sort, size: " + std::to_string(NELEM) + ", step: " + std::to_string(1) , "seq", 100, [&] {
+        for (uint32_t i = 0; i < NELEM; i++)
+        {
+            B = A;
+            hpx::partial_sort(B.begin(), B.begin() + i, B.end(), compare_t());
+        }
+    });
+
+    NELEM = 100000;
+
+    A.clear();
+    B.clear();
+    A.reserve(NELEM);
+    B.reserve(NELEM);
+
+    for (std::uint64_t i = 0; i < NELEM; ++i)
+    {
+        A.emplace_back(i);
+    }
+    std::shuffle(A.begin(), A.end(), gen);
+
+    hpx::util::perftests_report("hpx::partial_sort, size: " + std::to_string(NELEM), "seq", 100, [&] {
+        B = A;
+        hpx::partial_sort(B.begin(), B.end(), B.end(), compare_t());
+    });
+
+    hpx::util::perftests_print_times();
 
     return hpx::local::finalize();
 }
@@ -152,6 +191,8 @@ int main(int argc, char* argv[])
 
     // By default this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+
+    hpx::util::perftests_cfg(desc_commandline);
 
     // Initialize and run HPX
     hpx::local::init_params init_args;

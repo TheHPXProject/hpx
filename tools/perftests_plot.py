@@ -56,16 +56,16 @@ else:
             if n != 1:
                 sns.kdeplot(test2["series"], fill=True, ax=ax[i % n, i // n], label='baseline')
                 sns.kdeplot(test1["series"], fill=True, ax=ax[i % n, i // n], label='current')
-                ax[i % n, i // n].axvline(mean2)
-                ax[i % n, i // n].axvline(mean1)
+                ax[i].axvline(mean2, label='baseline mean', color='k')
+                ax[i].axvline(mean1, label='current mean', color='g')
                 ax[i % n, i // n].legend()
                 ax[i % n, i // n].set_title(f'{test1["name"]}, {test1["executor"]}')
                 
             else:
                 sns.kdeplot(test2["series"], fill=True, ax=ax[i], label='baseline')
                 sns.kdeplot(test1["series"], fill=True, ax=ax[i], label='current')
-                ax[i].axvline(mean2)
-                ax[i].axvline(mean1)
+                ax[i].axvline(mean2, label='baseline mean', color='k')
+                ax[i].axvline(mean1, label='current mean', color='g')
                 ax[i].legend()
                 ax[i].set_title(f'{test1["name"]}, {test1["executor"]}')
                 
@@ -93,5 +93,6 @@ else:
     html_file.close()
 
     plt.tight_layout()    
+    [fig.delaxes(a) for a in ax.flatten() if not a.has_data()]
     plt.savefig(sys.argv[3] + ".png")
     
