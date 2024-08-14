@@ -39,6 +39,10 @@ set(perftest_reports
     benchmark_is_heap
     benchmark_remove
     benchmark_remove_if
+    benchmark_partial_sort
+    benchmark_partial_sort_parallel
+    benchmark_nth_element
+    benchmark_nth_element_parallel
 )
 
 set(foreach_report_perftest_PARAMETERS

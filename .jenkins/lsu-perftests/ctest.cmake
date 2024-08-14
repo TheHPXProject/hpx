@@ -80,6 +80,10 @@ set(benchmarks
   benchmark_is_heap
   benchmark_remove
   benchmark_remove_if
+  benchmark_partial_sort
+  benchmark_partial_sort_parallel
+  benchmark_nth_element
+  benchmark_nth_element_parallel
 )
 
 foreach(benchmark ${benchmarks})
@@ -98,16 +102,8 @@ set(ctest_submission_result ${ctest_submission_result} "Build: "
                             ${__build_result} "\n"
 )
 
-set(bench_regex_list "")
-
-foreach(benchmark ${benchmarks})
-  set(bench_regex_list ${bench_regex_list} ${benchmark}_perftest)
-endforeach()
-
-string(JOIN "|" bench_regex ${bench_regex_list})
-
 ctest_test(
-  INCLUDE ${bench_regex}
+  INCLUDE "_perftest$"
   PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}"
 )
 ctest_submit(
