@@ -6,11 +6,6 @@
 
 set(benchmarks minmax_element_performance)
 
-set(minmax_element_performance_perftest_PARAMETERS
-    EXECUTABLE minmax_element_performance PSEUDO_DEPS_NAME
-    minmax_element_performance
-)
-
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
