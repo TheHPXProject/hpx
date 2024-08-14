@@ -134,10 +134,6 @@ set(future_overhead_report_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_overhead_report_perftest_PARAMETERS
     THREADS_PER_LOCALITY
     4
-    EXECUTABLE
-    future_overhead_report
-    PSEUDO_DEPS_NAME
-    future_overhead_report
     --hpx:ini=hpx.thread_queue.init_threads_count=100
     --test-all
     --repetitions=40
@@ -148,10 +144,6 @@ set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
 set(stream_report_perftest_PARAMETERS
     THREADS_PER_LOCALITY
     4
-    EXECUTABLE
-    stream_report
-    PSEUDO_DEPS_NAME
-    stream_report
     --hpx:ini=hpx.thread_queue.init_threads_count=100
     --vector_size=518176
     --iterations=200
