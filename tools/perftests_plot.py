@@ -34,7 +34,7 @@ else:
     
     header_flag = True
     n = ceil(len(json_obj1["outputs"]) / 2)
-    fig, ax = plt.subplots(n, 2, figsize=(25, 4 * n), sharey=False)
+    fig, ax = plt.subplots(n, 2, figsize=(16, 3 * n), sharey=False)
     plt.subplots_adjust(hspace=0.3)
     i = 0
     for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
@@ -90,5 +90,5 @@ else:
 
     plt.tight_layout()    
     [fig.delaxes(a) for a in ax.flatten() if not a.has_data()]
-    plt.savefig(sys.argv[3] + ".png")
+    plt.savefig(sys.argv[3] + ".png", dpi=150)
     
