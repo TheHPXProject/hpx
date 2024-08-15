@@ -54,20 +54,16 @@ else:
             mean1 = np.mean(test1["series"])
             
             if n != 1:
-                sns.kdeplot(test2["series"], fill=True, ax=ax[i % n, i // n], label='baseline')
-                sns.kdeplot(test1["series"], fill=True, ax=ax[i % n, i // n], label='current')
-                ax[i].axvline(mean2, label='baseline mean', color='k')
-                ax[i].axvline(mean1, label='current mean', color='g')
-                ax[i % n, i // n].legend()
-                ax[i % n, i // n].set_title(f'{test1["name"]}, {test1["executor"]}')
-                
+                curr_plot = ax[i % n, i // n]
             else:
-                sns.kdeplot(test2["series"], fill=True, ax=ax[i], label='baseline')
-                sns.kdeplot(test1["series"], fill=True, ax=ax[i], label='current')
-                ax[i].axvline(mean2, label='baseline mean', color='k')
-                ax[i].axvline(mean1, label='current mean', color='g')
-                ax[i].legend()
-                ax[i].set_title(f'{test1["name"]}, {test1["executor"]}')
+                curr_plot = ax[i]
+                
+            sns.kdeplot(test2["series"], fill=True, ax=curr_plot, label='baseline')
+            sns.kdeplot(test1["series"], fill=True, ax=curr_plot, label='current')
+            curr_plot.axvline(mean2, label='baseline mean', color='k')
+            curr_plot.axvline(mean1, label='current mean', color='g')
+            curr_plot.legend()
+            curr_plot.set_title(f'{test1["name"]}, {test1["executor"]}')
                 
             percentage_diff = ((mean2 - mean1) / mean2) * 100
             
@@ -82,7 +78,7 @@ else:
                     flag = False
                 html_file.writelines("<td>{}</td>".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
                 html_file.writelines("<td>{:.2f} %</td>".format(percentage_diff))
-                html_file.writelines("<td>{:.2e}, {:.2e}</td>".format(lower, upper))
+                html_file.writelines("<td>{:.5f}</td>".format(abs(res.standard_error/np.mean(res.bootstrap_distribution))))
                 if not flag:
                     html_file.writelines("</tr>")
         else:

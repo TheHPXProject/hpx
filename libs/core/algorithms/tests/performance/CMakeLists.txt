@@ -55,33 +55,19 @@ set(foreach_report_perftest_PARAMETERS
     --test_count=200
 )
 
-set(transform_reduce_scaling_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4 
-)
+set(transform_reduce_scaling_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_is_heap_until_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_is_heap_until_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_merge_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_inplace_merge_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_inplace_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_is_heap_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_is_heap_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_remove_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_remove_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
-set(benchmark_remove_if_perftest_PARAMETERS
-    THREADS_PER_LOCALITY 4
-)
+set(benchmark_remove_if_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)

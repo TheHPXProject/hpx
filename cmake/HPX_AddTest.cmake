@@ -326,8 +326,15 @@ endfunction(add_hpx_performance_test)
 function(add_hpx_performance_report_test subcategory name)
   string(REPLACE "_perftest" "" name ${name})
   add_test_and_deps_test(
-    "performance" "${subcategory}" ${name}_perftest EXECUTABLE ${name} PSEUDO_DEPS_NAME
-    ${name} ${ARGN} RUN_SERIAL
+    "performance"
+    "${subcategory}"
+    ${name}_perftest
+    EXECUTABLE
+    ${name}
+    PSEUDO_DEPS_NAME
+    ${name}
+    ${ARGN}
+    RUN_SERIAL
     "--print_cdash_img_path"
   )
   find_package(Python REQUIRED)
@@ -335,7 +342,7 @@ function(add_hpx_performance_report_test subcategory name)
   if(NOT ARGN STREQUAL "")
     string(REPLACE "THREADS_PER_LOCALITY" "--hpx:threads=" ARGN ${ARGN})
     string(REPLACE "LOCALITIES" "--hpx:localities=" ARGN ${ARGN})
-    string(REPLACE "--" " --" ARGN ${ARGN}) 
+    string(REPLACE "--" " --" ARGN ${ARGN})
   endif()
 
   add_custom_target(
