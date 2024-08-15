@@ -34,7 +34,7 @@ else:
     
     header_flag = True
     n = ceil(len(json_obj1["outputs"]) / 2)
-    fig, ax = plt.subplots(2, n, figsize=(6 * n, 9), sharey=False)
+    fig, ax = plt.subplots(2, n, figsize=(5 * n, 6), sharey=False)
     plt.subplots_adjust(hspace=0.3)
     i = 0
     for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
