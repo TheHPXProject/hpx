@@ -47,7 +47,7 @@ namespace hpx::util {
     namespace detail {
 
 #if defined(HPX_HAVE_NANOBENCH)
-        constexpr int nanobench_epochs = 24;
+        constexpr int nanobench_epochs = 100;
         constexpr int nanobench_warmup = 40;
 
         char const* nanobench_hpx_simple_template() noexcept
@@ -182,7 +182,7 @@ average: {{average(elapsed)}}{{^-last}}
                 }
                 if (print_cdash_img)
                     strm << "<CTestMeasurementFile type=\"image/png\" "
-                            "name=\"perftests\" >"
+                            "name=\"TestImage\" >"
                          << "./" << test_name_
                          << ".png</CTestMeasurementFile>\n";
             }
