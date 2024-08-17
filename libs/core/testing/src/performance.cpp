@@ -223,7 +223,7 @@ average: {{average(elapsed)}}{{^-last}}
         detail::bench().render(templ, strm);
         if (!detailed_ && print_cdash_img)
             strm << "<CTestMeasurementFile type=\"image/png\" "
-                    "name=\"perftests\">"
+                    "name=\"TestImage\">"
                  << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
     }
 
