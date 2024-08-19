@@ -9,10 +9,10 @@ from math import ceil
 
 sns.set_style("ticks",{'axes.grid' : True})
 
-def mean_statistic(sample1, sample2, axis=-1):
-    mean1 = np.mean(sample1, axis=axis)
-    mean2 = np.mean(sample2, axis=axis)
-    return (mean1 - mean2) / mean1
+def median_statistic(sample1, sample2, axis=-1):
+    median1 = np.median(sample1, axis=axis)
+    median2 = np.median(sample2, axis=axis)
+    return (median2 - median1) / median1
 
 rng = np.random.default_rng()
 
@@ -33,9 +33,9 @@ else:
     samples = []
     
     header_flag = True
-    n = ceil(len(json_obj1["outputs"]) / 2)
-    fig, ax = plt.subplots(2, n, figsize=(5 * n, 6), sharey=False)
-    plt.subplots_adjust(hspace=0.3)
+    # n = ceil(len(json_obj1["outputs"]) / 2)
+    # fig, ax = plt.subplots(2, n, figsize=(5 * n, 6), sharey=False)
+    # plt.subplots_adjust(hspace=0.3)
     i = 0
     for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
         if test1["name"] == test2["name"]:
@@ -48,22 +48,27 @@ else:
             samples.append(test1["series"])
             
             data = (test2["series"], test1["series"])
-            res = scipy.stats.bootstrap(data, mean_statistic, method='basic', random_state=rng)
+            res = scipy.stats.bootstrap(data, median_statistic, method='basic', random_state=rng)
             
             mean2 = np.mean(test2["series"])
             mean1 = np.mean(test1["series"])
             
-            if n != 1:
-                curr_plot = ax[i // n, i % n]
-            else:
-                curr_plot = ax[i]
+            # if n != 1:
+            #     curr_plot = ax[i // n, i % n]
+            # else:
+            #     curr_plot = ax[i]
                 
-            sns.kdeplot(test2["series"], fill=True, ax=curr_plot, label='baseline')
-            sns.kdeplot(test1["series"], fill=True, ax=curr_plot, label='current')
-            curr_plot.axvline(mean2, label='baseline mean', color='k')
-            curr_plot.axvline(mean1, label='current mean', color='g')
-            curr_plot.legend()
-            curr_plot.set_title(f'{test1["name"]}, {test1["executor"]}')
+            plt.figure(figsize=(8, 4))
+                
+            sns.kdeplot(test2["series"], fill=True, label='baseline')
+            sns.kdeplot(test1["series"], fill=True, label='current')
+            plt.axvline(mean2, label='baseline mean', color='k')
+            plt.axvline(mean1, label='current mean', color='g')
+            plt.legend()
+            plt.suptitle(f'{test1["name"]}, \n{test1["executor"]}')
+            
+            plt.tight_layout() 
+            plt.savefig(f"{sys.argv[3]}_{i}.png")
                 
             percentage_diff = ((mean2 - mean1) / mean2) * 100
             
@@ -88,7 +93,7 @@ else:
     
     html_file.close()
 
-    plt.tight_layout()    
-    [fig.delaxes(a) for a in ax.flatten() if not a.has_data()]
-    plt.savefig(sys.argv[3] + ".png")
+    # plt.tight_layout()    
+    # [fig.delaxes(a) for a in ax.flatten() if not a.has_data()]
+    # plt.savefig(sys.argv[3] + ".png")
     

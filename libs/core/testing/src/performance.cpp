@@ -181,10 +181,13 @@ average: {{average(elapsed)}}{{^-last}}
                          << "\n\n";
                 }
                 if (print_cdash_img)
-                    strm << "<CTestMeasurementFile type=\"image/png\" "
-                            "name=\"TestImage\" >"
-                         << "./" << test_name_
-                         << ".png</CTestMeasurementFile>\n";
+                {
+                    for (std::size_t i = 0; i < obj.m_map.size(); i++) 
+                        strm << "<CTestMeasurementFile type=\"image/png\" "
+                                "name=\"perftest\" >"
+                            << "./" << test_name_ << "_" << i
+                            << ".png</CTestMeasurementFile>\n";
+                }
             }
             return strm;
         }
@@ -222,9 +225,12 @@ average: {{average(elapsed)}}{{^-last}}
     {
         detail::bench().render(templ, strm);
         if (!detailed_ && print_cdash_img)
-            strm << "<CTestMeasurementFile type=\"image/png\" "
-                    "name=\"TestImage\">"
-                 << "./" << test_name_ << ".png</CTestMeasurementFile>\n";
+        {
+            for (long unsigned int i = 0; i < detail::bench().results().size(); i++)
+                strm << "<CTestMeasurementFile type=\"image/png\" "
+                        "name=\"perftest\">"
+                    << "./" << test_name_ << "_" << i << ".png</CTestMeasurementFile>\n";
+        }
     }
 
     // Overload that uses a default nanobench template
