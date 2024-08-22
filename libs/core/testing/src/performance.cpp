@@ -24,20 +24,20 @@ namespace hpx::util {
 
     void perftests_cfg(hpx::program_options::options_description& cmdline)
     {
-        cmdline.add_options()("detailed_bench",
+        cmdline.add_options()("hpx:detailed_bench",
             "Use if detailed benchmarks are required, showing the execution "
-            "time taken for each epoch")("print_cdash_img_path",
+            "time taken for each epoch")("hpx:print_cdash_img_path",
             "Print the path to the images to be uploaded, in CDash XML format");
     }
 
     void perftests_init(hpx::program_options::variables_map const& vm,
         std::string test_name)
     {
-        if (vm.count("detailed_bench"))
+        if (vm.count("hpx:detailed_bench"))
         {
             detailed_ = true;
         }
-        if (vm.count("print_cdash_img_path"))
+        if (vm.count("hpx:print_cdash_img_path"))
         {
             print_cdash_img = true;
         }
@@ -56,8 +56,18 @@ namespace hpx::util {
 {{#result}}
 name: {{name}},
 executor: {{context(executor)}},
-average: {{average(elapsed)}}{{^-last}}
-{{/-last}}
+average: {{average(elapsed)}}
+{{/result}})DELIM";
+        }
+
+        char const* nanobench_hpx_cdash_template() noexcept
+        {
+            return R"DELIM(Results:
+{{#result}}        
+name: {{name}},
+executor: {{context(executor)}},
+average: {{average(elapsed)}}
+<CTestMeasurement type=\"numeric/double\" name=\"{{name}}_{{context(executor)}}\">{{average(elapsed)}}</CTestMeasurement>
 {{/result}})DELIM";
         }
 
@@ -227,9 +237,11 @@ average: {{average(elapsed)}}{{^-last}}
         if (!detailed_ && print_cdash_img)
         {
             for (long unsigned int i = 0; i < detail::bench().results().size(); i++)
+            {
                 strm << "<CTestMeasurementFile type=\"image/png\" "
                         "name=\"perftest\">"
                     << "./" << test_name_ << "_" << i << ".png</CTestMeasurementFile>\n";
+            }
         }
     }
 
@@ -244,6 +256,8 @@ average: {{average(elapsed)}}{{^-last}}
     {
         if (detailed_)
             perftests_print_times(detail::nanobench_hpx_template(), std::cout);
+        else if (print_cdash_img) 
+            perftests_print_times(detail::nanobench_hpx_cdash_template(), std::cout);
         else
             perftests_print_times(
                 detail::nanobench_hpx_simple_template(), std::cout);
