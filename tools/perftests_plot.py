@@ -9,10 +9,46 @@ from math import ceil
 
 sns.set_style("ticks",{'axes.grid' : True})
 
+def classify(lower, higher):
+    if upper - lower > 0.1:
+            return '??'
+        
+    if -0.01 <= lower <= 0 <= upper <= 0.01:
+        return '='
+    if -0.02 <= lower <= upper <= 0.02:
+        return '(=)'
+
+    # probably no change, but quite large uncertainty
+    if -0.05 <= lower <= 0 <= upper <= 0.05:
+        return '?'
+
+    # faster
+    if -0.01 <= lower <= 0.0:
+        return '(+)'
+    if -0.05 <= lower <= -0.01:
+        return '+'
+    if -0.1 <= lower <= -0.05:
+        return '++'
+    if lower <= -0.1:
+        return '+++'
+
+    # slower
+    if 0.01 >= upper >= 0.0:
+        return '(-)'
+    if 0.05 >= upper >= 0.01:
+        return '-'
+    if 0.1 >= upper >= 0.05:
+        return '--'
+    if upper >= 0.1:
+        return '---'
+
+    # no idea
+    return '???'
+
 def median_statistic(sample1, sample2, axis=-1):
     median1 = np.median(sample1, axis=axis)
     median2 = np.median(sample2, axis=axis)
-    return (median2 - median1) / median1
+    return (median1 - median2)
 
 rng = np.random.default_rng()
 
@@ -47,11 +83,11 @@ else:
             category.append("current")
             samples.append(test1["series"])
             
-            data = (test2["series"], test1["series"])
+            data = (test2["series"], test1["series"]) / np.median(test1["series"])
             res = scipy.stats.bootstrap(data, median_statistic, method='basic', random_state=rng)
             
-            mean2 = np.mean(test2["series"])
-            mean1 = np.mean(test1["series"])
+            mean2 = np.median(test2["series"])
+            mean1 = np.median(test1["series"])
             
             # if n != 1:
             #     curr_plot = ax[i // n, i % n]
@@ -74,16 +110,16 @@ else:
             
             lower, upper = res.confidence_interval
             
-            if not (-0.02 <= lower <= 0 <= upper <= 0.02 or -0.01 <= lower <= 0.0 or 0.01 >= upper >= 0.0):
+            if ('=' not in classify(lower, upper)):
                 if header_flag:
-                    html_file.writelines("<tr><th scope=\"row\" colspan=\"5\">{}</th></tr>".format(sys.argv[3].split('/')[-1]))
+                    html_file.writelines("<tr><th scope=\"row\" colspan=\"4\">{}</th></tr>".format(sys.argv[3].split('/')[-1]))
                     header_flag = False
                 if flag:
                     html_file.writelines("<tr><th>{}</th>".format(test1["name"]))
                     flag = False
                 html_file.writelines("<td>{}</td>".format(test1["executor"].replace('<', '&lt;').replace('>', '&gt;')))
                 html_file.writelines("<td>{:.2f} %</td>".format(percentage_diff))
-                html_file.writelines("<td>{:.5f}</td>".format(abs(res.standard_error/np.mean(res.bootstrap_distribution))))
+                html_file.writelines("<td>{}</td>".format(classify(lower, upper)))
                 if not flag:
                     html_file.writelines("</tr>")
         else:
