@@ -67,7 +67,7 @@ average: {{average(elapsed)}}
 name: {{name}},
 executor: {{context(executor)}},
 average: {{average(elapsed)}}
-<CTestMeasurement type=\"numeric/double\" name=\"{{name}}_{{context(executor)}}\">{{average(elapsed)}}</CTestMeasurement>
+<CTestMeasurement type="numeric/double" name="{{name}}_{{context(executor)}}">{{average(elapsed)}}</CTestMeasurement>
 {{/result}})DELIM";
         }
 
