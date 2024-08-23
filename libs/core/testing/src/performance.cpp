@@ -47,7 +47,6 @@ namespace hpx::util {
     namespace detail {
 
 #if defined(HPX_HAVE_NANOBENCH)
-        constexpr int nanobench_epochs = 100;
         constexpr int nanobench_warmup = 40;
 
         char const* nanobench_hpx_simple_template() noexcept
@@ -94,7 +93,6 @@ average: {{average(elapsed)}}
             static ankerl::nanobench::Config cfg;
 
             cfg.mWarmup = nanobench_warmup;
-            cfg.mNumEpochs = nanobench_epochs;
 
             return b.config(cfg);
         }
@@ -171,6 +169,35 @@ average: {{average(elapsed)}}
                 strm << "]\n";
                 strm << "}\n";
             }
+            else if (print_cdash_img)
+            {
+                strm << "Results:\n\n";
+                for (auto&& item : obj.m_map)
+                {
+                    long double average = static_cast<long double>(0.0);
+                    int series = 0;
+                    strm << "name: " << std::get<0>(item.first) << "\n";
+                    strm << "executor: " << std::get<1>(item.first) << "\n";
+                    for (long double const val : item.second)
+                    {
+                        ++series;
+                        average += val;
+                    }
+                    strm.precision(
+                        std::numeric_limits<long double>::max_digits10 - 1);
+                    strm << std::scientific << "average: " << average / series
+                         << "\n";
+                    strm << "<CTestMeasurement type=\"numeric/double\" name=\""
+                         << std::get<0>(item.first) << "_"
+                         << std::get<1>(item.first) << "\">" << std::scientific
+                         << average / series << "</CTestMeasurement>\n\n";
+                }
+                for (std::size_t i = 0; i < obj.m_map.size(); i++)
+                    strm << "<CTestMeasurementFile type=\"image/png\" "
+                            "name=\"perftest\" >"
+                         << "./" << test_name_ << "_" << i
+                         << ".png</CTestMeasurementFile>\n";
+            }
             else
             {
                 strm << "Results:\n\n";
@@ -189,14 +216,6 @@ average: {{average(elapsed)}}
                         std::numeric_limits<long double>::max_digits10 - 1);
                     strm << std::scientific << "average: " << average / series
                          << "\n\n";
-                }
-                if (print_cdash_img)
-                {
-                    for (std::size_t i = 0; i < obj.m_map.size(); i++) 
-                        strm << "<CTestMeasurementFile type=\"image/png\" "
-                                "name=\"perftest\" >"
-                            << "./" << test_name_ << "_" << i
-                            << ".png</CTestMeasurementFile>\n";
                 }
             }
             return strm;
@@ -218,13 +237,10 @@ average: {{average(elapsed)}}
         if (steps == 0)
             return;
 
-        std::size_t const steps_per_epoch =
-            steps / detail::nanobench_epochs + 1;
-
         detail::bench()
             .name(name)
             .context("executor", exec)
-            .minEpochIterations(steps_per_epoch)
+            .epochs(steps)
             .run(test);
     }
 
@@ -236,11 +252,13 @@ average: {{average(elapsed)}}
         detail::bench().render(templ, strm);
         if (!detailed_ && print_cdash_img)
         {
-            for (long unsigned int i = 0; i < detail::bench().results().size(); i++)
+            for (long unsigned int i = 0; i < detail::bench().results().size();
+                 i++)
             {
                 strm << "<CTestMeasurementFile type=\"image/png\" "
                         "name=\"perftest\">"
-                    << "./" << test_name_ << "_" << i << ".png</CTestMeasurementFile>\n";
+                     << "./" << test_name_ << "_" << i
+                     << ".png</CTestMeasurementFile>\n";
             }
         }
     }
@@ -256,8 +274,9 @@ average: {{average(elapsed)}}
     {
         if (detailed_)
             perftests_print_times(detail::nanobench_hpx_template(), std::cout);
-        else if (print_cdash_img) 
-            perftests_print_times(detail::nanobench_hpx_cdash_template(), std::cout);
+        else if (print_cdash_img)
+            perftests_print_times(
+                detail::nanobench_hpx_cdash_template(), std::cout);
         else
             perftests_print_times(
                 detail::nanobench_hpx_simple_template(), std::cout);
