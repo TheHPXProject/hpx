@@ -30,6 +30,8 @@ std::mt19937 my_rand(0);
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
+    int test_count = vm["test_count"].as<int>();
+
     hpx::util::perftests_init(vm, "benchmark_nth_element_parallel");
 
     typedef std::less<uint64_t> compare_t;
@@ -45,7 +47,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_report("hpx::nth_element, size: " +
             std::to_string(NELEM) + ", step: " + std::to_string(1),
-        "par", 100, [&] {
+        "par", test_count, [&] {
             for (uint64_t i = 0; i < NELEM; ++i)
             {
                 B = A;
@@ -69,7 +71,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_report("hpx::nth_element, size: " +
             std::to_string(NELEM) + ", step: " + std::to_string(STEP),
-        "par", 100, [&] {
+        "par", test_count, [&] {
             for (uint64_t i = 0; i < NELEM; i += STEP)
             {
                 B = A;
@@ -88,6 +90,10 @@ int main(int argc, char* argv[])
     using namespace hpx::program_options;
     options_description desc_commandline(
         "Usage: " HPX_APPLICATION_STRING " [options]");
+
+    desc_commandline.add_options()("test_count",
+        hpx::program_options::value<int>()->default_value(10),
+        "number of tests to be averaged (default: 10)");
 
     hpx::util::perftests_cfg(desc_commandline);
 

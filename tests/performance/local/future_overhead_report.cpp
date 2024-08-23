@@ -161,7 +161,7 @@ int hpx_main(variables_map& vm)
             numa_sensitive = 0;
 
         bool test_all = (vm.count("test-all") > 0);
-        int const repetitions = vm["repetitions"].as<int>();
+        int const repetitions = vm["test_count"].as<int>();
 
         if (vm.count("info"))
             info_string = vm["info"].as<std::string>();
@@ -202,7 +202,7 @@ int main(int argc, char* argv[])
          "number of iterations in the delay loop")
 
         ("test-all", "run all benchmarks")
-        ("repetitions", value<int>()->default_value(1),
+        ("test_count", value<int>()->default_value(1),
          "number of repetitions of the full benchmark")
 
         ("info", value<std::string>()->default_value("no-info"),

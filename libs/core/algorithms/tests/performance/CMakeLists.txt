@@ -46,13 +46,8 @@ set(perftest_reports
 )
 
 set(foreach_report_perftest_PARAMETERS
-    THREADS_PER_LOCALITY
-    4
-    --hpx:ini=hpx.thread_queue.init_threads_count=100
-    --vector_size=104857
-    --work_delay=1
-    --chunk_size=0
-    --test_count=200
+    THREADS_PER_LOCALITY 4 --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --vector_size=104857 --work_delay=1 --chunk_size=0
 )
 
 set(transform_reduce_scaling_perftest_PARAMETERS THREADS_PER_LOCALITY 4)

@@ -336,6 +336,7 @@ function(add_hpx_performance_report_test subcategory name)
     ${ARGN}
     RUN_SERIAL
     "--hpx:print_cdash_img_path"
+    "--test_count=1000"
   )
   find_package(Python REQUIRED)
 
@@ -349,7 +350,7 @@ function(add_hpx_performance_report_test subcategory name)
     ${name}_cdash_results
     COMMAND
       sh -c
-      "${CMAKE_BINARY_DIR}/bin/${name}_test ${ARGN} --hpx:detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
+      "${CMAKE_BINARY_DIR}/bin/${name}_test ${ARGN} --test_count=1000 --hpx:detailed_bench >${CMAKE_BINARY_DIR}/${name}.json"
     COMMAND
       ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/perftests_plot.py
       ${CMAKE_BINARY_DIR}/${name}.json
