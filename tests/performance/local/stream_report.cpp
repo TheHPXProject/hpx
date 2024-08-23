@@ -443,7 +443,7 @@ auto run_benchmark(std::size_t warmup_iterations, std::size_t iterations,
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     std::size_t vector_size = vm["vector_size"].as<std::size_t>();
-    std::size_t iterations = vm["iterations"].as<std::size_t>();
+    std::size_t iterations = vm["test_count"].as<std::size_t>();
     std::size_t warmup_iterations = vm["warmup_iterations"].as<std::size_t>();
     std::size_t chunk_size = vm["chunk_size"].as<std::size_t>();
     hpx::util::perftests_init(vm, "stream_report");
@@ -527,7 +527,7 @@ int main(int argc, char* argv[])
         (   "vector_size",
             hpx::program_options::value<std::size_t>()->default_value(1024),
             "size of vector (default: 1024)")
-        (   "iterations",
+        (   "test_count",
             hpx::program_options::value<std::size_t>()->default_value(10),
             "number of iterations to repeat each test. (default: 10)")
         (   "warmup_iterations",

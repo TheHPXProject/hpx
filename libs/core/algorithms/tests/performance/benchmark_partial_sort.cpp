@@ -132,6 +132,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
+    int test_count = vm["test_count"].as<int>();
+
     hpx::util::perftests_init(vm, "benchmark_partial_sort");
 
     typedef std::less<std::uint64_t> compare_t;
@@ -150,7 +152,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_report("hpx::partial_sort, size: " +
             std::to_string(NELEM) + ", step: " + std::to_string(1),
-        "seq", 100, [&] {
+        "seq", test_count, [&] {
             for (uint32_t i = 0; i < NELEM; i++)
             {
                 B = A;
@@ -173,7 +175,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::shuffle(A.begin(), A.end(), gen);
 
     hpx::util::perftests_report(
-        "hpx::partial_sort, size: " + std::to_string(NELEM), "seq", 100, [&] {
+        "hpx::partial_sort, size: " + std::to_string(NELEM), "seq", test_count,
+        [&] {
             B = A;
             hpx::partial_sort(B.begin(), B.end(), B.end(), compare_t());
         });
@@ -191,7 +194,9 @@ int main(int argc, char* argv[])
         "Usage: " HPX_APPLICATION_STRING " [options]");
 
     desc_commandline.add_options()("seed,s", value<unsigned int>(),
-        "the random number generator seed to use for this run");
+        "the random number generator seed to use for this run")("test_count",
+        value<int>()->default_value(10),
+        "number of tests to be averaged (default: 10)");
 
     // By default this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
