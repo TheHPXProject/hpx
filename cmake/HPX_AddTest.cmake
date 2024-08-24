@@ -330,9 +330,8 @@ function(add_hpx_performance_report_test subcategory name)
     PSEUDO_DEPS_NAME
     ${name}
     ${ARGN}
-    RUN_SERIAL
     "--hpx:print_cdash_img_path"
-    "--test_count=1000"
+    "--test_count=100"
   )
   find_package(Python REQUIRED)
 

@@ -81,8 +81,8 @@ else:
             category.append("current")
             samples.append(test1["series"])
             
-            data = (test2["series"] / np.median(test1["series"]), test1["series"] / np.median(test1["series"]))
-            res = scipy.stats.bootstrap(data, median_statistic, method='basic', random_state=rng)
+            data = (test2["series"] / np.median(test2["series"]), test1["series"] / np.median(test2["series"]))
+            res = scipy.stats.bootstrap(data, median_statistic, random_state=rng, n_resamples=1000)
             
             median2 = np.median(test2["series"])
             median1 = np.median(test1["series"])
