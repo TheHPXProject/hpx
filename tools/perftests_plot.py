@@ -9,9 +9,9 @@ from math import ceil
 
 sns.set_style("ticks",{'axes.grid' : True})
 
-def classify(lower, higher):
+def classify(lower, upper):
     if upper - lower > 0.1:
-            return '??'
+        return '??'
         
     if -0.01 <= lower <= 0 <= upper <= 0.01:
         return '='
@@ -69,9 +69,7 @@ else:
     samples = []
     
     header_flag = True
-    # n = ceil(len(json_obj1["outputs"]) / 2)
-    # fig, ax = plt.subplots(2, n, figsize=(5 * n, 6), sharey=False)
-    # plt.subplots_adjust(hspace=0.3)
+    
     i = 0
     for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
         if test1["name"] == test2["name"]:
@@ -86,27 +84,22 @@ else:
             data = (test2["series"] / np.median(test1["series"]), test1["series"] / np.median(test1["series"]))
             res = scipy.stats.bootstrap(data, median_statistic, method='basic', random_state=rng)
             
-            mean2 = np.median(test2["series"])
-            mean1 = np.median(test1["series"])
-            
-            # if n != 1:
-            #     curr_plot = ax[i // n, i % n]
-            # else:
-            #     curr_plot = ax[i]
+            median2 = np.median(test2["series"])
+            median1 = np.median(test1["series"])
                 
             plt.figure(figsize=(8, 4))
                 
             sns.kdeplot(test2["series"], fill=True, label='baseline')
             sns.kdeplot(test1["series"], fill=True, label='current')
-            plt.axvline(mean2, label='baseline mean', color='k')
-            plt.axvline(mean1, label='current mean', color='g')
+            plt.axvline(median2, label='baseline median', color='k')
+            plt.axvline(median1, label='current median', color='g')
             plt.legend()
             plt.suptitle(f'{test1["name"]}, \n{test1["executor"]}')
             
             plt.tight_layout() 
             plt.savefig(f"{sys.argv[3]}_{i}.png")
                 
-            percentage_diff = ((mean2 - mean1) / mean2) * 100
+            percentage_diff = ((median2 - median1) / median2) * 100
             
             lower, upper = res.confidence_interval
             
@@ -128,8 +121,4 @@ else:
         i += 1
     
     html_file.close()
-
-    # plt.tight_layout()    
-    # [fig.delaxes(a) for a in ax.flatten() if not a.has_data()]
-    # plt.savefig(sys.argv[3] + ".png")
     
