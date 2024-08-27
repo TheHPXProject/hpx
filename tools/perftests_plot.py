@@ -5,7 +5,6 @@ import scipy
 import scipy.stats
 import numpy as np
 import seaborn as sns
-from math import ceil
 
 sns.set_style("ticks",{'axes.grid' : True})
 
@@ -50,8 +49,6 @@ def median_statistic(sample1, sample2, axis=-1):
     median2 = np.median(sample2, axis=axis)
     return (median1 - median2)
 
-rng = np.random.default_rng()
-
 if len(sys.argv) != 4:
     print("Usage: python perftests_plot.py [path_to_first_result.json] [path_to_second_result.json] [perftest_name]")
 else:
@@ -82,21 +79,25 @@ else:
             samples.append(test1["series"])
             
             data = (test2["series"] / np.median(test2["series"]), test1["series"] / np.median(test2["series"]))
-            res = scipy.stats.bootstrap(data, median_statistic, random_state=rng, n_resamples=1000)
+            res = scipy.stats.bootstrap(data, median_statistic, n_resamples=1000)
             
             median2 = np.median(test2["series"])
             median1 = np.median(test1["series"])
                 
             plt.figure(figsize=(8, 4))
+            
+            data_map = {
+                "baseline": test2["series"],
+                "current": test1["series"]
+            }
                 
-            sns.kdeplot(test2["series"], fill=True, label='baseline')
-            sns.kdeplot(test1["series"], fill=True, label='current')
+            sns.histplot(data=data_map, kde=True)
             plt.axvline(median2, label='baseline median', color='k')
             plt.axvline(median1, label='current median', color='g')
             plt.legend()
             plt.suptitle(f'{test1["name"]}, \n{test1["executor"]}')
             
-            plt.tight_layout() 
+            # plt.tight_layout() 
             plt.savefig(f"{sys.argv[3]}_{i}.png")
                 
             percentage_diff = ((median2 - median1) / median2) * 100
