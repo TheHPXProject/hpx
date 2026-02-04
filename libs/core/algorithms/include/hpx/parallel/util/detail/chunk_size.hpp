@@ -120,8 +120,8 @@ namespace hpx::parallel::util::detail {
 
                 // we should not make chunks smaller than what's determined by
                 // the max chunk size
-                chunk_size = (std::max) (chunk_size,
-                    (count + max_chunks - 1) / max_chunks);
+                chunk_size = (std::max)(
+                    chunk_size, (count + max_chunks - 1) / max_chunks);
             }
             else
             {
@@ -205,15 +205,24 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), hpx::chrono::null_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        auto [adj_chunk, adj_max] =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
+        if (adj_chunk != 0)
+            chunk_size = adj_chunk;
+        if (adj_max != 0)
+            max_chunks = adj_max;
+        else if (adj_chunk == 0)
+            adjust_chunk_size_and_max_chunks(
+                cores, count, max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
         Stride stride = parallel::detail::abs(s);
 
         if (stride != 1)
         {
-            chunk_size = (std::max) (static_cast<std::size_t>(stride),
+            chunk_size = (std::max)(static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -255,13 +264,13 @@ namespace hpx::parallel::util::detail {
             if (stride != 1)
             {
                 // rounding up
-                test_chunk_size = (std::max) (static_cast<std::size_t>(stride),
+                test_chunk_size = (std::max)(static_cast<std::size_t>(stride),
                     (test_chunk_size + stride - 1) / stride * stride);
             }
 
             add_ready_future(workitems, f1, it_or_r, test_chunk_size);
 
-            test_chunk_size = (std::min) (count, test_chunk_size);
+            test_chunk_size = (std::min)(count, test_chunk_size);
 
             count -= test_chunk_size;
             it_or_r = next_or_subrange(it_or_r, test_chunk_size, count);
@@ -285,14 +294,23 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), iteration_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        auto [adj_chunk, adj_max] =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
+        if (adj_chunk != 0)
+            chunk_size = adj_chunk;
+        if (adj_max != 0)
+            max_chunks = adj_max;
+        else if (adj_chunk == 0)
+            adjust_chunk_size_and_max_chunks(
+                cores, count, max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
 
         if (stride != 1)
         {
-            chunk_size = (std::max) (static_cast<std::size_t>(stride),
+            chunk_size = (std::max)(static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -339,7 +357,7 @@ namespace hpx::parallel::util::detail {
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
         {
-            max_chunks = (std::min) (max_chunks, count);
+            max_chunks = (std::min)(max_chunks, count);
         }
 
         while (count != 0)
@@ -355,16 +373,16 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                chunk_size = (std::max) (static_cast<std::size_t>(stride),
+                chunk_size = (std::max)(static_cast<std::size_t>(stride),
                     (chunk_size + stride - 1) / stride * stride);
             }
 
             // in last chunk, consider only remaining number of elements
-            std::size_t chunk = (std::min) (chunk_size, count);
+            std::size_t chunk = (std::min)(chunk_size, count);
 
             shape.emplace_back(it_or_r, chunk);
 
-            chunk = (std::min) (count, chunk);
+            chunk = (std::min)(count, chunk);
             count -= chunk;
 
             it_or_r = next_or_subrange(it_or_r, chunk, count);
@@ -459,12 +477,21 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), hpx::chrono::null_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        auto [adj_chunk, adj_max] =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
+        if (adj_chunk != 0)
+            chunk_size = adj_chunk;
+        if (adj_max != 0)
+            max_chunks = adj_max;
+        else if (adj_chunk == 0)
+            adjust_chunk_size_and_max_chunks(
+                cores, count, max_chunks, chunk_size);
 
         if (stride != 1)
         {
-            chunk_size = (std::max) (static_cast<std::size_t>(stride),
+            chunk_size = (std::max)(static_cast<std::size_t>(stride),
                 static_cast<std::size_t>(
                     (chunk_size + stride - 1) / stride * stride));
         }
@@ -514,7 +541,7 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                test_chunk_size = (std::max) (static_cast<std::size_t>(stride),
+                test_chunk_size = (std::max)(static_cast<std::size_t>(stride),
                     (test_chunk_size + stride - 1) / stride * stride);
             }
 
@@ -548,12 +575,21 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), iteration_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        auto [adj_chunk, adj_max] =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
+        if (adj_chunk != 0)
+            chunk_size = adj_chunk;
+        if (adj_max != 0)
+            max_chunks = adj_max;
+        else if (adj_chunk == 0)
+            adjust_chunk_size_and_max_chunks(
+                cores, count, max_chunks, chunk_size);
 
         if (stride != 1)
         {
-            chunk_size = (std::max) (static_cast<std::size_t>(stride),
+            chunk_size = (std::max)(static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -603,7 +639,7 @@ namespace hpx::parallel::util::detail {
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
         {
-            max_chunks = (std::min) (max_chunks, count);
+            max_chunks = (std::min)(max_chunks, count);
         }
 
         std::size_t base_idx = 0;
@@ -620,12 +656,12 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                chunk_size = (std::max) (static_cast<std::size_t>(stride),
+                chunk_size = (std::max)(static_cast<std::size_t>(stride),
                     (chunk_size + stride - 1) / stride * stride);
             }
 
             // in last chunk, consider only remaining number of elements
-            std::size_t chunk = (std::min) (chunk_size, count);
+            std::size_t chunk = (std::min)(chunk_size, count);
 
             shape.emplace_back(first, chunk, base_idx);
 

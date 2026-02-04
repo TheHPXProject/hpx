@@ -652,6 +652,69 @@ namespace hpx::execution::experimental::detail {
             call(static_cast<Parameters&>(params), HPX_FORWARD(Executor, exec));
         }
     };
+
+    ///////////////////////////////////////////////////////////////////////
+    // define member traits
+    HPX_HAS_MEMBER_XXX_TRAIT_DEF(adjust_chunk_size_and_max_chunks)
+
+    ///////////////////////////////////////////////////////////////////////
+    // default property implementation allowing to handle
+    // adjust_chunk_size_and_max_chunks
+    struct adjust_chunk_size_and_max_chunks_property
+    {
+        // default implementation
+        template <typename Target>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks(
+            Target, std::size_t, std::size_t, std::size_t, std::size_t) noexcept
+        {
+            // return zero which means no adjustment
+            return {0, 0};    // {adjusted_chunk_size, adjusted_max_chunks}
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // Generate a type that is guaranteed to support
+    // adjust_chunk_size_and_max_chunks
+    using get_adjust_chunk_size_and_max_chunks_t =
+        get_parameters_property_t<adjust_chunk_size_and_max_chunks_property,
+            has_adjust_chunk_size_and_max_chunks_t>;
+
+    inline constexpr get_adjust_chunk_size_and_max_chunks_t
+        get_adjust_chunk_size_and_max_chunks{};
+
+    ///////////////////////////////////////////////////////////////////////
+    // customization point for interface adjust_chunk_size_and_max_chunks()
+    template <typename Parameters, typename Executor_>
+    struct adjust_chunk_size_and_max_chunks_fn_helper<Parameters, Executor_,
+        std::enable_if_t<hpx::traits::is_executor_any_v<Executor_>>>
+    {
+        template <typename Executor>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        call(Parameters& params, Executor&& exec, std::size_t num_elements,
+            std::size_t num_cores, std::size_t num_chunks,
+            std::size_t chunk_size)
+        {
+            auto get_prop = get_adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(Executor, exec), params,
+                adjust_chunk_size_and_max_chunks_property{});
+
+            return get_prop.first.adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(decltype(get_prop.second), get_prop.second),
+                num_elements, num_cores, num_chunks, chunk_size);
+        }
+
+        template <typename AnyParameters, typename Executor>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        call(AnyParameters params, Executor&& exec, std::size_t num_elements,
+            std::size_t num_cores, std::size_t num_chunks,
+            std::size_t chunk_size)
+        {
+            return call(static_cast<Parameters&>(params),
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                num_chunks, chunk_size);
+        }
+    };
     /// \endcond
 
     /// \cond NOINTERNAL
