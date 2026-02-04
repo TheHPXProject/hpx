@@ -456,7 +456,7 @@ namespace hpx::parallel { namespace detail {
             std::next(part_begin, 2), part_size - 2, HPX_MOVE(init), r);
     }
 
-    HPX_CXX_EXPORT template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     struct reduce : public algorithm<reduce<T>, T>
     {
         constexpr reduce() noexcept
