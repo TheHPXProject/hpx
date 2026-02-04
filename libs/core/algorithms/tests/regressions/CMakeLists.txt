@@ -1,8 +1,8 @@
-# Copyright (c) 2014-2025 Hartmut Kaiser
+#Copyright(c) 2014 - 2025 Hartmut Kaiser
 #
-# SPDX-License-Identifier: BSL-1.0
-# Distributed under the Boost Software License, Version 1.0. (See accompanying
-# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#SPDX - License - Identifier : BSL - 1.0
+#Distributed under the Boost Software License, Version 1.0.(See accompanying
+#file LICENSE_1_0.txt or copy at http:    //www.boost.org/LICENSE_1_0.txt)
 
 set(tests
     chunk_size_variable_regression
@@ -40,24 +40,19 @@ if(HPX_WITH_DATAPAR)
   list(APPEND tests counting_iterator_datapar for_each_datapar)
 endif()
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+        foreach (test ${tests}) set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+            set(${test} _PARAMETERS THREADS_PER_LOCALITY 4)
 
-  source_group("Source Files" FILES ${sources})
+                source_group("Source Files" FILES ${sources})
 
-  # add example executable
-  add_hpx_executable(
-    ${test}_test INTERNAL_FLAGS
-    SOURCES ${sources}
-    EXCLUDE_FROM_ALL ${${test}_FLAGS}
-    FOLDER "Tests/Regressions/Modules/Core/Algorithms/"
-  )
+#add example executable
+                    add_hpx_executable(${test} _test INTERNAL_FLAGS SOURCES ${
+                        sources} EXCLUDE_FROM_ALL ${${test} _FLAGS} FOLDER
+                        "Tests/Regressions/Modules/Core/Algorithms/")
 
-  target_link_libraries(
-    ${test}_test PRIVATE hpx_iterator_support_test_utilities
-  )
+                        target_link_libraries(${test} _test PRIVATE
+                                hpx_iterator_support_test_utilities)
 
-  add_hpx_regression_test("modules.algorithms" ${test} ${${test}_PARAMETERS})
-endforeach()
+                            add_hpx_regression_test("modules.algorithms" ${
+                                test} ${${test} _PARAMETERS}) endforeach()
