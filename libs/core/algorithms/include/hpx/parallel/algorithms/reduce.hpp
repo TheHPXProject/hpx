@@ -63,7 +63,7 @@ namespace hpx {
     /// with an execution policy object of type \a sequenced_policy
     /// execute in sequential order in the calling thread.
     ///
-    /// The reduce operations in the parallel \a copy_if algorithm invoked
+    /// The reduce operations in the parallel \a reduce algorithm invoked
     /// with an execution policy object of type \a parallel_policy
     /// or \a parallel_task_policy are permitted to execute in an unordered
     /// fashion in unspecified threads, and indeterminately sequenced
@@ -418,9 +418,8 @@ namespace hpx::parallel {
                 }
 
                 auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
-                    T val = *part_begin;
-                    return detail::sequential_reduce<ExPolicy>(
-                        ++part_begin, --part_size, HPX_MOVE(val), r);
+                    return reduce_partition<ExPolicy, FwdIterB, T>(
+                        part_begin, part_size, r);
                 };
 
                 return util::partitioner<ExPolicy, T>::call(
