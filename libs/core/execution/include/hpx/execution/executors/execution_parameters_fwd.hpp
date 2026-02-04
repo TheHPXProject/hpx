@@ -64,6 +64,10 @@ namespace hpx::execution::experimental {
         template <typename Parameters, typename Executor,
             typename Enable = void>
         struct collect_execution_parameters_fn_helper;
+
+        template <typename Parameters, typename Executor,
+            typename Enable = void>
+        struct adjust_chunk_size_and_max_chunks_fn_helper;
         /// \endcond
     }    // namespace detail
 
@@ -454,6 +458,29 @@ namespace hpx::execution::experimental {
                 num_chunks, chunk_size);
         }
     } collect_execution_parameters{};
+
+    HPX_CXX_EXPORT inline constexpr struct adjust_chunk_size_and_max_chunks_t
+        final
+      : hpx::functional::detail::tag_priority<
+            adjust_chunk_size_and_max_chunks_t>
+    {
+    private:
+        template <typename Parameters, typename Executor>
+            requires(hpx::traits::is_executor_parameters_v<Parameters> &&
+                hpx::traits::is_executor_any_v<Executor>)
+        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
+            adjust_chunk_size_and_max_chunks_t, Parameters&& params,
+            Executor&& exec, std::size_t num_elements, std::size_t num_cores,
+            std::size_t num_chunks, std::size_t chunk_size)
+        {
+            return detail::adjust_chunk_size_and_max_chunks_fn_helper<
+                hpx::util::decay_unwrap_t<Parameters>,
+                std::decay_t<Executor>>::call(HPX_FORWARD(Parameters, params),
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                num_chunks, chunk_size);
+        }
+
+    } adjust_chunk_size_and_max_chunks{};
 
     template <>
     struct is_scheduling_property<with_processing_units_count_t>
