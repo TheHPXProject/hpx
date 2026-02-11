@@ -433,8 +433,7 @@ namespace hpx::execution::experimental {
     };
 }    // namespace hpx::execution::experimental
 
-namespace hpx::parallel {
-    namespace detail {
+namespace hpx::parallel { namespace detail {
 
     // Helper function to reduce a partition without requiring an init value.
     // Assumes partition size is always >= 2 (enforced by reduce_executor_parameters).
@@ -470,9 +469,8 @@ namespace hpx::parallel {
         static constexpr T sequential(ExPolicy&& policy, InIterB first,
             InIterE last, T_&& init, Reduce&& r)
         {
-            return sequential_reduce<ExPolicy>(
-                HPX_FORWARD(ExPolicy, policy), first, last,
-                HPX_FORWARD(T_, init), HPX_FORWARD(Reduce, r));
+            return sequential_reduce<ExPolicy>(HPX_FORWARD(ExPolicy, policy),
+                first, last, HPX_FORWARD(T_, init), HPX_FORWARD(Reduce, r));
         }
 
         template <typename ExPolicy, typename FwdIterB, typename FwdIterE,
@@ -495,7 +493,7 @@ namespace hpx::parallel {
 
             // Handle single-element case: can't partition into size >= 2
             // This must be checked for all execution policies
-            auto const count = distance(first, last);
+            auto const count = hpx::parallel::detail::distance(first, last);
             if (count == 1)
             {
                 T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
@@ -515,13 +513,12 @@ namespace hpx::parallel {
                     part_begin, part_size, r);
             };
 
-            auto reduce_policy =
-                policy.with(reduce_executor_parameters{});
+            auto reduce_policy = policy.with(reduce_executor_parameters{});
             using reduce_policy_type = std::decay_t<decltype(reduce_policy)>;
 
             return util::partitioner<reduce_policy_type, T>::call(
-                HPX_MOVE(reduce_policy), first, distance(first, last),
-                HPX_MOVE(f1),
+                HPX_MOVE(reduce_policy), first,
+                hpx::parallel::detail::distance(first, last), HPX_MOVE(f1),
                 hpx::unwrapping(
                     [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
                         auto&& results) -> T {
@@ -532,8 +529,7 @@ namespace hpx::parallel {
         }
     };
     /// \endcond
-    }    // namespace detail
-}    // namespace hpx::parallel
+}}    // namespace hpx::parallel::detail
 
 namespace hpx {
 
