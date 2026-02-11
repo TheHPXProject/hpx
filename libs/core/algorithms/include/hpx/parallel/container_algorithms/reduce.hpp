@@ -805,7 +805,7 @@ namespace hpx::ranges {
             using value_type =
                 typename std::iterator_traits<FwdIter>::value_type;
 
-            return hpx::parallel::reduce<value_type>().call(
+            return hpx::parallel::detail::reduce<value_type>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, value_type{},
                 std::plus<value_type>{});
         }
@@ -830,7 +830,7 @@ namespace hpx::ranges {
             static_assert(std::forward_iterator<iterator_type>,
                 "Requires at least forward iterator.");
 
-            return hpx::parallel::reduce<value_type>().call(
+            return hpx::parallel::detail::reduce<value_type>().call(
                 HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng),
                 hpx::util::end(rng), value_type{}, std::plus<value_type>{});
         }
@@ -876,8 +876,8 @@ namespace hpx::ranges {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");
 
-            return hpx::parallel::detail::reduce<T>().call(hpx::execution::seq, first,
-                last, HPX_MOVE(init), std::plus<T>{});
+            return hpx::parallel::detail::reduce<T>().call(hpx::execution::seq,
+                first, last, HPX_MOVE(init), std::plus<T>{});
         }
 
         template <typename Rng,
@@ -907,8 +907,9 @@ namespace hpx::ranges {
             using value_type =
                 typename std::iterator_traits<FwdIter>::value_type;
 
-            return hpx::parallel::reduce<value_type>().call(hpx::execution::seq,
-                first, last, value_type{}, std::plus<value_type>{});
+            return hpx::parallel::detail::reduce<value_type>().call(
+                hpx::execution::seq, first, last, value_type{},
+                std::plus<value_type>{});
         }
 
         template <typename Rng>
@@ -925,9 +926,9 @@ namespace hpx::ranges {
             static_assert(std::input_iterator<iterator_type>,
                 "Requires at least input iterator.");
 
-            return hpx::parallel::reduce<value_type>().call(hpx::execution::seq,
-                hpx::util::begin(rng), hpx::util::end(rng), value_type{},
-                std::plus<value_type>{});
+            return hpx::parallel::detail::reduce<value_type>().call(
+                hpx::execution::seq, hpx::util::begin(rng), hpx::util::end(rng),
+                value_type{}, std::plus<value_type>{});
         }
     } reduce{};
 }    // namespace hpx::ranges
