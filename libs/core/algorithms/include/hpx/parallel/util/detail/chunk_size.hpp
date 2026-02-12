@@ -73,8 +73,8 @@ namespace hpx::parallel::util::detail {
 
                 // we should not make chunks smaller than what's determined by
                 // the max chunk size
-                chunk_size = (std::max)(
-                    chunk_size, (count + max_chunks - 1) / max_chunks);
+                chunk_size = (std::max) (chunk_size,
+                    (count + max_chunks - 1) / max_chunks);
             }
             else
             {
@@ -175,7 +175,7 @@ namespace hpx::parallel::util::detail {
 
         if (stride != 1)
         {
-            chunk_size = (std::max)(static_cast<std::size_t>(stride),
+            chunk_size = (std::max) (static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -219,13 +219,13 @@ namespace hpx::parallel::util::detail {
             if (stride != 1)
             {
                 // rounding up
-                test_chunk_size = (std::max)(static_cast<std::size_t>(stride),
+                test_chunk_size = (std::max) (static_cast<std::size_t>(stride),
                     (test_chunk_size + stride - 1) / stride * stride);
             }
 
             add_ready_future(workitems, f1, it_or_r, test_chunk_size);
 
-            test_chunk_size = (std::min)(count, test_chunk_size);
+            test_chunk_size = (std::min) (count, test_chunk_size);
 
             count -= test_chunk_size;
             it_or_r = next_or_subrange(it_or_r, test_chunk_size, count);
@@ -265,7 +265,7 @@ namespace hpx::parallel::util::detail {
 
         if (stride != 1)
         {
-            chunk_size = (std::max)(static_cast<std::size_t>(stride),
+            chunk_size = (std::max) (static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -314,7 +314,7 @@ namespace hpx::parallel::util::detail {
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
         {
-            max_chunks = (std::min)(max_chunks, count);
+            max_chunks = (std::min) (max_chunks, count);
         }
 
         while (count != 0)
@@ -330,16 +330,16 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                chunk_size = (std::max)(static_cast<std::size_t>(stride),
+                chunk_size = (std::max) (static_cast<std::size_t>(stride),
                     (chunk_size + stride - 1) / stride * stride);
             }
 
             // in last chunk, consider only remaining number of elements
-            std::size_t chunk = (std::min)(chunk_size, count);
+            std::size_t chunk = (std::min) (chunk_size, count);
 
             shape.emplace_back(it_or_r, chunk);
 
-            chunk = (std::min)(count, chunk);
+            chunk = (std::min) (count, chunk);
             count -= chunk;
 
             it_or_r = next_or_subrange(it_or_r, chunk, count);
@@ -450,7 +450,7 @@ namespace hpx::parallel::util::detail {
 
         if (stride != 1)
         {
-            chunk_size = (std::max)(static_cast<std::size_t>(stride),
+            chunk_size = (std::max) (static_cast<std::size_t>(stride),
                 static_cast<std::size_t>(
                     (chunk_size + stride - 1) / stride * stride));
         }
@@ -502,7 +502,7 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                test_chunk_size = (std::max)(static_cast<std::size_t>(stride),
+                test_chunk_size = (std::max) (static_cast<std::size_t>(stride),
                     (test_chunk_size + stride - 1) / stride * stride);
             }
 
@@ -550,7 +550,7 @@ namespace hpx::parallel::util::detail {
 
         if (stride != 1)
         {
-            chunk_size = (std::max)(static_cast<std::size_t>(stride),
+            chunk_size = (std::max) (static_cast<std::size_t>(stride),
                 (chunk_size + stride - 1) / stride * stride);
         }
 
@@ -602,7 +602,7 @@ namespace hpx::parallel::util::detail {
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
         {
-            max_chunks = (std::min)(max_chunks, count);
+            max_chunks = (std::min) (max_chunks, count);
         }
 
         std::size_t base_idx = 0;
@@ -619,12 +619,12 @@ namespace hpx::parallel::util::detail {
 
             if (stride != 1)
             {
-                chunk_size = (std::max)(static_cast<std::size_t>(stride),
+                chunk_size = (std::max) (static_cast<std::size_t>(stride),
                     (chunk_size + stride - 1) / stride * stride);
             }
 
             // in last chunk, consider only remaining number of elements
-            std::size_t chunk = (std::min)(chunk_size, count);
+            std::size_t chunk = (std::min) (chunk_size, count);
 
             shape.emplace_back(first, chunk, base_idx);
 
