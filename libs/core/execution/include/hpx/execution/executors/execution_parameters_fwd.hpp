@@ -459,8 +459,28 @@ namespace hpx::execution::experimental {
         }
     } collect_execution_parameters{};
 
-    HPX_CXX_EXPORT inline constexpr struct adjust_chunk_size_and_max_chunks_t
-        final
+    /// Adjust the chunk size and maximal number of chunks for a parallel
+    /// algorithm execution
+    ///
+    /// \param params   [in] The executor parameters object to use for
+    ///                 adjusting the chunk size.
+    /// \param exec     [in] The executor object which will be used
+    ///                 for scheduling of the loop iterations.
+    /// \param num_elements [in] The overall number of elements for the
+    ///                     algorithm.
+    /// \param num_cores    [in] The overall number of cores to utilize
+    ///                     for the algorithm.
+    /// \param num_chunks   [in] The overall number of chunks for the
+    ///                     algorithm.
+    /// \param chunk_size   [in] The size of the chunks created for the
+    ///                     algorithm.
+    ///
+    /// \note This calls params.adjust_chunk_size_and_max_chunks(exec, ...)
+    ///       if it exists; otherwise it returns {0, 0} indicating no
+    ///       adjustment.
+    ///
+    HPX_CXX_CORE_EXPORT inline constexpr struct
+        adjust_chunk_size_and_max_chunks_t final
       : hpx::functional::detail::tag_priority<
             adjust_chunk_size_and_max_chunks_t>
     {
@@ -479,7 +499,6 @@ namespace hpx::execution::experimental {
                 HPX_FORWARD(Executor, exec), num_elements, num_cores,
                 num_chunks, chunk_size);
         }
-
     } adjust_chunk_size_and_max_chunks{};
 
     template <>
