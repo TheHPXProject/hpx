@@ -959,6 +959,30 @@ namespace hpx::execution::experimental::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////
+    template <typename T, typename Wrapper, typename Enable = void>
+    struct adjust_chunk_size_and_max_chunks_call_helper
+    {
+    };
+
+    template <typename T, typename Wrapper>
+    struct adjust_chunk_size_and_max_chunks_call_helper<T, Wrapper,
+        std::enable_if_t<has_adjust_chunk_size_and_max_chunks_v<T>>>
+    {
+        template <typename Executor>
+        HPX_FORCEINLINE std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks(Executor&& exec,
+            std::size_t num_elements, std::size_t num_cores,
+            std::size_t num_chunks, std::size_t chunk_size)
+        {
+            auto& wrapped =
+                static_cast<unwrapper<Wrapper>*>(this)->member_.get();
+            return wrapped.adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                num_chunks, chunk_size);
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////
     template <typename T>
     struct base_member_helper
     {
@@ -984,6 +1008,8 @@ namespace hpx::execution::experimental::detail {
       , processing_units_count_call_helper<T, std::reference_wrapper<T>>
       , reset_thread_distribution_call_helper<T, std::reference_wrapper<T>>
       , collect_execution_parameters_call_helper<T, std::reference_wrapper<T>>
+      , adjust_chunk_size_and_max_chunks_call_helper<T,
+            std::reference_wrapper<T>>
     {
         using wrapper_type = std::reference_wrapper<T>;
 
@@ -1024,6 +1050,8 @@ namespace hpx::execution::experimental::detail {
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(maximal_number_of_chunks);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(reset_thread_distribution);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(collect_execution_parameters);
+        HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(
+            adjust_chunk_size_and_max_chunks);
 
         constexpr executor_parameters()
             requires(hpx::util::all_of_v<std::is_constructible<Params>...>)

@@ -384,10 +384,11 @@ namespace hpx::parallel {
 
         /// \cond NOINTERNAL
 
-        // Custom executor parameters for reduce algorithm to prevent single-element partitions.
-        // reduce_partition requires at least 2 elements per partition because it initializes
-        // the accumulator via op(*first, *next(first)), which is the only way to produce a T
-        // from value_type elements when T may differ from value_type (e.g. minmax).
+        // Custom executor parameters for reduce algorithm to prevent
+        // single-element partitions. reduce_partition requires at least 2
+        // elements per partition because it initializes the accumulator via
+        // op(*first, *next(first)), which is the only way to produce a T from
+        // value_type elements when T may differ from value_type (e.g. minmax).
         struct reduce_executor_parameters
         {
             template <typename Executor>
@@ -404,9 +405,10 @@ namespace hpx::parallel {
                     chunk_size = (std::max) (chunk_size, std::size_t(2));
                 }
 
-                // chunk_size_iterator gives the last partition num_elements % chunk_size
-                // elements (or chunk_size if evenly divisible). If the remainder is 1,
-                // that partition would violate reduce_partition's >= 2 requirement.
+                // chunk_size_iterator gives the last partition
+                // num_elements % chunk_size elements (or chunk_size if
+                // evenly divisible). If the remainder is 1, that partition
+                // would violate reduce_partition's >= 2 requirement.
                 // Bump chunk_size until the remainder is 0 or >= 2.
                 while (
                     num_elements > chunk_size && num_elements % chunk_size == 1)
@@ -424,7 +426,8 @@ namespace hpx::parallel {
     }    // namespace detail
 }    // namespace hpx::parallel
 
-// Specialize trait to make reduce_executor_parameters a valid executor parameters type
+// Specialize trait to make reduce_executor_parameters a valid executor
+// parameters type
 namespace hpx::execution::experimental {
 
     template <>
@@ -437,7 +440,7 @@ namespace hpx::execution::experimental {
 namespace hpx::parallel { namespace detail {
 
     // Helper function to reduce a partition without requiring an init value.
-    // Assumes partition size is always >= 2 (enforced by reduce_executor_parameters).
+    // Assumes partition size >= 2 (enforced by reduce_executor_parameters).
     template <typename ExPolicy, typename FwdIterB, typename T, typename Reduce>
     T reduce_partition(
         FwdIterB part_begin, std::size_t part_size, Reduce const& r)
