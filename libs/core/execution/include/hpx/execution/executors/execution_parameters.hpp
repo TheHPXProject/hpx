@@ -662,14 +662,50 @@ namespace hpx::execution::experimental::detail {
     // adjust_chunk_size_and_max_chunks
     struct adjust_chunk_size_and_max_chunks_property
     {
-        // default implementation
         template <typename Target>
         HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
-        adjust_chunk_size_and_max_chunks(
-            Target, std::size_t, std::size_t, std::size_t, std::size_t) noexcept
+        adjust_chunk_size_and_max_chunks(Target, std::size_t num_elements,
+            std::size_t num_cores, std::size_t max_chunks,
+            std::size_t chunk_size) noexcept
         {
-            // return zero which means no adjustment
-            return {0, 0};    // {adjusted_chunk_size, adjusted_max_chunks}
+            if (max_chunks == 0)
+            {
+                if (chunk_size == 0)
+                {
+                    std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+
+                    chunk_size =
+                        (num_elements + cores_times_4 - 1) / cores_times_4;
+
+                    max_chunks =
+                        (std::min) (cores_times_4, num_elements);    // -V112
+
+                    chunk_size = (std::max) (chunk_size,
+                        (num_elements + max_chunks - 1) / max_chunks);
+                }
+                else
+                {
+                    // max_chunks == 0 && chunk_size != 0
+                    max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+                }
+            }
+            else if (chunk_size == 0)
+            {
+                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+            }
+            else
+            {
+                // max_chunks != 0 && chunk_size != 0
+                std::size_t const calculated_max_chunks =
+                    (num_elements + chunk_size - 1) / chunk_size;
+
+                if (calculated_max_chunks > max_chunks)
+                {
+                    chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+                }
+            }
+
+            return {chunk_size, max_chunks};
         }
     };
 
