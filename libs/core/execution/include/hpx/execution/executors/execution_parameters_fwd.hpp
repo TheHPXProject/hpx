@@ -476,8 +476,8 @@ namespace hpx::execution::experimental {
     ///                     algorithm.
     ///
     /// \note This calls params.adjust_chunk_size_and_max_chunks(exec, ...)
-    ///       if it exists; otherwise it returns {0, 0} indicating no
-    ///       adjustment.
+    ///       if it exists; otherwise it applies the default chunk size and
+    ///       max chunks adjustment logic.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct
         adjust_chunk_size_and_max_chunks_t final

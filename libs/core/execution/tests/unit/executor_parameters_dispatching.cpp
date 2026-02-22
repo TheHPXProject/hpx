@@ -652,6 +652,91 @@ void test_mark_end_execution()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// adjust_chunk_size_and_max_chunks
+
+struct test_executor_adjust_chunk_size : hpx::execution::parallel_executor
+{
+    test_executor_adjust_chunk_size() = default;
+
+    template <typename Parameters>
+    friend std::pair<std::size_t, std::size_t> tag_invoke(
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks_t,
+        Parameters&&, test_executor_adjust_chunk_size,
+        std::size_t /*num_elements*/, std::size_t /*num_cores*/,
+        std::size_t /*num_chunks*/, std::size_t /*chunk_size*/)
+    {
+        ++exec_count;
+        return {1, 1};
+    }
+};
+
+template <>
+struct hpx::execution::experimental::is_two_way_executor<
+    test_executor_adjust_chunk_size> : std::true_type
+{
+};
+
+struct test_adjust_chunk_size
+{
+    template <typename Executor>
+    friend std::pair<std::size_t, std::size_t> tag_override_invoke(
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks_t,
+        test_adjust_chunk_size, Executor&&, std::size_t /*num_elements*/,
+        std::size_t /*num_cores*/, std::size_t /*num_chunks*/,
+        std::size_t /*chunk_size*/)
+    {
+        ++params_count;
+        return {1, 1};
+    }
+};
+
+template <>
+struct hpx::execution::experimental::is_executor_parameters<
+    test_adjust_chunk_size> : std::true_type
+{
+};
+
+///////////////////////////////////////////////////////////////////////////////
+void test_adjust_chunk_size_and_max_chunks()
+{
+    {
+        params_count = 0;
+        exec_count = 0;
+
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+            test_adjust_chunk_size{}, hpx::execution::par.executor(), 100, 4, 0,
+            0);
+
+        HPX_TEST_EQ(params_count, static_cast<std::size_t>(1));
+        HPX_TEST_EQ(exec_count, static_cast<std::size_t>(0));
+    }
+
+    {
+        params_count = 0;
+        exec_count = 0;
+
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+            hpx::execution::par.parameters(), test_executor_adjust_chunk_size{},
+            100, 4, 0, 0);
+
+        HPX_TEST_EQ(params_count, static_cast<std::size_t>(0));
+        HPX_TEST_EQ(exec_count, static_cast<std::size_t>(1));
+    }
+
+    {
+        params_count = 0;
+        exec_count = 0;
+
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+            test_adjust_chunk_size{}, test_executor_adjust_chunk_size{}, 100, 4,
+            0, 0);
+
+        HPX_TEST_EQ(params_count, static_cast<std::size_t>(1));
+        HPX_TEST_EQ(exec_count, static_cast<std::size_t>(0));
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_get_chunk_size();
