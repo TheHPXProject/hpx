@@ -528,7 +528,7 @@ namespace hpx::parallel { namespace detail {
 
             return util::partitioner<reduce_policy_type, T>::call(
                 HPX_MOVE(reduce_policy), first,
-                count, HPX_MOVE(f1),
+                hpx::parallel::detail::distance(first, last), HPX_MOVE(f1),
                 hpx::unwrapping(
                     [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
                         auto&& results) -> T {
