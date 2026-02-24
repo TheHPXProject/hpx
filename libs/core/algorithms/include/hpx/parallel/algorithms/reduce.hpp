@@ -123,7 +123,7 @@ namespace hpx {
     /// with an execution policy object of type \a sequenced_policy
     /// execute in sequential order in the calling thread.
     ///
-    /// The reduce operations in the parallel \a copy_if algorithm invoked
+    /// The reduce operations in the parallel \a reduce algorithm invoked
     /// with an execution policy object of type \a parallel_policy
     /// or \a parallel_task_policy are permitted to execute in an unordered
     /// fashion in unspecified threads, and indeterminately sequenced
@@ -357,6 +357,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/execution/executors/rebind_executor_parameters.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
@@ -517,12 +518,17 @@ namespace hpx::parallel { namespace detail {
                     part_begin, part_size, r);
             };
 
-            auto reduce_policy = policy.with(reduce_executor_parameters{});
+            auto rebound_params =
+                hpx::execution::experimental::rebind_executor_parameters(
+                    policy.parameters(), reduce_executor_parameters{});
+            auto reduce_policy =
+                hpx::execution::experimental::create_rebound_policy(
+                    policy, HPX_MOVE(rebound_params));
             using reduce_policy_type = std::decay_t<decltype(reduce_policy)>;
 
             return util::partitioner<reduce_policy_type, T>::call(
                 HPX_MOVE(reduce_policy), first,
-                hpx::parallel::detail::distance(first, last), HPX_MOVE(f1),
+                count, HPX_MOVE(f1),
                 hpx::unwrapping(
                     [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
                         auto&& results) -> T {
