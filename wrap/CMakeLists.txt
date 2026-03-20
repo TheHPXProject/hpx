@@ -134,7 +134,11 @@ endif()
 if(HPX_WITH_DYNAMIC_HPX_MAIN)
   if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
     target_link_libraries(hpx_wrap INTERFACE "-Wl,-wrap=main")
+    target_compile_definitions(hpx_wrap INTERFACE HPX_HAVE_WRAP_MAIN_CONFIGURED)
     target_link_libraries(hpx_auto_wrap INTERFACE "-Wl,-wrap=main")
+    target_compile_definitions(
+      hpx_auto_wrap INTERFACE HPX_HAVE_WRAP_MAIN_CONFIGURED
+    )
   elseif(APPLE)
     target_link_libraries(hpx_wrap INTERFACE "-Wl,-e,_initialize_main")
     target_link_libraries(hpx_auto_wrap INTERFACE "-Wl,-e,_initialize_main")
