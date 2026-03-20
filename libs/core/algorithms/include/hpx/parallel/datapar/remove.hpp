@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Bhoomish Gupta
+//  Copyright (c) 2025 Bhoomish Gupta
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,36 +12,99 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/tag_invoke.hpp>
-#include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/remove.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
+#include <hpx/execution/traits/vector_pack_get_set.hpp>
 
+#include <cstddef>
+#include <iterator>
 #include <type_traits>
 #include <utility>
 
 namespace hpx::parallel::detail {
 
     ///////////////////////////////////////////////////////////////////////////
+
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct datapar_remove_if
     {
         template <typename Iter, typename Sent, typename Pred, typename Proj>
         static inline Iter call(
-            ExPolicy&& policy, Iter first, Sent last, Pred pred, Proj proj)
+            ExPolicy&&, Iter first, Sent last, Pred pred, Proj proj)
         {
-            first = hpx::parallel::detail::sequential_find_if<ExPolicy>(
-                first, last, pred, proj);
+            using value_type =
+                typename std::iterator_traits<Iter>::value_type;
+            using V = hpx::parallel::traits::vector_pack_type_t<value_type>;
+            constexpr std::size_t size =
+                hpx::parallel::traits::vector_pack_size_v<V>;
 
-            if (first != last)
+            Iter dest = first;
+
+            while (first != last && !util::detail::is_data_aligned(first))
             {
-                for (Iter i = first; ++i != last;)
-                    if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *i)))
-                    {
-                        *first++ = HPX_MOVE(*i);
-                    }
+                if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *first)))
+                {
+                    if (dest != first)
+                        *dest = HPX_MOVE(*first);
+                    ++dest;
+                }
+                ++first;
             }
-            return first;
+
+            while (last - first >= static_cast<std::ptrdiff_t>(size)) //Safety
+            {
+                V tmp(hpx::parallel::traits::vector_pack_load<V,
+                    value_type>::aligned(first));
+
+                auto msk = HPX_INVOKE(pred, HPX_INVOKE(proj, tmp));
+
+                if (hpx::parallel::traits::none_of(msk))
+                {
+                    //no elements match
+                    if (dest != first)
+                    {
+                        if (util::detail::is_data_aligned(dest))
+                        {
+                            hpx::parallel::traits::vector_pack_store<V,
+                                value_type>::aligned(tmp, dest);
+                        }
+                        else
+                        {
+                            hpx::parallel::traits::vector_pack_store<V,
+                                value_type>::unaligned(tmp, dest);
+                        }
+                    }
+                    std::advance(dest, size);
+                }
+                else if (!hpx::parallel::traits::all_of(msk))
+                {
+                    //mixed
+                    for (std::size_t i = 0; i < size; ++i)
+                    {
+                        if (!hpx::parallel::traits::get(msk, i))
+                        {
+                            *dest++ = value_type(
+                                hpx::parallel::traits::get(tmp, i));
+                        }
+                    }
+                }
+                //all elements match
+                std::advance(first, size);
+            }
+
+            while (first != last)
+            {
+                if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *first)))
+                {
+                    if (dest != first)
+                        *dest = HPX_MOVE(*first);
+                    ++dest;
+                }
+                ++first;
+            }
+
+            return dest;
         }
     };
 
@@ -80,7 +143,7 @@ namespace hpx::parallel::detail {
         {
             return datapar_remove_if<ExPolicy>::call(
                 HPX_FORWARD(ExPolicy, policy), first, last,
-                [&value](auto const& a) { return value == a; },
+                [&value](auto const& a) { return a == value; },
                 proj);
         }
     };
