@@ -24,6 +24,8 @@
     defined(HPX_HAVE_STATIC_LINKING) &&                                        \
     !defined(HPX_HAVE_WRAP_MAIN_CONFIGURED)
 // clang-format off
-#warning "HPX: Static Linux build detected. The linker requires '-Wl,-wrap=main' to properly intercept main(). If you are linking manually, add this flag to your linker command. Define 'HPX_HAVE_WRAP_MAIN_CONFIGURED' to suppress this warning."
+#warning \
+    "HPX: -Wl,-wrap=main not detected. " \
+    "Link via HPX::wrap_main or add flag manually."
 // clang-format on
 #endif

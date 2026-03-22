@@ -7,21 +7,17 @@
 /// \file hpx/local.hpp
 /// \brief Single-include convenience header for single-node HPX usage.
 ///
-/// This header bundles the **Standard Parallel Toolkit** — the most commonly
+/// This header bundles the **Standard Parallel Toolkit** -- the most commonly
 /// used HPX facilities for local (single-node) execution:
 ///
-///   - \c hpx/algorithm.hpp  — Parallel STL algorithms (for_each, sort, ...)
-///   - \c hpx/execution.hpp  — Execution policies (par, par_unseq, seq)
-///   - \c hpx/future.hpp     — Async primitives (hpx::async, hpx::future)
-///   - \c hpx/numeric.hpp    — Parallel numeric algorithms (reduce, ...)
+///   - \c hpx/algorithm.hpp  -- Parallel algorithms (for_each, sort, ...)
+///   - \c hpx/execution.hpp  -- Execution policies (par, par_unseq, seq)
+///   - \c hpx/future.hpp     -- Futures and dataflow
+///   - \c hpx/numeric.hpp    -- Parallel numeric (reduce, transform_reduce, ...)
 ///
 /// **Selection criteria**: each header is part of the HPX core module,
 /// provides ISO C++ Standard Library parallel equivalents, and has no
 /// dependency on the distributed runtime or networking layer.
-///
-/// \note For zero-boilerplate `main()` wrapping to automatically start
-///       and stop the HPX runtime, please additionally include
-///       `#include <hpx/hpx_main.hpp>`.
 
 #pragma once
 
