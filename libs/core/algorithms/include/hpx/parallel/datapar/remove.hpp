@@ -9,13 +9,14 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR)
+#include <hpx/execution/traits/vector_pack_find.hpp>
+#include <hpx/execution/traits/vector_pack_get_set.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/remove.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
-#include <hpx/execution/traits/vector_pack_get_set.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -33,8 +34,7 @@ namespace hpx::parallel::detail {
         static inline Iter call(
             ExPolicy&&, Iter first, Sent last, Pred pred, Proj proj)
         {
-            using value_type =
-                typename std::iterator_traits<Iter>::value_type;
+            using value_type = typename std::iterator_traits<Iter>::value_type;
             using V = hpx::parallel::traits::vector_pack_type_t<value_type>;
             constexpr std::size_t size =
                 hpx::parallel::traits::vector_pack_size_v<V>;
@@ -52,7 +52,8 @@ namespace hpx::parallel::detail {
                 ++first;
             }
 
-            while (last - first >= static_cast<std::ptrdiff_t>(size)) //Safety
+            while (
+                last - first >= static_cast<std::ptrdiff_t>(size))    //Safety
             {
                 V tmp(hpx::parallel::traits::vector_pack_load<V,
                     value_type>::aligned(first));
@@ -80,12 +81,27 @@ namespace hpx::parallel::detail {
                 else if (!hpx::parallel::traits::all_of(msk))
                 {
                     //mixed
-                    for (std::size_t i = 0; i < size; ++i)
+                    int first = hpx::parallel::traits::find_first_of(msk);
+
+                    for (int i = 0; i < first; ++i)
                     {
-                        if (!hpx::parallel::traits::get(msk, i))
+                        *dest++ =
+                            value_type(hpx::parallel::traits::get(tmp, i));
+                    }
+
+                    for (std::size_t i = first; i < size; ++i)
+                    {
+                        bool match = false;
+                        if constexpr (std::is_class_v<
+                                          std::decay_t<decltype(msk)>>)
+                            match = msk[i];
+                        else
+                            match = msk;
+
+                        if (!match)
                         {
-                            *dest++ = value_type(
-                                hpx::parallel::traits::get(tmp, i));
+                            *dest++ =
+                                value_type(hpx::parallel::traits::get(tmp, i));
                         }
                     }
                 }
@@ -138,13 +154,11 @@ namespace hpx::parallel::detail {
     {
         template <typename Iter, typename Sent, typename T, typename Proj>
         static inline Iter call(
-            ExPolicy&& policy, Iter first, Sent last, T const& value,
-            Proj proj)
+            ExPolicy&& policy, Iter first, Sent last, T const& value, Proj proj)
         {
             return datapar_remove_if<ExPolicy>::call(
                 HPX_FORWARD(ExPolicy, policy), first, last,
-                [&value](auto const& a) { return a == value; },
-                proj);
+                [&value](auto const& a) { return a == value; }, proj);
         }
     };
 
@@ -152,8 +166,8 @@ namespace hpx::parallel::detail {
         typename Sent, typename T, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
     HPX_HOST_DEVICE HPX_FORCEINLINE Iter tag_invoke(
-        sequential_remove_t<ExPolicy>, ExPolicy&& policy, Iter first,
-        Sent last, T const& value, Proj proj)
+        sequential_remove_t<ExPolicy>, ExPolicy&& policy, Iter first, Sent last,
+        T const& value, Proj proj)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
                           Iter>::value)

@@ -49,12 +49,11 @@ void test_remove_if(ExPolicy policy, IteratorTag)
     std::iota(std::begin(c), std::end(c), std::rand());
     std::copy(std::begin(c), std::end(c), std::begin(d));
 
-    std::size_t idx = std::rand() % c.size();    
+    std::size_t idx = std::rand() % c.size();
 
     auto result = hpx::remove_if(policy, iterator(std::begin(c)),
         iterator(std::end(c)), equal_f(c[idx]));
-    auto solution =
-        std::remove_if(std::begin(d), std::end(d), equal_f(d[idx]));
+    auto solution = std::remove_if(std::begin(d), std::end(d), equal_f(d[idx]));
 
     bool equality =
         test::equal(std::begin(c), result.base(), std::begin(d), solution);
@@ -73,13 +72,12 @@ void test_remove_if_async(ExPolicy p, IteratorTag)
     std::iota(std::begin(c), std::end(c), std::rand());
     std::copy(std::begin(c), std::end(c), std::begin(d));
 
-    std::size_t idx = std::rand() % c.size();    
+    std::size_t idx = std::rand() % c.size();
 
     auto f = hpx::remove_if(
         p, iterator(std::begin(c)), iterator(std::end(c)), equal_f(c[idx]));
     auto result = f.get();
-    auto solution =
-        std::remove_if(std::begin(d), std::end(d), equal_f(d[idx]));
+    auto solution = std::remove_if(std::begin(d), std::end(d), equal_f(d[idx]));
 
     bool equality =
         test::equal(std::begin(c), result.base(), std::begin(d), solution);

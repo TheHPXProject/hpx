@@ -214,6 +214,7 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
+#include <hpx/execution/traits/vector_pack_conditionals.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
@@ -254,9 +255,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename Iter, typename Sent,
                 typename Pred, typename Proj>
-            static constexpr Iter sequential(
-                ExPolicy&& policy, Iter first, Sent last, Pred&& pred,
-                Proj&& proj)
+            static constexpr Iter sequential(ExPolicy&& policy, Iter first,
+                Sent last, Pred&& pred, Proj&& proj)
             {
                 return sequential_remove_if<ExPolicy>(
                     HPX_FORWARD(ExPolicy, policy), first, last,
@@ -268,7 +268,9 @@ namespace hpx::parallel {
             static decltype(auto) parallel(ExPolicy&& policy, Iter first,
                 Sent last, Pred&& pred, Proj&& proj)
             {
-                using zip_iterator = hpx::util::zip_iterator<Iter, bool*>;
+                using value_t = std::decay_t<
+                    typename std::iterator_traits<Iter>::value_type>;
+                using zip_iterator = hpx::util::zip_iterator<Iter, value_t*>;
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, Iter>;
                 using difference_type =
@@ -283,28 +285,25 @@ namespace hpx::parallel {
                     if (count == 0)
                         return algorithm_result::get(HPX_MOVE(first));
                 }
-
-                std::shared_ptr<bool[]> flags(new bool[count]);
+                std::shared_ptr<value_t[]> flags(new value_t[count]);
 
                 using hpx::get;
 
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
-                using inner_policy_type =
-                    decltype(hpx::execution::experimental::to_non_simd(
-                        std::declval<std::decay_t<ExPolicy>>()));
+                using inner_policy_type = std::decay_t<ExPolicy>;
 
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
-                              zip_iterator part_begin,
-                              std::size_t part_size) -> void {
+                              auto part_begin, std::size_t part_size) -> void {
                     // MSVC complains if pred or proj is captured by ref below
-                    util::const_loop_n<inner_policy_type>(part_begin,
-                        part_size, [pred, proj](zip_iterator it) mutable {
-                            bool f = hpx::invoke(
+                    util::const_loop_n<inner_policy_type>(
+                        part_begin, part_size, [pred, proj](auto it) mutable {
+                            auto f = hpx::invoke(
                                 pred, hpx::invoke(proj, get<0>(*it)));
-
-                            get<1>(*it) = f;
+                            using V = std::decay_t<decltype(get<0>(*it))>;
+                            get<1>(*it) =
+                                hpx::parallel::traits::choose(f, V(1), V(0));
                         });
                 };
 
@@ -316,7 +315,7 @@ namespace hpx::parallel {
                     if (dest == get<0>(part_begin.get_iterator_tuple()))
                     {
                         // Self-assignment must be detected.
-                        util::const_loop_n<inner_policy_type>(
+                        util::const_loop_n<hpx::execution::sequenced_policy>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
                                 {
@@ -331,7 +330,7 @@ namespace hpx::parallel {
                     else
                     {
                         // Self-assignment can't be performed.
-                        util::const_loop_n<inner_policy_type>(
+                        util::const_loop_n<hpx::execution::sequenced_policy>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
                                     *dest++ = std::ranges::iter_move(

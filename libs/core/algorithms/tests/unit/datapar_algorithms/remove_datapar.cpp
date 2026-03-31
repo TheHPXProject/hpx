@@ -57,11 +57,11 @@ void test_remove_async(ExPolicy p, IteratorTag)
     std::iota(std::begin(c), std::end(c), std::rand());
     std::copy(std::begin(c), std::end(c), std::begin(d));
 
-    std::size_t idx = std::rand() % c.size();    
+    std::size_t idx = std::rand() % c.size();
     int value = c[idx];
 
-    auto f = hpx::remove(
-        p, iterator(std::begin(c)), iterator(std::end(c)), value);
+    auto f =
+        hpx::remove(p, iterator(std::begin(c)), iterator(std::end(c)), value);
     auto result = f.get();
     auto solution = std::remove(std::begin(d), std::end(d), value);
 

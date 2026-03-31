@@ -22,14 +22,12 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_remove_if_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_remove_if_t<ExPolicy>>
+      : hpx::functional::detail::tag_fallback<sequential_remove_if_t<ExPolicy>>
     {
     private:
         template <typename Iter, typename Sent, typename Pred, typename Proj>
-        friend constexpr Iter tag_fallback_invoke(
-            sequential_remove_if_t, ExPolicy&&, Iter first, Sent last,
-            Pred pred, Proj proj)
+        friend constexpr Iter tag_fallback_invoke(sequential_remove_if_t,
+            ExPolicy&&, Iter first, Sent last, Pred pred, Proj proj)
         {
             first = hpx::parallel::detail::sequential_find_if<ExPolicy>(
                 first, last, pred, proj);
@@ -66,13 +64,11 @@ namespace hpx::parallel::detail {
     private:
         template <typename Iter, typename Sent, typename T, typename Proj>
         friend constexpr Iter tag_fallback_invoke(sequential_remove_t,
-            ExPolicy&& policy, Iter first, Sent last, T const& value,
-            Proj proj)
+            ExPolicy&& policy, Iter first, Sent last, T const& value, Proj proj)
         {
             return sequential_remove_if<ExPolicy>(
                 HPX_FORWARD(ExPolicy, policy), first, last,
-                [&value](auto const& a) { return value == a; },
-                proj);
+                [&value](auto const& a) { return value == a; }, proj);
         }
     };
 
