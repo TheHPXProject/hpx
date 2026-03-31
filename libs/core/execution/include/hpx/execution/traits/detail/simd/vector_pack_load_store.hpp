@@ -58,8 +58,8 @@ namespace hpx::parallel::traits {
         {
             if constexpr (std::is_class_v<V>)
             {
-                value.copy_to(
-                    std::addressof(*iter), std::experimental::element_aligned);
+                value.copy_to(std::addressof(*iter),
+                    datapar::experimental::element_aligned);
             }
             else
             {

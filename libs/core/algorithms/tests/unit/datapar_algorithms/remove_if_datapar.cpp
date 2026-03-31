@@ -6,6 +6,7 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/datapar.hpp>
+#include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
