@@ -268,9 +268,21 @@ namespace hpx::parallel {
             static decltype(auto) parallel(ExPolicy&& policy, Iter first,
                 Sent last, Pred&& pred, Proj&& proj)
             {
+                using inner_policy_type = std::decay_t<ExPolicy>;
+                constexpr bool vectorpack_policy =
+                    hpx::is_vectorpack_execution_policy_v<inner_policy_type>;
+                constexpr bool vectorpack_predicate_callable =
+                    hpx::parallel::traits::is_indirect_callable_v<
+                        inner_policy_type, Pred,
+                        hpx::parallel::traits::projected<Proj, Iter>>;
+                constexpr bool use_vectorpack_predicate =
+                    vectorpack_policy && vectorpack_predicate_callable;
+
                 using value_t = std::decay_t<
                     typename std::iterator_traits<Iter>::value_type>;
-                using zip_iterator = hpx::util::zip_iterator<Iter, value_t*>;
+                using flag_t =
+                    std::conditional_t<use_vectorpack_predicate, value_t, bool>;
+                using zip_iterator = hpx::util::zip_iterator<Iter, flag_t*>;
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, Iter>;
                 using difference_type =
@@ -285,26 +297,40 @@ namespace hpx::parallel {
                     if (count == 0)
                         return algorithm_result::get(HPX_MOVE(first));
                 }
-                std::shared_ptr<value_t[]> flags(new value_t[count]);
+                std::shared_ptr<flag_t[]> flags(new flag_t[count]);
 
                 using hpx::get;
 
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
-                using inner_policy_type = std::decay_t<ExPolicy>;
-
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
                               auto part_begin, std::size_t part_size) -> void {
                     // MSVC complains if pred or proj is captured by ref below
-                    util::const_loop_n<inner_policy_type>(
-                        part_begin, part_size, [pred, proj](auto it) mutable {
-                            auto f = hpx::invoke(
-                                pred, hpx::invoke(proj, get<0>(*it)));
-                            using V = std::decay_t<decltype(get<0>(*it))>;
-                            get<1>(*it) =
-                                hpx::parallel::traits::choose(f, V(1), V(0));
-                        });
+                    if constexpr (use_vectorpack_predicate)
+                    {
+                        util::const_loop_n<inner_policy_type>(part_begin, part_size,
+                            [pred, proj](auto it) mutable {
+                                auto f = hpx::invoke(
+                                    pred, hpx::invoke(proj, get<0>(*it)));
+                                using V = std::decay_t<decltype(get<0>(*it))>;
+                                get<1>(*it) = hpx::parallel::traits::choose(
+                                    f, V(1), V(0));
+                            });
+                    }
+                    else
+                    {
+                        using loop_policy_type =
+                            std::conditional_t<vectorpack_policy,
+                                hpx::execution::sequenced_policy,
+                                inner_policy_type>;
+
+                        util::const_loop_n<loop_policy_type>(part_begin, part_size,
+                            [pred, proj](auto it) mutable {
+                                get<1>(*it) = hpx::invoke(
+                                    pred, hpx::invoke(proj, get<0>(*it)));
+                            });
+                    }
                 };
 
                 auto f2 = [flags, first, count](auto&&...) mutable -> Iter {
@@ -382,9 +408,15 @@ namespace hpx {
             requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
                 hpx::traits::is_iterator_v<FwdIter> &&
-                hpx::is_invocable_v<Pred,
-                    typename std::iterator_traits<FwdIter>::value_type
-                >
+                (
+                    hpx::parallel::traits::is_indirect_callable_v<ExPolicy,
+                        Pred, hpx::parallel::traits::projected<hpx::identity,
+                                  FwdIter>
+                    > ||
+                    hpx::is_invocable_v<Pred,
+                        typename std::iterator_traits<FwdIter>::value_type
+                    >
+                )
             )
         // clang-format on
         friend decltype(auto) tag_fallback_invoke(hpx::remove_if_t,
