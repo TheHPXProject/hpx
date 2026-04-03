@@ -81,15 +81,16 @@ namespace hpx::parallel::detail {
                 else if (!hpx::parallel::traits::all_of(msk))
                 {
                     //mixed
-                    int first = hpx::parallel::traits::find_first_of(msk);
+                    int first_match = hpx::parallel::traits::find_first_of(msk);
 
-                    for (int i = 0; i < first; ++i)
+                    for (int i = 0; i < first_match; ++i)
                     {
                         *dest++ =
                             value_type(hpx::parallel::traits::get(tmp, i));
                     }
 
-                    for (std::size_t i = first; i < size; ++i)
+                    for (std::size_t i = static_cast<std::size_t>(first_match);
+                        i < size; ++i)
                     {
                         bool match = false;
                         if constexpr (std::is_class_v<
