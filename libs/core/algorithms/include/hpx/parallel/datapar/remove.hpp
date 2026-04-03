@@ -95,7 +95,13 @@ namespace hpx::parallel::detail {
                         bool match = false;
                         if constexpr (std::is_class_v<
                                           std::decay_t<decltype(msk)>>)
+                        {
+#if defined(HPX_HAVE_DATAPAR_EVE)
+                            match = msk.get(i);
+#else
                             match = msk[i];
+#endif
+                        }
                         else
                             match = msk;
 
