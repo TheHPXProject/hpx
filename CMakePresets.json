@@ -274,19 +274,22 @@
         },
         {
             "name": "godbolt-minimal",
-            "displayName": "Godbolt / Sandboxed Environment",
-            "description": "Minimal single-node static build optimized for browser-based compilers (Compiler Explorer / Godbolt). Uses system malloc, disables networking, tests, examples, and documentation to minimize binary size and build time.",
+            "displayName": "Compiler Explorer / Godbolt (Minimal)",
+            "description": "Minimal single-node static build for Compiler Explorer (godbolt.org) and similar sandboxed environments. Statically links all HPX libraries, disables the distributed runtime and networking, fetches Asio via FetchContent, and uses the system allocator. Skips tests, examples, documentation, and tools to minimize build time. Produces libhpx_wrap.a, libhpx_init.a, libhpx.a, and libhpx_core.a suitable for use with -Wl,-wrap=main on Linux.",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/godbolt-minimal",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "HPX_WITH_MALLOC": "system",
+                "HPX_WITH_CXX_STANDARD": "20",
+                "HPX_WITH_STATIC_LINKING": "ON",
+                "HPX_WITH_DISTRIBUTED_RUNTIME": "OFF",
                 "HPX_WITH_NETWORKING": "OFF",
+                "HPX_WITH_FETCH_ASIO": "ON",
+                "HPX_WITH_MALLOC": "system",
                 "HPX_WITH_TESTS": "OFF",
                 "HPX_WITH_EXAMPLES": "OFF",
                 "HPX_WITH_DOCUMENTATION": "OFF",
-                "HPX_WITH_STATIC_LINKING": "ON",
-                "HPX_WITH_FETCH_ASIO": "ON"
+                "HPX_WITH_TOOLS": "OFF"
             }
         }
     ],
