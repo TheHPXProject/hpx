@@ -57,7 +57,7 @@ namespace hpx::parallel::traits {
         HPX_HOST_DEVICE HPX_FORCEINLINE static void unaligned(
             V& value, Iter& iter)
         {
-            *iter = value;
+            eve::store(value, std::addressof(*iter));
         }
     };
 }    // namespace hpx::parallel::traits
