@@ -42,21 +42,30 @@ struct minmax
     }
 };
 
+void test_reduce_case(
+    std::vector<int> const& c, std::pair<int, int> const& expected)
+{
+    auto const init = std::pair<int, int>{INT_MAX, INT_MIN};
+
+    auto result =
+        hpx::reduce(hpx::execution::seq, c.begin(), c.end(), init, minmax{});
+    HPX_TEST_EQ(result.first, expected.first);
+    HPX_TEST_EQ(result.second, expected.second);
+
+    result =
+        hpx::reduce(hpx::execution::par, c.begin(), c.end(), init, minmax{});
+    HPX_TEST_EQ(result.first, expected.first);
+    HPX_TEST_EQ(result.second, expected.second);
+}
+
 int hpx_main()
 {
-    std::vector<int> c = {3, 1, 4, 1, 5, 9, 2, 6};
-
-    auto result = hpx::reduce(hpx::execution::seq, c.begin(), c.end(),
-        std::pair<int, int>{INT_MAX, INT_MIN}, minmax{});
-
-    HPX_TEST_EQ(result.first, 1);
-    HPX_TEST_EQ(result.second, 9);
-
-    result = hpx::reduce(hpx::execution::par, c.begin(), c.end(),
-        std::pair<int, int>{INT_MAX, INT_MIN}, minmax{});
-
-    HPX_TEST_EQ(result.first, 1);
-    HPX_TEST_EQ(result.second, 9);
+    test_reduce_case({}, {INT_MAX, INT_MIN});
+    test_reduce_case({5}, {5, 5});
+    test_reduce_case({3, 1}, {1, 3});
+    test_reduce_case({3, 1, 4}, {1, 4});
+    test_reduce_case({9, 2, 7, 1, 6}, {1, 9});
+    test_reduce_case({3, 1, 4, 1, 5, 9, 2, 6}, {1, 9});
 
     return hpx::local::finalize();
 }

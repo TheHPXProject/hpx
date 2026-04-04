@@ -747,6 +747,7 @@ int hpx_main()
     test_mark_begin_execution();
     test_mark_end_of_scheduling();
     test_mark_end_execution();
+    test_adjust_chunk_size_and_max_chunks();
 
     return hpx::local::finalize();
 }
