@@ -298,7 +298,7 @@ namespace hpx::parallel {
                     if (count == 0)
                         return algorithm_result::get(HPX_MOVE(first));
                 }
-                std::shared_ptr<flag_t[]> flags(new flag_t[count]);
+                std::shared_ptr<flag_t[]> flags(new flag_t[count]());
 
                 using hpx::get;
 

@@ -83,14 +83,22 @@ namespace hpx::parallel::detail {
                     //mixed
                     int first_match = hpx::parallel::traits::find_first_of(msk);
 
-                    for (int i = 0; i < first_match; ++i)
+                    std::size_t first_lane = 0;
+                    if (first_match > 0)
+                    {
+                        std::size_t const first_match_lane =
+                            static_cast<std::size_t>(first_match);
+                        first_lane =
+                            first_match_lane < size ? first_match_lane : size;
+                    }
+
+                    for (std::size_t i = 0; i < first_lane; ++i)
                     {
                         *dest++ =
                             value_type(hpx::parallel::traits::get(tmp, i));
                     }
 
-                    for (std::size_t i = static_cast<std::size_t>(first_match);
-                        i < size; ++i)
+                    for (std::size_t i = first_lane; i < size; ++i)
                     {
                         bool match = false;
                         if constexpr (std::is_class_v<
@@ -103,7 +111,11 @@ namespace hpx::parallel::detail {
 #endif
                         }
                         else
-                            match = msk;
+                        {
+                            // Mixed masks are vector masks; keep scalar fallback
+                            // only for compatibility with non-vector paths.
+                            match = static_cast<bool>(msk);
+                        }
 
                         if (!match)
                         {
