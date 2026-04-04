@@ -100,27 +100,14 @@ namespace hpx::parallel::detail {
 
                     for (std::size_t i = first_lane; i < size; ++i)
                     {
-                        bool match = false;
-                        if constexpr (std::is_class_v<
-                                          std::decay_t<decltype(msk)>>)
-                        {
-#if defined(HPX_HAVE_DATAPAR_EVE)
-                            match = msk.get(i);
-#else
-                            match = msk[i];
-#endif
-                        }
-                        else
-                        {
-                            // Mixed masks are vector masks; keep scalar fallback
-                            // only for compatibility with non-vector paths.
-                            match = static_cast<bool>(msk);
-                        }
+                        auto scalar_val =
+                            value_type(hpx::parallel::traits::get(tmp, i));
+                        bool match =
+                            HPX_INVOKE(pred, HPX_INVOKE(proj, scalar_val));
 
                         if (!match)
                         {
-                            *dest++ =
-                                value_type(hpx::parallel::traits::get(tmp, i));
+                            *dest++ = scalar_val;
                         }
                     }
                 }
