@@ -86,4 +86,9 @@ if(MPI_FOUND)
   endif()
   target_include_directories(hpx_distributed PRIVATE "${TASK_BENCH_CORE_DIR}")
   target_link_libraries(hpx_distributed PUBLIC task_bench_core MPI::MPI_C)
+  # Suppress OpenMPI/MPICH C++ bindings header pulled in when <mpi.h> is
+  # included from a C++ TU; hpx_distributed.cc only uses the C MPI API.
+  target_compile_definitions(
+    hpx_distributed PRIVATE OMPI_SKIP_MPICXX MPICH_SKIP_MPICXX
+  )
 endif()
