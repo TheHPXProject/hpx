@@ -5,29 +5,32 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # This example builds the HPX driver from the upstream task-bench repository
-# (https://github.com/StanfordLegion/task-bench) as an external dependency.
-# No task-bench source files are vendored here.
+# (https://github.com/StanfordLegion/task-bench) as an external dependency. No
+# task-bench source files are vendored here.
 
 cmake_minimum_required(VERSION 3.17)
 
 include(FetchContent)
 
-# Fetch task-bench from upstream. Pin to the commit that includes the HPX
-# driver so the build is reproducible.
-FetchContent_Declare(
+# Fetch task-bench from upstream. Pin to the commit that includes the HPX driver
+# so the build is reproducible.
+fetchcontent_declare(
   task_bench
   GIT_REPOSITORY https://github.com/StanfordLegion/task-bench.git
-  GIT_TAG        master
-  SOURCE_SUBDIR  hpx
+  GIT_TAG master
+  SOURCE_SUBDIR hpx
 )
 
 # Build the core library first (required by the HPX driver).
-FetchContent_GetProperties(task_bench)
+fetchcontent_getproperties(task_bench)
 if(NOT task_bench_POPULATED)
-  FetchContent_Populate(task_bench)
+  fetchcontent_populate(task_bench)
 endif()
 
 set(TASK_BENCH_CORE_DIR "${task_bench_SOURCE_DIR}/core")
+
+# core_random.c and siphash.c are C files; enable C so cmake can compile them.
+enable_language(C)
 
 # Build the core static library.
 add_library(
@@ -68,10 +71,11 @@ if(MPI_FOUND)
       FOLDER "Examples/TaskBench"
     )
   else()
-    add_executable(hpx_distributed
-                   "${task_bench_SOURCE_DIR}/hpx/hpx_distributed.cc")
+    add_executable(
+      hpx_distributed "${task_bench_SOURCE_DIR}/hpx/hpx_distributed.cc"
+    )
     target_link_libraries(hpx_distributed PUBLIC HPX::hpx HPX::wrap_main)
   endif()
   target_include_directories(hpx_distributed PRIVATE "${TASK_BENCH_CORE_DIR}")
-  target_link_libraries(hpx_distributed PUBLIC task_bench_core MPI::MPI_CXX)
+  target_link_libraries(hpx_distributed PUBLIC task_bench_core MPI::MPI_C)
 endif()
