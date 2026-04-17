@@ -393,14 +393,18 @@ namespace hpx::parallel {
         // value_type elements when T may differ from value_type (e.g. minmax).
         struct reduce_executor_parameters
         {
-            template <typename Executor>
-            HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
-            adjust_chunk_size_and_max_chunks(Executor&&,
-                std::size_t num_elements, std::size_t num_cores,
-                std::size_t /*max_chunks*/,
-                std::size_t chunk_size) const noexcept
+        private:
+            static HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            adjust_chunk_size_and_max_chunks_impl(std::size_t num_elements,
+                std::size_t num_cores, std::size_t max_chunks,
+                std::size_t chunk_size) noexcept
             {
-                // Ensure minimum chunk size of 2
+                if (num_elements <= 1)
+                {
+                    return {chunk_size, max_chunks};
+                }
+
+                // Ensure minimum chunk size of 2 for reduce_partition.
                 if (chunk_size < 2)
                 {
                     chunk_size = (num_elements + num_cores - 1) / num_cores;
@@ -415,13 +419,41 @@ namespace hpx::parallel {
                 while (
                     num_elements > chunk_size && num_elements % chunk_size == 1)
                 {
-                    chunk_size++;
+                    ++chunk_size;
                 }
 
-                std::size_t new_max_chunks =
-                    (num_elements + chunk_size - 1) / chunk_size;
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+                return {chunk_size, max_chunks};
+            }
 
-                return {chunk_size, new_max_chunks};
+        public:
+            template <typename Executor>
+            HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            adjust_chunk_size_and_max_chunks(Executor&&,
+                std::size_t num_elements, std::size_t num_cores,
+                std::size_t max_chunks, std::size_t chunk_size) const noexcept
+            {
+                return adjust_chunk_size_and_max_chunks_impl(
+                    num_elements, num_cores, max_chunks, chunk_size);
+            }
+
+            template <typename InnerParams, typename Executor>
+            friend HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            tag_override_invoke(hpx::execution::experimental::
+                                    adjust_chunk_size_and_max_chunks_t,
+                reduce_executor_parameters const&, InnerParams&& inner,
+                Executor&& exec, std::size_t num_elements,
+                std::size_t num_cores, std::size_t max_chunks,
+                std::size_t chunk_size)
+            {
+                auto [adjusted_chunk_size, adjusted_max_chunks] = hpx::
+                    execution::experimental::adjust_chunk_size_and_max_chunks(
+                        HPX_FORWARD(InnerParams, inner),
+                        HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                        max_chunks, chunk_size);
+
+                return adjust_chunk_size_and_max_chunks_impl(num_elements,
+                    num_cores, adjusted_max_chunks, adjusted_chunk_size);
             }
         };
         /// \endcond
@@ -528,8 +560,7 @@ namespace hpx::parallel { namespace detail {
             using reduce_policy_type = std::decay_t<decltype(reduce_policy)>;
 
             return util::partitioner<reduce_policy_type, T>::call(
-                HPX_MOVE(reduce_policy), first,
-                hpx::parallel::detail::distance(first, last), HPX_MOVE(f1),
+                HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
                 hpx::unwrapping(
                     [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
                         auto&& results) -> T {

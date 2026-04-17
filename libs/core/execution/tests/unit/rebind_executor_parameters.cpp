@@ -965,7 +965,7 @@ struct test_dual_mark_begin_execution
     template <typename InnerParams, typename Executor>
     friend void tag_override_invoke(
         hpx::execution::experimental::mark_begin_execution_t,
-        test_dual_mark_begin_execution& self, InnerParams&&,
+        test_dual_mark_begin_execution const& self, InnerParams&&,
         Executor&&) noexcept
     {
         ++*self.wrapping_wrapped;
@@ -974,7 +974,7 @@ struct test_dual_mark_begin_execution
     template <typename Executor>
     friend void tag_override_invoke(
         hpx::execution::experimental::mark_begin_execution_t,
-        test_dual_mark_begin_execution& self, Executor&&) noexcept
+        test_dual_mark_begin_execution const& self, Executor&&) noexcept
     {
         ++*self.wrapping_only;
     }
