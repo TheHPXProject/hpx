@@ -14,8 +14,8 @@
 #include <cstddef>
 #include <iostream>
 #include <numeric>
-#include <string>
 #include <vector>
+#include <string>
 
 #include "../algorithms/test_utils.hpp"
 

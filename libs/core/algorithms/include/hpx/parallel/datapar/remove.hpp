@@ -9,7 +9,6 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR)
-#include <hpx/execution/traits/vector_pack_find.hpp>
 #include <hpx/execution/traits/vector_pack_get_set.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
@@ -81,24 +80,7 @@ namespace hpx::parallel::detail {
                 else if (!hpx::parallel::traits::all_of(msk))
                 {
                     //mixed
-                    int first_match = hpx::parallel::traits::find_first_of(msk);
-
-                    std::size_t first_lane = 0;
-                    if (first_match > 0)
-                    {
-                        std::size_t const first_match_lane =
-                            static_cast<std::size_t>(first_match);
-                        first_lane =
-                            first_match_lane < size ? first_match_lane : size;
-                    }
-
-                    for (std::size_t i = 0; i < first_lane; ++i)
-                    {
-                        *dest++ =
-                            value_type(hpx::parallel::traits::get(tmp, i));
-                    }
-
-                    for (std::size_t i = first_lane; i < size; ++i)
+                    for (std::size_t i = 0; i < size; ++i)
                     {
                         auto scalar_val =
                             value_type(hpx::parallel::traits::get(tmp, i));

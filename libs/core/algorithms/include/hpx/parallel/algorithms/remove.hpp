@@ -272,18 +272,15 @@ namespace hpx::parallel {
                 using inner_policy_type = std::decay_t<ExPolicy>;
                 constexpr bool vectorpack_policy =
                     hpx::is_vectorpack_execution_policy_v<inner_policy_type>;
-                constexpr bool vectorpack_predicate_callable =
-                    hpx::parallel::traits::is_indirect_callable_v<
-                        inner_policy_type, Pred,
-                        hpx::parallel::traits::projected<Proj, Iter>>;
-                constexpr bool use_vectorpack_predicate =
-                    vectorpack_policy && vectorpack_predicate_callable;
 
-                using value_t = std::decay_t<
-                    typename std::iterator_traits<Iter>::value_type>;
-                using flag_t =
-                    std::conditional_t<use_vectorpack_predicate, value_t, bool>;
-                using zip_iterator = hpx::util::zip_iterator<Iter, flag_t*>;
+                if constexpr (vectorpack_policy)
+                {
+                    return sequential_remove_if<inner_policy_type>(
+                        HPX_FORWARD(ExPolicy, policy), first, last,
+                        HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
+                }
+
+                using zip_iterator = hpx::util::zip_iterator<Iter, bool*>;
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, Iter>;
                 using difference_type =
@@ -298,7 +295,7 @@ namespace hpx::parallel {
                     if (count == 0)
                         return algorithm_result::get(HPX_MOVE(first));
                 }
-                std::shared_ptr<flag_t[]> flags(new flag_t[count]());
+                std::shared_ptr<bool[]> flags(new bool[count]);
 
                 using hpx::get;
 
@@ -306,32 +303,14 @@ namespace hpx::parallel {
                 // below makes gcc generate errors
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
                               proj = HPX_FORWARD(Proj, proj)](
-                              auto part_begin, std::size_t part_size) -> void {
+                              zip_iterator part_begin,
+                              std::size_t part_size) -> void {
                     // MSVC complains if pred or proj is captured by ref below
-                    if constexpr (use_vectorpack_predicate)
-                    {
-                        util::const_loop_n<inner_policy_type>(part_begin, part_size,
-                            [pred, proj](auto it) mutable {
-                                auto f = hpx::invoke(
-                                    pred, hpx::invoke(proj, get<0>(*it)));
-                                using V = std::decay_t<decltype(get<0>(*it))>;
-                                get<1>(*it) = hpx::parallel::traits::choose(
-                                    f, V(1), V(0));
-                            });
-                    }
-                    else
-                    {
-                        using loop_policy_type =
-                            std::conditional_t<vectorpack_policy,
-                                hpx::execution::sequenced_policy,
-                                inner_policy_type>;
-
-                        util::const_loop_n<loop_policy_type>(part_begin, part_size,
-                            [pred, proj](auto it) mutable {
-                                get<1>(*it) = hpx::invoke(
-                                    pred, hpx::invoke(proj, get<0>(*it)));
-                            });
-                    }
+                    util::const_loop_n<inner_policy_type>(part_begin, part_size,
+                        [pred, proj](zip_iterator it) mutable {
+                            get<1>(*it) = hpx::invoke(
+                                pred, hpx::invoke(proj, get<0>(*it)));
+                        });
                 };
 
                 auto f2 = [flags, first, count](auto&&...) mutable -> Iter {
