@@ -275,7 +275,7 @@ namespace hpx::parallel {
 
                 if constexpr (vectorpack_policy)
                 {
-                    return sequential_remove_if<inner_policy_type>(
+                    return sequential_remove_if<ExPolicy>(
                         HPX_FORWARD(ExPolicy, policy), first, last,
                         HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
                 }

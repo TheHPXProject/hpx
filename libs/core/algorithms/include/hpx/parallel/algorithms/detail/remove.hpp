@@ -14,6 +14,7 @@
 #include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
+#include <iterator>
 #include <type_traits>
 #include <utility>
 
@@ -37,7 +38,7 @@ namespace hpx::parallel::detail {
                 for (Iter i = first; ++i != last;)
                     if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *i)))
                     {
-                        *first++ = HPX_MOVE(*i);
+                        *first++ = std::ranges::iter_move(i);
                     }
             }
             return first;
