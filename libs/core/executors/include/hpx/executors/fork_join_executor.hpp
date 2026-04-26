@@ -1270,8 +1270,7 @@ namespace hpx::execution::experimental {
         /// \brief Construct a fork_join_executor.
         ///
         /// \param priority  The priority of the worker threads.
-        /// \param stacksize The stacksize of the worker threads. Must not be
-        ///                  nostack.
+        /// \param stacksize The stacksize of the worker threads.
         /// \param sched     The loop schedule of the parallel regions.
         /// \param yield_delay The time after which the executor yields to other
         ///        work if it has not received any new work for execution.
@@ -1291,8 +1290,7 @@ namespace hpx::execution::experimental {
         ///
         /// \param pu_mask   The PU-mask to use for placing the created threads
         /// \param priority  The priority of the worker threads.
-        /// \param stacksize The stacksize of the worker threads. Must not be
-        ///                  nostack.
+        /// \param stacksize The stacksize of the worker threads.
         /// \param sched     The loop schedule of the parallel regions.
         /// \param yield_delay The time after which the executor yields to other
         ///        work if it has not received any new work for execution.
@@ -1345,6 +1343,24 @@ namespace hpx::execution::experimental {
             fork_join_executor const& exec) noexcept
         {
             return exec.shared_data_->pu_mask_;
+        }
+
+        friend std::size_t tag_invoke(
+            hpx::execution::experimental::get_first_core_t,
+            fork_join_executor const& exec) noexcept
+        {
+            return shared_data::get_first_core(exec.shared_data_->pu_mask_);
+        }
+
+        template <typename Parameters>
+            requires(hpx::traits::is_executor_parameters_v<Parameters>)
+        friend std::size_t tag_invoke(
+            hpx::execution::experimental::processing_units_count_t,
+            Parameters&&, fork_join_executor const& exec,
+            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
+            std::size_t = 0) noexcept
+        {
+            return exec.shared_data_->num_threads_;
         }
 
         /// \cond NOINTERNAL
