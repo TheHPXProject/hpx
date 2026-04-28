@@ -29,7 +29,8 @@
 // Forward declaration
 namespace hpx::execution::experimental::detail {
     template <typename Policy, typename Sender, typename Shape, typename F,
-        bool IsChunked>
+        bool IsChunked = false, bool IsParallel = true,
+        bool IsUnsequenced = false>
     class thread_pool_bulk_sender;
 }
 #endif
@@ -74,23 +75,56 @@ namespace hpx::execution::experimental {
         hpx::execution::experimental::stdexec_internal::__sender_for<Sender,
             hpx::execution::experimental::bulk_unchunked_t>;
 
-    // Domain customization for stdexec bulk operations
-    // Following the stdexec parallel_scheduler pattern (set_value_t tag-based).
+    // Helper to check if a policy is sequential (single-threaded)
+    // seq runs elements sequentially; unseq runs vectorised but still single-threaded
     template <typename Policy>
+    inline constexpr bool is_sequenced_policy_v = false;
+
+    template <>
+    inline constexpr bool is_sequenced_policy_v<stdexec::sequenced_policy> =
+        true;
+
+    template <>
+    inline constexpr bool is_sequenced_policy_v<stdexec::unsequenced_policy> =
+        true;
+
+    //True for unseq and par_unseq
+    template <typename Policy>
+    inline constexpr bool is_unsequenced_bulk_policy_v = false;
+
+    template <>
+    inline constexpr bool
+        is_unsequenced_bulk_policy_v<stdexec::unsequenced_policy> = true;
+
+    template <>
+    inline constexpr bool
+        is_unsequenced_bulk_policy_v<stdexec::parallel_unsequenced_policy> =
+            true;
+
+    // Domain customization for stdexec bulk operations
+    // Only the env-based transform_sender is provided. The early (no-env)
+    // transform falls through to default_domain, and the late transform
+    // handles both completes_on and starts_on patterns at connection time.
+    // Note: This is NOT a template to ensure compile-time domain comparison works
+    // correctly in P3826R5 (domains must have unique type IDs).
     struct thread_pool_domain : stdexec::default_domain
     {
         // transform_sender for bulk operations
-        // (following stdexec parallel_scheduler pattern)
-        template <bulk_chunked_or_unchunked_sender Sender, typename Env>
-            requires std::same_as<
-                std::decay_t<decltype(hpx::execution::experimental::
-                        get_scheduler(std::declval<Env const&>()))>,
-                thread_pool_policy_scheduler<Policy>>
+        // (following stdexec system_context.hpp pattern env-based only)
+        template <bulk_chunked_or_unchunked_sender Sender, typename Env,
+            typename Sched = std::decay_t<decltype(hpx::execution::
+                    experimental::get_scheduler(std::declval<Env const&>()))>>
+            requires requires {
+                typename Sched::
+                    policy_type;    // Only match thread_pool_policy_scheduler
+            }
         constexpr auto transform_sender(
             hpx::execution::experimental::set_value_t, Sender&& sndr,
             Env const& env) const noexcept
         {
+            // Get the scheduler from env (works for both completes_on and starts_on)
             auto sched = hpx::execution::experimental::get_scheduler(env);
+            using Policy = typename std::decay_t<decltype(sched)>::policy_type;
 
             // Extract bulk parameters using structured binding
             auto&& [tag, data, child] = sndr;
@@ -105,12 +139,29 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::stdexec_internal::__sender_for<
                     Sender, hpx::execution::experimental::bulk_chunked_t>;
 
+            // Determine parallelism at compile time from policy type.
+            // pol is __policy_wrapper<_Pol>; unwrap with __get() to get the
+            // actual policy type before checking is_sequenced_policy_v.
+            constexpr bool is_parallel =
+                !is_sequenced_policy_v<std::decay_t<decltype(pol.__get())>>;
+
+            constexpr bool is_unsequenced = is_unsequenced_bulk_policy_v<
+                std::decay_t<decltype(pol.__get())>>;
+
+            // Pre-compute the PU mask once and pass it to the 5-arg
+            // constructor to avoid the expensive full_mask() call (O(N^2))
+            // that the 4-arg constructor would trigger on every bulk
+            // operation.
+            auto pu_mask =
+                hpx::execution::experimental::get_processing_units_mask(sched);
+
             return hpx::execution::experimental::detail::
                 thread_pool_bulk_sender<Policy, std::decay_t<decltype(child)>,
                     std::decay_t<decltype(iota_shape)>,
-                    std::decay_t<decltype(f)>, is_chunked>(HPX_MOVE(sched),
+                    std::decay_t<decltype(f)>, is_chunked, is_parallel,
+                    is_unsequenced>{HPX_MOVE(sched),
                     HPX_FORWARD(decltype(child), child), HPX_MOVE(iota_shape),
-                    HPX_FORWARD(decltype(f), f));
+                    HPX_FORWARD(decltype(f), f), HPX_MOVE(pu_mask)};
         }
     };
 
@@ -119,6 +170,9 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT template <typename Policy>
     struct thread_pool_policy_scheduler
     {
+        // Expose the policy type for domain customization
+        using policy_type = Policy;
+
         // Associate the parallel_execution_tag tag type as a default with this
         // scheduler, except if the given launch policy is sync.
         using execution_category =
@@ -308,6 +362,16 @@ namespace hpx::execution::experimental {
 
             friend void tag_invoke(start_t, operation_state& os) noexcept
             {
+#if defined(HPX_HAVE_STDEXEC)
+                // Check stop token before scheduling work
+                auto stop_token =
+                    stdexec::get_stop_token(stdexec::get_env(os.receiver));
+                if (stop_token.stop_requested())
+                {
+                    stdexec::set_stopped(HPX_MOVE(os.receiver));
+                    return;
+                }
+#endif
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
                         os.scheduler.execute([&os]() mutable {
@@ -474,8 +538,7 @@ namespace hpx::execution::experimental {
 #if defined(HPX_HAVE_STDEXEC)
         /// Returns the execution domain of this scheduler (following system_context.hpp pattern).
         [[nodiscard]]
-        auto query(stdexec::get_domain_t) const noexcept
-            -> thread_pool_domain<Policy>
+        auto query(stdexec::get_domain_t) const noexcept -> thread_pool_domain
         {
             return {};
         }
@@ -486,7 +549,7 @@ namespace hpx::execution::experimental {
         template <typename CPO>
         [[nodiscard]]
         auto query(stdexec::get_completion_domain_t<CPO>) const noexcept
-            -> thread_pool_domain<Policy>
+            -> thread_pool_domain
         {
             return {};
         }
@@ -581,7 +644,7 @@ namespace hpx::execution::experimental {
     constexpr auto tag_invoke(stdexec::get_domain_t,
         thread_pool_policy_scheduler<Policy> const& sched) noexcept
     {
-        return thread_pool_domain<Policy>{};
+        return thread_pool_domain{};
     }
 
     // Add stdexec-specific schedule customization

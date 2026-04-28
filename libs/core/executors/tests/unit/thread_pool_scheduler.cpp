@@ -2202,8 +2202,7 @@ void test_stdexec_domain_queries()
     auto scheduler = ex::thread_pool_scheduler{};
 
     // 1. Verify domain derives from ex::default_domain
-    static_assert(std::is_base_of_v<ex::default_domain,
-                      ex::thread_pool_domain<hpx::launch>>,
+    static_assert(std::is_base_of_v<ex::default_domain, ex::thread_pool_domain>,
         "thread_pool_domain should derive from default_domain");
     // 2. Verify domain is accessible via ex::get_domain (forwarded from stdexec)
     static_assert(
@@ -2212,13 +2211,19 @@ void test_stdexec_domain_queries()
     auto domain = ex::get_domain(scheduler);
 
     // 3. Verify the domain type is thread_pool_domain
-    static_assert(
-        std::is_same_v<decltype(domain), ex::thread_pool_domain<hpx::launch>>,
-        "scheduler domain should be thread_pool_domain<hpx::launch>");
+    static_assert(std::is_same_v<decltype(domain), ex::thread_pool_domain>,
+        "scheduler domain should be thread_pool_domain");
     // 4. Verify transform_sender produces thread_pool_bulk_sender for
     //    bulk_chunked (proves the domain customization is picked up)
     {
+#if defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-braces"
+#endif
         auto env = ex::env{ex::prop{ex::get_scheduler, scheduler}};
+#if defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic pop
+#endif
 
         auto chunked_sndr = ex::bulk_chunked(
             ex::schedule(scheduler), ex::par, 10, [](int, int) {});
@@ -2241,7 +2246,14 @@ void test_stdexec_domain_queries()
     // 5. Verify transform_sender produces thread_pool_bulk_sender for
     //    bulk_unchunked (proves the domain customization is picked up)
     {
+#if defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-braces"
+#endif
         auto env = ex::env{ex::prop{ex::get_scheduler, scheduler}};
+#if defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic pop
+#endif
 
         auto unchunked_sndr = ex::bulk_unchunked(
             ex::schedule(scheduler), ex::par, 10, [](int) {});

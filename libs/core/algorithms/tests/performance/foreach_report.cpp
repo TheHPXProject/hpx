@@ -82,6 +82,17 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 [&]() { measure_parallel_foreach(data_representation, exec); });
         }
 
+#if defined(HPX_HAVE_STDEXEC)
+        {
+            hpx::execution::experimental::scheduler_executor<
+                hpx::execution::experimental::parallel_scheduler>
+                exec(hpx::execution::experimental::get_parallel_scheduler());
+            hpx::util::perftests_report("for_each", "parallel_scheduler",
+                test_count,
+                [&]() { measure_parallel_foreach(data_representation, exec); });
+        }
+#endif
+
         {
             hpx::execution::parallel_executor exec;
             hpx::util::perftests_report("for_each", "parallel_executor",

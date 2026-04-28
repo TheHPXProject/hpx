@@ -603,10 +603,30 @@ int hpx_main(hpx::program_options::variables_map& vm)
             timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
                 std::move(alloc), std::move(policy));
         }
+#if defined(HPX_HAVE_STDEXEC)
+        else if (executor == 6)
+        {
+            // parallel_scheduler natively.
+            // Using it via scheduler_executor for parallel algorithms.
+            using executor_type =
+                hpx::execution::experimental::scheduler_executor<
+                    hpx::execution::experimental::parallel_scheduler>;
+
+            executor_type exec(
+                hpx::execution::experimental::get_parallel_scheduler());
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), std::move(policy));
+        }
+#endif
         else
         {
             HPX_THROW_EXCEPTION(hpx::error::commandline_option_error,
-                "hpx_main", "Invalid executor id given (0-4 allowed");
+                "hpx_main", "Invalid executor id given (0-6 allowed");
         }
     }
     time_total = mysecond() - time_total;
@@ -660,10 +680,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 "max,add_bytes,add_bw,add_avg,add_min,add_max,triad_bytes,"
                 "triad_bw,triad_avg,triad_min,triad_max\n");
         }
-        std::size_t const num_executors = 6;
+        std::size_t const num_executors = 7;
         char const* executors[num_executors] = {"parallel-serial", "block",
             "parallel-parallel", "fork_join_executor", "scheduler_executor",
-            "block_fork_join_executor"};
+            "block_fork_join_executor", "parallel_scheduler"};
         hpx::util::format_to(std::cout, "{},{},{},", executors[executor],
             hpx::get_os_thread_count(), vector_size);
     }

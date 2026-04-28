@@ -18,6 +18,11 @@
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#if defined(HPX_HAVE_STDEXEC)
+#include <hpx/executors/detail/index_queue_spawning.hpp>
+#include <hpx/executors/parallel_scheduler.hpp>
+#endif
+
 #include <cstddef>
 #include <exception>
 #include <type_traits>
@@ -25,6 +30,99 @@
 #include <vector>
 
 namespace hpx::execution::experimental {
+
+#if defined(HPX_HAVE_STDEXEC)
+    namespace detail {
+
+        // Trait to detect schedulers that expose a thread pool backend,
+        // enabling direct dispatch via index_queue_bulk_sync_execute
+        // instead of the slower sender/receiver pipeline.
+        template <typename Scheduler>
+        struct has_thread_pool_backend : std::false_type
+        {
+        };
+
+        template <typename Policy>
+        struct has_thread_pool_backend<thread_pool_policy_scheduler<Policy>>
+          : std::true_type
+        {
+        };
+
+        // parallel_scheduler wraps thread_pool_policy_scheduler; use the same
+        // index_queue fast path with thread_pool_params<parallel_scheduler>
+        // so pu_mask() can return the cached mask from get_pu_mask().
+        template <>
+        struct has_thread_pool_backend<parallel_scheduler> : std::true_type
+        {
+        };
+
+        // Helper to extract thread pool parameters from a scheduler
+        template <typename Scheduler>
+        struct thread_pool_params;    // primary: not defined
+
+        template <>
+        struct thread_pool_params<parallel_scheduler>
+        {
+            static auto* pool(parallel_scheduler const& sched)
+            {
+                return sched.get_underlying_scheduler()->get_thread_pool();
+            }
+            static std::size_t first_core(parallel_scheduler const& sched)
+            {
+                return hpx::execution::experimental::get_first_core(
+                    *sched.get_underlying_scheduler());
+            }
+            static std::size_t num_cores(parallel_scheduler const& sched)
+            {
+                return hpx::execution::experimental::processing_units_count(
+                    hpx::execution::experimental::null_parameters,
+                    *sched.get_underlying_scheduler(),
+                    hpx::chrono::null_duration, 0);
+            }
+            static auto const& policy(parallel_scheduler const& sched)
+            {
+                return sched.get_underlying_scheduler()->policy();
+            }
+            static hpx::threads::mask_type pu_mask(
+                parallel_scheduler const& sched)
+            {
+                return *sched.get_pu_mask();
+            }
+        };
+
+        template <typename Policy>
+        struct thread_pool_params<thread_pool_policy_scheduler<Policy>>
+        {
+            static auto* pool(thread_pool_policy_scheduler<Policy> const& sched)
+            {
+                return sched.get_thread_pool();
+            }
+            static std::size_t first_core(
+                thread_pool_policy_scheduler<Policy> const& sched)
+            {
+                return hpx::execution::experimental::get_first_core(sched);
+            }
+            static std::size_t num_cores(
+                thread_pool_policy_scheduler<Policy> const& sched)
+            {
+                return hpx::execution::experimental::processing_units_count(
+                    hpx::execution::experimental::null_parameters, sched,
+                    hpx::chrono::null_duration, 0);
+            }
+            static Policy const& policy(
+                thread_pool_policy_scheduler<Policy> const& sched)
+            {
+                return sched.policy();
+            }
+            static auto pu_mask(
+                thread_pool_policy_scheduler<Policy> const& sched)
+            {
+                return hpx::execution::experimental::get_processing_units_mask(
+                    sched);
+            }
+        };
+    }    // namespace detail
+#endif
 
     namespace detail {
 
@@ -180,16 +278,74 @@ namespace hpx::execution::experimental {
             if constexpr (std::is_void_v<result_type>)
             {
 #if defined(HPX_HAVE_STDEXEC)
-                // stdexec::bulk requires integral shape and execution policy
-                using size_type = decltype(hpx::util::size(shape));
-                size_type const n = hpx::util::size(shape);
-                return make_future(bulk(schedule(exec.sched_), par, n,
-                    [shape, f = HPX_FORWARD(F, f),
-                        ... args = HPX_FORWARD(Ts, ts)](size_type i) mutable {
-                        auto it = hpx::util::begin(shape);
-                        std::advance(it, i);
-                        HPX_INVOKE(f, *it, args...);
-                    }));
+                // Fast path: direct thread pool dispatch
+                if constexpr (detail::has_thread_pool_backend<
+                                  std::decay_t<BaseScheduler>>::value)
+                {
+                    using params_type =
+                        detail::thread_pool_params<std::decay_t<BaseScheduler>>;
+                    auto* pool = params_type::pool(exec.sched_);
+                    auto first_core = params_type::first_core(exec.sched_);
+                    auto num_cores = params_type::num_cores(exec.sched_);
+                    auto const& policy = params_type::policy(exec.sched_);
+                    auto mask = params_type::pu_mask(exec.sched_);
+
+                    return hpx::parallel::execution::detail::
+                        index_queue_bulk_async_execute(pool, first_core,
+                            num_cores, policy, HPX_FORWARD(F, f), shape, mask,
+                            HPX_FORWARD(Ts, ts)...);
+                }
+                else if constexpr (requires {
+                                       exec.sched_.get_underlying_scheduler();
+                                   })
+                {
+                    using underlying_type = std::decay_t<
+                        decltype(exec.sched_.get_underlying_scheduler())>;
+                    if constexpr (detail::has_thread_pool_backend<
+                                      underlying_type>::value)
+                    {
+                        using params_type =
+                            detail::thread_pool_params<underlying_type>;
+                        auto const& underlying =
+                            exec.sched_.get_underlying_scheduler();
+                        auto* pool = params_type::pool(underlying);
+                        auto first_core = params_type::first_core(underlying);
+                        auto num_cores = params_type::num_cores(underlying);
+                        auto const& policy = params_type::policy(underlying);
+                        auto mask = params_type::pu_mask(underlying);
+
+                        return hpx::parallel::execution::detail::
+                            index_queue_bulk_async_execute(pool, first_core,
+                                num_cores, policy, HPX_FORWARD(F, f), shape,
+                                mask, HPX_FORWARD(Ts, ts)...);
+                    }
+                    else
+                    {
+                        using size_type = decltype(hpx::util::size(shape));
+                        size_type const n = hpx::util::size(shape);
+                        return make_future(bulk(schedule(exec.sched_), par, n,
+                            [shape, f = HPX_FORWARD(F, f),
+                                ... args = HPX_FORWARD(Ts, ts)](
+                                size_type i) mutable {
+                                auto it = hpx::util::begin(shape);
+                                std::advance(it, i);
+                                HPX_INVOKE(f, *it, args...);
+                            }));
+                    }
+                }
+                else
+                {
+                    using size_type = decltype(hpx::util::size(shape));
+                    size_type const n = hpx::util::size(shape);
+                    return make_future(bulk(schedule(exec.sched_), par, n,
+                        [shape, f = HPX_FORWARD(F, f),
+                            ... args = HPX_FORWARD(Ts, ts)](
+                            size_type i) mutable {
+                            auto it = hpx::util::begin(shape);
+                            std::advance(it, i);
+                            HPX_INVOKE(f, *it, args...);
+                        }));
+                }
 #else
                 return make_future(bulk(schedule(exec.sched_), shape,
                     hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)));
@@ -255,20 +411,89 @@ namespace hpx::execution::experimental {
                 shape_element, Ts...>;
 
 #if defined(HPX_HAVE_STDEXEC)
-            // stdexec::bulk requires integral shape and execution policy
-            using size_type = decltype(hpx::util::size(shape));
-            size_type const n = hpx::util::size(shape);
-            return hpx::util::void_guard<result_type>(),
-                   // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                   *hpx::this_thread::experimental::sync_wait(
-                       bulk(schedule(exec.sched_), par, n,
-                           [shape, f = HPX_FORWARD(F, f),
-                               ... args = HPX_FORWARD(Ts, ts)](
-                               size_type i) mutable {
-                               auto it = hpx::util::begin(shape);
-                               std::advance(it, i);
-                               HPX_INVOKE(f, *it, args...);
-                           }));
+            // Fast path: if the scheduler (or its underlying scheduler)
+            // is backed by a thread pool, bypass the sender/receiver
+            // pipeline and call index_queue_bulk_sync_execute directly.
+            // This matches the same path that parallel_executor uses.
+            if constexpr (detail::has_thread_pool_backend<
+                              std::decay_t<BaseScheduler>>::value)
+            {
+                using params_type =
+                    detail::thread_pool_params<std::decay_t<BaseScheduler>>;
+                auto* pool = params_type::pool(exec.sched_);
+                auto first_core = params_type::first_core(exec.sched_);
+                auto num_cores = params_type::num_cores(exec.sched_);
+                auto const& policy = params_type::policy(exec.sched_);
+                auto mask = params_type::pu_mask(exec.sched_);
+
+                return hpx::util::void_guard<result_type>(),
+                       hpx::parallel::execution::detail::
+                           index_queue_bulk_sync_execute(pool, first_core,
+                               num_cores, policy, HPX_FORWARD(F, f), shape,
+                               mask, HPX_FORWARD(Ts, ts)...);
+            }
+            // Check if the scheduler has get_underlying_scheduler()
+            // (e.g. parallel_scheduler wrapping thread_pool_policy_scheduler)
+            else if constexpr (requires {
+                                   exec.sched_.get_underlying_scheduler();
+                               })
+            {
+                using underlying_type = std::decay_t<
+                    decltype(exec.sched_.get_underlying_scheduler())>;
+                if constexpr (detail::has_thread_pool_backend<
+                                  underlying_type>::value)
+                {
+                    using params_type =
+                        detail::thread_pool_params<underlying_type>;
+                    auto const& underlying =
+                        exec.sched_.get_underlying_scheduler();
+                    auto* pool = params_type::pool(underlying);
+                    auto first_core = params_type::first_core(underlying);
+                    auto num_cores = params_type::num_cores(underlying);
+                    auto const& policy = params_type::policy(underlying);
+                    auto mask = params_type::pu_mask(underlying);
+
+                    return hpx::util::void_guard<result_type>(),
+                           hpx::parallel::execution::detail::
+                               index_queue_bulk_sync_execute(pool, first_core,
+                                   num_cores, policy, HPX_FORWARD(F, f), shape,
+                                   mask, HPX_FORWARD(Ts, ts)...);
+                }
+                else
+                {
+                    // Fallback: underlying scheduler doesn't have a pool
+                    using size_type = decltype(hpx::util::size(shape));
+                    size_type const n = hpx::util::size(shape);
+                    return hpx::util::void_guard<result_type>(),
+                           // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+                           *hpx::this_thread::experimental::sync_wait(
+                               bulk(schedule(exec.sched_), par, n,
+                                   [shape, f = HPX_FORWARD(F, f),
+                                       ... args = HPX_FORWARD(Ts, ts)](
+                                       size_type i) mutable {
+                                       auto it = hpx::util::begin(shape);
+                                       std::advance(it, i);
+                                       HPX_INVOKE(f, *it, args...);
+                                   }));
+                }
+            }
+            else
+            {
+                // Generic fallback: use sender/receiver pipeline
+                using size_type = decltype(hpx::util::size(shape));
+                size_type const n = hpx::util::size(shape);
+                return hpx::util::void_guard<result_type>(),
+                       // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+                       *hpx::this_thread::experimental::sync_wait(
+                           bulk(schedule(exec.sched_), par, n,
+                               [shape, f = HPX_FORWARD(F, f),
+                                   ... args = HPX_FORWARD(Ts, ts)](
+                                   size_type i) mutable {
+                                   auto it = hpx::util::begin(shape);
+                                   std::advance(it, i);
+                                   HPX_INVOKE(f, *it, args...);
+                               }));
+            }
 #else
             return hpx::util::void_guard<result_type>(),
                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
@@ -292,29 +517,118 @@ namespace hpx::execution::experimental {
 
             if constexpr (std::is_void_v<result_type>)
             {
+#if defined(HPX_HAVE_STDEXEC)
+                // Fast path: wait on predecessor, then direct dispatch
+                if constexpr (detail::has_thread_pool_backend<
+                                  std::decay_t<BaseScheduler>>::value)
+                {
+                    using params_type =
+                        detail::thread_pool_params<std::decay_t<BaseScheduler>>;
+
+                    return hpx::async(
+                        [&exec, f = HPX_FORWARD(F, f), &shape,
+                            ... ts = HPX_FORWARD(Ts, ts)](
+                            Future&& pred) mutable {
+                            pred.get();    // wait for predecessor
+                            auto* pool = params_type::pool(exec.sched_);
+                            auto first_core =
+                                params_type::first_core(exec.sched_);
+                            auto num_cores =
+                                params_type::num_cores(exec.sched_);
+                            auto const& policy =
+                                params_type::policy(exec.sched_);
+                            auto mask = params_type::pu_mask(exec.sched_);
+
+                            hpx::parallel::execution::detail::
+                                index_queue_bulk_sync_execute(pool, first_core,
+                                    num_cores, policy,
+                                    HPX_FORWARD(decltype(f), f), shape, mask,
+                                    HPX_FORWARD(decltype(ts), ts)...);
+                        },
+                        HPX_FORWARD(Future, predecessor));
+                }
+                else if constexpr (requires {
+                                       exec.sched_.get_underlying_scheduler();
+                                   })
+                {
+                    using underlying_type = std::decay_t<
+                        decltype(exec.sched_.get_underlying_scheduler())>;
+                    if constexpr (detail::has_thread_pool_backend<
+                                      underlying_type>::value)
+                    {
+                        using uparams_type =
+                            detail::thread_pool_params<underlying_type>;
+
+                        return hpx::async(
+                            [&exec, f = HPX_FORWARD(F, f), &shape,
+                                ... ts = HPX_FORWARD(Ts, ts)](
+                                Future&& pred) mutable {
+                                pred.get();
+                                auto const& underlying =
+                                    exec.sched_.get_underlying_scheduler();
+                                auto* pool = uparams_type::pool(underlying);
+                                auto first_core =
+                                    uparams_type::first_core(underlying);
+                                auto num_cores =
+                                    uparams_type::num_cores(underlying);
+                                auto const& policy =
+                                    uparams_type::policy(underlying);
+                                auto mask = uparams_type::pu_mask(underlying);
+
+                                hpx::parallel::execution::detail::
+                                    index_queue_bulk_sync_execute(pool,
+                                        first_core, num_cores, policy,
+                                        HPX_FORWARD(decltype(f), f), shape,
+                                        mask, HPX_FORWARD(decltype(ts), ts)...);
+                            },
+                            HPX_FORWARD(Future, predecessor));
+                    }
+                    else
+                    {
+                        // Fallback: sender pipeline
+                        auto pre_req = when_all(
+                            keep_future(HPX_FORWARD(Future, predecessor)));
+                        using size_type = decltype(hpx::util::size(shape));
+                        size_type const n = hpx::util::size(shape);
+                        auto loop = bulk(
+                            transfer(HPX_MOVE(pre_req), exec.sched_), par, n,
+                            [shape, f = HPX_FORWARD(F, f),
+                                ... args = HPX_FORWARD(Ts, ts)](
+                                size_type i, auto&... receiver_args) mutable {
+                                auto it = hpx::util::begin(shape);
+                                std::advance(it, i);
+                                HPX_INVOKE(f, *it, args..., receiver_args...);
+                            });
+                        return make_future(HPX_MOVE(loop));
+                    }
+                }
+                else
+                {
+                    // Fallback: sender pipeline
+                    auto pre_req =
+                        when_all(keep_future(HPX_FORWARD(Future, predecessor)));
+                    using size_type = decltype(hpx::util::size(shape));
+                    size_type const n = hpx::util::size(shape);
+                    auto loop =
+                        bulk(transfer(HPX_MOVE(pre_req), exec.sched_), par, n,
+                            [shape, f = HPX_FORWARD(F, f),
+                                ... args = HPX_FORWARD(Ts, ts)](
+                                size_type i, auto&... receiver_args) mutable {
+                                auto it = hpx::util::begin(shape);
+                                std::advance(it, i);
+                                HPX_INVOKE(f, *it, args..., receiver_args...);
+                            });
+                    return make_future(HPX_MOVE(loop));
+                }
+#else
                 // the overall return value is future<void>
                 auto pre_req =
                     when_all(keep_future(HPX_FORWARD(Future, predecessor)));
-
-#if defined(HPX_HAVE_STDEXEC)
-                using size_type = decltype(hpx::util::size(shape));
-                size_type const n = hpx::util::size(shape);
-                auto loop =
-                    bulk(transfer(HPX_MOVE(pre_req), exec.sched_), par, n,
-                        [shape, f = HPX_FORWARD(F, f),
-                            ... args = HPX_FORWARD(Ts, ts)](
-                            size_type i, auto&... receiver_args) mutable {
-                            auto it = hpx::util::begin(shape);
-                            std::advance(it, i);
-                            HPX_INVOKE(f, *it, args..., receiver_args...);
-                        });
-#else
                 auto loop = bulk(transfer(HPX_MOVE(pre_req), exec.sched_),
                     shape,
                     hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
-#endif
-
                 return make_future(HPX_MOVE(loop));
+#endif
             }
             else
             {
