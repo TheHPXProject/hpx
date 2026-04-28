@@ -10,12 +10,6 @@ if(NOT HPX_WITH_TESTS_EXTERNAL_BUILD)
   return()
 endif()
 
-# If C++ modules are enabled, exit now (we don't know yet how to setup a
-# dependent HPX project to use the generated BMIs).
-if(HPX_WITH_CXX_MODULES)
-  return()
-endif()
-
 # Try building an external cmake based project ...
 function(
   create_cmake_test
@@ -200,7 +194,10 @@ foreach(build_type ${build_types})
 endforeach()
 add_hpx_pseudo_dependencies(tests.unit.build tests.unit.build.cmake)
 
-if(HPX_WITH_PKGCONFIG AND HPX_WITH_DISTRIBUTED_RUNTIME)
+if(HPX_WITH_PKGCONFIG
+   AND HPX_WITH_DISTRIBUTED_RUNTIME
+   AND NOT HPX_WITH_CXX_MODULES
+)
   find_package(PkgConfig)
   if(PKGCONFIG_FOUND)
     create_pkgconfig_test(

@@ -105,6 +105,10 @@ set(STANDARD_LIBRARY_HEADERS
     "<cwctype>"
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  list(APPEND STANDARD_LIBRARY_HEADERS "<link.h>" "<dlfcn.h>")
+endif()
+
 # Function to extract #includes from a file recursively
 function(hpx_extract_includes_from_file module)
 
@@ -137,8 +141,11 @@ function(hpx_extract_includes_from_file module)
     if(NOT filename MATCHES "\\.|/")
       # Check if the include is a standard library header
       if(${filename} IN_LIST STANDARD_LIBRARY_HEADERS)
-        list(APPEND found_includes ${filename})
+        list(APPEND found_includes "${filename}")
       endif()
+    elseif(${filename} IN_LIST STANDARD_LIBRARY_HEADERS)
+      # Handle headers with extensions (like link.h) that were added to the list
+      list(APPEND found_includes "${filename}")
     endif()
   endforeach()
 

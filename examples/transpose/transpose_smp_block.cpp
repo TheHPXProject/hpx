@@ -96,7 +96,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::vector<hpx::shared_future<void>> transpose_futures;
         transpose_futures.resize(num_blocks);
 
-        for_each(par, range, [&](std::uint64_t b) {
+        for (std::uint64_t b = 0; b < num_blocks; ++b)
+        {
             transpose_futures[b] =
                 for_each(par(task), range, [&, b](std::uint64_t phase) {
                     std::uint64_t const block_size = block_order * block_order;
@@ -108,7 +109,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                     transpose(&A[from_block][A_offset], &B[b][B_offset],
                         block_order, tile_size);
                 }).share();
-        });
+        }
 
         hpx::wait_all(transpose_futures);
 
