@@ -74,6 +74,8 @@ set(tests
     merge_range
     min_element_range
     minmax_element_range
+    minmax_element_parallel_projection
+    minmax_element_projection
     mismatch_binary_range
     mismatch_range
     move_range
