@@ -305,6 +305,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <list>
@@ -321,6 +322,12 @@ namespace hpx::parallel {
         /// \cond NOINTERNAL
 
         ///////////////////////////////////////////////////////////////////////
+        enum class partition_phase : std::uint8_t
+        {
+            start = 1,
+            end = 2
+        };
+
         HPX_CXX_CORE_EXPORT struct lower_bound_helper;
 
         HPX_CXX_CORE_EXPORT struct upper_bound_helper
@@ -650,13 +657,12 @@ namespace hpx::parallel {
         }
 
         class const_index_value_iterator
-          : public hpx::util::iterator_facade<
-                const_index_value_iterator,                    // Derived
-                hpx::tuple<std::size_t, std::size_t> const,    // Value type
-                std::random_access_iterator_tag>
+          : public hpx::util::iterator_facade<const_index_value_iterator,
+                hpx::tuple<std::size_t, std::size_t>,
+                std::random_access_iterator_tag,
+                hpx::tuple<std::size_t, std::size_t>>
         {
         private:
-            // current index and current value to be returned
             hpx::tuple<std::size_t, std::size_t> data_ = hpx::make_tuple(0, 0);
 
         public:
@@ -667,11 +673,12 @@ namespace hpx::parallel {
             {
             }
 
+            using use_brackets_proxy = std::false_type;
+
         private:
             friend class hpx::util::iterator_core_access;
 
-            hpx::tuple<std::size_t, std::size_t> const& dereference()
-                const noexcept
+            hpx::tuple<std::size_t, std::size_t> dereference() const noexcept
             {
                 return data_;
             }
@@ -718,6 +725,9 @@ namespace hpx::parallel {
 #endif
                 hpx::tracing::mark_event evt("get diagonal index");
                 auto const shape_size = std::size(shape);
+
+                static_assert(
+                    std::random_access_iterator<const_index_value_iterator>);
 
                 if (n == 0)
                     return hpx::util::iterator_range<
@@ -869,8 +879,11 @@ namespace hpx::parallel {
 
             using result_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
 
-            auto f1 = [dest, comp, proj1, proj2, first1, first2, len1, len2](
-                          std::size_t idx, std::size_t chunk) {
+            auto params = policy.parameters();
+            auto exec = policy.executor();
+
+            auto f1 = [dest, comp, proj1, proj2, first1, first2, len1, len2,
+                          params, exec](std::size_t idx, std::size_t chunk) {
                 if (len1 != 0 || len2 != 0)
                 {
                     std::size_t N = len1 + len2;
@@ -882,10 +895,15 @@ namespace hpx::parallel {
                     auto [a1, b1] = diagonal_intersection(
                         first1, len1, first2, len2, k1, comp, proj1, proj2);
 
+                    auto tid = hpx::this_thread::get_id();
+                    hpx::execution::experimental::mark_partition(
+                        params, exec, idx, partition_phase::start, a0, b0, tid);
                     sequential_merge(std::next(first1, a0),
                         std::next(first1, a1), std::next(first2, b0),
                         std::next(first2, b1), std::next(dest, k0), comp, proj1,
                         proj2);
+                    hpx::execution::experimental::mark_partition(
+                        params, exec, idx, partition_phase::end, tid);
                 }
             };
 

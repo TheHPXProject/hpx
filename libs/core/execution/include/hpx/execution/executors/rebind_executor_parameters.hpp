@@ -200,6 +200,19 @@ namespace hpx::execution::experimental {
         hpx::functional::detail::is_tag_override_invocable_v<
             mark_end_execution_t, Params&&, InnerParams&&, Executor&&>;
 
+    // execution_markers: partition
+    HPX_CXX_CORE_EXPORT template <typename Params, typename Executor,
+        typename... Args>
+    inline constexpr bool supports_mark_partition_v =
+        hpx::functional::detail::is_tag_override_invocable_v<mark_partition_t,
+            Params&&, Executor&&, std::size_t, Args&&...>;
+
+    HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
+        typename Executor, typename... Args>
+    inline constexpr bool supports_wrapping_mark_partition_v =
+        hpx::functional::detail::is_tag_override_invocable_v<mark_partition_t,
+            Params&&, InnerParams&&, Executor&&, std::size_t, Args&&...>;
+
     // wrapping processing_units_count
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_processing_units_count_v =
@@ -488,6 +501,49 @@ namespace hpx::execution::experimental {
             {
                 mark_end_execution(detail::wrapped_forward<Params>(this_),
                     HPX_FORWARD(Executor, exec));
+            }
+        }
+
+        // execution_markers: partition
+
+        // clang-format off
+        template <typename Params, typename Executor, typename... Args>
+            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
+                supports_wrapping_mark_partition_v<
+                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
+                    Executor, Args...> ||
+                supports_mark_partition_v<
+                    detail::wrapping_t<Params>, Executor, Args...> ||
+                supports_mark_partition_v<
+                    detail::wrapped_t<Params>, Executor, Args...>
+            ))
+        // clang-format on
+        friend constexpr void tag_override_invoke(mark_partition_t,
+            Params&& this_, Executor&& exec, std::size_t partition,
+            Args&&... args)
+        {
+            if constexpr (supports_wrapping_mark_partition_v<
+                              detail::wrapping_t<Params>,
+                              detail::wrapped_t<Params>, Executor, Args...>)
+            {
+                mark_partition(detail::wrapping_forward<Params>(this_),
+                    detail::wrapped_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), partition,
+                    HPX_FORWARD(Args, args)...);
+            }
+            else if constexpr (supports_mark_partition_v<
+                                   detail::wrapping_t<Params>, Executor,
+                                   Args...>)
+            {
+                mark_partition(detail::wrapping_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), partition,
+                    HPX_FORWARD(Args, args)...);
+            }
+            else
+            {
+                mark_partition(detail::wrapped_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), partition,
+                    HPX_FORWARD(Args, args)...);
             }
         }
 
