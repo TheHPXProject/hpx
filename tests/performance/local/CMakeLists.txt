@@ -25,6 +25,7 @@ set(benchmarks
     skynet
     wait_all_timings
     benchmark_stealing
+    shared_mutex_overhead
 )
 
 set(timed_task_spawn_SOURCES activate_counters.cpp)
@@ -144,6 +145,7 @@ set(print_heterogeneous_payloads_PARAMETERS NO_HPX_MAIN)
 set(skynet_PARAMETERS NO_HPX_MAIN)
 set(timed_task_spawn_PARAMETERS NO_HPX_MAIN)
 set(benchmark_stealing_PARAMETERS NO_HPX_MAIN)
+set(shared_mutex_overhead_PARAMETERS NO_HPX_MAIN)
 set(hpx_tls_overhead_PARAMETERS NO_HPX_MAIN)
 set(native_tls_overhead_PARAMETERS NO_HPX_MAIN)
 set(coroutines_call_overhead_PARAMETERS NO_HPX_MAIN)
