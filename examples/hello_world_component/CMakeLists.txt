@@ -11,12 +11,12 @@ project(hello_world_client CXX)
 if(EXISTS "${HPX_DIR}")
   find_package(HPX REQUIRED)
 
-  if(HPX_WITH_DISTRIBUTED_RUNTIME)
-    add_library(hello_world_component SHARED hello_world_component.cpp)
-  endif()
-
   if(HPX_WITH_CXX_MODULES)
     set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+  endif()
+
+  if(HPX_WITH_DISTRIBUTED_RUNTIME)
+    add_library(hello_world_component SHARED hello_world_component.cpp)
   endif()
 
   add_executable(hello_world_client hello_world_client.cpp)

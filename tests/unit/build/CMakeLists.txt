@@ -73,6 +73,14 @@ function(
     VERBATIM
   )
   add_dependencies(${name} hpx hpx_init hpx_wrap)
+  if(HPX_WITH_CXX_MODULES)
+    if(TARGET hpx_core_module)
+      add_dependencies(${name} hpx_core_module)
+    endif()
+    if(TARGET hpx_full_module)
+      add_dependencies(${name} hpx_full_module)
+    endif()
+  endif()
   if(HPX_WITH_DISTRIBUTED_RUNTIME)
     add_dependencies(${name} iostreams_component)
   endif()
@@ -103,7 +111,7 @@ function(create_pkgconfig_test name hpx_dir)
       "${PROJECT_SOURCE_DIR}/examples/hello_world_component/Makefile"
       SRC_DIR=${PROJECT_SOURCE_DIR}/examples/hello_world_component
       HPX_DIR=${hpx_dir} CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER}
-      CXX_FLAGS=${PKGCONFIG_CXX_FLAGS} PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
+      "CXX_FLAGS=${PKGCONFIG_CXX_FLAGS}" PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
       BUILD_TYPE=$<CONFIGURATION>
     VERBATIM
   )
