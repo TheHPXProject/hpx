@@ -52,10 +52,14 @@ jobs:
           PR_NUMBER: ${{ steps.context.outputs.pr_number }}
           CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
+          set -euo pipefail
           echo "Cancelling runs for PR #$PR_NUMBER..."
 
-          # Get all runs for the PR that are NOT completed, excluding this current run
-          RUN_IDS=$(gh run list --pr "$PR_NUMBER" --limit 200 --json databaseId,status --jq '.[] | select(.status != "completed" and .databaseId != (env.CURRENT_RUN_ID | tonumber)) | .databaseId')
+          # Fetch recent runs and filter by the specific PR number
+          # This is safer than filtering by branch name which can be non-unique (e.g. 'patch-1')
+          # any(.pull_requests[]; .number == ...) ensures we match the correct PR
+          RUN_IDS=$(gh api "/repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq ".workflow_runs[] | select(.status != \"completed\" and .id != (env.CURRENT_RUN_ID | tonumber) and any(.pull_requests[]; .number == ($PR_NUMBER | tonumber))) | .id")
 
           if [ -z "$RUN_IDS" ]; then
             echo "No active runs found to cancel."
