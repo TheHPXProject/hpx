@@ -62,6 +62,7 @@ set(tests
     is_partitioned_async_range
     is_partitioned_range
     is_partitioned_projection_range
+    is_sorted_projection
     is_sorted_range
     is_sorted_range2
     is_sorted_range3

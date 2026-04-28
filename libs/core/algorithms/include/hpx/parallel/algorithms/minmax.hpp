@@ -1,4 +1,5 @@
 //  Copyright (c) 2014-2026 Hartmut Kaiser
+//  Copyright (c) 2024-2026 The STE||AR Group
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -388,7 +389,7 @@ namespace hpx {
 
 namespace hpx::parallel {
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     using minmax_element_result = hpx::parallel::util::min_max_result<T>;
 
     ///////////////////////////////////////////////////////////////////////////
@@ -396,8 +397,8 @@ namespace hpx::parallel {
     namespace detail {
 
         /// \cond NOINTERNAL
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-            typename F, typename Proj>
+        template <typename ExPolicy, typename FwdIter, typename F,
+            typename Proj>
         constexpr FwdIter sequential_min_element(ExPolicy&&, FwdIter it,
             std::size_t count, F const& f, Proj const& proj)
         {
@@ -406,8 +407,9 @@ namespace hpx::parallel {
 
             auto smallest = it;
 
-            using element_type = hpx::traits::proxy_value_t<
-                std::decay_t<decltype(HPX_INVOKE(proj, *smallest))>>;
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
 
             element_type value = HPX_INVOKE(proj, *smallest);
             util::const_loop_n<std::decay_t<ExPolicy>>(
@@ -424,7 +426,7 @@ namespace hpx::parallel {
         }
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iter>
+        template <typename Iter>
         struct min_element : public algorithm<min_element<Iter>, Iter>
         {
             // this has to be a member of the algorithm type as we access this
@@ -444,7 +446,8 @@ namespace hpx::parallel {
                 auto smallest = *it;
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *smallest))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
 
                 element_type value = HPX_INVOKE(proj, *smallest);
                 util::const_loop_n<std::decay_t<ExPolicy>>(
@@ -476,7 +479,8 @@ namespace hpx::parallel {
                 auto smallest = first;
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *smallest))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
 
                 element_type value = HPX_INVOKE(proj, *smallest);
                 util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
@@ -548,8 +552,8 @@ namespace hpx::parallel {
     namespace detail {
 
         /// \cond NOINTERNAL
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-            typename F, typename Proj>
+        template <typename ExPolicy, typename FwdIter, typename F,
+            typename Proj>
         constexpr FwdIter sequential_max_element(ExPolicy&&, FwdIter it,
             std::size_t count, F const& f, Proj const& proj)
         {
@@ -558,8 +562,9 @@ namespace hpx::parallel {
 
             auto largest = it;
 
-            using element_type = hpx::traits::proxy_value_t<
-                std::decay_t<decltype(HPX_INVOKE(proj, *largest))>>;
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
 
             element_type value = HPX_INVOKE(proj, *largest);
             util::const_loop_n<std::decay_t<ExPolicy>>(
@@ -576,7 +581,7 @@ namespace hpx::parallel {
         }
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iter>
+        template <typename Iter>
         struct max_element : public algorithm<max_element<Iter>, Iter>
         {
             // this has to be a member of the algorithm type as we access this
@@ -596,7 +601,8 @@ namespace hpx::parallel {
                 auto largest = *it;
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *largest))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
 
                 element_type value = HPX_INVOKE(proj, *largest);
                 util::const_loop_n<std::decay_t<ExPolicy>>(
@@ -628,7 +634,8 @@ namespace hpx::parallel {
                 auto largest = first;
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *largest))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
 
                 element_type value = HPX_INVOKE(proj, *largest);
                 util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
@@ -700,8 +707,8 @@ namespace hpx::parallel {
     namespace detail {
 
         /// \cond NOINTERNAL
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-            typename F, typename Proj>
+        template <typename ExPolicy, typename FwdIter, typename F,
+            typename Proj>
         minmax_element_result<FwdIter> sequential_minmax_element(ExPolicy&&,
             FwdIter it, std::size_t count, F const& f, Proj const& proj)
         {
@@ -710,8 +717,9 @@ namespace hpx::parallel {
             if (count == 0 || count == 1)
                 return result;
 
-            using element_type = hpx::traits::proxy_value_t<
-                std::decay_t<decltype(HPX_INVOKE(proj, *it))>>;
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
 
             element_type min_value = HPX_INVOKE(proj, *it);
             element_type max_value = min_value;
@@ -734,7 +742,7 @@ namespace hpx::parallel {
             return result;
         }
 
-        HPX_CXX_CORE_EXPORT template <typename Iter>
+        template <typename Iter>
         struct minmax_element
           : public algorithm<minmax_element<Iter>, minmax_element_result<Iter>>
         {
@@ -755,7 +763,8 @@ namespace hpx::parallel {
                 auto result = *it;
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *result.min))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
 
                 element_type min_value = HPX_INVOKE(proj, *result.min);
                 element_type max_value = HPX_INVOKE(proj, *result.max);
@@ -801,7 +810,8 @@ namespace hpx::parallel {
                 }
 
                 using element_type = hpx::traits::proxy_value_t<
-                    std::decay_t<decltype(HPX_INVOKE(proj, *min))>>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
 
                 element_type min_value = HPX_INVOKE(proj, *min);
                 element_type max_value = HPX_INVOKE(proj, *max);
@@ -882,7 +892,7 @@ namespace hpx::parallel {
 
 namespace hpx {
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     using minmax_element_result = hpx::parallel::util::min_max_result<T>;
 
     ///////////////////////////////////////////////////////////////////////////
