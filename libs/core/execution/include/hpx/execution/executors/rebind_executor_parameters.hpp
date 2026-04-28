@@ -16,6 +16,7 @@
 #include <concepts>
 #include <cstddef>
 #include <type_traits>
+#include <utility>
 
 namespace hpx::execution::experimental {
 
@@ -253,6 +254,22 @@ namespace hpx::execution::experimental {
             collect_execution_parameters_t, Params&&, InnerParams&&, Executor&&,
             std::size_t, std::size_t, std::size_t, std::size_t>;
 
+    // wrapping adjust_chunk_size_and_max_chunks
+    HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
+    inline constexpr bool supports_adjust_chunk_size_and_max_chunks_v =
+        hpx::functional::detail::is_tag_override_invocable_v<
+            adjust_chunk_size_and_max_chunks_t, Params&&, Executor&&,
+            std::size_t, std::size_t, std::size_t, std::size_t> ||
+        hpx::execution::experimental::detail::
+            has_adjust_chunk_size_and_max_chunks_v<std::decay_t<Params>>;
+
+    HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
+        typename Executor>
+    inline constexpr bool supports_wrapping_adjust_chunk_size_and_max_chunks_v =
+        hpx::functional::detail::is_tag_override_invocable_v<
+            adjust_chunk_size_and_max_chunks_t, Params&&, InnerParams&&,
+            Executor&&, std::size_t, std::size_t, std::size_t, std::size_t>;
+
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename Wrapped, typename Wrapping>
         requires(hpx::executor_parameters<Wrapped> &&
@@ -415,8 +432,8 @@ namespace hpx::execution::experimental {
                     detail::wrapped_forward<Params>(this_),
                     HPX_FORWARD(Executor, exec));
             }
-            if constexpr (supports_mark_begin_execution_v<
-                              detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_mark_begin_execution_v<
+                                   detail::wrapping_t<Params>, Executor>)
             {
                 mark_begin_execution(detail::wrapping_forward<Params>(this_),
                     HPX_FORWARD(Executor, exec));
@@ -672,6 +689,54 @@ namespace hpx::execution::experimental {
             else
             {
                 collect_execution_parameters(
+                    detail::wrapped_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                    num_chunks, chunk_size);
+            }
+        }
+
+        // wrapping adjust_chunk_size_and_max_chunks
+
+        // clang-format off
+        template <typename Params, typename Executor>
+            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
+                supports_wrapping_adjust_chunk_size_and_max_chunks_v<
+                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
+                    Executor> ||
+                supports_adjust_chunk_size_and_max_chunks_v<
+                    detail::wrapping_t<Params>, Executor> ||
+                supports_adjust_chunk_size_and_max_chunks_v<
+                    detail::wrapped_t<Params>, Executor>
+            ))
+        // clang-format on
+        friend constexpr std::pair<std::size_t, std::size_t>
+        tag_override_invoke(
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks_t,
+            Params&& this_, Executor&& exec, std::size_t const num_elements,
+            std::size_t const num_cores, std::size_t const num_chunks,
+            std::size_t const chunk_size)
+        {
+            if constexpr (supports_wrapping_adjust_chunk_size_and_max_chunks_v<
+                              detail::wrapping_t<Params>,
+                              detail::wrapped_t<Params>, Executor>)
+            {
+                return adjust_chunk_size_and_max_chunks(
+                    detail::wrapping_forward<Params>(this_),
+                    detail::wrapped_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                    num_chunks, chunk_size);
+            }
+            else if constexpr (supports_adjust_chunk_size_and_max_chunks_v<
+                                   detail::wrapping_t<Params>, Executor>)
+            {
+                return adjust_chunk_size_and_max_chunks(
+                    detail::wrapping_forward<Params>(this_),
+                    HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                    num_chunks, chunk_size);
+            }
+            else
+            {
+                return adjust_chunk_size_and_max_chunks(
                     detail::wrapped_forward<Params>(this_),
                     HPX_FORWARD(Executor, exec), num_elements, num_cores,
                     num_chunks, chunk_size);

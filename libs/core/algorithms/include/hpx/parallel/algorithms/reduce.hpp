@@ -63,7 +63,7 @@ namespace hpx {
     /// with an execution policy object of type \a sequenced_policy
     /// execute in sequential order in the calling thread.
     ///
-    /// The reduce operations in the parallel \a copy_if algorithm invoked
+    /// The reduce operations in the parallel \a reduce algorithm invoked
     /// with an execution policy object of type \a parallel_policy
     /// or \a parallel_task_policy are permitted to execute in an unordered
     /// fashion in unspecified threads, and indeterminately sequenced
@@ -123,7 +123,7 @@ namespace hpx {
     /// with an execution policy object of type \a sequenced_policy
     /// execute in sequential order in the calling thread.
     ///
-    /// The reduce operations in the parallel \a copy_if algorithm invoked
+    /// The reduce operations in the parallel \a reduce algorithm invoked
     /// with an execution policy object of type \a parallel_policy
     /// or \a parallel_task_policy are permitted to execute in an unordered
     /// fashion in unspecified threads, and indeterminately sequenced
@@ -356,8 +356,11 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/parallel/algorithms/detail/accumulate.hpp>
@@ -382,62 +385,193 @@ namespace hpx::parallel {
     namespace detail {
 
         /// \cond NOINTERNAL
-        HPX_CXX_CORE_EXPORT template <typename T>
-        struct reduce : public algorithm<reduce<T>, T>
+
+        // Custom executor parameters for reduce algorithm to prevent
+        // single-element partitions. reduce_partition requires at least 2
+        // elements per partition because it initializes the accumulator via
+        // op(*first, *next(first)), which is the only way to produce a T from
+        // value_type elements when T may differ from value_type (e.g. minmax).
+        struct reduce_executor_parameters
         {
-            constexpr reduce() noexcept
-              : algorithm<reduce, T>("reduce")
+        private:
+            static HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            adjust_chunk_size_and_max_chunks_impl(std::size_t num_elements,
+                std::size_t num_cores, std::size_t max_chunks,
+                std::size_t chunk_size) noexcept
             {
-            }
-
-            template <typename ExPolicy, typename InIterB, typename InIterE,
-                typename T_, typename Reduce>
-            static constexpr T sequential(ExPolicy&& policy, InIterB first,
-                InIterE last, T_&& init, Reduce&& r)
-            {
-                return detail::sequential_reduce<ExPolicy>(
-                    HPX_FORWARD(ExPolicy, policy), first, last,
-                    HPX_FORWARD(T_, init), HPX_FORWARD(Reduce, r));
-            }
-
-            template <typename ExPolicy, typename FwdIterB, typename FwdIterE,
-                typename T_, typename Reduce>
-            static decltype(auto) parallel(ExPolicy&& policy, FwdIterB first,
-                FwdIterE last, T_&& init, Reduce&& r)
-            {
-                constexpr bool has_scheduler_executor =
-                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
-
-                if constexpr (!has_scheduler_executor)
+                if (num_elements <= 1)
                 {
-                    if (first == last)
-                    {
-                        return util::detail::algorithm_result<ExPolicy, T>::get(
-                            HPX_FORWARD(T_, init));
-                    }
+                    return {chunk_size, max_chunks};
                 }
 
-                auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
-                    T val = *part_begin;
-                    return detail::sequential_reduce<ExPolicy>(
-                        ++part_begin, --part_size, HPX_MOVE(val), r);
-                };
+                // Ensure minimum chunk size of 2 for reduce_partition.
+                if (chunk_size < 2)
+                {
+                    chunk_size = (num_elements + num_cores - 1) / num_cores;
+                    chunk_size = (std::max) (chunk_size, std::size_t(2));
+                }
 
-                return util::partitioner<ExPolicy, T>::call(
-                    HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
-                    hpx::unwrapping(
-                        [init = HPX_FORWARD(T_, init),
-                            r = HPX_FORWARD(Reduce, r)](auto&& results) -> T {
-                            return detail::sequential_reduce<ExPolicy>(
-                                hpx::util::begin(results),
-                                hpx::util::size(results), init, r);
-                        }));
+                // chunk_size_iterator gives the last partition
+                // num_elements % chunk_size elements (or chunk_size if
+                // evenly divisible). If the remainder is 1, that partition
+                // would violate reduce_partition's >= 2 requirement.
+                // Bump chunk_size until the remainder is 0 or >= 2.
+                while (
+                    num_elements > chunk_size && num_elements % chunk_size == 1)
+                {
+                    ++chunk_size;
+                }
+
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+                return {chunk_size, max_chunks};
+            }
+
+        public:
+            template <typename Executor>
+            HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            adjust_chunk_size_and_max_chunks(Executor&&,
+                std::size_t num_elements, std::size_t num_cores,
+                std::size_t max_chunks, std::size_t chunk_size) const noexcept
+            {
+                return adjust_chunk_size_and_max_chunks_impl(
+                    num_elements, num_cores, max_chunks, chunk_size);
+            }
+
+            template <typename InnerParams, typename Executor>
+            friend HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+            tag_override_invoke(hpx::execution::experimental::
+                                    adjust_chunk_size_and_max_chunks_t,
+                reduce_executor_parameters const&, InnerParams&& inner,
+                Executor&& exec, std::size_t num_elements,
+                std::size_t num_cores, std::size_t max_chunks,
+                std::size_t chunk_size)
+            {
+                auto [adjusted_chunk_size, adjusted_max_chunks] = hpx::
+                    execution::experimental::adjust_chunk_size_and_max_chunks(
+                        HPX_FORWARD(InnerParams, inner),
+                        HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                        max_chunks, chunk_size);
+
+                return adjust_chunk_size_and_max_chunks_impl(num_elements,
+                    num_cores, adjusted_max_chunks, adjusted_chunk_size);
             }
         };
         /// \endcond
     }    // namespace detail
 }    // namespace hpx::parallel
+
+// Specialize trait to make reduce_executor_parameters a valid executor
+// parameters type
+namespace hpx::execution::experimental {
+
+    template <>
+    struct is_executor_parameters<
+        hpx::parallel::detail::reduce_executor_parameters> : std::true_type
+    {
+    };
+}    // namespace hpx::execution::experimental
+
+namespace hpx::parallel { namespace detail {
+
+    // Helper function to reduce a partition without requiring an init value.
+    // Assumes partition size >= 2 (enforced by reduce_executor_parameters).
+    template <typename ExPolicy, typename FwdIterB, typename T, typename Reduce>
+    T reduce_partition(
+        FwdIterB part_begin, std::size_t part_size, Reduce const& r)
+    {
+        HPX_ASSERT(part_size >= 2);
+
+        // Combine first two elements using the reduction operator
+        T init = HPX_INVOKE(r, *part_begin, *std::next(part_begin));
+
+        if (part_size == 2)
+        {
+            return init;
+        }
+
+        // Reduce remaining elements
+        return sequential_reduce<ExPolicy>(
+            std::next(part_begin, 2), part_size - 2, HPX_MOVE(init), r);
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    struct reduce : public algorithm<reduce<T>, T>
+    {
+        constexpr reduce() noexcept
+          : algorithm<reduce<T>, T>("reduce")
+        {
+        }
+
+        template <typename ExPolicy, typename InIterB, typename InIterE,
+            typename T_, typename Reduce>
+        static constexpr T sequential(ExPolicy&& policy, InIterB first,
+            InIterE last, T_&& init, Reduce&& r)
+        {
+            return sequential_reduce<ExPolicy>(HPX_FORWARD(ExPolicy, policy),
+                first, last, HPX_FORWARD(T_, init), HPX_FORWARD(Reduce, r));
+        }
+
+        template <typename ExPolicy, typename FwdIterB, typename FwdIterE,
+            typename T_, typename Reduce>
+        static decltype(auto) parallel(ExPolicy&& policy, FwdIterB first,
+            FwdIterE last, T_&& init, Reduce&& r)
+        {
+            constexpr bool has_scheduler_executor =
+                hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
+
+            // Handle empty range
+            if constexpr (!has_scheduler_executor)
+            {
+                if (first == last)
+                {
+                    return util::detail::algorithm_result<ExPolicy, T>::get(
+                        HPX_FORWARD(T_, init));
+                }
+            }
+
+            // Handle single-element case: can't partition into size >= 2
+            // This must be checked for all execution policies
+            auto const count = hpx::parallel::detail::distance(first, last);
+            if (count == 1)
+            {
+                T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
+                if constexpr (has_scheduler_executor)
+                {
+                    return result;
+                }
+                else
+                {
+                    return util::detail::algorithm_result<ExPolicy, T>::get(
+                        HPX_MOVE(result));
+                }
+            }
+
+            auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                return reduce_partition<ExPolicy, FwdIterB, T>(
+                    part_begin, part_size, r);
+            };
+
+            auto rebound_params =
+                hpx::execution::experimental::rebind_executor_parameters(
+                    policy.parameters(), reduce_executor_parameters{});
+            auto reduce_policy =
+                hpx::execution::experimental::create_rebound_policy(
+                    policy, HPX_MOVE(rebound_params));
+            using reduce_policy_type = std::decay_t<decltype(reduce_policy)>;
+
+            return util::partitioner<reduce_policy_type, T>::call(
+                HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
+                hpx::unwrapping(
+                    [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
+                        auto&& results) -> T {
+                        return sequential_reduce<ExPolicy>(
+                            hpx::util::begin(results), hpx::util::size(results),
+                            init, r);
+                    }));
+        }
+    };
+    /// \endcond
+}}    // namespace hpx::parallel::detail
 
 namespace hpx {
 
