@@ -21,7 +21,7 @@ jobs:
     - uses: actions/checkout@v6
     - uses: jwlawson/actions-setup-cmake@v2.2
       with:
-        github-api-token: ${{ secrets.GITHUB_TOKEN }}
+        github-api-token: ${{ secrets.CMAKE_TOKEN }}
 
     - name: Install dependencies
       run: |
