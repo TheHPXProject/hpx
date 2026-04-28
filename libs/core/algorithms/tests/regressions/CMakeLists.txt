@@ -16,7 +16,6 @@ set(tests
     for_loop_5735
     for_loop_with_auto_chunk_size
     includes_empty_ranges
-    is_sorted_until_chunk_boundary
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
@@ -35,7 +34,7 @@ set(tests
 )
 
 if(HPX_WITH_DATAPAR)
-  list(APPEND tests counting_iterator_datapar for_each_datapar)
+  list(APPEND tests for_each_datapar)
 endif()
 
 foreach(test ${tests})

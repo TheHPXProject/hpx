@@ -15,13 +15,12 @@
 namespace hpx::parallel::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F, typename Rng,
-        typename Enable = void>
+    template <typename F, typename Rng, typename Enable = void>
     struct projected_range_result_of
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct projected_range_result_of<Proj, Rng,
         std::enable_if_t<std::ranges::range<Rng>>>
       : detail::projected_result_of<std::decay_t<Proj>,
@@ -30,31 +29,29 @@ namespace hpx::parallel::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng,
-        typename Enable = void>
+    template <typename Proj, typename Rng, typename Enable = void>
     struct is_projected_range : std::false_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct is_projected_range<Proj, Rng,
         std::enable_if_t<std::ranges::range<Rng>>>
       : detail::is_projected<std::decay_t<Proj>, std::ranges::iterator_t<Rng>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     inline constexpr bool is_projected_range_v =
         is_projected_range<Proj, Rng>::value;
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng,
-        typename Enable = void>
+    template <typename Proj, typename Rng, typename Enable = void>
     struct projected_range
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct projected_range<Proj, Rng, std::enable_if_t<std::ranges::range<Rng>>>
     {
         using projector_type = std::decay_t<Proj>;

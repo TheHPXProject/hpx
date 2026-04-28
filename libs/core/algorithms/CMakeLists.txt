@@ -54,7 +54,6 @@ set(algorithms_headers
     hpx/parallel/algorithms/fill.hpp
     hpx/parallel/algorithms/find.hpp
     hpx/parallel/algorithms/for_each.hpp
-    hpx/parallel/algorithms/for_each_index.hpp
     hpx/parallel/algorithms/for_loop.hpp
     hpx/parallel/algorithms/for_loop_induction.hpp
     hpx/parallel/algorithms/for_loop_reduction.hpp
@@ -261,6 +260,10 @@ set(algorithms_compat_headers
 
 set(algorithms_sources handle_exception_termination_handler.cpp task_group.cpp)
 
+if(HPX_TRACY_WITH_TRACY)
+  set(additional_dependencies hpx_tracy)
+endif()
+
 include(HPX_AddModule)
 add_hpx_module(
   core algorithms
@@ -298,8 +301,8 @@ add_hpx_module(
     hpx_synchronization
     hpx_tag_invoke
     hpx_threading_base
-    hpx_tracing
     hpx_type_support
     hpx_util
+    ${additional_dependencies}
   CMAKE_SUBDIRS examples tests
 )
