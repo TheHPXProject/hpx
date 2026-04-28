@@ -343,8 +343,8 @@ foreach(lib ${HPX_LIBS})
       hpx_${lib}_module PROPERTIES POSITION_INDEPENDENT_CODE ON
     )
     hpx_configure_module_producer(
-      hpx_${lib}_module
-      MODULE_OUT_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}/${lib}
+      hpx_${lib}_module MODULE_OUT_DIR
+      ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}/${lib}
     )
 
     target_link_libraries(
