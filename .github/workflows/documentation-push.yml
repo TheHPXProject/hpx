@@ -35,7 +35,7 @@ jobs:
     - uses: actions/checkout@v6
 
     - name: Download Documentation Artifacts
-      uses: dawidd6/action-download-artifact@v20
+      uses: dawidd6/action-download-artifact@v21
       with:
         workflow: documentation-build.yml
         commit: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -43,7 +43,7 @@ jobs:
         path: /__w/hpx/hpx/build/share/hpx/docs
 
     - name: Download Depreport Artifacts
-      uses: dawidd6/action-download-artifact@v20
+      uses: dawidd6/action-download-artifact@v21
       with:
         workflow: depreport.yml
         commit: ${{ github.event.workflow_run.head_sha || github.sha }}

@@ -31,6 +31,7 @@ set(tests
     executor_parameters
     executor_parameters_dispatching
     executor_parameters_timer_hooks
+    executor_parameters_partition_hooks
     forwarding_env_query
     forwarding_scheduler_query
     forwarding_sender_query
