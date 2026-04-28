@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: lukka/get-cmake@latest
+      - uses: jwlawson/actions-setup-cmake@v2.2
         with:
           github-api-token: ${{ secrets.GITHUB_TOKEN }}
 
