@@ -139,11 +139,14 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/pivot.hpp>
+#include <hpx/parallel/algorithms/make_heap.hpp>
 #include <hpx/parallel/algorithms/minmax.hpp>
 #include <hpx/parallel/algorithms/partial_sort.hpp>
 #include <hpx/parallel/algorithms/partition.hpp>
+#include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -180,6 +183,10 @@ namespace hpx::parallel {
         constexpr void nth_element_seq(RandomIt first, RandomIt nth,
             RandomIt end, std::uint32_t level, Compare&& comp, Proj&& proj)
         {
+            using wrapped_comp_type =
+                hpx::parallel::util::compare_projected<std::decay_t<Compare>,
+                    std::decay_t<Proj>>;
+
             constexpr std::uint32_t nmin_sort = 24;
             auto nelem = end - first;
 
@@ -187,8 +194,8 @@ namespace hpx::parallel {
             if (nth == first)
             {
                 RandomIt it = detail::min_element<RandomIt>().call(
-                    hpx::execution::seq, first, end, HPX_FORWARD(Compare, comp),
-                    HPX_FORWARD(Proj, proj));
+                    hpx::execution::seq, first, end,
+                    wrapped_comp_type(comp, proj), hpx::identity_v);
 
                 if (it != first)
                 {
@@ -206,13 +213,13 @@ namespace hpx::parallel {
             }
             if (level == 0)
             {
-                std::make_heap(first, end, comp);
-                std::sort_heap(first, nth, comp);
+                std::make_heap(first, end, wrapped_comp_type(comp, proj));
+                std::sort_heap(first, nth, wrapped_comp_type(comp, proj));
                 return;
             }
 
             // Filter the range and check which part contains the nth element
-            RandomIt c_last = filter(first, end, comp);
+            RandomIt c_last = filter(first, end, wrapped_comp_type(comp, proj));
 
             if (c_last == nth)
                 return;
@@ -263,9 +270,6 @@ namespace hpx::parallel {
             parallel(ExPolicy&& policy, RandomIt first, RandomIt nth, Sent last,
                 Pred&& pred, Proj&& proj)
             {
-                using value_type =
-                    typename std::iterator_traits<RandomIt>::value_type;
-
                 RandomIt partition_iter, return_last;
 
                 if (first == last)
@@ -288,17 +292,21 @@ namespace hpx::parallel {
 
                     while (first != last_iter)
                     {
-                        detail::pivot9(first, last_iter, pred);
+                        detail::pivot9(first, last_iter,
+                            hpx::parallel::util::compare_projected<
+                                std::decay_t<Pred>, std::decay_t<Proj>>(
+                                pred, proj));
 
                         partition_iter =
                             hpx::parallel::detail::partition<RandomIt>().call(
                                 policy(hpx::execution::non_task), first + 1,
                                 last_iter,
-                                [val = HPX_INVOKE(proj, *first), &pred](
-                                    value_type const& elem) {
-                                    return HPX_INVOKE(pred, elem, val);
+                                [val = HPX_INVOKE(proj, *first), &pred, &proj](
+                                    auto const& elem) {
+                                    return HPX_INVOKE(
+                                        pred, HPX_INVOKE(proj, elem), val);
                                 },
-                                proj);
+                                hpx::identity_v);
 
                         --partition_iter;
 

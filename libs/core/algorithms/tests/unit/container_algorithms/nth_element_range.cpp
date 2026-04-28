@@ -23,6 +23,11 @@
 
 #include "test_utils.hpp"
 
+struct S
+{
+    std::size_t val;
+};
+
 ////////////////////////////////////////////////////////////////////////////
 #define SIZE 10007
 
@@ -198,6 +203,65 @@ void test_nth_element_async(ExPolicy policy, IteratorTag)
     }
 }
 
+template <typename ExPolicy>
+void test_nth_element_projection(ExPolicy policy)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    std::vector<S> c(SIZE);
+    for (std::size_t i = 0; i < SIZE; ++i)
+        c[i].val = SIZE - i;
+
+    auto rand_index = std::rand() % SIZE;
+    auto nth = std::begin(c) + rand_index;
+
+    hpx::ranges::nth_element(policy, c, nth, std::less<std::size_t>{}, &S::val);
+
+    for (int k = 0; k < rand_index; k++)
+    {
+        HPX_TEST(c[k].val <= c[rand_index].val);
+    }
+
+    for (int k = rand_index + 1; k < SIZE; k++)
+    {
+        HPX_TEST(c[k].val >= c[rand_index].val);
+    }
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_nth_element_sent_projection(ExPolicy policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using base_iterator = std::vector<S>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using sentinel = test::sentinel_from_iterator<iterator>;
+
+    std::vector<S> c(SIZE);
+    for (std::size_t i = 0; i < SIZE; ++i)
+        c[i].val = SIZE - i;
+
+    auto rand_index = std::rand() % SIZE;
+
+    auto result = hpx::ranges::nth_element(policy, iterator(std::begin(c)),
+        iterator(std::begin(c) + rand_index),
+        sentinel(iterator(std::end(c) - 1)), std::less<std::size_t>{}, &S::val);
+
+    HPX_TEST(result == iterator(std::end(c) - 1));
+
+    for (int k = 0; k < rand_index; k++)
+    {
+        HPX_TEST(c[k].val <= c[rand_index].val);
+    }
+
+    for (int k = rand_index + 1; k < SIZE - 1; k++)
+    {
+        HPX_TEST(c[k].val >= c[rand_index].val);
+    }
+}
+
 template <typename IteratorTag>
 void test_nth_element()
 {
@@ -215,6 +279,14 @@ void test_nth_element()
     test_nth_element_sent(seq, IteratorTag());
     test_nth_element_sent(par, IteratorTag());
     test_nth_element_sent(par_unseq, IteratorTag());
+
+    test_nth_element_projection(seq);
+    test_nth_element_projection(par);
+    test_nth_element_projection(par_unseq);
+
+    test_nth_element_sent_projection(seq, IteratorTag());
+    test_nth_element_sent_projection(par, IteratorTag());
+    test_nth_element_sent_projection(par_unseq, IteratorTag());
 }
 
 void nth_element_test()
