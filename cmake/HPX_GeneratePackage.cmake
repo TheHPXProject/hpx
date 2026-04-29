@@ -19,13 +19,19 @@ write_basic_package_version_file(
   COMPATIBILITY AnyNewerVersion
 )
 
+# CXX_MODULES_DIRECTORY was added in CMake 3.28
+set(_cxx_modules_directory_arg)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.28")
+  set(_cxx_modules_directory_arg CXX_MODULES_DIRECTORY cxx-modules)
+endif()
+
 # Export HPXInternalTargets in the build directory. Use the EXPORT
 # signature so CMake also generates the per-target C++ module metadata files.
 export(
   EXPORT HPXInternalTargets
   NAMESPACE HPXInternal::
   FILE "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXInternalTargets.cmake"
-  CXX_MODULES_DIRECTORY cxx-modules
+  ${_cxx_modules_directory_arg}
 )
 
 # Export HPXInternalTargets in the install directory
@@ -34,7 +40,7 @@ install(
   NAMESPACE HPXInternal::
   FILE HPXInternalTargets.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}
-  CXX_MODULES_DIRECTORY cxx-modules
+  ${_cxx_modules_directory_arg}
   COMPONENT cmake
 )
 
@@ -44,7 +50,7 @@ export(
   EXPORT HPXTargets
   NAMESPACE HPX::
   FILE "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXTargets.cmake"
-  CXX_MODULES_DIRECTORY cxx-modules
+  ${_cxx_modules_directory_arg}
 )
 
 # Add aliases with the namespace for use within HPX
@@ -62,7 +68,7 @@ install(
   NAMESPACE HPX::
   FILE HPXTargets.cmake
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}
-  CXX_MODULES_DIRECTORY cxx-modules
+  ${_cxx_modules_directory_arg}
   COMPONENT cmake
 )
 
@@ -86,7 +92,7 @@ endif()
 set(HPX_CONFIG_IS_INSTALL OFF)
 configure_file(
   ${CMAKE_CURRENT_LIST_DIR}/templates/${HPX_PACKAGE_NAME}Config.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/${HPX_PACKAGE_NAME}Config.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/${HPX_PACKAGE_NAME}ConfigVersion.cmake"
   ESCAPE_QUOTES
   @ONLY
 )
