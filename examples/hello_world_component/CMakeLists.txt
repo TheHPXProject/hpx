@@ -17,6 +17,17 @@ if(EXISTS "${HPX_DIR}")
 
   if(HPX_WITH_CXX_MODULES)
     set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+
+    # CMake only propagates imported C++ module metadata from targets that are
+    # linked directly by the consumer. The exported HPXInternal module targets
+    # are therefore linked explicitly for the external build tests.
+    set(hpx_cxx_module_targets)
+    if(TARGET HPXInternal::hpx_core_module)
+      list(APPEND hpx_cxx_module_targets HPXInternal::hpx_core_module)
+    endif()
+    if(TARGET HPXInternal::hpx_full_module)
+      list(APPEND hpx_cxx_module_targets HPXInternal::hpx_full_module)
+    endif()
   endif()
 
   add_executable(hello_world_client hello_world_client.cpp)
@@ -26,11 +37,15 @@ if(EXISTS "${HPX_DIR}")
     if(HPX_WITH_DISTRIBUTED_RUNTIME)
       target_link_libraries(
         hello_world_component PUBLIC HPX::hpx HPX::iostreams_component
+                                     ${hpx_cxx_module_targets}
       )
       target_link_libraries(hello_world_component PRIVATE HPX::component)
       target_link_libraries(hello_world_client PRIVATE hello_world_component)
     endif()
-    target_link_libraries(hello_world_client PRIVATE HPX::hpx HPX::wrap_main)
+    target_link_libraries(
+      hello_world_client PRIVATE HPX::hpx HPX::wrap_main
+                                ${hpx_cxx_module_targets}
+    )
 
     # We still support not linking to HPX::wrap_main when
     # HPX_WITH_DYNAMIC_HPX_MAIN=OFF for legacy use. This can only be done using
@@ -44,6 +59,7 @@ if(EXISTS "${HPX_DIR}")
 
       target_link_libraries(
         hello_world_client_only_hpx_init PRIVATE hello_world_component
+                                                 ${hpx_cxx_module_targets}
       )
     endif()
   elseif("${SETUP_TYPE}" STREQUAL "MACROS")

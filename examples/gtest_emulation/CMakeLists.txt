@@ -14,6 +14,17 @@ if(EXISTS "${HPX_DIR}")
 
   if(HPX_WITH_CXX_MODULES)
     set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+
+    # CMake only propagates imported C++ module metadata from targets that are
+    # linked directly by the consumer. The exported HPXInternal module targets
+    # are therefore linked explicitly for the external build tests.
+    set(hpx_cxx_module_targets)
+    if(TARGET HPXInternal::hpx_core_module)
+      list(APPEND hpx_cxx_module_targets HPXInternal::hpx_core_module)
+    endif()
+    if(TARGET HPXInternal::hpx_full_module)
+      list(APPEND hpx_cxx_module_targets HPXInternal::hpx_full_module)
+    endif()
   endif()
 
   # Add a static library which contains a main to emulate gtest_main
@@ -27,7 +38,11 @@ if(EXISTS "${HPX_DIR}")
 
   # Test with the main function in a separate static library
   add_executable(hpx_main_ext_main hpx_main_ext_main.cpp)
-  target_link_libraries(hpx_main_ext_main PRIVATE hpx_helper_interface)
+  # Keep the helper interface for link order, but link module targets directly
+  # to the executable so CMake can see the imported BMI metadata.
+  target_link_libraries(
+    hpx_main_ext_main PRIVATE hpx_helper_interface ${hpx_cxx_module_targets}
+  )
 
   enable_testing()
   add_test(hello_world_test hpx_main_ext_main)

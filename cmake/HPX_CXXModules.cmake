@@ -116,6 +116,16 @@ function(hpx_configure_module_consumer consumer producer)
     hpx_error("hpx_configure_module_consumer: target '${producer}' not found")
   endif()
 
+  # Imported module metadata is only picked up from direct link dependencies.
+  # Link the underlying module target directly when the producer follows the
+  # '<module>_if' wrapper pattern.
+  if(producer MATCHES "_if$")
+    string(REGEX REPLACE "_if$" "" _producer_target "${producer}")
+    if(TARGET ${_producer_target})
+      target_link_libraries(${consumer} PRIVATE ${_producer_target})
+    endif()
+  endif()
+
   target_link_libraries(${consumer} PRIVATE ${producer})
   get_target_property(_scan ${producer} INTERFACE_CXX_SCAN_FOR_MODULES)
   if(_scan)
