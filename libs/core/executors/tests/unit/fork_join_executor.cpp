@@ -49,6 +49,16 @@ void test_processing_mask(ExecutorArgs&&... args)
 
     auto const cores_mask = hpx::execution::experimental::get_cores_mask(exec);
     HPX_TEST(cores_mask == expected_mask);
+
+    auto const expected_pu_count = hpx::threads::count(pus_mask);
+    HPX_TEST_EQ(expected_pu_count, hpx::threads::count(expected_mask));
+
+    auto const pu_count =
+        hpx::execution::experimental::processing_units_count(exec);
+    HPX_TEST_EQ(pu_count, expected_pu_count);
+
+    auto const first_core = hpx::execution::experimental::get_first_core(exec);
+    HPX_TEST_EQ(first_core, hpx::threads::find_first(expected_mask));
 }
 
 ///////////////////////////////////////////////////////////////////////////////

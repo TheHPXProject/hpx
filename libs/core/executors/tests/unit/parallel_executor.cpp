@@ -187,21 +187,43 @@ void test_processing_mask()
 {
     hpx::execution::parallel_executor exec;
 
-    {
-        auto const pool = hpx::threads::detail::get_self_or_default_pool();
-        auto const expected_mask =
-            pool->get_used_processing_units(pool->get_os_thread_count(), false);
-        auto const mask =
-            hpx::execution::experimental::get_processing_units_mask(exec);
-        HPX_TEST(mask == expected_mask);
-    }
+    auto const pool = hpx::threads::detail::get_self_or_default_pool();
+    auto const expected_mask =
+        pool->get_used_processing_units(pool->get_os_thread_count(), false);
 
+    // 1. Initial access returns the expected processing units mask
+    auto const mask1 =
+        hpx::execution::experimental::get_processing_units_mask(exec);
+    HPX_TEST(mask1 == expected_mask);
+
+    // 2. Repeated access returns the same mask
+    auto const mask2 =
+        hpx::execution::experimental::get_processing_units_mask(exec);
+    HPX_TEST(mask2 == expected_mask);
+
+    // 3. Copy construction preserves the observable mask behavior
+    hpx::execution::parallel_executor exec_copy = exec;
+    auto const mask3 =
+        hpx::execution::experimental::get_processing_units_mask(exec_copy);
+    HPX_TEST(mask3 == expected_mask);
+
+    // 4. Copy assignment preserves the observable mask behavior
+    hpx::execution::parallel_executor exec_assign;
+    // Exercise the assignee before assignment to verify repeated use remains correct
+    hpx::execution::experimental::get_processing_units_mask(exec_assign);
+
+    // Assign from another executor and verify the resulting mask is still correct
+    exec_assign = exec;
+    auto const mask4 =
+        hpx::execution::experimental::get_processing_units_mask(exec_assign);
+    HPX_TEST(mask4 == expected_mask);
+
+    // 5. Cores mask test
     {
-        auto const pool = hpx::threads::detail::get_self_or_default_pool();
-        auto const expected_mask =
+        auto const expected_cores =
             pool->get_used_processing_units(pool->get_os_thread_count(), true);
         auto const mask = hpx::execution::experimental::get_cores_mask(exec);
-        HPX_TEST(mask == expected_mask);
+        HPX_TEST(mask == expected_cores);
     }
 }
 
