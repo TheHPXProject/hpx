@@ -44,7 +44,7 @@ if(EXISTS "${HPX_DIR}")
     endif()
     target_link_libraries(
       hello_world_client PRIVATE HPX::hpx HPX::wrap_main
-                                ${hpx_cxx_module_targets}
+                                 ${hpx_cxx_module_targets}
     )
 
     # We still support not linking to HPX::wrap_main when
