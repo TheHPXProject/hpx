@@ -26,9 +26,12 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include "algorithm_test_utils.hpp"
+
 #include <atomic>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 namespace ex = hpx::execution::experimental;
@@ -41,19 +44,23 @@ int hpx_main()
     // Regression guard: no behavioural change for the scheduler-free path.
     // -----------------------------------------------------------------------
     {
-        auto s = ex::split(ex::just(42, std::string("hello")));
+        auto s = ex::split(ex::just(std::make_tuple(42, std::string("hello"))));
 
         std::atomic<int> count{0};
 
         // First subscriber (predecessor not yet complete when connecting)
-        tt::sync_wait(ex::then(s, [&](int x, std::string const& msg) {
+        tt::sync_wait(ex::then(s, [&](auto const& tuple_val) {
+            int x = std::get<0>(tuple_val);
+            std::string const& msg = std::get<1>(tuple_val);
             HPX_TEST_EQ(x, 42);
             HPX_TEST_EQ(msg, std::string("hello"));
             ++count;
         }));
 
         // Second subscriber (predecessor_done == true)
-        tt::sync_wait(ex::then(s, [&](int x, std::string const& msg) {
+        tt::sync_wait(ex::then(s, [&](auto const& tuple_val) {
+            int x = std::get<0>(tuple_val);
+            std::string const& msg = std::get<1>(tuple_val);
             HPX_TEST_EQ(x, 42);
             HPX_TEST_EQ(msg, std::string("hello"));
             ++count;
@@ -156,8 +163,7 @@ int hpx_main()
     // Test 5: error propagation through split — both subscribers see error.
     // -----------------------------------------------------------------------
     {
-        auto s = ex::split(ex::just_error(
-            std::make_exception_ptr(std::runtime_error("oops"))));
+        auto s = ex::split(error_sender{});
 
         std::atomic<int> error_count{0};
 
