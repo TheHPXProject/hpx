@@ -30,6 +30,16 @@ set(benchmarks
     transform_reduce_scaling
 )
 
+# foreach_report uses tag_invoke-based sender patterns that do not compile with
+# Clang < 22 / AppleClang < 18 against the current stdexec.
+if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION
+                                               VERSION_LESS "22")
+   OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+       AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "18")
+)
+  list(REMOVE_ITEM benchmarks foreach_report)
+endif()
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 

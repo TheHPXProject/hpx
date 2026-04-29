@@ -15,6 +15,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace ex = hpx::execution::experimental;
 
 bool start_called = false;
@@ -94,22 +99,6 @@ namespace mylib {
 int main()
 {
     {
-#if !defined(HPX_HAVE_STDEXEC)
-        //        Normally the operation states should be invalid but the
-        //        STDEXEC implementation does not match the proposed standard
-        //        yet.
-        //
-        //        The standard requires:
-        //            { start(opstate) } noexcept;
-        //
-        //        The current implementation requires:
-        //            { start(opstate) };
-
-        static_assert(!ex::is_operation_state<mylib::state_2>::value,
-            "mylib::state_2 is not an operation state");
-        static_assert(!ex::is_operation_state<mylib::state_4>::value,
-            "mylib::state_4 is not an operation state");
-#endif
         static_assert(!ex::is_operation_state<mylib::state_1>::value,
             "mylib::state_1 is not an operation state");
         static_assert(ex::is_operation_state<mylib::state_3>::value,
@@ -156,24 +145,16 @@ int main()
             tag_invoke(ex::start, std::declval<mylib::state<false> const&>())));
 
         // none of the operations work via the start CPO if they'd throw
-#if defined(HPX_HAVE_STDEXEC)
         /*TODO: Check if the following way of invoking the start cpo leads to
          * the required checks by the execution.op_state concept check. That
          * check goes through the operator() of start_t but I am not sure if
          * we ever reach that point when calling the tag_invoke directly.
          */
-//        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>>);
-//        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&&>);
-//        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&>);
-//        static_assert(
-//            !hpx::is_invocable_v<ex::start_t, mylib::state<false> const&>);
-#else
-        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>>);
-        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&&>);
-        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&>);
-        static_assert(
-            !hpx::is_invocable_v<ex::start_t, mylib::state<false> const&>);
-#endif
+        //        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>>);
+        //        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&&>);
+        //        static_assert(!hpx::is_invocable_v<ex::start_t, mylib::state<false>&>);
+        //        static_assert(
+        //            !hpx::is_invocable_v<ex::start_t, mylib::state<false> const&>);
     }
 
     {
@@ -228,3 +209,7 @@ int main()
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

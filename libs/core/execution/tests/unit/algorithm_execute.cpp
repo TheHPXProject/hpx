@@ -8,33 +8,33 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
-#if defined(HPX_HAVE_STDEXEC)
 #include "algorithm_test_utils.hpp"
-#endif
 
 #include <cstddef>
 #include <exception>
 #include <type_traits>
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 namespace ex = hpx::execution::experimental;
 
 static std::size_t friend_tag_invoke_schedule_calls = 0;
 static std::size_t tag_invoke_execute_calls = 0;
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename Scheduler>
-#endif
 struct execute_example_sender
 {
-#if defined(HPX_HAVE_STDEXEC)
     using is_sender = void;
+    using sender_concept = ex::sender_t;
 
     friend env_with_scheduler<Scheduler> tag_invoke(
         ex::get_env_t, execute_example_sender const&) noexcept
     {
         return {};
     }
-#endif
 
     // clang-format off
     template <typename Env>
@@ -58,11 +58,7 @@ struct execute_example_sender
 
 struct scheduler_1
 {
-#if defined(HPX_HAVE_STDEXEC)
     using my_sender = execute_example_sender<scheduler_1>;
-#else
-    using my_sender = execute_example_sender;
-#endif
 
     friend my_sender tag_invoke(ex::schedule_t, scheduler_1)
     {
@@ -83,11 +79,7 @@ struct scheduler_1
 
 struct scheduler_2
 {
-#if defined(HPX_HAVE_STDEXEC)
     using my_sender = execute_example_sender<scheduler_2>;
-#else
-    using my_sender = execute_example_sender;
-#endif
 
     bool operator==(scheduler_2 const&) const noexcept
     {
@@ -99,13 +91,11 @@ struct scheduler_2
         return false;
     }
 };
-#if defined(HPX_HAVE_STDEXEC)
 scheduler_2::my_sender tag_invoke(ex::schedule_t, scheduler_2)
 {
     ++friend_tag_invoke_schedule_calls;
     return {};
 }
-#endif
 
 template <typename F>
 void tag_invoke(ex::execute_t, scheduler_2, F&&)
@@ -160,3 +150,7 @@ int main()
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

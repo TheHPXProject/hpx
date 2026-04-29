@@ -17,6 +17,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace ex = hpx::execution::experimental;
 
 // schedule_from customization
@@ -35,7 +40,7 @@ template <typename Sender>
 auto tag_invoke(ex::schedule_from_t, scheduler_schedule_from sched, Sender&&)
 {
     sched.tag_invoke_overload_called = true;
-    return example_scheduler::my_sender{};
+    return scheduler_schedule_from::my_sender{std::move(sched)};
 }
 
 // transfer customization
@@ -68,32 +73,21 @@ struct sender_with_completion_scheduler : void_sender
     {
     }
 
-#if defined(HPX_HAVE_STDEXEC)
     struct my_env
     {
         scheduler_transfer const& sched;
 
-        friend scheduler_transfer const& tag_invoke(
-            ex::get_completion_scheduler_t<ex::set_value_t>,
-            my_env env) noexcept
+        scheduler_transfer const& query(
+            ex::get_completion_scheduler_t<ex::set_value_t>) const noexcept
         {
-            return env.sched;
+            return sched;
         }
     };
 
-    friend my_env tag_invoke(hpx::execution::experimental::get_env_t,
-        sender_with_completion_scheduler const& s) noexcept
+    my_env get_env() const noexcept
     {
-        return {s.sched};
+        return {sched};
     }
-#else
-    friend scheduler_transfer tag_invoke(
-        ex::get_completion_scheduler_t<ex::set_value_t>,
-        sender_with_completion_scheduler s)
-    {
-        return s.sched;
-    }
-#endif
 
     template <typename Env>
     friend auto tag_invoke(
@@ -115,11 +109,7 @@ int main()
             example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -144,11 +134,7 @@ int main()
             example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -174,11 +160,7 @@ int main()
                 example_scheduler{scheduler_schedule_called,
                     scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(s);
@@ -205,11 +187,7 @@ int main()
             example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -234,11 +212,7 @@ int main()
             example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<std::string, int>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -267,11 +241,7 @@ int main()
             ex::transfer(example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<std::string, int>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -300,11 +270,7 @@ int main()
             scheduler_schedule_from{example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called}});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -342,11 +308,7 @@ int main()
             sender_with_completion_scheduler{std::move(source_scheduler)},
             destination_scheduler);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -387,11 +349,7 @@ int main()
             sender_with_completion_scheduler{std::move(source_scheduler)},
             destination_scheduler);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -420,11 +378,7 @@ int main()
             example_scheduler{scheduler_schedule_called,
                 scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -436,14 +390,14 @@ int main()
         ex::start(os);
         HPX_TEST(set_error_called);
         HPX_TEST(!tag_invoke_overload_called);
-#if defined(HPX_HAVE_STDEXEC)
         // schedule is called anyways
         HPX_TEST(scheduler_schedule_called);
-#else
-        HPX_TEST(!scheduler_schedule_called);
-#endif
         HPX_TEST(!scheduler_execute_called);
     }
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

@@ -22,7 +22,6 @@
 #include "test_utils.hpp"
 #include "uninitialized_default_construct_tests.hpp"
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_default_construct_n_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -53,7 +52,6 @@ void test_uninitialized_default_construct_n_sender(
 
     std::free(p);
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_default_construct_n_sender_test()
@@ -70,7 +68,6 @@ void uninitialized_default_construct_n_sender_test()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_default_construct_n_sender2(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -101,7 +98,6 @@ void test_uninitialized_default_construct_n_sender2(
 
     std::free(p);
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_default_construct_n_sender_test2()
@@ -118,7 +114,6 @@ void uninitialized_default_construct_n_sender_test2()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_default_construct_n_exception_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -174,7 +169,6 @@ void test_uninitialized_default_construct_n_exception_sender(
 
     std::free(p);
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_default_construct_n_exception_sender_test()
@@ -191,7 +185,6 @@ void uninitialized_default_construct_n_exception_sender_test()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_default_construct_n_bad_alloc_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -246,7 +239,6 @@ void test_uninitialized_default_construct_n_bad_alloc_sender(
 
     std::free(p);
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_default_construct_n_bad_alloc_sender_test()

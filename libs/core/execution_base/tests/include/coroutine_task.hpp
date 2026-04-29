@@ -308,11 +308,7 @@ private:
         static hpx::coroutine_handle<> await_suspend(
             hpx::coroutine_handle<_promise> h) noexcept
         {
-#if defined(HPX_HAVE_STDEXEC)
             return h.promise().continuation().handle();
-#else
-            return h.promise().continuation();
-#endif
         }
         static void await_resume() noexcept {}
     };

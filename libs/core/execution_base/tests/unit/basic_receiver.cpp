@@ -21,24 +21,19 @@ bool value_called = false;
 namespace mylib {
     struct receiver_1
     {
-#if defined(HPX_HAVE_STDEXEC)
-        using is_receiver = void;
-#endif
-        friend void tag_invoke(ex::set_stopped_t, receiver_1&&) noexcept
+        using receiver_concept = ex::receiver_t;
+
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, receiver_1&&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) && noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, receiver_1&&, int)
-#if defined(HPX_HAVE_STDEXEC)
-            noexcept
-#endif
+        void set_value(int) && noexcept
         {
             value_called = true;
         }
@@ -46,15 +41,14 @@ namespace mylib {
 
     struct receiver_2
     {
-#if defined(HPX_HAVE_STDEXEC)
-        using is_receiver = void;
-#endif
-        friend void tag_invoke(ex::set_stopped_t, receiver_2&&) noexcept
+        using receiver_concept = ex::receiver_t;
+
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(ex::set_error_t, receiver_2&&, int) noexcept
+        void set_error(int) && noexcept
         {
             error_called = true;
         }
@@ -62,21 +56,19 @@ namespace mylib {
 
     struct receiver_3
     {
-#if defined(HPX_HAVE_STDEXEC)
-        using is_receiver = void;
-#endif
-        friend void tag_invoke(ex::set_stopped_t, receiver_3&&) noexcept
+        using receiver_concept = ex::receiver_t;
+
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, receiver_3&&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) && noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, receiver_3, int) noexcept
+        void set_value(int) && noexcept
         {
             value_called = true;
         }
@@ -84,18 +76,17 @@ namespace mylib {
 
     struct non_receiver_1
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_1&) noexcept
+        void set_stopped() & noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_1&&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) && noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, non_receiver_1, int) noexcept
+        void set_value(int) && noexcept
         {
             value_called = true;
         }
@@ -103,18 +94,17 @@ namespace mylib {
 
     struct non_receiver_2
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_2&&) noexcept
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_2&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) & noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, non_receiver_2, int) noexcept
+        void set_value(int) && noexcept
         {
             value_called = true;
         }
@@ -122,18 +112,17 @@ namespace mylib {
 
     struct non_receiver_3
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_3&) noexcept
+        void set_stopped() & noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_3&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) & noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, non_receiver_3, int) noexcept
+        void set_value(int) && noexcept
         {
             value_called = true;
         }
@@ -141,21 +130,19 @@ namespace mylib {
 
     struct non_receiver_4
     {
-#if defined(HPX_HAVE_STDEXEC)
-        using is_receiver = void;
-#endif
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_4&&) noexcept
+        using receiver_concept = ex::receiver_t;
+
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_4&&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) && noexcept
         {
             error_called = true;
         }
 
-        friend void tag_invoke(ex::set_value_t, non_receiver_4&, int) noexcept
+        void set_value(int) & noexcept
         {
             value_called = true;
         }
@@ -163,13 +150,12 @@ namespace mylib {
 
     struct non_receiver_5
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_5&&)
+        void set_stopped() && noexcept(false)
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_5&&, std::exception_ptr) noexcept
+        void set_error(std::exception_ptr) && noexcept
         {
             error_called = true;
         }
@@ -177,13 +163,12 @@ namespace mylib {
 
     struct non_receiver_6
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_6&&) noexcept
+        void set_stopped() && noexcept
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_6&&, std::exception_ptr)
+        void set_error(std::exception_ptr) && noexcept(false)
         {
             error_called = true;
         }
@@ -191,54 +176,22 @@ namespace mylib {
 
     struct non_receiver_7
     {
-        friend void tag_invoke(ex::set_stopped_t, non_receiver_7&&)
+        void set_stopped() && noexcept(false)
         {
             done_called = true;
         }
 
-        friend void tag_invoke(
-            ex::set_error_t, non_receiver_7&&, std::exception_ptr)
+        void set_error(std::exception_ptr) && noexcept(false)
         {
             error_called = true;
         }
     };
 }    // namespace mylib
 
-#if defined(HPX_HAVE_STDEXEC)
-#endif
-
 int main()
 {
     using ex::is_receiver;
     using ex::is_receiver_of;
-#if !defined(HPX_HAVE_STDEXEC)
-    using ex::is_nothrow_receiver_of;
-
-    static_assert(!is_nothrow_receiver_of<mylib::receiver_1,
-                      ex::completion_signatures<ex::set_value_t(int),
-                          ex::set_error_t(std::exception_ptr),
-                          ex::set_stopped_t()>>::value,
-        "mylib::receiver_1 should not be a nothrow receiver of an int");
-
-    static_assert(!is_nothrow_receiver_of<mylib::receiver_2,
-                      ex::completion_signatures<ex::set_value_t(int),
-                          ex::set_error_t(std::exception_ptr),
-                          ex::set_stopped_t()>>::value,
-        "mylib::receiver_2 should not be a nothrow receiver of int");
-
-    static_assert(is_nothrow_receiver_of<mylib::receiver_3,
-                      ex::completion_signatures<ex::set_value_t(int),
-                          ex::set_error_t(std::exception_ptr),
-                          ex::set_stopped_t()>>::value,
-        "mylib::receiver_3 should be a nothrow receiver of an int");
-
-    // set_error is not mandatory
-    static_assert(!is_receiver<mylib::receiver_2>::value,
-        "mylib::receiver_2 should not be a receiver of std::exception_ptr");
-
-    static_assert(is_receiver<mylib::receiver_2, int>::value,
-        "mylib::receiver_2 should be a receiver");
-#endif
 
     static_assert(is_receiver<mylib::receiver_1>::value,
         "mylib::receiver_1 should be a receiver");

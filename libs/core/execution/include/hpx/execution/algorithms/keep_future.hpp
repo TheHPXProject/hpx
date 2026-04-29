@@ -28,12 +28,12 @@ namespace hpx::execution::experimental {
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
             std::decay_t<Future> future;
 
-            friend void tag_invoke(start_t, operation_state& os) noexcept
+            void start() & noexcept
             {
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
                         auto state =
-                            hpx::traits::detail::get_shared_state(os.future);
+                            hpx::traits::detail::get_shared_state(future);
 
                         if (!state)
                         {
@@ -46,14 +46,14 @@ namespace hpx::execution::experimental {
                         // set_value is called, which means that we don't need
                         // to move receiver and future into the on_completed
                         // callback.
-                        state->set_on_completed([&os]() mutable {
+                        state->set_on_completed([this]() mutable {
                             hpx::execution::experimental::set_value(
-                                HPX_MOVE(os.receiver), HPX_MOVE(os.future));
+                                HPX_MOVE(receiver), HPX_MOVE(future));
                         });
                     },
                     [&](std::exception_ptr ep) {
                         hpx::execution::experimental::set_error(
-                            HPX_MOVE(os.receiver), HPX_MOVE(ep));
+                            HPX_MOVE(receiver), HPX_MOVE(ep));
                     });
             }
         };
@@ -62,26 +62,12 @@ namespace hpx::execution::experimental {
         struct keep_future_sender_base
         {
             std::decay_t<Future> future;
-#if defined(HPX_HAVE_STDEXEC)
             using completion_signatures =
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_value_t(
                         std::decay_t<Future>),
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>;
-#else
-            struct completion_signatures
-            {
-                template <template <typename...> class Tuple,
-                    template <typename...> class Variant>
-                using value_types = Variant<Tuple<std::decay_t<Future>>>;
-
-                template <template <typename...> class Variant>
-                using error_types = Variant<std::exception_ptr>;
-
-                static constexpr bool sends_stopped = false;
-            };
-#endif
         };
 
         HPX_CXX_CORE_EXPORT template <typename Future>
@@ -91,11 +77,7 @@ namespace hpx::execution::experimental {
         struct keep_future_sender<hpx::future<T>>
           : public keep_future_sender_base<hpx::future<T>>
         {
-#if defined(HPX_HAVE_STDEXEC)
             using sender_concept = hpx::execution::experimental::sender_t;
-#else
-            using is_sender = void;
-#endif
             using future_type = hpx::future<T>;
             using base_type = keep_future_sender_base<hpx::future<T>>;
             using base_type::future;
@@ -119,10 +101,10 @@ namespace hpx::execution::experimental {
                 -> typename base_type::completion_signatures;
 
             template <typename Receiver>
-            friend operation_state<Receiver, future_type> tag_invoke(
-                connect_t, keep_future_sender&& s, Receiver&& receiver)
+            operation_state<Receiver, future_type> connect(
+                Receiver&& receiver) &&
             {
-                return {HPX_FORWARD(Receiver, receiver), HPX_MOVE(s.future)};
+                return {HPX_FORWARD(Receiver, receiver), HPX_MOVE(future)};
             }
         };
 
@@ -130,11 +112,7 @@ namespace hpx::execution::experimental {
         struct keep_future_sender<hpx::shared_future<T>>
           : keep_future_sender_base<hpx::shared_future<T>>
         {
-#if defined(HPX_HAVE_STDEXEC)
             using sender_concept = hpx::execution::experimental::sender_t;
-#else
-            using is_sender = void;
-#endif
             using future_type = hpx::shared_future<T>;
             using base_type = keep_future_sender_base<hpx::shared_future<T>>;
             using base_type::future;
@@ -158,17 +136,17 @@ namespace hpx::execution::experimental {
                 -> typename base_type::completion_signatures;
 
             template <typename Receiver>
-            friend operation_state<Receiver, future_type> tag_invoke(
-                connect_t, keep_future_sender&& s, Receiver&& receiver)
+            operation_state<Receiver, future_type> connect(
+                Receiver&& receiver) &&
             {
-                return {HPX_FORWARD(Receiver, receiver), HPX_MOVE(s.future)};
+                return {HPX_FORWARD(Receiver, receiver), HPX_MOVE(future)};
             }
 
             template <typename Receiver>
-            friend operation_state<Receiver, future_type> tag_invoke(
-                connect_t, keep_future_sender& s, Receiver&& receiver)
+            operation_state<Receiver, future_type> connect(
+                Receiver&& receiver) &
             {
-                return {HPX_FORWARD(Receiver, receiver), s.future};
+                return {HPX_FORWARD(Receiver, receiver), future};
             }
         };
     }    // namespace detail

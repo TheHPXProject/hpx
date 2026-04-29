@@ -37,19 +37,11 @@ int main()
         auto s1 = void_sender{};
         auto s2 = ex::split(std::move(s1));
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         // In p2300R8 split's error channel returns a const& of an exception_ptr
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
         auto f = [] {};
@@ -63,30 +55,18 @@ int main()
         std::atomic<bool> set_value_called{false};
         auto s1 = ex::just(0);
         static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s1);
-#if defined(HPX_HAVE_STDEXEC)
         // In p2300R8 just does not have an error channel
         check_error_types<hpx::variant<>>(s1);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-#endif
         check_sends_stopped<false>(s1);
 
         auto s2 = ex::split(std::move(s1));
         static_assert(ex::is_sender_v<decltype(s2)>);
 
         check_value_types<hpx::variant<hpx::tuple<int const&>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 0); };
@@ -100,37 +80,21 @@ int main()
         std::atomic<bool> set_value_called{false};
         auto s1 = ex::just(custom_type_non_default_constructible{42});
         static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
 
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(
             s1);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<>>(s1);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-#endif
         check_sends_stopped<false>(s1);
 
         auto s2 = ex::split(std::move(s1));
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible const&>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -145,37 +109,21 @@ int main()
         auto s1 =
             ex::just(custom_type_non_default_constructible_non_copyable{42});
         static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(
             s1);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<>>(s1);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-#endif
         check_sends_stopped<false>(s1);
 
         auto s2 = ex::split(std::move(s1));
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<
             custom_type_non_default_constructible_non_copyable const&>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
         auto f = [](auto& x) { HPX_TEST_EQ(x.x, 42); };
@@ -190,18 +138,10 @@ int main()
         std::atomic<bool> set_value_called{false};
         auto s = void_sender{} | ex::split();
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-#endif
         check_sends_stopped<true>(s);
 
         auto f = [] {};
@@ -218,11 +158,7 @@ int main()
         auto s =
             custom_sender_tag_invoke{tag_invoke_overload_called} | ex::split();
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         // custom_sender_tag_invoke implements tag_invoke(split_t, ...)
         // returning an instance of void_sender
@@ -243,18 +179,10 @@ int main()
         std::atomic<bool> set_error_called{false};
         auto s = error_sender{} | ex::split();
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-#endif
         check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
@@ -268,18 +196,10 @@ int main()
         std::atomic<bool> set_error_called{false};
         auto s = error_sender{} | ex::split() | ex::split() | ex::split();
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-#endif
         check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
@@ -294,58 +214,28 @@ int main()
         std::atomic<bool> receiver_set_value_called{false};
         auto s1 = ex::just() | ex::split();
         static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s1);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s1);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-#endif
         check_sends_stopped<true>(s1);
 
         auto s2 = ex::split(s1);
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
-#if !defined(HPX_HAVE_STDEXEC)
-        HPX_TEST_EQ(s1.state, s2.state);
-#endif
         auto s3 = ex::split(std::move(s2));
         static_assert(ex::is_sender_v<decltype(s3)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s3), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s3), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s3);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s3);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s3);
-#endif
         check_sends_stopped<true>(s3);
 
-#if !defined(HPX_HAVE_STDEXEC)
-        HPX_TEST_EQ(s1.state, s3.state);
-#endif
         auto f = [] {};
         auto r = callback_receiver<decltype(f)>{f, receiver_set_value_called};
         auto os = ex::connect(std::move(s3), std::move(r));
@@ -357,58 +247,28 @@ int main()
         std::atomic<bool> receiver_set_value_called{false};
         auto s1 = ex::just(42) | ex::split();
         static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int const&>>>(s1);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s1);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-#endif
         check_sends_stopped<true>(s1);
 
         auto s2 = ex::split(s1);
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int const&>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<true>(s2);
 
-#if !defined(HPX_HAVE_STDEXEC)
-        HPX_TEST_EQ(s1.state, s2.state);
-#endif
         auto s3 = ex::split(std::move(s2));
         static_assert(ex::is_sender_v<decltype(s3)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s3), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s3), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int const&>>>(s3);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<std::exception_ptr const&>>(s3);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s3);
-#endif
         check_sends_stopped<true>(s3);
 
-#if !defined(HPX_HAVE_STDEXEC)
-        HPX_TEST_EQ(s1.state, s3.state);
-#endif
         auto f = [](int x) { HPX_TEST_EQ(x, 42); };
         auto r = callback_receiver<decltype(f)>{f, receiver_set_value_called};
         auto os = ex::connect(std::move(s3), std::move(r));

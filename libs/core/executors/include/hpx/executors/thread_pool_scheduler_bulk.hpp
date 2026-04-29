@@ -8,9 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#if defined(HPX_HAVE_STDEXEC)
 #include <hpx/execution_base/stdexec_forward.hpp>
-#endif
 
 #include <hpx/assert.hpp>
 #include <hpx/concepts/concepts.hpp>
@@ -181,11 +179,9 @@ namespace hpx::execution::experimental::detail {
                 // bulk_unchunked: f(index, values...) for each element
                 // In unchunked case, chunk_size is 1
                 // so each chunk will only have one element.
-                // The regular bulk invocation will go through the is_chunked case.
-                auto it = std::ranges::next(
-                    hpx::util::begin(op_state->shape), i_begin);
+                // The index used for invocation is i_begin.
                 bulk_scheduler_invoke_helper(
-                    index_pack_type{}, op_state->f, *it, ts);
+                    index_pack_type{}, op_state->f, i_begin, ts);
             }
         }
 
@@ -364,21 +360,22 @@ namespace hpx::execution::experimental::detail {
         typename Shape>
     struct bulk_receiver
     {
-#if defined(HPX_HAVE_STDEXEC)
         using receiver_concept = hpx::execution::experimental::receiver_t;
-#endif
         OperationState* op_state;
 
-        template <typename E>
+        template <typename Receiver, typename E>
+            requires std::same_as<std::remove_cvref_t<Receiver>, bulk_receiver>
         friend void tag_invoke(hpx::execution::experimental::set_error_t,
-            bulk_receiver&& r, E&& e) noexcept
+            Receiver&& r, E&& e) noexcept
         {
             hpx::execution::experimental::set_error(
                 HPX_MOVE(r.op_state->receiver), HPX_FORWARD(E, e));
         }
 
-        friend void tag_invoke(hpx::execution::experimental::set_stopped_t,
-            bulk_receiver&& r) noexcept
+        template <typename Receiver>
+            requires std::same_as<std::remove_cvref_t<Receiver>, bulk_receiver>
+        friend void tag_invoke(
+            hpx::execution::experimental::set_stopped_t, Receiver&& r) noexcept
         {
             hpx::execution::experimental::set_stopped(
                 HPX_MOVE(r.op_state->receiver));
@@ -633,11 +630,10 @@ namespace hpx::execution::experimental::detail {
             }
         }
 
-        template <typename... Ts>
-            requires(std::invocable<F, range_value_type,
-                std::add_lvalue_reference_t<Ts>...>)
+        template <typename Receiver, typename... Ts>
+            requires std::same_as<std::remove_cvref_t<Receiver>, bulk_receiver>
         friend void tag_invoke(hpx::execution::experimental::set_value_t,
-            bulk_receiver&& r, Ts&&... ts) noexcept
+            Receiver&& r, Ts&&... ts) noexcept
         {
             hpx::detail::try_catch_exception_ptr(
                 [&]() { r.execute(HPX_FORWARD(Ts, ts)...); },
@@ -677,9 +673,9 @@ namespace hpx::execution::experimental::detail {
 
     public:
         template <typename Sender_, typename Shape_, typename F_>
-        thread_pool_bulk_sender(
-            thread_pool_policy_scheduler<Policy>&& scheduler, Sender_&& sender,
-            Shape_&& shape, F_&& f, hpx::threads::mask_rvref_type pu_mask)
+        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy> scheduler,
+            Sender_&& sender, Shape_&& shape, F_&& f,
+            hpx::threads::mask_rvref_type pu_mask)
           : scheduler(HPX_MOVE(scheduler))
           , sender(HPX_FORWARD(Sender_, sender))
           , shape(HPX_FORWARD(Shape_, shape))
@@ -689,7 +685,7 @@ namespace hpx::execution::experimental::detail {
         }
 
         template <typename Sender_, typename Shape_, typename F_>
-        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy>&& sched,
+        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy> sched,
             Sender_&& sender, Shape_&& shape, F_&& f)
           : scheduler(HPX_MOVE(sched))
           , sender(HPX_FORWARD(Sender_, sender))
@@ -709,10 +705,13 @@ namespace hpx::execution::experimental::detail {
         thread_pool_bulk_sender& operator=(
             thread_pool_bulk_sender const&) = default;
 
-#if defined(HPX_HAVE_STDEXEC)
         using sender_concept = hpx::execution::experimental::sender_t;
 
         template <typename Env>
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
         friend auto tag_invoke(
             hpx::execution::experimental::get_completion_signatures_t,
             thread_pool_bulk_sender const&, Env const&)
@@ -721,6 +720,9 @@ namespace hpx::execution::experimental::detail {
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>>;
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif
 
         struct env
         {
@@ -729,31 +731,33 @@ namespace hpx::execution::experimental::detail {
 
             template <typename CPO>
                 requires(meta::value<meta::one_of<CPO,
+                        hpx::execution::experimental::set_value_t>>)
+            friend constexpr auto query(
+                hpx::execution::experimental::get_completion_scheduler_t<CPO>,
+                env const& e, auto&&...) noexcept
+            {
+                return e.sch;
+            }
+
+            template <typename CPO>
+                requires(meta::value<meta::one_of<CPO,
                              hpx::execution::experimental::set_error_t,
                              hpx::execution::experimental::set_stopped_t>> &&
                     hpx::execution::experimental::detail::
                         has_completion_scheduler_v<CPO, std::decay_t<Sender>>)
-            friend constexpr auto tag_invoke(
+            friend constexpr auto query(
                 hpx::execution::experimental::get_completion_scheduler_t<CPO>
                     tag,
-                env const& e) noexcept
+                env const& e, auto&&...) noexcept
             {
                 return tag(hpx::execution::experimental::get_env(e.pred_snd));
-            }
-
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_completion_scheduler_t<
-                    hpx::execution::experimental::set_value_t>,
-                env const& e) noexcept
-            {
-                return e.sch;
             }
 
             // P3826R5: report the completion domain for this bulk sender
             template <typename CPO>
             auto query(stdexec::get_completion_domain_t<CPO>) const noexcept
             {
-                return stdexec::get_domain(sch);
+                return sch.query(stdexec::get_completion_domain_t<CPO>{});
             }
         };
 
@@ -765,51 +769,6 @@ namespace hpx::execution::experimental::detail {
         {
             return env{s.sender, s.scheduler};
         }
-#else
-        template <typename Env>
-        struct generate_completion_signatures
-        {
-            template <template <typename...> typename Tuple,
-                template <typename...> typename Variant>
-            using value_types = value_types_of_t<Sender, Env, Tuple, Variant>;
-
-            template <template <typename...> typename Variant>
-            using error_types = hpx::util::detail::unique_concat_t<
-                error_types_of_t<Sender, Env, Variant>,
-                Variant<std::exception_ptr>>;
-
-            static constexpr bool sends_stopped =
-                sends_stopped_of_v<Sender, Env>;
-        };
-
-        template <typename Env>
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            thread_pool_bulk_sender const&, Env)
-            -> generate_completion_signatures<Env>;
-
-        template <typename CPO>
-            requires(
-                meta::value<
-                    meta::one_of<CPO, hpx::execution::experimental::set_error_t,
-                        hpx::execution::experimental::set_stopped_t>> &&
-                hpx::execution::experimental::detail::
-                    has_completion_scheduler_v<CPO, std::decay_t<Sender>>)
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_completion_scheduler_t<CPO> tag,
-            thread_pool_bulk_sender const& s)
-        {
-            return tag(s.sender);
-        }
-
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_completion_scheduler_t<
-                hpx::execution::experimental::set_value_t>,
-            thread_pool_bulk_sender const& s)
-        {
-            return s.scheduler;
-        }
-#endif
 
     private:
         template <typename Receiver>
@@ -896,57 +855,8 @@ namespace hpx::execution::experimental::detail {
     };
 }    // namespace hpx::execution::experimental::detail
 
-#if !defined(HPX_HAVE_STDEXEC)
-namespace hpx::execution::experimental {
-
-    HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Shape, typename F>
-        requires(!std::integral<Shape>)
-    constexpr auto tag_invoke(bulk_t,
-        thread_pool_policy_scheduler<Policy> scheduler, Sender&& sender,
-        Shape const& shape, F&& f)
-    {
-        if constexpr (std::is_same_v<Policy, launch::sync_policy>)
-        {
-            // fall back to non-bulk scheduling if sync execution was requested
-            return detail::bulk_sender<Sender, Shape, F>{
-                HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f)};
-        }
-        else
-        {
-            return detail::thread_pool_bulk_sender<Policy, Sender, Shape, F>{
-                HPX_MOVE(scheduler), HPX_FORWARD(Sender, sender), shape,
-                HPX_FORWARD(F, f)};
-        }
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Count, typename F>
-        requires(std::integral<Count>)
-    constexpr decltype(auto) tag_invoke(bulk_t,
-        thread_pool_policy_scheduler<Policy> scheduler, Sender&& sender,
-        Count const& count, F&& f)
-    {
-        if constexpr (std::is_same_v<Policy, launch::sync_policy>)
-        {
-            // fall back to non-bulk scheduling if sync execution was requested
-            return detail::bulk_sender<Sender, hpx::util::counting_shape<Count>,
-                F>{HPX_FORWARD(Sender, sender),
-                hpx::util::counting_shape(count), HPX_FORWARD(F, f)};
-        }
-        else
-        {
-            return detail::thread_pool_bulk_sender<Policy, Sender,
-                hpx::util::counting_shape<Count>, F>{HPX_MOVE(scheduler),
-                HPX_FORWARD(Sender, sender), hpx::util::counting_shape(count),
-                HPX_FORWARD(F, f)};
-        }
-    }
-}    // namespace hpx::execution::experimental
-#endif
-
 // Note: With stdexec integration, bulk operations are now customized
 // through the domain system in thread_pool_scheduler.hpp rather than
 // direct tag_invoke customizations. The thread_pool_domain<Policy>
-// intercepts stdexec::bulk_chunked_t operations and creates
+// intercepts hpx::execution::experimental::bulk_chunked_t operations and creates
 // thread_pool_bulk_sender instances for parallel execution.

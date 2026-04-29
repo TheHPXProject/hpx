@@ -48,7 +48,6 @@ void test_uninitialized_copy(ExPolicy&& policy, IteratorTag)
     HPX_TEST_EQ(count, d.size());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -83,7 +82,6 @@ void test_uninitialized_copy_sender(
         }));
     HPX_TEST_EQ(count, d.size());
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_async(ExPolicy&& p, IteratorTag)
@@ -154,7 +152,6 @@ void test_uninitialized_copy_exception(ExPolicy policy, IteratorTag)
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_exception_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -208,7 +205,6 @@ void test_uninitialized_copy_exception_sender(
     HPX_TEST(caught_exception);
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_exception_async(ExPolicy p, IteratorTag)
@@ -300,7 +296,6 @@ void test_uninitialized_copy_bad_alloc(ExPolicy policy, IteratorTag)
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_bad_alloc_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -350,7 +345,6 @@ void test_uninitialized_copy_bad_alloc_sender(
     HPX_TEST(caught_bad_alloc);
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_uninitialized_copy_bad_alloc_async(ExPolicy p, IteratorTag)

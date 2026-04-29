@@ -14,35 +14,24 @@ namespace tt = hpx::this_thread::experimental;
 
 struct this_test_example_scheduler
 {
-#if defined(HPX_HAVE_STDEXEC)
     struct example_sender
     {
         using is_sender = void;
+        using sender_concept = ex::sender_t;
         using completion_signatures = ex::completion_signatures<>;
 
-        friend env_with_scheduler<this_test_example_scheduler> tag_invoke(
-            ex::get_env_t, example_sender const&) noexcept
+        env_with_scheduler<this_test_example_scheduler> get_env() const noexcept
         {
             return {};
         }
     };
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
-    friend constexpr example_sender tag_invoke(
-        ex::schedule_t, this_test_example_scheduler) noexcept
+    constexpr example_sender schedule() const noexcept
     {
         return {};
     }
-#else
-    friend constexpr void tag_invoke(
-        ex::schedule_t, this_test_example_scheduler) noexcept
-    {
-    }
-#endif
 
-    friend constexpr bool tag_invoke(
-        tt::execute_may_block_caller_t, this_test_example_scheduler) noexcept
+    constexpr bool query(stdexec::__execute_may_block_caller_t) const noexcept
     {
         return false;
     }
@@ -66,8 +55,8 @@ int main()
 
     {
         constexpr this_test_example_scheduler s1{};
-        static_assert(
-            !tt::execute_may_block_caller(s1), "CPO should return false");
+        static_assert(!stdexec::__execute_may_block_caller(s1),
+            "CPO should return false");
     }
 
     return hpx::util::report_errors();

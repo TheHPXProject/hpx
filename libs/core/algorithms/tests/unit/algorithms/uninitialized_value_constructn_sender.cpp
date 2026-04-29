@@ -73,7 +73,6 @@ void uninitialized_value_construct_n_sender_test()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_value_construct_n_exception_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -127,7 +126,6 @@ void test_uninitialized_value_construct_n_exception_sender(
 
     std::free(p);
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_value_construct_n_exception_sender_test()

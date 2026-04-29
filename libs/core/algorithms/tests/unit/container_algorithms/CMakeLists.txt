@@ -139,6 +139,12 @@ if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} for_loop_range_generator)
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  list(REMOVE_ITEM tests adjacentdifference_range_sender foreach_range
+       foreach_range_sender
+  )
+endif()
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 

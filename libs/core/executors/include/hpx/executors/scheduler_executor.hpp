@@ -159,7 +159,7 @@ namespace hpx::execution::experimental {
             scheduler_executor const& exec, F&& f, Future&& predecessor,
             Ts&&... ts)
         {
-            auto&& predecessor_transfer_sched = transfer(
+            auto&& predecessor_transfer_sched = continues_on(
                 keep_future(HPX_FORWARD(Future, predecessor)), exec.sched_);
 
             return make_future(then(HPX_MOVE(predecessor_transfer_sched),
@@ -179,21 +179,17 @@ namespace hpx::execution::experimental {
 
             if constexpr (std::is_void_v<result_type>)
             {
-#if defined(HPX_HAVE_STDEXEC)
-                // stdexec::bulk requires integral shape and execution policy
+                // hpx::execution::experimental::bulk requires integral shape
+                // and execution policy
                 using size_type = decltype(hpx::util::size(shape));
                 size_type const n = hpx::util::size(shape);
-                return make_future(bulk(schedule(exec.sched_), par, n,
+                return make_future(bulk(schedule(exec.sched_), n,
                     [shape, f = HPX_FORWARD(F, f),
                         ... args = HPX_FORWARD(Ts, ts)](size_type i) mutable {
                         auto it = hpx::util::begin(shape);
                         std::advance(it, i);
                         HPX_INVOKE(f, *it, args...);
                     }));
-#else
-                return make_future(bulk(schedule(exec.sched_), shape,
-                    hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)));
-#endif
             }
             else
             {
@@ -228,17 +224,11 @@ namespace hpx::execution::experimental {
                         });
                 };
 
-#if defined(HPX_HAVE_STDEXEC)
-                start_detached(
-                    bulk(transfer_just(exec.sched_, HPX_MOVE(promises),
-                             HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...),
-                        par, n, HPX_MOVE(f_helper)));
-#else
-                start_detached(
-                    bulk(transfer_just(exec.sched_, HPX_MOVE(promises),
-                             HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...),
-                        n, HPX_MOVE(f_helper)));
-#endif
+                start_detached(bulk(
+                    continues_on(just(HPX_MOVE(promises), HPX_FORWARD(F, f),
+                                     shape, HPX_FORWARD(Ts, ts)...),
+                        exec.sched_),
+                    n, HPX_MOVE(f_helper)));
 
                 return results;
             }
@@ -254,14 +244,14 @@ namespace hpx::execution::experimental {
             using result_type = hpx::util::detail::invoke_deferred_result_t<F,
                 shape_element, Ts...>;
 
-#if defined(HPX_HAVE_STDEXEC)
-            // stdexec::bulk requires integral shape and execution policy
+            // hpx::execution::experimental::bulk requires integral shape
+            // and execution policy
             using size_type = decltype(hpx::util::size(shape));
             size_type const n = hpx::util::size(shape);
             return hpx::util::void_guard<result_type>(),
                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                    *hpx::this_thread::experimental::sync_wait(
-                       bulk(schedule(exec.sched_), par, n,
+                       bulk(schedule(exec.sched_), n,
                            [shape, f = HPX_FORWARD(F, f),
                                ... args = HPX_FORWARD(Ts, ts)](
                                size_type i) mutable {
@@ -269,14 +259,6 @@ namespace hpx::execution::experimental {
                                std::advance(it, i);
                                HPX_INVOKE(f, *it, args...);
                            }));
-#else
-            return hpx::util::void_guard<result_type>(),
-                   // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                   *hpx::this_thread::experimental::sync_wait(
-                       bulk(schedule(exec.sched_), shape,
-                           hpx::bind_back(
-                               HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)));
-#endif
         }
 
         template <typename F, typename S, typename Future, typename... Ts>
@@ -296,23 +278,9 @@ namespace hpx::execution::experimental {
                 auto pre_req =
                     when_all(keep_future(HPX_FORWARD(Future, predecessor)));
 
-#if defined(HPX_HAVE_STDEXEC)
-                using size_type = decltype(hpx::util::size(shape));
-                size_type const n = hpx::util::size(shape);
-                auto loop =
-                    bulk(transfer(HPX_MOVE(pre_req), exec.sched_), par, n,
-                        [shape, f = HPX_FORWARD(F, f),
-                            ... args = HPX_FORWARD(Ts, ts)](
-                            size_type i, auto&... receiver_args) mutable {
-                            auto it = hpx::util::begin(shape);
-                            std::advance(it, i);
-                            HPX_INVOKE(f, *it, args..., receiver_args...);
-                        });
-#else
-                auto loop = bulk(transfer(HPX_MOVE(pre_req), exec.sched_),
+                auto loop = bulk(continues_on(HPX_MOVE(pre_req), exec.sched_),
                     shape,
                     hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
-#endif
 
                 return make_future(HPX_MOVE(loop));
             }
@@ -323,19 +291,10 @@ namespace hpx::execution::experimental {
                     when_all(keep_future(HPX_FORWARD(Future, predecessor)),
                         just(std::vector<result_type>(hpx::util::size(shape))));
 
-#if defined(HPX_HAVE_STDEXEC)
-                using size_type = decltype(hpx::util::size(shape));
-                size_type const n = hpx::util::size(shape);
                 auto loop =
-                    bulk(transfer(HPX_MOVE(pre_req), exec.sched_), par, n,
+                    bulk(continues_on(HPX_MOVE(pre_req), exec.sched_), shape,
                         detail::captured_args_then(
                             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
-#else
-                auto loop =
-                    bulk(transfer(HPX_MOVE(pre_req), exec.sched_), shape,
-                        detail::captured_args_then(
-                            HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
-#endif
 
                 return make_future(then(
                     HPX_MOVE(loop), [](auto&&, std::vector<result_type>&& v) {

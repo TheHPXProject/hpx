@@ -62,16 +62,10 @@ namespace hpx::execution::experimental::detail {
         friend constexpr HPX_FORCEINLINE auto operator|(
             U&& u, partial_algorithm_base p)
         {
-#if defined(HPX_HAVE_STDEXEC)
             auto scheduler =
                 hpx::execution::experimental::get_completion_scheduler<
                     hpx::execution::experimental::set_value_t>(
                     hpx::execution::experimental::get_env(u));
-#else
-            auto scheduler =
-                hpx::execution::experimental::get_completion_scheduler<
-                    hpx::execution::experimental::set_value_t>(u);
-#endif
 
             return HPX_MOVE(p).invoke(HPX_MOVE(scheduler), HPX_FORWARD(U, u));
         }

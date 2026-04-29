@@ -29,11 +29,8 @@ auto signature_all(Error, Values...)
 template <typename Signatures>
 struct non_awaitable_sender
 {
-#if defined(HPX_HAVE_STDEXEC)
     using sender_concept = hpx::execution::experimental::sender_t;
-#else
     using is_sender = void;
-#endif
     using completion_signatures = Signatures;
 
     template <typename Env>
@@ -41,11 +38,6 @@ struct non_awaitable_sender
         hpx::execution::experimental::get_completion_signatures_t,
         non_awaitable_sender const&, Env&&) -> completion_signatures;
 };
-
-#if !defined(HPX_HAVE_STDEXEC)
-using dependent = hpx::execution::experimental::dependent_completion_signatures<
-    hpx::execution::experimental::no_env>;
-#endif
 
 template <typename Awaiter>
 struct promise
@@ -97,26 +89,12 @@ struct awaitable_sender_1
     }
 };
 
-#if !defined(HPX_HAVE_STDEXEC)
-struct awaitable_sender_2
-{
-    using promise_type = promise<hpx::suspend_always>;
-
-private:
-    friend dependent operator co_await(awaitable_sender_2);
-};
-#endif
-
 struct awaitable_sender_3
 {
     using promise_type = promise<awaiter>;
 
 private:
-#if defined(HPX_HAVE_STDEXEC)
     friend awaiter operator co_await(awaitable_sender_3);
-#else
-    friend dependent operator co_await(awaitable_sender_3);
-#endif
 };
 
 struct awaitable_sender_4
@@ -130,15 +108,6 @@ private:
     {
         return {};
     }
-#if !defined(HPX_HAVE_STDEXEC)
-    friend dependent tag_invoke(hpx::execution::experimental::as_awaitable_t,
-        awaitable_sender_4,
-        hpx::execution::experimental::detail::env_promise<
-            hpx::execution::experimental::no_env>&)
-    {
-        return {};
-    }
-#endif
 };
 
 struct awaitable_sender_5
@@ -155,6 +124,7 @@ private:
 struct recv_set_value
 {
     using is_receiver = void;
+    using receiver_concept = hpx::execution::experimental::receiver_t;
     using dependent = awaiter;
 
     friend void tag_invoke(hpx::execution::experimental::set_value_t,
@@ -238,15 +208,12 @@ int main()
     // connect awaitable
 #if !defined(HPX_HAVE_STDEXEC)
     {
+        // Verify that connect_awaitable and connect return the same operation state type
         static_assert(std::is_same_v<decltype(ex::connect_awaitable(
                                          awaitable_sender_1<awaiter>{},
                                          recv_set_value{})),
-            ex::operation_t<recv_set_value>>);
-
-        static_assert(
-            std::is_same_v<decltype(ex::connect(awaitable_sender_1<awaiter>{},
-                               recv_set_value{})),
-                ex::operation_t<recv_set_value>>);
+            decltype(ex::connect(
+                awaitable_sender_1<awaiter>{}, recv_set_value{}))>);
     }
 #endif
 
@@ -256,10 +223,6 @@ int main()
 
         static_assert(!ex::detail::has_free_operator_co_await_v<
             awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(
-            ex::detail::has_free_operator_co_await_v<awaitable_sender_2>);
-#endif
         static_assert(
             ex::detail::has_free_operator_co_await_v<awaitable_sender_3>);
         static_assert(
@@ -269,10 +232,6 @@ int main()
 
         static_assert(ex::detail::has_member_operator_co_await_v<
             awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(
-            !ex::detail::has_member_operator_co_await_v<awaitable_sender_2>);
-#endif
         static_assert(
             !ex::detail::has_member_operator_co_await_v<awaitable_sender_3>);
         static_assert(
@@ -281,16 +240,9 @@ int main()
             !ex::detail::has_member_operator_co_await_v<awaitable_sender_5>);
 
         static_assert(ex::is_awaitable_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_awaitable_v<awaitable_sender_2>);
-#endif
         static_assert(ex::is_awaitable_v<awaitable_sender_3>);
         static_assert(!ex::is_awaitable_v<awaitable_sender_4>);
         static_assert(!ex::is_awaitable_v<awaitable_sender_5>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_awaitable_v<awaitable_sender_2,
-            ::promise<hpx::suspend_always>>);
-#endif
         static_assert(
             ex::is_awaitable_v<awaitable_sender_3, ::promise<awaiter>>);
         static_assert(
@@ -301,53 +253,25 @@ int main()
             hpx::functional::tag_invoke_result_t<ex::as_awaitable_t,
                 awaitable_sender_4, ::promise<awaiter>&>,
             awaiter>);
-#if !defined(HPX_HAVE_STDEXEC)
-        // P2300 does not have dependent completion signatures.
-        static_assert(std::is_same_v<
-            hpx::functional::tag_invoke_result_t<ex::as_awaitable_t,
-                awaitable_sender_4, ex::detail::env_promise<ex::no_env>&>,
-            ex::detail::dependent_completion_signatures<ex::no_env>>);
-        static_assert(std::is_same_v<
-            decltype(ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr))),
-            ex::detail::dependent_completion_signatures<ex::no_env>>);
-        // clang-format off
-        static_assert(ex::is_awaiter_v<decltype(
-                ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                    static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr)))>);
-        static_assert(ex::detail::has_await_suspend_v<decltype(
-                ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                    static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr)))>);
-        static_assert(ex::detail::is_with_await_suspend_v<
-            decltype(ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr))),
-            ex::detail::env_promise<ex::no_env>>);
-        // clang-format on
-        static_assert(ex::is_awaitable_v<awaitable_sender_4,
-            ex::detail::env_promise<ex::no_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_4,
-            ex::detail::env_promise<ex::empty_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_5,
-            ex::detail::env_promise<ex::no_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_5,
-            ex::detail::env_promise<ex::empty_env>>);
-#endif
     }
 
     // Operation base
 #if !defined(HPX_HAVE_STDEXEC)
     {
-        static_assert(
-            ex::is_operation_state_v<ex::operation_t<recv_set_value>>);
+        using operation_type = decltype(ex::connect(
+            awaitable_sender_1<awaiter>{}, recv_set_value{}));
+        static_assert(ex::is_operation_state_v<operation_type>);
     }
 #endif
 
     // Connect result type
 #if !defined(HPX_HAVE_STDEXEC)
     {
+        using operation_type = decltype(ex::connect(
+            awaitable_sender_1<awaiter>{}, recv_set_value{}));
         static_assert(std::is_same_v<
             ex::connect_result_t<awaitable_sender_1<awaiter>, recv_set_value>,
-            ex::operation_t<recv_set_value>>);
+            operation_type>);
     }
 #endif
 
@@ -364,12 +288,6 @@ int main()
     // sender
     {
         static_assert(ex::is_sender_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_v<awaitable_sender_2>);
-        static_assert(ex::detail::is_enable_sender_v<awaitable_sender_2>);
-        static_assert(
-            ex::detail::is_sender_plain_v<awaitable_sender_2, ex::no_env>);
-#endif
         static_assert(ex::is_sender_v<awaitable_sender_3>);
         static_assert(ex::is_sender_v<awaitable_sender_4>);
     }
@@ -377,9 +295,6 @@ int main()
     // env promise
     {
         static_assert(is_sender_with_env_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(is_sender_with_env_v<awaitable_sender_2>);
-#endif
         static_assert(is_sender_with_env_v<awaitable_sender_3>);
         static_assert(is_sender_with_env_v<awaitable_sender_4>);
     }

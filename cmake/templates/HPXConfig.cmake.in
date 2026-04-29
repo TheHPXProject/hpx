@@ -33,15 +33,14 @@ else()
   include(HPX_SetupAsio)
 endif()
 
-# Stdexec can be installed by HPX or externally installed. In the first case we
-# use exported targets, in the second we find Stdexec again using find_package.
-if(HPX_WITH_STDEXEC)
-  if(HPX_WITH_FETCH_STDEXEC)
-    include("${CMAKE_CURRENT_LIST_DIR}/HPXStdexecTarget.cmake")
-  else()
-    set(Stdexec_ROOT "@Stdexec_ROOT@")
-    include(HPX_SetupStdexec)
-  endif()
+# Stdexec is required. It is either installed alongside HPX (FetchContent) or
+# found externally. In the first case we use the exported target; in the second
+# we re-run find_package via HPX_SetupStdexec.
+if(HPX_WITH_FETCH_STDEXEC)
+  include("${CMAKE_CURRENT_LIST_DIR}/HPXStdexecTarget.cmake")
+else()
+  set(Stdexec_ROOT "@Stdexec_ROOT@")
+  include(HPX_SetupStdexec)
 endif()
 
 # NLohnmann JSON can be installed by HPX or externally installed. In the first

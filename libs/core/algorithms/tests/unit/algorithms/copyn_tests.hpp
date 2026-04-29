@@ -74,7 +74,6 @@ void test_copy_n(ExPolicy&& policy, IteratorTag)
     HPX_TEST_EQ(count, d.size());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_copy_n_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -111,7 +110,6 @@ void test_copy_n_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         }));
     HPX_TEST_EQ(count, d.size());
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_copy_n_async(ExPolicy&& p, IteratorTag)

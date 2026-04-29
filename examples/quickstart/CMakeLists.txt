@@ -87,6 +87,15 @@ set(disabled_tests error_handling fibonacci_await non_atomic_rma zerocopy_rdma)
 if(HPX_WITH_STATIC_LINKING)
   set(disabled_tests ${disabled_tests} hello_world_1)
 endif()
+# sender_diamond uses stdexec continues_on which fails on Clang <= 21 /
+# AppleClang <= 16 due to tag_invoke dispatch differences.
+if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION
+                                               VERSION_LESS_EQUAL "21")
+   OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+       AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL "16")
+)
+  set(disabled_tests ${disabled_tests} sender_diamond)
+endif()
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   set(disabled_tests ${disabled_tests} 1d_wave_equation)
 endif()

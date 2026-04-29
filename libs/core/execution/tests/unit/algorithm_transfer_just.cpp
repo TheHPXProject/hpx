@@ -16,6 +16,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace ex = hpx::execution::experimental;
 
 // This overload is only used to check dispatching. It is not a useful
@@ -39,14 +44,10 @@ int main()
         auto s = ex::transfer_just(example_scheduler{scheduler_schedule_called,
             scheduler_execute_called, tag_invoke_overload_called});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [] {};
@@ -69,14 +70,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             3);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 3); };
@@ -100,18 +97,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             x);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
-#else
-        check_value_types<hpx::variant<hpx::tuple<int&>>>(s);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 3); };
@@ -134,15 +123,11 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             custom_type_non_default_constructible{42});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -166,20 +151,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             x);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-#if defined(HPX_HAVE_STDEXEC)
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(s);
-#else
-        check_value_types<
-            hpx::variant<hpx::tuple<custom_type_non_default_constructible&>>>(
-            s);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -202,15 +177,11 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             custom_type_non_default_constructible_non_copyable{42});
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -234,15 +205,11 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             std::move(x));
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -265,14 +232,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             std::string("hello"), 3);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<std::string, int>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](std::string s, int x) {
@@ -300,18 +263,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called},
             str, x);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         check_value_types<hpx::variant<hpx::tuple<std::string, int>>>(s);
-#else
-        check_value_types<hpx::variant<hpx::tuple<std::string&, int&>>>(s);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](std::string str, int x) {
@@ -327,7 +282,8 @@ int main()
         HPX_TEST(!scheduler_execute_called);
     }
 
-    // tag_invoke overload
+    // stdexec's transfer_just no longer dispatches through this custom
+    // overload; it uses the scheduler directly.
     {
         std::atomic<bool> set_value_called{false};
         std::atomic<bool> scheduler_schedule_called{false};
@@ -338,14 +294,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called}},
             3);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 3); };
@@ -353,7 +305,7 @@ int main()
         auto os = ex::connect(std::move(s), std::move(r));
         ex::start(os);
         HPX_TEST(set_value_called);
-        HPX_TEST(tag_invoke_overload_called);
+        HPX_TEST(!tag_invoke_overload_called);
         HPX_TEST(scheduler_schedule_called);
         HPX_TEST(!scheduler_execute_called);
     }
@@ -369,18 +321,10 @@ int main()
                 scheduler_execute_called, tag_invoke_overload_called}},
             x);
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
-#else
-        check_value_types<hpx::variant<hpx::tuple<int&>>>(s);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
+        check_error_types<hpx::variant<>>(s);
         check_sends_stopped<false>(s);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 3); };
@@ -388,10 +332,14 @@ int main()
         auto os = ex::connect(std::move(s), std::move(r));
         ex::start(os);
         HPX_TEST(set_value_called);
-        HPX_TEST(tag_invoke_overload_called);
+        HPX_TEST(!tag_invoke_overload_called);
         HPX_TEST(scheduler_schedule_called);
         HPX_TEST(!scheduler_execute_called);
     }
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

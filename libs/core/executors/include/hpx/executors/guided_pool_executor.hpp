@@ -370,18 +370,17 @@ namespace hpx::execution::experimental {
             // the thread of the predecessor continuation coming ready.
             // the numa_hint_function will be evaluated on that thread and then
             // the real task will be spawned on a new task with hints - as intended
-            return dataflow(
-                launch::sync,
-                [f = HPX_FORWARD(F, f), exec](
-                    Future&& predecessor, Ts&&... /* ts */) mutable {
-                    detail::pre_execution_then_domain_schedule<
-                        guided_pool_executor, pool_numa_hint<Tag>>
-                        pre_exec(exec, exec.hint_, exec.hp_sync_);
+            return HPX_FORWARD(Future, predecessor)
+                .then(hpx::launch::sync,
+                    [f = HPX_FORWARD(F, f), exec, ... ts = HPX_FORWARD(Ts, ts)](
+                        std::decay_t<Future> predecessor) mutable {
+                        detail::pre_execution_then_domain_schedule<
+                            guided_pool_executor, pool_numa_hint<Tag>>
+                            pre_exec(exec, exec.hint_, exec.hp_sync_);
 
-                    return pre_exec(
-                        HPX_MOVE(f), HPX_FORWARD(Future, predecessor));
-                },
-                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
+                        return pre_exec(HPX_MOVE(f), HPX_MOVE(predecessor),
+                            HPX_MOVE(ts)...);
+                    });
         }
 
         // --------------------------------------------------------------------
@@ -426,20 +425,19 @@ namespace hpx::execution::experimental {
 #endif
 
             // Please see notes for previous then_execute function above
-            return dataflow(
-                launch::sync,
-                [f = HPX_FORWARD(F, f), exec](
-                    OuterFuture<hpx::tuple<InnerFutures...>>&& predecessor,
-                    Ts&&... /* ts */) mutable {
-                    detail::pre_execution_then_domain_schedule<
-                        guided_pool_executor, pool_numa_hint<Tag>>
-                        pre_exec(exec, exec.hint_, exec.hp_sync_);
+            return HPX_FORWARD(
+                OuterFuture<hpx::tuple<InnerFutures...>>, predecessor)
+                .then(hpx::launch::sync,
+                    [f = HPX_FORWARD(F, f), exec, ... ts = HPX_FORWARD(Ts, ts)](
+                        OuterFuture<hpx::tuple<InnerFutures...>>
+                            predecessor) mutable {
+                        detail::pre_execution_then_domain_schedule<
+                            guided_pool_executor, pool_numa_hint<Tag>>
+                            pre_exec(exec, exec.hint_, exec.hp_sync_);
 
-                    return pre_exec(HPX_MOVE(f), HPX_MOVE(predecessor));
-                },
-                std::forward<OuterFuture<hpx::tuple<InnerFutures...>>>(
-                    predecessor),
-                HPX_FORWARD(Ts, ts)...);
+                        return pre_exec(HPX_MOVE(f), HPX_MOVE(predecessor),
+                            HPX_MOVE(ts)...);
+                    });
         }
 
         // --------------------------------------------------------------------

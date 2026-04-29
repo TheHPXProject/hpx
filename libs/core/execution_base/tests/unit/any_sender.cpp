@@ -17,6 +17,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace ex = hpx::execution::experimental;
 
 struct custom_type_non_copyable
@@ -48,11 +53,7 @@ public:
 template <typename... Ts>
 struct non_copyable_sender
 {
-#if defined(HPX_HAVE_STDEXEC)
     using sender_concept = ex::sender_t;
-#else
-    using is_sender = void;
-#endif
 
     hpx::tuple<std::decay_t<Ts>...> ts;
 
@@ -113,6 +114,7 @@ struct example_sender
     hpx::tuple<std::decay_t<Ts>...> ts;
 
     using is_sender = void;
+    using sender_concept = ex::sender_t;
 
     // clang-format off
     template <typename Env>
@@ -277,20 +279,12 @@ void test_any_sender(F&& f, Ts&&... ts)
     ex::any_sender<std::decay_t<Ts>...> as1{s};
 
     static_assert(ex::is_sender_v<decltype(as1)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as1), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as1), ex::empty_env>);
-#endif
 
     auto as2 = as1;
 
     static_assert(ex::is_sender_v<decltype(as2)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as2), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as2), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
@@ -380,11 +374,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
     ex::unique_any_sender<std::decay_t<Ts>...> as1{std::move(s)};
 
     static_assert(ex::is_sender_v<decltype(as1)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as1), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as1), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as1);
     check_error_types<hpx::variant<std::exception_ptr>>(as1);
@@ -393,11 +383,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
     auto as2 = std::move(as1);
 
     static_assert(ex::is_sender_v<decltype(as2)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as2), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as2), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
@@ -580,14 +566,10 @@ void test_globals()
 {
     global_unique_any_sender =
         std::move(global_unique_any_sender) | ex::ensure_started();
-#if defined(HPX_HAVE_STDEXEC)
     // P2300R8's ensure started returns non-copyable senders, so we need to split
     // to pass it to a global_any_sender.
     global_any_sender =
         std::move(global_any_sender) | ex::ensure_started() | ex::split();
-#else
-    global_any_sender = std::move(global_any_sender) | ex::ensure_started();
-#endif
 }
 
 int main()
@@ -677,3 +659,7 @@ int main()
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

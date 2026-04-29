@@ -10,13 +10,10 @@
 
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_STDEXEC)
-#include <hpx/modules/execution_base.hpp>
-#endif
+#include <hpx/execution_base/stdexec_forward.hpp>
 
 #include <hpx/assert.hpp>
 #include <hpx/execution/algorithms/detail/single_result.hpp>
-#include <hpx/execution/queries/get_stop_token.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -59,10 +56,7 @@ namespace hpx::when_all_vector_detail {
     template <typename Sender>
     struct when_all_vector_sender_impl<Sender>::when_all_vector_sender_type
     {
-        using is_sender = void;
-#if defined(HPX_HAVE_STDEXEC)
         using sender_concept = hpx::execution::experimental::sender_t;
-#endif
         using senders_type = std::vector<Sender>;
         senders_type senders;
 
@@ -94,7 +88,6 @@ namespace hpx::when_all_vector_detail {
         {
         };
 
-#if defined(HPX_HAVE_STDEXEC)
         // Dummy parameter introduced to please GCC11 which enforces
         // explicit specialization in non-namespace scope as an error.
         // Reference: https://cplusplus.com/forum/general/58906/#msg318049
@@ -125,64 +118,35 @@ namespace hpx::when_all_vector_detail {
                 hpx::execution::experimental::set_error_t(std::decay_t<Err>)>;
 
         template <typename Env>
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
         friend auto tag_invoke(
             hpx::execution::experimental::get_completion_signatures_t,
             when_all_vector_sender_type const&, Env const&) noexcept
-            -> hpx::execution::experimental::transform_completion_signatures_of<
-                Sender, Env,
+            -> hpx::execution::experimental::transform_completion_signatures<
+                hpx::execution::experimental::completion_signatures_of_t<Sender,
+                    Env>,
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>,
                 transformed_comp_sigs_identity, decay_set_error>;
-#else
-        // This sender sends a single vector of the type sent by the
-        // predecessor senders or nothing if the predecessor senders send
-        // nothing
-        template <typename Env>
-        struct generate_completion_signatures
-        {
-            template <template <typename...> class Tuple,
-                template <typename...> class Variant>
-            using value_types = Variant<std::conditional_t<is_void_value_type,
-                Tuple<>, Tuple<std::vector<element_value_type>>>>;
-
-            // This sender sends any error types sent by the predecessor senders
-            // or std::exception_ptr
-            template <template <typename...> class Variant>
-            using error_types = hpx::util::detail::unique_concat_t<
-                hpx::util::detail::transform_t<
-                    hpx::execution::experimental::error_types_of_t<Sender, Env,
-                        Variant>,
-                    std::decay>,
-                Variant<std::exception_ptr>>;
-
-            static constexpr bool sends_stopped = true;
-        };
-
-        // clang-format off
-        template <typename Env>
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            when_all_vector_sender_type const&,
-            Env) noexcept -> generate_completion_signatures<Env>;
-        // clang-format on
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
 #endif
 
         template <typename Receiver>
         struct operation_state
         {
             using receiver_type = std::decay_t<Receiver>;
-#if defined(HPX_HAVE_STDEXEC)
             using operation_state_concept =
                 hpx::execution::experimental::operation_state_t;
-#endif
 
             struct when_all_vector_receiver
             {
-#if defined(HPX_HAVE_STDEXEC)
                 using receiver_concept =
                     hpx::execution::experimental::receiver_t;
-#endif
                 operation_state& op_state;
                 std::size_t const i;
 
@@ -257,7 +221,6 @@ namespace hpx::when_all_vector_detail {
                 // TODO: Make this a method
                 friend auto tag_invoke(hpx::execution::experimental::get_env_t,
                     when_all_vector_receiver const& r)
-#if defined(HPX_HAVE_STDEXEC)
                     noexcept
                     -> hpx::execution::experimental::env<
                         hpx::execution::experimental::env_of_t<receiver_type>,
@@ -280,21 +243,6 @@ namespace hpx::when_all_vector_detail {
                     return hpx::execution::experimental::env(
                         std::move(e), std::move(p));
                 }
-#else
-                    -> hpx::execution::experimental::make_env_t<
-                        hpx::execution::experimental::get_stop_token_t,
-                        hpx::experimental::in_place_stop_token,
-                        hpx::execution::experimental::env_of_t<receiver_type>>
-                {
-                    /* The old calling convention is:
-                     * make_env<tag>(val, old_env) */
-                    return hpx::execution::experimental::make_env<
-                        hpx::execution::experimental::get_stop_token_t>(
-                        r.op_state.stop_source_.get_token(),
-                        hpx::execution::experimental::get_env(
-                            r.op_state.receiver));
-                }
-#endif
                 // clang-format on
             };
 
@@ -323,17 +271,11 @@ namespace hpx::when_all_vector_detail {
 
             // The first error sent by any predecessor sender is stored in a
             // optional of a variant of the error_types
-#if defined(HPX_HAVE_STDEXEC)
             using error_types =
                 typename hpx::execution::experimental::error_types_of_t<
                     when_all_vector_sender_impl<
                         Sender>::when_all_vector_sender_type,
-                    hpx::execution::experimental::env<>, hpx::variant>;
-#else
-            using error_types = typename generate_completion_signatures<
-                hpx::execution::experimental::empty_env>::
-                template error_types<hpx::variant>;
-#endif
+                    hpx::execution::experimental::empty_env, hpx::variant>;
             std::optional<error_types> error;
 
             // Set to true when set_stopped or set_error has been called
@@ -437,20 +379,16 @@ namespace hpx::when_all_vector_detail {
                     }
                     else
                     {
-#if defined(HPX_HAVE_STDEXEC)
                         if constexpr (hpx::execution::experimental::
                                           sends_stopped<Sender>)
                         {
-#endif
                             hpx::execution::experimental::set_stopped(
                                 HPX_MOVE(receiver));
-#if defined(HPX_HAVE_STDEXEC)
                         }
                         else
                         {
                             HPX_UNREACHABLE;
                         }
-#endif
                     }
                 }
             }
@@ -499,9 +437,15 @@ namespace hpx::when_all_vector_detail {
                 {
                     for (std::size_t i = 0; i < os.num_predecessors; ++i)
                     {
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
                         hpx::execution::experimental::start(
-                            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                             os.op_states.get()[i].value());
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif
                     }
                 }
             }
@@ -553,7 +497,7 @@ namespace hpx::execution::experimental {
         // clang-format off
         template <typename Sender,
             HPX_CONCEPT_REQUIRES_(
-                is_sender_v<Sender>
+                hpx::execution::experimental::is_sender_v<Sender>
             )>
         // clang-format on
         friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(
@@ -566,7 +510,7 @@ namespace hpx::execution::experimental {
         // clang-format off
         template <typename Sender,
             HPX_CONCEPT_REQUIRES_(
-                is_sender_v<Sender>
+                hpx::execution::experimental::is_sender_v<Sender>
             )>
         // clang-format on
         friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(

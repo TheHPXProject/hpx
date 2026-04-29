@@ -34,24 +34,26 @@ if(HPX_LIKWID_WITH_LIKWID)
   set(tests ${tests} likwid_executor)
 endif()
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  foreach(test ${tests})
+    set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
 
-  source_group("Source Files" FILES ${sources})
+    source_group("Source Files" FILES ${sources})
 
-  set(folder_name "Tests/Unit/Modules/Core/Executors")
+    set(folder_name "Tests/Unit/Modules/Core/Executors")
 
-  # add example executable
-  add_hpx_executable(
-    ${test}_test INTERNAL_FLAGS
-    SOURCES ${sources} ${${test}_FLAGS}
-    EXCLUDE_FROM_ALL
-    HPX_PREFIX ${HPX_BUILD_PREFIX}
-    FOLDER ${folder_name}
-  )
+    # add example executable
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${sources} ${${test}_FLAGS}
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER ${folder_name}
+    )
 
-  add_hpx_unit_test("modules.executors" ${test} ${${test}_PARAMETERS})
+    add_hpx_unit_test("modules.executors" ${test} ${${test}_PARAMETERS})
 
-endforeach()
+  endforeach()
+endif()

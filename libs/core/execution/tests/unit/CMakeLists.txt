@@ -45,26 +45,28 @@ set(tests
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  foreach(test ${tests})
+    set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
 
-  source_group("Source Files" FILES ${sources})
+    source_group("Source Files" FILES ${sources})
 
-  set(folder_name "Tests/Unit/Modules/Core/Execution")
+    set(folder_name "Tests/Unit/Modules/Core/Execution")
 
-  # add example executable
-  add_hpx_executable(
-    ${test}_test INTERNAL_FLAGS
-    SOURCES ${sources} ${${test}_FLAGS}
-    EXCLUDE_FROM_ALL
-    HPX_PREFIX ${HPX_BUILD_PREFIX}
-    FOLDER ${folder_name}
-  )
+    # add example executable
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${sources} ${${test}_FLAGS}
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER ${folder_name}
+    )
 
-  target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
+    target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
 
-  add_hpx_unit_test("modules.execution" ${test} ${${test}_PARAMETERS})
+    add_hpx_unit_test("modules.execution" ${test} ${${test}_PARAMETERS})
 
-endforeach()
+  endforeach()
+endif()

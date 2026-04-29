@@ -465,7 +465,6 @@ void test_equal_binary_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal_binary_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -521,7 +520,6 @@ void test_equal_binary_sender(
         HPX_TEST_EQ(result, expected);
     }
 }
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -566,7 +564,6 @@ void test_equal_binary_edge_cases(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal_binary_edge_cases_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -635,4 +632,3 @@ void test_equal_binary_edge_cases_sender(
         HPX_TEST(!result);
     }
 }
-#endif

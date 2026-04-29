@@ -345,7 +345,6 @@ void test_reduce_bad_alloc_async(ExPolicy p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_reduce_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -387,4 +386,3 @@ void test_reduce_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST_EQ(result, val);
     }
 }
-#endif

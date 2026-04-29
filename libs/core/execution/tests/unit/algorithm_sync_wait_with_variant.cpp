@@ -34,13 +34,8 @@ std::optional<std::variant<std::tuple<>>> tag_invoke(
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 int hpx_main()
 {
-#if defined(HPX_HAVE_STDEXEC)
     using std::tuple;
     using std::variant;
-#else
-    using hpx::tuple;
-    using hpx::variant;
-#endif
     // Success path
     {
         std::atomic<bool> start_called{false};
@@ -72,11 +67,7 @@ int hpx_main()
     }
 
     {
-#if defined(HPX_HAVE_STDEXEC)
         auto result = tt::sync_wait_with_variant(ex::just(3, 4.0));
-#else
-        auto result = ex::just(3, 4.0) | tt::sync_wait_with_variant();
-#endif
 
         auto v = *result;
         static_assert(std::is_same_v<decltype(v), variant<tuple<int, double>>>);
@@ -195,25 +186,16 @@ int hpx_main()
 
         // variant
         auto v = *result;
-#if defined(HPX_HAVE_STDEXEC)
         // just(3) does not have a set_error_r(std::exception_ptr) completion
         // so the just(std::string) completion is never materialized into the
         // let_error's completions
         static_assert(std::is_same_v<decltype(v), variant<tuple<int>>>);
-#else
-        static_assert(std::is_same_v<decltype(v),
-            variant<tuple<std::string>, tuple<int>>>);
-#endif
 
         HPX_TEST(hpx::holds_alternative<tuple<int>>(v));
 
         // tuple
-#if defined(HPX_HAVE_STDEXEC)
         // Now v is just a variant<tuple<int>>
         auto t = hpx::get<0>(v);
-#else
-        auto t = hpx::get<1>(v);
-#endif
         static_assert(std::is_same_v<decltype(t), tuple<int>>);
 
         auto i = hpx::get<0>(t);
@@ -251,25 +233,15 @@ int hpx_main()
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
         std::atomic<bool> tag_invoke_overload_called{false};
-#if defined(HPX_HAVE_STDEXEC)
         tt::sync_wait_with_variant(custom_sender{
             start_called, connect_called, tag_invoke_overload_called});
-#else
-        custom_sender{
-            start_called, connect_called, tag_invoke_overload_called} |
-            tt::sync_wait_with_variant();
-#endif
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
         HPX_TEST(!tag_invoke_overload_called);
     }
 
     {
-#if defined(HPX_HAVE_STDEXEC)
         auto result = tt::sync_wait_with_variant(ex::just(3));
-#else
-        auto result = ex::just(3) | tt::sync_wait_with_variant();
-#endif
 
         auto v = *result;
         static_assert(std::is_same_v<decltype(v), variant<tuple<int>>>);
@@ -314,13 +286,8 @@ int hpx_main()
 
     // cancellation path
     {
-#if defined(HPX_HAVE_STDEXEC)
         auto result =
             tt::sync_wait_with_variant(stopped_sender_with_value_type{});
-#else
-        auto result =
-            (stopped_sender_with_value_type{} | tt::sync_wait_with_variant());
-#endif
         HPX_TEST(!result);    // returned optional should be empty
     }
 

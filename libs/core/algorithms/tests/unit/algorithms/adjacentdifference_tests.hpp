@@ -71,7 +71,6 @@ void test_adjacent_difference_direct(Policy l, ExPolicy policy)
     HPX_TEST(std::end(d) == it);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy>
 void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
 {
@@ -132,7 +131,6 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
         HPX_TEST(++std::begin(d) == result);
     }
 }
-#endif
 
 template <typename ExPolicy>
 void test_adjacent_difference_async(ExPolicy&& p)

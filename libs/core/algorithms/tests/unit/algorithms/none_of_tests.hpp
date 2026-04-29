@@ -70,7 +70,6 @@ void test_none_of(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_none_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -104,7 +103,6 @@ void test_none_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST_EQ(result, expected);
     }
 }
-#endif
 
 template <typename IteratorTag, typename Proj = hpx::identity>
 void test_none_of_ranges_seq(IteratorTag, Proj proj = Proj())

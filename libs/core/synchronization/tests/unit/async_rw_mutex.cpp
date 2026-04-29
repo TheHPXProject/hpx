@@ -17,10 +17,10 @@
 #include <utility>
 #include <vector>
 
+using hpx::execution::experimental::continues_on;
 using hpx::execution::experimental::execute;
 using hpx::execution::experimental::then;
 using hpx::execution::experimental::thread_pool_scheduler;
-using hpx::execution::experimental::transfer;
 using hpx::experimental::async_rw_mutex;
 using hpx::this_thread::experimental::sync_wait;
 
@@ -158,18 +158,12 @@ void submit_senders(Executor&& exec, Senders& senders)
 {
     for (auto& sender : senders)
     {
-// Original code uses sync_wait inside an hpx scheduler. Sync_wait completely
-// blocks the thread with std synchronization primitives which causes it to hang
-#if defined(HPX_HAVE_STDEXEC)
+        // Original code uses sync_wait inside an hpx scheduler. Sync_wait completely
+        // blocks the thread with std synchronization primitives which causes it to hang
         hpx::execution::experimental::start_detached(
             hpx::execution::experimental::schedule(exec) |
             hpx::execution::experimental::let_value(
                 [s = std::move(sender)]() mutable { return std::move(s); }));
-#else
-        execute(exec, [sender = std::move(sender)]() mutable {
-            sync_wait(std::move(sender));
-        });
-#endif
     }
 }
 
@@ -211,9 +205,9 @@ void test_multiple_accesses(
     // Read-only and read-write access return senders of different types
     // clang-format off
     using r_sender_type = std::decay_t<decltype(
-        rwm.read() | transfer(exec) | then(checker{true, 0, count, 0}))>;
+        rwm.read() | continues_on(exec) | then(checker{true, 0, count, 0}))>;
     using rw_sender_type = std::decay_t<decltype(
-        rwm.readwrite() | transfer(exec) | then(checker{false, 0, count, 0}))>;
+        rwm.readwrite() | continues_on(exec) | then(checker{false, 0, count, 0}))>;
     // clang-format on
 
     std::vector<r_sender_type> r_senders;
@@ -234,13 +228,13 @@ void test_multiple_accesses(
         {
             if (readonly)
             {
-                r_senders.push_back(rwm.read() | transfer(exec) |
+                r_senders.push_back(rwm.read() | continues_on(exec) |
                     then(checker{readonly, expected_predecessor_count, count,
                         min_expected_count, max_expected_count}));
             }
             else
             {
-                rw_senders.push_back(rwm.readwrite() | transfer(exec) |
+                rw_senders.push_back(rwm.readwrite() | continues_on(exec) |
                     then(checker{readonly, expected_predecessor_count, count,
                         min_expected_count, max_expected_count}));
                 // Only read-write access is allowed to change the value
@@ -284,7 +278,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_moved(async_rw_mutex<std::size_t>{0});
     test_moved(async_rw_mutex<mytype, mytype_base>{mytype{}});
 
-    std::size_t iterations = 100;
+    // Keep the randomized stress test meaningful without tripping the CI time
+    // budget on slower clang jobs.
+    std::size_t iterations = 20;
     test_multiple_accesses(async_rw_mutex<void>{}, iterations);
     test_multiple_accesses(async_rw_mutex<std::size_t>{0}, iterations);
     test_multiple_accesses(

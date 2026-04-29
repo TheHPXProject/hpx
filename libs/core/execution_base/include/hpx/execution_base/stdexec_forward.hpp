@@ -7,8 +7,6 @@
 #pragma once
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_STDEXEC)
-
 /* TODO: Find out what diagnostics should be disabled for stdexec to compile.
  * currently it seems to need at least "-Wgnu-zero-variadic-macro-arguments"
  * and "-Wmissing-braces" even though they are explicitly disabled inside
@@ -30,18 +28,47 @@
 #elif defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)    // deprecated API warnings from stdexec
+#pragma warning(disable : 4141)    // 'inline' used more than once
+#pragma warning(disable : 4244)    // conversion warnings
 #endif
 
+// GCC advertises constexpr exceptions in C++26, but current stdexec main
+// selects a code path that is not accepted by GCC yet. Hide the feature-test
+// macro while including stdexec so it falls back to the pre-C++26 path.
+#if defined(HPX_GCC_VERSION) && defined(__cpp_constexpr_exceptions) &&         \
+    (__cpp_constexpr_exceptions >= 202411L)
+#define HPX_STDEXEC_RESTORE___cpp_constexpr_exceptions                         \
+    __cpp_constexpr_exceptions
+#undef __cpp_constexpr_exceptions
+#endif
+
+// NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
+// NOLINTBEGIN(bugprone-unhandled-exception-at-new)
+#include <exec/completion_signatures.hpp>
 #include <exec/ensure_started.hpp>
+#include <exec/env.hpp>
 #include <exec/execute.hpp>
 #include <exec/split.hpp>
 #include <exec/start_detached.hpp>
 #include <stdexec/execution.hpp>
+// NOLINTEND(bugprone-unhandled-exception-at-new)
+// NOLINTEND(bugprone-crtp-constructor-accessibility)
+
+#if defined(HPX_STDEXEC_RESTORE___cpp_constexpr_exceptions)
+#define __cpp_constexpr_exceptions                                             \
+    HPX_STDEXEC_RESTORE___cpp_constexpr_exceptions
+#undef HPX_STDEXEC_RESTORE___cpp_constexpr_exceptions
+#endif
 
 #if defined(HPX_GCC_VERSION)
 #pragma GCC diagnostic pop
 #elif defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 namespace hpx::execution::experimental {
@@ -85,6 +112,7 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::get_allocator_t;
     HPX_CXX_CORE_EXPORT using stdexec::get_completion_scheduler_t;
     HPX_CXX_CORE_EXPORT using stdexec::get_delegatee_scheduler_t;
+    HPX_CXX_CORE_EXPORT using stdexec::get_domain_t;
     HPX_CXX_CORE_EXPORT using stdexec::get_forward_progress_guarantee_t;
     HPX_CXX_CORE_EXPORT using stdexec::get_scheduler_t;
     HPX_CXX_CORE_EXPORT using stdexec::get_stop_token_t;
@@ -94,6 +122,7 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::get_allocator;
     HPX_CXX_CORE_EXPORT using stdexec::get_completion_scheduler;
     HPX_CXX_CORE_EXPORT using stdexec::get_delegatee_scheduler;
+    HPX_CXX_CORE_EXPORT using stdexec::get_domain;
     HPX_CXX_CORE_EXPORT using stdexec::get_forward_progress_guarantee;
     HPX_CXX_CORE_EXPORT using stdexec::get_scheduler;
     HPX_CXX_CORE_EXPORT using stdexec::get_stop_token;
@@ -134,10 +163,15 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::as_awaitable;
     HPX_CXX_CORE_EXPORT using stdexec::as_awaitable_t;
 
-    // Start on
+    // Starts on
+    HPX_CXX_CORE_EXPORT using stdexec::starts_on;
+    HPX_CXX_CORE_EXPORT using stdexec::starts_on_t;
+
+    // Start on (deprecated in P2300, replaced by starts_on)
     HPX_CXX_CORE_EXPORT using stdexec::start_on;
     HPX_CXX_CORE_EXPORT using stdexec::start_on_t;
 
+    // On (deprecated in P2300, replaced by starts_on)
     HPX_CXX_CORE_EXPORT using stdexec::on;
     HPX_CXX_CORE_EXPORT using stdexec::on_t;
 
@@ -145,47 +179,46 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::continues_on;
     HPX_CXX_CORE_EXPORT using stdexec::continues_on_t;
 
-    // Transfer just
-    HPX_CXX_CORE_EXPORT using stdexec::transfer_just;
-    HPX_CXX_CORE_EXPORT using stdexec::transfer_just_t;
+    // Deprecated aliases retained for compatibility with existing code and
+    // tests while HPX transitions to stdexec-only internals.
+    HPX_CXX_CORE_EXPORT using stdexec::transfer;
+    HPX_CXX_CORE_EXPORT using stdexec::transfer_t;
 
-    // Bulk operations
-    HPX_CXX_CORE_EXPORT using stdexec::bulk;
+    // Bulk (HPX provides its own bulk CPO, but still forwards chunked variants
+    // used by the thread pool scheduler domain customization on current master)
+    //    HPX_CXX_CORE_EXPORT using stdexec::bulk;
+    //    HPX_CXX_CORE_EXPORT using stdexec::bulk_t;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_chunked;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_chunked_t;
-    HPX_CXX_CORE_EXPORT using stdexec::bulk_t;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_unchunked;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_unchunked_t;
 
     // Execution policies
     HPX_CXX_CORE_EXPORT using stdexec::is_execution_policy;
     HPX_CXX_CORE_EXPORT using stdexec::is_execution_policy_v;
-    HPX_CXX_CORE_EXPORT using stdexec::par;
-    HPX_CXX_CORE_EXPORT using stdexec::par_unseq;
-    HPX_CXX_CORE_EXPORT using stdexec::seq;
-    HPX_CXX_CORE_EXPORT using stdexec::unseq;
+    using stdexec::par;
+    using stdexec::par_unseq;
+    using stdexec::seq;
+    using stdexec::unseq;
 
-    // Split (moved to exec:: namespace in newer stdexec)
     HPX_CXX_CORE_EXPORT using exec::split;
     HPX_CXX_CORE_EXPORT using exec::split_t;
 
-    // Ensure started (moved to exec:: namespace in newer stdexec)
     HPX_CXX_CORE_EXPORT using exec::ensure_started;
     HPX_CXX_CORE_EXPORT using exec::ensure_started_t;
 
-    // Transfer
-    HPX_CXX_CORE_EXPORT using stdexec::transfer;
-    HPX_CXX_CORE_EXPORT using stdexec::transfer_t;
-
-    // Tags
-    namespace tags {
-
-        HPX_CXX_CORE_EXPORT using namespace stdexec::tags;
-    }
-
-    // Execute (moved to exec:: namespace in newer stdexec)
     HPX_CXX_CORE_EXPORT using exec::execute;
     HPX_CXX_CORE_EXPORT using exec::execute_t;
+
+    // Environment queries
+    HPX_CXX_CORE_EXPORT using exec::make_env;
+    HPX_CXX_CORE_EXPORT using exec::make_env_t;
+    HPX_CXX_CORE_EXPORT using exec::read_with_default;
+    HPX_CXX_CORE_EXPORT using exec::with;
+    HPX_CXX_CORE_EXPORT using exec::with_t;
+    HPX_CXX_CORE_EXPORT using exec::without;
+    HPX_CXX_CORE_EXPORT using exec::write;
+    HPX_CXX_CORE_EXPORT using exec::write_env;
 
     // Into Variant
     HPX_CXX_CORE_EXPORT using stdexec::into_variant;
@@ -220,6 +253,9 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using exec::start_detached;
     HPX_CXX_CORE_EXPORT using exec::start_detached_t;
 
+    HPX_CXX_CORE_EXPORT using stdexec::transfer_just;
+    HPX_CXX_CORE_EXPORT using stdexec::transfer_just_t;
+
     // Stop token
     HPX_CXX_CORE_EXPORT using stdexec::stop_callback_for_t;
     HPX_CXX_CORE_EXPORT using stdexec::stoppable_token;
@@ -253,6 +289,7 @@ namespace hpx::execution::experimental {
 
     HPX_CXX_CORE_EXPORT using stdexec::transform_completion_signatures;
     HPX_CXX_CORE_EXPORT using stdexec::transform_completion_signatures_of;
+    HPX_CXX_CORE_EXPORT using exec::keep_completion;
 
     // Transform sender
     HPX_CXX_CORE_EXPORT using stdexec::transform_sender;
@@ -332,5 +369,3 @@ namespace hpx::execution::experimental {
 // Leaving this as a placeholder
 namespace hpx::this_thread {
 }
-
-#endif

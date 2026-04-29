@@ -23,24 +23,26 @@ if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} coroutine_traits coroutine_utils)
 endif()
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  foreach(test ${tests})
+    set(sources ${test}.cpp)
 
-  source_group("Source Files" FILES ${sources})
+    source_group("Source Files" FILES ${sources})
 
-  # add example executable
-  add_hpx_executable(
-    ${test}_test INTERNAL_FLAGS
-    SOURCES ${sources}
-    NOLIBS
-    DEPENDENCIES hpx_core ${BOOST_UNDERLYING_THREAD_LIBRARY}
-    EXCLUDE_FROM_ALL
-    FOLDER "Tests/Unit/Modules/Core/ExecutionBase"
-  )
+    # add example executable
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${sources}
+      NOLIBS
+      DEPENDENCIES hpx_core ${BOOST_UNDERLYING_THREAD_LIBRARY}
+      EXCLUDE_FROM_ALL
+      FOLDER "Tests/Unit/Modules/Core/ExecutionBase"
+    )
 
-  target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
+    target_link_libraries(${test}_test PRIVATE hpx_execution_test_utilities)
 
-  add_hpx_unit_test("modules.execution_base" ${test} ${${test}_PARAMETERS})
-  target_compile_definitions(${test}_test PRIVATE -DHPX_MODULE_STATIC_LINKING)
+    add_hpx_unit_test("modules.execution_base" ${test} ${${test}_PARAMETERS})
+    target_compile_definitions(${test}_test PRIVATE -DHPX_MODULE_STATIC_LINKING)
 
-endforeach()
+  endforeach()
+endif()

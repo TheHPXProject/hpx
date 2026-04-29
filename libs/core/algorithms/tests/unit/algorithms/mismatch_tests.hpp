@@ -481,7 +481,6 @@ void test_mismatch_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -552,7 +551,6 @@ void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST(result.second == std::begin(c2));
     }
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Cross-policy consistency tests for hpx::mismatch

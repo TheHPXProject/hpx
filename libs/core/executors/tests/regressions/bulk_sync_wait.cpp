@@ -17,18 +17,16 @@ namespace tt = hpx::this_thread::experimental;
 
 int hpx_main()
 {
-#if defined(HPX_HAVE_STDEXEC)
     std::atomic<bool> called = false;
 
     ex::thread_pool_scheduler sch{};
 
-    auto s =
-        ex::schedule(sch) | ex::bulk(1, [&called](auto) { called = true; });
+    auto s = ex::starts_on(
+        sch, ex::just() | ex::bulk(1, [&called](auto) { called = true; }));
 
     tt::sync_wait(s);
 
     HPX_TEST(called.load());
-#endif
 
     return hpx::local::finalize();
 }

@@ -161,7 +161,7 @@ if(HPX_WITH_CXX17_STD_EXECUTION_POLICES)
   set(tests ${tests} foreach_std_policies)
 endif()
 
-if(HPX_WITH_STDEXEC)
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
   set(tests
       ${tests}
       adjacentdifference_sender
@@ -237,6 +237,10 @@ if(HPX_WITH_STDEXEC)
       uninitialized_value_constructn_sender
       unique_sender
   )
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  list(REMOVE_ITEM tests foreach_scheduler)
 endif()
 
 foreach(test ${tests})

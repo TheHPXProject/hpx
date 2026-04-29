@@ -14,7 +14,6 @@
 #include <hpx/config/modules_enabled.hpp>
 
 @cxx_standard_headers@
-#if defined(HPX_HAVE_STDEXEC)
 # if defined(HPX_GCC_VERSION)
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wall"
@@ -32,7 +31,6 @@
 # elif defined(HPX_CLANG_VERSION)
 #  pragma clang diagnostic pop
 # endif
-#endif
 
 #if defined(HPX_HAVE_CXX20_COROUTINES)
 # if defined(__has_include)
@@ -44,8 +42,8 @@
 # endif
 #endif
 
-#include <bit>
-#include <source_location>
+# include <bit>
+# include <source_location>
 
 #if defined(HPX_HAVE_CXX23_STD_GENERATOR)
 # include <generator>
@@ -60,8 +58,8 @@
 # undef exception_info
 #endif
 
-#include <asio.hpp>
-#include <hwloc.h>
+# include <asio.hpp>
+# include <hwloc.h>
 
 #if defined(HPX_HAVE_MODULE_LIKWID)
 # include <likwid.h>

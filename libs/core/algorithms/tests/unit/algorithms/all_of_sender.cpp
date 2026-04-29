@@ -4,7 +4,11 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/init.hpp>
+
+// Clang 20 and earlier currently ICE while compiling this file.
+#if !defined(HPX_CLANG_VERSION) || (HPX_CLANG_VERSION / 10000) > 20
 
 #include <iostream>
 #include <string>
@@ -61,3 +65,12 @@ int main(int argc, char* argv[])
 
     return hpx::util::report_errors();
 }
+
+#else
+
+int main()
+{
+    return 0;
+}
+
+#endif

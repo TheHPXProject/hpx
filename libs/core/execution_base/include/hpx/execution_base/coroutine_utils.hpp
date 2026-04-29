@@ -31,49 +31,6 @@ namespace hpx::execution::experimental {
     //   3. Otherwise, sender-awaitable{e, p} if awaitable-sender<E, P>
     //      is true.
     //   4. Otherwise, e.
-#if !defined(HPX_HAVE_STDEXEC)
-    HPX_CXX_CORE_EXPORT struct as_awaitable_t;
-
-    HPX_CXX_CORE_EXPORT struct connect_awaitable_t;
-
-    namespace detail {
-
-        HPX_CXX_CORE_EXPORT template <typename Value>
-        struct receiver_base;
-
-        HPX_CXX_CORE_EXPORT template <typename PromiseId, typename Value>
-        struct sender_awaitable_base;
-
-        HPX_CXX_CORE_EXPORT template <typename PromiseId, typename SenderId>
-        struct sender_awaitable;
-    }    // namespace detail
-
-    namespace detail {
-
-        struct with_awaitable_senders_base;
-    }    // namespace detail
-
-    // with_awaitable_senders, when used as the base class of a coroutine
-    // promise type, makes senders awaitable in that coroutine type. In
-    // addition, it provides a default implementation of unhandled_stopped()
-    // such that if a sender completes by calling execution::set_stopped, it is
-    // treated as if an uncatchable "stopped" exception were thrown from the
-    // await-expression. In practice, the coroutine is never resumed, and the
-    // unhandled_stopped of the coroutine caller's promise type is called.
-    //
-    //    template <typename Promise>
-    //    struct with_awaitable_senders;
-
-    HPX_CXX_CORE_EXPORT struct promise_base;
-
-    HPX_CXX_CORE_EXPORT struct operation_base;
-
-    HPX_CXX_CORE_EXPORT template <typename ReceiverId>
-    struct promise;
-
-    HPX_CXX_CORE_EXPORT template <typename ReceiverId>
-    struct operation;
-#endif
 }    // namespace hpx::execution::experimental
 
 #endif    // HPX_HAVE_CXX20_COROUTINES

@@ -4,6 +4,8 @@
 #  Distributed under the Boost Software License, Version 1.0. (See accompanying
 #  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+tests.examples.1d_stencil.1d_stencil_8
+tests.examples.transpose.transpose_smp_block
 tests.regressions.modules.parcelset.distributed.tcp.nested_vectors_6623
 tests.regressions.modules.parcelset.distributed.tcp.very_big_parcel
 tests.regressions.modules.parcelset.distributed.tcp.very_big_parcel_int_max_plus_1

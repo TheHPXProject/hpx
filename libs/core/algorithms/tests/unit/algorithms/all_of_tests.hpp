@@ -69,7 +69,6 @@ void test_all_of(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_all_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -94,6 +93,7 @@ void test_all_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 [](auto v) { return v != 0; }) |
             hpx::all_of(ex_policy.on(exec)));
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
         bool result = hpx::get<0>(*snd_result);
 
         // verify values
@@ -103,7 +103,6 @@ void test_all_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST_EQ(result, expected);
     }
 }
-#endif
 
 template <typename IteratorTag, typename Proj = hpx::identity>
 void test_all_of_ranges_seq(IteratorTag, Proj proj = Proj())

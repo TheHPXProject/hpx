@@ -172,7 +172,6 @@ int hpx_main(hpx::program_options::variables_map& vm)
 // will execute hpx_main on an hpx thread
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
-#if !defined(HPX_HAVE_STDEXEC)
     // if this test is run with distributed runtime, we need to make sure
     // that all ranks run their main function
     std::vector<std::string> cfg = {"hpx.run_hpx_main!=1"};
@@ -209,5 +208,4 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
     MPI_Finalize();
 
     return result || hpx::util::report_errors();
-#endif
 }

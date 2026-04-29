@@ -506,7 +506,6 @@ void test_unique_bad_alloc()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -577,4 +576,3 @@ void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST(equality);
     }
 }
-#endif
