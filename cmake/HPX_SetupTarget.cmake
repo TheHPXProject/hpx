@@ -232,9 +232,21 @@ function(hpx_setup_target target)
   if(HPX_WITH_CXX_MODULES AND target_SCAN_FOR_MODULES)
     hpx_debug("setup_target.${target} SCAN_FOR_MODULES: ON")
 
-    hpx_configure_module_consumer(${target} hpx_core_module_if)
+    if(TARGET hpx_core_module_if)
+      hpx_configure_module_consumer(${target} hpx_core_module_if)
+    elseif(TARGET HPXInternal::hpx_core_module_if)
+      hpx_configure_module_consumer(${target} HPXInternal::hpx_core_module_if)
+    else()
+      hpx_error(
+        "setup_target.${target}: C++ modules scanning is enabled, but neither "
+        "hpx_core_module_if nor HPXInternal::hpx_core_module_if exists"
+      )
+    endif()
+
     if(TARGET hpx_full_module_if)
       hpx_configure_module_consumer(${target} hpx_full_module_if)
+    elseif(TARGET HPXInternal::hpx_full_module_if)
+      hpx_configure_module_consumer(${target} HPXInternal::hpx_full_module_if)
     endif()
   else()
     hpx_debug("setup_target.${target} SCAN_FOR_MODULES: OFF")

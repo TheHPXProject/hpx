@@ -11,12 +11,12 @@ project(hello_world_client CXX)
 if(EXISTS "${HPX_DIR}")
   find_package(HPX REQUIRED)
 
-  if(HPX_WITH_DISTRIBUTED_RUNTIME)
-    add_library(hello_world_component SHARED hello_world_component.cpp)
-  endif()
-
   if(HPX_WITH_CXX_MODULES)
     set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+  endif()
+
+  if(HPX_WITH_DISTRIBUTED_RUNTIME)
+    add_library(hello_world_component SHARED hello_world_component.cpp)
   endif()
 
   add_executable(hello_world_client hello_world_client.cpp)
@@ -53,10 +53,17 @@ if(EXISTS "${HPX_DIR}")
         COMPONENT_DEPENDENCIES iostreams
         DEPENDENCIES HPX::wrap_main
         TYPE COMPONENT
+        SCAN_FOR_MODULES ${HPX_WITH_CXX_MODULES}
       )
-      hpx_setup_target(hello_world_client DEPENDENCIES hello_world_component)
+      hpx_setup_target(
+        hello_world_client
+        DEPENDENCIES hello_world_component
+        SCAN_FOR_MODULES ${HPX_WITH_CXX_MODULES}
+      )
     else()
-      hpx_setup_target(hello_world_client)
+      hpx_setup_target(
+        hello_world_client SCAN_FOR_MODULES ${HPX_WITH_CXX_MODULES}
+      )
     endif()
   else()
     message(FATAL_ERROR "Unknown SETUP_TYPE=\"${SETUP_TYPE}\"")

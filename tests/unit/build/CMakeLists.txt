@@ -10,12 +10,6 @@ if(NOT HPX_WITH_TESTS_EXTERNAL_BUILD)
   return()
 endif()
 
-# If C++ modules are enabled, exit now (we don't know yet how to setup a
-# dependent HPX project to use the generated BMIs).
-if(HPX_WITH_CXX_MODULES)
-  return()
-endif()
-
 # Try building an external cmake based project ...
 function(
   create_cmake_test
@@ -79,6 +73,7 @@ function(
     VERBATIM
   )
   add_dependencies(${name} hpx hpx_init hpx_wrap)
+
   if(HPX_WITH_DISTRIBUTED_RUNTIME)
     add_dependencies(${name} iostreams_component)
   endif()
@@ -95,6 +90,13 @@ function(create_pkgconfig_test name hpx_dir)
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${build_dir}"
     VERBATIM
   )
+  set(PKGCONFIG_CXX_FLAGS "${CMAKE_CXX_FLAGS_SAFE}")
+  if(HPX_WITH_CXX_MODULES)
+    set(PKGCONFIG_CXX_FLAGS
+        "${PKGCONFIG_CXX_FLAGS} -DHPX_HAVE_FORCE_NO_CXX_MODULES"
+    )
+  endif()
+
   add_custom_target(
     ${name}.make_compile
     COMMAND
@@ -102,7 +104,7 @@ function(create_pkgconfig_test name hpx_dir)
       "${PROJECT_SOURCE_DIR}/examples/hello_world_component/Makefile"
       SRC_DIR=${PROJECT_SOURCE_DIR}/examples/hello_world_component
       HPX_DIR=${hpx_dir} CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER}
-      CXX_FLAGS=${CMAKE_CXX_FLAGS_SAFE} PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
+      "CXX_FLAGS=${PKGCONFIG_CXX_FLAGS}" PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
       BUILD_TYPE=$<CONFIGURATION>
     VERBATIM
   )
