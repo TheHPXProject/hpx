@@ -73,14 +73,7 @@ function(
     VERBATIM
   )
   add_dependencies(${name} hpx hpx_init hpx_wrap)
-  if(HPX_WITH_CXX_MODULES)
-    if(TARGET hpx_core_module)
-      add_dependencies(${name} hpx_core_module)
-    endif()
-    if(TARGET hpx_full_module)
-      add_dependencies(${name} hpx_full_module)
-    endif()
-  endif()
+
   if(HPX_WITH_DISTRIBUTED_RUNTIME)
     add_dependencies(${name} iostreams_component)
   endif()
