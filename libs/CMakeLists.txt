@@ -338,6 +338,11 @@ foreach(lib ${HPX_LIBS})
   # src/CMakeLists.txt. When all of hpx_full has been modularized the target
   # creation can move here as well.
   if(HPX_WITH_CXX_MODULES)
+    if(NOT TARGET hpx_modules)
+      add_custom_target(hpx_modules ALL)
+      set_target_properties(hpx_modules PROPERTIES FOLDER "Core")
+    endif()
+
     add_library(hpx_${lib}_module STATIC)
     set_target_properties(
       hpx_${lib}_module PROPERTIES POSITION_INDEPENDENT_CODE ON
@@ -353,6 +358,7 @@ foreach(lib ${HPX_LIBS})
       PRIVATE hpx_private_flags
     )
     set_target_properties(hpx_${lib}_module PROPERTIES FOLDER "Core")
+    add_dependencies(hpx_modules hpx_${lib}_module)
 
     add_hpx_source_group(
       NAME hpx_${lib}_module
