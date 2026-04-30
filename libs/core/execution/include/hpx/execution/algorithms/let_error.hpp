@@ -265,7 +265,7 @@ namespace hpx::execution::experimental {
                                 // TODO: receiver is moved before the visit, but
                                 // the invoke inside the visit may throw.
                                 r.op_state.predecessor_error
-                                    .template emplace<Error>(
+                                    .template emplace<std::decay_t<Error>>(
                                         HPX_FORWARD(Error, error));
 
                                 hpx::visit(

@@ -50,8 +50,7 @@ int hpx_main()
 
         // First subscriber (predecessor not yet complete when connecting)
         tt::sync_wait(ex::then(s, [&](auto const& tuple_val) {
-            int x = std::get<0>(tuple_val);
-            std::string const& msg = std::get<1>(tuple_val);
+            auto const& [x, msg] = tuple_val;
             HPX_TEST_EQ(x, 42);
             HPX_TEST_EQ(msg, std::string("hello"));
             ++count;
@@ -59,8 +58,7 @@ int hpx_main()
 
         // Second subscriber (predecessor_done == true)
         tt::sync_wait(ex::then(s, [&](auto const& tuple_val) {
-            int x = std::get<0>(tuple_val);
-            std::string const& msg = std::get<1>(tuple_val);
+            auto const& [x, msg] = tuple_val;
             HPX_TEST_EQ(x, 42);
             HPX_TEST_EQ(msg, std::string("hello"));
             ++count;
