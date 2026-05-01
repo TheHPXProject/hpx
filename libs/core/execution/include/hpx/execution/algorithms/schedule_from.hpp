@@ -61,7 +61,9 @@ namespace hpx::execution::experimental {
                     predecessor_sender_error_types<Variant>,
                     scheduler_sender_error_types<Variant>>;
 
-                static constexpr bool sends_stopped = false;
+                static constexpr bool sends_stopped =
+                    sends_stopped_of_v<Sender, Env> ||
+                    sends_stopped_of_v<scheduler_sender_type, Env>;
             };
 
             // clang-format off

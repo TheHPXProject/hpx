@@ -61,7 +61,8 @@ namespace hpx::execution::experimental {
                     error_types_of_t<Sender, Env, Variant>,
                     Variant<std::exception_ptr>>;
 
-                static constexpr bool sends_stopped = false;
+                static constexpr bool sends_stopped =
+                    sends_stopped_of_v<Sender, Env>;
             };
 
             // clang-format off
