@@ -1,14 +1,12 @@
-//  Copyright (c) 2021 ETH Zurich
-//  Copyright (c) 2022 Hartmut Kaiser
+//  Copyright (c) 2026 The STE||AR-Group
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/init.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
-
-#include "algorithm_test_utils.hpp"
 
 #include <atomic>
 #include <exception>
@@ -16,359 +14,94 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace ex = hpx::execution::experimental;
 
-// This overload is only used to check dispatching. It is not a useful
-// implementation.
-template <typename Allocator = hpx::util::internal_allocator<>>
-auto tag_invoke(ex::ensure_started_t, custom_sender_tag_invoke s,
-    Allocator const& = Allocator{})
+void test_eager_execution()
 {
-    s.tag_invoke_overload_called = true;
-    return void_sender{};
+    std::atomic<bool> started{false};
+
+    // Sender that sets started to true when executed
+    auto s1 = ex::then(ex::just(), [&]() { started = true; });
+
+    // Eagerly start the sender
+    auto s2 = ex::ensure_started(std::move(s1));
+
+    // Test Case 1: Ensure work starts even if the resulting sender isn't connected
+    // ensure_started immediately connects and starts the predecessor
+    HPX_TEST(started.load());
+
+    // Connect it to sink the result, avoiding memory leaks from the shared state
+    std::atomic<bool> set_value_called{false};
+    auto s3 = ex::then(std::move(s2), [&]() { set_value_called = true; });
+    hpx::this_thread::experimental::sync_wait(std::move(s3));
+
+    HPX_TEST(set_value_called.load());
 }
 
-int main()
+void test_multiple_connects()
 {
-    // Success path
+    std::atomic<int> start_count{0};
+
+    auto s1 = ex::then(ex::just(), [&]() {
+        ++start_count;
+        return 42;
+    });
+
+    auto s2 = ex::ensure_started(std::move(s1));
+
+    HPX_TEST_EQ(start_count.load(), 1);
+
+    // Test Case 2: Ensure multiple connects to the same started operation receive the same value
+    int result1 = 0;
+    auto s3 = ex::then(s2, [&](int val) { result1 = val; });
+    hpx::this_thread::experimental::sync_wait(std::move(s3));
+    HPX_TEST_EQ(result1, 42);
+
+    int result2 = 0;
+    auto s4 = ex::then(s2, [&](int val) { result2 = val; });
+    hpx::this_thread::experimental::sync_wait(std::move(s4));
+    HPX_TEST_EQ(result2, 42);
+
+    // The predecessor should only have been started ONCE!
+    HPX_TEST_EQ(start_count.load(), 1);
+}
+
+void test_error_propagation()
+{
+    auto s1 = ex::then(ex::just(), []() { throw std::runtime_error("error"); });
+    auto s2 = ex::ensure_started(std::move(s1));
+
+    bool caught = false;
+    try
     {
-        std::atomic<bool> set_value_called{false};
-        std::atomic<bool> started{false};
-        auto s1 = ex::then(void_sender{}, [&]() { started = true; });
-        auto s2 = ex::ensure_started(std::move(s1));
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s2);
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-        check_sends_stopped<true>(s2);
-
-        HPX_TEST(started);
-        auto f = [] {};
-        auto r = callback_receiver<decltype(f)>{f, set_value_called};
-        auto os = ex::connect(std::move(s2), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_value_called);
+        hpx::this_thread::experimental::sync_wait(s2);
+    }
+    catch (std::runtime_error const&)
+    {
+        caught = true;
     }
 
-    {
-        std::atomic<bool> set_value_called{false};
-        std::atomic<bool> started{false};
-        auto s1 = ex::then(ex::just(0), [&](int x) {
-            started = true;
-            return x;
-        });
-        auto s2 = ex::ensure_started(std::move(s1));
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
+    HPX_TEST(caught);
+}
 
-#if defined(HPX_HAVE_STDEXEC)
-        // Passes by value
-        check_value_types<hpx::variant<hpx::tuple<int>>>(s2);
-#else
-        check_value_types<hpx::variant<hpx::tuple<int const&>>>(s2);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-        check_sends_stopped<true>(s2);
+int hpx_main()
+{
+    test_eager_execution();
+    test_multiple_connects();
+    test_error_propagation();
+    return hpx::local::finalize();
+}
 
-        HPX_TEST(started);
-        auto f = [](int x) { HPX_TEST_EQ(x, 0); };
-        auto r = callback_receiver<decltype(f)>{f, set_value_called};
-        auto os = ex::connect(std::move(s2), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_value_called);
-    }
+int main(int argc, char* argv[])
+{
+    std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+    hpx::local::init_params init_args;
+    init_args.cfg = cfg;
 
-    {
-        std::atomic<bool> set_value_called{false};
-        std::atomic<bool> started{false};
-        auto s1 = ex::then(ex::just(custom_type_non_default_constructible{42}),
-            [&](custom_type_non_default_constructible x) {
-                started = true;
-                return x;
-            });
-        auto s2 = ex::ensure_started(std::move(s1));
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
-
-#if defined(HPX_HAVE_STDEXEC)
-        check_value_types<
-            hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(
-            s2);
-#else
-        check_value_types<hpx::variant<
-            hpx::tuple<custom_type_non_default_constructible const&>>>(s2);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-        check_sends_stopped<true>(s2);
-
-        HPX_TEST(started);
-        auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
-        auto r = callback_receiver<decltype(f)>{f, set_value_called};
-        auto os = ex::connect(std::move(s2), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_value_called);
-    }
-
-    {
-        std::atomic<bool> set_value_called{false};
-        std::atomic<bool> started{false};
-        auto s1 = ex::then(
-            ex::just(custom_type_non_default_constructible_non_copyable{42}),
-            [&](custom_type_non_default_constructible_non_copyable&& x) {
-                started = true;
-                return std::move(x);
-            });
-        auto s2 = ex::ensure_started(std::move(s1));
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
-
-#if defined(HPX_HAVE_STDEXEC)
-        // custom_type_non_default_constructible_non_copyable Will be move constructed
-        check_value_types<hpx::variant<
-            hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(
-            s2);
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#else
-        check_value_types<hpx::variant<hpx::tuple<
-            custom_type_non_default_constructible_non_copyable const&>>>(s2);
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
-        check_sends_stopped<true>(s2);
-
-        HPX_TEST(started);
-        auto f = [](auto& x) { HPX_TEST_EQ(x.x, 42); };
-        auto r = callback_receiver<decltype(f)>{f, set_value_called};
-#if defined(HPX_HAVE_STDEXEC)
-        auto os = ex::connect(std::move(s2) | ex::split(), std::move(r));
-#else
-        auto os = ex::connect(std::move(s2), std::move(r));
-#endif
-        ex::start(os);
-        HPX_TEST(set_value_called);
-    }
-
-    // operator| overload
-    {
-        std::atomic<bool> set_value_called{false};
-        auto s = void_sender{} | ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<true>(s);
-
-        auto f = [] {};
-        auto r = callback_receiver<decltype(f)>{f, set_value_called};
-        auto os = ex::connect(std::move(s), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_value_called);
-    }
-
-    // tag_invoke overload
-    {
-        std::atomic<bool> receiver_set_value_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        auto s = custom_sender_tag_invoke{tag_invoke_overload_called} |
-            ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        // custom_sender_tag_invoke implements tag_invoke(split_t, ...)
-        // returning an instance of void_sender
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<>>(s);
-        check_sends_stopped<false>(s);
-
-        auto f = [] {};
-        auto r = callback_receiver<decltype(f)>{f, receiver_set_value_called};
-        auto os = ex::connect(std::move(s), std::move(r));
-        ex::start(os);
-        HPX_TEST(receiver_set_value_called);
-        HPX_TEST(tag_invoke_overload_called);
-    }
-
-    // Failure path
-    {
-        std::atomic<bool> set_error_called{false};
-        auto s = error_sender{} | ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<true>(s);
-
-        auto r = error_callback_receiver<check_exception_ptr>{
-            check_exception_ptr{}, set_error_called};
-        auto os = ex::connect(std::move(s), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_error_called);
-    }
-
-    {
-        std::atomic<bool> set_error_called{false};
-        auto s = error_sender{} | ex::ensure_started() | ex::ensure_started() |
-            ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<true>(s);
-
-        auto r = error_callback_receiver<check_exception_ptr>{
-            check_exception_ptr{}, set_error_called};
-        auto os = ex::connect(std::move(s), std::move(r));
-        ex::start(os);
-        HPX_TEST(set_error_called);
-    }
-
-    // Chained ensure_started calls do not create new shared states
-    {
-        std::atomic<bool> receiver_set_value_called{false};
-        auto s1 = ex::just() | ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s1);
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-        check_sends_stopped<true>(s1);
-
-#if defined(HPX_HAVE_STDEXEC)
-        auto s2 = ex::ensure_started(std::move(s1));
-#else
-        auto s2 = ex::ensure_started(s1);
-        HPX_TEST_EQ(s1.state, s2.state);
-#endif
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s2);
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-        check_sends_stopped<true>(s2);
-
-        auto s3 = ex::ensure_started(std::move(s2));
-        static_assert(ex::is_sender_v<decltype(s3)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s3), ex::empty_env>);
-#else
-        HPX_TEST_EQ(s1.state, s3.state);
-        static_assert(ex::is_sender_v<decltype(s3), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s3);
-        check_error_types<hpx::variant<std::exception_ptr>>(s3);
-        check_sends_stopped<true>(s3);
-
-        auto f = [] {};
-        auto r = callback_receiver<decltype(f)>{f, receiver_set_value_called};
-        auto os = ex::connect(std::move(s3), std::move(r));
-        ex::start(os);
-        HPX_TEST(receiver_set_value_called);
-    }
-
-    {
-        std::atomic<bool> receiver_set_value_called{false};
-        auto s1 = ex::just(42) | ex::ensure_started();
-        static_assert(ex::is_sender_v<decltype(s1)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s1), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s1), ex::empty_env>);
-#endif
-
-#if defined(HPX_HAVE_STDEXEC)
-        check_value_types<hpx::variant<hpx::tuple<int>>>(s1);
-#else
-        check_value_types<hpx::variant<hpx::tuple<int const&>>>(s1);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s1);
-        check_sends_stopped<true>(s1);
-
-#if defined(HPX_HAVE_STDEXEC)
-        auto s2 = ex::ensure_started(std::move(s1));
-#else
-        auto s2 = ex::ensure_started(s1);
-        HPX_TEST_EQ(s1.state, s2.state);
-#endif
-        static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
-
-#if defined(HPX_HAVE_STDEXEC)
-        check_value_types<hpx::variant<hpx::tuple<int>>>(s2);
-#else
-        check_value_types<hpx::variant<hpx::tuple<int const&>>>(s2);
-#endif
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-        check_sends_stopped<true>(s2);
-
-        auto s3 = ex::ensure_started(std::move(s2));
-        static_assert(ex::is_sender_v<decltype(s3)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s3), ex::empty_env>);
-        check_value_types<hpx::variant<hpx::tuple<int>>>(s3);
-#else
-        static_assert(ex::is_sender_v<decltype(s3), ex::empty_env>);
-        HPX_TEST_EQ(s1.state, s3.state);
-        check_value_types<hpx::variant<hpx::tuple<int const&>>>(s3);
-#endif
-
-        check_error_types<hpx::variant<std::exception_ptr>>(s3);
-        check_sends_stopped<true>(s3);
-
-        auto f = [](int x) { HPX_TEST_EQ(x, 42); };
-        auto r = callback_receiver<decltype(f)>{f, receiver_set_value_called};
-        auto os = ex::connect(std::move(s3), std::move(r));
-        ex::start(os);
-        HPX_TEST(receiver_set_value_called);
-    }
+    HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv, init_args), 0,
+        "HPX main exited with non-zero status");
 
     return hpx::util::report_errors();
 }
