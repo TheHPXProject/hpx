@@ -1,3 +1,5 @@
+//  Copyright (c) 2021 ETH Zurich
+//  Copyright (c) 2022 Hartmut Kaiser
 //  Copyright (c) 2026 The STE||AR-Group
 //
 //  SPDX-License-Identifier: BSL-1.0

@@ -1,3 +1,5 @@
+//  Copyright (c) 2021 ETH Zurich
+//  Copyright (c) 2022 Hartmut Kaiser
 //  Copyright (c) 2026 The STE||AR-Group
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -7,8 +9,15 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
+#if defined(HPX_HAVE_STDEXEC)
+#include <hpx/modules/execution_base.hpp>
+#else
+
 #include <hpx/assert.hpp>
+#include <hpx/execution/algorithms/detail/inject_scheduler.hpp>
 #include <hpx/execution/algorithms/detail/partial_algorithm.hpp>
+#include <hpx/execution/algorithms/run_loop.hpp>
 #include <hpx/execution_base/completion_signatures.hpp>
 #include <hpx/execution_base/receiver.hpp>
 #include <hpx/execution_base/sender.hpp>
@@ -459,6 +468,21 @@ namespace hpx::execution::experimental {
                 HPX_FORWARD(Sender, sender), allocator};
         }
 
+        template <typename Sender,
+            typename Allocator = hpx::util::internal_allocator<>,
+            HPX_CONCEPT_REQUIRES_(hpx::execution::experimental::is_sender_v<
+                Sender>&& hpx::traits::is_allocator_v<Allocator>)>
+        friend constexpr HPX_FORCEINLINE auto tag_invoke(ensure_started_t,
+            hpx::execution::experimental::run_loop_scheduler const& sched,
+            Sender&& sender, Allocator const& allocator = {})
+        {
+            auto es_sender = detail::ensure_started_sender<Sender, Allocator>{
+                HPX_FORWARD(Sender, sender), allocator};
+
+            sched.get_run_loop().run();
+            return es_sender;
+        }
+
         template <typename Sender, typename Allocator>
         friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(
             ensure_started_t,
@@ -476,5 +500,19 @@ namespace hpx::execution::experimental {
             return detail::partial_algorithm<ensure_started_t, Allocator>{
                 allocator};
         }
+
+        template <typename Scheduler, typename Allocator,
+            HPX_CONCEPT_REQUIRES_(hpx::execution::experimental::is_scheduler_v<
+                Scheduler>&& hpx::traits::is_allocator_v<Allocator>)>
+        friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(
+            ensure_started_t, Scheduler&& scheduler,
+            Allocator const& allocator = {})
+        {
+            return hpx::execution::experimental::detail::inject_scheduler<
+                ensure_started_t, Scheduler, Allocator>{
+                HPX_FORWARD(Scheduler, scheduler), allocator};
+        }
     } ensure_started{};
 }    // namespace hpx::execution::experimental
+
+#endif
