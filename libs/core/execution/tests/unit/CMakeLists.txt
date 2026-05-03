@@ -18,6 +18,7 @@ set(tests
     algorithm_run_loop
     algorithm_split
     algorithm_start_detached
+    algorithm_stopped_as_optional
     algorithm_sync_wait
     algorithm_sync_wait_with_variant
     algorithm_then
