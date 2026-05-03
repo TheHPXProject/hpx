@@ -11,6 +11,10 @@
 
 #include <hpx/config.hpp>
 
+// Define HPX_NO_MAIN to ensure the test itself does not trigger inclusion
+// of hpx_main.hpp from local.hpp, thus bypassing any circular dependency
+// during the core module test build.
+#define HPX_NO_MAIN
 #include <hpx/init.hpp>
 #include <hpx/local.hpp>
 

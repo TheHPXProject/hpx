@@ -23,8 +23,14 @@
 
 #include <hpx/config.hpp>
 
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_NO_MAIN)
+#if __has_include(<hpx/hpx_main.hpp>)
+#include <hpx/hpx_main.hpp>    // hpxinspect:noinclude:hpx/hpx_main.hpp
+#endif
+#endif
+
 // --- Standard Parallel Toolkit (core, no networking dependency) ---
-#include <hpx/algorithm.hpp>
-#include <hpx/execution.hpp>
-#include <hpx/future.hpp>
+#include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/numeric.hpp>
