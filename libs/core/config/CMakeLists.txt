@@ -27,7 +27,11 @@ set(config_macro_headers
     hpx/config/forward.hpp
     hpx/config/manual_profiling.hpp
     hpx/config/move.hpp
+<<<<<<< HEAD
     hpx/config/thread_name.hpp
+=======
+    hpx/config/static_linker_check.hpp
+>>>>>>> f5486bc2c2 (fix: add missing static_linker_check.hpp and resolve CI failures)
     hpx/config/threads_stack.hpp
     hpx/config/warnings_prefix.hpp
     hpx/config/warnings_suffix.hpp

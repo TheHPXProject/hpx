@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <hpx/wrap_main.hpp>
 #include <hpx/config/static_linker_check.hpp>
+#include <hpx/wrap_main.hpp>
 
 #if defined(HPX_HAVE_RUN_MAIN_EVERYWHERE)
 
