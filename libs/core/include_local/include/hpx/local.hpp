@@ -28,15 +28,17 @@
 #include <hpx/config.hpp>
 
 // --- Standard Parallel Toolkit (core, no networking dependency) ---
-#include <hpx/algorithm.hpp>
-#include <hpx/execution.hpp>
-#include <hpx/future.hpp>
+#include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/numeric.hpp>
 
 // In local-only builds the wrap module is part of core, so we can safely
 // include hpx_main.hpp for zero-boilerplate usage. In full (distributed)
 // builds, hpx_main.hpp lives in the 'full' runtime layer and including
 // it from a core header would create a circular module dependency.
-#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-#include <hpx/hpx_main.hpp>
+#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_NO_MAIN)
+#if __has_include(<hpx/hpx_main.hpp>)
+#include <hpx/hpx_main.hpp>    // hpxinspect:noinclude:hpx/hpx_main.hpp
+#endif
 #endif
