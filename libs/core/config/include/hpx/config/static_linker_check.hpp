@@ -7,7 +7,7 @@
 // hpxinspect:linelength
 #pragma once
 
-#include <hpx/config/export_definitions.hpp>
+#include <hpx/config/defines.hpp>
 
 #if defined(HPX_HAVE_DYNAMIC_HPX_MAIN)
 #if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
