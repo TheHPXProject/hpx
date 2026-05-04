@@ -23,7 +23,7 @@
 
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_NO_MAIN)
+#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_NO_MAIN)
 #if __has_include(<hpx/hpx_main.hpp>)
 #include <hpx/hpx_main.hpp>    // hpxinspect:noinclude:hpx/hpx_main.hpp
 #endif
