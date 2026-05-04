@@ -10,24 +10,26 @@
 /// This header bundles the **Standard Parallel Toolkit** -- the most commonly
 /// used HPX facilities for local (single-node) execution:
 ///
-///   - \c hpx/algorithm.hpp  -- Parallel algorithms (for_each, sort, ...)
-///   - \c hpx/execution.hpp  -- Execution policies (par, par_unseq, seq)
-///   - \c hpx/future.hpp     -- Futures and dataflow
-///   - \c hpx/numeric.hpp    -- Parallel numeric (reduce, transform_reduce, ...)
+///   - \c hpx/modules/algorithms.hpp -- Parallel algorithms (for_each, sort, ...)
+///   - \c hpx/modules/execution.hpp  -- Execution policies (par, par_unseq, seq)
+///   - \c hpx/modules/futures.hpp    -- Futures and dataflow
+///   - \c hpx/numeric.hpp            -- Parallel numeric (reduce, transform_reduce, ...)
 ///
 /// **Selection criteria**: each header is part of the HPX core module,
 /// provides ISO C++ Standard Library parallel equivalents, and has no
 /// dependency on the distributed runtime or networking layer.
+///
+/// \note  This header intentionally does NOT include hpx/hpx_main.hpp.
+///        Including hpx_main.hpp has observable side effects: it emits
+///        non-weak symbol definitions (hpx_start::include_libhpx_wrap,
+///        hpx_start::app_name_libhpx_wrap) into every translation unit
+///        that includes it, and redefines 'main' via a preprocessor macro.
+///        Users who need the zero-boilerplate HPX runtime entry-point should
+///        include hpx/hpx_main.hpp explicitly in their *single* main TU.
 
 #pragma once
 
 #include <hpx/config.hpp>
-
-#if !defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_NO_MAIN)
-#if __has_include(<hpx/hpx_main.hpp>)
-#include <hpx/hpx_main.hpp>    // hpxinspect:noinclude:hpx/hpx_main.hpp
-#endif
-#endif
 
 // --- Standard Parallel Toolkit (core, no networking dependency) ---
 #include <hpx/modules/algorithms.hpp>
