@@ -6,7 +6,6 @@
 
 set(tests local_header)
 
-set(local_header_FLAGS NOLIBS DEPENDENCIES HPX::hpx)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
