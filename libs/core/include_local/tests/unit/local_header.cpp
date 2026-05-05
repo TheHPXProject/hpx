@@ -11,8 +11,8 @@
 // dependency on the wrap module (hpx_main.hpp / HPX::wrap_main).
 
 #include <hpx/config.hpp>
-#include <hpx/init.hpp>
 #include <hpx/local.hpp>
+#include <hpx/modules/init_runtime_local.hpp>
 
 #include <cstddef>
 #include <iostream>
