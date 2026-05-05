@@ -6,7 +6,6 @@
 
 set(tests local_header)
 
-
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
