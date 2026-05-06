@@ -281,14 +281,51 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::then;
     HPX_CXX_CORE_EXPORT using stdexec::then_t;
 
-    // Completion signature manipulators
+    // Completion signature manipulators: transform_completion_signatures and
+    // transform_completion_signatures_of.
+    //
+    // The stdexec public type-alias variants (stdexec::transform_completion_signatures
+    // and stdexec::transform_completion_signatures_of) are deprecated in favour of
+    // the new exec::transform_completion_signatures consteval-function API in
+    // <exec/completion_signatures.hpp>.  HPX re-exports the same functionality using
+    // the internal (non-deprecated) implementation aliases so that:
+    //   a) Existing HPX call sites that use these as type aliases continue to compile
+    //      without warnings.
+    //   b) New code may include <exec/completion_signatures.hpp> and call
+    //      exec::transform_completion_signatures (the consteval function) directly.
+
     HPX_CXX_CORE_EXPORT using stdexec::completion_signatures_of_t;
     HPX_CXX_CORE_EXPORT using stdexec::error_types_of_t;
     HPX_CXX_CORE_EXPORT using stdexec::sends_stopped;
     HPX_CXX_CORE_EXPORT using stdexec::value_types_of_t;
 
-    HPX_CXX_CORE_EXPORT using stdexec::transform_completion_signatures;
-    HPX_CXX_CORE_EXPORT using stdexec::transform_completion_signatures_of;
+    // Type-alias variant (kept for existing call sites).  Backed by the internal
+    // (non-deprecated) stdexec::__transform_completion_signatures_t helper.
+    template <class Sigs, class MoreSigs = stdexec::completion_signatures<>,
+        template <class...> class ValueTransform =
+            stdexec::__cmplsigs::__default_set_value,
+        template <class...> class ErrorTransform =
+            stdexec::__cmplsigs::__default_set_error,
+        class StoppedSigs =
+            stdexec::completion_signatures<stdexec::set_stopped_t()>>
+    using transform_completion_signatures =
+        stdexec::__transform_completion_signatures_t<Sigs, MoreSigs,
+            ValueTransform, ErrorTransform, StoppedSigs>;
+
+    // Type-alias variant for the "of_t" variant (sender + env convenience form).
+    // Backed by stdexec::__transform_completion_signatures_of_t (non-deprecated).
+    template <class Sndr, class Env = stdexec::env<>,
+        class MoreSigs = stdexec::completion_signatures<>,
+        template <class...> class ValueTransform =
+            stdexec::__cmplsigs::__default_set_value,
+        template <class...> class ErrorTransform =
+            stdexec::__cmplsigs::__default_set_error,
+        class StoppedSigs =
+            stdexec::completion_signatures<stdexec::set_stopped_t()>>
+    using transform_completion_signatures_of =
+        stdexec::__transform_completion_signatures_of_t<Sndr, Env, MoreSigs,
+            ValueTransform, ErrorTransform, StoppedSigs>;
+
     HPX_CXX_CORE_EXPORT using exec::keep_completion;
 
     // Transform sender

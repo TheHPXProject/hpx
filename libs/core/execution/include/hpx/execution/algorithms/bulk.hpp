@@ -55,10 +55,6 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::completion_signatures<>;
 
             template <typename Env>
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
             friend auto tag_invoke(get_completion_signatures_t,
                 bulk_sender const&, Env) noexcept -> hpx::execution::
                 experimental::transform_completion_signatures<
@@ -68,9 +64,6 @@ namespace hpx::execution::experimental {
                         hpx::execution::experimental::set_error_t(
                             std::exception_ptr)>,
                     default_set_value, default_set_error, disable_set_stopped>;
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic pop
-#endif
 
             friend constexpr auto tag_invoke(
                 hpx::execution::experimental::get_env_t,

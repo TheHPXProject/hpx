@@ -118,10 +118,6 @@ namespace hpx::when_all_vector_detail {
                 hpx::execution::experimental::set_error_t(std::decay_t<Err>)>;
 
         template <typename Env>
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
         friend auto tag_invoke(
             hpx::execution::experimental::get_completion_signatures_t,
             when_all_vector_sender_type const&, Env const&) noexcept
@@ -132,9 +128,6 @@ namespace hpx::when_all_vector_detail {
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr)>,
                 transformed_comp_sigs_identity, decay_set_error>;
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic pop
-#endif
 
         template <typename Receiver>
         struct operation_state
