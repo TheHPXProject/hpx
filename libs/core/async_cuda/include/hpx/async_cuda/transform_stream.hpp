@@ -294,7 +294,28 @@ namespace hpx::cuda::experimental {
                 }
             };
 
+<<<<<<< HEAD
             struct default_set_error_fn
+=======
+            template <typename... Args>
+            using invoke_function_transformation =
+                invoke_function_transformation_helper<Args...>::type;
+
+            template <typename Self, typename Env>
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+            static consteval auto get_completion_signatures()
+                -> hpx::execution::experimental::
+                    transform_completion_signatures<
+                        hpx::execution::experimental::completion_signatures_of_t<
+                            std::decay_t<S>, Env>,
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_error_t(
+                                std::exception_ptr)>,
+                        invoke_function_transformation>
+>>>>>>> 13e2e82d54 (Migrate from deprecated transform_completion_signatures_of to transform_completion_signatures)
             {
                 template <typename Err>
                 consteval auto operator()() const noexcept
@@ -321,7 +342,13 @@ namespace hpx::cuda::experimental {
                     default_set_error_fn{},
                     hpx::execution::experimental::ignore_completion{});
             }
+<<<<<<< HEAD
             // clang-format on
+=======
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif
+>>>>>>> 13e2e82d54 (Migrate from deprecated transform_completion_signatures_of to transform_completion_signatures)
 
             constexpr auto get_env() const noexcept
             {
