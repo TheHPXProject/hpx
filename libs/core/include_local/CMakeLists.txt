@@ -15,7 +15,6 @@ set(include_local_headers
     hpx/format.hpp
     hpx/functional.hpp
     hpx/generator.hpp
-    hpx/local.hpp
     hpx/memory.hpp
     hpx/mutex.hpp
     hpx/numeric.hpp
