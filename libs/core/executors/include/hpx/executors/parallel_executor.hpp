@@ -10,7 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/execution/queries/get_scheduler.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/executors/detail/hierarchical_spawning.hpp>
 #include <hpx/executors/detail/index_queue_spawning.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
@@ -459,7 +459,11 @@ namespace hpx::execution {
         parallel_policy_executor& operator=(
             parallel_policy_executor&&) = default;
 
+#if defined(__NVCC__) || defined(__CUDACC__)
+        constexpr ~parallel_policy_executor() {}
+#else
         ~parallel_policy_executor() = default;
+#endif
 
     private:
         // property implementations
@@ -1008,15 +1012,7 @@ namespace hpx::execution {
             }
         }
 
-        friend hpx::execution::experimental::executor_scheduler<
-            parallel_policy_executor>
-        tag_invoke(hpx::execution::experimental::get_scheduler_t,
-            parallel_policy_executor const& exec)
-        {
-            return hpx::execution::experimental::executor_scheduler<
-                parallel_policy_executor>(exec);
-        }
-        /// \endcond
+/// \endcond
 
     public:
         /// \cond NOINTERNAL

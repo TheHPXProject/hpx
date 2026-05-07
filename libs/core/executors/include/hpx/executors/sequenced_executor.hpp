@@ -12,6 +12,7 @@
 #include <hpx/executors/execution_policy_mappings.hpp>
 #include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/executor_scheduler_bulk.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>

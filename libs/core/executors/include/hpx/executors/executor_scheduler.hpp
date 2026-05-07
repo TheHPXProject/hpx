@@ -12,22 +12,15 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 
 #include <exception>
 #include <type_traits>
 #include <utility>
 
 namespace hpx::execution::experimental {
-
-    // Forward declarations
-    template <typename Executor>
-    struct executor_scheduler;
-
-    template <typename Executor>
-    struct executor_sender;
-
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Executor, typename Receiver>
+    HPX_CXX_CORE_EXPORT template <typename Executor, typename Receiver>
     struct executor_operation_state
     {
         HPX_NO_UNIQUE_ADDRESS std::decay_t<Executor> exec_;
@@ -54,9 +47,9 @@ namespace hpx::execution::experimental {
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
                     hpx::parallel::execution::post(os.exec_,
-                        [receiver = HPX_MOVE(os.receiver_)]() mutable {
+                        [&os]() mutable {
                             hpx::execution::experimental::set_value(
-                                HPX_MOVE(receiver));
+                                HPX_MOVE(os.receiver_));
                         });
                 },
                 [&](std::exception_ptr ep) {
@@ -67,9 +60,11 @@ namespace hpx::execution::experimental {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Executor>
+    HPX_CXX_CORE_EXPORT template <typename Executor>
     struct executor_sender
     {
+        using sender_concept = hpx::execution::experimental::sender_t;
+
         HPX_NO_UNIQUE_ADDRESS std::decay_t<Executor> exec_;
 
         using completion_signatures =
@@ -106,7 +101,7 @@ namespace hpx::execution::experimental {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Executor>
+    HPX_CXX_CORE_EXPORT template <typename Executor>
     struct executor_scheduler
     {
         using executor_type = std::decay_t<Executor>;

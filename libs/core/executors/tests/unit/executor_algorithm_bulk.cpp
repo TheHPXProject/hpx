@@ -19,8 +19,7 @@ namespace ex = hpx::execution::experimental;
 void test_sequential_bulk()
 {
     hpx::execution::sequenced_executor exec;
-    auto sched =
-        ex::executor_scheduler<hpx::execution::sequenced_executor>{exec};
+    auto sched = ex::get_scheduler(exec);
 
     std::atomic<int> call_count{0};
 
@@ -38,8 +37,7 @@ void test_sequential_bulk()
 void test_parallel_bulk()
 {
     hpx::execution::parallel_executor exec;
-    auto sched =
-        ex::executor_scheduler<hpx::execution::parallel_executor>{exec};
+    auto sched = ex::get_scheduler(exec);
 
     std::atomic<int> call_count{0};
 
@@ -56,8 +54,7 @@ void test_parallel_bulk()
 void test_parallel_bulk_with_value()
 {
     hpx::execution::parallel_executor exec;
-    auto sched =
-        ex::executor_scheduler<hpx::execution::parallel_executor>{exec};
+    auto sched = ex::get_scheduler(exec);
 
     std::atomic<int> call_count{0};
 
