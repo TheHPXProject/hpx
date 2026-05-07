@@ -21,6 +21,8 @@
 
 int test_main(int argc, char* argv[])
 {
+    (void) argc;
+    (void) argv;
     // 1. Verify parallel algorithms are reachable via hpx/local.hpp
     std::vector<int> v(100);
     std::iota(v.begin(), v.end(), 1);
