@@ -12,13 +12,15 @@ set(futures_headers
     hpx/futures/detail/future_transforms.hpp
     hpx/futures/future.hpp
     hpx/futures/future_fwd.hpp
-    hpx/futures/futures_factory.hpp
     hpx/futures/future_or_value.hpp
+    hpx/futures/future_sender.hpp
+    hpx/futures/futures_factory.hpp
     hpx/futures/macros.hpp
     hpx/futures/monadic_operations.hpp
     hpx/futures/packaged_continuation.hpp
     hpx/futures/packaged_task.hpp
     hpx/futures/promise.hpp
+    hpx/futures/sender_future.hpp
     hpx/futures/traits/acquire_future.hpp
     hpx/futures/traits/acquire_shared_state.hpp
     hpx/futures/traits/detail/future_await_traits.hpp
