@@ -32,8 +32,7 @@ namespace hpx::execution::experimental {
             typename F>
         struct executor_bulk_receiver
         {
-            using receiver_concept =
-                hpx::execution::experimental::receiver_t;
+            using receiver_concept = hpx::execution::experimental::receiver_t;
 
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Executor> exec_;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver_;

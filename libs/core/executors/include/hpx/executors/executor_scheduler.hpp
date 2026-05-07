@@ -9,10 +9,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 
 #include <exception>
 #include <type_traits>
@@ -46,11 +46,10 @@ namespace hpx::execution::experimental {
         {
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    hpx::parallel::execution::post(os.exec_,
-                        [&os]() mutable {
-                            hpx::execution::experimental::set_value(
-                                HPX_MOVE(os.receiver_));
-                        });
+                    hpx::parallel::execution::post(os.exec_, [&os]() mutable {
+                        hpx::execution::experimental::set_value(
+                            HPX_MOVE(os.receiver_));
+                    });
                 },
                 [&](std::exception_ptr ep) {
                     hpx::execution::experimental::set_error(

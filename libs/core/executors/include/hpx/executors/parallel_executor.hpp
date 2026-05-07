@@ -10,12 +10,12 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/executors/detail/hierarchical_spawning.hpp>
 #include <hpx/executors/detail/index_queue_spawning.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
 #include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/executor_scheduler_bulk.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
@@ -1012,7 +1012,7 @@ namespace hpx::execution {
             }
         }
 
-/// \endcond
+        /// \endcond
 
     public:
         /// \cond NOINTERNAL
