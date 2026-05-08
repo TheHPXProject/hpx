@@ -8,9 +8,7 @@
 
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_STDEXEC)
 #include <hpx/execution_base/stdexec_forward.hpp>
-#endif
 
 #include <hpx/execution/algorithms/bulk.hpp>
 #include <hpx/execution_base/completion_scheduler.hpp>
@@ -82,7 +80,6 @@ namespace hpx::execution::experimental {
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape_;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f_;
 
-#if defined(HPX_HAVE_STDEXEC)
             using sender_concept = hpx::execution::experimental::sender_t;
 
             template <typename Env>
@@ -142,48 +139,6 @@ namespace hpx::execution::experimental {
             {
                 return env{s.sender_, s.exec_};
             }
-#else
-            template <typename Env>
-            struct generate_completion_signatures
-            {
-                template <template <typename...> typename Tuple,
-                    template <typename...> typename Variant>
-                using value_types =
-                    value_types_of_t<Sender, Env, Tuple, Variant>;
-
-                template <template <typename...> typename Variant>
-                using error_types = hpx::util::detail::unique_concat_t<
-                    error_types_of_t<Sender, Env, Variant>,
-                    Variant<std::exception_ptr>>;
-
-                static constexpr bool sends_stopped =
-                    sends_stopped_of_v<Sender, Env>;
-            };
-
-            template <typename Env>
-            friend auto tag_invoke(
-                hpx::execution::experimental::get_completion_signatures_t,
-                executor_bulk_sender const&, Env)
-                -> generate_completion_signatures<Env>;
-
-            template <typename CPO>
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_completion_scheduler_t<CPO>
-                    tag,
-                executor_bulk_sender const& s)
-            {
-                return tag(s.sender_);
-            }
-
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_completion_scheduler_t<
-                    hpx::execution::experimental::set_value_t>,
-                executor_bulk_sender const& s)
-            {
-                return hpx::execution::experimental::executor_scheduler<
-                    Executor>{s.exec_};
-            }
-#endif
 
             template <typename Receiver>
             friend auto tag_invoke(connect_t,

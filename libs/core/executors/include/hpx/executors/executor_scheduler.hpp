@@ -14,6 +14,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 
+#include <concepts>
 #include <exception>
 #include <type_traits>
 #include <utility>
@@ -109,9 +110,8 @@ namespace hpx::execution::experimental {
 
         constexpr executor_scheduler() = default;
 
-        template <typename Exec,
-            typename = std::enable_if_t<
-                !std::is_same_v<std::decay_t<Exec>, executor_scheduler>>>
+        template <typename Exec>
+            requires(!std::is_same_v<std::decay_t<Exec>, executor_scheduler>)
         explicit executor_scheduler(Exec&& exec)
           : exec_(HPX_FORWARD(Exec, exec))
         {

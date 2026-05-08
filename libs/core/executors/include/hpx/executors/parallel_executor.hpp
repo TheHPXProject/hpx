@@ -13,8 +13,6 @@
 #include <hpx/executors/detail/hierarchical_spawning.hpp>
 #include <hpx/executors/detail/index_queue_spawning.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
-#include <hpx/executors/executor_scheduler.hpp>
-#include <hpx/executors/executor_scheduler_bulk.hpp>
 #include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/async_base.hpp>
@@ -675,13 +673,13 @@ namespace hpx::execution {
             }
         }
 
-        friend hpx::execution::experimental::executor_scheduler<
-            parallel_policy_executor>
-        tag_invoke(hpx::execution::experimental::get_scheduler_t,
-            parallel_policy_executor const& exec)
+        template <typename Exec = parallel_policy_executor>
+            requires std::is_same_v<Exec, parallel_policy_executor>
+        friend hpx::execution::experimental::executor_scheduler<Exec>
+        tag_invoke(
+            hpx::execution::experimental::get_scheduler_t, Exec const& exec)
         {
-            return hpx::execution::experimental::executor_scheduler<
-                parallel_policy_executor>(exec);
+            return hpx::execution::experimental::executor_scheduler<Exec>(exec);
         }
         /// \endcond
 
