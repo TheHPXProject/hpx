@@ -11,6 +11,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concurrency.hpp>
@@ -1240,6 +1241,14 @@ namespace hpx::execution::experimental {
                 HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        template <typename F, typename... Ts>
+        friend void tag_invoke(hpx::parallel::execution::post_t,
+            fork_join_executor const& exec, F&& f, Ts&&... ts)
+        {
+            exec.shared_data_->async_invoke(
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
         template <typename F, typename... Fs>
             requires(std::invocable<F> && (std::invocable<Fs> && ...))
         friend decltype(auto) tag_invoke(
@@ -1361,6 +1370,18 @@ namespace hpx::execution::experimental {
             std::size_t = 0) noexcept
         {
             return exec.shared_data_->num_threads_;
+        }
+
+        // P2300 get_scheduler bridge: wraps this executor in an
+        // executor_scheduler so it can participate in sender/receiver
+        // pipelines.
+        template <typename Exec = fork_join_executor>
+            requires std::is_same_v<Exec, fork_join_executor>
+        friend hpx::execution::experimental::executor_scheduler<Exec>
+        tag_invoke(
+            hpx::execution::experimental::get_scheduler_t, Exec const& exec) noexcept
+        {
+            return hpx::execution::experimental::executor_scheduler<Exec>(exec);
         }
 
         /// \cond NOINTERNAL

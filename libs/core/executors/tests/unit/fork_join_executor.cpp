@@ -8,6 +8,7 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
 #include <hpx/execution.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -512,9 +513,37 @@ void test_fork_join_static_large_range()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+void test_get_scheduler()
+{
+    namespace ex = hpx::execution::experimental;
+    namespace tt = hpx::this_thread::experimental;
+
+    std::cerr << "test_get_scheduler\n";
+
+    // Test 1: get_scheduler returns a valid scheduler
+    fork_join_executor exec{};
+    auto sched = ex::get_scheduler(exec);
+
+    // Test 2: scheduler can be used to schedule work via then + sync_wait
+    auto result = hpx::get<0>(
+        *(tt::sync_wait(ex::then(ex::schedule(sched), []() { return 42; }))));
+    HPX_TEST_EQ(result, 42);
+
+    // Test 3: scheduled work runs on an HPX worker thread
+    hpx::thread::id scheduled_thread_id{};
+    tt::sync_wait(ex::then(ex::schedule(sched),
+        [&]() { scheduled_thread_id = hpx::this_thread::get_id(); }));
+    HPX_TEST(scheduled_thread_id != hpx::thread::id{});
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     static_check_executor();
+
+    // P2300 get_scheduler bridge test
+    test_get_scheduler();
 
     // Call regression test for #6922
     test_fork_join_static_large_range();
