@@ -12,15 +12,15 @@
 // Emit a compile-time diagnostic when the user includes hpx/hpx_main.hpp
 // while building a statically-linked HPX application on Linux or macOS.
 //
-// Root cause: the `--wrap=main` linker flag, which redirects user `main` to
+// Root cause: the '--wrap=main' linker flag, which redirects user 'main' to
 // the HPX runtime entry-point, is only applied automatically when the user
-// links against `HPX::wrap_main`.  Without it, the resulting binary will call
-// the raw `main` symbol, bypassing HPX initialisation and producing a
+// links against 'HPX::wrap_main'. Without it, the resulting binary will call
+// the raw 'main' symbol, bypassing HPX initialisation and producing a
 // hard-to-diagnose runtime crash or silent hang.
 //
 // Actionable remedies (pick one):
-//   CMake   — add `target_link_libraries(<target> PRIVATE HPX::wrap_main)`
-//   Manual  — pass `-Wl,--wrap=main` to the linker explicitly
+//   CMake  -- add target_link_libraries(<target> PRIVATE HPX::wrap_main)
+//   Manual -- pass -Wl,--wrap=main to the linker explicitly
 //
 // This check is intentionally limited to Linux/macOS static builds because:
 //   * On Windows the wrap mechanism is not used (MSVC uses a different ABI).
@@ -34,9 +34,9 @@
     !defined(HPX_HAVE_WRAP_MAIN_CONFIGURED)
 #warning                                                                       \
     "HPX static-link wrap-main check: you included hpx/hpx_main.hpp but the " \
-    "--wrap=main linker flag has not been applied.  Add "                      \
+    "--wrap=main linker flag has not been applied. Add "                       \
     "target_link_libraries(<target> PRIVATE HPX::wrap_main) to your "         \
-    "CMakeLists.txt, or pass -Wl,--wrap=main to the linker manually.  "       \
+    "CMakeLists.txt, or pass -Wl,--wrap=main to the linker manually. "        \
     "Without this flag the HPX runtime will not be initialised correctly."
 #endif
 #endif
