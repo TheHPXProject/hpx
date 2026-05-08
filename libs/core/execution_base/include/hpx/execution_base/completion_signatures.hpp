@@ -179,7 +179,7 @@ namespace hpx::execution::experimental {
     //
     namespace detail {
         template <typename ValueTypes>
-        struct HPX_CXX_CORE_EXPORT single_sender_value;
+        struct single_sender_value;
 
         template <>
         struct single_sender_value<hpx::variant<>>
