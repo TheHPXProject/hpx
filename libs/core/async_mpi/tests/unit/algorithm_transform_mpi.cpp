@@ -21,7 +21,6 @@
 
 namespace ex = hpx::execution::experimental;
 namespace mpi = hpx::mpi::experimental;
-namespace tt = hpx::this_thread::experimental;
 
 // This overload is only used to check dispatching. It is not a useful
 // implementation.
@@ -52,6 +51,11 @@ int hpx_main()
             // Success path
             {
                 // MPI function pointer
+                // Use ex::make_future instead of tt::sync_wait: stdexec's
+                // sync_wait drives its own run_loop and never yields back to
+                // the HPX thread pool, so the MPI background poller can never
+                // fire the completion callback. make_future converts the sender
+                // to an hpx::future whose .get() yields the calling HPX thread.
                 int data = 0, count = 1;
                 if (rank == 0)
                 {
@@ -59,8 +63,7 @@ int hpx_main()
                 }
                 auto s = mpi::transform_mpi(
                     ex::just(&data, count, datatype, 0, comm), MPI_Ibcast);
-                auto mpi_result = tt::sync_wait(HPX_MOVE(s));
-                auto result = hpx::get<0>(*mpi_result);
+                auto result = ex::make_future(HPX_MOVE(s)).get();
                 if (rank != 0)
                 {
                     HPX_TEST_EQ(data, 42);
@@ -85,8 +88,7 @@ int hpx_main()
                         return MPI_Ibcast(
                             data, count, datatype, i, comm, request);
                     });
-                auto mpi_result = tt::sync_wait(HPX_MOVE(s));
-                auto result = hpx::get<0>(*mpi_result);
+                auto result = ex::make_future(HPX_MOVE(s)).get();
                 if (rank != 0)
                 {
                     HPX_TEST_EQ(data, 42);
@@ -110,7 +112,7 @@ int hpx_main()
                         MPI_Comm comm, MPI_Request* request) {
                         MPI_Ibcast(data, count, datatype, i, comm, request);
                     });
-                tt::sync_wait(HPX_MOVE(s));
+                ex::make_future(HPX_MOVE(s)).get();
                 if (rank != 0)
                 {
                     HPX_TEST_EQ(data, 42);
@@ -126,7 +128,7 @@ int hpx_main()
                     c.x = 3;
                 }
                 auto s = mpi::transform_mpi(c);
-                tt::sync_wait(s);
+                ex::make_future(HPX_MOVE(s)).get();
                 if (rank == 0)
                 {
                     HPX_TEST_EQ(c.x, 3);
@@ -142,9 +144,10 @@ int hpx_main()
                 {
                     data = 42;
                 }
-                auto result = hpx::get<0>(
-                    *tt::sync_wait(ex::just(&data, count, datatype, 0, comm) |
-                        mpi::transform_mpi(MPI_Ibcast)));
+                auto result =
+                    ex::make_future(ex::just(&data, count, datatype, 0, comm) |
+                        mpi::transform_mpi(MPI_Ibcast))
+                        .get();
                 if (rank != 0)
                 {
                     HPX_TEST_EQ(data, 42);
@@ -161,9 +164,11 @@ int hpx_main()
                 bool exception_thrown = false;
                 try
                 {
-                    tt::sync_wait(mpi::transform_mpi(
-                        error_sender<int*, int, MPI_Datatype, int, MPI_Comm>{},
-                        MPI_Ibcast));
+                    ex::make_future(
+                        mpi::transform_mpi(error_sender<int*, int, MPI_Datatype,
+                                               int, MPI_Comm>{},
+                            MPI_Ibcast))
+                        .get();
                     HPX_TEST(false);
                 }
                 catch (std::runtime_error const& e)
@@ -187,7 +192,7 @@ int hpx_main()
                     });
                 try
                 {
-                    tt::sync_wait(HPX_MOVE(s));
+                    ex::make_future(HPX_MOVE(s)).get();
                 }
                 catch (std::runtime_error const& e)
                 {
@@ -207,8 +212,10 @@ int hpx_main()
                 bool exception_thrown = false;
                 try
                 {
-                    tt::sync_wait(mpi::transform_mpi(
-                        ex::just(data, count, datatype, -1, comm), MPI_Ibcast));
+                    ex::make_future(mpi::transform_mpi(ex::just(data, count,
+                                                           datatype, -1, comm),
+                                        MPI_Ibcast))
+                        .get();
                     HPX_TEST(false);
                 }
                 catch (std::runtime_error const& e)
@@ -233,8 +240,10 @@ int hpx_main()
                 bool exception_thrown = false;
                 try
                 {
-                    tt::sync_wait(mpi::transform_mpi(
-                        ex::just(data, count, datatype, -1, comm), MPI_Ibcast));
+                    ex::make_future(mpi::transform_mpi(ex::just(data, count,
+                                                           datatype, -1, comm),
+                                        MPI_Ibcast))
+                        .get();
                     HPX_TEST(false);
                 }
                 catch (std::runtime_error const&)
@@ -252,10 +261,6 @@ int hpx_main()
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[])
 {
-    // Note: Previously disabled under stdexec because sync_wait would hang by
-    // consuming the calling thread.  This is no longer the case with the modern
-    // stdexec run_loop-based sync_wait implementation, so the guard has been
-    // removed.
     MPI_Init(&argc, &argv);
 
     auto result = hpx::local::init(hpx_main, argc, argv);
