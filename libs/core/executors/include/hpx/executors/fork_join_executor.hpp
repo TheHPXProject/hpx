@@ -1245,7 +1245,7 @@ namespace hpx::execution::experimental {
         friend void tag_invoke(hpx::parallel::execution::post_t,
             fork_join_executor const& exec, F&& f, Ts&&... ts)
         {
-            exec.shared_data_->async_invoke(
+            exec.shared_data_->sync_invoke(
                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
@@ -1401,6 +1401,7 @@ namespace hpx::execution::experimental {
         std::ostream& os, fork_join_executor::loop_schedule schedule);
 
     /// \cond NOINTERNAL
+
     template <>
     struct is_bulk_one_way_executor<fork_join_executor> : std::true_type
     {
