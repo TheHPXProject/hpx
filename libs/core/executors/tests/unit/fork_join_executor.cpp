@@ -8,9 +8,9 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/chrono.hpp>
 #include <hpx/execution.hpp>
-#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 

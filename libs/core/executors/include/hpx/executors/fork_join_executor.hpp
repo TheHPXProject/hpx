@@ -1372,8 +1372,6 @@ namespace hpx::execution::experimental {
             return exec.shared_data_->num_threads_;
         }
 
-
-
         /// \cond NOINTERNAL
         enum class init_mode : std::uint8_t
         {
@@ -1388,8 +1386,7 @@ namespace hpx::execution::experimental {
     // executor_scheduler<fork_join_executor> is fully defined at point of use.
     // This allows fork_join_executor to participate in P2300 sender/receiver
     // pipelines via schedule(get_scheduler(exec)).
-    inline auto tag_invoke(
-        hpx::execution::experimental::get_scheduler_t,
+    inline auto tag_invoke(hpx::execution::experimental::get_scheduler_t,
         fork_join_executor const& exec) noexcept
         -> hpx::execution::experimental::executor_scheduler<fork_join_executor>
     {
@@ -1401,6 +1398,12 @@ namespace hpx::execution::experimental {
         std::ostream& os, fork_join_executor::loop_schedule schedule);
 
     /// \cond NOINTERNAL
+
+    template <>
+    struct is_never_blocking_one_way_executor<fork_join_executor>
+      : std::true_type
+    {
+    };
 
     template <>
     struct is_bulk_one_way_executor<fork_join_executor> : std::true_type
