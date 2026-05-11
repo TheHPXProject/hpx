@@ -4,10 +4,8 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-# Changed from 'local_header' to match your new filename
 set(tests static_linker)
 
-# Changed the prefix here to match the new 'static_linker' name in the tests list
 set(static_linker_FLAGS NOLIBS DEPENDENCIES hpx_core)
 
 foreach(test ${tests})
@@ -25,4 +23,5 @@ foreach(test ${tests})
   )
 
   add_hpx_unit_test("modules.include_local" ${test} ${${test}_PARAMETERS})
+
 endforeach()
