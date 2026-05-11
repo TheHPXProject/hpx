@@ -16,6 +16,6 @@
 
 int main()
 {
-    hpx::execution::parallel_policy p;
+    [[maybe_unused]] hpx::execution::parallel_policy p;
     return 0;
 }
