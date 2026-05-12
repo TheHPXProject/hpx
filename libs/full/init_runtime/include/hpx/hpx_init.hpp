@@ -17,9 +17,7 @@
 #include <hpx/hpx_main_winsocket.hpp>
 #include <hpx/hpx_suspend.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <hpx/runtime_local/detail/runtime_local_fwd.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -192,8 +190,7 @@ namespace hpx {
 #if !defined(HPX_HAVE_STATIC_LINKING)
     inline
 #endif
-        int
-        init(init_params const& params = init_params());
+        int init(init_params const& params = init_params());
 }    // namespace hpx
 
 #if !defined(DOXYGEN)
