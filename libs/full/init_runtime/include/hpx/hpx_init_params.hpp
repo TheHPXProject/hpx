@@ -15,9 +15,9 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/resource_partitioner_fwd.hpp>
+#include <hpx/modules/runtime_configuration_fwd.hpp>
+#include <hpx/modules/runtime_local_fwd.hpp>
 
 #include <cstring>
 #include <functional>

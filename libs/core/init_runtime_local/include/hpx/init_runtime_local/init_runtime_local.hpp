@@ -18,8 +18,8 @@
 #include <hpx/modules/prefix.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/resource_partitioner_fwd.hpp>
+#include <hpx/modules/runtime_local_fwd.hpp>
 
 #include <csignal>
 #include <cstddef>
