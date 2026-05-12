@@ -100,6 +100,16 @@ namespace hpx {
 
     namespace local {
 
+        namespace detail {
+            void dump_config::operator()() const
+            {
+                std::cout << "Configuration after runtime start:\n";
+                std::cout << "----------------------------------\n";
+                rt_.get().get_config().dump(0, std::cout);
+                std::cout << "----------------------------------\n";
+            }
+        }    // namespace detail
+
         // Print stack trace and exit.
 #if defined(HPX_WINDOWS)
         extern BOOL WINAPI termination_handler(DWORD ctrl_type);

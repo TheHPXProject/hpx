@@ -18,8 +18,11 @@
 #include <hpx/modules/prefix.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <hpx/resource_partitioner/partitioner_fwd.hpp>
+#include <hpx/runtime_configuration/runtime_mode.hpp>
+#include <hpx/runtime_local/detail/runtime_local_fwd.hpp>
+#include <hpx/runtime_local/shutdown_function.hpp>
+#include <hpx/runtime_local/startup_function.hpp>
 
 #include <csignal>
 #include <cstddef>
@@ -44,6 +47,10 @@ namespace hpx {
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT int init_helper(
             hpx::program_options::variables_map&,
             hpx::function<int(int, char**)> const&);
+
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void on_exit() noexcept;
+        HPX_CXX_CORE_EXPORT [[noreturn]] HPX_CORE_EXPORT void on_abort(
+            int signal) noexcept;
     }    // namespace detail
 
     namespace local {
@@ -57,13 +64,7 @@ namespace hpx {
                 {
                 }
 
-                void operator()() const
-                {
-                    std::cout << "Configuration after runtime start:\n";
-                    std::cout << "----------------------------------\n";
-                    rt_.get().get_config().dump(0, std::cout);
-                    std::cout << "----------------------------------\n";
-                }
+                HPX_CORE_EXPORT void operator()() const;
 
                 std::reference_wrapper<hpx::runtime const> rt_;
             };
