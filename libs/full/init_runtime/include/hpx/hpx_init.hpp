@@ -17,7 +17,7 @@
 #include <hpx/hpx_main_winsocket.hpp>
 #include <hpx/hpx_suspend.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/runtime_local/detail/runtime_local_fwd.hpp>
+#include <hpx/modules/runtime_local.hpp>
 
 #include <cstddef>
 #include <functional>

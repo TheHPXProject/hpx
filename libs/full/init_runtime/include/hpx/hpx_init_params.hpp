@@ -12,14 +12,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/init_runtime_local/init_runtime_local.hpp>
-#include <hpx/init_runtime_local/macros.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/resource_partitioner/partitioner_fwd.hpp>
-#include <hpx/runtime_configuration/runtime_configuration_fwd.hpp>
-#include <hpx/runtime_configuration/runtime_mode.hpp>
-#include <hpx/runtime_local/detail/runtime_local_fwd.hpp>
+#include <hpx/modules/resource_partitioner.hpp>
+#include <hpx/modules/runtime_configuration.hpp>
+#include <hpx/modules/runtime_local.hpp>
 
 #include <cstring>
 #include <functional>
