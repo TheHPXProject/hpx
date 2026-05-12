@@ -1,5 +1,5 @@
 //  Copyright (c) 2020 ETH Zurich
-//  Copyright (c) 2022-2023 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,8 +12,9 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/init_runtime_local/init_runtime_local.hpp>
+#include <hpx/init_runtime_local/macros.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/resource_partitioner/partitioner_fwd.hpp>
 #include <hpx/runtime_configuration/runtime_configuration_fwd.hpp>
