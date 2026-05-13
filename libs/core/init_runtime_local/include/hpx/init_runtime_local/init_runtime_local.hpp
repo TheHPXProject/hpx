@@ -18,17 +18,33 @@
 #include <hpx/modules/prefix.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner_fwd.hpp>
-#include <hpx/modules/runtime_local_fwd.hpp>
 
 #include <csignal>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <iostream>
 #include <string>
 #include <utility>
 #include <vector>
+
+// Forward declarations — replaces sub-module includes to satisfy C++20
+// module boundary requirements. Full definitions are available in the
+// corresponding .cpp files via their umbrella module includes.
+namespace hpx {
+
+    class runtime;
+
+    using startup_function_type = hpx::move_only_function<void()>;
+    using shutdown_function_type = hpx::move_only_function<void()>;
+
+    namespace resource {
+
+        enum class partitioner_mode : std::int8_t;
+        class partitioner;
+    }    // namespace resource
+}    // namespace hpx
 
 #if defined(__FreeBSD__)
 HPX_CXX_CORE_EXPORT extern HPX_CORE_EXPORT char** freebsd_environ;
@@ -89,6 +105,7 @@ namespace hpx {
         HPX_CXX_CORE_EXPORT struct init_params
         {
             init_params()
+              : rp_mode(static_cast<hpx::resource::partitioner_mode>(0))
             {
                 std::strncpy(detail::app_name, HPX_APPLICATION_STRING,
                     sizeof(detail::app_name) - 1);
@@ -100,8 +117,7 @@ namespace hpx {
             std::vector<std::string> cfg;
             mutable startup_function_type startup;
             mutable shutdown_function_type shutdown;
-            hpx::resource::partitioner_mode rp_mode =
-                ::hpx::resource::partitioner_mode::default_;
+            hpx::resource::partitioner_mode rp_mode;
             hpx::local::detail::rp_callback_type rp_callback;
         };
 
