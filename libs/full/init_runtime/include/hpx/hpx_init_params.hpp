@@ -15,19 +15,13 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
+#include <hpx/modules/resource_partitioner_mode.hpp>
+#include <hpx/modules/runtime_mode.hpp>
 
-#include <cstdint>
 #include <cstring>
 #include <functional>
 #include <string>
 #include <vector>
-
-// Forward declaration — replaces sub-module includes to satisfy C++20
-// module boundary requirements.
-namespace hpx {
-
-    enum class runtime_mode : std::int8_t;
-}    // namespace hpx
 
 #if !defined(DOXYGEN)
 ///////////////////////////////////////////////////////////////////////////////
@@ -106,8 +100,6 @@ namespace hpx {
     struct init_params
     {
         init_params()
-          : mode(static_cast<hpx::runtime_mode>(4))
-          , rp_mode(static_cast<hpx::resource::partitioner_mode>(0))
         {
             std::strncpy(hpx::local::detail::app_name, HPX_APPLICATION_STRING,
                 sizeof(hpx::local::detail::app_name) - 1);
@@ -120,8 +112,9 @@ namespace hpx {
         std::vector<std::string> cfg;
         std::function<void()> startup;
         std::function<void()> shutdown;
-        hpx::runtime_mode mode;
-        hpx::resource::partitioner_mode rp_mode;
+        hpx::runtime_mode mode = hpx::runtime_mode::default_;
+        hpx::resource::partitioner_mode rp_mode =
+            hpx::resource::partitioner_mode::default_;
         hpx::resource::rp_callback_type rp_callback;
     };
 }    // namespace hpx

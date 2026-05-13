@@ -18,6 +18,11 @@
 #include <hpx/hpx_suspend.hpp>
 #include <hpx/modules/program_options.hpp>
 
+namespace hpx {
+    class runtime;
+    using startup_function_type = hpx::move_only_function<void()>;
+    using shutdown_function_type = hpx::move_only_function<void()>;
+}
 #include <cstddef>
 #include <functional>
 

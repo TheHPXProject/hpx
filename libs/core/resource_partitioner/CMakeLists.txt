@@ -7,10 +7,12 @@
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(resource_partitioner_headers
+    hpx/modules/resource_partitioner_mode.hpp
     hpx/resource_partitioner/detail/create_partitioner.hpp
     hpx/resource_partitioner/detail/partitioner.hpp
     hpx/resource_partitioner/partitioner.hpp
     hpx/resource_partitioner/partitioner_fwd.hpp
+    hpx/resource_partitioner/partitioner_mode.hpp
 )
 
 # cmake-format: off
