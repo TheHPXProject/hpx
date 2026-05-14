@@ -748,7 +748,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<OutIter> &&
                 hpx::is_invocable_v<Pred,
                     hpx::traits::iter_value_t<InIter>,
-                    hpx::traits::iter_value_t<OutIter>
+                    hpx::traits::iter_value_t<InIter>
                 >
             )
         // clang-format on
@@ -775,7 +775,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2> &&
                 hpx::is_invocable_v<Pred,
                     hpx::traits::iter_value_t<FwdIter1>,
-                    hpx::traits::iter_value_t<FwdIter2>
+                    hpx::traits::iter_value_t<FwdIter1>
                 >
             )
         // clang-format on

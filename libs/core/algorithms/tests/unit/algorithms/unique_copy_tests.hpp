@@ -518,3 +518,172 @@ void test_unique_copy_bad_alloc()
     test_unique_copy_bad_alloc_async(seq(task), IteratorTag());
     test_unique_copy_bad_alloc_async(par(task), IteratorTag());
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// Verify that the predicate constraint in hpx::unique_copy is checked against
+// the INPUT iterator's value type (iter_value_t<InIter>), not the output
+// iterator's value type. This directly exercises the corrected requires clause.
+//
+// All calls use a predicate typed explicitly on int (the input element type),
+// confirming the CPO correctly dispatches with a strongly-typed binary predicate
+// across all execution policies.
+template <typename IteratorTag>
+void test_unique_copy_constraint()
+{
+    using namespace hpx::execution;
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    // Strongly-typed binary predicate on the input element type (int).
+    // Before the fix, the parallel overload's requires clause checked
+    // is_invocable_v<Pred, iter_value_t<FwdIter1>, iter_value_t<FwdIter2>>,
+    // which could silently mis-constrain when InIter and OutIter differ.
+    auto typed_pred = [](int const a, int const b) -> bool { return a == b; };
+
+    std::size_t const size = 10007;
+    std::vector<int> c(size), dest_res(size), dest_sol(size);
+    std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+
+    // --- seq policy ---
+    {
+        auto result = hpx::unique_copy(seq, iterator(std::begin(c)),
+            iterator(std::end(c)), iterator(std::begin(dest_res)), typed_pred);
+        auto solution = std::unique_copy(std::begin(c), std::end(c),
+            std::begin(dest_sol), [](int a, int b) { return a == b; });
+        HPX_TEST(test::equal(std::begin(dest_res), result.base(),
+            std::begin(dest_sol), solution));
+    }
+
+    // --- par policy ---
+    {
+        auto result = hpx::unique_copy(par, iterator(std::begin(c)),
+            iterator(std::end(c)), iterator(std::begin(dest_res)), typed_pred);
+        auto solution = std::unique_copy(std::begin(c), std::end(c),
+            std::begin(dest_sol), [](int a, int b) { return a == b; });
+        HPX_TEST(test::equal(std::begin(dest_res), result.base(),
+            std::begin(dest_sol), solution));
+    }
+
+    // --- par_unseq policy ---
+    {
+        auto result = hpx::unique_copy(par_unseq, iterator(std::begin(c)),
+            iterator(std::end(c)), iterator(std::begin(dest_res)), typed_pred);
+        auto solution = std::unique_copy(std::begin(c), std::end(c),
+            std::begin(dest_sol), [](int a, int b) { return a == b; });
+        HPX_TEST(test::equal(std::begin(dest_res), result.base(),
+            std::begin(dest_sol), solution));
+    }
+
+    // --- seq(task) async ---
+    {
+        auto f = hpx::unique_copy(seq(task), iterator(std::begin(c)),
+            iterator(std::end(c)), iterator(std::begin(dest_res)), typed_pred);
+        auto result = f.get();
+        auto solution = std::unique_copy(std::begin(c), std::end(c),
+            std::begin(dest_sol), [](int a, int b) { return a == b; });
+        HPX_TEST(test::equal(std::begin(dest_res), result.base(),
+            std::begin(dest_sol), solution));
+    }
+
+    // --- par(task) async ---
+    {
+        auto f = hpx::unique_copy(par(task), iterator(std::begin(c)),
+            iterator(std::end(c)), iterator(std::begin(dest_res)), typed_pred);
+        auto result = f.get();
+        auto solution = std::unique_copy(std::begin(c), std::end(c),
+            std::begin(dest_sol), [](int a, int b) { return a == b; });
+        HPX_TEST(test::equal(std::begin(dest_res), result.base(),
+            std::begin(dest_sol), solution));
+    }
+
+    // --- Edge case: empty range ---
+    // Ensures the constraint does not misfire on zero-length inputs.
+    {
+        std::vector<int> empty_src;
+        std::vector<int> empty_dst;
+        auto result = hpx::unique_copy(par, empty_src.begin(), empty_src.end(),
+            empty_dst.begin(), typed_pred);
+        HPX_TEST(result == empty_dst.begin());
+
+        result = hpx::unique_copy(seq, empty_src.begin(), empty_src.end(),
+            empty_dst.begin(), typed_pred);
+        HPX_TEST(result == empty_dst.begin());
+    }
+
+    // --- Edge case: single element ---
+    // Must copy the one element verbatim; no predicate calls occur.
+    {
+        std::vector<int> single_src = {42};
+        std::vector<int> single_dst(1, 0);
+
+        auto result = hpx::unique_copy(seq, single_src.begin(),
+            single_src.end(), single_dst.begin(), typed_pred);
+        HPX_TEST(result == single_dst.begin() + 1);
+        HPX_TEST(single_dst[0] == 42);
+
+        result = hpx::unique_copy(par, single_src.begin(), single_src.end(),
+            single_dst.begin(), typed_pred);
+        HPX_TEST(result == single_dst.begin() + 1);
+        HPX_TEST(single_dst[0] == 42);
+    }
+
+    // --- Edge case: all elements identical -> only one element in output ---
+    {
+        std::vector<int> all_same(100, 7);
+        std::vector<int> dst_res(100, 0), dst_sol(100, 0);
+
+        auto result = hpx::unique_copy(
+            par, all_same.begin(), all_same.end(), dst_res.begin(), typed_pred);
+        auto solution = std::unique_copy(all_same.begin(), all_same.end(),
+            dst_sol.begin(), [](int a, int b) { return a == b; });
+
+        HPX_TEST(result == dst_res.begin() + 1);
+        HPX_TEST(
+            test::equal(dst_res.begin(), result, dst_sol.begin(), solution));
+    }
+
+    // --- Edge case: no consecutive duplicates -> full copy ---
+    {
+        std::vector<int> no_dup = {1, 2, 3, 4, 5};
+        std::vector<int> dst_res(5, 0), dst_sol(5, 0);
+
+        auto result = hpx::unique_copy(
+            par, no_dup.begin(), no_dup.end(), dst_res.begin(), typed_pred);
+        auto solution = std::unique_copy(no_dup.begin(), no_dup.end(),
+            dst_sol.begin(), [](int a, int b) { return a == b; });
+
+        HPX_TEST(result == dst_res.begin() + 5);
+        HPX_TEST(
+            test::equal(dst_res.begin(), result, dst_sol.begin(), solution));
+    }
+
+    // --- Edge case: two elements, identical ---
+    {
+        std::vector<int> two_same = {9, 9};
+        std::vector<int> dst_res(2, 0), dst_sol(2, 0);
+
+        auto result = hpx::unique_copy(
+            par, two_same.begin(), two_same.end(), dst_res.begin(), typed_pred);
+        auto solution = std::unique_copy(two_same.begin(), two_same.end(),
+            dst_sol.begin(), [](int a, int b) { return a == b; });
+
+        HPX_TEST(result == dst_res.begin() + 1);
+        HPX_TEST(
+            test::equal(dst_res.begin(), result, dst_sol.begin(), solution));
+    }
+
+    // --- Edge case: two elements, distinct ---
+    {
+        std::vector<int> two_diff = {3, 5};
+        std::vector<int> dst_res(2, 0), dst_sol(2, 0);
+
+        auto result = hpx::unique_copy(
+            par, two_diff.begin(), two_diff.end(), dst_res.begin(), typed_pred);
+        auto solution = std::unique_copy(two_diff.begin(), two_diff.end(),
+            dst_sol.begin(), [](int a, int b) { return a == b; });
+
+        HPX_TEST(result == dst_res.begin() + 2);
+        HPX_TEST(
+            test::equal(dst_res.begin(), result, dst_sol.begin(), solution));
+    }
+}
