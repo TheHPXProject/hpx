@@ -6,6 +6,7 @@
 
 set(tests
     algorithm_as_sender
+    algorithm_as_sender_with_scheduler
     algorithm_bulk
     algorithm_continues_on
     algorithm_ensure_started
