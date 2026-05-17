@@ -82,23 +82,24 @@ namespace hpx::execution::experimental {
 
             using sender_concept = hpx::execution::experimental::sender_t;
 
-            template <typename Env>
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-            friend auto tag_invoke(
-                hpx::execution::experimental::get_completion_signatures_t,
-                executor_bulk_sender const&, Env const&) -> hpx::execution::
-                experimental::transform_completion_signatures<
-                    hpx::execution::experimental::completion_signatures_of_t<
-                        Sender, Env>,
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_error_t(
-                            std::exception_ptr)>>;
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic pop
-#endif
+            template <typename Self, typename Env>
+            static consteval auto get_completion_signatures() noexcept
+                -> decltype(hpx::execution::experimental::
+                        transform_completion_signatures(
+                            hpx::execution::experimental::
+                                completion_signatures_of_t<Sender, Env>{},
+                            hpx::execution::experimental::keep_completion<
+                                hpx::execution::experimental::set_value_t>{},
+                            hpx::execution::experimental::keep_completion<
+                                hpx::execution::experimental::set_error_t>{},
+                            hpx::execution::experimental::keep_completion<
+                                hpx::execution::experimental::set_stopped_t>{},
+                            hpx::execution::experimental::completion_signatures<
+                                hpx::execution::experimental::set_error_t(
+                                    std::exception_ptr)>{}))
+            {
+                return {};
+            }
 
             struct env
             {

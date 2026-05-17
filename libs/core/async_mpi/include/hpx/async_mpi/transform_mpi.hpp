@@ -182,7 +182,6 @@ namespace hpx::mpi::experimental {
             };
 
             // clang-format off
-<<<<<<< HEAD
             template <typename Self, typename Env>
             static consteval auto get_completion_signatures() noexcept
             ->  decltype(hpx::execution::experimental::transform_completion_signatures(
@@ -199,28 +198,6 @@ namespace hpx::mpi::experimental {
                     default_set_error_fn{},
                     hpx::execution::experimental::ignore_completion{});
             }
-=======
-            template <typename Env>
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-            friend auto tag_invoke(
-                hpx::execution::experimental::get_completion_signatures_t,
-                transform_mpi_sender const&, Env const&)
-            ->  hpx::execution::experimental::transform_completion_signatures<
-                    hpx::execution::experimental::completion_signatures_of_t<Sender, Env>,
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_error_t(std::exception_ptr)
-                    >,
-                    invoke_function_transformation,
-                    default_set_error,
-                    no_set_stopped_signature
-                >;
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic pop
-#endif
->>>>>>> 13e2e82d54 (Migrate from deprecated transform_completion_signatures_of to transform_completion_signatures)
             // clang-format on
 
             template <typename R>

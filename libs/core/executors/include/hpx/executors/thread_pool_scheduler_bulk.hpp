@@ -685,7 +685,6 @@ namespace hpx::execution::experimental::detail {
 
         using sender_concept = hpx::execution::experimental::sender_t;
 
-<<<<<<< HEAD
         template <typename Self, typename Env>
         static consteval auto get_completion_signatures() noexcept
             -> decltype(hpx::execution::experimental::
@@ -704,25 +703,6 @@ namespace hpx::execution::experimental::detail {
         {
             return {};
         }
-=======
-        template <typename Env>
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            thread_pool_bulk_sender const&, Env const&)
-            -> hpx::execution::experimental::transform_completion_signatures<
-                hpx::execution::experimental::completion_signatures_of_t<
-                    Sender, Env>,
-                hpx::execution::experimental::completion_signatures<
-                    hpx::execution::experimental::set_error_t(
-                        std::exception_ptr)>>;
-#if defined(HPX_CLANG_VERSION)
-#pragma clang diagnostic pop
-#endif
->>>>>>> 13e2e82d54 (Migrate from deprecated transform_completion_signatures_of to transform_completion_signatures)
 
         struct env
         {
