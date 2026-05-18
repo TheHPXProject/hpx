@@ -73,7 +73,8 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::set_error_t(std::exception_ptr)>;
 
         template <typename Self, typename... Env>
-        static consteval auto get_completion_signatures() noexcept -> completion_signatures
+        static consteval auto get_completion_signatures() noexcept
+            -> completion_signatures
         {
             return {};
         }
@@ -84,9 +85,9 @@ namespace hpx::execution::experimental {
             {
                 std::decay_t<Executor> const& exec_;
 
-                constexpr auto query(
-                    hpx::execution::experimental::get_completion_scheduler_t<
-                        hpx::execution::experimental::set_value_t>) const noexcept
+                constexpr auto
+                query(hpx::execution::experimental::get_completion_scheduler_t<
+                    hpx::execution::experimental::set_value_t>) const noexcept
                 {
                     return executor_scheduler<Executor>{exec_};
                 }
