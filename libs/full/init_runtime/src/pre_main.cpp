@@ -9,12 +9,11 @@
 
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
 
-#include <hpx/agas/addressing_service.hpp>
 #include <hpx/collectives/barrier.hpp>
 #include <hpx/collectives/channel_communicator.hpp>
 #include <hpx/collectives/create_communicator.hpp>
 #include <hpx/collectives/latch.hpp>
-#include <hpx/init_runtime/pre_main.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
@@ -30,6 +29,8 @@
 #include <hpx/runtime_distributed/applier.hpp>
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
 #include <hpx/runtime_distributed/runtime_support.hpp>
+
+#include <hpx/init_runtime/pre_main.hpp>
 
 #include <string>
 #include <vector>

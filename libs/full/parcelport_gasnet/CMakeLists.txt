@@ -35,7 +35,7 @@ endif()
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_gasnet
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_gasnet_sources}
   HEADERS ${parcelport_gasnet_headers}
   DEPENDENCIES hpx_core hpx_gasnet_base PkgConfig::GASNET

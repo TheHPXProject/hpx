@@ -14,12 +14,13 @@ namespace hpx {
 
     namespace agas {
 
-        struct HPX_EXPORT addressing_service;
+        HPX_CXX_EXPORT struct HPX_EXPORT addressing_service;
     }    // namespace agas
 
     namespace naming {
 
-        HPX_EXPORT agas::addressing_service& get_agas_client();
-        HPX_EXPORT agas::addressing_service* get_agas_client_ptr();
+        HPX_CXX_EXPORT HPX_EXPORT agas::addressing_service& get_agas_client();
+        HPX_CXX_EXPORT HPX_EXPORT agas::addressing_service*
+        get_agas_client_ptr();
     }    // namespace naming
 }    // namespace hpx

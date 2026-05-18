@@ -525,7 +525,7 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct const_loop_n_t final
-      : hpx::functional::detail::tag_fallback<loop_n_t<ExPolicy>>
+      : hpx::functional::detail::tag_fallback<const_loop_n_t<ExPolicy>>
     {
     private:
         template <typename Iter, typename F>

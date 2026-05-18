@@ -6,10 +6,11 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
 #include <hpx/runtime_components/console_error_sink.hpp>
 #include <hpx/runtime_components/server/console_error_sink.hpp>
 

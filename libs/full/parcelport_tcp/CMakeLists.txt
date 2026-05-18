@@ -26,7 +26,7 @@ set(parcelport_tcp_sources connection_handler_tcp.cpp locality.cpp
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_tcp
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_tcp_sources}
   HEADERS ${parcelport_tcp_headers}
   COMPAT_HEADERS ${parcelport_tcp_compat_headers}

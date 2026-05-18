@@ -9,10 +9,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas/agas_fwd.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
@@ -25,6 +25,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/runtime_components/components_fwd.hpp>
+
 #include <hpx/runtime_distributed/find_here.hpp>
 
 #include <atomic>

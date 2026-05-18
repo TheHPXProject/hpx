@@ -6,9 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-
-#include <hpx/agas/addressing_service.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
@@ -41,6 +40,8 @@
 #include <hpx/runtime_components/console_error_sink.hpp>
 #include <hpx/runtime_components/console_logging.hpp>
 #include <hpx/runtime_components/server/console_error_sink.hpp>
+#include <hpx/version.hpp>
+
 #include <hpx/runtime_distributed.hpp>
 #include <hpx/runtime_distributed/applier.hpp>
 #include <hpx/runtime_distributed/big_boot_barrier.hpp>
@@ -49,7 +50,6 @@
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
 #include <hpx/runtime_distributed/runtime_support.hpp>
 #include <hpx/runtime_distributed/server/runtime_support.hpp>
-#include <hpx/version.hpp>
 
 #include <atomic>
 #include <condition_variable>
