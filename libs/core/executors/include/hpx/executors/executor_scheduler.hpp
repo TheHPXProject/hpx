@@ -13,6 +13,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/execution_base/completion_signatures.hpp>
 
 #include <concepts>
 #include <exception>
@@ -122,7 +123,7 @@ namespace hpx::execution::experimental {
 
         template <typename Exec>
             requires(!std::is_same_v<std::decay_t<Exec>, executor_scheduler>)
-        explicit executor_scheduler(Exec&& exec)
+        constexpr explicit executor_scheduler(Exec&& exec)
           : exec_(HPX_FORWARD(Exec, exec))
         {
         }
@@ -137,7 +138,7 @@ namespace hpx::execution::experimental {
             return !(*this == rhs);
         }
 
-        executor_sender<Executor> schedule() const noexcept
+        constexpr executor_sender<Executor> schedule() const noexcept
         {
             return {exec_};
         }

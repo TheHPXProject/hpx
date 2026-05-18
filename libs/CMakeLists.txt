@@ -514,6 +514,12 @@ endif()
 
 if(TARGET STDEXEC::stdexec)
   target_link_libraries(hpx_core INTERFACE STDEXEC::stdexec)
+
+  # Resolve TBB runtime symbols transitively pulled in by stdexec
+  find_library(TBB_LIBRARY NAMES tbb)
+  if(TBB_LIBRARY)
+    target_link_libraries(hpx_core PUBLIC ${TBB_LIBRARY})
+  endif()
 endif()
 
 if(HPX_WITH_PARCELPORT_GASNET AND GASNET_LIBRARY_DIRS)

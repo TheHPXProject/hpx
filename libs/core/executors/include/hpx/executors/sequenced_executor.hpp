@@ -10,7 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
-#include <hpx/executors/executor_scheduler_fwd.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
@@ -237,13 +237,18 @@ namespace hpx::execution {
 #endif
         }
 
-        template <typename Exec = sequenced_executor>
-            requires std::is_same_v<Exec, sequenced_executor>
-        friend hpx::execution::experimental::executor_scheduler<Exec>
-        tag_invoke(
-            hpx::execution::experimental::get_scheduler_t, Exec const& exec)
+    public:
+        /// \cond NOINTERNAL
+        constexpr hpx::execution::experimental::executor_scheduler<sequenced_executor>
+        query(hpx::execution::experimental::get_scheduler_t) const noexcept
         {
-            return hpx::execution::experimental::executor_scheduler<Exec>(exec);
+            return hpx::execution::experimental::executor_scheduler<sequenced_executor>(*this);
+        }
+
+        constexpr hpx::execution::experimental::executor_sender<sequenced_executor>
+        schedule() const noexcept
+        {
+            return hpx::execution::experimental::executor_scheduler<sequenced_executor>(*this).schedule();
         }
 
     private:

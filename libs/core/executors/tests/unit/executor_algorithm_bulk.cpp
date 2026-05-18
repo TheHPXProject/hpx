@@ -19,11 +19,9 @@ namespace ex = hpx::execution::experimental;
 void test_sequential_bulk()
 {
     hpx::execution::sequenced_executor exec;
-    auto sched = ex::get_scheduler(exec);
-
     std::atomic<int> call_count{0};
 
-    auto snd = ex::schedule(sched) | ex::bulk(10, [&](int i) {
+    auto snd = ex::schedule(exec) | ex::bulk(10, [&](int i) {
         (void) i;
         ++call_count;
         // Should run sequentially, so it's safe
@@ -31,17 +29,16 @@ void test_sequential_bulk()
 
     hpx::this_thread::experimental::sync_wait(snd);
 
+
     HPX_TEST_EQ(call_count.load(), 10);
 }
 
 void test_parallel_bulk()
 {
     hpx::execution::parallel_executor exec;
-    auto sched = ex::get_scheduler(exec);
-
     std::atomic<int> call_count{0};
 
-    auto snd = ex::schedule(sched) | ex::bulk(1000, [&](int i) {
+    auto snd = ex::schedule(exec) | ex::bulk(1000, [&](int i) {
         (void) i;
         ++call_count;
     });
@@ -54,11 +51,9 @@ void test_parallel_bulk()
 void test_parallel_bulk_with_value()
 {
     hpx::execution::parallel_executor exec;
-    auto sched = ex::get_scheduler(exec);
-
     std::atomic<int> call_count{0};
 
-    auto snd = ex::schedule(sched) | ex::then([]() { return 42; }) |
+    auto snd = ex::schedule(exec) | ex::then([]() { return 42; }) |
         ex::bulk(100, [&](int i, int val) {
             (void) i;
             HPX_TEST_EQ(val, 42);

@@ -114,31 +114,26 @@ namespace hpx::execution::experimental {
                         hpx::execution::experimental::detail::
                             has_completion_scheduler_v<CPO,
                                 std::decay_t<Sender>>)
-                friend constexpr auto tag_invoke(
+                constexpr auto query(
                     hpx::execution::experimental::get_completion_scheduler_t<
-                        CPO>
-                        tag,
-                    env const& e) noexcept
+                        CPO> tag) const noexcept
                 {
                     return tag(
-                        hpx::execution::experimental::get_env(e.pred_snd));
+                        hpx::execution::experimental::get_env(pred_snd));
                 }
 
-                friend constexpr auto tag_invoke(
+                constexpr auto query(
                     hpx::execution::experimental::get_completion_scheduler_t<
-                        hpx::execution::experimental::set_value_t>,
-                    env const& e) noexcept
+                        hpx::execution::experimental::set_value_t>) const noexcept
                 {
                     return hpx::execution::experimental::executor_scheduler<
-                        Executor>{e.exec};
+                        Executor>{exec};
                 }
             };
 
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_env_t,
-                executor_bulk_sender const& s) noexcept
+            constexpr auto get_env() const noexcept
             {
-                return env{s.sender_, s.exec_};
+                return env{sender_, exec_};
             }
 
             template <typename Receiver>
