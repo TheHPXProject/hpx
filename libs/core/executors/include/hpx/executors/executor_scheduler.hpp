@@ -9,7 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/executors/fwd/executor_scheduler_fwd.hpp>
+#include <hpx/executors/executor_scheduler_fwd.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -43,18 +43,18 @@ namespace hpx::execution::experimental {
 
         ~executor_operation_state() = default;
 
-        friend void tag_invoke(start_t, executor_operation_state& os) noexcept
+        void start() & noexcept
         {
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    hpx::parallel::execution::post(os.exec_, [&os]() mutable {
+                    hpx::parallel::execution::post(exec_, [&]() mutable {
                         hpx::execution::experimental::set_value(
-                            HPX_MOVE(os.receiver_));
+                            HPX_MOVE(receiver_));
                     });
                 },
                 [&](std::exception_ptr ep) {
                     hpx::execution::experimental::set_error(
-                        HPX_MOVE(os.receiver_), HPX_MOVE(ep));
+                        HPX_MOVE(receiver_), HPX_MOVE(ep));
                 });
         }
     };
@@ -72,31 +72,40 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::set_value_t(),
                 hpx::execution::experimental::set_error_t(std::exception_ptr)>;
 
-        template <typename Env>
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            executor_sender const&, Env) noexcept -> completion_signatures;
-
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_completion_scheduler_t<
-                hpx::execution::experimental::set_value_t>,
-            executor_sender const& s) noexcept
+        template <typename Self, typename... Env>
+        static consteval auto get_completion_signatures() noexcept -> completion_signatures
         {
-            return executor_scheduler<Executor>{s.exec_};
+            return {};
+        }
+
+        constexpr auto get_env() const noexcept
+        {
+            struct env
+            {
+                std::decay_t<Executor> const& exec_;
+
+                constexpr auto query(
+                    hpx::execution::experimental::get_completion_scheduler_t<
+                        hpx::execution::experimental::set_value_t>) const noexcept
+                {
+                    return executor_scheduler<Executor>{exec_};
+                }
+            };
+            return env{exec_};
         }
 
         template <typename Receiver>
-        friend executor_operation_state<Executor, Receiver> tag_invoke(
-            connect_t, executor_sender&& s, Receiver&& receiver)
+        auto connect(Receiver&& receiver) &&
         {
-            return {HPX_MOVE(s.exec_), HPX_FORWARD(Receiver, receiver)};
+            return executor_operation_state<Executor, std::decay_t<Receiver>>{
+                HPX_MOVE(exec_), HPX_FORWARD(Receiver, receiver)};
         }
 
         template <typename Receiver>
-        friend executor_operation_state<Executor, Receiver> tag_invoke(
-            connect_t, executor_sender const& s, Receiver&& receiver)
+        auto connect(Receiver&& receiver) const&
         {
-            return {s.exec_, HPX_FORWARD(Receiver, receiver)};
+            return executor_operation_state<Executor, std::decay_t<Receiver>>{
+                exec_, HPX_FORWARD(Receiver, receiver)};
         }
     };
 
@@ -127,16 +136,9 @@ namespace hpx::execution::experimental {
             return !(*this == rhs);
         }
 
-        friend executor_sender<Executor> tag_invoke(
-            schedule_t, executor_scheduler&& sched)
+        executor_sender<Executor> schedule() const noexcept
         {
-            return {HPX_MOVE(sched.exec_)};
-        }
-
-        friend executor_sender<Executor> tag_invoke(
-            schedule_t, executor_scheduler const& sched)
-        {
-            return {sched.exec_};
+            return {exec_};
         }
     };
 }    // namespace hpx::execution::experimental
