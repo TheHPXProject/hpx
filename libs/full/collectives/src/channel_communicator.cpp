@@ -16,8 +16,8 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/runtime_components/new.hpp>
 
 #include <cstddef>
 #include <memory>

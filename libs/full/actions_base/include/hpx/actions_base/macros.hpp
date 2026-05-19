@@ -483,12 +483,16 @@
     /**/
 
 #define HPX_DEFINE_PLAIN_ACTION_1(func)                                        \
-    HPX_DEFINE_PLAIN_ACTION_2(func, HPX_PP_CAT(func, _action))                 \
+    HPX_DEFINE_PLAIN_ACTION_3(HPX_PP_EMPTY(), func, HPX_PP_CAT(func, _action)) \
+    /**/
+
+#define HPX_DEFINE_PLAIN_ACTION_2(func, name)                                  \
+    HPX_DEFINE_PLAIN_ACTION_3(HPX_PP_EMPTY(), func, name)                      \
     /**/
 
 #if defined(__NVCC__) || defined(__CUDACC__)
-#define HPX_DEFINE_PLAIN_ACTION_2(func, name)                                  \
-    struct name                                                                \
+#define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
+    Prefix struct name                                                         \
       : hpx::actions::make_action<                                             \
             typename std::add_pointer<                                         \
                 typename std::remove_pointer<decltype(&func)>::type>::type,    \
@@ -496,18 +500,24 @@
     {                                                                          \
     } /**/
 #else
-#define HPX_DEFINE_PLAIN_ACTION_2(func, name)                                  \
-    struct name : hpx::actions::make_action_t<decltype(&func), &func, name>    \
+#define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
+    Prefix struct name                                                         \
+      : hpx::actions::make_action_t<decltype(&func), &func, name>              \
     {                                                                          \
     } /**/
 #endif
 
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_1(func)                                 \
-    HPX_DEFINE_PLAIN_DIRECT_ACTION_2(func, HPX_PP_CAT(func, _action))          \
+    HPX_DEFINE_PLAIN_DIRECT_ACTION_3(                                          \
+        HPX_PP_EMPTY(), func, HPX_PP_CAT(func, _action))                       \
     /**/
 
 #define HPX_DEFINE_PLAIN_DIRECT_ACTION_2(func, name)                           \
-    struct name                                                                \
+    HPX_DEFINE_PLAIN_DIRECT_ACTION_3(HPX_PP_EMPTY(), func, name)               \
+    /**/
+
+#define HPX_DEFINE_PLAIN_DIRECT_ACTION_3(Prefix, func, name)                   \
+    Prefix struct name                                                         \
       : hpx::actions::make_direct_action_t<decltype(&func), &func, name>       \
     {                                                                          \
     } /**/

@@ -10,16 +10,11 @@
 #include <hpx/config.hpp>
 #include <hpx/include/actions.hpp>
 
-#include <hpx/runtime_components/component_factory.hpp>
-#include <hpx/runtime_components/component_registry.hpp>
-#include <hpx/runtime_components/derived_component_factory.hpp>
-#include <hpx/runtime_components/distributed_metadata_base.hpp>
-#include <hpx/runtime_components/new.hpp>
-
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/runtime_distributed/copy_component.hpp>
 #include <hpx/runtime_distributed/migrate_component.hpp>

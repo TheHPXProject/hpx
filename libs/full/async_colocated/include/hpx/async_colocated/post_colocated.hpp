@@ -25,7 +25,7 @@
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     bool post_colocated(hpx::id_type const& id, Ts&&... vs)
     {
         // shortcut co-location code if target already is a locality
@@ -50,8 +50,8 @@ namespace hpx::detail {
             service_target, id.get_gid());
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename... Ts>
     bool post_colocated(
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& id, Ts&&... vs)
@@ -59,7 +59,8 @@ namespace hpx::detail {
         return post_colocated<Derived>(id, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Action, typename Continuation, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename... Ts>
         requires(traits::is_continuation_v<Continuation>)
     bool post_colocated(Continuation&& cont, hpx::id_type const& id, Ts&&... vs)
     {
@@ -88,8 +89,8 @@ namespace hpx::detail {
             service_target, id.get_gid());
     }
 
-    template <typename Continuation, typename Component, typename Signature,
-        typename Derived, typename... Ts>
+    HPX_CXX_EXPORT template <typename Continuation, typename Component,
+        typename Signature, typename Derived, typename... Ts>
     bool post_colocated(Continuation&& cont,
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& id, Ts&&... vs)

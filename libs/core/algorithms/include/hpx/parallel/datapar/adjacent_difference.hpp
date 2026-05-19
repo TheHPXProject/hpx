@@ -50,7 +50,7 @@ namespace hpx::parallel::detail {
 
             using hpx::get;
 
-            util::const_loop_n<std::decay_t<ExPolicy>>(
+            util::loop_n<std::decay_t<ExPolicy>>(
                 hpx::util::zip_iterator(first, prev, dest), count,
                 [op](auto&& it) mutable {
                     get<2>(*it) = HPX_INVOKE(op, get<0>(*it), get<1>(*it));

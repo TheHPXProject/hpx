@@ -6,8 +6,8 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/performance_counters/detail/counter_interface_functions.hpp>
-#include <hpx/runtime_components/component_registry.hpp>
 #include <hpx/runtime_distributed/runtime_support.hpp>
 
 #include <mutex>

@@ -21,7 +21,7 @@
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
     async_colocated_cb([[maybe_unused]] hpx::id_type const& id,
@@ -49,8 +49,8 @@ namespace hpx::detail {
 #endif
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Derived>::remote_result_type>>
     async_colocated_cb(
@@ -62,8 +62,8 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Continuation, typename Callback,
-        typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
     async_colocated_cb([[maybe_unused]] Continuation&& cont,
@@ -94,8 +94,8 @@ namespace hpx::detail {
 #endif
     }
 
-    template <typename Continuation, typename Component, typename Signature,
-        typename Derived, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Continuation, typename Component,
+        typename Signature, typename Derived, typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Derived>::remote_result_type>>
     async_colocated_cb(Continuation&& cont,

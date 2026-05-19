@@ -21,10 +21,10 @@
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/program_options.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/performance_counters/counters.hpp>
-#include <hpx/runtime_components/components_fwd.hpp>
 
 #include <hpx/runtime_distributed/find_here.hpp>
 

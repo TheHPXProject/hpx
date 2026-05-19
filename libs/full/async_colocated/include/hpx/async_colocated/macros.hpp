@@ -8,6 +8,8 @@
 
 #include <hpx/config.hpp>
 
+#include <hpx/async_distributed/macros.hpp>
+
 ////////////////////////////////////////////////////////////////////////////////
 // from async_colocated.hpp
 #define HPX_REGISTER_ASYNC_COLOCATED_DECLARATION(Action, Name)                 \

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2014 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -8,11 +8,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/components.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-
-#include <cstddef>
-#include <string>
 
 namespace hpx {
 
@@ -20,22 +15,23 @@ namespace hpx {
     namespace components {
 
         ///////////////////////////////////////////////////////////////////////
-        template <typename Component>
+        HPX_CXX_EXPORT template <typename Component>
         struct component_factory;
 
-        class runtime_support;
+        HPX_CXX_EXPORT class runtime_support;
 
         namespace stubs {
 
-            struct runtime_support;
+            HPX_CXX_EXPORT struct runtime_support;
         }    // namespace stubs
 
         namespace server {
 
-            class HPX_EXPORT runtime_support;
+            HPX_CXX_EXPORT class HPX_EXPORT runtime_support;
         }    // namespace server
 
     }    // namespace components
 
-    HPX_EXPORT components::server::runtime_support* get_runtime_support_ptr();
+    HPX_CXX_EXPORT HPX_EXPORT components::server::runtime_support*
+    get_runtime_support_ptr();
 }    // namespace hpx

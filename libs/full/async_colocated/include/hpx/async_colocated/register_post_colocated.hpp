@@ -14,6 +14,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/async_colocated/functional/colocated_helpers.hpp>
+#include <hpx/async_colocated/macros.hpp>
 
 namespace hpx::detail {
 

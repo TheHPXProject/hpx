@@ -392,7 +392,6 @@ with section("parse"):
                                              'SOURCES': '+',
                                              'SOURCE_ROOT': 1,
                                              'ARGS': '+',
-                                             'EXECUTABLE': 1,
                                              'PSEUDO_DEPS_NAME': 1,
                                              'LOCALITIES': 1,
                                              'PARCELPORTS': '+',

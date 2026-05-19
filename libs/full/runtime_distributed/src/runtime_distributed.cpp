@@ -21,6 +21,7 @@
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/static_reinit.hpp>
@@ -36,10 +37,6 @@
 #include <hpx/performance_counters/manage_counter_type.hpp>
 #include <hpx/performance_counters/query_counters.hpp>
 #include <hpx/performance_counters/registry.hpp>
-#include <hpx/runtime_components/components_fwd.hpp>
-#include <hpx/runtime_components/console_error_sink.hpp>
-#include <hpx/runtime_components/console_logging.hpp>
-#include <hpx/runtime_components/server/console_error_sink.hpp>
 #include <hpx/version.hpp>
 
 #include <hpx/runtime_distributed.hpp>

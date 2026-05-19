@@ -14,10 +14,10 @@
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_components/derived_component_factory.hpp>
 
 #include <cstdint>
 #include <functional>

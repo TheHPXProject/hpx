@@ -19,8 +19,8 @@
 #include <hpx/compute/host/distributed_target.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
 #include <cstddef>

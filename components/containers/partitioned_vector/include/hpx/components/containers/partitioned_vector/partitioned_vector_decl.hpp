@@ -18,9 +18,8 @@
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_components/distributed_metadata_base.hpp>
-#include <hpx/runtime_components/new.hpp>
 #include <hpx/runtime_distributed/copy_component.hpp>
 
 #include <hpx/components/containers/partitioned_vector/export_definitions.hpp>

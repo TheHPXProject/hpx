@@ -12,8 +12,8 @@
 #include <hpx/modules/runtime_configuration.hpp>
 
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/threading_base.hpp>
-#include <hpx/runtime_components/console_logging.hpp>
 #endif
 
 #include <cstddef>

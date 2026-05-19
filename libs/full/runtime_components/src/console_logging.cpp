@@ -33,7 +33,7 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components {
+namespace hpx::components {
 
     void fallback_console_logging_locked(
         messages_type const& msgs, std::string fail_msg = "")
@@ -346,4 +346,4 @@ namespace hpx { namespace components {
     {
         detail::logger().activate();
     }
-}}    // namespace hpx::components
+}    // namespace hpx::components

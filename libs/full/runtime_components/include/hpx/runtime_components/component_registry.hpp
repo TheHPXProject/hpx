@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2017      Thomas Heller
 //  Copyright (c) 2011      Bryce Lelbach
 //
@@ -11,8 +11,9 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
+
+#include <hpx/runtime_components/macros.hpp>
 
 #include <string>
 #include <vector>
@@ -38,7 +39,7 @@ namespace hpx::components {
     ///
     /// \tparam Component   The component type this registry should be
     ///                     responsible for.
-    template <typename Component, factory_state state>
+    HPX_CXX_EXPORT template <typename Component, factory_state state>
     struct component_registry : component_registry_base
     {
         /// \brief Return the ini-information for all contained components
@@ -90,54 +91,3 @@ namespace hpx::components {
         }
     };
 }    // namespace hpx::components
-
-///////////////////////////////////////////////////////////////////////////////
-/// This macro is used create and to register a minimal component registry with
-/// Hpx.Plugin.
-
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY(...)                           \
-    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_(__VA_ARGS__)                      \
-    /**/
-
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_(...)                          \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_,         \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_2(                             \
-    ComponentType, componentname)                                              \
-    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                                 \
-        ComponentType, componentname, ::hpx::components::factory_state::check) \
-/**/
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_3(                             \
-    ComponentType, componentname, state)                                       \
-    using componentname##_component_registry_type =                            \
-        hpx::components::component_registry<ComponentType, state>;             \
-    HPX_REGISTER_COMPONENT_REGISTRY(                                           \
-        componentname##_component_registry_type, componentname)                \
-    template struct hpx::components::component_registry<ComponentType, state>; \
-/**/
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC(...)                   \
-    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_(__VA_ARGS__)              \
-    /**/
-
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_(...)                  \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_, \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_2(                     \
-    ComponentType, componentname)                                              \
-    HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                         \
-        ComponentType, componentname, ::hpx::components::factory_state::check) \
-/**/
-#define HPX_REGISTER_MINIMAL_COMPONENT_REGISTRY_DYNAMIC_3(                     \
-    ComponentType, componentname, state)                                       \
-    using componentname##_component_registry_type =                            \
-        hpx::components::component_registry<ComponentType, state>;             \
-    HPX_REGISTER_COMPONENT_REGISTRY_DYNAMIC(                                   \
-        componentname##_component_registry_type, componentname)                \
-    template struct hpx::components::component_registry<ComponentType, state>; \
-/**/

@@ -11,11 +11,10 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/performance_counters/counters.hpp>
-#include <hpx/runtime_components/derived_component_factory.hpp>
-#include <hpx/runtime_components/new.hpp>
 #include <hpx/runtime_distributed/find_here.hpp>
 
 #include <cstddef>

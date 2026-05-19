@@ -22,8 +22,8 @@
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/new.hpp>
 #include <hpx/runtime_distributed/find_here.hpp>
 
 #include <cstddef>

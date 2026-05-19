@@ -28,8 +28,8 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/preprocessor.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
 
 #include <cstddef>
 #include <memory>

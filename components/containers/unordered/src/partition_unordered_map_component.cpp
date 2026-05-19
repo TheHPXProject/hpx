@@ -10,7 +10,7 @@
 /// required for proper functioning of components in the context of HPX.
 
 #include <hpx/config.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/components/containers/unordered/partition_unordered_map_component.hpp>
 #include <hpx/components/containers/unordered/unordered_map.hpp>

@@ -18,6 +18,6 @@ namespace hpx::util {
     template <typename T>
     struct lazy_enable_if<true, T>
     {
-        using type = typename T::type;
+        using type = T::type;
     };
 }    // namespace hpx::util

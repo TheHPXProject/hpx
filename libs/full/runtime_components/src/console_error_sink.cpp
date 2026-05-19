@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -17,7 +17,7 @@
 #include <exception>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components {
+namespace hpx::components {
 
     // Stub function which applies the console_error_sink action.
     void console_error_sink(
@@ -62,4 +62,4 @@ namespace hpx { namespace components {
             hpx::async<server::console_error_sink_action>(dst, e).get();
         }
     }
-}}    // namespace hpx::components
+}    // namespace hpx::components
