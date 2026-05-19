@@ -486,7 +486,16 @@
     HPX_DEFINE_PLAIN_ACTION_2(func, HPX_PP_CAT(func, _action))                 \
     /**/
 
-#if defined(__NVCC__) || defined(__CUDACC__)
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+// clang-format off
+/// When C++26 reflection is available, HPX_DEFINE_PLAIN_ACTION_2 uses
+/// reflect_action<^^func> instead of make_action_t. This eliminates the
+/// need for HPX_REGISTER_ACTION while keeping the same user-facing syntax.
+#define HPX_DEFINE_PLAIN_ACTION_2(func, name)                                  \
+    using name = hpx::actions::reflect_action<^^func>                          \
+    /**/
+// clang-format on
+#elif defined(__NVCC__) || defined(__CUDACC__)
 #define HPX_DEFINE_PLAIN_ACTION_2(func, name)                                  \
     struct name                                                                \
       : hpx::actions::make_action<                                             \
