@@ -12,26 +12,27 @@
 
 #include <type_traits>
 
-namespace hpx { namespace detail {
+namespace hpx::detail {
+
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action, typename... Ts>
-    bool post_colocated(hpx::id_type const& gid, Ts&&... vs);
+    bool post_colocated(hpx::id_type const& id, Ts&&... vs);
 
     template <typename Component, typename Signature, typename Derived,
         typename... Ts>
     bool post_colocated(
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
-        hpx::id_type const& gid, Ts&&... vs);
+        hpx::id_type const& id, Ts&&... vs);
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action, typename Continuation, typename... Ts>
-    typename std::enable_if<traits::is_continuation<Continuation>::value,
-        bool>::type
-    post_colocated(Continuation&& cont, hpx::id_type const& gid, Ts&&... vs);
+        requires(traits::is_continuation_v<Continuation>)
+    bool post_colocated(
+        Continuation&& cont, hpx::id_type const& id, Ts&&... vs);
 
     template <typename Continuation, typename Component, typename Signature,
         typename Derived, typename... Ts>
     bool post_colocated(Continuation&& cont,
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
-        hpx::id_type const& gid, Ts&&... vs);
-}}    // namespace hpx::detail
+        hpx::id_type const& id, Ts&&... vs);
+}    // namespace hpx::detail

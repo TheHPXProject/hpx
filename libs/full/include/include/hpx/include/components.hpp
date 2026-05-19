@@ -16,9 +16,8 @@
 #include <hpx/runtime_components/distributed_metadata_base.hpp>
 #include <hpx/runtime_components/new.hpp>
 
-#include <hpx/async_colocated/server/destroy_component.hpp>
-
 #include <hpx/modules/actions.hpp>
+#include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
 

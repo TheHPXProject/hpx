@@ -9,7 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_colocated/server/destroy_component.hpp>
+#include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
@@ -56,7 +56,7 @@ namespace hpx::components {
         bool get_component_info(std::vector<std::string>& fillini,
             std::string const& filepath, bool is_static = false) override
         {
-            using type_holder = typename Component::type_holder;
+            using type_holder = Component::type_holder;
 
             char const* name = get_component_name<type_holder>();
             char const* more = traits::component_config_data<Component>::call();
@@ -86,7 +86,7 @@ namespace hpx::components {
                 components::set_component_type<type_holder>(type);
             }
             components::enabled(type) = enabled;
-            components::deleter(type) = &server::destroy<Component>;
+            components::deleter(type) = &server::template destroy<Component>;
         }
     };
 }    // namespace hpx::components

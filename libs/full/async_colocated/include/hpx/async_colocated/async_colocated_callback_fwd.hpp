@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2015 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,38 +6,40 @@
 
 #pragma once
 
-#include <hpx/async_colocated/async_colocated_fwd.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/futures.hpp>
 
-namespace hpx { namespace detail {
+#include <hpx/async_colocated/async_colocated_fwd.hpp>
+
+namespace hpx::detail {
+
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action, typename Callback, typename... Ts>
-    hpx::future<typename traits::promise_local_result<
-        typename hpx::traits::extract_action<Action>::remote_result_type>::type>
-    async_colocated_cb(hpx::id_type const& gid, Callback&& cb, Ts&&... vs);
+    hpx::future<traits::promise_local_result_t<
+        typename hpx::traits::extract_action<Action>::remote_result_type>>
+    async_colocated_cb(hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 
     template <typename Component, typename Signature, typename Derived,
         typename Callback, typename... Ts>
-    hpx::future<typename traits::promise_local_result<typename hpx::traits::
-            extract_action<Derived>::remote_result_type>::type>
+    hpx::future<traits::promise_local_result_t<
+        typename hpx::traits::extract_action<Derived>::remote_result_type>>
     async_colocated_cb(
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
-        hpx::id_type const& gid, Callback&& cb, Ts&&... vs);
+        hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action, typename Continuation, typename Callback,
         typename... Ts>
-    hpx::future<typename traits::promise_local_result<
-        typename hpx::traits::extract_action<Action>::remote_result_type>::type>
-    async_colocated_cb(Continuation&& cont, hpx::id_type const& gid,
-        Callback&& cb, Ts&&... vs);
+    hpx::future<traits::promise_local_result_t<
+        typename hpx::traits::extract_action<Action>::remote_result_type>>
+    async_colocated_cb(
+        Continuation&& cont, hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 
     template <typename Continuation, typename Component, typename Signature,
         typename Derived, typename Callback, typename... Ts>
-    hpx::future<typename traits::promise_local_result<typename hpx::traits::
-            extract_action<Derived>::remote_result_type>::type>
+    hpx::future<traits::promise_local_result_t<
+        typename hpx::traits::extract_action<Derived>::remote_result_type>>
     async_colocated_cb(Continuation&& cont,
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
-        hpx::id_type const& gid, Callback&& cb, Ts&&... vs);
-}}    // namespace hpx::detail
+        hpx::id_type const& id, Callback&& cb, Ts&&... vs);
+}    // namespace hpx::detail

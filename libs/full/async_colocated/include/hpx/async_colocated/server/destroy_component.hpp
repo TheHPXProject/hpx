@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011-2017 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -17,11 +17,11 @@
 namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_EXPORT void destroy_component(
+    HPX_CXX_EXPORT HPX_EXPORT void destroy_component(
         naming::gid_type const& gid, naming::address const& addr);
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     void destroy(naming::gid_type const& gid, naming::address const& addr)
     {
         // make sure this component is located here
@@ -59,7 +59,7 @@ namespace hpx::components::server {
         component_heap<Component>().free(c, 1);
     }
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     void destroy(naming::gid_type const& gid)
     {
         naming::address addr;
