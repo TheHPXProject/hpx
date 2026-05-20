@@ -9,12 +9,14 @@ set(tests
     annotation_property
     created_executor
     execution_policy_mappings
+    executor_scheduler
     explicit_scheduler_executor
     fork_join_executor
     fork_join_executor_from
     limiting_executor
     parallel_executor
     parallel_executor_parameters
+    parallel_executor_scheduler
     parallel_fork_executor
     parallel_policy_executor
     polymorphic_executor

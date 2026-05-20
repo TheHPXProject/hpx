@@ -10,6 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
@@ -234,6 +235,15 @@ namespace hpx::execution {
 #else
             return parallel_executor();
 #endif
+        }
+
+        friend hpx::execution::experimental::executor_scheduler<
+            sequenced_executor>
+        tag_invoke(hpx::execution::experimental::get_scheduler_t,
+            sequenced_executor const& exec)
+        {
+            return hpx::execution::experimental::executor_scheduler<
+                sequenced_executor>(exec);
         }
 
     private:
