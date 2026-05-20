@@ -52,7 +52,7 @@ hpx_setup_lcw()
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_lcw
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_lcw_sources}
   HEADERS ${parcelport_lcw_headers}
   COMPAT_HEADERS ${parcelport_lcw_compat_headers}

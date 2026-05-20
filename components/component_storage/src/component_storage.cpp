@@ -7,8 +7,8 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_components/new.hpp>
 
 #include <hpx/components/component_storage/component_storage.hpp>
 

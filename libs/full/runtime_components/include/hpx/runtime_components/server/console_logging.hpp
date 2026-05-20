@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -15,6 +15,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/serialization.hpp>
+
 #include <hpx/runtime_components/console_logging.hpp>
 
 #include <cstddef>
@@ -25,10 +26,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::components {
 
-    using message_type =
+    HPX_CXX_EXPORT using message_type =
         hpx::tuple<logging_destination, std::size_t, std::string>;
 
-    using messages_type = std::vector<message_type>;
+    HPX_CXX_EXPORT using messages_type = std::vector<message_type>;
 }    // namespace hpx::components
 
 //////////////////////////////////////////////////////////////////////////////
@@ -36,12 +37,12 @@ namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // console logging happens here
-    void console_logging(messages_type const&);
+    HPX_CXX_EXPORT void console_logging(messages_type const&);
 
     ///////////////////////////////////////////////////////////////////////////
     // this type is a dummy template to avoid premature instantiation of the
     // serialization support instances
-    template <typename Dummy = void>
+    HPX_CXX_EXPORT template <typename Dummy = void>
     class console_logging_action
       : public actions::direct_action<void (*)(messages_type const&),
             console_logging, console_logging_action<Dummy>>
@@ -91,13 +92,16 @@ HPX_REGISTER_ACTION_DECLARATION(
 #if !defined(HPX_COMPUTE_DEVICE_CODE) && defined(HPX_HAVE_NETWORKING)
 ///////////////////////////////////////////////////////////////////////////
 // Logging does not make this locality black
-template <>
-struct hpx::traits::action_does_termination_detection<
-    hpx::components::server::console_logging_action<>>
-{
-    static constexpr bool call() noexcept
+namespace hpx::traits {
+
+    template <>
+    struct action_does_termination_detection<
+        hpx::components::server::console_logging_action<>>
     {
-        return true;
-    }
-};    // namespace hpx::traits
+        static constexpr bool call() noexcept
+        {
+            return true;
+        }
+    };    // namespace hpx::traits
+}    // namespace hpx::traits
 #endif

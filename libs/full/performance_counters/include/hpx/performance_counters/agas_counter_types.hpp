@@ -8,7 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
+#include <hpx/modules/agas.hpp>
 
 namespace hpx { namespace performance_counters {
 

@@ -78,10 +78,12 @@ add_hpx_module(
   MODULE_DEPENDENCIES
     hpx_actions
     hpx_actions_base
+    hpx_async_colocated
     hpx_async_distributed
     hpx_components
     hpx_components_base
     hpx_naming_base
+    hpx_runtime_components
     hpx_runtime_distributed
   CMAKE_SUBDIRS examples tests
 )

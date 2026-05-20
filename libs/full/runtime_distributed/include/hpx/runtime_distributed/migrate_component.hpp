@@ -10,14 +10,15 @@
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/async_colocated/async_colocated.hpp>
 #include <hpx/distribution_policies/target_distribution_policy.hpp>
 #include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/runtime_distributed/server/migrate_component.hpp>
 
 #include <type_traits>

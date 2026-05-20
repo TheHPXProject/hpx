@@ -8,7 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/naming_base.hpp>
-#include <hpx/runtime_components/new.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/components/process/child.hpp>
 

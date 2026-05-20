@@ -32,6 +32,6 @@ add_hpx_module(
   COMPAT_HEADERS ${lcos_distributed_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_actions_base hpx_actions hpx_async_distributed
-                      hpx_components_base hpx_naming
+                      hpx_components_base hpx_naming hpx_runtime_components
   CMAKE_SUBDIRS examples tests
 )

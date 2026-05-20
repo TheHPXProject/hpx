@@ -316,7 +316,7 @@ namespace hpx::parallel {
                               std::size_t part_size) mutable {
                     // VS2015RC bails out when op is captured by ref
                     using hpx::get;
-                    util::const_loop_n<std::decay_t<ExPolicy>>(
+                    util::loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_size, [op](auto&& it) mutable {
                             get<2>(*it) =
                                 HPX_INVOKE(op, get<0>(*it), get<1>(*it));

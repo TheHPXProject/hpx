@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,13 +12,14 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
 #include <hpx/runtime_components/server/console_error_sink.hpp>
 #include <hpx/runtime_components/server/console_error_sink_singleton.hpp>
 
 #include <exception>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // implementation of this console error sink
@@ -27,7 +28,7 @@ namespace hpx { namespace components { namespace server {
         // dispatch this error to registered functions
         get_error_dispatcher()(hpx::diagnostic_information(e));
     }
-}}}    // namespace hpx::components::server
+}    // namespace hpx::components::server
 
 ///////////////////////////////////////////////////////////////////////////////
 // This must be in global namespace

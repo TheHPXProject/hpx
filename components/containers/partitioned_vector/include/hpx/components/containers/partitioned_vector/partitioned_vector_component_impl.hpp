@@ -12,7 +12,7 @@
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/preprocessor.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_decl.hpp>
 

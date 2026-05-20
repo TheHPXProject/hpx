@@ -5,14 +5,15 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/async_colocated/get_colocation_id.hpp>
-#include <hpx/async_colocated/server/destroy_component.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/async_colocated/get_colocation_id.hpp>
+#include <hpx/async_colocated/server/destroy_component.hpp>
 
 #include <cstddef>
 #include <cstdint>

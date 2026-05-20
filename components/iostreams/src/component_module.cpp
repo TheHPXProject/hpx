@@ -8,12 +8,13 @@
 #include <hpx/config.hpp>
 
 #include <hpx/modules/actions.hpp>
-#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/runtime_components.hpp>
+#include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
 
 #include <hpx/components/iostreams/ostream.hpp>
 #include <hpx/components/iostreams/server/output_stream.hpp>

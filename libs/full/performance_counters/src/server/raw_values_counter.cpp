@@ -8,10 +8,10 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/server/raw_values_counter.hpp>
-#include <hpx/runtime_components/derived_component_factory.hpp>
 
 #include <cstdint>
 #include <utility>

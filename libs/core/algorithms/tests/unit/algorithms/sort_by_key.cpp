@@ -29,21 +29,20 @@
 //
 namespace debug {
     template <typename T>
-    void output(std::string const& name, std::vector<T> const& v)
+    void output([[maybe_unused]] std::string const& name,
+        [[maybe_unused]] std::vector<T> const& v)
     {
 #ifdef EXTRA_DEBUG7
         std::cout << name.c_str() << "\t : {" << v.size() << "} : ";
         std::copy(std::begin(v), std::end(v),
             std::ostream_iterator<T>(std::cout, ", "));
         std::cout << "\n";
-#else
-        HPX_UNUSED(name);
-        HPX_UNUSED(v);
 #endif
     }
 
     template <typename Iter>
-    void output(std::string const& name, Iter begin, Iter end)
+    void output([[maybe_unused]] std::string const& name,
+        [[maybe_unused]] Iter begin, [[maybe_unused]] Iter end)
     {
 #ifdef EXTRA_DEBUG
         std::cout << name.c_str() << "\t : {" << std::distance(begin, end)
@@ -53,10 +52,6 @@ namespace debug {
                 typename std::iterator_traits<Iter>::value_type>(
                 std::cout, ", "));
         std::cout << "\n";
-#else
-        HPX_UNUSED(name);
-        HPX_UNUSED(begin);
-        HPX_UNUSED(end);
 #endif
     }
 

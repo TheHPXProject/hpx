@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,6 +18,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
@@ -319,7 +320,7 @@ namespace hpx::components {
             template <typename... Ts>
             static type call(Ts&&... ts)
             {
-                using component_type = typename Component::wrapping_type;
+                using component_type = Component::wrapping_type;
 
                 hpx::id_type id(components::server::create<component_type>(
                                     HPX_FORWARD(Ts, ts)...),
@@ -336,7 +337,7 @@ namespace hpx::components {
             template <typename... Ts>
             static type call(std::size_t count, Ts&&... ts)
             {
-                using component_type = typename Component::wrapping_type;
+                using component_type = Component::wrapping_type;
 
                 std::vector<hpx::id_type> result;
                 result.reserve(count);
@@ -352,6 +353,7 @@ namespace hpx::components {
             }
         };
 
+        ///////////////////////////////////////////////////////////////////////
         // same as above, just fully synchronous
         template <typename Component>
         struct local_new_component_sync
@@ -361,7 +363,7 @@ namespace hpx::components {
             template <typename... Ts>
             static type call(Ts&&... ts)
             {
-                using component_type = typename Component::wrapping_type;
+                using component_type = Component::wrapping_type;
 
                 hpx::id_type id(components::server::create<component_type>(
                                     HPX_FORWARD(Ts, ts)...),
@@ -379,7 +381,7 @@ namespace hpx::components {
             template <typename... Ts>
             static type call(std::size_t count, Ts&&... ts)
             {
-                using component_type = typename Component::wrapping_type;
+                using component_type = Component::wrapping_type;
 
                 std::vector<hpx::id_type> result;
                 result.reserve(count);
@@ -397,11 +399,9 @@ namespace hpx::components {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component, typename... Ts>
-    inline typename util::lazy_enable_if<
-        traits::is_component_or_component_array<Component>::value,
-        detail::new_component<Component>>::type
-    new_(id_type const& locality, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
+        requires(traits::is_component_or_component_array_v<Component>)
+    decltype(auto) new_(id_type const& locality, Ts&&... vs)
     {
         if (naming::get_locality_id_from_id(locality) ==
             agas::get_locality_id())
@@ -414,12 +414,11 @@ namespace hpx::components {
             locality, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Component, typename DistPolicy, typename... Ts>
-    inline typename util::lazy_enable_if<
-        traits::is_component_or_component_array<Component>::value &&
-            traits::is_distribution_policy<DistPolicy>::value,
-        detail::new_component<Component>>::type
-    new_(DistPolicy const& policy, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy,
+        typename... Ts>
+        requires(traits::is_component_or_component_array_v<Component> &&
+            traits::is_distribution_policy_v<DistPolicy>)
+    decltype(auto) new_(DistPolicy const& policy, Ts&&... vs)
     {
         return detail::new_component<Component>::call(
             policy, HPX_FORWARD(Ts, vs)...);
@@ -433,7 +432,7 @@ namespace hpx::components {
         struct new_client
         {
             using type = Client;
-            using component_type = typename Client::server_component_type;
+            using component_type = Client::server_component_type;
 
             template <typename... Ts>
             static type call(hpx::id_type const& locality, Ts&&... vs)
@@ -457,7 +456,7 @@ namespace hpx::components {
         struct new_client<Client[]>
         {
             using type = hpx::future<std::vector<Client>>;
-            using component_type = typename Client::server_component_type;
+            using component_type = Client::server_component_type;
 
             template <typename... Ts>
             static type call(Ts&&... vs)
@@ -477,8 +476,7 @@ namespace hpx::components {
         struct local_new_client
         {
             using type = Client;
-            using component_type =
-                typename Client::server_component_type::wrapping_type;
+            using component_type = Client::server_component_type::wrapping_type;
 
             template <typename... Ts>
             static type call(Ts&&... ts)
@@ -494,8 +492,7 @@ namespace hpx::components {
         struct local_new_client<Client[]>
         {
             using type = hpx::future<std::vector<Client>>;
-            using component_type =
-                typename Client::server_component_type::wrapping_type;
+            using component_type = Client::server_component_type::wrapping_type;
 
             template <typename... Ts>
             static type call(Ts&&... ts)
@@ -512,10 +509,9 @@ namespace hpx::components {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Client, typename... Ts>
-    typename util::lazy_enable_if<traits::is_client_or_client_array_v<Client>,
-        detail::new_client<Client>>::type
-    new_(id_type const& locality, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Client, typename... Ts>
+        requires(traits::is_client_or_client_array_v<Client>)
+    decltype(auto) new_(id_type const& locality, Ts&&... vs)
     {
         if (naming::get_locality_id_from_id(locality) ==
             agas::get_locality_id())
@@ -528,11 +524,11 @@ namespace hpx::components {
             locality, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Client, typename DistPolicy, typename... Ts>
-    typename util::lazy_enable_if<traits::is_client_or_client_array_v<Client> &&
-            traits::is_distribution_policy_v<DistPolicy>,
-        detail::new_client<Client>>::type
-    new_(DistPolicy const& policy, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Client, typename DistPolicy,
+        typename... Ts>
+        requires(traits::is_client_or_client_array_v<Client> &&
+            traits::is_distribution_policy_v<DistPolicy>)
+    decltype(auto) new_(DistPolicy const& policy, Ts&&... vs)
     {
         return detail::new_client<Client>::call(policy, HPX_FORWARD(Ts, vs)...);
     }
@@ -541,41 +537,34 @@ namespace hpx::components {
     // Same as above, but just on this locality. This does not go through an
     // action, that means that the constructor arguments can be non-copyable and
     // non-movable.
-    template <typename Component>
-    typename util::lazy_enable_if<
-        traits::is_component_or_component_array_v<Component>,
-        detail::local_new_component<Component>>::type
-    local_new()
+    HPX_CXX_EXPORT template <typename Component>
+        requires(traits::is_component_or_component_array_v<Component>)
+    decltype(auto) local_new()
     {
         return detail::local_new_component<Component>::call();
     }
 
-    template <typename Component, typename T1, typename... Ts>
-    typename util::lazy_enable_if<
-        traits::is_component_or_component_array_v<Component> &&
-            !std::is_same_v<std::decay_t<T1>, launch::sync_policy>,
-        detail::local_new_component<Component>>::type
-    local_new(T1&& t1, Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Component, typename T1, typename... Ts>
+        requires(traits::is_component_or_component_array_v<Component> &&
+            !std::is_same_v<std::decay_t<T1>, launch::sync_policy>)
+    decltype(auto) local_new(T1&& t1, Ts&&... ts)
     {
         return detail::local_new_component<Component>::call(
             HPX_FORWARD(T1, t1), HPX_FORWARD(Ts, ts)...);
     }
 
-    template <typename Component, typename... Ts>
-    typename util::lazy_enable_if<
-        traits::is_component_or_component_array_v<Component>,
-        detail::local_new_component_sync<Component>>::type
-    local_new(launch::sync_policy, Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
+        requires(traits::is_component_or_component_array_v<Component>)
+    decltype(auto) local_new(launch::sync_policy, Ts&&... ts)
     {
         return detail::local_new_component_sync<Component>::call(
             HPX_FORWARD(Ts, ts)...);
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Client, typename... Ts>
-    typename util::lazy_enable_if<traits::is_client_or_client_array_v<Client>,
-        detail::local_new_client<Client>>::type
-    local_new(Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Client, typename... Ts>
+        requires(traits::is_client_or_client_array_v<Client>)
+    decltype(auto) local_new(Ts&&... ts)
     {
         return detail::local_new_client<Client>::call(HPX_FORWARD(Ts, ts)...);
     }
@@ -583,8 +572,8 @@ namespace hpx::components {
 
 namespace hpx {
 
-    using hpx::components::local_new;
-    using hpx::components::new_;
+    HPX_CXX_EXPORT using hpx::components::local_new;
+    HPX_CXX_EXPORT using hpx::components::new_;
 }    // namespace hpx
 
 #endif

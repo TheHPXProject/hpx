@@ -9,19 +9,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_colocated/async_colocated_callback.hpp>
-#include <hpx/async_colocated/post_colocated_callback_fwd.hpp>
-#include <hpx/async_colocated/post_colocated_fwd.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
 #include <cstddef>

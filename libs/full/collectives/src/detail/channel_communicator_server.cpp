@@ -13,7 +13,7 @@
 #include <hpx/collectives/detail/channel_communicator.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <cstddef>
 #include <utility>

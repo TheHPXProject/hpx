@@ -15,7 +15,7 @@
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming.hpp>
-#include <hpx/runtime_components/new.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <cstddef>
 #include <type_traits>

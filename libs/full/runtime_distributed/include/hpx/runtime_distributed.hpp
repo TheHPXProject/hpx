@@ -8,16 +8,17 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/io_service.hpp>
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/performance_counters/query_counters.hpp>
 #include <hpx/performance_counters/registry.hpp>
-#include <hpx/runtime_components/server/console_error_sink_singleton.hpp>
+
 #include <hpx/runtime_distributed/applier.hpp>
 #include <hpx/runtime_distributed/find_localities.hpp>
 #include <hpx/runtime_distributed/runtime_fwd.hpp>

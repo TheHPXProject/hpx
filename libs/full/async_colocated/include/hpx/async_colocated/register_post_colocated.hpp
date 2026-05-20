@@ -7,14 +7,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_colocated/functional/colocated_helpers.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/type_support.hpp>
 
-namespace hpx { namespace detail {
+#include <hpx/async_colocated/functional/colocated_helpers.hpp>
+#include <hpx/async_colocated/macros.hpp>
+
+namespace hpx::detail {
 
     template <typename Action, typename Ts = typename Action::arguments_type>
     struct post_colocated_bound_action;
@@ -29,7 +31,4 @@ namespace hpx { namespace detail {
                 hpx::id_type>,
             Ts...>;
     };
-}}    // namespace hpx::detail
-
-#define HPX_REGISTER_APPLY_COLOCATED_DECLARATION(Action, Name)
-#define HPX_REGISTER_APPLY_COLOCATED(action, name)
+}    // namespace hpx::detail
