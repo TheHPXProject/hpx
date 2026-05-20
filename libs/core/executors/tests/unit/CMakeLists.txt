@@ -9,6 +9,7 @@ set(tests
     annotation_property
     created_executor
     execution_policy_mappings
+    executor_algorithm_bulk
     explicit_scheduler_executor
     fork_join_executor
     fork_join_executor_from

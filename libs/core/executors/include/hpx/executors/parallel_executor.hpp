@@ -13,6 +13,7 @@
 #include <hpx/executors/detail/hierarchical_spawning.hpp>
 #include <hpx/executors/detail/index_queue_spawning.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
@@ -156,7 +157,7 @@ namespace hpx::execution {
         }
 
     public:
-        parallel_policy_executor_base(parallel_policy_executor_base const& rhs)
+        parallel_policy_executor_base(parallel_policy_executor_base const& rhs) noexcept
           : pool_(rhs.pool_)
           , policy_(rhs.policy_)
           , first_core_(rhs.first_core_)
@@ -169,7 +170,7 @@ namespace hpx::execution {
         // NOLINTEND(bugprone-crtp-constructor-accessibility)
 
         parallel_policy_executor_base& operator=(
-            parallel_policy_executor_base const& rhs)
+            parallel_policy_executor_base const& rhs) noexcept
         {
             if (this != &rhs)
             {
@@ -458,6 +459,8 @@ namespace hpx::execution {
 
 #if defined(__NVCC__) || defined(__CUDACC__)
         constexpr ~parallel_policy_executor() {}
+#else
+        ~parallel_policy_executor() = default;
 #endif
 
     private:
@@ -669,15 +672,25 @@ namespace hpx::execution {
 #endif
             }
         }
-        /// \endcond
 
     public:
         /// \cond NOINTERNAL
+        constexpr hpx::execution::experimental::executor_scheduler<parallel_policy_executor>
+        query(hpx::execution::experimental::get_scheduler_t) const noexcept
+        {
+            return hpx::execution::experimental::executor_scheduler<parallel_policy_executor>(*this);
+        }
+
+        constexpr hpx::execution::experimental::executor_sender<parallel_policy_executor>
+        schedule() const noexcept
+        {
+            return hpx::execution::experimental::executor_scheduler<parallel_policy_executor>(*this).schedule();
+        }
         constexpr bool operator==(
             parallel_policy_executor const& rhs) const noexcept
         {
             return base_type::policy_ == rhs.policy_ &&
-                base_type::pool_ == rhs.pool;
+                base_type::pool_ == rhs.pool_;
         }
 
         constexpr bool operator!=(
@@ -997,6 +1010,7 @@ namespace hpx::execution {
 #endif
             }
         }
+
         /// \endcond
 
     public:
