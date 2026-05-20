@@ -77,6 +77,7 @@ add_hpx_module(
     hpx_concepts
     hpx_concurrency
     hpx_config
+    hpx_contracts
     hpx_coroutines
     hpx_datastructures
     hpx_errors

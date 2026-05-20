@@ -152,6 +152,7 @@ namespace hpx {
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
@@ -392,8 +393,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend void tag_fallback_invoke(
-            hpx::sort_t, RandomIt first, RandomIt last, Comp comp = Comp())
+        friend void tag_fallback_invoke(hpx::sort_t, RandomIt first,
+            RandomIt last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
@@ -416,7 +417,7 @@ namespace hpx {
         // clang-format on
         friend parallel::util::detail::algorithm_result_t<ExPolicy>
         tag_fallback_invoke(hpx::sort_t, ExPolicy&& policy, RandomIt first,
-            RandomIt last, Comp comp = Comp())
+            RandomIt last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");

@@ -33,6 +33,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <algorithm>
@@ -938,12 +939,13 @@ namespace hpx::detail {
         }
 
         [[nodiscard]] auto operator[](std::size_t idx) const noexcept
-            -> T const&
+            HPX_PRE(idx < this->size()) -> T const&
         {
             return *(data() + idx);
         }
 
-        [[nodiscard]] auto operator[](std::size_t idx) noexcept -> T&
+        [[nodiscard]] auto operator[](std::size_t idx) noexcept
+            HPX_PRE(idx < this->size()) -> T&
         {
             return *(data() + idx);
         }
@@ -1034,17 +1036,19 @@ namespace hpx::detail {
             return const_reverse_iterator{begin()};
         }
 
-        [[nodiscard]] auto front() const noexcept -> T const&
+        [[nodiscard]] auto front() const noexcept HPX_PRE(!this->empty())
+            -> T const&
         {
             return *data();
         }
 
-        [[nodiscard]] auto front() noexcept -> T&
+        [[nodiscard]] auto front() noexcept HPX_PRE(!this->empty()) -> T&
         {
             return *data();
         }
 
-        [[nodiscard]] auto back() const noexcept -> T const&
+        [[nodiscard]] auto back() const noexcept HPX_PRE(!this->empty())
+            -> T const&
         {
             if (is_direct())
             {
@@ -1055,7 +1059,7 @@ namespace hpx::detail {
                 data<direction::indirect>() + size<direction::indirect>() - 1);
         }
 
-        [[nodiscard]] auto back() noexcept -> T&
+        [[nodiscard]] auto back() noexcept HPX_PRE(!this->empty()) -> T&
         {
             if (is_direct())
             {
