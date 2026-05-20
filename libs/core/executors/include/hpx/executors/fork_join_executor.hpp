@@ -11,6 +11,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concurrency.hpp>
@@ -1240,6 +1241,14 @@ namespace hpx::execution::experimental {
                 HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        template <typename F, typename... Ts>
+        friend void tag_invoke(hpx::parallel::execution::post_t,
+            fork_join_executor const& exec, F&& f, Ts&&... ts)
+        {
+            exec.shared_data_->sync_invoke(
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
         template <typename F, typename... Fs>
             requires(std::invocable<F> && (std::invocable<Fs> && ...))
         friend decltype(auto) tag_invoke(
@@ -1373,10 +1382,29 @@ namespace hpx::execution::experimental {
         /// \endcond
     };
 
+    // P2300 get_scheduler bridge — defined outside the class so that
+    // executor_scheduler<fork_join_executor> is fully defined at point of use.
+    // This allows fork_join_executor to participate in P2300 sender/receiver
+    // pipelines via schedule(get_scheduler(exec)).
+    inline auto tag_invoke(hpx::execution::experimental::get_scheduler_t,
+        fork_join_executor const& exec) noexcept
+        -> hpx::execution::experimental::executor_scheduler<fork_join_executor>
+    {
+        return hpx::execution::experimental::executor_scheduler<
+            fork_join_executor>(exec);
+    }
+
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
         std::ostream& os, fork_join_executor::loop_schedule schedule);
 
     /// \cond NOINTERNAL
+
+    template <>
+    struct is_never_blocking_one_way_executor<fork_join_executor>
+      : std::true_type
+    {
+    };
+
     template <>
     struct is_bulk_one_way_executor<fork_join_executor> : std::true_type
     {
