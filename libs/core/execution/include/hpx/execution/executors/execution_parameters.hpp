@@ -652,6 +652,116 @@ namespace hpx::execution::experimental::detail {
             call(static_cast<Parameters&>(params), HPX_FORWARD(Executor, exec));
         }
     };
+
+    ///////////////////////////////////////////////////////////////////////
+    // define member traits
+    HPX_HAS_MEMBER_XXX_TRAIT_DEF(adjust_chunk_size_and_max_chunks)
+
+    ///////////////////////////////////////////////////////////////////////
+    // shared default implementation allowing to handle
+    // adjust_chunk_size_and_max_chunks
+    HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+    adjust_chunk_size_and_max_chunks_default(std::size_t num_elements,
+        std::size_t num_cores, std::size_t max_chunks,
+        std::size_t chunk_size) noexcept
+    {
+        if (max_chunks == 0)
+        {
+            if (chunk_size == 0)
+            {
+                std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+
+                chunk_size = (num_elements + cores_times_4 - 1) / cores_times_4;
+
+                max_chunks =
+                    (std::min) (cores_times_4, num_elements);    // -V112
+
+                chunk_size = (std::max) (chunk_size,
+                    (num_elements + max_chunks - 1) / max_chunks);
+            }
+            else
+            {
+                // max_chunks == 0 && chunk_size != 0
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+            }
+        }
+        else if (chunk_size == 0)
+        {
+            chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+        }
+        else
+        {
+            // max_chunks != 0 && chunk_size != 0
+            std::size_t const calculated_max_chunks =
+                (num_elements + chunk_size - 1) / chunk_size;
+
+            if (calculated_max_chunks > max_chunks)
+            {
+                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+            }
+        }
+
+        return {chunk_size, max_chunks};
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    // default property implementation allowing to handle
+    // adjust_chunk_size_and_max_chunks
+    struct adjust_chunk_size_and_max_chunks_property
+    {
+        template <typename Target>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks(Target, std::size_t num_elements,
+            std::size_t num_cores, std::size_t max_chunks,
+            std::size_t chunk_size) noexcept
+        {
+            return adjust_chunk_size_and_max_chunks_default(
+                num_elements, num_cores, max_chunks, chunk_size);
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // Generate a type that is guaranteed to support
+    // adjust_chunk_size_and_max_chunks
+    using get_adjust_chunk_size_and_max_chunks_t =
+        get_parameters_property_t<adjust_chunk_size_and_max_chunks_property,
+            has_adjust_chunk_size_and_max_chunks_t>;
+
+    inline constexpr get_adjust_chunk_size_and_max_chunks_t
+        get_adjust_chunk_size_and_max_chunks{};
+
+    ///////////////////////////////////////////////////////////////////////
+    // customization point for interface adjust_chunk_size_and_max_chunks()
+    template <typename Parameters, typename Executor_>
+    struct adjust_chunk_size_and_max_chunks_fn_helper<Parameters, Executor_,
+        std::enable_if_t<hpx::traits::is_executor_any_v<Executor_>>>
+    {
+        template <typename Executor>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        call(Parameters& params, Executor&& exec, std::size_t num_elements,
+            std::size_t num_cores, std::size_t num_chunks,
+            std::size_t chunk_size)
+        {
+            auto get_prop = get_adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(Executor, exec), params,
+                adjust_chunk_size_and_max_chunks_property{});
+
+            return get_prop.first.adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(decltype(get_prop.second), get_prop.second),
+                num_elements, num_cores, num_chunks, chunk_size);
+        }
+
+        template <typename AnyParameters, typename Executor>
+        HPX_FORCEINLINE static constexpr std::pair<std::size_t, std::size_t>
+        call(AnyParameters params, Executor&& exec, std::size_t num_elements,
+            std::size_t num_cores, std::size_t num_chunks,
+            std::size_t chunk_size)
+        {
+            return call(static_cast<Parameters&>(params),
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                num_chunks, chunk_size);
+        }
+    };
     /// \endcond
 
     /// \cond NOINTERNAL
@@ -896,6 +1006,30 @@ namespace hpx::execution::experimental::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////
+    template <typename T, typename Wrapper, typename Enable = void>
+    struct adjust_chunk_size_and_max_chunks_call_helper
+    {
+    };
+
+    template <typename T, typename Wrapper>
+    struct adjust_chunk_size_and_max_chunks_call_helper<T, Wrapper,
+        std::enable_if_t<has_adjust_chunk_size_and_max_chunks_v<T>>>
+    {
+        template <typename Executor>
+        HPX_FORCEINLINE std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks(Executor&& exec,
+            std::size_t num_elements, std::size_t num_cores,
+            std::size_t num_chunks, std::size_t chunk_size)
+        {
+            auto& wrapped =
+                static_cast<unwrapper<Wrapper>*>(this)->member_.get();
+            return wrapped.adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                num_chunks, chunk_size);
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////
     template <typename T>
     struct base_member_helper
     {
@@ -921,6 +1055,8 @@ namespace hpx::execution::experimental::detail {
       , processing_units_count_call_helper<T, std::reference_wrapper<T>>
       , reset_thread_distribution_call_helper<T, std::reference_wrapper<T>>
       , collect_execution_parameters_call_helper<T, std::reference_wrapper<T>>
+      , adjust_chunk_size_and_max_chunks_call_helper<T,
+            std::reference_wrapper<T>>
     {
         using wrapper_type = std::reference_wrapper<T>;
 
@@ -961,6 +1097,8 @@ namespace hpx::execution::experimental::detail {
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(maximal_number_of_chunks);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(reset_thread_distribution);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(collect_execution_parameters);
+        HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(
+            adjust_chunk_size_and_max_chunks);
 
         constexpr executor_parameters()
             requires(hpx::util::all_of_v<std::is_constructible<Params>...>)
