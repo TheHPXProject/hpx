@@ -29,7 +29,7 @@ set(tests
     serialization_std_variant
 )
 
-set(full_tests serialization_raw_pointer)
+set(full_tests serialization_raw_pointer serialization_exception_ptr)
 
 if(HPX_SERIALIZATION_WITH_BOOST_TYPES)
   set(tests ${tests} serialization_boost_variant)
