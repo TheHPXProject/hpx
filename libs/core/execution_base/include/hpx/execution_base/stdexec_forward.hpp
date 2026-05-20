@@ -51,6 +51,7 @@
 #include <exec/ensure_started.hpp>
 #include <exec/env.hpp>
 #include <exec/execute.hpp>
+#include <exec/sender_for.hpp>
 #include <exec/split.hpp>
 #include <exec/start_detached.hpp>
 #include <stdexec/execution.hpp>
@@ -186,10 +187,12 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::transfer;
     HPX_CXX_CORE_EXPORT using stdexec::transfer_t;
 
-    // Bulk (HPX provides its own bulk CPO, but still forwards chunked variants
-    // used by the thread pool scheduler domain customization on current master)
-    //    HPX_CXX_CORE_EXPORT using stdexec::bulk;
-    //    HPX_CXX_CORE_EXPORT using stdexec::bulk_t;
+    // Sender for
+    HPX_CXX_CORE_EXPORT using exec::sender_for;
+
+    // Bulk operations
+    // Note: HPX defines its own bulk/bulk_t CPO in execution/algorithms/bulk.hpp,
+    // so we cannot import stdexec::bulk or stdexec::bulk_t here.
     HPX_CXX_CORE_EXPORT using stdexec::bulk_chunked;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_chunked_t;
     HPX_CXX_CORE_EXPORT using stdexec::bulk_unchunked;
@@ -198,7 +201,10 @@ namespace hpx::execution::experimental {
     // Execution policies
     HPX_CXX_CORE_EXPORT using stdexec::is_execution_policy;
     HPX_CXX_CORE_EXPORT using stdexec::is_execution_policy_v;
-
+    HPX_CXX_CORE_EXPORT using stdexec::sequenced_policy;
+    HPX_CXX_CORE_EXPORT using stdexec::parallel_policy;
+    HPX_CXX_CORE_EXPORT using stdexec::parallel_unsequenced_policy;
+    HPX_CXX_CORE_EXPORT using stdexec::unsequenced_policy;
     HPX_CXX_CORE_EXPORT inline constexpr stdexec::parallel_policy par{};
     HPX_CXX_CORE_EXPORT inline constexpr stdexec::parallel_unsequenced_policy
         par_unseq{};
@@ -335,6 +341,11 @@ namespace hpx::execution::experimental {
 
     HPX_CXX_CORE_EXPORT using stdexec::operation_state;
 
+    // sender invokes
+    HPX_CXX_CORE_EXPORT template <typename Sender, typename AlgorithmTag>
+    inline constexpr bool sender_invokes_algorithm_v =
+        stdexec::__sender_for<Sender, AlgorithmTag>;
+
     namespace stdexec_non_standard_tag_invoke {
 
         // Presently, the stdexec repository implements tag invoke,
@@ -360,7 +371,6 @@ namespace hpx::execution::experimental {
 
         // Additional stdexec concepts and utilities needed for domain customization
         HPX_CXX_CORE_EXPORT using stdexec::__completes_on;
-        HPX_CXX_CORE_EXPORT using stdexec::__sender_for;
     }    // namespace stdexec_internal
 }    // namespace hpx::execution::experimental
 

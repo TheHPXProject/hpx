@@ -67,7 +67,8 @@ namespace hpx::execution::experimental {
                     hpx::execution::experimental::set_value_t(
                         std::decay_t<Future>),
                     hpx::execution::experimental::set_error_t(
-                        std::exception_ptr)>;
+                        std::exception_ptr),
+                    hpx::execution::experimental::set_stopped_t()>;
         };
 
         HPX_CXX_CORE_EXPORT template <typename Future>

@@ -36,9 +36,9 @@
 
 // Forward declaration
 namespace hpx::execution::experimental::detail {
-
     HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Shape, typename F, bool IsChunked>
+        typename Shape, typename F, bool IsChunked, bool IsParallel,
+        bool IsUnsequenced>
     class thread_pool_bulk_sender;
 }    // namespace hpx::execution::experimental::detail
 
@@ -74,21 +74,40 @@ namespace hpx::execution::experimental {
     // Concept to match bulk sender types
     HPX_CXX_CORE_EXPORT template <typename Sender>
     concept bulk_chunked_or_unchunked_sender =
-        hpx::execution::experimental::stdexec_internal::__sender_for<Sender,
+        sender_invokes_algorithm_v<Sender,
             hpx::execution::experimental::bulk_t> ||
-        hpx::execution::experimental::stdexec_internal::__sender_for<Sender,
+        sender_invokes_algorithm_v<Sender,
             hpx::execution::experimental::bulk_chunked_t> ||
-        hpx::execution::experimental::stdexec_internal::__sender_for<Sender,
+        sender_invokes_algorithm_v<Sender,
             hpx::execution::experimental::bulk_unchunked_t>;
 
-    // Domain customization for stdexec bulk operations and sync_wait.
-    // Following the stdexec parallel_scheduler pattern (set_value_t tag-based).
+    HPX_CXX_CORE_EXPORT template <typename Policy>
+    inline constexpr bool is_sequenced_policy_v = false;
+
+    template <>
+    inline constexpr bool is_sequenced_policy_v<sequenced_policy> = true;
+
+    template <>
+    inline constexpr bool is_sequenced_policy_v<unsequenced_policy> = true;
+
+    HPX_CXX_CORE_EXPORT template <typename Policy>
+    inline constexpr bool is_unsequenced_bulk_policy_v = false;
+
+    template <>
+    inline constexpr bool is_unsequenced_bulk_policy_v<unsequenced_policy> =
+        true;
+
+    template <>
+    inline constexpr bool
+        is_unsequenced_bulk_policy_v<parallel_unsequenced_policy> = true;
+
+    // Domain customization for stdexec bulk operations and sync_wait,
+    // with thread-pool parallelism derived from wrapped execution policies.
     HPX_CXX_CORE_EXPORT template <typename Policy>
     struct thread_pool_domain
       : hpx::execution::experimental::detail::sync_wait_domain
     {
-        // transform_sender for bulk operations
-        // (following stdexec parallel_scheduler pattern)
+        // transform_sender for bulk operations (stdexec parallel_scheduler pattern)
         template <bulk_chunked_or_unchunked_sender Sender, typename Env>
             requires std::same_as<
                 std::decay_t<decltype(hpx::execution::experimental::
@@ -100,30 +119,39 @@ namespace hpx::execution::experimental {
         {
             auto sched = hpx::execution::experimental::get_scheduler(env);
 
-            // Extract bulk parameters using structured binding
             auto&& [tag, data, child] = sndr;
             auto&& [pol, shape, f] = data;
 
             auto iota_shape = hpx::util::counting_shape(shape);
 
-            // bulk_t and bulk_unchunked_t use unchunked mode (f(index, ...values))
-            // bulk_chunked_t uses chunked mode (f(begin, end, ...values))
-            constexpr bool is_chunked =
-                hpx::execution::experimental::stdexec_internal::__sender_for<
-                    Sender, hpx::execution::experimental::bulk_chunked_t>;
+            constexpr bool is_chunked = sender_invokes_algorithm_v<Sender,
+                hpx::execution::experimental::bulk_chunked_t>;
+
+            constexpr bool is_parallel =
+                !is_sequenced_policy_v<std::decay_t<decltype(pol.__get())>>;
+
+            constexpr bool is_unsequenced = is_unsequenced_bulk_policy_v<
+                std::decay_t<decltype(pol.__get())>>;
+
+            auto pu_mask =
+                hpx::execution::experimental::get_processing_units_mask(sched);
 
             return hpx::execution::experimental::detail::
                 thread_pool_bulk_sender<Policy, std::decay_t<decltype(child)>,
-                    decltype(iota_shape), std::decay_t<decltype(f)>,
-                    is_chunked>(HPX_MOVE(sched),
+                    std::decay_t<decltype(iota_shape)>,
+                    std::decay_t<decltype(f)>, is_chunked, is_parallel,
+                    is_unsequenced>{HPX_MOVE(sched),
                     HPX_FORWARD(decltype(child), child), HPX_MOVE(iota_shape),
-                    HPX_FORWARD(decltype(f), f));
+                    HPX_FORWARD(decltype(f), f), HPX_MOVE(pu_mask)};
         }
     };
 
     HPX_CXX_CORE_EXPORT template <typename Policy>
     struct thread_pool_policy_scheduler
     {
+        // Expose the policy type for domain customization
+        using policy_type = Policy;
+
         // Associate the parallel_execution_tag tag type as a default with this
         // scheduler, except if the given launch policy is sync.
         using execution_category =
@@ -202,6 +230,12 @@ namespace hpx::execution::experimental {
             thread_pool_policy_scheduler const& scheduler, Sender&& sender,
             Shape const& shape, F&& f)
         {
+            constexpr bool is_parallel =
+                !std::is_same_v<Policy, hpx::launch::sync_policy> &&
+                !is_sequenced_policy_v<Policy>;
+            constexpr bool is_unsequenced =
+                is_unsequenced_bulk_policy_v<Policy>;
+
             if constexpr (std::is_integral_v<std::decay_t<Shape>>)
             {
                 auto iota_shape = hpx::util::counting_shape(shape);
@@ -221,16 +255,16 @@ namespace hpx::execution::experimental {
 
                     return detail::thread_pool_bulk_sender<Policy,
                         std::decay_t<Sender>, decltype(iota_shape),
-                        decltype(wrapped_f), true>{scheduler,
-                        HPX_FORWARD(Sender, sender), iota_shape,
+                        decltype(wrapped_f), true, is_parallel, is_unsequenced>{
+                        scheduler, HPX_FORWARD(Sender, sender), iota_shape,
                         HPX_MOVE(wrapped_f)};
                 }
                 else
                 {
                     return detail::thread_pool_bulk_sender<Policy,
                         std::decay_t<Sender>, decltype(iota_shape),
-                        std::decay_t<F>, false>{scheduler,
-                        HPX_FORWARD(Sender, sender), iota_shape,
+                        std::decay_t<F>, false, is_parallel, is_unsequenced>{
+                        scheduler, HPX_FORWARD(Sender, sender), iota_shape,
                         HPX_FORWARD(F, f)};
                 }
             }
@@ -248,16 +282,17 @@ namespace hpx::execution::experimental {
 
                     return detail::thread_pool_bulk_sender<Policy,
                         std::decay_t<Sender>, std::decay_t<Shape>,
-                        decltype(wrapped_f), true>{scheduler,
-                        HPX_FORWARD(Sender, sender), shape,
+                        decltype(wrapped_f), true, is_parallel, is_unsequenced>{
+                        scheduler, HPX_FORWARD(Sender, sender), shape,
                         HPX_MOVE(wrapped_f)};
                 }
                 else
                 {
                     return detail::thread_pool_bulk_sender<Policy,
                         std::decay_t<Sender>, std::decay_t<Shape>,
-                        std::decay_t<F>, false>{scheduler,
-                        HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f)};
+                        std::decay_t<F>, false, is_parallel, is_unsequenced>{
+                        scheduler, HPX_FORWARD(Sender, sender), shape,
+                        HPX_FORWARD(F, f)};
                 }
             }
         }
@@ -378,16 +413,25 @@ namespace hpx::execution::experimental {
 
             void start() & noexcept
             {
+                auto stop_token = hpx::execution::experimental::get_stop_token(
+                    hpx::execution::experimental::get_env(receiver));
+                if (stop_token.stop_requested())
+                {
+                    hpx::execution::experimental::set_stopped(
+                        HPX_MOVE(receiver));
+                    return;
+                }
 #if defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        scheduler.execute([this]() mutable {
-                            hpx::execution::experimental::set_value(
-                                HPX_MOVE(receiver));
-                        });
+                        scheduler.execute(
+                            [receiver = HPX_MOVE(receiver)]() mutable {
+                                hpx::execution::experimental::set_value(
+                                    HPX_MOVE(receiver));
+                            });
                     },
                     [&](std::exception_ptr ep) {
                         hpx::execution::experimental::set_error(

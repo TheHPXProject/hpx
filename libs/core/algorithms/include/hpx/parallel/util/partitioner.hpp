@@ -19,6 +19,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/partitioner_iteration.hpp>
@@ -75,8 +76,7 @@ namespace hpx::parallel::util::detail {
             // We attempt to perform some optimizations in case of non-task
             // execution.
             if constexpr (Optimize &&
-                !hpx::is_async_execution_policy_v<ExPolicy> &&
-                !hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
+                !hpx::is_async_execution_policy_v<ExPolicy>)
             {
                 // Switch to sequential execution for one-core, one-chunk case
                 // if the executor supports it.
@@ -700,4 +700,25 @@ namespace hpx::parallel::util {
             detail::task_static_partitioner>::template apply<R, Result>
     {
     };
+
+    // Helper to call partitioner and wrap the result with
+    // algorithm_result::get(). Handles both void and non-void return types.
+    template <typename ExPolicy, typename... Args>
+    decltype(auto) call_with_algorithm_result(ExPolicy&& policy, Args&&... args)
+    {
+        if constexpr (std::is_void_v<decltype(partitioner<ExPolicy>::call(
+                          HPX_FORWARD(ExPolicy, policy),
+                          HPX_FORWARD(Args, args)...))>)
+        {
+            partitioner<ExPolicy>::call(
+                HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...);
+            return detail::algorithm_result<ExPolicy>::get();
+        }
+        else
+        {
+            return detail::algorithm_result<ExPolicy>::get(
+                partitioner<ExPolicy>::call(
+                    HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
+        }
+    }
 }    // namespace hpx::parallel::util

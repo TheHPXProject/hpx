@@ -59,9 +59,10 @@ struct is_thread_pool_bulk_sender : std::false_type
 };
 
 template <typename Policy, typename Sender, typename Shape, typename F,
-    bool IsChunked>
-struct is_thread_pool_bulk_sender<hpx::execution::experimental::detail::
-        thread_pool_bulk_sender<Policy, Sender, Shape, F, IsChunked>>
+    bool IsChunked, bool IsParallel, bool IsUnsequenced>
+struct is_thread_pool_bulk_sender<
+    hpx::execution::experimental::detail::thread_pool_bulk_sender<Policy,
+        Sender, Shape, F, IsChunked, IsParallel, IsUnsequenced>>
   : std::true_type
 {
 };
@@ -1804,7 +1805,7 @@ void test_stdexec_domain_queries()
     // 3. Verify the domain type is thread_pool_domain
     static_assert(
         std::is_same_v<decltype(domain), ex::thread_pool_domain<hpx::launch>>,
-        "scheduler domain should be thread_pool_domain<hpx::launch>");
+        "scheduler domain should be thread_pool_domain");
     // 4. Verify transform_sender produces thread_pool_bulk_sender for
     //    bulk_chunked (proves the domain customization is picked up)
     {
@@ -2131,6 +2132,18 @@ void test_completion_scheduler()
     {
         auto sender = ex::bulk(
             ex::schedule(ex::thread_pool_scheduler{}), ex::par, 10, [](int) {});
+        auto completion_scheduler =
+            ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(sender));
+        static_assert(
+            std::is_same_v<std::decay_t<decltype(completion_scheduler)>,
+                ex::thread_pool_scheduler>,
+            "the completion scheduler should be a thread_pool_scheduler");
+    }
+
+    {
+        auto sender = ex::bulk(
+            ex::schedule(ex::thread_pool_scheduler{}),
+            hpx::execution::parallel_task_policy{}, 10, [](int) {});
         auto completion_scheduler =
             ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(sender));
         static_assert(

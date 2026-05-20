@@ -312,14 +312,18 @@ namespace hpx::cuda::experimental {
                         S, Env>{},
                     invoke_function_transformation_fn{},
                     default_set_error_fn{},
-                    hpx::execution::experimental::ignore_completion{}))
+                    hpx::execution::experimental::ignore_completion{},
+                    hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_stopped_t()>{}))
             {
                 return hpx::execution::experimental::transform_completion_signatures(
                     hpx::execution::experimental::completion_signatures_of_t<
                         S, Env>{},
                     invoke_function_transformation_fn{},
                     default_set_error_fn{},
-                    hpx::execution::experimental::ignore_completion{});
+                    hpx::execution::experimental::ignore_completion{},
+                    hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_stopped_t()>{});
             }
             // clang-format on
 

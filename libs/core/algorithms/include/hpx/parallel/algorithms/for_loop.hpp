@@ -1215,11 +1215,10 @@ namespace hpx::parallel {
                     if constexpr (hpx::is_async_execution_policy_v<ExPolicy> ||
                         is_scheduler_policy)
                     {
-                        return util::detail::algorithm_result<ExPolicy>::get(
-                            util::partitioner<ExPolicy>::call(
-                                HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
-                                part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
-                                hpx::util::empty_function{}));
+                        return util::call_with_algorithm_result<ExPolicy>(
+                            HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
+                            part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
+                            hpx::util::empty_function{});
                     }
                     else
                     {
