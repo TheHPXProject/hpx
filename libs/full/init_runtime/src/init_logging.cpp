@@ -8,6 +8,7 @@
 
 #if defined(HPX_HAVE_LOGGING)
 #include <hpx/init_runtime/detail/init_logging.hpp>
+#include <hpx/init_runtime_local/detail/init_logging.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 

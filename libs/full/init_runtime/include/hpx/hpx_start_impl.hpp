@@ -16,10 +16,7 @@
 #include <hpx/init_runtime/detail/run_or_start.hpp>
 #include <hpx/modules/debugging.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
 
 #include <cstddef>
 #include <utility>

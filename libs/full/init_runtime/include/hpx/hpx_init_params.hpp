@@ -1,5 +1,5 @@
 //  Copyright (c) 2020 ETH Zurich
-//  Copyright (c) 2022-2023 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,9 +15,8 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/resource_partitioner_mode.hpp>
+#include <hpx/modules/runtime_mode.hpp>
 
 #include <cstring>
 #include <functional>
@@ -113,9 +112,9 @@ namespace hpx {
         std::vector<std::string> cfg;
         std::function<void()> startup;
         std::function<void()> shutdown;
-        hpx::runtime_mode mode = ::hpx::runtime_mode::default_;
+        hpx::runtime_mode mode = hpx::runtime_mode::default_;
         hpx::resource::partitioner_mode rp_mode =
-            ::hpx::resource::partitioner_mode::default_;
+            hpx::resource::partitioner_mode::default_;
         hpx::resource::rp_callback_type rp_callback;
     };
 }    // namespace hpx

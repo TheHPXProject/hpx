@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/resource_partitioner/partitioner_mode.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -36,19 +37,9 @@ namespace hpx::resource {
     /// Returns false otherwise.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool is_partitioner_valid();
 
-    /// This enumeration describes the modes available when creating a
-    /// resource partitioner.
-    HPX_CXX_CORE_EXPORT enum class partitioner_mode : std::int8_t {
-        /// Default mode.
-        default_ = 0,
-
-        /// Allow processing units to be oversubscribed, i.e. multiple
-        /// worker threads to share a single processing unit.
-        allow_oversubscription = 1,
-
-        /// Allow worker threads to be added and removed from thread pools.
-        allow_dynamic_pools = 2
-    };
+    // partitioner_mode enum is defined in partitioner_mode.hpp
+    // (included above) to allow lightweight inclusion without the
+    // functional/threading_base transitive dependencies of this header.
 
 #define HPX_PARTITIONER_MODE_UNSCOPED_ENUM_DEPRECATION_MSG                     \
     "The unscoped partitioner_mode names are deprecated. Please use "          \
@@ -64,18 +55,6 @@ namespace hpx::resource {
         partitioner_mode::allow_dynamic_pools;
 
 #undef HPX_PARTITIONER_MODE_UNSCOPED_ENUM_DEPRECATION_MSG
-
-    HPX_CXX_CORE_EXPORT constexpr partitioner_mode operator&(
-        partitioner_mode lhs, partitioner_mode rhs) noexcept
-    {
-        return static_cast<partitioner_mode>(
-            static_cast<int>(lhs) & static_cast<int>(rhs));
-    }
-
-    HPX_CXX_CORE_EXPORT constexpr bool as_bool(partitioner_mode val) noexcept
-    {
-        return static_cast<int>(val) != 0;
-    }
 
     HPX_CXX_CORE_EXPORT using scheduler_function =
         hpx::function<std::unique_ptr<hpx::threads::thread_pool_base>(

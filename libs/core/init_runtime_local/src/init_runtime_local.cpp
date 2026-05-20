@@ -10,6 +10,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/init_runtime_local/detail/init_logging.hpp>
 #include <hpx/init_runtime_local/init_runtime_local.hpp>
+#include <hpx/init_runtime_local/macros.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/command_line_handling_local.hpp>
 #include <hpx/modules/errors.hpp>
@@ -21,6 +22,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/prefix.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_local.hpp>
@@ -99,6 +101,16 @@ namespace hpx {
     }    // namespace detail
 
     namespace local {
+
+        namespace detail {
+            void dump_config::operator()() const
+            {
+                std::cout << "Configuration after runtime start:\n";
+                std::cout << "----------------------------------\n";
+                rt_.get().get_config().dump(0, std::cout);
+                std::cout << "----------------------------------\n";
+            }
+        }    // namespace detail
 
         // Print stack trace and exit.
 #if defined(HPX_WINDOWS)
@@ -540,3 +552,33 @@ namespace hpx {
         }    // namespace detail
     }    // namespace local
 }    // namespace hpx
+
+namespace hpx::local::detail {
+    int init_start_impl(
+        hpx::function<int(hpx::program_options::variables_map&)> const& f,
+        int argc, char** argv, init_params const& params, bool blocking)
+    {
+        if (argc == 0 || argv == nullptr)
+        {
+            argc = dummy_argc;
+            argv = dummy_argv;
+        }
+
+        util::set_hpx_prefix(HPX_PREFIX);
+#if defined(__FreeBSD__)
+        freebsd_environ = environ;
+#endif
+        // set a handler for std::abort
+        [[maybe_unused]] auto prev_sh =
+            std::signal(SIGABRT, hpx::detail::on_abort);
+
+        [[maybe_unused]] auto ret = std::atexit(hpx::detail::on_exit);
+        HPX_ASSERT_MSG(ret == 0, "std::atexit returned error code");
+
+#if defined(HPX_HAVE_CXX11_STD_QUICK_EXIT)
+        ret = std::at_quick_exit(hpx::detail::on_exit);
+        HPX_ASSERT_MSG(ret == 0, "std::at_quick_exit returned error code");
+#endif
+        return run_or_start(f, argc, argv, params, blocking);
+    }
+}    // namespace hpx::local::detail

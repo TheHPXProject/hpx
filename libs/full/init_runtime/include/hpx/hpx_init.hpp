@@ -17,10 +17,12 @@
 #include <hpx/hpx_main_winsocket.hpp>
 #include <hpx/hpx_suspend.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
 
+namespace hpx {
+    class runtime;
+    using startup_function_type = hpx::move_only_function<void()>;
+    using shutdown_function_type = hpx::move_only_function<void()>;
+}
 #include <cstddef>
 #include <functional>
 
@@ -192,8 +194,7 @@ namespace hpx {
 #if !defined(HPX_HAVE_STATIC_LINKING)
     inline
 #endif
-        int
-        init(init_params const& params = init_params());
+        int init(init_params const& params = init_params());
 }    // namespace hpx
 
 #if !defined(DOXYGEN)
