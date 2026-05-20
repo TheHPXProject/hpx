@@ -11,6 +11,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
@@ -62,21 +63,26 @@ namespace hpx::execution::experimental {
                 exec_, num_threads);
         }
 
-        restricted_policy_executor(restricted_policy_executor const& other)
+        // clang-format off
+        restricted_policy_executor(
+            restricted_policy_executor const& other)
+            noexcept(std::is_nothrow_copy_constructible_v<embedded_executor>)
           : first_thread_(other.first_thread_)
           , os_thread_(other.os_thread_.load())
           , exec_(other.exec_)
         {
         }
 
-        restricted_policy_executor& operator=(
-            restricted_policy_executor const& rhs)
+        restricted_policy_executor&
+        operator=(restricted_policy_executor const& rhs)
+            noexcept(std::is_nothrow_copy_assignable_v<embedded_executor>)
         {
             first_thread_ = rhs.first_thread_;
             os_thread_ = rhs.os_thread_.load();
             exec_ = rhs.exec_;
             return *this;
         }
+        // clang-format on
 
         /// \cond NOINTERNAL
         bool operator==(restricted_policy_executor const& rhs) const noexcept
@@ -225,6 +231,30 @@ namespace hpx::execution::experimental {
                 HPX_FORWARD(Ts, ts)...);
         }
         /// \endcond
+
+    public:
+        // clang-format off
+        constexpr hpx::execution::experimental::executor_scheduler<
+            restricted_policy_executor>
+        query(hpx::execution::experimental::get_scheduler_t) const
+            noexcept(std::is_nothrow_copy_constructible_v<
+                restricted_policy_executor>)
+        {
+            return hpx::execution::experimental::executor_scheduler<
+                restricted_policy_executor>(*this);
+        }
+
+        constexpr hpx::execution::experimental::detail::executor_sender<
+            restricted_policy_executor>
+        schedule() const
+            noexcept(std::is_nothrow_copy_constructible_v<
+                restricted_policy_executor>)
+        {
+            return hpx::execution::experimental::executor_scheduler<
+                restricted_policy_executor>(*this)
+                .schedule();
+        }
+        // clang-format on
 
     private:
         std::uint16_t first_thread_;

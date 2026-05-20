@@ -10,6 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/executors/execution_policy_mappings.hpp>
+#include <hpx/executors/executor_scheduler.hpp>
 #include <hpx/executors/parallel_executor.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
@@ -235,6 +236,28 @@ namespace hpx::execution {
             return parallel_executor();
 #endif
         }
+
+    public:
+        /// \cond NOINTERNAL
+        constexpr hpx::execution::experimental::executor_scheduler<
+            sequenced_executor>
+        query(hpx::execution::experimental::get_scheduler_t) const
+            noexcept(std::is_nothrow_copy_constructible_v<sequenced_executor>)
+        {
+            return hpx::execution::experimental::executor_scheduler<
+                sequenced_executor>(*this);
+        }
+
+        constexpr hpx::execution::experimental::detail::executor_sender<
+            sequenced_executor>
+        schedule() const
+            noexcept(std::is_nothrow_copy_constructible_v<sequenced_executor>)
+        {
+            return hpx::execution::experimental::executor_scheduler<
+                sequenced_executor>(*this)
+                .schedule();
+        }
+        /// \endcond
 
     private:
         friend class hpx::serialization::access;
