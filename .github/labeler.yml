@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Arpit Khandelwal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+cmake:
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.cmake', 'CMakeLists.txt', '**/CMakeLists.txt']
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ['docs/**/*', '**/*.md']
+
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file: ['.github/**/*']
+
+core:
+  - changed-files:
+      - any-glob-to-any-file: ['libs/core/**/*']
+
+full:
+  - changed-files:
+      - any-glob-to-any-file: ['libs/full/**/*']
+
+tests:
+  - changed-files:
+          - any-glob-to-any-file: ['tests/**/*', 'libs/**/tests/**/*']
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file: ['examples/**/*']
