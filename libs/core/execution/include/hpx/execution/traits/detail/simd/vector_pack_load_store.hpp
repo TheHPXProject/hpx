@@ -35,7 +35,15 @@ namespace hpx::parallel::traits {
         template <typename Iter>
         HPX_HOST_DEVICE HPX_FORCEINLINE static V unaligned(Iter& iter)
         {
-            return *iter;
+            if constexpr (traits::is_scalar_vector_pack_v<V>)
+            {
+                return *iter;
+            }
+            else
+            {
+                return V(std::addressof(*iter),
+                    std::experimental::element_aligned);
+            }
         }
     };
 
@@ -56,7 +64,15 @@ namespace hpx::parallel::traits {
         HPX_HOST_DEVICE HPX_FORCEINLINE static void unaligned(
             V& value, Iter& iter)
         {
-            *iter = value;
+            if constexpr (traits::is_scalar_vector_pack_v<V>)
+            {
+                *iter = value;
+            }
+            else
+            {
+                value.copy_to(std::addressof(*iter),
+                    std::experimental::element_aligned);
+            }
         }
     };
 }    // namespace hpx::parallel::traits
