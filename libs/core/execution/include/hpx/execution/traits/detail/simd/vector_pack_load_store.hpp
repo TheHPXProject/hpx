@@ -41,8 +41,8 @@ namespace hpx::parallel::traits {
             }
             else
             {
-                return V(std::addressof(*iter),
-                    std::experimental::element_aligned);
+                return V(
+                    std::addressof(*iter), std::experimental::element_aligned);
             }
         }
     };
@@ -70,8 +70,8 @@ namespace hpx::parallel::traits {
             }
             else
             {
-                value.copy_to(std::addressof(*iter),
-                    std::experimental::element_aligned);
+                value.copy_to(
+                    std::addressof(*iter), std::experimental::element_aligned);
             }
         }
     };

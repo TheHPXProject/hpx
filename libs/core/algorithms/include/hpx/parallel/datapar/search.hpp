@@ -42,8 +42,7 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::detail::iterator_datapar_compatible<
                 Iter2>::value)
         {
-            using value_type =
-                typename std::iterator_traits<Iter1>::value_type;
+            using value_type = typename std::iterator_traits<Iter1>::value_type;
             using pack_type =
                 hpx::parallel::traits::vector_pack_type_t<value_type>;
             constexpr std::size_t pack_size =
@@ -75,12 +74,10 @@ namespace hpx::parallel::detail {
                 if (tok.was_cancelled(base_idx + i))
                     return;
 
-                pack_type v(
-                    hpx::parallel::traits::vector_pack_load<pack_type,
-                        value_type>::unaligned(curr));
+                pack_type v(hpx::parallel::traits::vector_pack_load<pack_type,
+                    value_type>::unaligned(curr));
 
-                auto mask =
-                    HPX_INVOKE(op, HPX_INVOKE(proj1, v), needle0);
+                auto mask = HPX_INVOKE(op, HPX_INVOKE(proj1, v), needle0);
 
                 if (!hpx::parallel::traits::none_of(mask))
                 {
@@ -134,8 +131,7 @@ namespace hpx::parallel::detail {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
                           Iter>::value)
         {
-            using value_type =
-                typename std::iterator_traits<Iter>::value_type;
+            using value_type = typename std::iterator_traits<Iter>::value_type;
             using pack_type =
                 hpx::parallel::traits::vector_pack_type_t<value_type>;
             constexpr std::size_t pack_size =
@@ -159,12 +155,10 @@ namespace hpx::parallel::detail {
                 if (tok.was_cancelled(base_idx + i))
                     return;
 
-                pack_type v(
-                    hpx::parallel::traits::vector_pack_load<pack_type,
-                        value_type>::unaligned(curr));
+                pack_type v(hpx::parallel::traits::vector_pack_load<pack_type,
+                    value_type>::unaligned(curr));
 
-                auto mask =
-                    HPX_INVOKE(pred, HPX_INVOKE(proj, v), value_proj);
+                auto mask = HPX_INVOKE(pred, HPX_INVOKE(proj, v), value_proj);
 
                 if (hpx::parallel::traits::none_of(mask))
                 {
