@@ -153,7 +153,7 @@ namespace hpx::parallel::detail {
             // SIMD bulk pass
             for (; i + pack_size <= scan_count; i += pack_size)
             {
-                if (tok.was_cancelled(base_idx))
+                if (tok.was_cancelled(base_idx + i))
                     return;
 
                 pack_type v(
@@ -214,7 +214,7 @@ namespace hpx::parallel::detail {
             // Scalar tail (< pack_size elements remaining)
             for (; i < scan_count; ++i, ++curr)
             {
-                if (tok.was_cancelled(base_idx))
+                if (tok.was_cancelled(base_idx + i))
                     return;
 
                 if (HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
