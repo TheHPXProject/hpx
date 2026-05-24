@@ -12,6 +12,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/program_options.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -122,6 +123,15 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t vector_size = vm["vector_size"].as<std::size_t>();
     int test_count = vm["test_count"].as<int>();
     int needle_count = vm["needle_count"].as<int>();
+
+    if (needle_count < 1 ||
+        vector_size < 4 * static_cast<std::size_t>(needle_count) + 1)
+    {
+        std::cerr << "vector_size must be at least 4 * needle_count + 1 "
+                     "and needle_count must be >= 1"
+                  << std::endl;
+        return hpx::local::finalize();
+    }
 
     std::size_t const os_threads = hpx::get_os_thread_count();
 
