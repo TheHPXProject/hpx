@@ -12,6 +12,8 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <cstdlib>
+#include <ctime>
 #include <iostream>
 #include <iterator>
 #include <numeric>
@@ -40,9 +42,15 @@ void test_shift_right_sender(
     std::iota(std::begin(c), std::end(c), std::rand());
     std::vector<std::size_t> d = c;
 
-    std::size_t n = (std::rand() % (std::size_t) ARR_SIZE) + 1;
-
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
+
+    // verify shift by 0 is a no-op
+    tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
+                      std::size_t(0)) |
+        hpx::shift_right(ex_policy.on(exec)));
+    HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(d)));
+
+    std::size_t n = (static_cast<std::size_t>(std::rand()) % ARR_SIZE) + 1;
 
     tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)), n) |
         hpx::shift_right(ex_policy.on(exec)));
@@ -54,10 +62,10 @@ void test_shift_right_sender(
     HPX_TEST(std::equal(std::begin(c) + static_cast<std::ptrdiff_t>(n),
         std::end(c), std::begin(d) + static_cast<std::ptrdiff_t>(n)));
 
-    // ensure shift by more than n does not crash
+    // ensure shift by more than the range length does not crash
     tt::sync_wait(
         ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-            (std::size_t)(ARR_SIZE + 1)) |
+            static_cast<std::size_t>(ARR_SIZE + 1)) |
         hpx::shift_right(ex_policy.on(exec)));
 }
 
