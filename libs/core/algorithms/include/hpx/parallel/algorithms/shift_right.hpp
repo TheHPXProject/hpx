@@ -123,6 +123,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/reverse.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
+#include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 #include <hpx/parallel/util/transfer.hpp>
 
@@ -264,6 +265,16 @@ namespace hpx::parallel {
                 FwdIter2>::type
             parallel(ExPolicy&& policy, FwdIter2 first, Sent last, Size n)
             {
+                constexpr bool has_scheduler_executor =
+                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
+
+                if constexpr (has_scheduler_executor)
+                {
+                    return util::detail::algorithm_result<ExPolicy,
+                        FwdIter2>::get(sequential(
+                        HPX_FORWARD(ExPolicy, policy), first, last, n));
+                }
+
                 auto dist =
                     static_cast<std::size_t>(detail::distance(first, last));
                 // C++20 [alg.shift]: if n is 0, do nothing and return first.
@@ -293,7 +304,7 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::shift_right
     HPX_CXX_CORE_EXPORT inline constexpr struct shift_right_t final
-      : hpx::functional::detail::tag_fallback<shift_right_t>
+      : hpx::detail::tag_parallel_algorithm<shift_right_t>
     {
     private:
         template <typename FwdIter, typename Size>
