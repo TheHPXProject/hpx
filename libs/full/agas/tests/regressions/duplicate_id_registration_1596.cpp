@@ -17,6 +17,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <iostream>
 
 using namespace std;
 

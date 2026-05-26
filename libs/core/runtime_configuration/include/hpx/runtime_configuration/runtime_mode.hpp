@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,7 +12,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
 #include <cstdint>
 #include <string>
 

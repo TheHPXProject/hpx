@@ -7,6 +7,7 @@
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(runtime_configuration_headers
+    hpx/modules/runtime_mode.hpp
     hpx/runtime_configuration/agas_service_mode.hpp
     hpx/runtime_configuration/component_commandline_base.hpp
     hpx/runtime_configuration/component_factory_base.hpp
