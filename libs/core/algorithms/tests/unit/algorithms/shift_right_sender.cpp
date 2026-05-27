@@ -11,6 +11,7 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 #include <ctime>
@@ -44,13 +45,16 @@ void test_shift_right_sender(
 
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
 
-    // verify shift by 0 is a no-op
-    tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-                      std::size_t(0)) |
+    // verify shift by 0 is a no-op and returns first
+    auto result_zero = tt::sync_wait(
+        ex::just(iterator(std::begin(c)), iterator(std::end(c)),
+            std::size_t(0)) |
         hpx::shift_right(ex_policy.on(exec)));
     HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(d)));
+    HPX_TEST(hpx::get<0>(result_zero) == iterator(std::begin(c)));
 
-    std::size_t n = (static_cast<std::size_t>(std::rand()) % ARR_SIZE) + 1;
+    std::size_t n =
+        (static_cast<std::size_t>(std::rand()) % (ARR_SIZE - 1)) + 1;
 
     tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)), n) |
         hpx::shift_right(ex_policy.on(exec)));
@@ -62,11 +66,12 @@ void test_shift_right_sender(
     HPX_TEST(std::equal(std::begin(c) + static_cast<std::ptrdiff_t>(n),
         std::end(c), std::begin(d) + static_cast<std::ptrdiff_t>(n)));
 
-    // ensure shift by more than the range length does not crash
-    tt::sync_wait(
+    // ensure shift by more than the range length returns last
+    auto result_over = tt::sync_wait(
         ex::just(iterator(std::begin(c)), iterator(std::end(c)),
             static_cast<std::size_t>(ARR_SIZE + 1)) |
         hpx::shift_right(ex_policy.on(exec)));
+    HPX_TEST(hpx::get<0>(result_over) == iterator(std::end(c)));
 }
 
 template <typename IteratorTag>
