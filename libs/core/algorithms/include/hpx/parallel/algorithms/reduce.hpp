@@ -393,50 +393,6 @@ namespace hpx::parallel {
         // value_type elements when T may differ from value_type (e.g. minmax).
         struct reduce_executor_parameters
         {
-        private:
-            static HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
-            adjust_chunk_size_and_max_chunks_impl(std::size_t num_elements,
-                std::size_t num_cores, std::size_t max_chunks,
-                std::size_t chunk_size) noexcept
-            {
-                if (num_elements <= 1)
-                {
-                    return {chunk_size, max_chunks};
-                }
-
-                // Ensure minimum chunk size of 2 for reduce_partition.
-                if (chunk_size < 2)
-                {
-                    chunk_size = (num_elements + num_cores - 1) / num_cores;
-                    chunk_size = (std::max) (chunk_size, std::size_t(2));
-                }
-
-                // chunk_size_iterator gives the last partition
-                // num_elements % chunk_size elements (or chunk_size if
-                // evenly divisible). If the remainder is 1, that partition
-                // would violate reduce_partition's >= 2 requirement.
-                // Bump chunk_size until the remainder is 0 or >= 2.
-                while (
-                    num_elements > chunk_size && num_elements % chunk_size == 1)
-                {
-                    ++chunk_size;
-                }
-
-                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
-                return {chunk_size, max_chunks};
-            }
-
-        public:
-            template <typename Executor>
-            HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
-            adjust_chunk_size_and_max_chunks(Executor&&,
-                std::size_t num_elements, std::size_t num_cores,
-                std::size_t max_chunks, std::size_t chunk_size) const noexcept
-            {
-                return adjust_chunk_size_and_max_chunks_impl(
-                    num_elements, num_cores, max_chunks, chunk_size);
-            }
-
             template <typename InnerParams, typename Executor>
             friend HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
             tag_override_invoke(hpx::execution::experimental::
@@ -446,14 +402,42 @@ namespace hpx::parallel {
                 std::size_t num_cores, std::size_t max_chunks,
                 std::size_t chunk_size)
             {
+                // First get the base adjustment from the inner parameters.
                 auto [adjusted_chunk_size, adjusted_max_chunks] = hpx::
                     execution::experimental::adjust_chunk_size_and_max_chunks(
                         HPX_FORWARD(InnerParams, inner),
                         HPX_FORWARD(Executor, exec), num_elements, num_cores,
                         max_chunks, chunk_size);
 
-                return adjust_chunk_size_and_max_chunks_impl(num_elements,
-                    num_cores, adjusted_max_chunks, adjusted_chunk_size);
+                if (num_elements <= 1)
+                {
+                    return {adjusted_chunk_size, adjusted_max_chunks};
+                }
+
+                // Ensure minimum chunk size of 2 for reduce_partition.
+                if (adjusted_chunk_size < 2)
+                {
+                    adjusted_chunk_size =
+                        (num_elements + num_cores - 1) / num_cores;
+                    adjusted_chunk_size =
+                        (std::max) (adjusted_chunk_size, std::size_t(2));
+                }
+
+                // chunk_size_iterator gives the last partition
+                // num_elements % chunk_size elements (or chunk_size if
+                // evenly divisible). If the remainder is 1, that partition
+                // would violate reduce_partition's >= 2 requirement.
+                // Bump chunk_size until the remainder is 0 or >= 2.
+                while (num_elements > adjusted_chunk_size &&
+                    num_elements % adjusted_chunk_size == 1)
+                {
+                    ++adjusted_chunk_size;
+                }
+
+                adjusted_max_chunks =
+                    (num_elements + adjusted_chunk_size - 1) /
+                    adjusted_chunk_size;
+                return {adjusted_chunk_size, adjusted_max_chunks};
             }
         };
         /// \endcond
@@ -474,12 +458,16 @@ namespace hpx::execution::experimental {
 namespace hpx::parallel { namespace detail {
 
     // Helper function to reduce a partition without requiring an init value.
-    // Assumes partition size >= 2 (enforced by reduce_executor_parameters).
     template <typename ExPolicy, typename FwdIterB, typename T, typename Reduce>
     T reduce_partition(
         FwdIterB part_begin, std::size_t part_size, Reduce const& r)
     {
-        HPX_ASSERT(part_size >= 2);
+        HPX_ASSERT(part_size != 0);
+
+        if (part_size == 1)
+        {
+            return *part_begin;
+        }
 
         // Combine first two elements using the reduction operator
         T init = HPX_INVOKE(r, *part_begin, *std::next(part_begin));
