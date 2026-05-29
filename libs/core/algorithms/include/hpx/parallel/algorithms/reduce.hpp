@@ -402,25 +402,29 @@ namespace hpx::parallel {
                 std::size_t num_cores, std::size_t max_chunks,
                 std::size_t chunk_size)
             {
-                // First get the base adjustment from the inner parameters.
                 auto [adjusted_chunk_size, adjusted_max_chunks] = hpx::
                     execution::experimental::adjust_chunk_size_and_max_chunks(
                         HPX_FORWARD(InnerParams, inner),
                         HPX_FORWARD(Executor, exec), num_elements, num_cores,
                         max_chunks, chunk_size);
 
+                auto result = hpx::execution::experimental::
+                    adjust_chunk_size_and_max_chunks_default(num_elements,
+                        num_cores, adjusted_max_chunks, adjusted_chunk_size);
+
+                std::size_t new_chunk_size = result.first;
+                std::size_t new_max_chunks = result.second;
+
                 if (num_elements <= 1)
                 {
-                    return {adjusted_chunk_size, adjusted_max_chunks};
+                    return {new_chunk_size, new_max_chunks};
                 }
 
                 // Ensure minimum chunk size of 2 for reduce_partition.
-                if (adjusted_chunk_size < 2)
+                if (new_chunk_size < 2)
                 {
-                    adjusted_chunk_size =
-                        (num_elements + num_cores - 1) / num_cores;
-                    adjusted_chunk_size =
-                        (std::max) (adjusted_chunk_size, std::size_t(2));
+                    new_chunk_size = (num_elements + num_cores - 1) / num_cores;
+                    new_chunk_size = (std::max) (new_chunk_size, std::size_t(2));
                 }
 
                 // chunk_size_iterator gives the last partition
@@ -428,16 +432,14 @@ namespace hpx::parallel {
                 // evenly divisible). If the remainder is 1, that partition
                 // would violate reduce_partition's >= 2 requirement.
                 // Bump chunk_size until the remainder is 0 or >= 2.
-                while (num_elements > adjusted_chunk_size &&
-                    num_elements % adjusted_chunk_size == 1)
+                while (
+                    num_elements > new_chunk_size && num_elements % new_chunk_size == 1)
                 {
-                    ++adjusted_chunk_size;
+                    ++new_chunk_size;
                 }
 
-                adjusted_max_chunks =
-                    (num_elements + adjusted_chunk_size - 1) /
-                    adjusted_chunk_size;
-                return {adjusted_chunk_size, adjusted_max_chunks};
+                new_max_chunks = (num_elements + new_chunk_size - 1) / new_chunk_size;
+                return {new_chunk_size, new_max_chunks};
             }
         };
         /// \endcond
@@ -462,12 +464,7 @@ namespace hpx::parallel { namespace detail {
     T reduce_partition(
         FwdIterB part_begin, std::size_t part_size, Reduce const& r)
     {
-        HPX_ASSERT(part_size != 0);
-
-        if (part_size == 1)
-        {
-            return *part_begin;
-        }
+        HPX_ASSERT(part_size >= 2);
 
         // Combine first two elements using the reduction operator
         T init = HPX_INVOKE(r, *part_begin, *std::next(part_begin));

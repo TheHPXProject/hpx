@@ -16,9 +16,67 @@
 
 #include <cstddef>
 #include <type_traits>
+#include <algorithm>
 #include <utility>
 
 namespace hpx::execution::experimental {
+
+    HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+    adjust_chunk_size_and_max_chunks_default(std::size_t num_elements,
+        std::size_t num_cores, std::size_t max_chunks,
+        std::size_t chunk_size) noexcept
+    {
+        if (num_elements == 0)
+        {
+            return {0, 0};
+        }
+
+        if (max_chunks == 0)
+        {
+            if (chunk_size == 0)
+            {
+                std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+
+                chunk_size = (num_elements + cores_times_4 - 1) / cores_times_4;
+
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+
+                max_chunks =
+                    (std::min) (max_chunks, num_elements);    // -V112
+
+                chunk_size = (std::max) (chunk_size,
+                    (num_elements + max_chunks - 1) / max_chunks);
+            }
+            else
+            {
+                // max_chunks == 0 && chunk_size != 0
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+            }
+        }
+        else if (chunk_size == 0)
+        {
+            chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+
+            max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+        }
+        else
+        {
+            // max_chunks != 0 && chunk_size != 0
+            std::size_t const calculated_max_chunks =
+                (num_elements + chunk_size - 1) / chunk_size;
+
+            if (calculated_max_chunks > max_chunks)
+            {
+                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+            }
+            else if (calculated_max_chunks < max_chunks)
+            {
+                max_chunks = calculated_max_chunks;
+            }
+        }
+
+        return {chunk_size, max_chunks};
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Executor information customization points

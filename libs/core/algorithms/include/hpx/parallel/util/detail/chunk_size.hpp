@@ -8,6 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/execution/executors/execution_parameters_fwd.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -58,64 +59,17 @@ namespace hpx::parallel::util::detail {
         std::size_t& max_chunks, std::size_t& chunk_size,
         bool const has_variable_chunk_size = false) noexcept
     {
-        if (max_chunks == 0)
-        {
-            if (chunk_size == 0)
-            {
-                std::size_t const cores_times_4 = 4 * cores;    // -V112
-
-                // try to calculate chunk-size and maximum number of chunks
-                chunk_size = (count + cores_times_4 - 1) / cores_times_4;
-
-                max_chunks = (count + chunk_size - 1) / chunk_size;
-
-                // we should not consider more chunks than we have elements
-                max_chunks = (std::min) (max_chunks, count);    // -V112
-
-                // we should not make chunks smaller than what's determined by
-                // the max chunk size
-                chunk_size = (std::max) (chunk_size,
-                    (count + max_chunks - 1) / max_chunks);
-            }
-            else
-            {
-                // max_chunks == 0 && chunk_size != 0
-                max_chunks = (count + chunk_size - 1) / chunk_size;
-            }
-            return;
-        }
-
-        if (has_variable_chunk_size)
+        if (max_chunks != 0 && has_variable_chunk_size)
         {
             HPX_ASSERT(chunk_size != 0);
             return;
         }
 
-        if (chunk_size == 0)
-        {
-            // max_chunks != 0
-            chunk_size = (count + max_chunks - 1) / max_chunks;
-
-            max_chunks = (count + chunk_size - 1) / chunk_size;
-        }
-        else
-        {
-            // max_chunks != 0 && chunk_size != 0
-
-            // in this case we make sure that there are no more chunks than
-            // max_chunks
-            std::size_t const calculated_max_chunks =
-                (count + chunk_size - 1) / chunk_size;
-
-            if (calculated_max_chunks > max_chunks)
-            {
-                chunk_size = (count + max_chunks - 1) / max_chunks;
-            }
-            else if (calculated_max_chunks < max_chunks)
-            {
-                max_chunks = calculated_max_chunks;
-            }
-        }
+        auto const result =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks_default(
+                count, cores, max_chunks, chunk_size);
+        chunk_size = result.first;
+        max_chunks = result.second;
     }
 
     ////////////////////////////////////////////////////////////////////////////
