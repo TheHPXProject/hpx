@@ -420,7 +420,8 @@ namespace hpx::parallel {
                 if (new_chunk_size < 2)
                 {
                     new_chunk_size = (num_elements + num_cores - 1) / num_cores;
-                    new_chunk_size = (std::max) (new_chunk_size, std::size_t(2));
+                    new_chunk_size =
+                        (std::max) (new_chunk_size, std::size_t(2));
                 }
 
                 // chunk_size_iterator gives the last partition
