@@ -47,8 +47,7 @@ namespace hpx::execution::experimental {
 
                 max_chunks = (num_elements + chunk_size - 1) / chunk_size;
 
-                max_chunks =
-                    (std::min) (max_chunks, num_elements);    // -V112
+                max_chunks = (std::min) (max_chunks, num_elements);    // -V112
 
                 chunk_size = (std::max) (chunk_size,
                     (num_elements + max_chunks - 1) / max_chunks);
