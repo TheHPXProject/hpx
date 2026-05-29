@@ -15,9 +15,9 @@
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <type_traits>
-#include <algorithm>
 #include <utility>
 
 namespace hpx::execution::experimental {

@@ -466,7 +466,7 @@ namespace hpx::execution::experimental {
     };
 }    // namespace hpx::execution::experimental
 
-namespace hpx::parallel { namespace detail {
+namespace hpx::parallel::detail {
 
     // Helper function to reduce a partition without requiring an init value.
     template <typename ExPolicy, typename FwdIterB, typename T, typename Reduce>
@@ -565,7 +565,7 @@ namespace hpx::parallel { namespace detail {
         }
     };
     /// \endcond
-}}    // namespace hpx::parallel::detail
+}    // namespace hpx::parallel::detail
 
 namespace hpx {
 
