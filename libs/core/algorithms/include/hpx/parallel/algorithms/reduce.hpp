@@ -408,12 +408,8 @@ namespace hpx::parallel {
                         HPX_FORWARD(Executor, exec), num_elements, num_cores,
                         max_chunks, chunk_size);
 
-                auto result = hpx::execution::experimental::
-                    adjust_chunk_size_and_max_chunks_default(num_elements,
-                        num_cores, adjusted_max_chunks, adjusted_chunk_size);
-
-                std::size_t new_chunk_size = result.first;
-                std::size_t new_max_chunks = result.second;
+                std::size_t new_chunk_size = adjusted_chunk_size;
+                std::size_t new_max_chunks = adjusted_max_chunks;
 
                 if (num_elements <= 1)
                 {
@@ -431,14 +427,27 @@ namespace hpx::parallel {
                 // num_elements % chunk_size elements (or chunk_size if
                 // evenly divisible). If the remainder is 1, that partition
                 // would violate reduce_partition's >= 2 requirement.
-                // Bump chunk_size until the remainder is 0 or >= 2.
-                while (
-                    num_elements > new_chunk_size && num_elements % new_chunk_size == 1)
+                // Reduce the number of chunks by 1 so the last partition
+                // absorbs the extra element and stays >= 2.
+                if (num_elements > new_chunk_size &&
+                    num_elements % new_chunk_size == 1)
                 {
-                    ++new_chunk_size;
+                    if (new_max_chunks > 1)
+                    {
+                        --new_max_chunks;
+                        new_chunk_size = (num_elements + new_max_chunks - 1) /
+                            new_max_chunks;
+                    }
+                    else
+                    {
+                        new_chunk_size = num_elements;
+                    }
                 }
-
-                new_max_chunks = (num_elements + new_chunk_size - 1) / new_chunk_size;
+                else
+                {
+                    new_max_chunks =
+                        (num_elements + new_chunk_size - 1) / new_chunk_size;
+                }
                 return {new_chunk_size, new_max_chunks};
             }
         };

@@ -32,6 +32,12 @@ namespace hpx::execution::experimental {
             return {0, 0};
         }
 
+        // Ensure num_cores is at least 1 to prevent division by zero.
+        if (num_cores == 0)
+        {
+            num_cores = 1;
+        }
+
         if (max_chunks == 0)
         {
             if (chunk_size == 0)
