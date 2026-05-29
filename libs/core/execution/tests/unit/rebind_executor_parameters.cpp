@@ -896,11 +896,11 @@ void replace_adjust_chunk_size_and_max_chunks()
     {
         std::atomic<bool> invoked_replaced(false);
 
-        auto params =
-            join_executor_parameters(experimental::static_chunk_size());
+        auto params = join_executor_parameters(
+            hpx::execution::experimental::static_chunk_size());
         auto bound_params = rebind_executor_parameters(params,
             test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
-        auto policy = create_rebound_policy(par, bound_params);
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
         parameters_test(policy);
 
         HPX_TEST(invoked_replaced);
@@ -910,10 +910,11 @@ void replace_adjust_chunk_size_and_max_chunks()
     {
         std::atomic<bool> invoked_replaced(false);
 
-        auto params = join_executor_parameters(experimental::max_num_chunks());
+        auto params = join_executor_parameters(
+            hpx::execution::experimental::max_num_chunks());
         auto bound_params = rebind_executor_parameters(params,
             test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
-        auto policy = create_rebound_policy(par, bound_params);
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
         parameters_test(policy);
 
         HPX_TEST(invoked_replaced);
@@ -925,9 +926,9 @@ void replace_adjust_chunk_size_and_max_chunks()
 
         auto params = join_executor_parameters(
             test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
-        auto bound_params =
-            rebind_executor_parameters(params, experimental::num_cores(4));
-        auto policy = create_rebound_policy(par, bound_params);
+        auto bound_params = rebind_executor_parameters(
+            params, hpx::execution::experimental::num_cores(4));
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
         parameters_test(policy);
 
         HPX_TEST(invoked_replaced);
@@ -943,7 +944,7 @@ void replace_adjust_chunk_size_and_max_chunks()
                 invoked_inner_replaced));
         auto bound_params = rebind_executor_parameters(params,
             test_wrapping_adjust_chunk_size_and_max_chunks(invoked_replaced));
-        auto policy = create_rebound_policy(par, bound_params);
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
         parameters_test(policy);
 
         HPX_TEST(invoked_replaced);
@@ -1000,16 +1001,65 @@ void verify_single_mark_begin_dispatch()
     std::atomic<int> wrapping_wrapped_count(0);
     std::atomic<int> wrapping_only_count(0);
 
-    auto params = join_executor_parameters(experimental::num_cores(4));
+    auto params =
+        join_executor_parameters(hpx::execution::experimental::num_cores(4));
     auto bound_params = rebind_executor_parameters(params,
         test_dual_mark_begin_execution(
             wrapping_wrapped_count, wrapping_only_count));
-    auto policy = create_rebound_policy(par, bound_params);
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
 
     parameters_test(policy);
 
     HPX_TEST_EQ(wrapping_wrapped_count.load(), 1);
     HPX_TEST_EQ(wrapping_only_count.load(), 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// test mark_begin_execution with non-wrapping overload only
+struct test_non_wrapping_mark_begin_execution
+{
+    explicit test_non_wrapping_mark_begin_execution(
+        std::atomic<int>& wrapping_only) noexcept
+      : wrapping_only(&wrapping_only)
+    {
+    }
+
+    template <typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_non_wrapping_mark_begin_execution const& self, Executor&&) noexcept
+    {
+        ++*self.wrapping_only;
+    }
+
+    std::atomic<int>* wrapping_only;
+};
+
+namespace hpx::execution::experimental {
+
+    template <>
+    struct is_executor_parameters<test_non_wrapping_mark_begin_execution>
+      : std::true_type
+    {
+    };
+}    // namespace hpx::execution::experimental
+
+void verify_non_wrapping_mark_begin_dispatch()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    std::atomic<int> wrapping_only_count(0);
+
+    auto params =
+        join_executor_parameters(hpx::execution::experimental::num_cores(4));
+    auto bound_params = rebind_executor_parameters(
+        params, test_non_wrapping_mark_begin_execution(wrapping_only_count));
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+
+    parameters_test(policy);
+
+    HPX_TEST_EQ(wrapping_only_count.load(), 1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1023,6 +1073,7 @@ int hpx_main()
     replace_collect_execution_parameters();
     replace_adjust_chunk_size_and_max_chunks();
     verify_single_mark_begin_dispatch();
+    verify_non_wrapping_mark_begin_dispatch();
 
     return hpx::local::finalize();
 }
