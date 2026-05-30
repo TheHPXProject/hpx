@@ -520,21 +520,19 @@ namespace hpx::parallel::detail {
                 // consistently typed (the partitioner returns a sender,
                 // so early returns must also go through the partitioner
                 // or return a compatible type).
-                auto const count =
-                    hpx::parallel::detail::distance(first, last);
+                auto const count = hpx::parallel::detail::distance(first, last);
 
                 // Handle empty range and single-element case before
                 // entering the partitioner (which requires chunks >= 2).
                 if (count <= 1)
                 {
-                    T result = (count == 0)
-                        ? T(HPX_FORWARD(T_, init))
-                        : HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
+                    T result = (count == 0) ?
+                        T(HPX_FORWARD(T_, init)) :
+                        HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
                     return result;
                 }
 
-                auto f1 =
-                    [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
                     return reduce_partition<ExPolicy, FwdIterB, T>(
                         part_begin, part_size, r);
                 };
@@ -552,8 +550,7 @@ namespace hpx::parallel::detail {
                     HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
                     hpx::unwrapping(
                         [init = HPX_FORWARD(T_, init),
-                            r = HPX_FORWARD(Reduce, r)](
-                            auto&& results) -> T {
+                            r = HPX_FORWARD(Reduce, r)](auto&& results) -> T {
                             return sequential_reduce<ExPolicy>(
                                 hpx::util::begin(results),
                                 hpx::util::size(results), init, r);
@@ -569,18 +566,15 @@ namespace hpx::parallel::detail {
                         HPX_FORWARD(T_, init));
                 }
 
-                auto const count =
-                    hpx::parallel::detail::distance(first, last);
+                auto const count = hpx::parallel::detail::distance(first, last);
                 if (count == 1)
                 {
-                    T result =
-                        HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
+                    T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
                     return util::detail::algorithm_result<ExPolicy, T>::get(
                         HPX_MOVE(result));
                 }
 
-                auto f1 =
-                    [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
                     return reduce_partition<ExPolicy, FwdIterB, T>(
                         part_begin, part_size, r);
                 };
@@ -598,8 +592,7 @@ namespace hpx::parallel::detail {
                     HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
                     hpx::unwrapping(
                         [init = HPX_FORWARD(T_, init),
-                            r = HPX_FORWARD(Reduce, r)](
-                            auto&& results) -> T {
+                            r = HPX_FORWARD(Reduce, r)](auto&& results) -> T {
                             return sequential_reduce<ExPolicy>(
                                 hpx::util::begin(results),
                                 hpx::util::size(results), init, r);
