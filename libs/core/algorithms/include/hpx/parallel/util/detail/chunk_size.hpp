@@ -65,7 +65,7 @@ namespace hpx::parallel::util::detail {
             return;
         }
 
-        auto const result = hpx::execution::experimental::
+        auto const result = hpx::execution::experimental::detail::
             adjust_chunk_size_and_max_chunks_default(
                 count, cores, max_chunks, chunk_size);
         chunk_size = result.first;

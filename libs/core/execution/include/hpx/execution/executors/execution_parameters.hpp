@@ -671,7 +671,7 @@ namespace hpx::execution::experimental::detail {
             std::size_t num_cores, std::size_t max_chunks,
             std::size_t chunk_size) noexcept
         {
-            return adjust_chunk_size_and_max_chunks_default(
+            return detail::adjust_chunk_size_and_max_chunks_default(
                 num_elements, num_cores, max_chunks, chunk_size);
         }
     };

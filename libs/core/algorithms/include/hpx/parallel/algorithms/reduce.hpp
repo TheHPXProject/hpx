@@ -430,7 +430,7 @@ namespace hpx::parallel {
                 // would violate reduce_partition's >= 2 requirement.
                 // Reduce the number of chunks by 1 so the last partition
                 // absorbs the extra element and stays >= 2.
-                if (num_elements > new_chunk_size &&
+                while (num_elements > new_chunk_size &&
                     num_elements % new_chunk_size == 1)
                 {
                     if (new_max_chunks > 1)
@@ -444,11 +444,9 @@ namespace hpx::parallel {
                         new_chunk_size = num_elements;
                     }
                 }
-                else
-                {
-                    new_max_chunks =
-                        (num_elements + new_chunk_size - 1) / new_chunk_size;
-                }
+                new_max_chunks =
+                    (num_elements + new_chunk_size - 1) / new_chunk_size;
+
                 return {new_chunk_size, new_max_chunks};
             }
         };
@@ -526,10 +524,17 @@ namespace hpx::parallel::detail {
                 // entering the partitioner (which requires chunks >= 2).
                 if (count <= 1)
                 {
-                    T result = (count == 0) ?
-                        T(HPX_FORWARD(T_, init)) :
-                        HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
-                    return result;
+                    if (count == 0)
+                    {
+                        return util::detail::algorithm_result<ExPolicy, T>::get(
+                            T(HPX_FORWARD(T_, init)));
+                    }
+                    else
+                    {
+                        T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
+                        return util::detail::algorithm_result<ExPolicy, T>::get(
+                            HPX_MOVE(result));
+                    }
                 }
 
                 auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {

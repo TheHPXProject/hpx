@@ -20,68 +20,71 @@
 #include <utility>
 
 namespace hpx::execution::experimental {
-
-    HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
-    adjust_chunk_size_and_max_chunks_default(std::size_t num_elements,
-        std::size_t num_cores, std::size_t max_chunks,
-        std::size_t chunk_size) noexcept
-    {
-        if (num_elements == 0)
+    namespace detail {
+        HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks_default(std::size_t num_elements,
+            std::size_t num_cores, std::size_t max_chunks,
+            std::size_t chunk_size) noexcept
         {
-            return {0, 0};
-        }
-
-        // Ensure num_cores is at least 1 to prevent division by zero.
-        if (num_cores == 0)
-        {
-            num_cores = 1;
-        }
-
-        if (max_chunks == 0)
-        {
-            if (chunk_size == 0)
+            if (num_elements == 0)
             {
-                std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+                return {0, 0};
+            }
 
-                chunk_size = (num_elements + cores_times_4 - 1) / cores_times_4;
+            // Ensure num_cores is at least 1 to prevent division by zero.
+            if (num_cores == 0)
+            {
+                num_cores = 1;
+            }
+
+            if (max_chunks == 0)
+            {
+                if (chunk_size == 0)
+                {
+                    std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+
+                    chunk_size =
+                        (num_elements + cores_times_4 - 1) / cores_times_4;
+
+                    max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+
+                    max_chunks =
+                        (std::min) (max_chunks, num_elements);    // -V112
+
+                    chunk_size = (std::max) (chunk_size,
+                        (num_elements + max_chunks - 1) / max_chunks);
+                }
+                else
+                {
+                    // max_chunks == 0 && chunk_size != 0
+                    max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+                }
+            }
+            else if (chunk_size == 0)
+            {
+                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
 
                 max_chunks = (num_elements + chunk_size - 1) / chunk_size;
-
-                max_chunks = (std::min) (max_chunks, num_elements);    // -V112
-
-                chunk_size = (std::max) (chunk_size,
-                    (num_elements + max_chunks - 1) / max_chunks);
             }
             else
             {
-                // max_chunks == 0 && chunk_size != 0
-                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
-            }
-        }
-        else if (chunk_size == 0)
-        {
-            chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+                // max_chunks != 0 && chunk_size != 0
+                std::size_t const calculated_max_chunks =
+                    (num_elements + chunk_size - 1) / chunk_size;
 
-            max_chunks = (num_elements + chunk_size - 1) / chunk_size;
-        }
-        else
-        {
-            // max_chunks != 0 && chunk_size != 0
-            std::size_t const calculated_max_chunks =
-                (num_elements + chunk_size - 1) / chunk_size;
-
-            if (calculated_max_chunks > max_chunks)
-            {
-                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+                if (calculated_max_chunks > max_chunks)
+                {
+                    chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+                }
+                else if (calculated_max_chunks < max_chunks)
+                {
+                    max_chunks = calculated_max_chunks;
+                }
             }
-            else if (calculated_max_chunks < max_chunks)
-            {
-                max_chunks = calculated_max_chunks;
-            }
-        }
 
-        return {chunk_size, max_chunks};
-    }
+            return {chunk_size, max_chunks};
+        }
+    }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     // Executor information customization points
@@ -493,8 +496,9 @@ namespace hpx::execution::experimental {
     ///                     algorithm.
     /// \param num_cores    [in] The overall number of cores to utilize
     ///                     for the algorithm.
-    /// \param num_chunks   [in] The overall number of chunks for the
-    ///                     algorithm.
+    /// \param max_chunks   [in] The overall maximal number of chunks for the
+    ///                     algorithm. A value of 0 denotes unspecified/compute
+    ///                     from num_elements and chunk_size.
     /// \param chunk_size   [in] The size of the chunks created for the
     ///                     algorithm.
     ///
@@ -512,13 +516,13 @@ namespace hpx::execution::experimental {
         friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
             collect_execution_parameters_t, Parameters&& params,
             Executor&& exec, std::size_t num_elements, std::size_t num_cores,
-            std::size_t num_chunks, std::size_t chunk_size)
+            std::size_t max_chunks, std::size_t chunk_size)
         {
             return detail::collect_execution_parameters_fn_helper<
                 hpx::util::decay_unwrap_t<Parameters>,
                 std::decay_t<Executor>>::call(HPX_FORWARD(Parameters, params),
                 HPX_FORWARD(Executor, exec), num_elements, num_cores,
-                num_chunks, chunk_size);
+                max_chunks, chunk_size);
         }
     } collect_execution_parameters{};
 
@@ -533,8 +537,9 @@ namespace hpx::execution::experimental {
     ///                     algorithm.
     /// \param num_cores    [in] The overall number of cores to utilize
     ///                     for the algorithm.
-    /// \param num_chunks   [in] The overall number of chunks for the
-    ///                     algorithm.
+    /// \param max_chunks   [in] The overall maximal number of chunks for the
+    ///                     algorithm. A value of 0 denotes unspecified/compute
+    ///                     from num_elements and chunk_size.
     /// \param chunk_size   [in] The size of the chunks created for the
     ///                     algorithm.
     ///
@@ -554,13 +559,13 @@ namespace hpx::execution::experimental {
         friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
             adjust_chunk_size_and_max_chunks_t, Parameters&& params,
             Executor&& exec, std::size_t num_elements, std::size_t num_cores,
-            std::size_t num_chunks, std::size_t chunk_size)
+            std::size_t max_chunks, std::size_t chunk_size)
         {
             return detail::adjust_chunk_size_and_max_chunks_fn_helper<
                 hpx::util::decay_unwrap_t<Parameters>,
                 std::decay_t<Executor>>::call(HPX_FORWARD(Parameters, params),
                 HPX_FORWARD(Executor, exec), num_elements, num_cores,
-                num_chunks, chunk_size);
+                max_chunks, chunk_size);
         }
     } adjust_chunk_size_and_max_chunks{};
 
