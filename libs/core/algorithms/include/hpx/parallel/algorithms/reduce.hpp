@@ -514,58 +514,99 @@ namespace hpx::parallel::detail {
             constexpr bool has_scheduler_executor =
                 hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
-            // Handle empty range
-            if constexpr (!has_scheduler_executor)
+            if constexpr (has_scheduler_executor)
             {
+                // Scheduler-executor path: all returns must be
+                // consistently typed (the partitioner returns a sender,
+                // so early returns must also go through the partitioner
+                // or return a compatible type).
+                auto const count =
+                    hpx::parallel::detail::distance(first, last);
+
+                // Handle empty range and single-element case before
+                // entering the partitioner (which requires chunks >= 2).
+                if (count <= 1)
+                {
+                    T result = (count == 0)
+                        ? T(HPX_FORWARD(T_, init))
+                        : HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
+                    return result;
+                }
+
+                auto f1 =
+                    [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                    return reduce_partition<ExPolicy, FwdIterB, T>(
+                        part_begin, part_size, r);
+                };
+
+                auto rebound_params =
+                    hpx::execution::experimental::rebind_executor_parameters(
+                        policy.parameters(), reduce_executor_parameters{});
+                auto reduce_policy =
+                    hpx::execution::experimental::create_rebound_policy(
+                        policy, HPX_MOVE(rebound_params));
+                using reduce_policy_type =
+                    std::decay_t<decltype(reduce_policy)>;
+
+                return util::partitioner<reduce_policy_type, T>::call(
+                    HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
+                    hpx::unwrapping(
+                        [init = HPX_FORWARD(T_, init),
+                            r = HPX_FORWARD(Reduce, r)](
+                            auto&& results) -> T {
+                            return sequential_reduce<ExPolicy>(
+                                hpx::util::begin(results),
+                                hpx::util::size(results), init, r);
+                        }));
+            }
+            else
+            {
+                // Non-scheduler path: all returns go through
+                // algorithm_result for consistent return type.
                 if (first == last)
                 {
                     return util::detail::algorithm_result<ExPolicy, T>::get(
                         HPX_FORWARD(T_, init));
                 }
-            }
 
-            // Handle single-element case: can't partition into size >= 2
-            // This must be checked for all execution policies
-            auto const count = hpx::parallel::detail::distance(first, last);
-            if (count == 1)
-            {
-                T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
-                if constexpr (has_scheduler_executor)
+                auto const count =
+                    hpx::parallel::detail::distance(first, last);
+                if (count == 1)
                 {
-                    return result;
-                }
-                else
-                {
+                    T result =
+                        HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
                     return util::detail::algorithm_result<ExPolicy, T>::get(
                         HPX_MOVE(result));
                 }
+
+                auto f1 =
+                    [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                    return reduce_partition<ExPolicy, FwdIterB, T>(
+                        part_begin, part_size, r);
+                };
+
+                auto rebound_params =
+                    hpx::execution::experimental::rebind_executor_parameters(
+                        policy.parameters(), reduce_executor_parameters{});
+                auto reduce_policy =
+                    hpx::execution::experimental::create_rebound_policy(
+                        policy, HPX_MOVE(rebound_params));
+                using reduce_policy_type =
+                    std::decay_t<decltype(reduce_policy)>;
+
+                return util::partitioner<reduce_policy_type, T>::call(
+                    HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
+                    hpx::unwrapping(
+                        [init = HPX_FORWARD(T_, init),
+                            r = HPX_FORWARD(Reduce, r)](
+                            auto&& results) -> T {
+                            return sequential_reduce<ExPolicy>(
+                                hpx::util::begin(results),
+                                hpx::util::size(results), init, r);
+                        }));
             }
-
-            auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
-                return reduce_partition<ExPolicy, FwdIterB, T>(
-                    part_begin, part_size, r);
-            };
-
-            auto rebound_params =
-                hpx::execution::experimental::rebind_executor_parameters(
-                    policy.parameters(), reduce_executor_parameters{});
-            auto reduce_policy =
-                hpx::execution::experimental::create_rebound_policy(
-                    policy, HPX_MOVE(rebound_params));
-            using reduce_policy_type = std::decay_t<decltype(reduce_policy)>;
-
-            return util::partitioner<reduce_policy_type, T>::call(
-                HPX_MOVE(reduce_policy), first, count, HPX_MOVE(f1),
-                hpx::unwrapping(
-                    [init = HPX_FORWARD(T_, init), r = HPX_FORWARD(Reduce, r)](
-                        auto&& results) -> T {
-                        return sequential_reduce<ExPolicy>(
-                            hpx::util::begin(results), hpx::util::size(results),
-                            init, r);
-                    }));
         }
     };
-    /// \endcond
 }    // namespace hpx::parallel::detail
 
 namespace hpx {
