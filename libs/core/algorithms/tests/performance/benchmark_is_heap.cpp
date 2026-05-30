@@ -64,8 +64,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::size_t break_pos = vm["break_pos"].as<std::size_t>();
     int test_count = vm["test_count"].as<int>();
 
-    std::size_t const os_threads = hpx::get_os_thread_count();
-    HPX_UNUSED(os_threads);
+    [[maybe_unused]] std::size_t const os_threads = hpx::get_os_thread_count();
 
     hpx::util::perftests_init(vm, "benchmark_is_heap");
 
@@ -109,8 +108,8 @@ int main(int argc, char* argv[])
         hpx::program_options::value<std::size_t>()->default_value(
             (std::numeric_limits<std::size_t>::max)()),
         "a position which breaks max heap (default: vector_size)")("test_count",
-        hpx::program_options::value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)")("seed,s",
+        hpx::program_options::value<int>()->default_value(100),
+        "number of tests to be averaged (default: 100)")("seed,s",
         hpx::program_options::value<unsigned int>(),
         "the random number generator seed to use for this run");
 

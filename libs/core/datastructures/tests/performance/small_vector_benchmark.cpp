@@ -107,7 +107,7 @@ int main(int argc, char* argv[])
         ("vector_size", value<std::size_t>()->default_value(10),
             "size of vector")
         ("test_count", value<std::size_t>()->default_value(100000),
-            "number of tests to be averaged")
+            "number of tests to be averaged (default: 100000)")
         ;
     // clang-format on
 

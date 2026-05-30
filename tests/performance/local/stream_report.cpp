@@ -528,8 +528,8 @@ int main(int argc, char* argv[])
             hpx::program_options::value<std::size_t>()->default_value(1024),
             "size of vector (default: 1024)")
         (   "test_count",
-            hpx::program_options::value<std::size_t>()->default_value(10),
-            "number of iterations to repeat each test. (default: 10)")
+            hpx::program_options::value<std::size_t>()->default_value(1000),
+            "number of iterations to repeat each test. (default: 1000)")
         (   "warmup_iterations",
             hpx::program_options::value<std::size_t>()->default_value(1),
             "number of warmup iterations to perform before timing. (default: 1)")

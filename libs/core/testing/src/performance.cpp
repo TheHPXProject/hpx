@@ -30,8 +30,8 @@ namespace hpx::util {
             "Print the path to the images to be uploaded, in CDash XML format");
     }
 
-    void perftests_init(hpx::program_options::variables_map const& vm,
-        std::string test_name)
+    void perftests_init(
+        hpx::program_options::variables_map const& vm, std::string test_name)
     {
         if (vm.count("hpx:detailed_bench"))
         {
@@ -62,11 +62,14 @@ average: {{average(elapsed)}}
         char const* nanobench_hpx_cdash_template() noexcept
         {
             return R"DELIM(Results:
-{{#result}}        
+{{#result}}
 name: {{name}},
 executor: {{context(executor)}},
 average: {{average(elapsed)}}
-<CTestMeasurement type="numeric/double" name="{{name}}_{{context(executor)}}">{{average(elapsed)}}</CTestMeasurement>
+<CTestMeasurement
+    type="numeric/double"
+    name="{{name}}_{{context(executor)}}">{{average(elapsed)}}
+</CTestMeasurement>
 {{/result}})DELIM";
         }
 
@@ -253,7 +256,7 @@ average: {{average(elapsed)}}
         if (!detailed_ && print_cdash_img)
         {
             for (long unsigned int i = 0; i < detail::bench().results().size();
-                 i++)
+                i++)
             {
                 strm << "<CTestMeasurementFile type=\"image/png\" "
                         "name=\"perftest\">"

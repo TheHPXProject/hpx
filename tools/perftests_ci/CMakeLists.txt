@@ -19,5 +19,3 @@ if(HPX_WITH_HIP OR HPX_WITH_CUDA)
 else()
   set(PYUTILS_COMPILER "${CMAKE_CXX_COMPILER} ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
-
-configure_file(pyutils/buildinfo.py.in pyutils/buildinfo.py)
