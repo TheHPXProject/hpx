@@ -50,7 +50,7 @@ template <typename OrgIter, typename BidirIter>
 double run_inplace_merge_benchmark_std(int test_count, OrgIter org_first,
     OrgIter org_last, BidirIter first, BidirIter middle, BidirIter last)
 {
-    std::uint64_t time = std::uint64_t(0);
+    std::uint64_t time = static_cast<std::uint64_t>(0);
 
     for (int i = 0; i < test_count; ++i)
     {
@@ -71,7 +71,7 @@ double run_inplace_merge_benchmark_hpx(int test_count, ExPolicy policy,
     OrgIter org_first, OrgIter org_last, BidirIter first, BidirIter middle,
     BidirIter last)
 {
-    std::uint64_t time = std::uint64_t(0);
+    std::uint64_t time = static_cast<std::uint64_t>(0);
 
     for (int i = 0; i < test_count; ++i)
     {
@@ -133,16 +133,6 @@ void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-std::string correct_iterator_tag_str(std::string iterator_tag)
-{
-    if (iterator_tag != "random"/* &&
-        iterator_tag != "bidirectional"*/)
-        return "random";
-    else
-        return iterator_tag;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -156,39 +146,20 @@ int hpx_main(hpx::program_options::variables_map& vm)
     double vector_ratio = vm["vector_ratio"].as<double>();
     std::size_t random_range = vm["random_range"].as<std::size_t>();
     int test_count = vm["test_count"].as<int>();
-    std::string iterator_tag_str =
-        correct_iterator_tag_str(vm["iterator_tag"].as<std::string>());
 
-    std::size_t const os_threads = hpx::get_os_thread_count();
-    HPX_UNUSED(os_threads);
+    [[maybe_unused]] std::size_t const os_threads = hpx::get_os_thread_count();
 
     hpx::util::perftests_init(vm, "benchmark_inplace_merge");
 
     if (random_range < 1)
         random_range = 1;
 
-    std::size_t vector_left_size =
-        std::size_t(static_cast<double>(vector_size) * vector_ratio);
+    std::size_t vector_left_size = static_cast<std::size_t>(
+        static_cast<double>(vector_size) * vector_ratio);
     std::size_t vector_right_size = vector_size - vector_left_size;
 
-    // std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    // std::cout << "seed              : " << seed << std::endl;
-    // std::cout << "vector_left_size  : " << vector_left_size << std::endl;
-    // std::cout << "vector_right_size : " << vector_right_size << std::endl;
-    // std::cout << "random_range      : " << random_range << std::endl;
-    // std::cout << "iterator_tag      : " << iterator_tag_str << std::endl;
-    // std::cout << "test_count        : " << test_count << std::endl;
-    // std::cout << "os threads        : " << os_threads << std::endl;
-    // std::cout << "----------------------------------------------\n"
-    //           << std::endl;
-
-    if (iterator_tag_str == "random")
-        run_benchmark(vector_left_size, vector_right_size, test_count,
-            random_range, std::random_access_iterator_tag());
-    //else // bidirectional
-    //    run_benchmark(vector_left_size, vector_right_size,
-    //        test_count, random_range,
-    //        std::bidirectional_iterator_tag());
+    run_benchmark(vector_left_size, vector_right_size, test_count, random_range,
+        std::random_access_iterator_tag());
 
     return hpx::local::finalize();
 }
@@ -199,19 +170,25 @@ int main(int argc, char* argv[])
     options_description desc_commandline(
         "usage: " HPX_APPLICATION_STRING " [options]");
 
-    desc_commandline.add_options()("vector_size",
-        hpx::program_options::value<std::size_t>()->default_value(1000000),
-        "sum of sizes of two vectors (default: 1000000)")("vector_ratio",
-        hpx::program_options::value<double>()->default_value(0.7),
-        "ratio of two vector sizes (default: 0.7)")("random_range",
-        hpx::program_options::value<std::size_t>()->default_value(6),
-        "range of random numbers [0, x) (default: 6)")("iterator_tag",
-        hpx::program_options::value<std::string>()->default_value("random"),
-        "the kind of iterator tag (random/bidirectional/forward)")("test_count",
-        hpx::program_options::value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)")("seed,s",
-        hpx::program_options::value<unsigned int>(),
-        "the random number generator seed to use for this run");
+    // clang-format off
+    desc_commandline.add_options()
+        ("vector_size",
+            hpx::program_options::value<std::size_t>()->default_value(1000000),
+            "sum of sizes of two vectors (default: 1000000)")
+        ("vector_ratio",
+            hpx::program_options::value<double>()->default_value(0.7),
+            "ratio of two vector sizes (default: 0.7)")
+        ("random_range",
+            hpx::program_options::value<std::size_t>()->default_value(6),
+            "range of random numbers [0, x) (default: 6)")
+        ("test_count",
+            hpx::program_options::value<int>()->default_value(100),
+            "number of tests to be averaged (default: 100)")
+        ("seed,s",
+            hpx::program_options::value<unsigned int>(),
+            "the random number generator seed to use for this run")
+    ;
+    // clang-format on
 
     // initialize program
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};

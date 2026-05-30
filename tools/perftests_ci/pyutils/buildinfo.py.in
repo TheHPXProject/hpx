@@ -19,7 +19,7 @@ source_dir = '@CMAKE_SOURCE_DIR@'
 log.debug('Source dir', source_dir)
 
 # CMake binary dir
-binary_dir = '@CMAKE_BINARY_DIR@'
+binary_dir = 'CMAKE_BINARY_DIR@'
 log.debug('Binary dir', binary_dir)
 
 # CMake install dir

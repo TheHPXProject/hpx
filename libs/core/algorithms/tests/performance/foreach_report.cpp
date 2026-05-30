@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
         ("work_delay", value<int>()->default_value(1),
             "loop delay per element in nanoseconds")
         ("test_count", value<int>()->default_value(100),
-            "number of tests to be averaged")
+            "number of tests to be averaged (default: 100)")
         ("chunk_size", value<int>()->default_value(0),
             "number of iterations to combine while parallelization")
         ("disable_stealing", "disable thread stealing")

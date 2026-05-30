@@ -211,7 +211,7 @@ using data_type = int;
 template <typename IteratorTag, typename Allocator>
 void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     int test_count, IteratorTag, Allocator const& alloc,
-    std::string const& type, int entropy, int num_chunks)
+    std::string const& type, int entropy, int)
 {
     std::cout << "* Preparing Benchmark... (" << type << ")" << std::endl;
 
@@ -227,8 +227,8 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
         std::end(uniform_distribution), [&] { return dist(re); });
 
     using test_container = test_container<IteratorTag, data_type, Allocator>;
-    using container = typename test_container::type;
-    using T = typename container::value_type;
+    using container = test_container::type;
+    using T = container::value_type;
 
     container src =
         test_container::get_container(vector_size1 + vector_size2, alloc);
@@ -268,9 +268,6 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 
     auto dest = std::begin(result);
 
-    std::cout << "* Running Benchmark... (" << type << ")" << std::endl;
-    std::cout << "--- run_merge_benchmark_std ---" << std::endl;
-
     hpx::util::perftests_report("hpx::merge", "seq", test_count,
         [&] { hpx::merge(seq, first1, last1, first2, last2, dest); });
 
@@ -298,8 +295,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     int const entropy = vm["entropy"].as<int>();
     int const num_chunks = vm["num_chunks"].as<int>();
 
-    std::size_t const os_threads = hpx::get_os_thread_count();
-    HPX_UNUSED(os_threads);
+    [[maybe_unused]] std::size_t const os_threads = hpx::get_os_thread_count();
 
     std::size_t const vector_size1 = static_cast<std::size_t>(
         static_cast<double>(vector_size) * vector_ratio);
@@ -318,20 +314,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_init(vm, "benchmark_merge");
 
-    if (iterator_tag_str == "random")
-        run_benchmark(vector_size1, vector_size2, test_count, random_range,
-            std::random_access_iterator_tag());
-    //else if (iterator_tag_str == "bidirectional")
-    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
-    //        std::bidirectional_iterator_tag());
-    //else // forward
-    //    run_benchmark(vector_size1, vector_size2, test_count, random_range,
-    //        std::forward_iterator_tag());
+    {
+        using allocator_type = std::allocator<int>;
+        allocator_type alloc;
 
-    //     run_benchmark(vector_size1, vector_size2, test_count,
-    //         std::random_access_iterator_tag(), alloc, "std::vector", entropy,
-    //         num_chunks);
-    // }
+        run_benchmark(vector_size1, vector_size2, test_count,
+            std::random_access_iterator_tag(), alloc, "std::vector", entropy,
+            num_chunks);
+    }
 
     // {
     //     auto policy = hpx::execution::par;
@@ -339,7 +329,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     //         hpx::compute::host::detail::policy_allocator<data_type,
     //             decltype(policy)>;
     //     allocator_type alloc(policy);
-    // 
+    //
     //     run_benchmark(vector_size1, vector_size2, test_count,
     //         std::random_access_iterator_tag(), alloc, "hpx::compute::vector",
     //         entropy, num_chunks);
@@ -374,8 +364,8 @@ int main(int const argc, char* argv[])
          "entropy value: 0 -> 1, 4 -> 0.201 (default: 0)")
         ("num_chunks", value<int>()->default_value(8),
          "number of chunks (times number of cores) (default: 8)")
-        ("test_count", value<int>()->default_value(10),
-         "number of tests to be averaged (default: 10)")
+        ("test_count", value<int>()->default_value(100),
+         "number of tests to be averaged (default: 100)")
         ("seed,s", value<unsigned int>(),
          "the random number generator seed to use for this run")
     ;

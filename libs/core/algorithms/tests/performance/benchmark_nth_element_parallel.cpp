@@ -17,12 +17,12 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <random>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string>
-#include <time.h>
+#include <utility>
 #include <vector>
 #include <version>
 
@@ -34,25 +34,26 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_init(vm, "benchmark_nth_element_parallel");
 
-    typedef std::less<uint64_t> compare_t;
+    typedef std::less<std::uint64_t> compare_t;
 
-    std::vector<uint64_t> A, B;
-    uint32_t const NELEM = 1000;
+    std::vector<std::uint64_t> A, B;
+    std::uint32_t NELEM = 1000;
     A.reserve(NELEM);
     B.reserve(NELEM);
 
-    for (uint64_t i = 0; i < NELEM; ++i)
+    for (std::uint64_t i = 0; i < NELEM; ++i)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
 
     hpx::util::perftests_report("hpx::nth_element, size: " +
             std::to_string(NELEM) + ", step: " + std::to_string(1),
         "par", test_count, [&] {
-            for (uint64_t i = 0; i < NELEM; ++i)
+            for (std::uint64_t i = 0; i < NELEM; ++i)
             {
                 B = A;
                 hpx::nth_element(::hpx::execution::par, B.begin(),
-                    B.begin() + i, B.end(), compare_t());
+                    std::next(B.begin(), static_cast<std::int64_t>(i)), B.end(),
+                    compare_t());
             }
         });
 
@@ -63,20 +64,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
     A.reserve(NELEM);
     B.reserve(NELEM);
 
-    for (uint64_t i = 0; i < NELEM; ++i)
+    for (std::uint64_t i = 0; i < NELEM; ++i)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
 
-    uint32_t const STEP = NELEM / 20;
+    std::uint32_t const STEP = NELEM / 20;
 
     hpx::util::perftests_report("hpx::nth_element, size: " +
             std::to_string(NELEM) + ", step: " + std::to_string(STEP),
         "par", test_count, [&] {
-            for (uint64_t i = 0; i < NELEM; i += STEP)
+            for (std::uint64_t i = 0; i < NELEM; i += STEP)
             {
                 B = A;
                 hpx::nth_element(::hpx::execution::par, B.begin(),
-                    B.begin() + i, B.end(), compare_t());
+                    std::next(B.begin(), static_cast<std::int64_t>(i)), B.end(),
+                    compare_t());
             }
         });
 
@@ -91,9 +93,13 @@ int main(int argc, char* argv[])
     options_description desc_commandline(
         "Usage: " HPX_APPLICATION_STRING " [options]");
 
-    desc_commandline.add_options()("test_count",
-        hpx::program_options::value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)");
+    // clang-format off
+    desc_commandline.add_options()
+        ("test_count",
+            hpx::program_options::value<int>()->default_value(25),
+            "number of tests to be averaged (default: 25)")
+    ;
+    // clang-format on
 
     hpx::util::perftests_cfg(desc_commandline);
 

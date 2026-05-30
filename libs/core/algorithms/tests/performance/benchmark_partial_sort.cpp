@@ -195,8 +195,8 @@ int main(int argc, char* argv[])
 
     desc_commandline.add_options()("seed,s", value<unsigned int>(),
         "the random number generator seed to use for this run")("test_count",
-        value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)");
+        value<int>()->default_value(100),
+        "number of tests to be averaged (default: 100)");
 
     // By default this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};

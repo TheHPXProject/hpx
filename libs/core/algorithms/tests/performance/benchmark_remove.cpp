@@ -196,8 +196,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::string data_type_str =
         correct_data_type_str(vm["data_type"].as<std::string>());
 
-    std::size_t const os_threads = hpx::get_os_thread_count();
-    HPX_UNUSED(os_threads);
+    [[maybe_unused]] std::size_t const os_threads = hpx::get_os_thread_count();
 
     hpx::util::perftests_init(vm, "benchmark_remove");
 
@@ -225,8 +224,8 @@ int main(int argc, char* argv[])
         "the kind of iterator tag (random/bidirectional/forward)")("data_type",
         hpx::program_options::value<std::string>()->default_value("int"),
         "the kind of data type (int/vector/array)")("test_count",
-        hpx::program_options::value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)")("seed,s",
+        hpx::program_options::value<int>()->default_value(100),
+        "number of tests to be averaged (default: 100)")("seed,s",
         hpx::program_options::value<unsigned int>(),
         "the random number generator seed to use for this run");
 
