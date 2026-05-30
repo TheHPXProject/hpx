@@ -6,6 +6,8 @@
 
 set(benchmarks minmax_element_performance)
 
+set(minmax_element_performance_perftest_PARAMETERS --test_count=100)
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
@@ -28,5 +30,10 @@ foreach(benchmark ${benchmarks})
   add_hpx_performance_report_test(
     "modules.segmented_algorithms" ${benchmark}_perftest
     ${${benchmark}_perftest_PARAMETERS}
+  )
+  set_target_properties(
+    ${benchmark}_cdash_results
+    PROPERTIES FOLDER
+               "Benchmarks/Modules/Full/SegmentedAlgorithms/CDashResults"
   )
 endforeach()

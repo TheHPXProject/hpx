@@ -202,8 +202,8 @@ int main(int argc, char* argv[])
          "number of iterations in the delay loop")
 
         ("test-all", "run all benchmarks")
-        ("test_count", value<int>()->default_value(1),
-         "number of repetitions of the full benchmark")
+        ("test_count", value<int>()->default_value(100),
+         "number of repetitions of the full benchmark (default: 100)")
 
         ("info", value<std::string>()->default_value("no-info"),
          "extra info for plot output (e.g. branch name)");

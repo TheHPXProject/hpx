@@ -6,6 +6,10 @@
 
 set(tests small_vector_benchmark)
 
+set(small_vector_benchmark_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                               --test_count=100
+)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
@@ -27,5 +31,8 @@ foreach(test ${tests})
 
   add_hpx_performance_report_test(
     "modules.datastructures" ${test}_perftest ${${test}_perftest_PARAMETERS}
+  )
+  set_target_properties(
+    ${test}_cdash_results PROPERTIES FOLDER ${folder_name}/CDashResults
   )
 endforeach()

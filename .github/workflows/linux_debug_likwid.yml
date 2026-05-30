@@ -25,6 +25,7 @@ jobs:
       run: |
           git clone https://github.com/RRZE-HPC/likwid.git
           cd likwid
+          git checkout v5.5.1
           make; make install; cd ..
     - name: Configure
       shell: bash

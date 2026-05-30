@@ -68,26 +68,28 @@ set(ctest_submission_result ${ctest_submission_result} "Configure: "
 )
 
 set(benchmarks
-  minmax_element_performance
-  small_vector_benchmark
-  future_overhead_report
-  stream_report
-  foreach_report
-  transform_reduce_scaling
-  benchmark_is_heap_until
-  benchmark_merge
-  benchmark_inplace_merge
-  benchmark_is_heap
-  benchmark_remove
-  benchmark_remove_if
-  benchmark_partial_sort
-  benchmark_partial_sort_parallel
-  benchmark_nth_element
-  benchmark_nth_element_parallel
+    minmax_element_performance
+    small_vector_benchmark
+    future_overhead_report
+    stream_report
+    foreach_report
+    transform_reduce_scaling
+    benchmark_is_heap_until
+    benchmark_merge
+    benchmark_inplace_merge
+    benchmark_is_heap
+    benchmark_remove
+    benchmark_remove_if
+    benchmark_partial_sort
+    benchmark_partial_sort_parallel
+    benchmark_nth_element
+    benchmark_nth_element_parallel
 )
 
 foreach(benchmark ${benchmarks})
-  ctest_build(TARGET ${benchmark}_cdash_results FLAGS "-k0 -j ${CTEST_BUILD_PARALLELISM}")
+  ctest_build(
+    TARGET ${benchmark}_cdash_results FLAGS "-k0 -j ${CTEST_BUILD_PARALLELISM}"
+  )
 endforeach()
 
 ctest_submit(
@@ -102,10 +104,7 @@ set(ctest_submission_result ${ctest_submission_result} "Build: "
                             ${__build_result} "\n"
 )
 
-ctest_test(
-  INCLUDE "_perftest$"
-  PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}"
-)
+ctest_test(INCLUDE "_perftest$" PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}")
 ctest_submit(
   PARTS Test
   BUILD_ID __ctest_build_id

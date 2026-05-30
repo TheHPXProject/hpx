@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
         "size of vector")
 
         ("test_count", hpx::program_options::value<int>()->default_value(100),
-            "number of tests to take average from");
+            "number of tests to take average from (default: 100)");
 
     hpx::local::init_params init_args;
     init_args.desc_cmdline = cmdline;
