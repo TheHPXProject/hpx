@@ -182,7 +182,7 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename... Args>
-    <unspecified> for_loop(
+    auto for_loop(
         ExPolicy&& policy, std::decay_t<I> first, I last, Args&&... args);
 
     /// The for_loop_strided implements loop functionality over a range
@@ -366,7 +366,7 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename S, typename... Args>
-    <unspecified> for_loop_strided(ExPolicy&& policy, std::decay_t<I> first,
+    auto for_loop_strided(ExPolicy&& policy, std::decay_t<I> first,
         I last, S stride, Args&&... args);
 
     /// The for_loop_n implements loop functionality over a range specified by
@@ -541,7 +541,7 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename Size, typename... Args>
-    <unspecified> for_loop_n(
+    auto for_loop_n(
         ExPolicy&& policy, I first, Size size, Args&&... args);
 
     /// The for_loop_n_strided implements loop functionality over a range
@@ -729,7 +729,7 @@ namespace hpx { namespace experimental {
     ///
     template <typename ExPolicy, typename I, typename Size, typename S,
         typename... Args>
-    <unspecified> for_loop_n_strided(
+    auto for_loop_n_strided(
         ExPolicy&& policy, I first, Size size, S stride, Args&&... args);
 }}    // namespace hpx::experimental
 

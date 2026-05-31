@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import traceback
+import logging as py_logging
 from datetime import datetime
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -55,6 +56,35 @@ extensions = [
     'sphinx-hpx', # Custom HPX roles
     'sphinx_copybutton',
 ]
+
+# Fix Sphinx/Breathe duplicate declaration warnings caused by repeated
+# C++ namespace rendering. Apply a filter to suppress only namespace
+# types (hpx, ranges, experimental) emitted as cpp:type duplicates.
+# This prevents false-positive “Duplicate C++ declaration” warnings
+# while preserving all real API duplication checks.
+class _BreatheNamespaceDuplicateFilter(py_logging.Filter):
+    namespace_type_declarations = {
+        "hpx",
+        "ranges",
+        "experimental",
+    }
+
+    def filter(self, record):
+        message = record.getMessage()
+        prefix = "Declaration is '.. cpp:type:: "
+        if not message.startswith("Duplicate C++ declaration"):
+            return True
+        if prefix not in message:
+            return True
+
+        declaration = message.split(prefix, 1)[1].split("'.", 1)[0]
+        return declaration not in self.namespace_type_declarations
+
+
+def setup(app):
+    py_logging.getLogger('sphinx.sphinx.domains.cpp').addFilter(
+        _BreatheNamespaceDuplicateFilter())
+
 
 breathe_projects = { "hpx": "../hpx_autodoc" }
 breathe_projects_source = {}
@@ -202,9 +232,9 @@ api_ref_header = '''
 
 .. _modules_{0}_api:
 
--------------------------------------------------------------------------------
+{1}
 {0}
--------------------------------------------------------------------------------
+{1}
 
 See :ref:`public_api` for a list of names and headers that are part of the public
 |hpx| API.
@@ -225,9 +255,9 @@ api_header_file = '''
 
 .. _modules_{0}_api:
 
--------------------------------------------------------------------------------
+{4}
 {2}
--------------------------------------------------------------------------------
+{4}
 
 Defined in header {3}.
 
@@ -255,7 +285,7 @@ for lib in hpx_libs.keys():
         if not os.path.exists(basedir):
             os.makedirs(basedir)
         module_api_ref = open(basedir + '/full_api.rst', 'w')
-        module_api_ref.write(api_ref_header.format(module))
+        module_api_ref.write(api_ref_header.format(module, '-' * len(module)))
         header_refs = ''
         header_names = set()
         for source in module_sources[1]:
@@ -276,7 +306,8 @@ for lib in hpx_libs.keys():
                 include_header = header
 
             header_ref = open(basedir + '/' + header_name + '.rst', 'w')
-            header_ref.write(api_header_file.format(header, module, page_title, find_link_hpx_header(include_header)))
+            header_ref.write(api_header_file.format(header, module, page_title,
+                find_link_hpx_header(include_header), '-' * len(page_title)))
             header_ref.close()
             header_refs += '   /libs/' + lib + '/' + module + '/api/' + header_name + '.rst\n'
         module_api_ref.write(api_file)
