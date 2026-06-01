@@ -13,6 +13,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/futures/detail/future_data.hpp>
 #include <hpx/futures/future_fwd.hpp>
 #include <hpx/futures/traits/acquire_shared_state.hpp>
@@ -662,6 +663,7 @@ namespace hpx {
         //         shared state.
         // Postcondition: valid() == false.
         typename hpx::traits::future_traits<future>::result_type get()
+            HPX_PRE(this->valid())
         {
             if (!this->shared_state_)
             {
@@ -1012,7 +1014,7 @@ namespace hpx {
         //         shared state.
         // Postcondition: valid() == false.
         typename hpx::traits::future_traits<shared_future>::result_type get()
-            const    //-V659
+            const HPX_PRE(this->valid())    //-V659
         {
             if (!this->shared_state_)
             {

@@ -101,7 +101,13 @@ add_hpx_module(
     "hpx/datastructures/detail/flat_set.hpp"
     "hpx/datastructures/detail/intrusive_list.hpp"
     "hpx/datastructures/detail/small_vector.hpp"
-  MODULE_DEPENDENCIES hpx_assertion hpx_config hpx_concepts hpx_errors
-                      hpx_serialization hpx_type_support
+  MODULE_DEPENDENCIES
+    hpx_assertion
+    hpx_config
+    hpx_concepts
+    hpx_contracts
+    hpx_errors
+    hpx_serialization
+    hpx_type_support
   CMAKE_SUBDIRS examples tests
 )
