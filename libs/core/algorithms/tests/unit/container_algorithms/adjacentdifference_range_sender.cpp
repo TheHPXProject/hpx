@@ -39,7 +39,7 @@ void test_sen_direct(Policy l, ExPolicy&& policy)
 
     auto exec = ex::explicit_scheduler_executor(scheduler_t(l));
     auto it = hpx::ranges::adjacent_difference(policy.on(exec), std::begin(c),
-        sentinel<std::size_t>{10007}, std::begin(d));
+        test::sentinel_from_iterator(std::end(c) - 1), std::begin(d));
 
     std::adjacent_difference(std::begin(c), std::end(c), std::begin(d_ans));
 
