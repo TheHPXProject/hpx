@@ -172,4 +172,49 @@ namespace hpx::execution::experimental {
             Shape, std::decay_t<F>>{
             exec_, HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f)};
     }
+
+    // Out-of-line definition for executor_scheduler::bulk_chunked() member.
+    //
+    // For chunked semantics the user-provided callable has the signature
+    //   f(begin_index, end_index, values...)
+    // We wrap it so that the executor's bulk_sync_execute (which calls
+    // f(index, values...)) iterates the range and delegates each sub-range
+    // to the user function.
+    template <typename Executor>
+    template <typename Sender, typename Shape, typename F>
+    auto executor_scheduler<Executor>::bulk_chunked(
+        Sender&& sender, Shape const& shape, F&& f) const
+    {
+        // Wrap the chunked callable into a per-element callable that
+        // accumulates a full pass and calls f(begin, end, values...).
+        // For simple executors the "chunk" is the entire shape since
+        // bulk_sync_execute already handles partitioning internally.
+        auto wrapped = [f = HPX_FORWARD(F, f), shape](
+                           auto /*index*/, auto&... ts) mutable {
+            // Call f once with the full range
+            using shape_type = std::decay_t<Shape>;
+            f(shape_type(0), shape, ts...);
+        };
+
+        // Use an unchunked sender that calls the wrapped function once
+        // with index 0 over a shape of 1, effectively delivering one
+        // chunk covering the entire range.
+        return detail::executor_bulk_sender<Executor, std::decay_t<Sender>, int,
+            decltype(wrapped)>{
+            exec_, HPX_FORWARD(Sender, sender), 1, HPX_MOVE(wrapped)};
+    }
+
+    // Out-of-line definition for executor_scheduler::bulk_unchunked() member.
+    //
+    // Unchunked semantics are identical to standard bulk: f(index, values...)
+    // is called once per element in the shape.
+    template <typename Executor>
+    template <typename Sender, typename Shape, typename F>
+    auto executor_scheduler<Executor>::bulk_unchunked(
+        Sender&& sender, Shape const& shape, F&& f) const
+    {
+        return detail::executor_bulk_sender<Executor, std::decay_t<Sender>,
+            Shape, std::decay_t<F>>{
+            exec_, HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f)};
+    }
 }    // namespace hpx::execution::experimental

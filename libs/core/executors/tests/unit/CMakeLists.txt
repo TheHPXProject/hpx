@@ -11,6 +11,7 @@ set(tests
     execution_policy_mappings
     executor_scheduler
     executor_algorithm_bulk
+    executor_algorithm_bulk_chunked
     explicit_scheduler_executor
     fork_join_executor
     fork_join_executor_from

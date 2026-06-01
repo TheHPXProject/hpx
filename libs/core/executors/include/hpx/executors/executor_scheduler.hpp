@@ -204,5 +204,13 @@ namespace hpx::execution::experimental {
         // executor_scheduler_bulk.hpp after executor_bulk_sender is available.
         template <typename Sender, typename Shape, typename F>
         auto bulk(Sender&& sender, Shape const& shape, F&& f) const;
+
+        // P2300 bulk_chunked customization -- f(begin, end, values...)
+        template <typename Sender, typename Shape, typename F>
+        auto bulk_chunked(Sender&& sender, Shape const& shape, F&& f) const;
+
+        // P2300 bulk_unchunked customization -- f(index, values...)
+        template <typename Sender, typename Shape, typename F>
+        auto bulk_unchunked(Sender&& sender, Shape const& shape, F&& f) const;
     };
 }    // namespace hpx::execution::experimental
