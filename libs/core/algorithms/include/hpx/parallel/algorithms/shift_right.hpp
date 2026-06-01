@@ -141,30 +141,55 @@ namespace hpx::parallel {
 
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
             typename Sent>
-        hpx::future<FwdIter> shift_right_helper(
+        decltype(auto) shift_right_helper(
             ExPolicy policy, FwdIter first, Sent last, FwdIter new_first)
         {
-            using non_seq = std::false_type;
-
-            auto p = hpx::execution::parallel_task_policy()
-                         .on(policy.executor())
-                         .with(policy.parameters());
+            constexpr bool has_scheduler_executor =
+                hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
             detail::reverse<FwdIter> r;
-            return dataflow(
-                [=](hpx::future<FwdIter>&& f1) mutable -> hpx::future<FwdIter> {
-                    f1.get();
 
-                    hpx::future<FwdIter> f = r.call2(p, non_seq(), first, last);
-                    return f.then(
-                        [=](hpx::future<FwdIter>&& f) mutable -> FwdIter {
-                            f.get();
-                            std::advance(
-                                first, detail::distance(new_first, last));
-                            return first;
-                        });
-                },
-                r.call2(p, non_seq(), first, new_first));
+            if constexpr (!has_scheduler_executor)
+            {
+                using non_seq = std::false_type;
+
+                auto p = hpx::execution::parallel_task_policy()
+                             .on(policy.executor())
+                             .with(policy.parameters());
+
+                return dataflow(
+                    [=](hpx::future<FwdIter>&& f1) mutable
+                        -> hpx::future<FwdIter> {
+                        f1.get();
+
+                        hpx::future<FwdIter> f =
+                            r.call2(p, non_seq(), first, last);
+                        return f.then(
+                            [=](hpx::future<FwdIter>&& f) mutable -> FwdIter {
+                                f.get();
+                                std::advance(first,
+                                    detail::distance(new_first, last));
+                                return first;
+                            });
+                    },
+                    r.call2(p, non_seq(), first, new_first));
+            }
+            else
+            {
+                // sender-based path: compose reverses using sender
+                // primitives
+                namespace ex = hpx::execution::experimental;
+
+                return r.call(policy, first, new_first) |
+                    ex::let_value([=](FwdIter) mutable {
+                        return r.call(policy, first, last);
+                    }) |
+                    ex::then([=](FwdIter) mutable -> FwdIter {
+                        std::advance(
+                            first, detail::distance(new_first, last));
+                        return first;
+                    });
+            }
         }
 
         // Sequential shift_right implementation borrowed from
@@ -261,20 +286,9 @@ namespace hpx::parallel {
             }
 
             template <typename ExPolicy, typename Sent, typename Size>
-            static typename util::detail::algorithm_result<ExPolicy,
-                FwdIter2>::type
-            parallel(ExPolicy&& policy, FwdIter2 first, Sent last, Size n)
+            static decltype(auto) parallel(
+                ExPolicy&& policy, FwdIter2 first, Sent last, Size n)
             {
-                constexpr bool has_scheduler_executor =
-                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
-
-                if constexpr (has_scheduler_executor)
-                {
-                    return util::detail::algorithm_result<ExPolicy,
-                        FwdIter2>::get(sequential(
-                        HPX_FORWARD(ExPolicy, policy), first, last, n));
-                }
-
                 auto dist =
                     static_cast<std::size_t>(detail::distance(first, last));
                 // C++20 [alg.shift]: if n is 0, do nothing and return first.
