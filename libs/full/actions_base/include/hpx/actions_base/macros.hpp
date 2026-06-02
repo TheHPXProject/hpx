@@ -228,7 +228,7 @@
 /// defined using one of the \a HPX_DEFINE_COMPONENT_ACTION macros. It has to
 /// be visible in all translation units using the action, thus it is
 /// recommended to place it into the header file defining the component.
-#if defined(HPX_COMPUTE_DEVICE_CODE)
+#if defined(HPX_COMPUTE_DEVICE_CODE) || defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_REGISTER_ACTION_DECLARATION(...) /**/
 #else
 #define HPX_REGISTER_ACTION_DECLARATION(...)                                   \
@@ -272,7 +272,7 @@
 ///       \a HPX_REGISTER_ACTION_ID should be used for a particular action,
 ///       never both.
 ///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
+#if defined(HPX_COMPUTE_DEVICE_CODE) || defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_REGISTER_ACTION(...) /**/
 #else
 #define HPX_REGISTER_ACTION(...)                                               \
@@ -311,7 +311,7 @@
 ///       \a HPX_REGISTER_ACTION_ID should be used for a particular action,
 ///       never both.
 ///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
+#if defined(HPX_COMPUTE_DEVICE_CODE) || defined(HPX_HAVE_CXX26_REFLECTION)
 #define HPX_REGISTER_ACTION_ID(action, actionname, actionid) /**/
 #else
 #define HPX_REGISTER_ACTION_ID(action, actionname, actionid)                   \
@@ -392,12 +392,26 @@
         HPX_DEFINE_COMPONENT_ACTION_, HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__)) \
     /**/
 
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+// clang-format off
+/// When C++26 reflection is available, HPX_DEFINE_COMPONENT_ACTION_3 uses
+/// reflect_component_action<^^component::func> instead of make_action_t.
+/// This eliminates the need for HPX_REGISTER_ACTION while keeping the same
+/// user-facing macro syntax.
+#define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
+    struct name                                                                \
+      : hpx::actions::reflect_component_action<^^component::func>             \
+    {                                                                          \
+    }; /**/
+// clang-format on
+#else
 #define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
     struct name                                                                \
       : hpx::actions::make_action_t<decltype(&component::func),                \
             &component::func, name>                                            \
     {                                                                          \
     }; /**/
+#endif
 #define HPX_DEFINE_COMPONENT_ACTION_2(component, func)                         \
     HPX_DEFINE_COMPONENT_ACTION_3(component, func, HPX_PP_CAT(func, _action))  \
     /**/
@@ -413,6 +427,15 @@
         HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
     /**/
 
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+// clang-format off
+#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
+    struct name                                                                \
+      : hpx::actions::reflect_component_action<^^component::func>             \
+    {                                                                          \
+    }; /**/
+// clang-format on
+#else
 #define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
     struct name                                                                \
       : hpx::actions::make_direct_action_t<decltype(&component::func),         \
@@ -420,6 +443,7 @@
     {                                                                          \
     };                                                                         \
     /**/
+#endif
 
 #define HPX_DEFINE_COMPONENT_DIRECT_ACTION_2(component, func)                  \
     HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(                                      \
@@ -497,7 +521,7 @@
 /// need for HPX_REGISTER_ACTION while keeping the same user-facing syntax.
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
     Prefix using name = hpx::actions::reflect_action<^^func>                   \
-    /**/
+    ; /**/
 // clang-format on
 #elif defined(__NVCC__) || defined(__CUDACC__)
 #define HPX_DEFINE_PLAIN_ACTION_3(Prefix, func, name)                          \
@@ -724,5 +748,5 @@
 ///
 /// \note Requires HPX_WITH_CXX26_REFLECTION=ON
 #define HPX_ACTION(func, name)                                                 \
-    using name = hpx::actions::reflect_action<^^func> /**/
+    using name = hpx::actions::reflect_action<^^func>; /**/
 #endif    // HPX_HAVE_CXX26_REFLECTION
