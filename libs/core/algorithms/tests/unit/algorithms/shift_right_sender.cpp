@@ -56,8 +56,13 @@ void test_shift_right_sender(
     std::size_t n =
         (static_cast<std::size_t>(std::rand()) % (arr_size - 1)) + 1;
 
-    tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)), n) |
+    auto result_n = tt::sync_wait(
+        ex::just(iterator(std::begin(c)), iterator(std::end(c)), n) |
         hpx::shift_right(ex_policy.on(exec)));
+
+    // assert returned iterator equals begin + n
+    HPX_TEST(hpx::get<0>(result_n) ==
+        iterator(std::begin(c) + static_cast<std::ptrdiff_t>(n)));
 
     std::move_backward(std::begin(d),
         std::end(d) - static_cast<std::ptrdiff_t>(n), std::end(d));
@@ -67,11 +72,14 @@ void test_shift_right_sender(
         std::end(c), std::begin(d) + static_cast<std::ptrdiff_t>(n)));
 
     // ensure shift by more than the range length returns last
+    // and that the range contents are unchanged
+    std::vector<std::size_t> c_snapshot = c;
     auto result_over =
         tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                           static_cast<std::size_t>(arr_size + 1)) |
             hpx::shift_right(ex_policy.on(exec)));
     HPX_TEST(hpx::get<0>(result_over) == iterator(std::end(c)));
+    HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(c_snapshot)));
 }
 
 template <typename IteratorTag>
