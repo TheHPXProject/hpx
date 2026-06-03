@@ -23,7 +23,7 @@
 
 #include "test_utils.hpp"
 
-#define ARR_SIZE 10007
+constexpr std::size_t arr_size = 10007;
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_shift_right_sender(
@@ -39,22 +39,22 @@ void test_shift_right_sender(
     namespace tt = hpx::this_thread::experimental;
     using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
 
-    std::vector<std::size_t> c(ARR_SIZE);
+    std::vector<std::size_t> c(arr_size);
     std::iota(std::begin(c), std::end(c), std::rand());
     std::vector<std::size_t> d = c;
 
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
 
     // verify shift by 0 is a no-op and returns first
-    auto result_zero = tt::sync_wait(
-        ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-            std::size_t(0)) |
-        hpx::shift_right(ex_policy.on(exec)));
+    auto result_zero =
+        tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
+                          std::size_t(0)) |
+            hpx::shift_right(ex_policy.on(exec)));
     HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(d)));
     HPX_TEST(hpx::get<0>(result_zero) == iterator(std::begin(c)));
 
     std::size_t n =
-        (static_cast<std::size_t>(std::rand()) % (ARR_SIZE - 1)) + 1;
+        (static_cast<std::size_t>(std::rand()) % (arr_size - 1)) + 1;
 
     tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)), n) |
         hpx::shift_right(ex_policy.on(exec)));
@@ -67,10 +67,10 @@ void test_shift_right_sender(
         std::end(c), std::begin(d) + static_cast<std::ptrdiff_t>(n)));
 
     // ensure shift by more than the range length returns last
-    auto result_over = tt::sync_wait(
-        ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-            static_cast<std::size_t>(ARR_SIZE + 1)) |
-        hpx::shift_right(ex_policy.on(exec)));
+    auto result_over =
+        tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
+                          static_cast<std::size_t>(arr_size + 1)) |
+            hpx::shift_right(ex_policy.on(exec)));
     HPX_TEST(hpx::get<0>(result_over) == iterator(std::end(c)));
 }
 

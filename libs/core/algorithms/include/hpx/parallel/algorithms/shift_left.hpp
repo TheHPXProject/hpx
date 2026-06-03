@@ -163,11 +163,10 @@ namespace hpx::parallel {
                         hpx::future<FwdIter> f =
                             r.call2(p, non_seq(), first, last);
                         return f.then(
-                            [=](hpx::future<FwdIter>&& fut) mutable
-                                -> FwdIter {
+                            [=](hpx::future<FwdIter>&& fut) mutable -> FwdIter {
                                 fut.get();
-                                std::advance(first,
-                                    detail::distance(new_first, last));
+                                std::advance(
+                                    first, detail::distance(new_first, last));
                                 return first;
                             });
                     },
@@ -184,8 +183,7 @@ namespace hpx::parallel {
                         return r.call(policy, first, last);
                     }) |
                     ex::then([=](FwdIter) mutable -> FwdIter {
-                        std::advance(
-                            first, detail::distance(new_first, last));
+                        std::advance(first, detail::distance(new_first, last));
                         return first;
                     });
             }
@@ -304,9 +302,8 @@ namespace hpx {
             )
         // clang-format on
         friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter>::type
-        tag_fallback_invoke(shift_left_t, ExPolicy&& policy, FwdIter first,
-            FwdIter last, Size n)
+            FwdIter>::type tag_fallback_invoke(shift_left_t, ExPolicy&& policy,
+            FwdIter first, FwdIter last, Size n)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

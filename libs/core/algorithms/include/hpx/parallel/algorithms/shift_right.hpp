@@ -167,8 +167,8 @@ namespace hpx::parallel {
                         return f.then(
                             [=](hpx::future<FwdIter>&& f) mutable -> FwdIter {
                                 f.get();
-                                std::advance(first,
-                                    detail::distance(new_first, last));
+                                std::advance(
+                                    first, detail::distance(new_first, last));
                                 return first;
                             });
                     },
@@ -185,8 +185,7 @@ namespace hpx::parallel {
                         return r.call(policy, first, last);
                     }) |
                     ex::then([=](FwdIter) mutable -> FwdIter {
-                        std::advance(
-                            first, detail::distance(new_first, last));
+                        std::advance(first, detail::distance(new_first, last));
                         return first;
                     });
             }
