@@ -1385,7 +1385,15 @@ void test_detach()
 
 void test_keep_future_sender()
 {
-    // the future should be passed to then, not it's contained value
+    // the future should be passed to then, not its contained value
+    {
+        auto sender = ex::keep_future(hpx::make_ready_future<void>());
+        static_assert(ex::is_sender_v<decltype(sender)>);
+        static_assert(
+            std::is_same_v<decltype(ex::get_env(sender)), ex::empty_env>);
+    }
+
+    // the future should be passed to then, not its contained value
     {
         ex::run_loop loop;
         auto t = hpx::thread([&] { loop.run(); });
