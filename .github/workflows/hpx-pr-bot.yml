@@ -1,0 +1,183 @@
+# Copyright (c) 2026 Arpit Khandelwal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+name: "HPX PR Sentinel"
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label-and-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Auto-Label PR
+        uses: actions/labeler@v5
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          sync-labels: false
+
+      - name: HPX PR Sentinel Auto-Review
+        uses: actions/github-script@v7
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            const pr = context.payload.pull_request;
+            const botSign = `\n\n---\n*Beep Boop! I am the **HPX PR Sentinel**!*\n*I automatically review pull requests to keep HPX fast and reliable!*`;
+            let comments = [];
+            
+            // Rule 1: Check description length
+            if (!pr.body || pr.body.trim().length < 20) {
+              comments.push("[!] **Description Too Short!** Please provide a more detailed description of what this PR does, why the change is necessary, and link any relevant issue numbers.");
+            }
+            
+            // Rule 2: Check PR Size (Alert for massive PRs)
+            if (pr.additions + pr.deletions > 750) {
+              comments.push("[!] **Large PR Alert!** This PR changes more than 750 lines. If possible, consider breaking it up into smaller PRs to make it easier for human reviewers to digest.");
+            }
+            
+            // Rule 3: Check for Tests
+            let hasSourceChanges = false;
+            let hasTestChanges = false;
+            let page = 1;
+            let changedFiles = [];
+            
+            // Fetch all changed files (handle pagination)
+            while (true) {
+              const { data: files } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+                page: page
+              });
+              if (files.length === 0) break;
+              changedFiles = changedFiles.concat(files.map(f => f.filename));
+              if (files.length < 100) break;
+              page++;
+            }
+            
+            if (changedFiles.some(f => f.endsWith('.cpp') || f.endsWith('.hpp'))) {
+              hasSourceChanges = true;
+            }
+            if (changedFiles.some(f => f.startsWith('tests/') || /^libs\/[^/]+\/tests\//.test(f))) {
+              hasTestChanges = true;
+            }
+            
+            if (hasSourceChanges && !hasTestChanges) {
+              comments.push("[?] **Missing Tests?** I noticed you modified source files, but I don't see any matching changes in the test directories (for example `tests/` or `libs/*/tests/`). Please add testing for your changes.");
+            }
+            
+            // Rule 4: Check for linked issue
+            const issueRegex = /#\d+|Fixes\s+#\d+|Resolves\s+#\d+|Closes\s+#\d+/i;
+            if (!issueRegex.test(pr.body || '')) {
+              comments.push("[-] **Missing Issue Link:** Sentinel couldn't find a linked `#issue` in your description. If this PR fixes a bug or adds a feature request, linking it makes tracking much easier!");
+            }
+            
+            // Rule 5: Check WIP status
+            if (pr.draft || (pr.title && pr.title.toUpperCase().includes('WIP'))) {
+              comments.push("[WIP] **Work In Progress!** Sentinel sees you are still forging this PR. Remember to mark it ready for review when finished!");
+            }
+            
+            // Rule 6: Documentation praise
+            let hasDocsChanges = changedFiles.some(f => f.startsWith('docs/') || f.endsWith('.md'));
+            if (hasDocsChanges && !hasSourceChanges && !hasTestChanges) {
+              comments.push("[+] **Documentation Guardian!** A PR dedicated entirely to improving the manuals! Sentinel salutes your dedication to spreading knowledge.");
+            }
+            
+            // Rule 7: First-Time Contributor Check
+            if (pr.author_association === 'FIRST_TIME_CONTRIBUTOR' || pr.author_association === 'NONE') {
+              comments.push("[+] **New Contributor!** Welcome to the HPX project! Sentinel is thrilled to see your first PR.");
+            }
+
+            // Rule 8: Changelog Enforcer
+            let hasChangelog = changedFiles.some(f => f.toUpperCase().includes('CHANGELOG') || f.toUpperCase().includes('RELEASE_NOTES'));
+            if (hasSourceChanges && !hasChangelog) {
+              comments.push("[?] **Changelog:** Sentinel noticed that you changed source code but didn't update a Changelog! If this PR adds a feature or fixes a notable bug, please consider adding a changelog entry.");
+            }
+
+            // Rule 9: Branch Naming Check
+            if (pr.head && pr.head.ref) {
+              const branchName = pr.head.ref.toLowerCase();
+              if (branchName === 'main' || branchName === 'master' || branchName.startsWith('patch-')) {
+                comments.push("[-] **Branch Check:** Sentinel recommends using descriptive feature branches (like `feature/my-new-idea` or `bugfix/issue-123`) rather than generic branch names like `" + pr.head.ref + "`.");
+              }
+            }
+
+            // Rule 10: Merge Conflict Watcher
+            if (pr.mergeable === false) {
+              comments.push("[!] **Merge Conflict!** Sentinel detects that this PR has merge conflicts with the base branch. You will need to rebase against the target branch and resolve those conflicts.");
+            }
+
+            // Rule 11: Title Formatting (Conventional Commits)
+            const titleRegex = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(\([a-zA-Z0-9_-]+\))?:\s.*$/i;
+            if (!titleRegex.test(pr.title || '')) {
+              comments.push("[-] **Title Formatting:** Your PR title doesn't seem to follow the Conventional Commits format (e.g., `feat: added something`, `fix: squashed bug`). This isn't strictly mandatory, but it helps keep git history clean.");
+            }
+            
+            // Fetch existing bot comments
+            let allComments = [];
+            let cPage = 1;
+            while (true) {
+              const { data: pageComments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                per_page: 100,
+                page: cPage
+              });
+              if (pageComments.length === 0) break;
+              allComments = allComments.concat(pageComments);
+              if (pageComments.length < 100) break;
+              cPage++;
+            }
+            const botComment = allComments.find(c => c.user.type === 'Bot' && c.body.includes('HPX PR Sentinel'));
+
+            let body = '';
+            let shouldUpdate = false;
+            
+            if (comments.length > 0) {
+              if (context.payload.action === 'opened') {
+                comments.unshift("[Wait] **Hang tight!** Sentinel has logged your Pull Request. Please wait while our maintainers review your code.");
+              }
+              body = `### HPX Sentinel Automated Review\n\n` + comments.map(c => `- ${c}`).join('\n') + botSign;
+              shouldUpdate = true;
+            } else if (context.payload.action === 'opened') {
+              body = `### HPX Sentinel Automated Review\n\n- [Wait] **Hang tight!** Sentinel has logged your Pull Request. Please wait while our maintainers review your code.\n` + botSign;
+              shouldUpdate = true;
+            } else if (botComment) {
+               // Update the comment if all issues are completely resolved
+               body = `### HPX Sentinel Automated Review\n\n- [OK] **All automatic Sentinel checks passed!** Outstanding work.\n` + botSign;
+               shouldUpdate = true;
+            }
+
+            // Post or Update the comment
+            if (shouldUpdate && body) {
+              if (botComment) {
+                if (botComment.body.trim() !== body.trim()) {
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: botComment.id,
+                    body: body
+                  });
+                }
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: body
+                });
+              }
+            }
