@@ -157,7 +157,7 @@ namespace hpx::parallel {
                              .on(policy.executor())
                              .with(policy.parameters());
 
-                return dataflow(
+                hpx::future<FwdIter> result = dataflow(
                     [=](hpx::future<FwdIter>&& f1) mutable
                         -> hpx::future<FwdIter> {
                         f1.get();
@@ -173,6 +173,7 @@ namespace hpx::parallel {
                             });
                     },
                     r.call2(p, non_seq(), first, new_first));
+                return result;
             }
             else
             {
