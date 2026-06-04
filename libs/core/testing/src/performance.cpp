@@ -24,23 +24,29 @@ namespace hpx::util {
 
     void perftests_cfg(hpx::program_options::options_description& cmdline)
     {
-        cmdline.add_options()("detailed_bench",
+        cmdline.add_options()("hpx:detailed_bench",
             "Use if detailed benchmarks are required, showing the execution "
-            "time taken for each epoch");
+            "time taken for each epoch")("hpx:print_cdash_img_path",
+            "Print the path to the images to be uploaded, in CDash XML format");
     }
 
-    void perftests_init(hpx::program_options::variables_map const& vm)
+    void perftests_init(
+        hpx::program_options::variables_map const& vm, std::string test_name)
     {
-        if (vm.count("detailed_bench"))
+        if (vm.count("hpx:detailed_bench"))
         {
             detailed_ = true;
         }
+        if (vm.count("hpx:print_cdash_img_path"))
+        {
+            print_cdash_img = true;
+        }
+        test_name_ = HPX_MOVE(test_name);
     }
 
     namespace detail {
 
 #if defined(HPX_HAVE_NANOBENCH)
-        constexpr int nanobench_epochs = 24;
         constexpr int nanobench_warmup = 40;
 
         char const* nanobench_hpx_simple_template() noexcept
@@ -49,8 +55,21 @@ namespace hpx::util {
 {{#result}}
 name: {{name}},
 executor: {{context(executor)}},
-average: {{average(elapsed)}}{{^-last}}
-{{/-last}}
+average: {{average(elapsed)}}
+{{/result}})DELIM";
+        }
+
+        char const* nanobench_hpx_cdash_template() noexcept
+        {
+            return R"DELIM(Results:
+{{#result}}
+name: {{name}},
+executor: {{context(executor)}},
+average: {{average(elapsed)}}
+<CTestMeasurement
+    type="numeric/double"
+    name="{{name}}_{{context(executor)}}">{{average(elapsed)}}
+</CTestMeasurement>
 {{/result}})DELIM";
         }
 
@@ -77,7 +96,6 @@ average: {{average(elapsed)}}{{^-last}}
             static ankerl::nanobench::Config cfg;
 
             cfg.mWarmup = nanobench_warmup;
-            cfg.mNumEpochs = nanobench_epochs;
 
             return b.config(cfg);
         }
@@ -154,6 +172,35 @@ average: {{average(elapsed)}}{{^-last}}
                 strm << "]\n";
                 strm << "}\n";
             }
+            else if (print_cdash_img)
+            {
+                strm << "Results:\n\n";
+                for (auto&& item : obj.m_map)
+                {
+                    long double average = static_cast<long double>(0.0);
+                    int series = 0;
+                    strm << "name: " << std::get<0>(item.first) << "\n";
+                    strm << "executor: " << std::get<1>(item.first) << "\n";
+                    for (long double const val : item.second)
+                    {
+                        ++series;
+                        average += val;
+                    }
+                    strm.precision(
+                        std::numeric_limits<long double>::max_digits10 - 1);
+                    strm << std::scientific << "average: " << average / series
+                         << "\n";
+                    strm << "<CTestMeasurement type=\"numeric/double\" name=\""
+                         << std::get<0>(item.first) << "_"
+                         << std::get<1>(item.first) << "\">" << std::scientific
+                         << average / series << "</CTestMeasurement>\n\n";
+                }
+                for (std::size_t i = 0; i < obj.m_map.size(); i++)
+                    strm << "<CTestMeasurementFile type=\"image/png\" "
+                            "name=\"perftest\" >"
+                         << "./" << test_name_ << "_" << i
+                         << ".png</CTestMeasurementFile>\n";
+            }
             else
             {
                 strm << "Results:\n\n";
@@ -193,13 +240,10 @@ average: {{average(elapsed)}}{{^-last}}
         if (steps == 0)
             return;
 
-        std::size_t const steps_per_epoch =
-            steps / detail::nanobench_epochs + 1;
-
         detail::bench()
             .name(name)
             .context("executor", exec)
-            .minEpochIterations(steps_per_epoch)
+            .epochs(steps)
             .run(test);
     }
 
@@ -209,6 +253,17 @@ average: {{average(elapsed)}}{{^-last}}
     void perftests_print_times(char const* templ, std::ostream& strm)
     {
         detail::bench().render(templ, strm);
+        if (!detailed_ && print_cdash_img)
+        {
+            for (long unsigned int i = 0; i < detail::bench().results().size();
+                i++)
+            {
+                strm << "<CTestMeasurementFile type=\"image/png\" "
+                        "name=\"perftest\">"
+                     << "./" << test_name_ << "_" << i
+                     << ".png</CTestMeasurementFile>\n";
+            }
+        }
     }
 
     // Overload that uses a default nanobench template
@@ -222,6 +277,9 @@ average: {{average(elapsed)}}{{^-last}}
     {
         if (detailed_)
             perftests_print_times(detail::nanobench_hpx_template(), std::cout);
+        else if (print_cdash_img)
+            perftests_print_times(
+                detail::nanobench_hpx_cdash_template(), std::cout);
         else
             perftests_print_times(
                 detail::nanobench_hpx_simple_template(), std::cout);
