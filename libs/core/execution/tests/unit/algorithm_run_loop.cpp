@@ -1330,6 +1330,183 @@ void test_let_error()
     }
 }
 
+void test_let_stopped()
+{
+    // just_stopped -> let_stopped recovers with void on the scheduler
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> let_stopped_called{false};
+        tt::sync_wait(
+            ex::just_stopped() | ex::let_stopped([=, &let_stopped_called]() {
+                let_stopped_called = true;
+                return ex::schedule(sched) | ex::then([]() {});
+            }));
+        HPX_TEST(let_stopped_called);
+        loop.finish();
+        t.join();
+    }
+
+    // just_stopped -> let_stopped recovers with a value
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> let_stopped_called{false};
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just_stopped() | ex::let_stopped([&let_stopped_called]() {
+                let_stopped_called = true;
+                return ex::just(42);
+            })));
+        HPX_TEST(let_stopped_called);
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+
+    // just_stopped -> let_stopped with continues_on to a scheduler
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> let_stopped_called{false};
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just_stopped() | ex::let_stopped([=, &let_stopped_called]() {
+                let_stopped_called = true;
+                return ex::just(42) | ex::continues_on(sched);
+            })));
+        HPX_TEST(let_stopped_called);
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+
+    // schedule(sched) -> stopped_as_optional -> let_stopped: stopped propagates
+    // through the run_loop scheduler
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> let_stopped_called{false};
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just_stopped() | ex::let_stopped([=, &let_stopped_called]() {
+                let_stopped_called = true;
+                return ex::schedule(sched) | ex::then([]() { return 99; });
+            })));
+        HPX_TEST(let_stopped_called);
+        HPX_TEST_EQ(result, 99);
+        loop.finish();
+        t.join();
+    }
+
+    // non-stopped predecessor: let_stopped callback is NOT called
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just(42) | ex::continues_on(sched) | ex::let_stopped([]() {
+                HPX_TEST(false);
+                return ex::just(0);
+            })));
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just(42) | ex::continues_on(sched) | ex::let_stopped([=]() {
+                HPX_TEST(false);
+                return ex::just(0) | ex::continues_on(sched);
+            })));
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+}
+
+void test_upon_stopped()
+{
+    // just_stopped -> upon_stopped recovers with void
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> upon_stopped_called{false};
+        tt::sync_wait(ex::just_stopped() |
+            ex::upon_stopped(
+                [&upon_stopped_called]() { upon_stopped_called = true; }));
+        HPX_TEST(upon_stopped_called);
+        loop.finish();
+        t.join();
+    }
+
+    // just_stopped -> upon_stopped with value recovery through run_loop
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> upon_stopped_called{false};
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just_stopped() | ex::upon_stopped([&upon_stopped_called]() {
+                upon_stopped_called = true;
+                return 42;
+            })));
+        HPX_TEST(upon_stopped_called);
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+
+    // upon_stopped chained after continues_on
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        std::atomic<bool> upon_stopped_called{false};
+        auto result = hpx::get<0>(*tt::sync_wait(ex::just_stopped() |
+            ex::upon_stopped([&upon_stopped_called]() {
+                upon_stopped_called = true;
+                return 99;
+            }) |
+            ex::continues_on(sched) | ex::then([](int x) { return x + 1; })));
+        HPX_TEST(upon_stopped_called);
+        HPX_TEST_EQ(result, 100);
+        loop.finish();
+        t.join();
+    }
+
+    // non-stopped predecessor: upon_stopped callback is NOT called
+    {
+        ex::run_loop loop;
+        auto t = hpx::thread([&] { loop.run(); });
+        [[maybe_unused]] auto sched = loop.get_scheduler();
+
+        auto result = hpx::get<0>(*tt::sync_wait(
+            ex::just(42) | ex::continues_on(sched) | ex::upon_stopped([]() {
+                HPX_TEST(false);
+                return 0;
+            })));
+        HPX_TEST_EQ(result, 42);
+        loop.finish();
+        t.join();
+    }
+}
+
 void test_detach()
 {
     {
@@ -1943,6 +2120,8 @@ int hpx_main()
     RUN_TEST(test_split_when_all);
     RUN_TEST(test_let_value);
     RUN_TEST(test_let_error);
+    RUN_TEST(test_let_stopped);
+    RUN_TEST(test_upon_stopped);
     RUN_TEST(test_detach);
     RUN_TEST(test_bulk);
 
