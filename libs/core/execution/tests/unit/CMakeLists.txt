@@ -39,6 +39,7 @@ set(tests
     minimal_sync_executor
     persistent_executor_parameters
     rebind_executor_parameters
+    vector_pack_load_store
 )
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
