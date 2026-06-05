@@ -231,6 +231,99 @@ namespace hpx::execution::experimental { namespace detail {
     };
 }}    // namespace hpx::execution::experimental::detail
 
+namespace hpx::execution::experimental { namespace detail {
+
+    ///////////////////////////////////////////////////////////////////////
+    // Scheduler-aware sender wrapper.
+    //
+    // Exposes the stored scheduler through its environment so that
+    // downstream sender algorithms (bulk, sync_wait, etc.) can query
+    // get_completion_scheduler<set_value_t> and obtain the scheduler
+    // that originated the work.
+    HPX_CXX_CORE_EXPORT template <typename Future, typename Scheduler>
+        requires(hpx::traits::is_future_v<std::decay_t<Future>>)
+    struct as_sender_sender_with_scheduler
+      : public as_sender_sender_base<std::decay_t<Future>>
+    {
+        using sender_concept = hpx::execution::experimental::sender_t;
+        using future_type = std::decay_t<Future>;
+        using scheduler_type = std::decay_t<Scheduler>;
+        using base_type = as_sender_sender_base<std::decay_t<Future>>;
+        using base_type::future_;
+
+        HPX_NO_UNIQUE_ADDRESS scheduler_type scheduler_;
+
+        // Environment that answers get_completion_scheduler queries.
+        struct env
+        {
+            scheduler_type const& sched;
+
+            auto query(
+                hpx::execution::experimental::get_domain_t) const noexcept
+            {
+                return hpx::execution::experimental::get_domain(sched);
+            }
+
+            template <typename CPO>
+                requires(std::is_same_v<CPO,
+                             hpx::execution::experimental::set_value_t> ||
+                    std::is_same_v<CPO,
+                        hpx::execution::experimental::set_stopped_t>)
+            auto query(
+                hpx::execution::experimental::get_completion_scheduler_t<CPO>)
+                const noexcept
+            {
+                return sched;
+            }
+        };
+
+        template <typename Future_, typename Scheduler_>
+            requires(!std::is_same_v<std::decay_t<Future_>,
+                        as_sender_sender_with_scheduler>)
+        explicit as_sender_sender_with_scheduler(
+            Future_&& future, Scheduler_&& scheduler)
+          : base_type{HPX_FORWARD(Future_, future)}
+          , scheduler_(HPX_FORWARD(Scheduler_, scheduler))
+        {
+        }
+
+        as_sender_sender_with_scheduler(
+            as_sender_sender_with_scheduler&&) = default;
+        as_sender_sender_with_scheduler& operator=(
+            as_sender_sender_with_scheduler&&) = default;
+        as_sender_sender_with_scheduler(
+            as_sender_sender_with_scheduler const&) = default;
+        as_sender_sender_with_scheduler& operator=(
+            as_sender_sender_with_scheduler const&) = default;
+
+        template <typename Self, typename... Env>
+        static consteval auto get_completion_signatures() noexcept ->
+            typename base_type::completion_signatures
+        {
+            return {};
+        }
+
+        template <typename Receiver>
+        auto connect(Receiver&& receiver) &&
+        {
+            return as_sender_operation_state<Receiver, future_type>{
+                HPX_FORWARD(Receiver, receiver), HPX_MOVE(future_)};
+        }
+
+        template <typename Receiver>
+        auto connect(Receiver&& receiver) &
+        {
+            return as_sender_operation_state<Receiver, future_type>{
+                HPX_FORWARD(Receiver, receiver), future_};
+        }
+
+        constexpr auto get_env() const noexcept
+        {
+            return env{scheduler_};
+        }
+    };
+}}    // namespace hpx::execution::experimental::detail
+
 namespace hpx::execution::experimental {
     // The as_sender CPO can be used to adapt any HPX future as a sender. The
     // value provided by the future will be used to call set_value on the
@@ -252,6 +345,20 @@ namespace hpx::execution::experimental {
         {
             return detail::as_sender_sender<std::decay_t<Future>>(
                 HPX_FORWARD(Future, future));
+        }
+
+        // Scheduler-aware overload: wraps the future into a sender whose
+        // environment exposes the given scheduler as completion scheduler.
+        template <typename Future, typename Scheduler>
+            requires(hpx::traits::is_future_v<std::decay_t<Future>> &&
+                hpx::execution::experimental::scheduler<
+                    std::decay_t<Scheduler>>)
+        constexpr HPX_FORCEINLINE auto operator()(
+            Future&& future, Scheduler&& scheduler) const
+        {
+            return detail::as_sender_sender_with_scheduler<std::decay_t<Future>,
+                std::decay_t<Scheduler>>(
+                HPX_FORWARD(Future, future), HPX_FORWARD(Scheduler, scheduler));
         }
 
         constexpr HPX_FORCEINLINE auto operator()() const
