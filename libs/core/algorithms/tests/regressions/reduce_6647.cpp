@@ -11,6 +11,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <climits>
+#include <numeric>
 #include <utility>
 #include <vector>
 
@@ -66,6 +67,13 @@ int hpx_main()
     test_reduce_case({3, 1, 4}, {1, 4});
     test_reduce_case({9, 2, 7, 1, 6}, {1, 9});
     test_reduce_case({3, 1, 4, 1, 5, 9, 2, 6}, {1, 9});
+
+    for (int i = 1; i <= 200; ++i)
+    {
+        std::vector<int> v(i);
+        std::iota(v.begin(), v.end(), 1);
+        test_reduce_case(v, {1, i});
+    }
 
     return hpx::local::finalize();
 }

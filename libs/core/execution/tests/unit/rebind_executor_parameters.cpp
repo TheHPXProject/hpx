@@ -478,6 +478,28 @@ struct test_replaced_execution_markers
     std::atomic<bool>* invoked_end_execution;
 };
 
+struct test_wrapping_replaced_execution_markers
+{
+    explicit test_wrapping_replaced_execution_markers(
+        std::atomic<bool>& invoked_begin) noexcept
+      : invoked_begin(&invoked_begin)
+    {
+    }
+
+    template <typename InnerParams, typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_wrapping_replaced_execution_markers self, InnerParams&& inner,
+        Executor&& exec) noexcept
+    {
+        hpx::execution::experimental::mark_begin_execution(
+            HPX_FORWARD(InnerParams, inner), HPX_FORWARD(Executor, exec));
+        *self.invoked_begin = true;
+    }
+
+    std::atomic<bool>* invoked_begin;
+};
+
 namespace hpx::execution::experimental {
 
     template <>
@@ -487,6 +509,12 @@ namespace hpx::execution::experimental {
 
     template <>
     struct is_executor_parameters<test_replaced_execution_markers>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_executor_parameters<test_wrapping_replaced_execution_markers>
       : std::true_type
     {
     };
@@ -575,6 +603,26 @@ void replace_execution_markers()
         HPX_TEST(invoked_begin);
         HPX_TEST(invoked_end);
         HPX_TEST(invoked_end_execution);
+    }
+
+    // test wrapped mark_begin_execution
+    {
+        std::atomic<bool> invoked_replaced(false);
+        std::atomic<bool> invoked_inner_replaced(false);
+        std::atomic<bool> invoked_inner_end(false);
+        std::atomic<bool> invoked_inner_end_execution(false);
+
+        auto params = join_executor_parameters(
+            test_replaced_execution_markers(invoked_inner_replaced,
+                invoked_inner_end, invoked_inner_end_execution));
+        auto rebound_params = rebind_executor_parameters(
+            params, test_wrapping_replaced_execution_markers(invoked_replaced));
+        auto policy =
+            create_rebound_policy(hpx::execution::par, rebound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+        HPX_TEST(invoked_inner_replaced);
     }
 }
 
