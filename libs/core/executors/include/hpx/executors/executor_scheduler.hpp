@@ -16,6 +16,7 @@
 #include <hpx/modules/execution_base.hpp>
 
 #include <exception>
+#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -115,6 +116,14 @@ namespace hpx::execution::experimental {
                         const noexcept
                     {
                         return executor_scheduler<Executor>{exec_};
+                    }
+
+                    // P2300 get_allocator query
+                    constexpr auto query(
+                        hpx::execution::experimental::get_allocator_t)
+                        const noexcept
+                    {
+                        return std::allocator<std::byte>{};
                     }
                 };
                 return env{exec_};
