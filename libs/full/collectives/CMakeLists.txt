@@ -23,6 +23,8 @@ set(collectives_headers
     hpx/collectives/create_communicator.hpp
     hpx/collectives/detail/channel_communicator.hpp
     hpx/collectives/detail/communicator.hpp
+    hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp
+    hpx/collectives/detail/hierarchical_helpers.hpp
     hpx/collectives/detail/latch.hpp
     hpx/collectives/exclusive_scan.hpp
     hpx/collectives/fold.hpp
@@ -79,6 +81,9 @@ add_hpx_module(
   SOURCES ${collectives_sources}
   HEADERS ${collectives_headers}
   MACRO_HEADERS ${collectives_macros_headers}
+  ADD_TO_GLOBAL_HEADER
+    "hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp"
+    "hpx/collectives/detail/hierarchical_helpers.hpp"
   COMPAT_HEADERS ${collectives_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES

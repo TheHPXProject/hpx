@@ -300,12 +300,13 @@ namespace hpx::collectives {
         hierarchical_communicator(
             std::vector<hpx::tuple<communicator, this_site_arg>>&& comms,
             arity_arg arity, root_site_arg root_site, num_sites_arg num_sites,
-            this_site_arg this_site) noexcept
+            this_site_arg this_site, bool flat_fallback) noexcept
           : communicators(HPX_MOVE(comms))
           , num_sites(num_sites)
           , this_site(this_site)
           , root_site(root_site)
           , arity(arity)
+          , flat_fallback_(flat_fallback)
         {
         }
 
@@ -360,6 +361,11 @@ namespace hpx::collectives {
             return arity;
         }
 
+        [[nodiscard]] constexpr bool is_flat_fallback() const noexcept
+        {
+            return flat_fallback_;
+        }
+
         [[nodiscard]] HPX_EXPORT
             hpx::tuple<num_sites_arg, this_site_arg, root_site_arg>
             get_info_ex() const noexcept;
@@ -373,6 +379,7 @@ namespace hpx::collectives {
         this_site_arg this_site;
         root_site_arg root_site;
         arity_arg arity;
+        bool flat_fallback_ = false;
     };
 
     ///////////////////////////////////////////////////////////////////////////

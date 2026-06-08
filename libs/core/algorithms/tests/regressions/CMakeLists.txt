@@ -20,6 +20,7 @@ set(tests
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
+    prefetching_iterator
     reduce_3641
     reduce_6647
     scan_different_inits

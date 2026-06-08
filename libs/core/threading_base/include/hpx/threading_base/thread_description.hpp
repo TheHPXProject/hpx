@@ -225,7 +225,7 @@ namespace hpx::threads {
 
     private:
         // expose for ABI compatibility reasons
-        HPX_CORE_EXPORT void init_from_alternative_name(char const* altname);
+        void init_from_alternative_name(char const* altname);
 
     public:
         thread_description() noexcept = default;

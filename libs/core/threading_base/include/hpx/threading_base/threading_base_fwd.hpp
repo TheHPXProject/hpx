@@ -24,18 +24,19 @@ namespace hpx::tracing {
 
 namespace hpx::threads {
 
-    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT
-        thread_data;    // forward declaration only
+    // forward declaration only
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT thread_data;
     HPX_CXX_CORE_EXPORT class thread_data_stackful;
     HPX_CXX_CORE_EXPORT class thread_data_stackless;
 
     HPX_CXX_CORE_EXPORT class thread_init_data;
-    HPX_CXX_CORE_EXPORT struct thread_description;
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT thread_description;
 
     namespace policies {
 
         HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT scheduler_base;
-    }
+    }    // namespace policies
+
     HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT thread_pool_base;
 
     /// \cond NOINTERNAL

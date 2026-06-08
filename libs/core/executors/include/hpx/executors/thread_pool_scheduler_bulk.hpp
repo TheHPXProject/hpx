@@ -20,7 +20,6 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -769,9 +768,11 @@ namespace hpx::execution::experimental::detail {
           , shape(HPX_FORWARD(Shape_, shape))
           , f(HPX_FORWARD(F_, f))
           , pu_mask(detail::full_mask(
-                hpx::execution::experimental::get_first_core(scheduler),
-                hpx::execution::experimental::processing_units_count(
-                    hpx::execution::experimental::null_parameters, scheduler,
+                this->scheduler.query(
+                    hpx::execution::experimental::get_first_core_t{}),
+                this->scheduler.query(
+                    hpx::execution::experimental::processing_units_count_t{},
+                    hpx::execution::experimental::null_parameters,
                     hpx::chrono::null_duration, 0)))
         {
         }
@@ -899,19 +900,19 @@ namespace hpx::execution::experimental::detail {
 
             template <typename Scheduler_, typename Sender_, typename Shape_,
                 typename F_, typename Receiver_>
-            operation_state(Scheduler_&& scheduler, Sender_&& sender,
+            operation_state(Scheduler_&& scheduler_, Sender_&& sender,
                 Shape_&& shape, F_&& f, hpx::threads::mask_type pumask,
                 Receiver_&& receiver)
-              : scheduler(HPX_FORWARD(Scheduler_, scheduler))
+              : scheduler(HPX_FORWARD(Scheduler_, scheduler_))
               , op_state(hpx::execution::experimental::connect(
                     HPX_FORWARD(Sender_, sender),
                     bulk_receiver<operation_state, F, Shape>{this}))
-              , first_thread(
-                    hpx::execution::experimental::get_first_core(scheduler))
-              , num_worker_threads(
-                    hpx::execution::experimental::processing_units_count(
-                        hpx::execution::experimental::null_parameters,
-                        scheduler, hpx::chrono::null_duration, 0))
+              , first_thread(scheduler.query(
+                    hpx::execution::experimental::get_first_core_t{}))
+              , num_worker_threads(scheduler.query(
+                    hpx::execution::experimental::processing_units_count_t{},
+                    hpx::execution::experimental::null_parameters,
+                    hpx::chrono::null_duration, 0))
               , pu_mask(HPX_MOVE(pumask))
               , queues(num_worker_threads)
               , shape(HPX_FORWARD(Shape_, shape))
@@ -938,28 +939,22 @@ namespace hpx::execution::experimental::detail {
 
     public:
         template <typename Receiver>
-        friend auto tag_invoke(
-            connect_t, thread_pool_bulk_sender&& s, Receiver&& receiver)
+        operation_state<std::decay_t<Receiver>> connect(Receiver&& receiver) &&
         {
-            return operation_state<std::decay_t<Receiver>>{
-                HPX_MOVE(s.scheduler), HPX_MOVE(s.sender), HPX_MOVE(s.shape),
-                HPX_MOVE(s.f), HPX_MOVE(s.pu_mask),
-                HPX_FORWARD(Receiver, receiver)};
+            return operation_state<std::decay_t<Receiver>>{HPX_MOVE(scheduler),
+                HPX_MOVE(sender), HPX_MOVE(shape), HPX_MOVE(f),
+                HPX_MOVE(pu_mask), HPX_FORWARD(Receiver, receiver)};
         }
 
         template <typename Receiver>
-        friend auto tag_invoke(
-            connect_t, thread_pool_bulk_sender& s, Receiver&& receiver)
+        operation_state<std::decay_t<Receiver>> connect(Receiver&& receiver) &
         {
-            return operation_state<std::decay_t<Receiver>>{s.scheduler,
-                s.sender, s.shape, s.f, s.pu_mask,
-                HPX_FORWARD(Receiver, receiver)};
+            return operation_state<std::decay_t<Receiver>>{scheduler, sender,
+                shape, f, pu_mask, HPX_FORWARD(Receiver, receiver)};
         }
     };
 }    // namespace hpx::execution::experimental::detail
 
-// Note: With stdexec integration, bulk operations are now customized
-// through the domain system in thread_pool_scheduler.hpp rather than
-// direct tag_invoke customizations. The thread_pool_domain<Policy>
-// intercepts hpx::execution::experimental::bulk_chunked_t operations and creates
-// thread_pool_bulk_sender instances for parallel execution.
+// Bulk operations are customized through the domain system in
+// thread_pool_scheduler.hpp. thread_pool_domain<Policy> intercepts bulk
+// operations and creates thread_pool_bulk_sender instances.

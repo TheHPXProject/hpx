@@ -53,6 +53,17 @@ namespace hpx {
           : hpx::functional::detail::tag_fallback<dataflow_t>
         {
         private:
+            template <typename Target, typename... Args>
+                requires requires(Target&& t, Args&&... args) {
+                    HPX_FORWARD(Target, t).dataflow(HPX_FORWARD(Args, args)...);
+                }
+            friend constexpr auto tag_invoke(
+                dataflow_t, Target&& target, Args&&... args)
+            {
+                return HPX_FORWARD(Target, target)
+                    .dataflow(HPX_FORWARD(Args, args)...);
+            }
+
             template <typename F, typename... Ts,
                 HPX_CONCEPT_REQUIRES_(
                     !hpx::traits::is_allocator_v<std::decay_t<F>>)>

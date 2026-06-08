@@ -21,47 +21,16 @@
 
 namespace hpx::execution::experimental {
 
-    // with_processing_units_count property implementation for execution
-    // policies that simply forwards to the embedded executor (if that supports
-    // the parameters type)
-
-    HPX_CXX_CORE_EXPORT template <execution_policy ExPolicy>
-        requires(std::invocable<with_processing_units_count_t,
-            typename std::decay_t<ExPolicy>::executor_type, std::size_t>)
-    constexpr decltype(auto) tag_invoke(
-        with_processing_units_count_t, ExPolicy&& policy, std::size_t num_cores)
-    {
-        auto exec = with_processing_units_count(policy.executor(), num_cores);
-
-        return create_rebound_policy(
-            policy, HPX_MOVE(exec), policy.parameters());
-    }
-
-    HPX_CXX_CORE_EXPORT template <execution_policy ExPolicy,
-        executor_parameters Params>
-        requires(
-            std::invocable<with_processing_units_count_t,
-                typename std::decay_t<ExPolicy>::executor_type, std::size_t> &&
-            std::invocable<processing_units_count_t, std::decay_t<Params>,
-                typename std::decay_t<ExPolicy>::executor_type,
-                hpx::chrono::steady_duration const&, std::size_t>)
-    constexpr decltype(auto) tag_invoke(
-        with_processing_units_count_t, ExPolicy&& policy, Params&& params)
-    {
-        // explicitly extract pu count from given parameters object as otherwise
-        // the executor might take precedence
-        auto exec = with_processing_units_count(policy.executor(),
-            processing_units_count(
-                params, policy.executor(), hpx::chrono::null_duration, 0));
-
-        return create_rebound_policy(
-            policy, HPX_MOVE(exec), policy.parameters());
-    }
+    // with_processing_units_count property implementations for execution
+    // policies that support the embedded executor are provided through the
+    // public query() member functions on execution_policy (see
+    // hpx/executors/execution_policy.hpp).
 
     // general fallback for parameters types that are not directly supported by
     // the underlying executor
     HPX_CXX_CORE_EXPORT template <typename ParametersProperty,
         execution_policy ExPolicy, executor_parameters Params>
+        requires(!is_scheduling_property_v<ParametersProperty>)
     constexpr decltype(auto) tag_fallback_invoke(
         ParametersProperty, ExPolicy&& policy, Params&& params)
     {

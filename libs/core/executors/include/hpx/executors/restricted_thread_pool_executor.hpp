@@ -139,113 +139,94 @@ namespace hpx::execution::experimental {
                     static_cast<std::int16_t>(thread_num)));
         }
 
-    private:
+    public:
         // property implementations
 
         // support all properties exposed by the embedded executor
         template <typename Tag, typename Property>
             requires(
-                hpx::execution::experimental::is_scheduling_property_v<Tag> &&
-                hpx::functional::is_tag_invocable_v<Tag, embedded_executor,
-                    Property>)
-        friend restricted_policy_executor tag_invoke(
-            Tag tag, restricted_policy_executor const& exec, Property&& prop)
+                hpx::execution::experimental::is_scheduling_property_v<Tag>)
+        restricted_policy_executor query(Tag tag, Property&& prop) const
         {
-            auto exec_with_prop = exec;
-            exec_with_prop.exec_ = hpx::functional::tag_invoke(tag,
-                exec.generate_executor(exec.get_current_thread_num()),
-                HPX_FORWARD(Property, prop));
+            auto exec_with_prop = *this;
+            exec_with_prop.exec_ =
+                tag(generate_executor(get_current_thread_num()),
+                    HPX_FORWARD(Property, prop));
             return exec_with_prop;
         }
 
         template <scheduling_property Tag>
-            requires(
-                hpx::functional::is_tag_invocable_v<Tag, embedded_executor>)
-        friend decltype(auto) tag_invoke(
-            Tag tag, restricted_policy_executor const& exec)
+        decltype(auto) query(Tag tag) const
         {
-            return tag(exec.generate_executor(exec.get_current_thread_num()));
+            return tag(generate_executor(get_current_thread_num()));
         }
 
         template <executor_parameters Parameters>
-        friend constexpr std::size_t tag_invoke(
+        constexpr std::size_t query(
             hpx::execution::experimental::processing_units_count_t tag,
-            Parameters&& params, restricted_policy_executor const& exec,
+            Parameters&& params,
             hpx::chrono::steady_duration const& duration =
                 hpx::chrono::null_duration,
-            std::size_t num_tasks = 0)
+            std::size_t num_tasks = 0) const
         {
             return tag(HPX_FORWARD(Parameters, params),
-                exec.generate_executor(exec.get_current_thread_num()), duration,
+                generate_executor(get_current_thread_num()), duration,
                 num_tasks);
         }
 
         // executor API
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            restricted_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
             return hpx::parallel::execution::sync_execute(
-                exec.generate_executor(exec.get_next_thread_num()),
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                generate_executor(get_next_thread_num()), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            restricted_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
             return hpx::parallel::execution::async_execute(
-                exec.generate_executor(exec.get_next_thread_num()),
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                generate_executor(get_next_thread_num()), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::then_execute_t,
-            restricted_policy_executor const& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+        decltype(auto) then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
         {
             return hpx::parallel::execution::then_execute(
-                exec.generate_executor(exec.get_next_thread_num()),
-                HPX_FORWARD(F, f), HPX_FORWARD(Future, predecessor),
-                HPX_FORWARD(Ts, ts)...);
+                generate_executor(get_next_thread_num()), HPX_FORWARD(F, f),
+                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
         // NonBlockingOneWayExecutor (adapted) interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            restricted_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) post(F&& f, Ts&&... ts) const
         {
             return hpx::parallel::execution::post(
-                exec.generate_executor(exec.get_next_thread_num()),
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                generate_executor(get_next_thread_num()), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            restricted_policy_executor const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
             return hpx::parallel::execution::bulk_async_execute(
-                exec.generate_executor(exec.first_thread_), HPX_FORWARD(F, f),
-                shape, HPX_FORWARD(Ts, ts)...);
+                generate_executor(first_thread_), HPX_FORWARD(F, f), shape,
+                HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename S, typename Future, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            restricted_policy_executor const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
             return hpx::parallel::execution::bulk_then_execute(
-                exec.generate_executor(exec.first_thread_), HPX_FORWARD(F, f),
-                shape, HPX_FORWARD(Future, predecessor),
-                HPX_FORWARD(Ts, ts)...);
+                generate_executor(first_thread_), HPX_FORWARD(F, f), shape,
+                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
         /// \endcond
 

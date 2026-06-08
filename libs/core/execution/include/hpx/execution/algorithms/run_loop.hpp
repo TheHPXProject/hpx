@@ -22,6 +22,8 @@
 
 namespace hpx::execution::experimental {
 
+    HPX_CXX_CORE_EXPORT struct make_future_t;
+
     namespace detail {
 
         HPX_CXX_CORE_EXPORT struct sync_wait_domain;
@@ -161,12 +163,6 @@ namespace hpx::execution::experimental {
             {
             }
 
-            friend void tag_invoke(hpx::execution::experimental::start_t,
-                run_loop_opstate& os) noexcept
-            {
-                os.start();
-            }
-
             void start() & noexcept;
         };
 
@@ -258,6 +254,11 @@ namespace hpx::execution::experimental {
             {
                 return forward_progress_guarantee::parallel;
             }
+
+            template <typename Sender,
+                typename Allocator = hpx::util::internal_allocator<>>
+            [[nodiscard]] auto query(make_future_t, Sender&& sender,
+                Allocator const& allocator = Allocator{}) const;
 
             [[nodiscard]] friend constexpr bool operator==(
                 run_loop_scheduler const& lhs,

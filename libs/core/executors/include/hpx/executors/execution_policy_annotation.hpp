@@ -22,43 +22,9 @@
 
 namespace hpx::execution::experimental {
 
-    // with_annotation property implementation for execution policies
-    // that simply forwards to the embedded executor
-    template <execution_policy ExPolicy>
-        requires(std::invocable<hpx::execution::experimental::with_annotation_t,
-            typename std::decay_t<ExPolicy>::executor_type, char const*>)
-    constexpr decltype(auto) tag_invoke(
-        hpx::execution::experimental::with_annotation_t, ExPolicy&& policy,
-        char const* annotation)
-    {
-        auto exec = hpx::execution::experimental::with_annotation(
-            policy.executor(), annotation);
-
-        return hpx::execution::experimental::create_rebound_policy(
-            policy, HPX_MOVE(exec), policy.parameters());
-    }
-
-    template <execution_policy ExPolicy>
-        requires(std::invocable<hpx::execution::experimental::with_annotation_t,
-            typename std::decay_t<ExPolicy>::executor_type, std::string>)
-    decltype(auto) tag_invoke(hpx::execution::experimental::with_annotation_t,
-        ExPolicy&& policy, std::string annotation)
-    {
-        auto exec = hpx::execution::experimental::with_annotation(
-            policy.executor(), HPX_MOVE(annotation));
-
-        return hpx::execution::experimental::create_rebound_policy(
-            policy, HPX_MOVE(exec), policy.parameters());
-    }
-
-    // get_annotation property implementation for execution policies
-    // that simply forwards to the embedded executor
-    template <execution_policy ExPolicy>
-        requires(std::invocable<hpx::execution::experimental::get_annotation_t,
-            typename std::decay_t<ExPolicy>::executor_type>)
-    constexpr decltype(auto) tag_invoke(
-        hpx::execution::experimental::get_annotation_t, ExPolicy&& policy)
-    {
-        return hpx::execution::experimental::get_annotation(policy.executor());
-    }
+    // with_annotation/get_annotation property implementations for execution
+    // policies are provided through the public query() member functions on
+    // execution_policy (see hpx/executors/execution_policy.hpp). The property
+    // CPOs detect those members directly (via property_base), so no tag_invoke
+    // bridge is needed here.
 }    // namespace hpx::execution::experimental

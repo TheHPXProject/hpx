@@ -3,7 +3,7 @@
 // Copyright (c) 2009 Boris Schaeling
 // Copyright (c) 2010 Felipe Tanus, Boris Schaeling
 // Copyright (c) 2011, 2012 Jeff Flinn, Boris Schaeling
-// Copyright (c) 2016 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -19,14 +19,13 @@
 
 #include <utility>
 
-namespace hpx { namespace components { namespace process { namespace windows {
+namespace hpx::components::process::windows {
 
     template <typename... Ts>
     child execute(Ts&&... ts)
     {
         return executor()(HPX_FORWARD(Ts, ts)...);
     }
-
-}}}}    // namespace hpx::components::process::windows
+}    // namespace hpx::components::process::windows
 
 #endif

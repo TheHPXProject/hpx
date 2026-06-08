@@ -19,14 +19,17 @@ set(tests
     channel_communicator
     fold
     global_spmd_block
+    hierarchical_helpers
     reduce_direct
     remote_latch
+    subtree_gather_scatter
 )
 if(HPX_WITH_NETWORKING)
   set(tests
       ${tests}
       all_gather_hierarchical
       all_reduce_hierarchical
+      all_to_all_hierarchical
       barrier_hierarchical
       broadcast_direct
       concurrent_collectives

@@ -7,9 +7,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/async_base/detail/query_first_fallback.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/tag_invoke.hpp>
-#include <hpx/topology/topology.hpp>
+#include <hpx/topology/detail/mask_fallback.hpp>
 
 #include <type_traits>
 
@@ -18,17 +19,10 @@ namespace hpx::execution::experimental {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct get_processing_units_mask_t
         final
-      : hpx::functional::detail::tag_fallback<get_processing_units_mask_t>
+      : detail::query_first_tag_fallback<get_processing_units_mask_t,
+            detail::machine_affinity_mask_fallback>
     {
-    private:
-        // simply return machine affinity mask if get_processing_units_mask is
-        // not supported
-        template <typename Target>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            get_processing_units_mask_t, Target&&) noexcept
-        {
-            return hpx::threads::create_topology().get_machine_affinity_mask();
-        }
+        constexpr get_processing_units_mask_t() = default;
     } get_processing_units_mask{};
 
     template <>
@@ -38,17 +32,10 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct get_cores_mask_t final
-      : hpx::functional::detail::tag_fallback<get_cores_mask_t>
+      : detail::query_first_tag_fallback<get_cores_mask_t,
+            detail::machine_affinity_mask_fallback>
     {
-    private:
-        // simply return machine affinity mask if get_cores_mask is not
-        // supported
-        template <typename Target>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            get_cores_mask_t, Target&&) noexcept
-        {
-            return hpx::threads::create_topology().get_machine_affinity_mask();
-        }
+        constexpr get_cores_mask_t() = default;
     } get_cores_mask{};
 
     template <>

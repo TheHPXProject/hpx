@@ -41,13 +41,17 @@
 /// - \b sample_counter: Updates a registered metric with a new double value.
 #endif
 
+#if defined(HPX_HAVE_MODULE_TRACING)
+
 namespace hpx::threads {
-    HPX_CORE_EXPORT struct thread_description;
-    HPX_CORE_EXPORT struct thread_id;
+
+    HPX_CXX_CORE_EXPORT struct thread_description;
+    HPX_CXX_CORE_EXPORT struct thread_id;
 }    // namespace hpx::threads
 
 namespace hpx::util::external_timer {
-    HPX_CORE_EXPORT struct task_wrapper;
+
+    HPX_CXX_CORE_EXPORT struct task_wrapper;
 }    // namespace hpx::util::external_timer
 
 #if defined(HPX_HAVE_TRACY)
@@ -58,4 +62,6 @@ namespace hpx::util::external_timer {
 #include <hpx/tracing/backends/apex.hpp>
 #else
 #include <hpx/tracing/backends/empty.hpp>
+#endif
+
 #endif

@@ -12,12 +12,14 @@
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/properties.hpp>
 #include <hpx/parallel/util/detail/chunk_size_iterator.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <tuple>
 #include <type_traits>
@@ -26,6 +28,51 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::util::detail {
+
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy>
+    void update_policy_processing_units_count(
+        ExPolicy& policy, std::size_t cores)
+    {
+        using exec_type = typename std::decay_t<ExPolicy>::executor_type;
+
+        if constexpr (std::derived_from<exec_type,
+                          hpx::execution::parallel_executor>)
+        {
+            exec_type exec = policy.executor();
+            auto& base_exec =
+                static_cast<hpx::execution::parallel_executor&>(exec);
+            if (cores == 0)
+            {
+                auto* pool = base_exec.pool_ ?
+                    base_exec.pool_ :
+                    hpx::threads::detail::get_self_or_default_pool();
+                cores = pool->get_active_os_thread_count();
+            }
+            base_exec.num_cores_ = cores;
+            policy = hpx::execution::experimental::create_rebound_policy(
+                policy, HPX_MOVE(exec), policy.parameters());
+        }
+        else if constexpr (requires {
+                               policy.query(hpx::execution::experimental::
+                                                with_processing_units_count_t{},
+                                   cores);
+                           })
+        {
+            policy = policy.query(
+                hpx::execution::experimental::with_processing_units_count_t{},
+                cores);
+        }
+        else if constexpr (hpx::functional::is_tag_invocable_v<
+                               hpx::execution::experimental::
+                                   with_processing_units_count_t,
+                               exec_type, std::size_t>)
+        {
+            policy = hpx::execution::experimental::create_rebound_policy(policy,
+                hpx::execution::experimental::with_processing_units_count(
+                    policy.executor(), cores),
+                policy.parameters());
+        }
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename F, typename Future, typename FwdIter>
@@ -133,9 +180,7 @@ namespace hpx::parallel::util::detail {
             chunk_size);
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         auto shape_begin = chunk_size_iterator(it_or_r, chunk_size, count);
         auto shape_end = chunk_size_iterator(last, chunk_size, count, count);
@@ -216,9 +261,7 @@ namespace hpx::parallel::util::detail {
             chunk_size);
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         auto shape_begin = chunk_size_iterator(it_or_r, chunk_size, count);
         auto shape_end = chunk_size_iterator(last, chunk_size, count, count);
@@ -292,9 +335,7 @@ namespace hpx::parallel::util::detail {
             static_cast<std::size_t>(-1));
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         return shape;
     }
@@ -395,9 +436,7 @@ namespace hpx::parallel::util::detail {
             chunk_size);
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         using iterator =
             parallel::util::detail::chunk_size_idx_iterator<FwdIter>;
@@ -487,9 +526,7 @@ namespace hpx::parallel::util::detail {
             chunk_size);
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         using iterator =
             parallel::util::detail::chunk_size_idx_iterator<FwdIter>;
@@ -568,9 +605,7 @@ namespace hpx::parallel::util::detail {
             static_cast<std::size_t>(-1));
 
         // update executor with new values
-        policy = hpx::experimental::prefer(
-            hpx::execution::experimental::with_processing_units_count, policy,
-            cores);
+        update_policy_processing_units_count(policy, cores);
 
         return shape;
     }

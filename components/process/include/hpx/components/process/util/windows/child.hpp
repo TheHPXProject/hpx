@@ -3,7 +3,7 @@
 // Copyright (c) 2009 Boris Schaeling
 // Copyright (c) 2010 Felipe Tanus, Boris Schaeling
 // Copyright (c) 2011, 2012 Jeff Flinn, Boris Schaeling
-// Copyright (c) 2016-2024 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -17,8 +17,6 @@
 #include <cstring>
 #include <utility>
 
-#include <windows.h>
-
 namespace hpx::components::process::windows {
 
     class child
@@ -26,14 +24,14 @@ namespace hpx::components::process::windows {
     public:
         PROCESS_INFORMATION proc_info;
 
-        child()
+        child() noexcept
         {
             std::memset(&proc_info, '\0', sizeof(PROCESS_INFORMATION));
             proc_info.hProcess = INVALID_HANDLE_VALUE;
             proc_info.hThread = INVALID_HANDLE_VALUE;
         }
 
-        explicit child(const PROCESS_INFORMATION& pi)
+        explicit child(const PROCESS_INFORMATION& pi) noexcept
           : proc_info(pi)
         {
         }
@@ -69,7 +67,7 @@ namespace hpx::components::process::windows {
             return *this;
         }
 
-        HANDLE process_handle() const
+        constexpr HANDLE process_handle() const noexcept
         {
             return proc_info.hProcess;
         }

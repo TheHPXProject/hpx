@@ -9,6 +9,9 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
+#include <hpx/collectives/argument_types.hpp>
+#include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/hierarchical_helpers.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
@@ -392,30 +395,24 @@ namespace hpx::collectives {
                 return;
             }
 
-            std::size_t division_steps = (right - left + 1) / arity;
-            std::size_t remainder = (right - left + 1) % arity;
-            std::size_t offset = 0;
+            auto const groups =
+                detail::get_top_level_groups(right - left + 1, arity);
 
-            for (std::size_t i = 0; i != arity; ++i)
+            for (std::size_t i = 0; i != groups.size(); ++i)
             {
-                std::size_t const current_group_size =
-                    division_steps + (i < remainder ? 1 : 0);
-
-                std::size_t const current_left = left + offset;
-                std::size_t const current_right =
-                    current_left + current_group_size - 1;
-                offset += current_group_size;
+                std::size_t const current_left = left + groups[i].left;
+                std::size_t const current_right = left + groups[i].right;
 
                 if (this_site == current_left)
                 {
                     auto c = create_communicator(name.c_str(),
-                        num_sites_arg(arity), this_site_arg(i),
+                        num_sites_arg(groups.size()), this_site_arg(i),
                         generation_arg(generation), root_site_arg(0));
 
                     communicators.emplace_back(HPX_MOVE(c), this_site_arg(i));
                 }
 
-                if (this_site >= current_left && this_site < current_right + 1)
+                if (this_site >= current_left && this_site <= current_right)
                 {
                     recursively_fill_communicators(communicators, current_left,
                         current_right, basename, arity, this_site, num_sites,
@@ -477,14 +474,15 @@ namespace hpx::collectives {
             std::vector<hpx::tuple<communicator, this_site_arg>> communicators;
             communicators.emplace_back(HPX_MOVE(c), this_site);
             return hierarchical_communicator(HPX_MOVE(communicators), arity,
-                root_site, num_sites, this_site);
+                root_site, num_sites, this_site,
+                /*flat_fallback=*/true);
         }
 
         std::vector<hpx::tuple<communicator, this_site_arg>> communicators;
         recursively_fill_communicators(communicators, 0, num_sites - 1, name,
             arity, this_site, num_sites, generation);
-        return hierarchical_communicator(
-            HPX_MOVE(communicators), arity, root_site, num_sites, this_site);
+        return hierarchical_communicator(HPX_MOVE(communicators), arity,
+            root_site, num_sites, this_site, /*flat_fallback=*/false);
     }
 
     hpx::tuple<num_sites_arg, this_site_arg, root_site_arg>

@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 
+#include <hpx/async_base/query_dispatch.hpp>
 #include <hpx/execution/algorithms/detail/partial_algorithm.hpp>
 #include <hpx/functional/detail/tag_priority_invoke.hpp>
 #include <hpx/modules/concepts.hpp>
@@ -144,21 +145,19 @@ namespace hpx::execution::experimental {
             };
 
             template <typename Receiver>
-            friend auto tag_invoke(
-                connect_t, bulk_sender&& s, Receiver&& receiver)
+            auto connect(Receiver&& receiver) &&
             {
-                return hpx::execution::experimental::connect(HPX_MOVE(s.sender),
+                return hpx::execution::experimental::connect(HPX_MOVE(sender),
                     bulk_receiver<Receiver>(HPX_FORWARD(Receiver, receiver),
-                        HPX_MOVE(s.shape), HPX_MOVE(s.f)));
+                        HPX_MOVE(shape), HPX_MOVE(f)));
             }
 
             template <typename Receiver>
-            friend auto tag_invoke(
-                connect_t, bulk_sender& s, Receiver&& receiver)
+            auto connect(Receiver&& receiver) &
             {
-                return hpx::execution::experimental::connect(s.sender,
+                return hpx::execution::experimental::connect(sender,
                     bulk_receiver<Receiver>(
-                        HPX_FORWARD(Receiver, receiver), s.shape, s.f));
+                        HPX_FORWARD(Receiver, receiver), shape, f));
             }
         };
     }    // namespace detail
@@ -193,6 +192,17 @@ namespace hpx::execution::experimental {
       : hpx::functional::detail::tag_priority<bulk_t>
     {
     private:
+        template <typename Scheduler, typename Sender, typename Shape,
+            typename F>
+        friend constexpr auto tag_invoke(bulk_t tag, Scheduler&& sched,
+            Sender&& sender, Shape const& shape, F&& f)
+            requires has_query_v<Scheduler, bulk_t, Sender, Shape const&, F&&>
+        {
+            return HPX_FORWARD(Scheduler, sched)
+                .query(
+                    tag, HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f));
+        }
+
         // clang-format off
         template <typename Sender, typename Shape, typename F,
             HPX_CONCEPT_REQUIRES_(
@@ -211,8 +221,9 @@ namespace hpx::execution::experimental {
                     hpx::execution::experimental::set_value_t>(
                     hpx::execution::experimental::get_env(sender));
 
-            return hpx::functional::tag_invoke(bulk_t{}, HPX_MOVE(scheduler),
-                HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f));
+            return HPX_FORWARD(decltype(scheduler), scheduler)
+                .query(bulk_t{}, HPX_FORWARD(Sender, sender), shape,
+                    HPX_FORWARD(F, f));
         }
 
         // clang-format off

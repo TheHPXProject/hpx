@@ -10,7 +10,6 @@
 #include <hpx/executors/explicit_scheduler_executor.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -88,6 +87,46 @@ namespace hpx::execution::experimental {
         }
 
         policy_type policy;
+
+        template <typename Tag, typename Property>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag>)
+        [[nodiscard]] auto query(Tag tag, Property&& prop) const
+        {
+            return scheduler_and_policy{
+                get_scheduler().query(tag, HPX_FORWARD(Property, prop)),
+                get_policy()};
+        }
+
+        template <typename Tag>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag>)
+        [[nodiscard]] auto query(Tag tag) const
+        {
+            return get_scheduler().query(tag);
+        }
+
+        template <typename Tag, typename... Args>
+            requires(
+                !hpx::execution::experimental::is_scheduling_property_v<Tag> &&
+                requires(base_scheduler_type const& sched, Tag t, Args... a) {
+                    sched.query(t, HPX_FORWARD(Args, a)...);
+                })
+        [[nodiscard]] auto query(Tag tag, Args&&... args) const
+        {
+            return get_scheduler().query(tag, HPX_FORWARD(Args, args)...);
+        }
+
+        template <typename Tag>
+            requires(
+                !hpx::execution::experimental::is_scheduling_property_v<Tag> &&
+                requires(base_scheduler_type const& sched, Tag t) {
+                    sched.query(t);
+                })
+        [[nodiscard]] auto query(Tag tag) const
+        {
+            return get_scheduler().query(tag);
+        }
     };
 
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename ExPolicy>
@@ -96,40 +135,10 @@ namespace hpx::execution::experimental {
             std::decay_t<ExPolicy>>;
 
     ////////////////////////////////////////////////////////////////////////////
-    // support all scheduling properties exposed by the embedded scheduler
 
-    // clang-format off
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename Scheduler, typename ExPolicy,
-        typename Property,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    auto tag_invoke(Tag tag,
-        scheduler_and_policy<Scheduler, ExPolicy> const& scheduler,
-        Property&& prop)
-        -> decltype(scheduler_and_policy<Scheduler, ExPolicy>(
-                std::declval<Tag>()(
-                    std::declval<Scheduler>(), std::declval<Property>()),
-                std::declval<ExPolicy>()))
-    // clang-format on
-    {
-        return scheduler_and_policy<Scheduler, ExPolicy>(
-            tag(scheduler.get_scheduler(), HPX_FORWARD(Property, prop)),
-            scheduler.get_policy());
-    }
-
-    // clang-format off
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename Scheduler, typename ExPolicy,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    // clang-format on
-    auto tag_invoke(
-        Tag tag, scheduler_and_policy<Scheduler, ExPolicy> const& scheduler)
-        -> decltype(std::declval<Tag>()(std::declval<Scheduler>()))
-    {
-        return tag(scheduler.get_scheduler());
-    }
+    // The scheduling property CPOs detect the public query() member functions
+    // of scheduler_and_policy directly (via property_base), so no tag_invoke
+    // bridge is needed here.
 
     // Experimental support for facilities from p2500 (wg21.link/p2500)
     inline namespace p2500 {
