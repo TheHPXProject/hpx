@@ -86,8 +86,10 @@ namespace hpx::compute {
         }
 
         template <typename InIter>
-            requires hpx::traits::is_input_iterator_v<InIter>
         vector(InIter first, InIter last, Allocator const& alloc = Allocator())
+#if !defined(DOXYGEN)
+            requires hpx::traits::is_input_iterator_v<InIter>
+#endif
           : size_(static_cast<size_type>(std::distance(first, last)))
           , capacity_(size_)
           , alloc_(alloc)
@@ -238,8 +240,10 @@ namespace hpx::compute {
         }
 
         template <typename InIter>
-            requires hpx::traits::is_input_iterator_v<InIter>
         void assign(InIter first, InIter last)
+#if !defined(DOXYGEN)
+            requires hpx::traits::is_input_iterator_v<InIter>
+#endif
         {
             clear();
             size_type count =

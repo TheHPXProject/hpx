@@ -210,6 +210,7 @@ namespace hpx::execution::experimental {
             }
         }
 
+        /// \cond NOINTERNAL
         template <typename F, typename S, typename... Ts>
         void bulk_sync_execute_helper(F&& f, S const& shape, Ts&&... ts)
         {
@@ -361,6 +362,7 @@ namespace hpx::execution::experimental {
         {
             return hpx::functional::tag_invoke(tag, exec.exec_);
         }
+        /// \endcond
 
     private:
         fork_join_executor exec_;
