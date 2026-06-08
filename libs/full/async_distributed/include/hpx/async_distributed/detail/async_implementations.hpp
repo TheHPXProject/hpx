@@ -365,17 +365,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     template <typename Action>
-    struct get_function_annotation_itt<hpx::detail::action_invoker<Action>>
+    struct get_function_annotation_tracing<hpx::detail::action_invoker<Action>>
     {
-        static util::itt::string_handle call(
+        static hpx::tracing::annotation_handle call(
             hpx::detail::action_invoker<Action> const&) noexcept
         {
-            return hpx::actions::detail::get_action_name_itt<Action>();
+            return hpx::actions::detail::get_action_name_tracing<Action>();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 

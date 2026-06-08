@@ -21,6 +21,15 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT using enable_parent_task_handler_type = bool (*)();
 
     ////////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT using annotation_handle = util::itt::string_handle;
+
+    HPX_CXX_CORE_EXPORT inline annotation_handle create_annotation_handle(
+        char const* name) noexcept
+    {
+        return util::itt::string_handle(name);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct region_init_data
     {
         char const* name = nullptr;
@@ -29,7 +38,7 @@ namespace hpx::tracing {
         bool is_stackless = false;
         std::size_t address = 0;
         bool is_address_type = false;
-        void* itt_string_handle = nullptr;
+        annotation_handle handle;
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -93,23 +102,104 @@ namespace hpx::tracing {
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
-        constexpr explicit lock_context(char const* = nullptr) noexcept {}
-        constexpr explicit lock_context(char const*, char const*) noexcept {}
-
-        constexpr bool before_lock() const noexcept
+        explicit lock_context(
+            char const* name = nullptr, void const* addr = nullptr) noexcept
+          : addr_(addr)
         {
-            return false;
+            if (addr_)
+                HPX_ITT_SYNC_CREATE(
+                    const_cast<void*>(addr_), name ? name : "sync", "");
+        }
+        explicit lock_context(char const* prefix, char const* suffix,
+            void const* addr = nullptr) noexcept
+          : addr_(addr)
+        {
+            if (addr_)
+                HPX_ITT_SYNC_CREATE(const_cast<void*>(addr_),
+                    prefix ? prefix : "sync", suffix ? suffix : "");
         }
 
-        constexpr void after_lock() const noexcept {}
+        ~lock_context()
+        {
+            if (addr_)
+                HPX_ITT_SYNC_DESTROY(const_cast<void*>(addr_));
+        }
 
-        constexpr void after_try_lock(bool) const noexcept {}
+        bool before_lock() const noexcept
+        {
+            if (addr_)
+                HPX_ITT_SYNC_PREPARE(const_cast<void*>(addr_));
+            return addr_ != nullptr;
+        }
 
-        constexpr void after_unlock() const noexcept {}
+        void after_lock() const noexcept
+        {
+            if (addr_)
+                HPX_ITT_SYNC_ACQUIRED(const_cast<void*>(addr_));
+        }
+
+        void after_try_lock(bool success) const noexcept
+        {
+            if (addr_)
+            {
+                if (success)
+                    HPX_ITT_SYNC_ACQUIRED(const_cast<void*>(addr_));
+                else
+                    HPX_ITT_SYNC_CANCEL(const_cast<void*>(addr_));
+            }
+        }
+
+        void before_unlock() const noexcept
+        {
+            if (addr_)
+                HPX_ITT_SYNC_RELEASING(const_cast<void*>(addr_));
+        }
+
+        void after_unlock() const noexcept
+        {
+            if (addr_)
+                HPX_ITT_SYNC_RELEASED(const_cast<void*>(addr_));
+        }
+
+    private:
+        void const* addr_ = nullptr;
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT constexpr void set_thread_name(char const*) noexcept {}
+    namespace detail {
+        HPX_CXX_CORE_EXPORT inline void sync_prepare(void const* addr) noexcept
+        {
+            if (addr)
+                HPX_ITT_SYNC_PREPARE(const_cast<void*>(addr));
+        }
+        HPX_CXX_CORE_EXPORT inline void sync_acquired(void const* addr) noexcept
+        {
+            if (addr)
+                HPX_ITT_SYNC_ACQUIRED(const_cast<void*>(addr));
+        }
+        HPX_CXX_CORE_EXPORT inline void sync_cancel(void const* addr) noexcept
+        {
+            if (addr)
+                HPX_ITT_SYNC_CANCEL(const_cast<void*>(addr));
+        }
+        HPX_CXX_CORE_EXPORT inline void sync_releasing(
+            void const* addr) noexcept
+        {
+            if (addr)
+                HPX_ITT_SYNC_RELEASING(const_cast<void*>(addr));
+        }
+        HPX_CXX_CORE_EXPORT inline void sync_released(void const* addr) noexcept
+        {
+            if (addr)
+                HPX_ITT_SYNC_RELEASED(const_cast<void*>(addr));
+        }
+    }    // namespace detail
+
+    ////////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT inline void set_thread_name(char const* name) noexcept
+    {
+        HPX_ITT_THREAD_SET_NAME(name);
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // ITT has no rename_region equivalent

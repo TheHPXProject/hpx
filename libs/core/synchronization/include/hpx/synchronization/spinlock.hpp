@@ -19,9 +19,8 @@
 
 #include <hpx/config.hpp>
 
+#include <hpx/lock_registration/detail/register_locks.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/itt_notify.hpp>
-#include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/tracing.hpp>
 
 #include <atomic>
@@ -54,22 +53,17 @@ namespace hpx {
 #if defined(HPX_HAVE_TRACING)
             spinlock() noexcept
               : v_(false)
-              , context_("hpx::spinlock")
+              , context_("hpx::spinlock", this)
             {
-                HPX_ITT_SYNC_CREATE(this, "hpx::spinlock", nullptr);
             }
 
             explicit spinlock(char const* const desc) noexcept
               : v_(false)
-              , context_("hpx::spinlock#", desc)
+              , context_("hpx::spinlock#", desc, this)
             {
-                HPX_ITT_SYNC_CREATE(this, "hpx::spinlock", desc);
             }
 
-            ~spinlock()
-            {
-                HPX_ITT_SYNC_DESTROY(this);
-            }
+            ~spinlock() = default;
 #else
             constexpr spinlock() noexcept
               : v_(false)
@@ -86,7 +80,6 @@ namespace hpx {
 
             void lock()
             {
-                HPX_ITT_SYNC_PREPARE(this);
                 bool const run_after = context_.before_lock();
 
                 // Checking for the value in is_locked() ensures that
@@ -116,8 +109,6 @@ namespace hpx {
                         util::yield_while<Backoff>(pred, "hpx::spinlock::lock");
                     } while (!acquire_lock_plain());
                 }
-
-                HPX_ITT_SYNC_ACQUIRED(this);
                 if (run_after)
                     context_.after_lock();
                 util::register_lock(this);
@@ -126,19 +117,16 @@ namespace hpx {
             bool try_lock() noexcept(
                 noexcept(util::register_lock(std::declval<spinlock*>())))
             {
-                HPX_ITT_SYNC_PREPARE(this);
                 bool const run_after = context_.before_lock();
 
                 if (acquire_lock())
                 {
-                    HPX_ITT_SYNC_ACQUIRED(this);
                     if (run_after)
                         context_.after_try_lock(true);
                     util::register_lock(this);
                     return true;
                 }
 
-                HPX_ITT_SYNC_CANCEL(this);
                 if (run_after)
                     context_.after_try_lock(false);
                 return false;
@@ -147,11 +135,10 @@ namespace hpx {
             void unlock() noexcept(
                 noexcept(util::unregister_lock(std::declval<spinlock*>())))
             {
-                HPX_ITT_SYNC_RELEASING(this);
+                context_.before_unlock();
 
                 relinquish_lock();
 
-                HPX_ITT_SYNC_RELEASED(this);
                 context_.after_unlock();
                 util::unregister_lock(this);
             }

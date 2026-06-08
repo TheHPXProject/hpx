@@ -23,6 +23,15 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT using enable_parent_task_handler_type = bool (*)();
 
     ////////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT using annotation_handle = char const*;
+
+    HPX_CXX_CORE_EXPORT constexpr annotation_handle create_annotation_handle(
+        char const* name) noexcept
+    {
+        return name;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct region_init_data
     {
         char const* name = nullptr;
@@ -102,8 +111,10 @@ namespace hpx::tracing {
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] lock_context
     {
-        explicit lock_context(char const* name = nullptr) noexcept;
-        explicit lock_context(char const* prefix, char const* suffix) noexcept;
+        explicit lock_context(
+            char const* name = nullptr, void const* addr = nullptr) noexcept;
+        explicit lock_context(char const* prefix, char const* suffix,
+            void const* addr = nullptr) noexcept;
 
         ~lock_context();
 
@@ -113,11 +124,27 @@ namespace hpx::tracing {
         bool before_lock() const noexcept;
         void after_lock() const noexcept;
         void after_try_lock(bool acquired) const noexcept;
+        void before_unlock() const noexcept;
         void after_unlock() const noexcept;
 
     private:
         hpx::tracy::lock_data impl;
     };
+
+    ////////////////////////////////////////////////////////////////////////////
+    namespace detail {
+        HPX_CXX_CORE_EXPORT constexpr void sync_prepare(void const*) noexcept {}
+        HPX_CXX_CORE_EXPORT constexpr void sync_acquired(void const*) noexcept
+        {
+        }
+        HPX_CXX_CORE_EXPORT constexpr void sync_cancel(void const*) noexcept {}
+        HPX_CXX_CORE_EXPORT constexpr void sync_releasing(void const*) noexcept
+        {
+        }
+        HPX_CXX_CORE_EXPORT constexpr void sync_released(void const*) noexcept
+        {
+        }
+    }    // namespace detail
 
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_thread_name(

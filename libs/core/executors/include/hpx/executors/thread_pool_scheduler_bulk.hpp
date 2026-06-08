@@ -172,14 +172,10 @@ namespace hpx::execution::experimental::detail {
         template <typename Ts>
         void do_work_chunk(Ts& ts, std::uint32_t const index) const
         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event(
-                "set_value_loop_visitor::do_work_chunk(chunking)");
-
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-
             using index_pack_type = hpx::detail::fused_index_pack_t<Ts>;
+
+            HPX_TRACING_MARK_EVENT(
+                "set_value_loop_visitor::do_work_chunk(chunking)");
 
             auto const i_begin =
                 static_cast<std::size_t>(index) * op_state->chunk_size;

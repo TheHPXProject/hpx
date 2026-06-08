@@ -85,7 +85,6 @@ add_hpx_module(
     hpx_execution_base
     hpx_functional
     hpx_hashing
-    hpx_itt_notify
     hpx_lock_registration
     hpx_logging
     hpx_memory

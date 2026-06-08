@@ -882,6 +882,18 @@ namespace hpx::traits {
         }
     };
 
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    struct get_function_annotation_tracing<
+        parallel::detail::transform_iteration<ExPolicy, F, Proj>>
+    {
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
+            parallel::detail::transform_iteration<ExPolicy, F, Proj> const&
+                f) noexcept
+        {
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
+        }
+    };
+
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj1,
         typename Proj2>
     struct get_function_address<
@@ -908,32 +920,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
-    struct get_function_annotation_itt<
-        parallel::detail::transform_iteration<ExPolicy, F, Proj>>
-    {
-        [[nodiscard]] static util::itt::string_handle call(
-            parallel::detail::transform_iteration<ExPolicy, F, Proj> const&
-                f) noexcept
-        {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
-        }
-    };
-
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj1,
         typename Proj2>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1, Proj2>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1,
                 Proj2> const& f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
 }    // namespace hpx::traits
 
 #endif

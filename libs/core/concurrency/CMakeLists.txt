@@ -73,7 +73,6 @@ add_hpx_module(
     hpx_execution_base
     hpx_errors
     hpx_hashing
-    hpx_itt_notify
     hpx_lock_registration
     hpx_thread_support
     hpx_tracing

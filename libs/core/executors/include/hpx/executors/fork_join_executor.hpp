@@ -21,7 +21,7 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/hardware.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading.hpp>
@@ -279,12 +279,9 @@ namespace hpx::execution::experimental {
                     while (HPX_LIKELY(state != thread_state::stopping))
                     {
                         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                            static hpx::util::itt::event notify_event(
+                            HPX_TRACING_MARK_EVENT(
                                 "fork_join_executor::invoke_work");
 
-                            hpx::util::itt::mark_event e(notify_event);
-#endif
                             data.thread_function_helper_(region_data_,
                                 thread_index_, num_threads_, queues_,
                                 exception_mutex_, exception_);

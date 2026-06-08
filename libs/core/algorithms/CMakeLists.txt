@@ -289,7 +289,6 @@ add_hpx_module(
     hpx_functional
     hpx_futures
     hpx_iterator_support
-    hpx_itt_notify
     hpx_lcos_local
     hpx_memory
     hpx_pack_traversal

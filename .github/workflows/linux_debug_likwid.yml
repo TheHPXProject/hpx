@@ -23,7 +23,7 @@ jobs:
     - name: InstallLikwid
       shell: bash
       run: |
-          git clone https://github.com/RRZE-HPC/likwid.git
+          git clone --branch v5.5.0 https://github.com/RRZE-HPC/likwid.git
           cd likwid
           make; make install; cd ..
     - name: Configure

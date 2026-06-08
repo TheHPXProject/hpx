@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/preprocessor/cat.hpp>
 
 #if defined(DOXYGEN)
 /// \defgroup tracing Tracing API
@@ -56,12 +57,20 @@ namespace hpx::util::external_timer {
 
 #if defined(HPX_HAVE_TRACY)
 #include <hpx/tracing/backends/tracy.hpp>
+#define HPX_TRACING_MARK_EVENT(name)                                           \
+    hpx::tracing::mark_event HPX_PP_CAT(hpx_trace_mark_, __LINE__)(name)
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
 #include <hpx/tracing/backends/ittnotify.hpp>
+#define HPX_TRACING_MARK_EVENT(name)                                           \
+    static hpx::util::itt::event HPX_PP_CAT(hpx_trace_event_, __LINE__)(name); \
+    hpx::util::itt::mark_event HPX_PP_CAT(hpx_trace_mark_, __LINE__)(          \
+        HPX_PP_CAT(hpx_trace_event_, __LINE__))
 #elif defined(HPX_HAVE_APEX)
 #include <hpx/tracing/backends/apex.hpp>
+#define HPX_TRACING_MARK_EVENT(name)
 #else
 #include <hpx/tracing/backends/empty.hpp>
+#define HPX_TRACING_MARK_EVENT(name)
 #endif
 
 #endif

@@ -186,13 +186,7 @@ namespace hpx::actions {
 
         threads::thread_init_data data;
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-        data.description = threads::thread_description(
-            actions::detail::get_action_name<Action>(),
-            actions::detail::get_action_name_itt<Action>());
-#else
         data.description = actions::detail::get_action_name<Action>();
-#endif
 #endif
 #if defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
         data.parent_id = this->parent_id_;

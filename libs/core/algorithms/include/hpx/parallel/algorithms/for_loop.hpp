@@ -1868,20 +1868,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
         typename Tuple>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {
-        static util::itt::string_handle call(
+        static hpx::tracing::annotation_handle call(
             hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 #endif

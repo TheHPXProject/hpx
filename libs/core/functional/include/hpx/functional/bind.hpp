@@ -251,18 +251,17 @@ namespace hpx {
 #endif
             }
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            [[nodiscard]] util::itt::string_handle get_function_annotation_itt()
-                const
+            [[nodiscard]] hpx::tracing::annotation_handle
+            get_function_annotation_tracing() const
             {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-                return traits::get_function_annotation_itt<F>::call(_f);
+                return traits::get_function_annotation_tracing<F>::call(_f);
 #else
-                static util::itt::string_handle sh("bound");
+                static auto sh =
+                    hpx::tracing::create_annotation_handle("bound");
                 return sh;
 #endif
             }
-#endif
 
         private:
             F _f;
@@ -338,17 +337,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
-    struct get_function_annotation_itt<hpx::detail::bound<F, Ts...>>
+    struct get_function_annotation_tracing<hpx::detail::bound<F, Ts...>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             hpx::detail::bound<F, Ts...> const& f) noexcept
         {
-            return f.get_function_annotation_itt();
+            return f.get_function_annotation_tracing();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 

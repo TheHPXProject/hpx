@@ -16,10 +16,6 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/serialization.hpp>
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
 
 #include <hpx/actions/actions_fwd.hpp>
 #include <hpx/modules/actions_base.hpp>
@@ -128,13 +124,6 @@ namespace hpx::actions {
         /// The function \a get_serialization_id returns the id which has been
         /// associated with this action (mainly used for serialization purposes).
         virtual std::uint32_t get_action_id() const = 0;
-
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-        /// The function \a get_action_name_itt returns the name of this action
-        /// as an ITT string_handle
-        virtual util::itt::string_handle const& get_action_name_itt() const = 0;
-#endif
     };
 
     ///////////////////////////////////////////////////////////////////////////

@@ -118,19 +118,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename Result, typename F>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         parallel::util::detail::partitioner_iteration<Result, F>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             parallel::util::detail::partitioner_iteration<Result, F> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
+
 }    // namespace hpx::traits
 
 #endif

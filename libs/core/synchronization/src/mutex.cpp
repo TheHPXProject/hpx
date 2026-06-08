@@ -8,7 +8,6 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/errors.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
@@ -27,17 +26,13 @@ namespace hpx {
 #if defined(HPX_HAVE_TRACING)
     mutex::mutex(char const* const description)
       : owner_id_(threads::invalid_thread_id)
-      , context_("hpx::mutex#", description)
+      , context_("hpx::mutex#", description, this)
     {
-        HPX_ITT_SYNC_CREATE(this, "hpx::mutex", description);
     }
 #endif
 
 #if defined(HPX_HAVE_TRACING)
-    mutex::~mutex()
-    {
-        HPX_ITT_SYNC_DESTROY(this);
-    }
+    mutex::~mutex() = default;
 #else
     mutex::~mutex() = default;
 #endif
@@ -46,7 +41,6 @@ namespace hpx {
     {
         HPX_ASSERT(threads::get_self_ptr() != nullptr);
 
-        HPX_ITT_SYNC_PREPARE(this);
         bool const run_after = context_.before_lock();
 
         {
@@ -55,8 +49,9 @@ namespace hpx {
             threads::thread_id_type const self_id = threads::get_self_id();
             if (owner_id_ == self_id)
             {
-                HPX_ITT_SYNC_CANCEL(this);
                 l.unlock();
+                if (run_after)
+                    context_.after_try_lock(false);
                 HPX_THROWS_IF(ec, hpx::error::deadlock, description,
                     "The calling thread already owns the mutex");
                 return;
@@ -67,7 +62,8 @@ namespace hpx {
                 cond_.wait(l, ec);
                 if (ec)
                 {
-                    HPX_ITT_SYNC_CANCEL(this);
+                    if (run_after)
+                        context_.after_try_lock(false);
                     return;
                 }
             }
@@ -76,7 +72,6 @@ namespace hpx {
             owner_id_ = self_id;
         }
 
-        HPX_ITT_SYNC_ACQUIRED(this);
         if (run_after)
             context_.after_lock();
     }
@@ -85,7 +80,6 @@ namespace hpx {
     {
         HPX_ASSERT(threads::get_self_ptr() != nullptr);
 
-        HPX_ITT_SYNC_PREPARE(this);
         bool const run_after = context_.before_lock();
 
         {
@@ -93,7 +87,6 @@ namespace hpx {
 
             if (owner_id_ != threads::invalid_thread_id)
             {
-                HPX_ITT_SYNC_CANCEL(this);
                 if (run_after)
                     context_.after_try_lock(false);
                 return false;
@@ -103,7 +96,6 @@ namespace hpx {
             owner_id_ = threads::get_self_id();
         }
 
-        HPX_ITT_SYNC_ACQUIRED(this);
         if (run_after)
             context_.after_try_lock(true);
 
@@ -114,7 +106,7 @@ namespace hpx {
     {
         HPX_ASSERT(threads::get_self_ptr() != nullptr);
 
-        HPX_ITT_SYNC_RELEASING(this);
+        context_.before_unlock();
         // Unregister lock early as the lock guard below may suspend.
         util::unregister_lock(this);
         std::unique_lock<mutex_type> l(mtx_);
@@ -130,7 +122,6 @@ namespace hpx {
 
         owner_id_ = threads::invalid_thread_id;
 
-        HPX_ITT_SYNC_RELEASED(this);
         context_.after_unlock();
 
         {
@@ -165,7 +156,7 @@ namespace hpx {
     {
         HPX_ASSERT(threads::get_self_ptr() != nullptr);
 
-        HPX_ITT_SYNC_PREPARE(this);
+        bool const run_after = context_.before_lock();
         std::unique_lock<mutex_type> l(mtx_);
 
         threads::thread_id_type const self_id = threads::get_self_id();
@@ -175,25 +166,29 @@ namespace hpx {
                 cond_.wait_until(l, abs_time, ec);
             if (ec)
             {
-                HPX_ITT_SYNC_CANCEL(this);
+                if (run_after)
+                    context_.after_try_lock(false);
                 return false;
             }
 
             if (reason == threads::thread_restart_state::timeout)    //-V110
             {
-                HPX_ITT_SYNC_CANCEL(this);
+                if (run_after)
+                    context_.after_try_lock(false);
                 return false;
             }
 
             if (owner_id_ != threads::invalid_thread_id)    //-V110
             {
-                HPX_ITT_SYNC_CANCEL(this);
+                if (run_after)
+                    context_.after_try_lock(false);
                 return false;
             }
         }
 
         util::register_lock(this);
-        HPX_ITT_SYNC_ACQUIRED(this);
+        if (run_after)
+            context_.after_try_lock(true);
         owner_id_ = self_id;
         return true;
     }
