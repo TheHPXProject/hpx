@@ -59,9 +59,8 @@ namespace hpx::parallel::util::detail {
         std::size_t& max_chunks, std::size_t& chunk_size,
         bool const has_variable_chunk_size = false) noexcept
     {
-        if (max_chunks != 0 && has_variable_chunk_size)
+        if (has_variable_chunk_size)
         {
-            HPX_ASSERT(chunk_size != 0);
             return;
         }
 

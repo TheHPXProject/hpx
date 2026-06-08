@@ -419,7 +419,10 @@ namespace hpx::parallel {
                 // Ensure minimum chunk size of 2 for reduce_partition.
                 if (new_chunk_size < 2)
                 {
-                    new_chunk_size = (num_elements + num_cores - 1) / num_cores;
+                    std::size_t safe_cores =
+                        (std::max) (std::size_t(1), num_cores);
+                    new_chunk_size =
+                        (num_elements + safe_cores - 1) / safe_cores;
                     new_chunk_size =
                         (std::max) (new_chunk_size, std::size_t(2));
                 }
@@ -526,13 +529,13 @@ namespace hpx::parallel::detail {
                 {
                     if (count == 0)
                     {
-                        return util::detail::algorithm_result<ExPolicy, T>::get(
+                        return hpx::execution::experimental::just(
                             T(HPX_FORWARD(T_, init)));
                     }
                     else
                     {
                         T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
-                        return util::detail::algorithm_result<ExPolicy, T>::get(
+                        return hpx::execution::experimental::just(
                             HPX_MOVE(result));
                     }
                 }
