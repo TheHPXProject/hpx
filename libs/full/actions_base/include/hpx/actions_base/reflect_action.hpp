@@ -16,6 +16,7 @@
 #include <hpx/actions_base/basic_action.hpp>
 #include <hpx/actions_base/detail/invocation_count_registry.hpp>
 #include <hpx/actions_base/plain_action.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/serialization.hpp>
 
 #include <cstddef>
@@ -41,6 +42,69 @@ namespace hpx::actions {
 
     }    // namespace detail
     /// \endcond
+    /// \cond NOINTERNAL
+    namespace detail {
+        /// Helper to extract component type and function type from a member
+        /// function reflection for use as basic_action template arguments.
+        template <std::meta::info F>
+        struct reflect_component_action_base
+        {
+            using func_type = [:std::meta::type_of(F):];
+            using component_type = [:std::meta::parent_of(F):];
+        };
+    }    // namespace detail
+    /// \endcond
+
+    /// \brief Reflection-based component action template.
+    ///
+    /// Replaces HPX_DEFINE_COMPONENT_ACTION with a single line:
+    ///
+    /// \code
+    /// // Old:
+    /// HPX_DEFINE_COMPONENT_ACTION(server, compute, compute_action)
+    ///
+    /// // New:
+    /// HPX_COMPONENT_ACTION(server, compute, compute_action);
+    /// \endcode
+    ///
+    /// \tparam F       A std::meta::info reflection of a member function.
+    /// \tparam Derived CRTP derived type (defaults to void).
+    template <std::meta::info F,
+        typename Component =
+            typename detail::reflect_component_action_base<F>::component_type,
+        typename Derived = void>
+    struct reflect_component_action
+      : basic_action<Component,
+            typename detail::reflect_component_action_base<F>::func_type,
+            detail::action_type_t<
+                reflect_component_action<F, Component, Derived>, Derived>>
+    {
+    public:
+        static constexpr std::size_t arity = std::meta::parameters_of(F).size();
+
+        static std::string get_action_name(naming::address_type lva)
+        {
+            return hpx::util::format("component action({}) lva({})",
+                hpx::serialization::detail::scope_builder<F>::value.data, lva);
+        }
+
+        static detail::register_action_invocation_count<
+            reflect_component_action>
+            invocation_count_registrar_;
+    };
+
+    template <std::meta::info F, typename Component, typename Derived>
+    detail::register_action_invocation_count<
+        reflect_component_action<F, Component, Derived>>
+        reflect_component_action<F, Component,
+            Derived>::invocation_count_registrar_;
+
+/// \brief Convenience macro for component actions.
+/// Usage: HPX_COMPONENT_ACTION(component, func, action_name)
+#define HPX_COMPONENT_ACTION(component, func, name)                            \
+    struct name : ::hpx::actions::reflect_component_action<^^component::func>  \
+    {                                                                          \
+    } /**/
 
     /// \brief Reflection-based action template.
     ///

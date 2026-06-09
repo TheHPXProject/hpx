@@ -7,7 +7,7 @@
 set(tests)
 
 if(HPX_WITH_CXX26_REFLECTION)
-  set(tests ${tests} reflect_action_test)
+  set(tests ${tests} reflect_action_test reflect_component_action_test)
 endif()
 
 foreach(test ${tests})
