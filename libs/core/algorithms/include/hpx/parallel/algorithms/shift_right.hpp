@@ -182,7 +182,7 @@ namespace hpx::parallel {
                 namespace ex = hpx::execution::experimental;
 
                 return r.call(policy, first, new_first) |
-                    ex::let_value([=](FwdIter) mutable {
+                    ex::let_value([=](FwdIter /*unused*/) mutable {
                         return r.call(policy, first, last);
                     }) |
                     ex::then([=](FwdIter) mutable -> FwdIter {
