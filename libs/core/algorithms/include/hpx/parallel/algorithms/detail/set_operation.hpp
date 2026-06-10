@@ -30,6 +30,24 @@
 namespace hpx::parallel::detail {
     /// \cond NOINTERNAL
 
+    template <typename T>
+    struct decay_tuple
+    {
+        using type = T;
+    };
+
+    template <typename T>
+    struct decay_tuple<std::tuple<T>>
+    {
+        using type = std::tuple<std::remove_const_t<T>>;
+    };
+
+    template <typename T>
+    struct decay_tuple<std::tuple<T&>>
+    {
+        using type = std::tuple<std::remove_const_t<T>>;
+    };
+
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename FwdIter>
     struct set_operations_buffer
@@ -40,14 +58,21 @@ namespace hpx::parallel::detail {
         public:
             rewritable_ref() = default;
 
-            explicit constexpr rewritable_ref(T const& item) noexcept
+            explicit constexpr rewritable_ref(T& item) noexcept
               : item_(&item)
             {
             }
 
-            rewritable_ref& operator=(T const& item)
+            rewritable_ref& operator=(T& item)
             {
                 item_ = &item;
+                return *this;
+            }
+
+            template <typename U>
+            rewritable_ref& operator=(U const& item)
+            {
+                *item_ = item;
                 return *this;
             }
 
@@ -61,7 +86,7 @@ namespace hpx::parallel::detail {
             // clang-format on
 
         private:
-            T const* item_ = nullptr;
+            T* item_ = nullptr;
         };
 
         using value_type = typename std::iterator_traits<FwdIter>::value_type;
@@ -142,8 +167,13 @@ namespace hpx::parallel::detail {
             bool const first_partition = start1 == 0;
             bool const last_partition = end1 == static_cast<std::size_t>(len1);
 
-            auto start_value = HPX_INVOKE(proj1, first1[start1]);
-            auto end_value = HPX_INVOKE(proj1, first1[end1]);
+            using result_type =
+                std::invoke_result_t<Proj1, hpx::traits::iter_value_t<Iter1>>;
+            using element_type =
+                typename decay_tuple<std::decay_t<result_type>>::type;
+
+            element_type start_value = HPX_INVOKE(proj1, first1[start1]);
+            element_type end_value = HPX_INVOKE(proj1, first1[end1]);
 
             // all but the last chunk require special handling
             if (!last_partition)
@@ -159,7 +189,8 @@ namespace hpx::parallel::detail {
                 // the last element of the current chunk
                 if (end1 != 0)
                 {
-                    auto end_value1 = HPX_INVOKE(proj1, first1[end1 - 1]);
+                    element_type end_value1 =
+                        HPX_INVOKE(proj1, first1[end1 - 1]);
 
                     while (!HPX_INVOKE(f, end_value1, end_value) && --end1 != 0)
                     {
@@ -173,7 +204,8 @@ namespace hpx::parallel::detail {
             // first element of the current chunk
             if (start1 != 0)
             {
-                auto start_value1 = HPX_INVOKE(proj1, first1[start1 - 1]);
+                element_type start_value1 =
+                    HPX_INVOKE(proj1, first1[start1 - 1]);
 
                 while (
                     !HPX_INVOKE(f, start_value1, start_value) && --start1 != 0)
