@@ -184,6 +184,77 @@ void test_rotate_async(ExPolicy p, IteratorTag)
 }
 
 template <typename IteratorTag>
+void test_rotate_sentinel(IteratorTag)
+{
+    using base_iterator = std::vector<std::size_t>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using test_vector =
+        test::test_sentinel_container<std::vector<std::size_t>, IteratorTag>;
+
+    test_vector c(10007);
+    std::vector<std::size_t> d1;
+
+    std::iota(std::begin(c.base()), std::end(c.base()), std::rand());
+    std::copy(std::begin(c.base()), std::end(c.base()), std::back_inserter(d1));
+
+    std::size_t mid_pos = std::rand() % c.size();    //-V104
+    auto mid = std::begin(c);
+    std::advance(mid, mid_pos);
+
+    hpx::ranges::rotate(c, iterator(mid));
+
+    base_iterator mid1 = std::begin(d1);
+    std::advance(mid1, mid_pos);
+    std::rotate(std::begin(d1), mid1, std::end(d1));
+
+    std::size_t count = 0;
+    HPX_TEST(std::equal(std::begin(c.base()), std::end(c.base()),
+        std::begin(d1), [&count](std::size_t v1, std::size_t v2) -> bool {
+            HPX_TEST_EQ(v1, v2);
+            ++count;
+            return v1 == v2;
+        }));
+    HPX_TEST_EQ(count, d1.size());
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_rotate_sentinel(ExPolicy policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy_v<ExPolicy>,
+        "hpx::is_execution_policy_v<ExPolicy>");
+
+    using base_iterator = std::vector<std::size_t>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using test_vector =
+        test::test_sentinel_container<std::vector<std::size_t>, IteratorTag>;
+
+    test_vector c(10007);
+    std::vector<std::size_t> d1;
+
+    std::iota(std::begin(c.base()), std::end(c.base()), std::rand());
+    std::copy(std::begin(c.base()), std::end(c.base()), std::back_inserter(d1));
+
+    std::size_t mid_pos = std::rand() % c.size();    //-V104
+    auto mid = std::begin(c);
+    std::advance(mid, mid_pos);
+
+    hpx::ranges::rotate(policy, c, iterator(mid));
+
+    base_iterator mid1 = std::begin(d1);
+    std::advance(mid1, mid_pos);
+    std::rotate(std::begin(d1), mid1, std::end(d1));
+
+    std::size_t count = 0;
+    HPX_TEST(std::equal(std::begin(c.base()), std::end(c.base()),
+        std::begin(d1), [&count](std::size_t v1, std::size_t v2) -> bool {
+            HPX_TEST_EQ(v1, v2);
+            ++count;
+            return v1 == v2;
+        }));
+    HPX_TEST_EQ(count, d1.size());
+}
+
+template <typename IteratorTag>
 void test_rotate()
 {
     using namespace hpx::execution;
@@ -197,6 +268,11 @@ void test_rotate()
     test_rotate(seq, IteratorTag());
     test_rotate(par, IteratorTag());
     test_rotate(par_unseq, IteratorTag());
+
+    test_rotate_sentinel(IteratorTag());
+    test_rotate_sentinel(seq, IteratorTag());
+    test_rotate_sentinel(par, IteratorTag());
+    test_rotate_sentinel(par_unseq, IteratorTag());
 
     test_rotate_async(seq(task), IteratorTag());
     test_rotate_async(par(task), IteratorTag());

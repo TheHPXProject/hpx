@@ -179,6 +179,59 @@ void test_remove_if_async(ExPolicy policy, DataType)
 }
 
 template <typename DataType>
+void test_remove_if_sentinel(DataType)
+{
+    using hpx::get;
+
+    using test_vector = test::test_sentinel_container<std::vector<DataType>,
+        std::forward_iterator_tag>;
+
+    std::size_t const size = 10007;
+    test_vector c(size);
+    std::vector<DataType> d;
+    std::generate(std::begin(c.base()), std::end(c.base()), random_fill(0, 6));
+    d = c.base();
+
+    auto pred = [](DataType const& a) -> bool { return a == 0; };
+
+    auto result = hpx::ranges::remove_if(c, pred);
+    auto solution = std::remove_if(std::begin(d), std::end(d), pred);
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename ExPolicy, typename DataType>
+void test_remove_if_sentinel(ExPolicy policy, DataType)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using hpx::get;
+
+    using test_vector = test::test_sentinel_container<std::vector<DataType>,
+        std::forward_iterator_tag>;
+
+    std::size_t const size = 10007;
+    test_vector c(size);
+    std::vector<DataType> d;
+    std::generate(std::begin(c.base()), std::end(c.base()), random_fill(0, 6));
+    d = c.base();
+
+    auto pred = [](DataType const& a) -> bool { return a == 0; };
+
+    auto result = hpx::ranges::remove_if(policy, c, pred);
+    auto solution = std::remove_if(std::begin(d), std::end(d), pred);
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename DataType>
 void test_remove_if()
 {
     using namespace hpx::execution;
@@ -187,6 +240,11 @@ void test_remove_if()
     test_remove_if(seq, DataType());
     test_remove_if(par, DataType());
     test_remove_if(par_unseq, DataType());
+
+    test_remove_if_sentinel(DataType());
+    test_remove_if_sentinel(seq, DataType());
+    test_remove_if_sentinel(par, DataType());
+    test_remove_if_sentinel(par_unseq, DataType());
 
     test_remove_if_async(seq(task), DataType());
     test_remove_if_async(par(task), DataType());

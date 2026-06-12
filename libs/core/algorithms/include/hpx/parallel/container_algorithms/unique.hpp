@@ -695,7 +695,7 @@ namespace hpx::ranges {
             )
         // clang-format on
         friend subrange_t<std::ranges::iterator_t<Rng>,
-            std::ranges::iterator_t<Rng>>
+            std::ranges::sentinel_t<Rng>>
         tag_fallback_invoke(hpx::ranges::unique_t, Rng&& rng,
             Pred pred = Pred(), Proj proj = Proj())
         {
@@ -728,7 +728,7 @@ namespace hpx::ranges {
         // clang-format on
         friend parallel::util::detail::algorithm_result_t<ExPolicy,
             subrange_t<std::ranges::iterator_t<Rng>,
-                std::ranges::iterator_t<Rng>>>
+                std::ranges::sentinel_t<Rng>>>
         tag_fallback_invoke(hpx::ranges::unique_t, ExPolicy&& policy, Rng&& rng,
             Pred pred = Pred(), Proj proj = Proj())
         {
