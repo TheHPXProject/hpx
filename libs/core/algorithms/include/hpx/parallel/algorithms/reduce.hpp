@@ -523,24 +523,11 @@ namespace hpx::parallel::detail {
                 // or return a compatible type).
                 auto const count = hpx::parallel::detail::distance(first, last);
 
-                // Handle empty range and single-element case before
-                // entering the partitioner (which requires chunks >= 2).
-                if (count <= 1)
-                {
-                    if (count == 0)
-                    {
-                        return hpx::execution::experimental::just(
-                            T(HPX_FORWARD(T_, init)));
-                    }
-                    else
-                    {
-                        T result = HPX_INVOKE(r, HPX_FORWARD(T_, init), *first);
-                        return hpx::execution::experimental::just(
-                            HPX_MOVE(result));
-                    }
-                }
-
                 auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                    if (part_size == 1)
+                    {
+                        return *part_begin;
+                    }
                     return reduce_partition<ExPolicy, FwdIterB, T>(
                         part_begin, part_size, r);
                 };
