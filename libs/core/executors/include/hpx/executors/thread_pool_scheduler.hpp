@@ -21,6 +21,7 @@
 #include <concepts>
 #include <cstddef>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -497,6 +498,13 @@ namespace hpx::execution::experimental {
                     return sched.query(
                         hpx::execution::experimental::get_completion_domain_t<
                             CPO>{});
+                }
+
+                // P2300 get_allocator query
+                auto query(hpx::execution::experimental::get_allocator_t)
+                    const noexcept
+                {
+                    return std::allocator<std::byte>{};
                 }
             };
 
