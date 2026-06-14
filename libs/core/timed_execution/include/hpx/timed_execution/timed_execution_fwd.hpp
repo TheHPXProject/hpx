@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //  Copyright (c) 2017 Google
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -10,7 +10,6 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/timing.hpp>
 
 #include <type_traits>
@@ -23,6 +22,29 @@ namespace hpx::parallel::execution {
     namespace detail {
 
         /// \cond NOINTERNAL
+        template <typename Executor, typename Time, typename F, typename... Ts>
+        concept has_post_at_member =
+            requires(Executor&& exec, Time const& time, F&& f, Ts&&... ts) {
+                HPX_FORWARD(Executor, exec)
+                    .post_at(time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            };
+
+        template <typename Executor, typename Time, typename F, typename... Ts>
+        concept has_async_execute_at_member =
+            requires(Executor&& exec, Time const& time, F&& f, Ts&&... ts) {
+                HPX_FORWARD(Executor, exec)
+                    .async_execute_at(
+                        time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            };
+
+        template <typename Executor, typename Time, typename F, typename... Ts>
+        concept has_sync_execute_at_member =
+            requires(Executor&& exec, Time const& time, F&& f, Ts&&... ts) {
+                HPX_FORWARD(Executor, exec)
+                    .sync_execute_at(
+                        time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            };
+
         template <typename Executor, typename Enable = void>
         struct timed_post_fn_helper;
 
@@ -67,13 +89,24 @@ namespace hpx::parallel::execution {
     ///       execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct post_at_t final
-      : hpx::functional::detail::tag_fallback<post_at_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(post_at_t,
-            Executor&& exec, hpx::chrono::steady_time_point const& abs_time,
-            F&& f, Ts&&... ts)
+            requires(detail::has_post_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .post_at(abs_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_post_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_post_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), abs_time, HPX_FORWARD(F, f),
@@ -102,13 +135,24 @@ namespace hpx::parallel::execution {
     ///       execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct post_after_t final
-      : hpx::functional::detail::tag_fallback<post_after_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(post_after_t,
-            Executor&& exec, hpx::chrono::steady_duration const& rel_time,
-            F&& f, Ts&&... ts)
+            requires(detail::has_post_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .post_at(rel_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_post_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_post_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), rel_time, HPX_FORWARD(F, f),
@@ -143,13 +187,25 @@ namespace hpx::parallel::execution {
     ///       non-time-scheduled execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct async_execute_at_t final
-      : hpx::functional::detail::tag_fallback<async_execute_at_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            async_execute_at_t, Executor&& exec,
-            hpx::chrono::steady_time_point const& abs_time, F&& f, Ts&&... ts)
+            requires(detail::has_async_execute_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .async_execute_at(
+                    abs_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_async_execute_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_async_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
@@ -179,13 +235,25 @@ namespace hpx::parallel::execution {
     ///       non-time-scheduled execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct async_execute_after_t final
-      : hpx::functional::detail::tag_fallback<async_execute_after_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            async_execute_after_t, Executor&& exec,
-            hpx::chrono::steady_duration const& rel_time, F&& f, Ts&&... ts)
+            requires(detail::has_async_execute_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .async_execute_at(
+                    rel_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_async_execute_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_async_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
@@ -215,13 +283,25 @@ namespace hpx::parallel::execution {
     ///       non-time-scheduled execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct sync_execute_at_t final
-      : hpx::functional::detail::tag_fallback<sync_execute_at_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            sync_execute_at_t, Executor&& exec,
-            hpx::chrono::steady_time_point const& abs_time, F&& f, Ts&&... ts)
+            requires(detail::has_sync_execute_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .sync_execute_at(
+                    abs_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_sync_execute_at_member<Executor,
+                hpx::chrono::steady_time_point const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_time_point const& abs_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_sync_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
@@ -251,13 +331,25 @@ namespace hpx::parallel::execution {
     ///       non-time-scheduled execution agent.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct sync_execute_after_t final
-      : hpx::functional::detail::tag_fallback<sync_execute_after_t>
     {
-    private:
         template <executor_any Executor, typename F, typename... Ts>
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            sync_execute_after_t, Executor&& exec,
-            hpx::chrono::steady_duration const& rel_time, F&& f, Ts&&... ts)
+            requires(detail::has_sync_execute_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
+        {
+            return HPX_FORWARD(Executor, exec)
+                .sync_execute_at(
+                    rel_time, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <executor_any Executor, typename F, typename... Ts>
+            requires(!detail::has_sync_execute_at_member<Executor,
+                hpx::chrono::steady_duration const&, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            hpx::chrono::steady_duration const& rel_time, F&& f,
+            Ts&&... ts) const
         {
             return detail::timed_sync_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),

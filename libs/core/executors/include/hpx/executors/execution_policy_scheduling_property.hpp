@@ -11,7 +11,6 @@
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 

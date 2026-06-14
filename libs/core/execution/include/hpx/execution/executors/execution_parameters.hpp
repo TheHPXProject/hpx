@@ -16,7 +16,6 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -34,50 +33,47 @@ namespace hpx::execution::experimental::detail {
     ///////////////////////////////////////////////////////////////////////
     template <typename Property, template <typename> class CheckForProperty>
     struct get_parameters_property_t final
-      : hpx::functional::detail::tag_fallback<
-            get_parameters_property_t<Property, CheckForProperty>>
     {
     private:
-        using derived_property_t =
-            get_parameters_property_t<Property, CheckForProperty>;
-
         template <typename T>
         using check_for_property = CheckForProperty<std::decay_t<T>>;
 
-        template <typename Executor, typename Parameters>
-            requires(!hpx::traits::is_executor_parameters_v<Parameters> ||
-                !check_for_property<Parameters>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_fallback_invoke(
-            derived_property_t, Executor&& /*exec*/, Parameters&& /*params*/,
-            Property prop) noexcept
-        {
-            return std::make_pair(prop, prop);
-        }
-
-        ///////////////////////////////////////////////////////////////////
-        // Parameters directly supports property
+    public:
+        // Primary: Parameters directly supports property (highest priority -
+        // mirrors tag_override_invoke > tag_invoke semantics)
         template <typename Executor, typename Parameters>
             requires(hpx::traits::is_executor_parameters_v<Parameters> &&
                 check_for_property<Parameters>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_fallback_invoke(
-            derived_property_t, Executor&& exec, Parameters&& params,
-            Property /*prop*/) noexcept
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& exec,
+            Parameters&& params, Property /*prop*/) const noexcept
         {
             return std::pair<Parameters&&, Executor&&>(
                 HPX_FORWARD(Parameters, params), HPX_FORWARD(Executor, exec));
         }
 
         ///////////////////////////////////////////////////////////////////
-        // Executor directly supports property
+        // Secondary: Executor directly supports property (when parameters doesn't)
         template <typename Executor, typename Parameters>
             requires(hpx::traits::is_executor_any_v<Executor> &&
-                check_for_property<Executor>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_invoke(
-            derived_property_t, Executor&& exec, Parameters&& params,
-            Property /*prop*/) noexcept
+                check_for_property<Executor>::value &&
+                (!hpx::traits::is_executor_parameters_v<Parameters> ||
+                    !check_for_property<Parameters>::value))
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& exec,
+            Parameters&& params, Property /*prop*/) const noexcept
         {
             return std::pair<Executor&&, Parameters&&>(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(Parameters, params));
+        }
+
+        // Fallback: neither executor nor parameters support property
+        template <typename Executor, typename Parameters>
+            requires(!check_for_property<Executor>::value &&
+                (!hpx::traits::is_executor_parameters_v<Parameters> ||
+                    !check_for_property<Parameters>::value))
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& /*exec*/,
+            Parameters&& /*params*/, Property prop) const noexcept
+        {
+            return std::make_pair(prop, prop);
         }
     };
 
@@ -746,13 +742,13 @@ namespace hpx::execution::experimental::detail {
         std::enable_if_t<has_measure_iteration_v<T>>>
     {
         template <typename Executor, typename F>
-        HPX_FORCEINLINE std::size_t measure_iteration(Executor&& exec, F&& f,
-            std::size_t cores, std::size_t num_tasks) const
+        HPX_FORCEINLINE decltype(auto) measure_iteration(
+            Executor&& exec, F&& f, std::size_t num_tasks) const
         {
             auto& wrapped =
                 static_cast<unwrapper<Wrapper> const*>(this)->member_.get();
-            return wrapped.measure_iteration(HPX_FORWARD(Executor, exec),
-                HPX_FORWARD(F, f), cores, num_tasks);
+            return wrapped.measure_iteration(
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
         }
     };
 
@@ -845,12 +841,14 @@ namespace hpx::execution::experimental::detail {
         std::enable_if_t<has_processing_units_count_v<T>>>
     {
         template <typename Executor>
-        HPX_FORCEINLINE std::size_t processing_units_count(
-            Executor&& exec) const
+        HPX_FORCEINLINE std::size_t processing_units_count(Executor&& exec,
+            hpx::chrono::steady_duration const& iteration_duration,
+            std::size_t num_tasks) const
         {
             auto& wrapped =
                 static_cast<unwrapper<Wrapper> const*>(this)->member_.get();
-            return wrapped.processing_units_count(HPX_FORWARD(Executor, exec));
+            return wrapped.processing_units_count(
+                HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
         }
     };
 

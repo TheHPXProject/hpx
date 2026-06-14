@@ -69,23 +69,18 @@ namespace hpx::resiliency::experimental {
             return *this;
         }
 
-    private:
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            replicate_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return async_replicate_vote_validate(exec.exec_,
-                exec.replicate_count_, exec.voter_, exec.validator_,
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async_replicate_vote_validate(exec_, replicate_count_,
+                voter_, validator_, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            replicate_executor const& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
             std::size_t size = hpx::util::size(shape);
 
@@ -100,7 +95,7 @@ namespace hpx::resiliency::experimental {
 
             hpx::latch l(static_cast<std::ptrdiff_t>(size + 1));
 
-            exec.spawn_hierarchical(results, l, 0, size, num_tasks, f,
+            spawn_hierarchical(results, l, 0, size, num_tasks, f,
                 hpx::util::begin(shape), ts...);
 
             l.arrive_and_wait();
@@ -120,9 +115,7 @@ namespace hpx::resiliency::experimental {
 
             for (std::size_t i = 0; i != size; (void) ++i, ++it)
             {
-                results[base + i] =
-                    tag_invoke(hpx::parallel::execution::async_execute_t{},
-                        *this, func, *it, ts...);
+                results[base + i] = async_execute(func, *it, ts...);
             }
 
             l.count_down(static_cast<std::ptrdiff_t>(size));

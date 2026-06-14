@@ -60,10 +60,10 @@ namespace hpx::parallel::util::detail {
                 hpx::execution::experimental::with_processing_units_count_t{},
                 cores);
         }
-        else if constexpr (hpx::functional::is_tag_invocable_v<
-                               hpx::execution::experimental::
-                                   with_processing_units_count_t,
-                               exec_type, std::size_t>)
+        else if constexpr (
+            hpx::execution::experimental::has_query_v<exec_type const&,
+                hpx::execution::experimental::with_processing_units_count_t,
+                std::size_t>)
         {
             policy = hpx::execution::experimental::create_rebound_policy(policy,
                 hpx::execution::experimental::with_processing_units_count(

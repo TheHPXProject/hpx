@@ -193,25 +193,9 @@ namespace hpx::sycl::experimental {
         }
 #endif
 
-        // --------------------------------------------------------------------
-        // OneWay Execution
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            sycl_executor& exec, F&& f, Ts&&... ts)
-        {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        // --------------------------------------------------------------------
-        // TwoWay Execution
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t, sycl_executor& exec,
-            F&& f, Ts&&... ts)
-        {
-            return exec.async_execute(
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
+        // OneWay Execution and TwoWay Execution are provided by
+        // the post() and async_execute() member functions above,
+        // which are detected directly by the CPOs.
 
         // Property interface:
 

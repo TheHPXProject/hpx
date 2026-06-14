@@ -47,16 +47,15 @@ namespace hpx::execution::experimental {
 
         /// \cond NOINTERNAL
         template <typename Executor>
-        friend void tag_override_invoke(
-            hpx::execution::experimental::collect_execution_parameters_t,
-            collect_chunking_parameters const& this_, Executor&&,
+        void collect_execution_parameters(Executor&&,
             std::size_t const num_elements, std::size_t const num_cores,
-            std::size_t const num_chunks, std::size_t const chunk_size) noexcept
+            std::size_t const num_chunks,
+            std::size_t const chunk_size) const noexcept
         {
-            this_.exec_params_->num_elements = num_elements;
-            this_.exec_params_->num_cores = num_cores;
-            this_.exec_params_->num_chunks = num_chunks;
-            this_.exec_params_->chunk_size = chunk_size;
+            exec_params_->num_elements = num_elements;
+            exec_params_->num_cores = num_cores;
+            exec_params_->num_chunks = num_chunks;
+            exec_params_->chunk_size = chunk_size;
         }
         /// \endcond
 

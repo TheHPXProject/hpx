@@ -122,136 +122,179 @@ namespace hpx::execution::experimental {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
+    // Detection of parameter member functions (member-based customization).
+    // The "wrapping" variants detect a member that takes another parameters
+    // object as its first argument (used to wrap/decorate an inner parameter).
+
     // wrapping get_chunk_size
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_get_chunk_size_v =
-        hpx::functional::detail::is_tag_override_invocable_v<get_chunk_size_t,
-            Params&&, Executor&&, hpx::chrono::steady_duration const&,
-            std::size_t, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e,
+            hpx::chrono::steady_duration const& d) {
+            p.get_chunk_size(e, d, std::size_t{}, std::size_t{});
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_get_chunk_size_v =
-        hpx::functional::detail::is_tag_override_invocable_v<get_chunk_size_t,
-            Params&&, InnerParams&&, Executor&&,
-            hpx::chrono::steady_duration const&, std::size_t, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e,
+            hpx::chrono::steady_duration const& d) {
+            p.get_chunk_size(ip, e, d, std::size_t{}, std::size_t{});
+        };
 
     // wrapping measure_iteration
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor,
         typename F>
     inline constexpr bool supports_measure_iteration_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            measure_iteration_t, Params&&, Executor&&, F&&, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e, F&& f) {
+            p.measure_iteration(e, HPX_FORWARD(F, f), std::size_t{});
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor, typename F>
     inline constexpr bool supports_wrapping_measure_iteration_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            measure_iteration_t, Params&&, InnerParams&&, Executor&&, F&&,
-            std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e, F&& f) {
+            p.measure_iteration(ip, e, HPX_FORWARD(F, f), std::size_t{});
+        };
 
     // maximal_number_of_chunks
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_maximal_number_of_chunks_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            maximal_number_of_chunks_t, Params&&, Executor&&, std::size_t,
-            std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e) {
+            p.maximal_number_of_chunks(e, std::size_t{}, std::size_t{});
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_maximal_number_of_chunks_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            maximal_number_of_chunks_t, Params&&, InnerParams&&, Executor&&,
-            std::size_t, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e) {
+            p.maximal_number_of_chunks(ip, e, std::size_t{}, std::size_t{});
+        };
 
     // execution_markers: begin_execution
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
-    inline constexpr bool supports_mark_begin_execution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_begin_execution_t, Params&&, Executor&&>;
+    inline constexpr bool supports_mark_begin_execution_v = requires(
+        std::remove_reference_t<Params> const& p,
+        std::remove_reference_t<Executor>& e) { p.mark_begin_execution(e); };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_mark_begin_execution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_begin_execution_t, Params&&, InnerParams&&, Executor&&>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e) {
+            p.mark_begin_execution(ip, e);
+        };
 
     // execution_markers: end_of_scheduling
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
-    inline constexpr bool supports_mark_end_of_scheduling_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_end_of_scheduling_t, Params&&, Executor&&>;
+    inline constexpr bool supports_mark_end_of_scheduling_v = requires(
+        std::remove_reference_t<Params> const& p,
+        std::remove_reference_t<Executor>& e) { p.mark_end_of_scheduling(e); };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_mark_end_of_scheduling_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_end_of_scheduling_t, Params&&, InnerParams&&, Executor&&>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e) {
+            p.mark_end_of_scheduling(ip, e);
+        };
 
     // execution_markers: end_execution
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_mark_end_execution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_end_execution_t, Params&&, Executor&&>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e) { p.mark_end_execution(e); };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
-    inline constexpr bool supports_wrapping_mark_end_execution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            mark_end_execution_t, Params&&, InnerParams&&, Executor&&>;
+    inline constexpr bool supports_wrapping_mark_end_execution_v = requires(
+        std::remove_reference_t<Params> const& p,
+        std::remove_reference_t<InnerParams>& ip,
+        std::remove_reference_t<Executor>& e) { p.mark_end_execution(ip, e); };
 
     // execution_markers: partition
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor,
         typename... Args>
     inline constexpr bool supports_mark_partition_v =
-        hpx::functional::detail::is_tag_override_invocable_v<mark_partition_t,
-            Params&&, Executor&&, std::size_t, Args&&...>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e, Args&&... args) {
+            p.mark_partition(e, std::size_t{}, HPX_FORWARD(Args, args)...);
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor, typename... Args>
     inline constexpr bool supports_wrapping_mark_partition_v =
-        hpx::functional::detail::is_tag_override_invocable_v<mark_partition_t,
-            Params&&, InnerParams&&, Executor&&, std::size_t, Args&&...>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e, Args&&... args) {
+            p.mark_partition(ip, e, std::size_t{}, HPX_FORWARD(Args, args)...);
+        };
 
     // wrapping processing_units_count
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_processing_units_count_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            processing_units_count_t, Params&&, Executor&&,
-            hpx::chrono::steady_duration const&, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e,
+            hpx::chrono::steady_duration const& d) {
+            p.processing_units_count(e, d, std::size_t{});
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_processing_units_count_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            processing_units_count_t, Params&&, InnerParams&&, Executor&&,
-            hpx::chrono::steady_duration const&, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e,
+            hpx::chrono::steady_duration const& d) {
+            p.processing_units_count(ip, e, d, std::size_t{});
+        };
 
     // wrapping reset_thread_distribution
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_reset_thread_distribution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            reset_thread_distribution_t, Params&&, Executor&&>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e) {
+            p.reset_thread_distribution(e);
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_reset_thread_distribution_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            reset_thread_distribution_t, Params&&, InnerParams&&, Executor&&>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e) {
+            p.reset_thread_distribution(ip, e);
+        };
 
     // wrapping collect_execution_parameters
     HPX_CXX_CORE_EXPORT template <typename Params, typename Executor>
     inline constexpr bool supports_collect_execution_parameters_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            collect_execution_parameters_t, Params&&, Executor&&, std::size_t,
-            std::size_t, std::size_t, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<Executor>& e) {
+            p.collect_execution_parameters(
+                e, std::size_t{}, std::size_t{}, std::size_t{}, std::size_t{});
+        };
 
     HPX_CXX_CORE_EXPORT template <typename Params, typename InnerParams,
         typename Executor>
     inline constexpr bool supports_wrapping_collect_execution_parameters_v =
-        hpx::functional::detail::is_tag_override_invocable_v<
-            collect_execution_parameters_t, Params&&, InnerParams&&, Executor&&,
-            std::size_t, std::size_t, std::size_t, std::size_t>;
+        requires(std::remove_reference_t<Params> const& p,
+            std::remove_reference_t<InnerParams>& ip,
+            std::remove_reference_t<Executor>& e) {
+            p.collect_execution_parameters(ip, e, std::size_t{}, std::size_t{},
+                std::size_t{}, std::size_t{});
+        };
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename Wrapped, typename Wrapping>
@@ -270,409 +313,262 @@ namespace hpx::execution::experimental {
         }
 
         // wrapping get_chunk_size
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_get_chunk_size_v<detail::wrapping_t<Params>,
-                    detail::wrapped_t<Params>, Executor> ||
-                supports_get_chunk_size_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_get_chunk_size_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr std::size_t tag_override_invoke(get_chunk_size_t,
-            Params&& this_, Executor&& exec,
+        template <typename Executor>
+        constexpr std::size_t get_chunk_size(Executor&& exec,
             hpx::chrono::steady_duration const& t, std::size_t const cores,
-            std::size_t const num_iterations)
+            std::size_t const num_iterations) const
         {
-            if constexpr (supports_wrapping_get_chunk_size_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_get_chunk_size_v<Wrapping, Wrapped,
+                              Executor>)
             {
-                return get_chunk_size(detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
+                return wrapping.get_chunk_size(wrapped,
                     HPX_FORWARD(Executor, exec), t, cores, num_iterations);
             }
-            else if constexpr (supports_get_chunk_size_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_get_chunk_size_v<Wrapping, Executor>)
             {
-                return get_chunk_size(detail::wrapping_forward<Params>(this_),
+                return wrapping.get_chunk_size(
+                    HPX_FORWARD(Executor, exec), t, cores, num_iterations);
+            }
+            else if constexpr (supports_get_chunk_size_v<Wrapped, Executor>)
+            {
+                return wrapped.get_chunk_size(
                     HPX_FORWARD(Executor, exec), t, cores, num_iterations);
             }
             else
             {
-                return get_chunk_size(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), t, cores, num_iterations);
+                // Default implementation when neither has get_chunk_size
+                return (num_iterations + cores - 1) / cores;
             }
         }
 
         // wrapping measure_iteration
-
-        // clang-format off
-        template <typename Params, typename Executor, typename F>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_measure_iteration_v<detail::wrapping_t<Params>,
-                    detail::wrapped_t<Params>, Executor, F> ||
-                supports_measure_iteration_v<
-                    detail::wrapping_t<Params>, Executor, F> ||
-                supports_measure_iteration_v<
-                    detail::wrapped_t<Params>, Executor, F>
-            ))
-        // clang-format on
-        friend constexpr hpx::chrono::steady_duration tag_override_invoke(
-            measure_iteration_t, Params&& this_, Executor&& exec, F&& f,
-            std::size_t const num_tasks)
+        template <typename Executor, typename F>
+        constexpr hpx::chrono::steady_duration measure_iteration(
+            Executor&& exec, F&& f, std::size_t const num_tasks)
         {
-            if constexpr (supports_wrapping_measure_iteration_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor, F>)
+            if constexpr (supports_wrapping_measure_iteration_v<Wrapping,
+                              Wrapped, Executor, F>)
             {
-                return measure_iteration(
-                    detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
+                return wrapping.measure_iteration(wrapped,
                     HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
             }
-            else if constexpr (supports_measure_iteration_v<
-                                   detail::wrapping_t<Params>, Executor, F>)
+            else if constexpr (supports_measure_iteration_v<Wrapping, Executor,
+                                   F>)
             {
-                return measure_iteration(
-                    detail::wrapping_forward<Params>(this_),
+                return wrapping.measure_iteration(
+                    HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
+            }
+            else if constexpr (supports_measure_iteration_v<Wrapped, Executor,
+                                   F>)
+            {
+                return wrapped.measure_iteration(
                     HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
             }
             else
             {
-                return measure_iteration(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
+                // Default implementation when neither has measure_iteration
+                return hpx::chrono::null_duration;
             }
         }
 
         // maximal_number_of_chunks
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_maximal_number_of_chunks_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_maximal_number_of_chunks_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_maximal_number_of_chunks_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr std::size_t tag_override_invoke(
-            maximal_number_of_chunks_t, Params&& this_, Executor&& exec,
-            std::size_t const cores, std::size_t const num_tasks)
+        template <typename Executor>
+        constexpr std::size_t maximal_number_of_chunks(Executor&& exec,
+            std::size_t const cores, std::size_t const num_tasks) const
         {
-            if constexpr (supports_wrapping_maximal_number_of_chunks_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_maximal_number_of_chunks_v<Wrapping,
+                              Wrapped, Executor>)
             {
-                return maximal_number_of_chunks(
-                    detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
+                return wrapping.maximal_number_of_chunks(
+                    wrapped, HPX_FORWARD(Executor, exec), cores, num_tasks);
+            }
+            else if constexpr (supports_maximal_number_of_chunks_v<Wrapping,
+                                   Executor>)
+            {
+                return wrapping.maximal_number_of_chunks(
                     HPX_FORWARD(Executor, exec), cores, num_tasks);
             }
-            else if constexpr (supports_maximal_number_of_chunks_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_maximal_number_of_chunks_v<Wrapped,
+                                   Executor>)
             {
-                return maximal_number_of_chunks(
-                    detail::wrapping_forward<Params>(this_),
+                return wrapped.maximal_number_of_chunks(
                     HPX_FORWARD(Executor, exec), cores, num_tasks);
             }
             else
             {
-                return maximal_number_of_chunks(
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), cores, num_tasks);
+                // Default implementation when neither has maximal_number_of_chunks
+                return cores * 4;
             }
         }
 
         // execution_markers: begin_execution
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_mark_begin_execution_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_mark_begin_execution_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_mark_begin_execution_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(
-            mark_begin_execution_t, Params&& this_, Executor&& exec)
+        template <typename Executor>
+        constexpr void mark_begin_execution(Executor&& exec) const
         {
-            if constexpr (supports_wrapping_mark_begin_execution_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_mark_begin_execution_v<Wrapping,
+                              Wrapped, Executor>)
             {
-                mark_begin_execution(detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_begin_execution(
+                    wrapped, HPX_FORWARD(Executor, exec));
             }
-            if constexpr (supports_mark_begin_execution_v<
-                              detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_mark_begin_execution_v<Wrapping,
+                                   Executor>)
             {
-                mark_begin_execution(detail::wrapping_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_begin_execution(HPX_FORWARD(Executor, exec));
             }
-            else
+            else if constexpr (supports_mark_begin_execution_v<Wrapped,
+                                   Executor>)
             {
-                mark_begin_execution(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapped.mark_begin_execution(HPX_FORWARD(Executor, exec));
             }
         }
 
         // execution_markers: end_of_scheduling
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_mark_end_of_scheduling_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_mark_end_of_scheduling_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_mark_end_of_scheduling_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(
-            mark_end_of_scheduling_t, Params&& this_, Executor&& exec)
+        template <typename Executor>
+        constexpr void mark_end_of_scheduling(Executor&& exec) const
         {
-            if constexpr (supports_wrapping_mark_end_of_scheduling_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_mark_end_of_scheduling_v<Wrapping,
+                              Wrapped, Executor>)
             {
-                mark_end_of_scheduling(detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_end_of_scheduling(
+                    wrapped, HPX_FORWARD(Executor, exec));
             }
-            else if constexpr (supports_mark_end_of_scheduling_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_mark_end_of_scheduling_v<Wrapping,
+                                   Executor>)
             {
-                mark_end_of_scheduling(detail::wrapping_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_end_of_scheduling(HPX_FORWARD(Executor, exec));
             }
-            else
+            else if constexpr (supports_mark_end_of_scheduling_v<Wrapped,
+                                   Executor>)
             {
-                mark_end_of_scheduling(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapped.mark_end_of_scheduling(HPX_FORWARD(Executor, exec));
             }
         }
 
         // execution_markers: end_execution
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_mark_end_execution_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_mark_end_execution_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_mark_end_execution_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(
-            mark_end_execution_t, Params&& this_, Executor&& exec)
+        template <typename Executor>
+        constexpr void mark_end_execution(Executor&& exec) const
         {
-            if constexpr (supports_wrapping_mark_end_execution_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_mark_end_execution_v<Wrapping,
+                              Wrapped, Executor>)
             {
-                mark_end_execution(detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_end_execution(
+                    wrapped, HPX_FORWARD(Executor, exec));
             }
-            else if constexpr (supports_mark_end_execution_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_mark_end_execution_v<Wrapping,
+                                   Executor>)
             {
-                mark_end_execution(detail::wrapping_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.mark_end_execution(HPX_FORWARD(Executor, exec));
             }
-            else
+            else if constexpr (supports_mark_end_execution_v<Wrapped, Executor>)
             {
-                mark_end_execution(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapped.mark_end_execution(HPX_FORWARD(Executor, exec));
             }
         }
 
         // execution_markers: partition
-
-        // clang-format off
-        template <typename Params, typename Executor, typename... Args>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_mark_partition_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor, Args...> ||
-                supports_mark_partition_v<
-                    detail::wrapping_t<Params>, Executor, Args...> ||
-                supports_mark_partition_v<
-                    detail::wrapped_t<Params>, Executor, Args...>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(mark_partition_t,
-            Params&& this_, Executor&& exec, std::size_t partition,
-            Args&&... args)
+        template <typename Executor, typename... Args>
+        constexpr void mark_partition(
+            Executor&& exec, std::size_t partition, Args&&... args) const
         {
-            if constexpr (supports_wrapping_mark_partition_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor, Args...>)
+            if constexpr (supports_wrapping_mark_partition_v<Wrapping, Wrapped,
+                              Executor, Args...>)
             {
-                mark_partition(detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), partition,
-                    HPX_FORWARD(Args, args)...);
+                wrapping.mark_partition(wrapped, HPX_FORWARD(Executor, exec),
+                    partition, HPX_FORWARD(Args, args)...);
             }
-            else if constexpr (supports_mark_partition_v<
-                                   detail::wrapping_t<Params>, Executor,
+            else if constexpr (supports_mark_partition_v<Wrapping, Executor,
                                    Args...>)
             {
-                mark_partition(detail::wrapping_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), partition,
+                wrapping.mark_partition(HPX_FORWARD(Executor, exec), partition,
                     HPX_FORWARD(Args, args)...);
             }
-            else
+            else if constexpr (supports_mark_partition_v<Wrapped, Executor,
+                                   Args...>)
             {
-                mark_partition(detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), partition,
+                wrapped.mark_partition(HPX_FORWARD(Executor, exec), partition,
                     HPX_FORWARD(Args, args)...);
             }
         }
 
         // wrapping processing_units_count
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_processing_units_count_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_processing_units_count_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_processing_units_count_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr std::size_t tag_override_invoke(
-            processing_units_count_t, Params&& this_, Executor&& exec,
+        template <typename Executor>
+        constexpr std::size_t processing_units_count(Executor&& exec,
             hpx::chrono::steady_duration const& iteration_duration,
-            std::size_t const num_tasks)
+            std::size_t const num_tasks) const
         {
-            if constexpr (supports_wrapping_processing_units_count_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+            if constexpr (supports_wrapping_processing_units_count_v<Wrapping,
+                              Wrapped, Executor>)
             {
-                return processing_units_count(
-                    detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
+                return wrapping.processing_units_count(wrapped,
                     HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
             }
-            else if constexpr (supports_processing_units_count_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_processing_units_count_v<Wrapping,
+                                   Executor>)
             {
-                return processing_units_count(
-                    detail::wrapping_forward<Params>(this_),
+                return wrapping.processing_units_count(
+                    HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
+            }
+            else if constexpr (supports_processing_units_count_v<Wrapped,
+                                   Executor>)
+            {
+                return wrapped.processing_units_count(
                     HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
             }
             else
             {
-                return processing_units_count(
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
+                // Default implementation when neither has processing_units_count
+                return hpx::execution::experimental::processing_units_count(
+                    exec, iteration_duration, num_tasks);
             }
         }
 
         // wrapping reset_thread_distribution
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_reset_thread_distribution_v<
-                     detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                     Executor> ||
-                supports_reset_thread_distribution_v<
-                     detail::wrapping_t<Params>, Executor> ||
-                supports_reset_thread_distribution_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(
-            reset_thread_distribution_t, Params&& this_, Executor&& exec)
+        template <typename Executor>
+        constexpr void reset_thread_distribution(Executor&& exec) const
         {
             if constexpr (supports_wrapping_reset_thread_distribution_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+                              Wrapping, Wrapped, Executor>)
             {
-                reset_thread_distribution(
-                    detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.reset_thread_distribution(
+                    wrapped, HPX_FORWARD(Executor, exec));
             }
-            else if constexpr (supports_reset_thread_distribution_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_reset_thread_distribution_v<Wrapping,
+                                   Executor>)
             {
-                reset_thread_distribution(
-                    detail::wrapping_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapping.reset_thread_distribution(HPX_FORWARD(Executor, exec));
             }
-            else
+            else if constexpr (supports_reset_thread_distribution_v<Wrapped,
+                                   Executor>)
             {
-                reset_thread_distribution(
-                    detail::wrapped_forward<Params>(this_),
-                    HPX_FORWARD(Executor, exec));
+                wrapped.reset_thread_distribution(HPX_FORWARD(Executor, exec));
             }
         }
 
         // wrapping collect_execution_parameters
-
-        // clang-format off
-        template <typename Params, typename Executor>
-            requires(std::same_as<wrapped_params, std::decay_t<Params>> && (
-                supports_wrapping_collect_execution_parameters_v<
-                    detail::wrapping_t<Params>, detail::wrapped_t<Params>,
-                    Executor> ||
-                supports_collect_execution_parameters_v<
-                    detail::wrapping_t<Params>, Executor> ||
-                supports_collect_execution_parameters_v<
-                    detail::wrapped_t<Params>, Executor>
-            ))
-        // clang-format on
-        friend constexpr void tag_override_invoke(
-            hpx::execution::experimental::collect_execution_parameters_t,
-            Params&& this_, Executor&& exec, std::size_t const num_elements,
-            std::size_t const num_cores, std::size_t const num_chunks,
-            std::size_t const chunk_size)
+        template <typename Executor>
+        constexpr void collect_execution_parameters(Executor&& exec,
+            std::size_t const num_elements, std::size_t const num_cores,
+            std::size_t const num_chunks, std::size_t const chunk_size) const
         {
             if constexpr (supports_wrapping_collect_execution_parameters_v<
-                              detail::wrapping_t<Params>,
-                              detail::wrapped_t<Params>, Executor>)
+                              Wrapping, Wrapped, Executor>)
             {
-                collect_execution_parameters(
-                    detail::wrapping_forward<Params>(this_),
-                    detail::wrapped_forward<Params>(this_),
+                wrapping.collect_execution_parameters(wrapped,
                     HPX_FORWARD(Executor, exec), num_elements, num_cores,
                     num_chunks, chunk_size);
             }
-            else if constexpr (supports_collect_execution_parameters_v<
-                                   detail::wrapping_t<Params>, Executor>)
+            else if constexpr (supports_collect_execution_parameters_v<Wrapping,
+                                   Executor>)
             {
-                collect_execution_parameters(
-                    detail::wrapping_forward<Params>(this_),
+                wrapping.collect_execution_parameters(
                     HPX_FORWARD(Executor, exec), num_elements, num_cores,
                     num_chunks, chunk_size);
             }
-            else
+            else if constexpr (supports_collect_execution_parameters_v<Wrapped,
+                                   Executor>)
             {
-                collect_execution_parameters(
-                    detail::wrapped_forward<Params>(this_),
+                wrapped.collect_execution_parameters(
                     HPX_FORWARD(Executor, exec), num_elements, num_cores,
                     num_chunks, chunk_size);
             }

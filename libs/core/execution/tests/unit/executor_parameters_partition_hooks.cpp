@@ -24,27 +24,28 @@ struct partition_hooks_parameters
     explicit partition_hooks_parameters() = default;
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::collect_execution_parameters_t,
-        partition_hooks_parameters& self, Executor&&, std::size_t const,
+    void collect_execution_parameters(Executor&&, std::size_t const,
         std::size_t const, std::size_t const num_chunks,
         std::size_t const) noexcept
     {
-        self.num_chunks_ = num_chunks;
-        self.values_.resize(num_chunks);
-        self.seen_.resize(num_chunks);
+        num_chunks_ = num_chunks;
+        values_.resize(num_chunks);
+        seen_.resize(num_chunks);
     }
 
-    template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_partition_t,
-        partition_hooks_parameters& self, Executor&&, std::size_t partition,
-        auto state, std::size_t a, std::size_t b, auto) noexcept
+    template <typename Executor, typename State, typename Extra>
+    void mark_partition(Executor&&, std::size_t partition, State state,
+        std::size_t a, std::size_t b, Extra) noexcept
     {
-        HPX_TEST_LT(partition, self.values_.size());
+        HPX_TEST_LT(partition, values_.size());
         HPX_TEST_EQ(std::uint8_t(1), static_cast<std::uint8_t>(state));
-        self.values_[partition] = {a, b};
-        self.seen_[partition] = 1;
+        values_[partition] = {a, b};
+        seen_[partition] = 1;
+    }
+
+    template <typename Executor, typename State, typename Extra>
+    void mark_partition(Executor&&, std::size_t, State, Extra) noexcept
+    {
     }
 
     std::size_t count_seen() const

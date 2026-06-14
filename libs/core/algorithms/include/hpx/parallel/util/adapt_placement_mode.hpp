@@ -19,9 +19,10 @@ namespace hpx::execution::experimental {
         ExPolicy&& policy, hpx::threads::thread_placement_hint placement)
     {
         constexpr bool supports_placement_hint =
-            hpx::functional::is_tag_invocable_v<
+            hpx::execution::experimental::has_query_v<
+                std::decay_t<ExPolicy> const&,
                 hpx::execution::experimental::with_hint_t,
-                std::decay_t<ExPolicy>, hpx::threads::thread_schedule_hint>;
+                hpx::threads::thread_schedule_hint>;
 
         if constexpr (supports_placement_hint)
         {

@@ -1,6 +1,6 @@
 //  Copyright (c) 2020 John Biddiscombe
 //  Copyright (c) 2020 Teodor Nikolov
-//  Copyright (c) 2024-2025 Hartmut Kaiser
+//  Copyright (c) 2024-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -123,25 +123,14 @@ namespace hpx::cuda::experimental {
         ~cuda_executor() {}
 
         // -------------------------------------------------------------------------
-        // OneWay Execution
+        // TwoWay Execution - async_execute delegates to async()
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
-        // -------------------------------------------------------------------------
-        // TwoWay Execution
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-    protected:
+    public:
         // -------------------------------------------------------------------------
         // launch a kernel on our stream and return without a future
         // the return value is the value returned from the cuda call

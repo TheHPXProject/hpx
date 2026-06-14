@@ -131,24 +131,12 @@ namespace hpx::cuda::experimental {
         ~cublas_executor() {}
 
         // -------------------------------------------------------------------------
-        // OneWay Execution
+        // TwoWay Execution - async_execute delegates to async()
         // -------------------------------------------------------------------------
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        // -------------------------------------------------------------------------
-        // TwoWay Execution
-        // -------------------------------------------------------------------------
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
     protected:

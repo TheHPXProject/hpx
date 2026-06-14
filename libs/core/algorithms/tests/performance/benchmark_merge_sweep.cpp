@@ -94,22 +94,20 @@ struct adaptive_chunk_size
 
     // calculate number of cores
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::processing_units_count_t,
-        adaptive_chunk_size& this_, Executor&& exec,
-        hpx::chrono::steady_duration const&, std::size_t count) noexcept
+    std::size_t processing_units_count(Executor&& exec,
+        hpx::chrono::steady_duration const&, std::size_t count) const noexcept
     {
         std::size_t const cores_baseline =
             hpx::execution::experimental::processing_units_count(
-                exec, this_.time_per_iteration_, count);
+                exec, time_per_iteration_, count);
 
-        auto const overall_time = static_cast<double>(
-            (count + 1) * this_.time_per_iteration_.count());
+        auto const overall_time =
+            static_cast<double>((count + 1) * time_per_iteration_.count());
 
         constexpr double efficiency_factor = 0.052;    // see paper: 1 / 19
         auto const optimal_num_cores =
             static_cast<std::size_t>(efficiency_factor * overall_time /
-                static_cast<double>(this_.overhead_time_.count()));
+                static_cast<double>(overhead_time_.count()));
 
         std::size_t num_cores = (std::min) (cores_baseline, optimal_num_cores);
         num_cores = (std::max) (num_cores, static_cast<std::size_t>(1));
@@ -118,10 +116,8 @@ struct adaptive_chunk_size
     }
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::get_chunk_size_t, adaptive_chunk_size&,
-        Executor&, hpx::chrono::steady_duration const&, std::size_t const cores,
-        std::size_t const num_iterations)
+    std::size_t get_chunk_size(Executor&&, hpx::chrono::steady_duration const&,
+        std::size_t const cores, std::size_t const num_iterations) const
     {
         if (cores == 1)
         {
@@ -167,9 +163,7 @@ struct hpx::execution::experimental::is_executor_parameters<adaptive_chunk_size>
 struct enable_fast_idle_mode
 {
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_begin_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);
@@ -186,9 +180,7 @@ struct enable_fast_idle_mode
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_end_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);
@@ -214,19 +206,15 @@ struct force_sequential_execution
     force_sequential_execution() = default;
 
     template <typename Executor>
-    friend constexpr std::size_t tag_override_invoke(
-        hpx::execution::experimental::maximal_number_of_chunks_t,
-        force_sequential_execution, Executor&&, std::size_t const,
-        std::size_t const) noexcept
+    constexpr std::size_t maximal_number_of_chunks(
+        Executor&&, std::size_t const, std::size_t const) const noexcept
     {
         return 1;
     }
 
     template <typename Executor>
-    friend constexpr std::size_t tag_override_invoke(
-        hpx::execution::experimental::processing_units_count_t,
-        force_sequential_execution, Executor&&,
-        hpx::chrono::steady_duration const&, std::size_t const) noexcept
+    constexpr std::size_t processing_units_count(Executor&&,
+        hpx::chrono::steady_duration const&, std::size_t const) const noexcept
     {
         return 1;
     }

@@ -21,15 +21,13 @@
 struct execution_parameters
 {
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::collect_execution_parameters_t,
-        execution_parameters& self, Executor&&, std::size_t const count,
+    void collect_execution_parameters(Executor&&, std::size_t const count,
         std::size_t const, std::size_t const num_chunks,
         std::size_t const chunk_size) noexcept
     {
-        self.count_ = count;
-        self.num_chunks_ = num_chunks;
-        self.chunk_size_ = chunk_size;
+        count_ = count;
+        num_chunks_ = num_chunks;
+        chunk_size_ = chunk_size;
     }
 
     std::size_t count_ = 0;

@@ -100,11 +100,8 @@ struct compute_chunk_size
     //}
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::get_chunk_size_t,
-        compute_chunk_size& this_, Executor&,
-        hpx::chrono::steady_duration const&, std::size_t const cores,
-        std::size_t const num_iterations)
+    std::size_t get_chunk_size(Executor&&, hpx::chrono::steady_duration const&,
+        std::size_t const cores, std::size_t const num_iterations) const
     {
         if (cores == 1)
         {
@@ -115,7 +112,7 @@ struct compute_chunk_size
         // number of chunks the sizes of which are equal (except for the last
         // chunk, which may be smaller by not more than the number of chunks in
         // terms of elements).
-        std::size_t const num_chunks = this_.times_cores_ * cores;
+        std::size_t const num_chunks = times_cores_ * cores;
         std::size_t chunk_size = (num_iterations + num_chunks - 1) / num_chunks;
 
         // we should not consider more chunks than we have elements
@@ -143,9 +140,7 @@ struct hpx::execution::experimental::is_executor_parameters<compute_chunk_size>
 struct enable_fast_idle_mode
 {
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_begin_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);
@@ -162,9 +157,7 @@ struct enable_fast_idle_mode
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_end_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);

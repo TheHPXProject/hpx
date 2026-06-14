@@ -247,25 +247,22 @@ namespace hpx::execution::experimental {
 
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend void tag_invoke(hpx::parallel::execution::bulk_sync_execute_t,
-            block_fork_join_executor& exec, F&& f, S const& shape, Ts&&... ts)
+        void bulk_sync_execute(F&& f, S const& shape, Ts&&... ts)
         {
-            exec.bulk_sync_execute_helper(
+            bulk_sync_execute_helper(
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            block_fork_join_executor& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(F&& f, S const& shape, Ts&&... ts)
         {
             // Forward to the synchronous version as we can't create futures to
             // the completion of the parallel region (this HPX thread
             // participates in computation).
             return hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    exec.bulk_sync_execute_helper(
+                    bulk_sync_execute_helper(
                         HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
                     return hpx::make_ready_future();
                 },
@@ -310,25 +307,21 @@ namespace hpx::execution::experimental {
 
         template <typename F, typename... Fs>
             requires(std::is_invocable_v<F> && (std::is_invocable_v<Fs> && ...))
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_invoke_t,
-            block_fork_join_executor const& exec, F&& f, Fs&&... fs)
+        decltype(auto) sync_invoke(F&& f, Fs&&... fs) const
         {
-            exec.sync_invoke_helper(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
+            sync_invoke_helper(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
         template <typename F, typename... Fs>
             requires(std::is_invocable_v<F> && (std::is_invocable_v<Fs> && ...))
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_invoke_t,
-            block_fork_join_executor const& exec, F&& f, Fs&&... fs)
+        decltype(auto) async_invoke(F&& f, Fs&&... fs) const
         {
             // Forward to the synchronous version as we can't create futures to
             // the completion of the parallel region (this HPX thread
             // participates in computation).
             return hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    exec.sync_invoke_helper(
+                    sync_invoke_helper(
                         HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
                     return hpx::make_ready_future();
                 },
@@ -341,25 +334,26 @@ namespace hpx::execution::experimental {
         template <typename Tag, typename Property>
             requires(
                 hpx::execution::experimental::is_scheduling_property_v<Tag> &&
-                hpx::functional::is_tag_invocable_v<Tag, fork_join_executor,
-                    Property>)
-        friend block_fork_join_executor tag_invoke(Tag tag,
-            block_fork_join_executor const& exec, Property&& prop) noexcept
+                requires(
+                    Tag tag, fork_join_executor const& exec, Property&& prop) {
+                    tag(exec, HPX_FORWARD(Property, prop));
+                })
+        [[nodiscard]] block_fork_join_executor query(
+            Tag, Property&& prop) const noexcept
         {
-            auto exec_with_prop = exec;
-            exec_with_prop.exec_ = hpx::functional::tag_invoke(
-                tag, exec.exec_, HPX_FORWARD(Property, prop));
+            auto exec_with_prop = *this;
+            exec_with_prop.exec_ = Tag{}(exec_, HPX_FORWARD(Property, prop));
             return exec_with_prop;
         }
 
         template <typename Tag>
             requires(
                 hpx::execution::experimental::is_scheduling_property_v<Tag> &&
-                hpx::functional::is_tag_invocable_v<Tag, fork_join_executor>)
-        friend decltype(auto) tag_invoke(
-            Tag tag, block_fork_join_executor const& exec) noexcept
+                requires(
+                    Tag tag, fork_join_executor const& exec) { tag(exec); })
+        [[nodiscard]] decltype(auto) query(Tag tag) const noexcept
         {
-            return hpx::functional::tag_invoke(tag, exec.exec_);
+            return tag(exec_);
         }
 
     private:

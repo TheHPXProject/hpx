@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //  Copyright (c) 2017 Google
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -11,7 +11,6 @@
 #include <hpx/execution/detail/execution_parameter_callbacks.hpp>
 #include <hpx/execution/traits/executor_traits.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/topology.hpp>
 
 #include <cstddef>
@@ -41,24 +40,23 @@ namespace hpx::execution::experimental {
     ///       will always return \a false
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct has_pending_closures_t final
-      : hpx::functional::detail::tag_fallback<has_pending_closures_t>
     {
-    private:
-        template <typename Executor>
-            requires(hpx::traits::is_executor_any_v<Executor>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            has_pending_closures_t, Executor&& /*exec*/)
-        {
-            return false;    // assume stateless scheduling
-        }
-
+        // Primary: forward to member function if available
         template <typename Executor>
             requires(hpx::traits::is_executor_any_v<Executor> &&
                 detail::has_has_pending_closures_v<Executor>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            has_pending_closures_t, Executor&& exec)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec) const
         {
             return HPX_FORWARD(Executor, exec).has_pending_closures();
+        }
+
+        // Fallback: assume stateless scheduling
+        template <typename Executor>
+            requires(hpx::traits::is_executor_any_v<Executor> &&
+                !detail::has_has_pending_closures_v<Executor>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& /*exec*/) const
+        {
+            return false;
         }
     } has_pending_closures{};
 
@@ -78,26 +76,26 @@ namespace hpx::execution::experimental {
     ///       will always invoke hpx::threads::get_pu_mask()
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct get_pu_mask_t final
-      : hpx::functional::detail::tag_fallback<get_pu_mask_t>
     {
-    private:
-        template <typename Executor>
-            requires(hpx::traits::is_executor_any_v<Executor>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(get_pu_mask_t,
-            Executor&& /*exec*/, threads::topology& topo,
-            std::size_t thread_num)
-        {
-            return hpx::parallel::execution::detail::get_pu_mask(
-                topo, thread_num);
-        }
-
+        // Primary: forward to member function if available
         template <typename Executor>
             requires(hpx::traits::is_executor_any_v<Executor> &&
                 detail::has_get_pu_mask_v<Executor>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(get_pu_mask_t,
-            Executor&& exec, threads::topology& topo, std::size_t thread_num)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec,
+            threads::topology& topo, std::size_t thread_num) const
         {
             return HPX_FORWARD(Executor, exec).get_pu_mask(topo, thread_num);
+        }
+
+        // Fallback: use default implementation
+        template <typename Executor>
+            requires(hpx::traits::is_executor_any_v<Executor> &&
+                !detail::has_get_pu_mask_v<Executor>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& /*exec*/,
+            threads::topology& topo, std::size_t thread_num) const
+        {
+            return hpx::parallel::execution::detail::get_pu_mask(
+                topo, thread_num);
         }
     } get_pu_mask{};
 
@@ -111,23 +109,23 @@ namespace hpx::execution::experimental {
     ///       otherwise it does nothing.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct set_scheduler_mode_t final
-      : hpx::functional::detail::tag_fallback<set_scheduler_mode_t>
     {
-    private:
-        template <typename Executor, typename Mode>
-            requires(hpx::traits::is_executor_any_v<Executor>)
-        friend HPX_FORCEINLINE void tag_fallback_invoke(
-            set_scheduler_mode_t, Executor&& /*exec*/, Mode const& /*mode*/)
-        {
-        }
-
+        // Primary: forward to member function if available
         template <typename Executor, typename Mode>
             requires(hpx::traits::is_executor_any_v<Executor> &&
                 detail::has_set_scheduler_mode_v<Executor>)
-        friend HPX_FORCEINLINE void tag_invoke(
-            set_scheduler_mode_t, Executor&& exec, Mode const& mode)
+        HPX_FORCEINLINE void operator()(Executor&& exec, Mode const& mode) const
         {
             HPX_FORWARD(Executor, exec).set_scheduler_mode(mode);
+        }
+
+        // Fallback: no-op
+        template <typename Executor, typename Mode>
+            requires(hpx::traits::is_executor_any_v<Executor> &&
+                !detail::has_set_scheduler_mode_v<Executor>)
+        HPX_FORCEINLINE void operator()(
+            Executor&& /*exec*/, Mode const& /*mode*/) const
+        {
         }
     } set_scheduler_mode{};
 }    // namespace hpx::execution::experimental

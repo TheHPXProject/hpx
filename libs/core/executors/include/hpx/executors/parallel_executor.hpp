@@ -516,11 +516,25 @@ namespace hpx::execution {
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
-            Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return this->get_num_cores();
+            using exec_type = std::decay_t<decltype(*this)>;
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              exec_type const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return this->get_num_cores();
+            }
         }
 
         [[nodiscard]] auto query(experimental::with_first_core_t,
@@ -830,11 +844,25 @@ namespace hpx::execution {
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
-            Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return this->get_num_cores();
+            using exec_type = std::decay_t<decltype(*this)>;
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              exec_type const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return this->get_num_cores();
+            }
         }
 
         [[nodiscard]] auto query(experimental::with_first_core_t,

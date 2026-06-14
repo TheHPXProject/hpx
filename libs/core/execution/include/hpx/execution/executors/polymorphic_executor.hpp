@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -802,60 +802,48 @@ namespace hpx::parallel::execution {
         template <typename>
         using future_type = hpx::future<R>;
 
-    private:
+    public:
         // NonBlockingOneWayExecutor interface
         template <typename F>
-        HPX_FORCEINLINE friend void tag_invoke(hpx::parallel::execution::post_t,
-            polymorphic_executor const& exec, F&& f, Ts... ts)
+        HPX_FORCEINLINE void post(F&& f, Ts... ts) const
         {
             using function_type = typename vtable::post_function_type;
 
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            vptr_->post(exec.object, function_type(HPX_FORWARD(F, f)),
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            vptr_->post(object, function_type(HPX_FORWARD(F, f)),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // OneWayExecutor interface
         template <typename F>
-        HPX_FORCEINLINE friend R tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            polymorphic_executor const& exec, F&& f, Ts... ts)
+        HPX_FORCEINLINE R sync_execute(F&& f, Ts... ts) const
         {
             using function_type = typename vtable::sync_execute_function_type;
 
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->sync_execute(exec.object,
-                function_type(HPX_FORWARD(F, f)), HPX_FORWARD(Ts, ts)...);
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->sync_execute(object, function_type(HPX_FORWARD(F, f)),
+                HPX_FORWARD(Ts, ts)...);
         }
 
         // TwoWayExecutor interface
         template <typename F>
-        HPX_FORCEINLINE friend hpx::future<R> tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            polymorphic_executor const& exec, F&& f, Ts... ts)
+        HPX_FORCEINLINE hpx::future<R> async_execute(F&& f, Ts... ts) const
         {
             using function_type = typename vtable::async_execute_function_type;
 
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->async_execute(exec.object,
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->async_execute(object,
                 function_type(HPX_FORWARD(F, f)), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Future>
-        HPX_FORCEINLINE friend hpx::future<R> tag_invoke(
-            hpx::parallel::execution::then_execute_t,
-            polymorphic_executor const& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+        HPX_FORCEINLINE hpx::future<R> then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
         {
             using function_type = typename vtable::then_execute_function_type;
 
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->then_execute(exec.object,
-                function_type(HPX_FORWARD(F, f)),
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->then_execute(object, function_type(HPX_FORWARD(F, f)),
                 hpx::make_shared_future(HPX_FORWARD(Future, predecessor)),
                 HPX_FORWARD(Ts, ts)...);
         }
@@ -863,17 +851,15 @@ namespace hpx::parallel::execution {
         // BulkOneWayExecutor interface
         template <typename F, typename Shape>
             requires(!std::is_integral_v<Shape>)
-        HPX_FORCEINLINE friend std::vector<R> tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            polymorphic_executor const& exec, F&& f, Shape const& s, Ts&&... ts)
+        HPX_FORCEINLINE std::vector<R> bulk_sync_execute(
+            F&& f, Shape const& s, Ts&&... ts) const
         {
             using function_type =
                 typename vtable::bulk_sync_execute_function_type;
 
             detail::range_proxy shape(s);
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->bulk_sync_execute(exec.object,
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->bulk_sync_execute(object,
                 function_type(HPX_FORWARD(F, f)), shape,
                 HPX_FORWARD(Ts, ts)...);
         }
@@ -881,35 +867,31 @@ namespace hpx::parallel::execution {
         // BulkTwoWayExecutor interface
         template <typename F, typename Shape>
             requires(!std::is_integral_v<Shape>)
-        HPX_FORCEINLINE friend hpx::future<std::vector<R>> tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            polymorphic_executor const& exec, F&& f, Shape const& s, Ts&&... ts)
+        HPX_FORCEINLINE hpx::future<std::vector<R>> bulk_async_execute(
+            F&& f, Shape const& s, Ts&&... ts) const
         {
             using function_type =
                 typename vtable::bulk_async_execute_function_type;
 
             detail::range_proxy shape(s);
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->bulk_async_execute(exec.object,
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->bulk_async_execute(object,
                 function_type(HPX_FORWARD(F, f)), shape,
                 HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Shape>
             requires(!std::is_integral_v<Shape>)
-        HPX_FORCEINLINE friend hpx::future<std::vector<R>> tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            polymorphic_executor const& exec, F&& f, Shape const& s,
-            hpx::shared_future<void> const& predecessor, Ts&&... ts)
+        HPX_FORCEINLINE hpx::future<std::vector<R>> bulk_then_execute(F&& f,
+            Shape const& s, hpx::shared_future<void> const& predecessor,
+            Ts&&... ts) const
         {
             using function_type =
                 typename vtable::bulk_then_execute_function_type;
 
             detail::range_proxy shape(s);
-            vtable const* vptr_ =
-                static_cast<vtable const*>(exec.base_type::vptr);
-            return vptr_->bulk_then_execute(exec.object,
+            vtable const* vptr_ = static_cast<vtable const*>(base_type::vptr);
+            return vptr_->bulk_then_execute(object,
                 function_type(HPX_FORWARD(F, f)), shape, predecessor,
                 HPX_FORWARD(Ts, ts)...);
         }
