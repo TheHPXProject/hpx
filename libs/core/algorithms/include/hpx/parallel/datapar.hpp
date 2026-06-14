@@ -23,6 +23,7 @@
 #include <hpx/parallel/datapar/loop.hpp>
 #include <hpx/parallel/datapar/mismatch.hpp>
 #include <hpx/parallel/datapar/reduce.hpp>
+#include <hpx/parallel/datapar/remove.hpp>
 #include <hpx/parallel/datapar/replace.hpp>
 #include <hpx/parallel/datapar/search.hpp>
 #include <hpx/parallel/datapar/transfer.hpp>
