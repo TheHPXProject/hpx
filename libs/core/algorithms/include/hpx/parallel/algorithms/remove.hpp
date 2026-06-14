@@ -279,77 +279,85 @@ namespace hpx::parallel {
                         HPX_FORWARD(ExPolicy, policy), first, last,
                         HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
                 }
-
-                using zip_iterator = hpx::util::zip_iterator<Iter, bool*>;
-                using algorithm_result =
-                    util::detail::algorithm_result<ExPolicy, Iter>;
-                using difference_type =
-                    typename std::iterator_traits<Iter>::difference_type;
-                constexpr bool has_scheduler_executor =
-                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
-
-                difference_type count = detail::distance(first, last);
-
-                if constexpr (!has_scheduler_executor)
+                else
                 {
-                    if (count == 0)
-                        return algorithm_result::get(HPX_MOVE(first));
-                }
-                std::shared_ptr<bool[]> flags(new bool[count]);
+                    using zip_iterator = hpx::util::zip_iterator<Iter, bool*>;
+                    using algorithm_result =
+                        util::detail::algorithm_result<ExPolicy, Iter>;
+                    using difference_type =
+                        typename std::iterator_traits<Iter>::difference_type;
+                    constexpr bool has_scheduler_executor =
+                        hpx::execution_policy_has_scheduler_executor_v<
+                            ExPolicy>;
 
-                using hpx::get;
+                    difference_type count = detail::distance(first, last);
 
-                // Note: replacing the invoke() with HPX_INVOKE()
-                // below makes gcc generate errors
-                auto f1 = [pred = HPX_FORWARD(Pred, pred),
-                              proj = HPX_FORWARD(Proj, proj)](
-                              zip_iterator part_begin,
-                              std::size_t part_size) -> void {
-                    // MSVC complains if pred or proj is captured by ref below
-                    util::const_loop_n<inner_policy_type>(part_begin, part_size,
-                        [pred, proj](zip_iterator it) mutable {
-                            get<1>(*it) = hpx::invoke(
-                                pred, hpx::invoke(proj, get<0>(*it)));
-                        });
-                };
-
-                auto f2 = [flags, first, count](auto&&...) mutable -> Iter {
-                    auto part_begin = zip_iterator(first, flags.get());
-                    auto dest = first;
-                    auto part_size = count;
-
-                    if (dest == get<0>(part_begin.get_iterator_tuple()))
+                    if constexpr (!has_scheduler_executor)
                     {
-                        // Self-assignment must be detected.
+                        if (count == 0)
+                            return algorithm_result::get(HPX_MOVE(first));
+                    }
+                    std::shared_ptr<bool[]> flags(new bool[count]);
+
+                    using hpx::get;
+
+                    // Note: replacing the invoke() with HPX_INVOKE()
+                    // below makes gcc generate errors
+                    auto f1 = [pred = HPX_FORWARD(Pred, pred),
+                                  proj = HPX_FORWARD(Proj, proj)](
+                                  zip_iterator part_begin,
+                                  std::size_t part_size) -> void {
+                        // MSVC complains if pred or proj is captured by ref below
                         util::const_loop_n<hpx::execution::sequenced_policy>(
-                            part_begin, part_size, [&dest](zip_iterator it) {
-                                if (!get<1>(*it))
-                                {
-                                    if (dest != get<0>(it.get_iterator_tuple()))
+                            part_begin, part_size,
+                            [pred, proj](zip_iterator it) mutable {
+                                get<1>(*it) = hpx::invoke(
+                                    pred, hpx::invoke(proj, get<0>(*it)));
+                            });
+                    };
+
+                    auto f2 = [flags, first, count](auto&&...) mutable -> Iter {
+                        auto part_begin = zip_iterator(first, flags.get());
+                        auto dest = first;
+                        auto part_size = count;
+
+                        if (dest == get<0>(part_begin.get_iterator_tuple()))
+                        {
+                            // Self-assignment must be detected.
+                            util::const_loop_n<
+                                hpx::execution::sequenced_policy>(part_begin,
+                                part_size, [&dest](zip_iterator it) {
+                                    if (!get<1>(*it))
+                                    {
+                                        if (dest !=
+                                            get<0>(it.get_iterator_tuple()))
+                                            *dest++ =
+                                                std::ranges::iter_move(get<0>(
+                                                    it.get_iterator_tuple()));
+                                        else
+                                            ++dest;
+                                    }
+                                });
+                        }
+                        else
+                        {
+                            // Self-assignment can't be performed.
+                            util::const_loop_n<
+                                hpx::execution::sequenced_policy>(part_begin,
+                                part_size, [&dest](zip_iterator it) {
+                                    if (!get<1>(*it))
                                         *dest++ = std::ranges::iter_move(
                                             get<0>(it.get_iterator_tuple()));
-                                    else
-                                        ++dest;
-                                }
-                            });
-                    }
-                    else
-                    {
-                        // Self-assignment can't be performed.
-                        util::const_loop_n<hpx::execution::sequenced_policy>(
-                            part_begin, part_size, [&dest](zip_iterator it) {
-                                if (!get<1>(*it))
-                                    *dest++ = std::ranges::iter_move(
-                                        get<0>(it.get_iterator_tuple()));
-                            });
-                    }
-                    return dest;
-                };
+                                });
+                        }
+                        return dest;
+                    };
 
-                return util::partitioner<ExPolicy, Iter, void>::call(
-                    HPX_FORWARD(ExPolicy, policy),
-                    zip_iterator(first, flags.get()), count, HPX_MOVE(f1),
-                    HPX_MOVE(f2));
+                    return util::partitioner<ExPolicy, Iter, void>::call(
+                        HPX_FORWARD(ExPolicy, policy),
+                        zip_iterator(first, flags.get()), count, HPX_MOVE(f1),
+                        HPX_MOVE(f2));
+                }
             }
         };
         /// \endcond
