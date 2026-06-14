@@ -15,11 +15,77 @@
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
 
 namespace hpx::execution::experimental {
+    namespace detail {
+        HPX_FORCEINLINE constexpr std::pair<std::size_t, std::size_t>
+        adjust_chunk_size_and_max_chunks_default(std::size_t num_elements,
+            std::size_t num_cores, std::size_t max_chunks,
+            std::size_t chunk_size) noexcept
+        {
+            if (num_elements == 0)
+            {
+                return {0, 0};
+            }
+
+            // Ensure num_cores is at least 1 to prevent division by zero.
+            if (num_cores == 0)
+            {
+                num_cores = 1;
+            }
+
+            if (max_chunks == 0)
+            {
+                if (chunk_size == 0)
+                {
+                    std::size_t const cores_times_4 = 4 * num_cores;    // -V112
+
+                    chunk_size =
+                        (num_elements + cores_times_4 - 1) / cores_times_4;
+
+                    max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+
+                    max_chunks =
+                        (std::min) (max_chunks, num_elements);    // -V112
+
+                    chunk_size = (std::max) (chunk_size,
+                        (num_elements + max_chunks - 1) / max_chunks);
+                }
+                else
+                {
+                    // max_chunks == 0 && chunk_size != 0
+                    max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+                }
+            }
+            else if (chunk_size == 0)
+            {
+                chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+
+                max_chunks = (num_elements + chunk_size - 1) / chunk_size;
+            }
+            else
+            {
+                // max_chunks != 0 && chunk_size != 0
+                std::size_t const calculated_max_chunks =
+                    (num_elements + chunk_size - 1) / chunk_size;
+
+                if (calculated_max_chunks > max_chunks)
+                {
+                    chunk_size = (num_elements + max_chunks - 1) / max_chunks;
+                }
+                else if (calculated_max_chunks < max_chunks)
+                {
+                    max_chunks = calculated_max_chunks;
+                }
+            }
+
+            return {chunk_size, max_chunks};
+        }
+    }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     // Executor information customization points
@@ -65,6 +131,10 @@ namespace hpx::execution::experimental {
         template <typename Parameters, typename Executor,
             typename Enable = void>
         struct collect_execution_parameters_fn_helper;
+
+        template <typename Parameters, typename Executor,
+            typename Enable = void>
+        struct adjust_chunk_size_and_max_chunks_fn_helper;
         /// \endcond
     }    // namespace detail
 
@@ -499,8 +569,9 @@ namespace hpx::execution::experimental {
     ///                     algorithm.
     /// \param num_cores    [in] The overall number of cores to utilize
     ///                     for the algorithm.
-    /// \param num_chunks   [in] The overall number of chunks for the
-    ///                     algorithm.
+    /// \param max_chunks   [in] The overall maximal number of chunks for the
+    ///                     algorithm. A value of 0 denotes unspecified/compute
+    ///                     from num_elements and chunk_size.
     /// \param chunk_size   [in] The size of the chunks created for the
     ///                     algorithm.
     ///
@@ -518,15 +589,58 @@ namespace hpx::execution::experimental {
         friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
             collect_execution_parameters_t, Parameters&& params,
             Executor&& exec, std::size_t num_elements, std::size_t num_cores,
-            std::size_t num_chunks, std::size_t chunk_size)
+            std::size_t max_chunks, std::size_t chunk_size)
         {
             return detail::collect_execution_parameters_fn_helper<
                 hpx::util::decay_unwrap_t<Parameters>,
                 std::decay_t<Executor>>::call(HPX_FORWARD(Parameters, params),
                 HPX_FORWARD(Executor, exec), num_elements, num_cores,
-                num_chunks, chunk_size);
+                max_chunks, chunk_size);
         }
     } collect_execution_parameters{};
+
+    /// Adjust the chunk size and maximal number of chunks for a parallel
+    /// algorithm execution
+    ///
+    /// \param params   [in] The executor parameters object to use for
+    ///                 adjusting the chunk size.
+    /// \param exec     [in] The executor object which will be used
+    ///                 for scheduling of the loop iterations.
+    /// \param num_elements [in] The overall number of elements for the
+    ///                     algorithm.
+    /// \param num_cores    [in] The overall number of cores to utilize
+    ///                     for the algorithm.
+    /// \param max_chunks   [in] The overall maximal number of chunks for the
+    ///                     algorithm. A value of 0 denotes unspecified/compute
+    ///                     from num_elements and chunk_size.
+    /// \param chunk_size   [in] The size of the chunks created for the
+    ///                     algorithm.
+    ///
+    /// \note This calls params.adjust_chunk_size_and_max_chunks(exec, ...)
+    ///       if it exists; otherwise it applies the default chunk size and
+    ///       max chunks adjustment logic.
+    ///
+    HPX_CXX_CORE_EXPORT inline constexpr struct
+        adjust_chunk_size_and_max_chunks_t final
+      : hpx::functional::detail::tag_priority<
+            adjust_chunk_size_and_max_chunks_t>
+    {
+    private:
+        template <typename Parameters, typename Executor>
+            requires(hpx::traits::is_executor_parameters_v<Parameters> &&
+                hpx::traits::is_executor_any_v<Executor>)
+        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
+            adjust_chunk_size_and_max_chunks_t, Parameters&& params,
+            Executor&& exec, std::size_t num_elements, std::size_t num_cores,
+            std::size_t max_chunks, std::size_t chunk_size)
+        {
+            return detail::adjust_chunk_size_and_max_chunks_fn_helper<
+                hpx::util::decay_unwrap_t<Parameters>,
+                std::decay_t<Executor>>::call(HPX_FORWARD(Parameters, params),
+                HPX_FORWARD(Executor, exec), num_elements, num_cores,
+                max_chunks, chunk_size);
+        }
+    } adjust_chunk_size_and_max_chunks{};
 
     template <>
     struct is_scheduling_property<with_processing_units_count_t>

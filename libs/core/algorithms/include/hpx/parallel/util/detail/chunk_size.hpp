@@ -8,6 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/execution/executors/execution_parameters_fwd.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstddef>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -104,64 +106,16 @@ namespace hpx::parallel::util::detail {
         std::size_t& max_chunks, std::size_t& chunk_size,
         bool const has_variable_chunk_size = false) noexcept
     {
-        if (max_chunks == 0)
-        {
-            if (chunk_size == 0)
-            {
-                std::size_t const cores_times_4 = 4 * cores;    // -V112
-
-                // try to calculate chunk-size and maximum number of chunks
-                chunk_size = (count + cores_times_4 - 1) / cores_times_4;
-
-                max_chunks = (count + chunk_size - 1) / chunk_size;
-
-                // we should not consider more chunks than we have elements
-                max_chunks = (std::min) (max_chunks, count);    // -V112
-
-                // we should not make chunks smaller than what's determined by
-                // the max chunk size
-                chunk_size = (std::max) (chunk_size,
-                    (count + max_chunks - 1) / max_chunks);
-            }
-            else
-            {
-                // max_chunks == 0 && chunk_size != 0
-                max_chunks = (count + chunk_size - 1) / chunk_size;
-            }
-            return;
-        }
-
         if (has_variable_chunk_size)
         {
-            HPX_ASSERT(chunk_size != 0);
             return;
         }
 
-        if (chunk_size == 0)
-        {
-            // max_chunks != 0
-            chunk_size = (count + max_chunks - 1) / max_chunks;
-
-            max_chunks = (count + chunk_size - 1) / chunk_size;
-        }
-        else
-        {
-            // max_chunks != 0 && chunk_size != 0
-
-            // in this case we make sure that there are no more chunks than
-            // max_chunks
-            std::size_t const calculated_max_chunks =
-                (count + chunk_size - 1) / chunk_size;
-
-            if (calculated_max_chunks > max_chunks)
-            {
-                chunk_size = (count + max_chunks - 1) / max_chunks;
-            }
-            else if (calculated_max_chunks < max_chunks)
-            {
-                max_chunks = calculated_max_chunks;
-            }
-        }
+        auto const result = hpx::execution::experimental::detail::
+            adjust_chunk_size_and_max_chunks_default(
+                count, cores, max_chunks, chunk_size);
+        chunk_size = result.first;
+        max_chunks = result.second;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -205,8 +159,10 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), hpx::chrono::null_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        std::tie(chunk_size, max_chunks) =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
         Stride stride = parallel::detail::abs(s);
@@ -285,8 +241,10 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), iteration_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        std::tie(chunk_size, max_chunks) =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
 
@@ -459,8 +417,10 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), hpx::chrono::null_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        std::tie(chunk_size, max_chunks) =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
 
         if (stride != 1)
         {
@@ -548,8 +508,10 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
                 policy.executor(), iteration_duration, cores, count);
 
-        // make sure, chunk size and max_chunks are consistent
-        adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
+        std::tie(chunk_size, max_chunks) =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                policy.parameters(), policy.executor(), count, cores,
+                max_chunks, chunk_size);
 
         if (stride != 1)
         {
