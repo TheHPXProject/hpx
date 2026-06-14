@@ -1851,7 +1851,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
@@ -1939,7 +1939,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
@@ -2028,7 +2028,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 

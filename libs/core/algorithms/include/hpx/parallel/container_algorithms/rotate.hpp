@@ -467,7 +467,7 @@ namespace hpx::ranges {
         template <typename Rng>
             requires(std::ranges::range<Rng>)
         friend subrange_t<std::ranges::iterator_t<Rng>,
-            std::ranges::iterator_t<Rng>>
+            std::ranges::sentinel_t<Rng>>
         tag_fallback_invoke(hpx::ranges::rotate_t, Rng&& rng,
             std::ranges::iterator_t<Rng> middle)
         {
@@ -489,7 +489,7 @@ namespace hpx::ranges {
         // clang-format on
         friend parallel::util::detail::algorithm_result_t<ExPolicy,
             subrange_t<std::ranges::iterator_t<Rng>,
-                std::ranges::iterator_t<Rng>>>
+                std::ranges::sentinel_t<Rng>>>
         tag_fallback_invoke(hpx::ranges::rotate_t, ExPolicy&& policy, Rng&& rng,
             std::ranges::iterator_t<Rng> middle)
         {
