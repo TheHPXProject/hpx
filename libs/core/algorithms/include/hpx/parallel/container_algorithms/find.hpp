@@ -2578,6 +2578,39 @@ namespace hpx::ranges {
         }
     } find_first_of{};
 
+    namespace detail {
+
+        // Helper: given a future<Iter> (or Iter) and a Sentinel, produce an
+        // algorithm_result for a subrange_t<Iter, Sent>. This avoids
+        // repeating the same async/sync pattern in every find_last* CPO.
+        template <typename ExPolicy, typename Iter, typename Sent>
+        hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+            hpx::ranges::subrange_t<Iter, Sent>>
+        make_subrange_result(
+            hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>&&
+                result,
+            Sent last)
+        {
+            using subrange_type = hpx::ranges::subrange_t<Iter, Sent>;
+            using result_type =
+                hpx::parallel::util::detail::algorithm_result<ExPolicy,
+                    subrange_type>;
+
+            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+            {
+                return result_type::get(
+                    HPX_MOVE(result).then([last](hpx::future<Iter>&& f) {
+                        return subrange_type(f.get(), last);
+                    }));
+            }
+            else
+            {
+                return result_type::get(subrange_type(HPX_MOVE(result), last));
+            }
+        }
+
+    }    // namespace detail
+
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::find_last
     HPX_CXX_CORE_EXPORT inline constexpr struct find_last_t final
@@ -2601,28 +2634,12 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<Iter>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<Iter, Sent>>;
-
             auto result = hpx::parallel::detail::find_last<Iter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, val,
                 HPX_MOVE(proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(hpx::future<Iter>(HPX_MOVE(result))
-                        .then([last](hpx::future<Iter>&& f)
-                                  -> hpx::ranges::subrange_t<Iter, Sent> {
-                            return hpx::ranges::subrange_t<Iter, Sent>(
-                                f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(hpx::ranges::subrange_t<Iter, Sent>(
-                    HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, Iter, Sent>(
+                HPX_MOVE(result), last);
         }
 
         template <typename ExPolicy, typename Rng, typename T,
@@ -2645,33 +2662,14 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<iterator_type>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>>;
-
             auto last = hpx::util::end(rng);
             auto result =
                 hpx::parallel::detail::find_last<iterator_type>().call(
                     HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng), last,
                     val, HPX_MOVE(proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(
-                    hpx::future<iterator_type>(HPX_MOVE(result))
-                        .then([last](hpx::future<iterator_type>&& f)
-                                  -> hpx::ranges::subrange_t<iterator_type,
-                                      sentinel_type> {
-                            return hpx::ranges::subrange_t<iterator_type,
-                                sentinel_type>(f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>(
-                        HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, iterator_type,
+                sentinel_type>(HPX_MOVE(result), last);
         }
 
         template <typename Iter, typename Sent, typename T,
@@ -2746,28 +2744,12 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<Iter>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<Iter, Sent>>;
-
             auto result = hpx::parallel::detail::find_last_if<Iter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last,
                 HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(hpx::future<Iter>(HPX_MOVE(result))
-                        .then([last](hpx::future<Iter>&& f)
-                                  -> hpx::ranges::subrange_t<Iter, Sent> {
-                            return hpx::ranges::subrange_t<Iter, Sent>(
-                                f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(hpx::ranges::subrange_t<Iter, Sent>(
-                    HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, Iter, Sent>(
+                HPX_MOVE(result), last);
         }
 
         template <typename ExPolicy, typename Rng, typename Pred,
@@ -2796,33 +2778,14 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<iterator_type>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>>;
-
             auto last = hpx::util::end(rng);
             auto result =
                 hpx::parallel::detail::find_last_if<iterator_type>().call(
                     HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng), last,
                     HPX_MOVE(pred), HPX_MOVE(proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(
-                    hpx::future<iterator_type>(HPX_MOVE(result))
-                        .then([last](hpx::future<iterator_type>&& f)
-                                  -> hpx::ranges::subrange_t<iterator_type,
-                                      sentinel_type> {
-                            return hpx::ranges::subrange_t<iterator_type,
-                                sentinel_type>(f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>(
-                        HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, iterator_type,
+                sentinel_type>(HPX_MOVE(result), last);
         }
 
         template <typename Iter, typename Sent, typename Pred,
@@ -2901,28 +2864,12 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<Iter>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<Iter, Sent>>;
-
             auto result = hpx::parallel::detail::find_last_if_not<Iter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(pred),
                 HPX_MOVE(proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(hpx::future<Iter>(HPX_MOVE(result))
-                        .then([last](hpx::future<Iter>&& f)
-                                  -> hpx::ranges::subrange_t<Iter, Sent> {
-                            return hpx::ranges::subrange_t<Iter, Sent>(
-                                f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(hpx::ranges::subrange_t<Iter, Sent>(
-                    HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, Iter, Sent>(
+                HPX_MOVE(result), last);
         }
 
         template <typename ExPolicy, typename Rng, typename Pred,
@@ -2951,33 +2898,14 @@ namespace hpx::ranges {
             static_assert(std::bidirectional_iterator<iterator_type>,
                 "Requires at least bidirectional iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result<ExPolicy,
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>>;
-
             auto last = hpx::util::end(rng);
             auto result =
                 hpx::parallel::detail::find_last_if_not<iterator_type>().call(
                     HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng), last,
                     HPX_MOVE(pred), HPX_MOVE(proj));
 
-            if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
-            {
-                return result_type::get(
-                    hpx::future<iterator_type>(HPX_MOVE(result))
-                        .then([last](hpx::future<iterator_type>&& f)
-                                  -> hpx::ranges::subrange_t<iterator_type,
-                                      sentinel_type> {
-                            return hpx::ranges::subrange_t<iterator_type,
-                                sentinel_type>(f.get(), last);
-                        }));
-            }
-            else
-            {
-                return result_type::get(
-                    hpx::ranges::subrange_t<iterator_type, sentinel_type>(
-                        HPX_MOVE(result), last));
-            }
+            return detail::make_subrange_result<ExPolicy, iterator_type,
+                sentinel_type>(HPX_MOVE(result), last);
         }
 
         template <typename Iter, typename Sent, typename Pred,
