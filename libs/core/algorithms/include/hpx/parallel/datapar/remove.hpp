@@ -1,4 +1,4 @@
-//  Copyright (c) 2025 Bhoomish Gupta
+//  Copyright (c) 2026 Bhoomish Gupta
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,10 +9,11 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR)
-#include <hpx/execution/traits/vector_pack_get_set.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/remove.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
@@ -40,61 +41,64 @@ namespace hpx::parallel::detail {
 
             Iter dest = first;
 
-            while (first != last && !util::detail::is_data_aligned(first))
+            if constexpr (hpx::traits::is_contiguous_iterator_v<Iter>)
             {
-                if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *first)))
+                while (first != last && !util::detail::is_data_aligned(first))
                 {
-                    if (dest != first)
-                        *dest = HPX_MOVE(*first);
-                    ++dest;
-                }
-                ++first;
-            }
-
-            while (
-                last - first >= static_cast<std::ptrdiff_t>(size))    //Safety
-            {
-                V tmp(hpx::parallel::traits::vector_pack_load<V,
-                    value_type>::aligned(first));
-
-                auto msk = HPX_INVOKE(pred, HPX_INVOKE(proj, tmp));
-
-                if (hpx::parallel::traits::none_of(msk))
-                {
-                    //no elements match
-                    if (dest != first)
+                    if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *first)))
                     {
-                        if (util::detail::is_data_aligned(dest))
+                        if (dest != first)
+                            *dest = HPX_MOVE(*first);
+                        ++dest;
+                    }
+                    ++first;
+                }
+
+                while (last - first >=
+                    static_cast<std::ptrdiff_t>(size))    // Safety
+                {
+                    V tmp(hpx::parallel::traits::vector_pack_load<V,
+                        value_type>::aligned(first));
+
+                    auto msk = HPX_INVOKE(pred, HPX_INVOKE(proj, tmp));
+
+                    if (hpx::parallel::traits::none_of(msk))
+                    {
+                        // no elements match
+                        if (dest != first)
                         {
-                            hpx::parallel::traits::vector_pack_store<V,
-                                value_type>::aligned(tmp, dest);
+                            if (util::detail::is_data_aligned(dest))
+                            {
+                                hpx::parallel::traits::vector_pack_store<V,
+                                    value_type>::aligned(tmp, dest);
+                            }
+                            else
+                            {
+                                hpx::parallel::traits::vector_pack_store<V,
+                                    value_type>::unaligned(tmp, dest);
+                            }
                         }
-                        else
+                        std::advance(dest, size);
+                    }
+                    else if (!hpx::parallel::traits::all_of(msk))
+                    {
+                        // mixed
+                        for (std::size_t i = 0; i < size; ++i)
                         {
-                            hpx::parallel::traits::vector_pack_store<V,
-                                value_type>::unaligned(tmp, dest);
+                            auto scalar_val =
+                                value_type(hpx::parallel::traits::get(tmp, i));
+                            bool match =
+                                HPX_INVOKE(pred, HPX_INVOKE(proj, scalar_val));
+
+                            if (!match)
+                            {
+                                *dest++ = scalar_val;
+                            }
                         }
                     }
-                    std::advance(dest, size);
+                    // all elements match
+                    std::advance(first, size);
                 }
-                else if (!hpx::parallel::traits::all_of(msk))
-                {
-                    //mixed
-                    for (std::size_t i = 0; i < size; ++i)
-                    {
-                        auto scalar_val =
-                            value_type(hpx::parallel::traits::get(tmp, i));
-                        bool match =
-                            HPX_INVOKE(pred, HPX_INVOKE(proj, scalar_val));
-
-                        if (!match)
-                        {
-                            *dest++ = scalar_val;
-                        }
-                    }
-                }
-                //all elements match
-                std::advance(first, size);
             }
 
             while (first != last)
