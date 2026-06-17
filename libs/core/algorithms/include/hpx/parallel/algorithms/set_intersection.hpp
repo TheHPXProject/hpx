@@ -277,7 +277,6 @@ namespace hpx::parallel {
                         HPX_MOVE(first1), HPX_MOVE(first2), HPX_MOVE(dest)});
                 }
 
-                using buffer_type = typename set_operations_buffer<Iter3>::type;
                 using func_type = std::decay_t<F>;
 
                 // calculate approximate destination index
@@ -288,8 +287,8 @@ namespace hpx::parallel {
 
                 // perform required set operation for one chunk
                 auto f2 = [proj1, proj2](Iter1 part_first1, Sent1 part_last1,
-                              Iter2 part_first2, Sent2 part_last2,
-                              buffer_type* d, func_type const& f) {
+                              Iter2 part_first2, Sent2 part_last2, auto* d,
+                              func_type const& f) {
                     return sequential_set_intersection(part_first1, part_last1,
                         part_first2, part_last2, d, f, proj1, proj2);
                 };
