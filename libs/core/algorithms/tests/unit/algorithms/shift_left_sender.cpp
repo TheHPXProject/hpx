@@ -19,6 +19,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -51,7 +52,7 @@ void test_shift_left_sender(
                           std::size_t(0)) |
             hpx::shift_left(ex_policy.on(exec)));
     HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(d)));
-    HPX_TEST(hpx::get<0>(result_zero) == iterator(std::end(c)));
+    HPX_TEST(hpx::get<0>(result_zero.value()) == iterator(std::end(c)));
 
     std::size_t n =
         (static_cast<std::size_t>(std::rand()) % (arr_size - 1)) + 1;
@@ -61,7 +62,7 @@ void test_shift_left_sender(
         hpx::shift_left(ex_policy.on(exec)));
 
     // assert returned iterator equals end - n
-    HPX_TEST(hpx::get<0>(result_n) ==
+    HPX_TEST(hpx::get<0>(result_n.value()) ==
         iterator(std::begin(c) + static_cast<std::ptrdiff_t>(arr_size - n)));
 
     std::move(std::begin(d) + static_cast<std::ptrdiff_t>(n), std::end(d),
@@ -79,7 +80,7 @@ void test_shift_left_sender(
         tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                           static_cast<std::size_t>(arr_size + 1)) |
             hpx::shift_left(ex_policy.on(exec)));
-    HPX_TEST(hpx::get<0>(result_over) == iterator(std::begin(c)));
+    HPX_TEST(hpx::get<0>(result_over.value()) == iterator(std::begin(c)));
     HPX_TEST(std::equal(std::begin(c), std::end(c), std::begin(c_snapshot)));
 }
 
@@ -103,7 +104,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
 
-    shift_left_sender_test<std::forward_iterator_tag>();
+    shift_left_sender_test<std::bidirectional_iterator_tag>();
     shift_left_sender_test<std::random_access_iterator_tag>();
 
     return hpx::local::finalize();

@@ -116,6 +116,7 @@ namespace hpx {
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
@@ -245,24 +246,45 @@ namespace hpx::parallel {
             static decltype(auto) parallel(
                 ExPolicy&& policy, FwdIter2 first, Sent last, Size n)
             {
+                namespace ex = hpx::execution::experimental;
+                constexpr bool has_scheduler_executor =
+                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
+
                 auto const dist =
                     static_cast<std::size_t>(detail::distance(first, last));
                 // C++20 [alg.shift]: if n is 0, do nothing and return last.
                 if (n == 0)
                 {
-                    return parallel::util::detail::algorithm_result<ExPolicy,
-                        FwdIter2>::get(std::next(first, dist));
+                    auto result =
+                        parallel::util::detail::algorithm_result<ExPolicy,
+                            FwdIter2>::get(std::next(first, dist));
+                    if constexpr (has_scheduler_executor)
+                        return ex::unique_any_sender<FwdIter2>(
+                            HPX_MOVE(result));
+                    else
+                        return result;
                 }
                 // C++20 [alg.shift]: if n >= dist, do nothing and return first.
                 if (static_cast<std::size_t>(n) >= dist)
                 {
-                    return parallel::util::detail::algorithm_result<ExPolicy,
-                        FwdIter2>::get(HPX_MOVE(first));
+                    auto result =
+                        parallel::util::detail::algorithm_result<ExPolicy,
+                            FwdIter2>::get(HPX_MOVE(first));
+                    if constexpr (has_scheduler_executor)
+                        return ex::unique_any_sender<FwdIter2>(
+                            HPX_MOVE(result));
+                    else
+                        return result;
                 }
 
-                return util::detail::algorithm_result<ExPolicy, FwdIter2>::get(
-                    shift_left_helper(
-                        policy, first, last, std::next(first, n)));
+                auto result =
+                    util::detail::algorithm_result<ExPolicy, FwdIter2>::get(
+                        shift_left_helper(
+                            policy, first, last, std::next(first, n)));
+                if constexpr (has_scheduler_executor)
+                    return ex::unique_any_sender<FwdIter2>(HPX_MOVE(result));
+                else
+                    return result;
             }
         };
         /// \endcond
@@ -302,10 +324,8 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter>::type
-        tag_fallback_invoke(shift_left_t, ExPolicy&& policy, FwdIter first,
-            FwdIter last, Size n)
+        friend decltype(auto) tag_fallback_invoke(shift_left_t,
+            ExPolicy&& policy, FwdIter first, FwdIter last, Size n)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
