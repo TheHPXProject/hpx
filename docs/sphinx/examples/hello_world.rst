@@ -68,6 +68,34 @@ Notice how the ordering of the two print statements will change with
 subsequent runs. To run this program on multiple localities please see the
 section :ref:`unix_pbs`.
 
+**Note for Local Runs of Distributed Examples**
+
+If |hpx| is compiled with the MPI parcelport disabled (``HPX_WITH_PARCELPORT_MPI=OFF``),
+running distributed examples out-of-the-box might cause a segmentation
+fault or ``invalid_status`` exception. This happens because the automatic
+runtime initialization macro (``hpx/hpx_main.hpp``) will be bypassed.
+
+The reason for this is the ``#if !defined(HPX_COMPUTE_DEVICE_CODE)`` macro
+guard at the top of the ``hpx/hpx_main.hpp`` header. In specific GPU or device code compilations,
+this guard prevents the header from being included. Without this header,
+the preprocessor does not rename your standard ``main`` to ``hpx_main``,
+leaving the |hpx| environment uninitialized when
+:cpp:func:`hpx::find_all_localities` is called.
+
+**Solution:**
+To fix this without changing the internal logic of the example, you must
+explicitly initialize the runtime. Follow these two steps:
+
+1. Rename your existing ``int main(int argc, char* argv[])`` function to ``int hpx_main(int argc, char* argv[])`` (keeping your original parameters).
+2. Add a manual initialization entry point at the bottom of your file:
+
+.. code-block:: c++
+
+   int main(int argc, char* argv[])
+   {
+       return hpx::init(argc, argv);
+   }
+
 Walkthrough
 ===========
 
