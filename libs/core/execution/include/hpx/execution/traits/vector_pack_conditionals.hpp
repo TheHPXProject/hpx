@@ -8,6 +8,8 @@
 
 #include <hpx/config.hpp>
 
+#if defined(HPX_HAVE_DATAPAR)
+
 namespace hpx::parallel::traits {
 
     ////////////////////////////////////////////////////////////////////
@@ -29,8 +31,6 @@ namespace hpx::parallel::traits {
         }
     }
 }    // namespace hpx::parallel::traits
-
-#if defined(HPX_HAVE_DATAPAR)
 
 #if !defined(__CUDACC__)
 #include <hpx/execution/traits/detail/eve/vector_pack_conditionals.hpp>

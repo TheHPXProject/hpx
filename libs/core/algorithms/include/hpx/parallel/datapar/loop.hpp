@@ -56,7 +56,7 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    while (last - first > static_cast<std::ptrdiff_t>(size + 1))
+                    while (last - first >= static_cast<std::ptrdiff_t>(size))
                     {
                         datapar_loop_step<Begin, IsConst>::callv(f, first);
                     }
@@ -130,7 +130,7 @@ namespace hpx::parallel::util {
 
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                while (last - first > static_cast<std::ptrdiff_t>(size + 1))
+                while (last - first >= static_cast<std::ptrdiff_t>(size))
                 {
                     int offset =
                         datapar_loop_pred_step<Begin>::callv(pred, first);
@@ -180,7 +180,7 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    while (last - first > static_cast<std::ptrdiff_t>(size + 1))
+                    while (last - first >= static_cast<std::ptrdiff_t>(size))
                     {
                         datapar_loop_step_ind<Begin>::callv(f, first);
                     }
@@ -246,7 +246,7 @@ namespace hpx::parallel::util {
 
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                while (last1 - it1 > static_cast<std::ptrdiff_t>(size + 1))
+                while (last1 - it1 >= static_cast<std::ptrdiff_t>(size))
                 {
                     datapar_loop_step2_ind<InIter1, InIter2>::callv(
                         f, it1, it2);
@@ -298,7 +298,7 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    while (len > size + 1)
+                    while (len >= size)
                     {
                         datapar_loop_step<InIter, IsConst>::callv(f, first);
                         len -= size;
@@ -369,7 +369,7 @@ namespace hpx::parallel::util {
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
                 // clang-format off
-                while (len > size + 1)
+                while (len >= size)
                 {
                     datapar_loop_step<I, true>::callv(f, first);
                     len -= size;
@@ -426,7 +426,7 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    while (len > size + 1)
+                    while (len >= size)
                     {
                         datapar_loop_step_ind<InIter>::callv(f, first);
                         len -= size;
@@ -495,7 +495,7 @@ namespace hpx::parallel::util {
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
                 // clang-format off
-                while (len > size + 1)
+                while (len >= size)
                 {
                     datapar_loop_idx_step<Iter>::callv(f, it, base_idx);
                     std::advance(it, size);
