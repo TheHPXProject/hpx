@@ -38,7 +38,8 @@ void test_multiple_use_with_generation(int arity = 2)
 
     auto const all_reduce_clients = create_hierarchical_communicator(
         all_reduce_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -76,7 +77,8 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
         sites.push_back(hpx::async([=]() {
             auto const all_reduce_clients = create_hierarchical_communicator(
                 all_reduce_direct_basename, num_sites_arg(num_sites),
-                this_site_arg(site), arity_arg(arity));
+                this_site_arg(site), arity_arg(arity), generation_arg(),
+                root_site_arg(), flat_fallback_threshold_arg(0));
 
             hpx::chrono::high_resolution_timer const t;
 

@@ -21,7 +21,6 @@
 #include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>

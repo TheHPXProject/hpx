@@ -652,7 +652,7 @@ namespace hpx::parallel {
             util::const_loop_n<std::decay_t<ExPolicy>>(
                 ++it, count - 1, [&](FwdIter const& curr) -> void {
                     if (element_type curr_value = HPX_INVOKE(proj, *curr);
-                        !HPX_INVOKE(f, curr_value, value))
+                        HPX_INVOKE(f, value, curr_value))
                     {
                         largest = curr;
                         value = HPX_MOVE(curr_value);
@@ -679,7 +679,7 @@ namespace hpx::parallel {
             util::const_loop_n<std::decay_t<ExPolicy>>(
                 ++it, count - 1, [&](FwdIter const& curr) -> void {
                     if (element_type curr_value = *curr;
-                        !HPX_INVOKE(f, curr_value, value))
+                        HPX_INVOKE(f, value, curr_value))
                     {
                         largest = curr;
                         value = HPX_MOVE(curr_value);
@@ -717,7 +717,7 @@ namespace hpx::parallel {
                 util::const_loop_n<std::decay_t<ExPolicy>>(
                     ++it, count - 1, [&](FwdIter const& curr) -> void {
                         if (element_type curr_value = HPX_INVOKE(proj, **curr);
-                            !HPX_INVOKE(f, curr_value, value))
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = *curr;
                             value = HPX_MOVE(curr_value);
@@ -747,7 +747,7 @@ namespace hpx::parallel {
                 util::const_loop_n<std::decay_t<ExPolicy>>(
                     ++it, count - 1, [&](FwdIter const& curr) -> void {
                         if (element_type curr_value = **curr;
-                            !HPX_INVOKE(f, curr_value, value))
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = *curr;
                             value = HPX_MOVE(curr_value);
@@ -780,7 +780,7 @@ namespace hpx::parallel {
                 util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
                     [&](FwdIter const& curr) -> void {
                         if (element_type curr_value = HPX_INVOKE(proj, *curr);
-                            !HPX_INVOKE(f, curr_value, value))
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = curr;
                             value = HPX_MOVE(curr_value);
@@ -807,7 +807,7 @@ namespace hpx::parallel {
                 util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
                     [&](FwdIter const& curr) -> void {
                         if (element_type curr_value = *curr;
-                            !HPX_INVOKE(f, curr_value, value))
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = curr;
                             value = HPX_MOVE(curr_value);

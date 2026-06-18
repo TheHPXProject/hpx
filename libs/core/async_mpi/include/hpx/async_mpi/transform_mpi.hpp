@@ -248,6 +248,12 @@ namespace hpx::mpi::experimental {
             }
             // clang-format on
 
+            constexpr decltype(auto) get_env() const
+                noexcept(noexcept(hpx::execution::experimental::get_env(s)))
+            {
+                return hpx::execution::experimental::get_env(s);
+            }
+
             template <typename R>
             constexpr auto connect(R&& r) &
             {

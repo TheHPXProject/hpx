@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,15 +18,16 @@
 
 #include <utility>
 
-namespace hpx { namespace components { namespace process {
+namespace hpx::components::process {
+
     ///////////////////////////////////////////////////////////////////////////
     class child : public client_base<child, process::server::child>
     {
-        typedef client_base<child, process::server::child> base_type;
+        using base_type = client_base<child, process::server::child>;
 
     public:
         template <typename... Ts>
-        child(Ts&&... ts)
+        explicit child(Ts&&... ts)
           : base_type(HPX_FORWARD(Ts, ts)...)
         {
         }
@@ -34,7 +35,7 @@ namespace hpx { namespace components { namespace process {
         hpx::future<void> terminate()
         {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-            typedef server::child::terminate_action terminate_action;
+            using terminate_action = server::child::terminate_action;
             return hpx::async(terminate_action(), this->get_id());
 #else
             HPX_ASSERT(false);
@@ -50,7 +51,7 @@ namespace hpx { namespace components { namespace process {
         hpx::future<int> wait_for_exit()
         {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-            typedef server::child::wait_for_exit_action wait_for_exit_action;
+            using wait_for_exit_action = server::child::wait_for_exit_action;
             return hpx::async(wait_for_exit_action(), this->get_id());
 #else
             HPX_ASSERT(false);
@@ -63,4 +64,4 @@ namespace hpx { namespace components { namespace process {
             return wait_for_exit().get();
         }
     };
-}}}    // namespace hpx::components::process
+}    // namespace hpx::components::process

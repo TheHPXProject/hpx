@@ -30,10 +30,19 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-parallel (sequenced) execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_par_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_par_t
       : hpx::functional::detail::tag_fallback<to_non_par_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_par(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_non_par_t, Target const& target)
+        {
+            return target.to_non_par();
+        }
+
         // any non-parallel policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -51,10 +60,19 @@ namespace hpx::execution::experimental {
     };
 
     // Return the matching parallel execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_par_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_par_t
       : hpx::functional::detail::tag_fallback<to_par_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_par(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_par_t, Target const& target)
+        {
+            return target.to_par();
+        }
+
         // any parallel policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -77,6 +95,15 @@ namespace hpx::execution::experimental {
       : hpx::functional::detail::tag_fallback<to_non_task_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_task(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_non_task_t, Target const& target)
+        {
+            return target.to_non_task();
+        }
+
         // any non-task policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -98,6 +125,15 @@ namespace hpx::execution::experimental {
       : hpx::functional::detail::tag_fallback<to_task_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_task(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_task_t, Target const& target)
+        {
+            return target.to_task();
+        }
+
         // any task policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -116,10 +152,19 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-unsequenced execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_unseq_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_unseq_t
       : hpx::functional::detail::tag_fallback<to_non_unseq_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_unseq(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_non_unseq_t, Target const& target)
+        {
+            return target.to_non_unseq();
+        }
+
         // any non-unsequenced policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -137,10 +182,19 @@ namespace hpx::execution::experimental {
     };
 
     // Return the matching unsequenced execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_unseq_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_unseq_t
       : hpx::functional::detail::tag_fallback<to_unseq_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_unseq(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_unseq_t, Target const& target)
+        {
+            return target.to_unseq();
+        }
+
         // any unsequenced policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(

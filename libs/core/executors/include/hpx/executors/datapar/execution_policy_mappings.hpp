@@ -23,10 +23,19 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-simd (vectorpack) execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_simd_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_simd_t
       : hpx::functional::detail::tag_fallback<to_non_simd_t>
     {
     private:
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_simd(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_non_simd_t, Target const& target)
+        {
+            return target.to_non_simd();
+        }
+
         // any non-simd policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
@@ -44,12 +53,20 @@ namespace hpx::execution::experimental {
     };
 
     // Return the matching simd (vectorpack) execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_simd_t final
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_simd_t
       : hpx::functional::detail::tag_fallback<to_simd_t>
     {
     private:
-        // any simd policy just returns itself
+        // Bridge: forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_simd(); }
+        friend constexpr decltype(auto) tag_invoke(
+            to_simd_t, Target const& target)
+        {
+            return target.to_simd();
+        }
 
+        // any simd policy just returns itself
         template <execution_policy ExPolicy>
         friend constexpr decltype(auto) tag_fallback_invoke(
             to_simd_t, ExPolicy&& policy) noexcept

@@ -1,4 +1,5 @@
 //  Copyright (c) 2019-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -36,7 +37,8 @@ void test_multiple_use(int arity = 2)
 
     auto const reduce_clients = create_hierarchical_communicator(
         reduce_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -81,7 +83,8 @@ void test_multiple_use_with_generation(int arity = 2)
 
     auto const reduce_clients = create_hierarchical_communicator(
         reduce_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -130,7 +133,8 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
         sites.push_back(hpx::async([=]() {
             auto const reduce_clients = create_hierarchical_communicator(
                 reduce_direct_basename, num_sites_arg(num_sites),
-                this_site_arg(site), arity_arg(arity));
+                this_site_arg(site), arity_arg(arity), generation_arg(),
+                root_site_arg(), flat_fallback_threshold_arg(0));
 
             hpx::chrono::high_resolution_timer const t;
 

@@ -1,4 +1,4 @@
-#  Copyright (c) 2022-2025 Hartmut Kaiser
+#  Copyright (c) 2022-2026 Hartmut Kaiser
 #
 #  SPDX-License-Identifier: BSL-1.0
 #  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +9,7 @@
 tests.examples.1d_stencil.1d_stencil_6
 tests.examples.1d_stencil.1d_stencil_7
 tests.examples.async_io.async_io_simple
+tests.examples.components.process.launch_command
 tests.examples.modules.algorithms.run_on_all
 tests.examples.modules.checkpoint.1d_stencil_4_checkpoint
 tests.examples.modules.executors.executor_with_thread_hooks

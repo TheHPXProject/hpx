@@ -85,7 +85,7 @@ namespace hpx::collectives {
     HPX_CXX_EXPORT using tag_arg = detail::argument_type<detail::tag_tag, 0>;
 
     /// The number of children each of the communication nodes is connected
-    /// to (default: picked based on num_sites).
+    /// to (default: 2).
     HPX_CXX_EXPORT using arity_arg =
         detail::argument_type<detail::arity_tag, 2>;
 

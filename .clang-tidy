@@ -16,6 +16,7 @@ Checks: >
     -bugprone-reserved-identifier,
     -bugprone-lambda-function-name,
     -bugprone-unchecked-optional-access,
+    -bugprone-crtp-constructor-accessibility,
     modernize-use-nullptr,
     misc-assert-side-effect
     misc-dangling-handle

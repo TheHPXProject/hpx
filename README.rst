@@ -8,7 +8,7 @@
 |github_status| |codacy_quality| |OpenSSF| |CFF| |JOSS| |zenodo_doi|
 
 Documentation: `latest <https://docs.hpx.dev/latest/html/index.html>`_,
-`development (master) <https://docs.hpx.dev/branches/master/html/index.html>`_
+`development (master) <https://docs.hpx.dev/branches/master/html/index.html>`_, also |deepwiki|
 
 |hpx_logo|
 
@@ -145,7 +145,7 @@ to check our code base.
 Past and current funding and support for HPX is listed `here
 <https://hpx.stellar-group.org/funding-acknowledgements>`_.
 
-Copyright © 2026 HPX Project a Series of LF Projects, LLC
+Copyright Â© 2026 HPX Project a Series of LF Projects, LLC
 
 .. |github_status| image:: https://github.com/TheHPXProject/hpx/actions/workflows/build-and-test.yml/badge.svg
      :target: https://github.com/TheHPXProject/hpx/actions/workflows/build-and-test.yml
@@ -174,3 +174,7 @@ Copyright © 2026 HPX Project a Series of LF Projects, LLC
 .. |hpx_logo| image:: http://hpx.stellar-group.org/files/hpx_logo.png
     :target: http://hpx.stellar-group.org/
     :alt: HPX Logo
+
+.. |deepwiki| image:: https://deepwiki.com/badge.svg
+    :target: https://deepwiki.com/TheHPXProject/hpx
+    :alt: Ask DeepWiki

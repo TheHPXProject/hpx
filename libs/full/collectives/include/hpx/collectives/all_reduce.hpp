@@ -434,6 +434,10 @@ namespace hpx::collectives {
     // Hierarchical all_reduce: reduce (bottom-up) + broadcast (top-down)
     // Uses 2k-1/2k generation mapping: user generation k maps to
     // internal generation 2k-1 (reduce phase) and 2k (broadcast phase)
+    //
+    // An instance may be shared between all_reduce and all_gather (identical
+    // generation scheme), but not with other collectives; see the note on
+    // create_hierarchical_communicator.
     HPX_CXX_EXPORT template <typename T, typename F>
     hpx::future<std::decay_t<T>> all_reduce(
         hierarchical_communicator const& communicators, T&& local_result,
@@ -449,12 +453,49 @@ namespace hpx::collectives {
                 HPX_GET_EXCEPTION(hpx::error::bad_parameter,
                     "hpx::collectives::all_reduce (hierarchical)",
                     "hierarchical all_reduce requires an explicit generation "
-                    "number for the 2k/2k+1 internal mapping"));
+                    "number for the 2k-1/2k internal mapping"));
         }
 
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
+        }
+
+        std::size_t const num_sites_val = hpx::get<0>(communicators.get_info());
+        std::size_t const arity_val = communicators.get_arity();
+
+        // The hierarchical helpers hardcode site 0 as the local root at
+        // every tree level, so a non-zero root is not supported.
+        if (root_site != 0)
+        {
+            return hpx::make_exceptional_future<arg_type>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_reduce (hierarchical)",
+                    "hierarchical all_reduce currently supports only "
+                    "root_site == 0 (the tree designates site 0 as the root)"));
+        }
+
+        if (this_site >= num_sites_val)
+        {
+            return hpx::make_exceptional_future<arg_type>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_reduce (hierarchical)",
+                    "this_site must be smaller than the number of "
+                    "participating sites"));
+        }
+
+        // Flat fast path: when arity >= num_sites, the tree builder's leaf
+        // condition (right - left < arity) fired at the root call and
+        // produced a single flat communicator spanning all sites. The
+        // reduce+broadcast decomposition then collapses to a single flat
+        // all_reduce; dispatch directly to avoid the two separate gate
+        // synchronizations.
+        if (arity_val >= num_sites_val)
+        {
+            HPX_ASSERT(communicators.size() == 1);
+            return all_reduce(communicators.get(0),
+                HPX_FORWARD(T, local_result), HPX_FORWARD(F, op),
+                communicators.site(0), generation);
         }
 
         generation_arg const reduce_gen(2 * generation - 1);

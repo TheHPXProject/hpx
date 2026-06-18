@@ -32,8 +32,8 @@ namespace hpx::threads {
     public:
         constexpr thread_id() noexcept = default;
 
-        thread_id(thread_id const&) = default;
-        thread_id& operator=(thread_id const&) = default;
+        thread_id(thread_id const&) noexcept = default;
+        thread_id& operator=(thread_id const&) noexcept = default;
 
         ~thread_id() = default;
 
@@ -52,11 +52,11 @@ namespace hpx::threads {
             return *this;
         }
 
-        explicit constexpr thread_id(thread_id_repr thrd) noexcept
+        explicit constexpr thread_id(thread_id_repr const thrd) noexcept
           : thrd_(thrd)
         {
         }
-        constexpr thread_id& operator=(thread_id_repr rhs) noexcept
+        constexpr thread_id& operator=(thread_id_repr const rhs) noexcept
         {
             thrd_ = rhs;
             return *this;
@@ -164,7 +164,7 @@ namespace hpx::threads {
             // created thread will be held alive by the variable returned from
             // the creation function;
             explicit constexpr thread_data_reference_counting(
-                thread_id_addref addref = thread_id_addref::yes) noexcept
+                thread_id_addref const addref = thread_id_addref::yes) noexcept
               : count_(addref == thread_id_addref::yes ? 1 : 0)
             {
             }
@@ -232,7 +232,7 @@ namespace hpx::threads {
         using thread_repr = detail::thread_data_reference_counting;
 
         explicit thread_id_ref(thread_repr* thrd,
-            thread_id_addref addref = thread_id_addref::yes) noexcept
+            thread_id_addref const addref = thread_id_addref::yes) noexcept
           : thrd_(thrd, addref == thread_id_addref::yes)
         {
         }
@@ -296,7 +296,7 @@ namespace hpx::threads {
             thrd_.reset();
         }
 
-        void reset(thread_repr* thrd, bool add_ref = true) noexcept
+        void reset(thread_repr* thrd, bool const add_ref = true) noexcept
         {
             thrd_.reset(thrd, add_ref);
         }

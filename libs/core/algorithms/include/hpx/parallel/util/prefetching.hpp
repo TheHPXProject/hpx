@@ -159,16 +159,14 @@ namespace hpx::parallel::util {
                 return tmp;
             }
 
-            // FIXME: should other members be compared too?
             bool operator==(prefetching_iterator const& rhs) const
             {
                 return idx_ == rhs.idx_ && base_ == rhs.base_;
             }
 
-            // FIXME: should the base iterators be compared too?
             bool operator!=(prefetching_iterator const& rhs) const
             {
-                return idx_ != rhs.idx_;
+                return !(*this == rhs);
             }
             bool operator>(prefetching_iterator const& rhs) const
             {

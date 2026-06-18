@@ -210,6 +210,7 @@ namespace hpx { namespace collectives {
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+#include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
@@ -392,6 +393,10 @@ namespace hpx::collectives {
     //
     // Key difference from all_reduce: the gather phase produces vector<T>
     // (O(N) data), so the broadcast phase transfers O(N) instead of a scalar.
+    //
+    // An instance may be shared between all_gather and all_reduce (identical
+    // generation scheme), but not with other collectives; see the note on
+    // create_hierarchical_communicator.
 
     // Async overload
     HPX_CXX_EXPORT template <typename T>
@@ -409,12 +414,49 @@ namespace hpx::collectives {
                 HPX_GET_EXCEPTION(hpx::error::bad_parameter,
                     "hpx::collectives::all_gather (hierarchical)",
                     "hierarchical all_gather requires an explicit generation "
-                    "number for the 2k/2k+1 internal mapping"));
+                    "number for the 2k-1/2k internal mapping"));
         }
 
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
+        }
+
+        std::size_t const num_sites_val = hpx::get<0>(communicators.get_info());
+        std::size_t const arity_val = communicators.get_arity();
+
+        // The hierarchical helpers hardcode site 0 as the local root at
+        // every tree level, so a non-zero root is not supported.
+        if (root_site != 0)
+        {
+            return hpx::make_exceptional_future<std::vector<arg_type>>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_gather (hierarchical)",
+                    "hierarchical all_gather currently supports only "
+                    "root_site == 0 (the tree designates site 0 as the root)"));
+        }
+
+        if (this_site >= num_sites_val)
+        {
+            return hpx::make_exceptional_future<std::vector<arg_type>>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_gather (hierarchical)",
+                    "this_site must be smaller than the number of "
+                    "participating sites"));
+        }
+
+        // Flat fast path: when arity >= num_sites, the tree builder's leaf
+        // condition (right - left < arity) fired at the root call and
+        // produced a single flat communicator spanning all sites. The
+        // gather+broadcast decomposition then collapses to a single flat
+        // all_gather; dispatch directly to avoid the two separate gate
+        // synchronizations.
+        if (arity_val >= num_sites_val)
+        {
+            HPX_ASSERT(communicators.size() == 1);
+            return all_gather(communicators.get(0),
+                HPX_FORWARD(T, local_result), communicators.site(0),
+                generation);
         }
 
         generation_arg const gather_gen(2 * generation - 1);

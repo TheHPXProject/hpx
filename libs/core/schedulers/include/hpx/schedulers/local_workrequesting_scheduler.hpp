@@ -16,6 +16,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
 #include <hpx/schedulers/thread_queue.hpp>
 
@@ -1070,8 +1071,7 @@ namespace hpx::threads::policies {
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "local_workrequesting_scheduler::schedule_thread",
-                    "unknown thread priority value "
-                    "(thread_priority::unknown)");
+                    "unknown thread priority value (thread_priority::unknown)");
             }
             }
         }
@@ -1141,10 +1141,8 @@ namespace hpx::threads::policies {
             case thread_priority::unknown:
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "local_workrequesting_scheduler::schedule_thread_"
-                    "last",
-                    "unknown thread priority value "
-                    "(thread_priority::unknown)");
+                    "local_workrequesting_scheduler::schedule_thread_last",
+                    "unknown thread priority value (thread_priority::unknown)");
             }
             }
         }

@@ -21,7 +21,7 @@ namespace hpx {
     /// prefix of the first range defined by [first2, last2)
     ///
     /// \note   Complexity: Linear: at most min(N1, N2) applications of the
-    ///                     predicate and both projections.
+    ///                     predicate.
     ///
     /// \tparam InIter1     The type of the source iterators used
     ///                     (deduced). This iterator type must meet the
@@ -29,15 +29,8 @@ namespace hpx {
     /// \tparam InIter2     The type of the destination iterators used
     ///                     (deduced). This iterator type must meet the
     ///                     requirements of an input iterator.
-    /// \tparam Pred        The binary predicate that compares the projected
-    ///                     elements. This defaults to
-    ///                     \a hpx::parallel::detail::equal_to.
-    /// \tparam Proj1       The type of an optional projection function for
-    ///                     the source range. This defaults to
-    ///                     \a hpx::identity.
-    /// \tparam Proj2       The type of an optional projection function for
-    ///                     the destination range. This defaults to
-    ///                     \a hpx::identity.
+    /// \tparam Pred        The binary predicate that compares the elements.
+    ///                     This defaults to \a hpx::parallel::detail::equal_to.
     ///
     /// \param first1       Refers to the beginning of the source range.
     /// \param last1        Sentinel value referring to the end of the source
@@ -47,16 +40,7 @@ namespace hpx {
     ///                     destination range.
     /// \param pred         Specifies the binary predicate function
     ///                     (or function object) which will be invoked for
-    ///                     comparison of the elements in the in two ranges
-    ///                     projected by \a proj1 and \a proj2 respectively.
-    /// \param proj1        Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements in the
-    ///                     source range as a projection operation before the
-    ///                     actual predicate \a pred is invoked.
-    /// \param proj2        Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements in the
-    ///                     destination range as a projection operation before
-    ///                     the actual predicate \a pred is invoked.
+    ///                     comparison of the elements in the two ranges.
     ///
     /// The assignments in the parallel \a starts_with algorithm invoked
     /// without an execution policy object execute in sequential order
@@ -67,19 +51,16 @@ namespace hpx {
     ///           value true if the second range matches the prefix of the
     ///           first range, false otherwise.
     template <typename InIter1, typename InIter2,
-        typename Pred = hpx::parallel::detail::equal_to,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity>
-    bool starts_with( InIter1 first1, InIter1 last1, InIter2 first2,
-        InIter2 last2, Pred&& pred = Pred(), Proj1&& proj1 = Proj1(),
-        Proj2&& proj2 = Proj2());
+        typename Pred = hpx::parallel::detail::equal_to>
+    bool starts_with(InIter1 first1, InIter1 last1, InIter2 first2,
+        InIter2 last2, Pred&& pred = Pred());
 
     /// Checks whether the second range defined by [first1, last1) matches the
     /// prefix of the first range defined by [first2, last2).
     /// Executed according to the policy.
     ///
     /// \note   Complexity: Linear: at most min(N1, N2) applications of the
-    ///                     predicate and both projections.
+    ///                     predicate.
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
     ///                     It describes the manner in which the execution
@@ -91,15 +72,8 @@ namespace hpx {
     /// \tparam InIter2     The type of the destination iterators used
     ///                     (deduced). This iterator type must meet the
     ///                     requirements of an input iterator.
-    /// \tparam Pred        The binary predicate that compares the projected
-    ///                     elements. This defaults to
-    ///                     \a hpx::parallel::detail::equal_to.
-    /// \tparam Proj1       The type of an optional projection function for
-    ///                     the source range. This defaults to
-    ///                     \a hpx::identity.
-    /// \tparam Proj2       The type of an optional projection function for
-    ///                     the destination range. This defaults to
-    ///                     \a hpx::identity.
+    /// \tparam Pred        The binary predicate that compares the elements.
+    ///                     This defaults to \a ranges::equal_to.
     ///
     /// \param policy       The execution policy to use for the scheduling of
     ///                     the iterations.
@@ -111,16 +85,7 @@ namespace hpx {
     ///                     destination range.
     /// \param pred         Specifies the binary predicate function
     ///                     (or function object) which will be invoked for
-    ///                     comparison of the elements in the in two ranges
-    ///                     projected by \a proj1 and \a proj2 respectively.
-    /// \param proj1        Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements in the
-    ///                     source range as a projection operation before the
-    ///                     actual predicate \a pred is invoked.
-    /// \param proj2        Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements in the
-    ///                     destination range as a projection operation before
-    ///                     the actual predicate \a pred is invoked.
+    ///                     comparison of the elements in the two ranges.
     ///
     /// The assignments in the parallel \a starts_with algorithm invoked
     /// without an execution policy object execute in sequential order
@@ -134,13 +99,10 @@ namespace hpx {
     ///           value true if the second range matches the prefix of the
     ///           first range, false otherwise.
     template <typename ExPolicy, typename InIter1, typename InIter2,
-        typename Pred = hpx::parallel::detail::equal_to,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity>
+        typename Pred = ranges::equal_to>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
     starts_with(ExPolicy&& policy, InIter1 first1, InIter1 last1,
-        InIter2 first2,InIter2 last2, Pred&& pred = Pred(),
-        Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
+        InIter2 first2, InIter2 last2, Pred&& pred = Pred());
 
     // clang-format on
 }    // namespace hpx
@@ -157,6 +119,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/equal.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
+#include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
 #include <algorithm>

@@ -421,30 +421,24 @@ namespace hpx::execution::experimental {
                 }
             };
 
-            // connect: creates the right op state behind the
-            // type-erased pointer.
             template <typename Receiver>
-            friend dispatch_op<std::decay_t<Receiver>> tag_invoke(
-                hpx::execution::experimental::connect_t,
-                parallel_bulk_dispatch_sender&& self, Receiver&& rcvr)
+            dispatch_op<std::decay_t<Receiver>> connect(Receiver&& rcvr) &&
             {
-                if (auto* fast = std::get_if<fast_path_data>(&self.data_))
+                if (auto* fast = std::get_if<fast_path_data>(&data_))
                 {
                     return dispatch_op<std::decay_t<Receiver>>{
                         std::make_unique<fast_parallel_bulk_op<FastSender,
                             std::decay_t<Receiver>>>(HPX_MOVE(fast->sender_),
                             HPX_FORWARD(Receiver, rcvr))};
                 }
-                else
-                {
-                    auto& vp = std::get<virtual_path_data>(self.data_);
-                    return dispatch_op<std::decay_t<Receiver>>{
-                        std::make_unique<virtual_parallel_bulk_op<F, IsChunked,
-                            IsParallel, ChildSender, std::decay_t<Receiver>>>(
-                            HPX_MOVE(vp.backend_), vp.count_, vp.actual_shape_,
-                            HPX_MOVE(vp.f_), HPX_MOVE(vp.child_),
-                            HPX_FORWARD(Receiver, rcvr))};
-                }
+
+                auto& vp = std::get<virtual_path_data>(data_);
+                return dispatch_op<std::decay_t<Receiver>>{
+                    std::make_unique<virtual_parallel_bulk_op<F, IsChunked,
+                        IsParallel, ChildSender, std::decay_t<Receiver>>>(
+                        HPX_MOVE(vp.backend_), vp.count_, vp.actual_shape_,
+                        HPX_MOVE(vp.f_), HPX_MOVE(vp.child_),
+                        HPX_FORWARD(Receiver, rcvr))};
             }
         };
 
@@ -619,44 +613,38 @@ namespace hpx::execution::experimental {
         }
 
         // Scheduling properties: forward to the wrapped thread_pool_policy_scheduler
-        // when present so callers use get_processing_units_mask(sched),
-        // get_first_core(sched), processing_units_count(..., sched), etc.,
-        // consistent with thread_pool_policy_scheduler.
-        friend std::size_t tag_invoke(
-            get_first_core_t, parallel_scheduler const& sched) noexcept
+        // when present, consistent with thread_pool_policy_scheduler.
+        [[nodiscard]] std::size_t query(get_first_core_t) const noexcept
         {
-            if (auto const* u = sched.get_underlying_scheduler())
-                return get_first_core(*u);
+            if (auto const* u = get_underlying_scheduler())
+                return u->query(get_first_core_t{});
             return 0;
         }
 
         template <hpx::executor_parameters Parameters>
-        friend std::size_t tag_invoke(processing_units_count_t, Parameters&&,
-            parallel_scheduler const& sched,
+        [[nodiscard]] std::size_t query(processing_units_count_t, Parameters&&,
             hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0)
+            std::size_t = 0) const
         {
-            if (auto const* u = sched.get_underlying_scheduler())
-                return processing_units_count(
-                    null_parameters, *u, hpx::chrono::null_duration, 0);
+            if (auto const* u = get_underlying_scheduler())
+                return u->query(processing_units_count_t{}, null_parameters,
+                    hpx::chrono::null_duration, 0);
             return 1;
         }
 
-        friend auto tag_invoke(
-            get_processing_units_mask_t, parallel_scheduler const& sched)
+        [[nodiscard]] auto query(get_processing_units_mask_t) const
         {
-            if (auto const* cached = sched.get_pu_mask())
+            if (auto const* cached = get_pu_mask())
                 return *cached;
-            if (auto const* u = sched.get_underlying_scheduler())
-                return get_processing_units_mask(*u);
+            if (auto const* u = get_underlying_scheduler())
+                return u->query(get_processing_units_mask_t{});
             return hpx::threads::create_topology().get_machine_affinity_mask();
         }
 
-        friend auto tag_invoke(
-            get_cores_mask_t, parallel_scheduler const& sched)
+        [[nodiscard]] auto query(get_cores_mask_t) const
         {
-            if (auto const* u = sched.get_underlying_scheduler())
-                return get_cores_mask(*u);
+            if (auto const* u = get_underlying_scheduler())
+                return u->query(get_cores_mask_t{});
             return hpx::threads::create_topology().get_machine_affinity_mask();
         }
 
@@ -761,23 +749,21 @@ namespace hpx::execution::experimental {
                     set_stopped_t()>;
 
             template <typename Receiver>
-            friend operation_state<std::decay_t<Receiver>> tag_invoke(
-                connect_t, sender const& s, Receiver&& receiver) noexcept(std::
-                    is_nothrow_constructible_v<std::decay_t<Receiver>,
+            operation_state<std::decay_t<Receiver>> connect(Receiver&& receiver)
+                const& noexcept(
+                    std::is_nothrow_constructible_v<std::decay_t<Receiver>,
                         Receiver>)
             {
-                return {
-                    HPX_FORWARD(Receiver, receiver), s.sched_.get_backend()};
+                return {HPX_FORWARD(Receiver, receiver), sched_.get_backend()};
             }
 
             template <typename Receiver>
-            friend operation_state<std::decay_t<Receiver>>
-            tag_invoke(connect_t, sender&& s, Receiver&& receiver) noexcept(
+            operation_state<std::decay_t<Receiver>>
+            connect(Receiver&& receiver) && noexcept(
                 std::is_nothrow_constructible_v<std::decay_t<Receiver>,
                     Receiver>)
             {
-                return {
-                    HPX_FORWARD(Receiver, receiver), s.sched_.get_backend()};
+                return {HPX_FORWARD(Receiver, receiver), sched_.get_backend()};
             }
 
             struct env

@@ -102,12 +102,13 @@ namespace hpx { namespace collectives {
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
 
-    /// Create a new communicator object usable with any collective operation
+    /// Create a new hierarchical communicator object usable with collective
+    /// operations
     ///
     /// This functions creates a new hierarchical_communicator object that can
     /// be called in order to pre-allocate a communicator object usable with
-    /// multiple invocations of any of the collective operations (such as \a
-    /// all_gather, \a all_reduce, \a all_to_all, \a broadcast, etc.).
+    /// multiple invocations of a collective operation (such as \a all_gather,
+    /// \a all_reduce, \a all_to_all, \a broadcast, etc.).
     ///
     /// \param  basename    The base name identifying the collective operation
     /// \param  num_sites   The number of participating sites (default: all
@@ -126,6 +127,26 @@ namespace hpx { namespace collectives {
     /// \param  root_site   The site that is responsible for creating the
     ///                     collective support object. This value is optional
     ///                     and defaults to '0' (zero).
+    /// \param  threshold   The site-count threshold below which the
+    ///                     communicator collapses to a single flat
+    ///                     communicator spanning all sites (strict
+    ///                     comparison: num_sites < threshold). The default
+    ///                     is 16; pass 0 to disable the fallback and always
+    ///                     build a tree.
+    ///
+    /// \note   The sub-communicators of a hierarchical_communicator share
+    ///         one generation sequence per registered name, and the
+    ///         hierarchical collectives consume internal generations at
+    ///         different rates: \a broadcast and \a barrier consume one
+    ///         generation per call on every sub-communicator, \a all_gather
+    ///         and \a all_reduce consume two per call, and \a all_to_all
+    ///         consumes two per call on the subtree communicators but one on
+    ///         the inter-group communicator. A single
+    ///         hierarchical_communicator instance must therefore only be
+    ///         used with collective operations sharing one consumption
+    ///         scheme: \a all_gather and \a all_reduce may be mixed on one
+    ///         instance, while \a all_to_all, \a broadcast, and \a barrier
+    ///         each require their own instance.
     ///
     /// \returns    This function returns a new communicator object usable
     ///             with the collective operation.

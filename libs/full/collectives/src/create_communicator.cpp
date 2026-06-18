@@ -1,5 +1,6 @@
 //  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +10,9 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
+#include <hpx/collectives/argument_types.hpp>
+#include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/hierarchical_helpers.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
@@ -20,9 +24,6 @@
 #include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/type_support.hpp>
-
-#include <hpx/collectives/argument_types.hpp>
-#include <hpx/collectives/create_communicator.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -392,30 +393,24 @@ namespace hpx::collectives {
                 return;
             }
 
-            std::size_t division_steps = (right - left + 1) / arity;
-            std::size_t remainder = (right - left + 1) % arity;
-            std::size_t offset = 0;
+            auto const groups =
+                detail::get_top_level_groups(right - left + 1, arity);
 
-            for (std::size_t i = 0; i != arity; ++i)
+            for (std::size_t i = 0; i != groups.size(); ++i)
             {
-                std::size_t const current_group_size =
-                    division_steps + (i < remainder ? 1 : 0);
-
-                std::size_t const current_left = left + offset;
-                std::size_t const current_right =
-                    current_left + current_group_size - 1;
-                offset += current_group_size;
+                std::size_t const current_left = left + groups[i].left;
+                std::size_t const current_right = left + groups[i].right;
 
                 if (this_site == current_left)
                 {
                     auto c = create_communicator(name.c_str(),
-                        num_sites_arg(arity), this_site_arg(i),
+                        num_sites_arg(groups.size()), this_site_arg(i),
                         generation_arg(generation), root_site_arg(0));
 
                     communicators.emplace_back(HPX_MOVE(c), this_site_arg(i));
                 }
 
-                if (this_site >= current_left && this_site < current_right + 1)
+                if (this_site >= current_left && this_site <= current_right)
                 {
                     recursively_fill_communicators(communicators, current_left,
                         current_right, basename, arity, this_site, num_sites,
@@ -438,18 +433,27 @@ namespace hpx::collectives {
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
-            if (root_site == static_cast<std::size_t>(-1))    //-V1051
-            {
-                root_site = 0;
-            }
+        }
+
+        if (root_site == static_cast<std::size_t>(-1))
+        {
+            root_site = 0;
         }
         if (root_site != 0)
         {
-            this_site = this_site - root_site % num_sites;
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::collectives::create_hierarchical_communicator",
+                "hierarchical communicators currently support only "
+                "root_site == 0");
         }
-        HPX_ASSERT(this_site < num_sites);
-        HPX_ASSERT(
-            root_site != static_cast<std::size_t>(-1) && root_site < num_sites);
+
+        if (num_sites == 0 || this_site >= num_sites)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::collectives::create_hierarchical_communicator",
+                "num_sites must be non-zero and this_site must be smaller "
+                "than the number of participating sites");
+        }
 
         std::string name(basename);
         if (!generation.is_default())
@@ -458,26 +462,15 @@ namespace hpx::collectives {
         }
 
         // Flat fallback: below the threshold, hierarchical overhead exceeds
-        // its benefit. Produce a single-level communicator spanning all N
-        // sites; the tree walking loops in the hierarchical collective
-        // overloads collapse to a single flat call when size() == 1 (this is
-        // also the code path non-leader sites take in normal tree mode). Pass
-        // threshold == 0 to disable this fallback and always build a tree.
+        // its benefit. Overriding arity to num_sites makes the tree builder's
+        // leaf condition (right - left < arity) fire at the root call, which
+        // produces a single flat communicator spanning all sites; the
+        // hierarchical collectives dispatch on the same arity >= num_sites
+        // condition and collapse to a direct flat call. Pass threshold == 0
+        // to disable this fallback and always build a tree.
         if (num_sites < threshold)
         {
-            // Name the fallback communicator the same way the tree path would
-            // name a single top-level group, to avoid basename collisions with
-            // direct flat communicators using the bare basename.
-            std::string fallback_name(name);
-            fallback_name += "0-" +
-                std::to_string(static_cast<std::size_t>(num_sites) - 1) + "/";
-
-            auto c = create_communicator(fallback_name.c_str(), num_sites,
-                this_site, generation, root_site_arg(0));
-            std::vector<hpx::tuple<communicator, this_site_arg>> communicators;
-            communicators.emplace_back(HPX_MOVE(c), this_site);
-            return hierarchical_communicator(HPX_MOVE(communicators), arity,
-                root_site, num_sites, this_site);
+            arity = static_cast<std::size_t>(num_sites);
         }
 
         std::vector<hpx::tuple<communicator, this_site_arg>> communicators;

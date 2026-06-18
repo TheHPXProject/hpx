@@ -52,7 +52,10 @@ set(executors_macro_headers hpx/executors/macros.hpp)
 
 if(HPX_WITH_DATAPAR)
   set(executors_headers
-      ${executors_headers} hpx/executors/datapar/execution_policy_fwd.hpp
+      ${executors_headers}
+      hpx/executors/datapar/detail/execution_policy_mapping_members.hpp
+      hpx/executors/datapar/detail/execution_policy_mapping_members_impl.hpp
+      hpx/executors/datapar/execution_policy_fwd.hpp
       hpx/executors/datapar/execution_policy_mappings.hpp
       hpx/executors/datapar/execution_policy.hpp
   )

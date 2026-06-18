@@ -456,18 +456,16 @@ namespace hpx::when_all_vector_detail {
         };
 
         template <typename Receiver>
-        friend auto tag_invoke(hpx::execution::experimental::connect_t,
-            when_all_vector_sender_type&& s, Receiver&& receiver)
+        operation_state<Receiver> connect(Receiver&& receiver) &&
         {
             return operation_state<Receiver>(
-                HPX_FORWARD(Receiver, receiver), HPX_MOVE(s.senders));
+                HPX_FORWARD(Receiver, receiver), HPX_MOVE(senders));
         }
 
         template <typename Receiver>
-        friend auto tag_invoke(hpx::execution::experimental::connect_t,
-            when_all_vector_sender_type& s, Receiver&& receiver)
+        operation_state<Receiver> connect(Receiver&& receiver) &
         {
-            return operation_state<Receiver>(receiver, s.senders);
+            return operation_state<Receiver>(receiver, senders);
         }
     };    // namespace hpx::when_all_vector_detail
 }    // namespace hpx::when_all_vector_detail

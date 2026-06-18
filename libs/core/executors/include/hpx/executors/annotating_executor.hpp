@@ -76,113 +76,110 @@ namespace hpx::execution::experimental {
         using future_type =
             hpx::traits::executor_future_t<BaseExecutor, T, Ts...>;
 
-    private:
+        [[nodiscard]] constexpr annotating_executor query(
+            with_annotation_t, char const* annotation) const
+        {
+            auto exec_with_annotation = *this;
+            exec_with_annotation.annotation_ = annotation;
+            return exec_with_annotation;
+        }
+
+        [[nodiscard]] annotating_executor query(
+            with_annotation_t, std::string annotation) const
+        {
+            auto exec_with_annotation = *this;
+            exec_with_annotation.annotation_ =
+                hpx::detail::store_function_annotation(HPX_MOVE(annotation));
+            return exec_with_annotation;
+        }
+
+        [[nodiscard]] constexpr char const* query(
+            get_annotation_t) const noexcept
+        {
+            return annotation_;
+        }
+
+        template <typename Tag, typename Property>
+            requires(is_scheduling_property_v<Tag>)
+        [[nodiscard]] auto query(Tag tag, Property&& prop) const
+        {
+            return annotating_executor(
+                exec_.query(tag, HPX_FORWARD(Property, prop)), annotation_);
+        }
+
+        template <typename Tag>
+            requires(is_scheduling_property_v<Tag>)
+        [[nodiscard]] auto query(Tag tag) const
+        {
+            return exec_.query(tag);
+        }
+
         // NonBlockingOneWayExecutor interface
         template <typename F, typename... Ts>
             requires(std::invocable<F, Ts...>)
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            annotating_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) post(F&& f, Ts&&... ts) const
         {
-            return parallel::execution::post(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
+            return parallel::execution::post(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // OneWayExecutor interface
         template <typename F, typename... Ts>
             requires(std::invocable<F, Ts...>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            annotating_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return parallel::execution::sync_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
+            return parallel::execution::sync_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
             requires(std::invocable<F, Ts...>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            annotating_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return parallel::execution::async_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
+            return parallel::execution::async_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Future, typename... Ts>
             requires(std::invocable<F, Ts...>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::then_execute_t,
-            annotating_executor const& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+        decltype(auto) then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
         {
-            return parallel::execution::then_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
+            return parallel::execution::then_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_),
                 HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            annotating_executor const& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return parallel::execution::bulk_async_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
-                shape, HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            annotating_executor const& exec, F&& f, S const& shape, Ts&&... ts)
-        {
-            return parallel::execution::bulk_sync_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
-                shape, HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename F, typename S, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            annotating_executor const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
-        {
-            return parallel::execution::bulk_then_execute(exec.exec_,
-                hpx::annotated_function(HPX_FORWARD(F, f), exec.annotation_),
-                shape, HPX_FORWARD(Future, predecessor),
+            return parallel::execution::bulk_async_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_), shape,
                 HPX_FORWARD(Ts, ts)...);
         }
 
-        // support with_annotation property
-        friend constexpr annotating_executor tag_invoke(
-            hpx::execution::experimental::with_annotation_t,
-            annotating_executor const& exec, char const* annotation)
+        template <typename F, typename S, typename... Ts>
+        decltype(auto) bulk_sync_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            auto exec_with_annotation = exec;
-            exec_with_annotation.annotation_ = annotation;
-            return exec_with_annotation;
+            return parallel::execution::bulk_sync_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_), shape,
+                HPX_FORWARD(Ts, ts)...);
         }
 
-        friend annotating_executor tag_invoke(
-            hpx::execution::experimental::with_annotation_t,
-            annotating_executor const& exec, std::string annotation)
+        template <typename F, typename S, typename Future, typename... Ts>
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
-            auto exec_with_annotation = exec;
-            exec_with_annotation.annotation_ =
-                hpx::detail::store_function_annotation(HPX_MOVE(annotation));
-            return exec_with_annotation;
-        }
-
-        // support get_annotation property
-        friend constexpr char const* tag_invoke(
-            hpx::execution::experimental::get_annotation_t,
-            annotating_executor const& exec) noexcept
-        {
-            return exec.annotation_;
+            return parallel::execution::bulk_then_execute(exec_,
+                hpx::annotated_function(HPX_FORWARD(F, f), annotation_), shape,
+                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
     private:
@@ -201,26 +198,9 @@ namespace hpx::execution::experimental {
         /// \endcond
     };
 
-    // support all properties exposed by the wrapped executor
-    HPX_CXX_CORE_EXPORT template <typename Tag, executor_any BaseExecutor,
-        typename Property>
-        requires(hpx::execution::experimental::is_scheduling_property_v<Tag>)
-    auto tag_invoke(
-        Tag tag, annotating_executor<BaseExecutor> const& exec, Property&& prop)
-        -> decltype(annotating_executor<BaseExecutor>(std::declval<Tag>()(
-            std::declval<BaseExecutor>(), std::declval<Property>())))
-    {
-        return annotating_executor<BaseExecutor>(
-            tag(exec.get_executor(), HPX_FORWARD(Property, prop)));
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename BaseExecutor>
-        requires(hpx::execution::experimental::is_scheduling_property_v<Tag>)
-    auto tag_invoke(Tag tag, annotating_executor<BaseExecutor> const& exec)
-        -> decltype(std::declval<Tag>()(std::declval<BaseExecutor>()))
-    {
-        return tag(exec.get_executor());
-    }
+    // All properties exposed by the wrapped executor are supported through the
+    // public query() member functions above, which the scheduling property
+    // CPOs detect directly (via property_base). No tag_invoke bridge needed.
 
     ///////////////////////////////////////////////////////////////////////////
 #if !defined(DOXYGEN)    // doxygen gets confused by the deduction guides

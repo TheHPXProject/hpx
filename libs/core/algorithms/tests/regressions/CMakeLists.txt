@@ -20,6 +20,7 @@ set(tests
     minimal_findend
     mismatch_differently_sized_ranges
     num_cores
+    prefetching_iterator
     reduce_3641
     scan_different_inits
     scan_non_commutative

@@ -17,6 +17,7 @@
 #include <atomic>
 #include <mpi.h>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace ex = hpx::execution::experimental;
@@ -33,8 +34,31 @@ auto tag_invoke(mpi::transform_mpi_t, custom_type<T>& c)
         ex::just(&c.x, 1, MPI_INT, 0, MPI_COMM_WORLD), MPI_Ibcast);
 }
 
+void test_transform_mpi_forwards_env()
+{
+    auto s = ex::schedule(ex::thread_pool_scheduler{});
+    using sender_type = decltype(s);
+    using original_scheduler_type =
+        std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+            ex::get_env(std::declval<sender_type&>())))>;
+
+    auto transformed =
+        mpi::transform_mpi(std::move(s), [](MPI_Request* request) {
+            *request = MPI_REQUEST_NULL;
+            return MPI_SUCCESS;
+        });
+
+    using scheduler_type =
+        std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+            ex::get_env(transformed)))>;
+
+    static_assert(std::is_same_v<scheduler_type, original_scheduler_type>);
+}
+
 int hpx_main()
 {
+    test_transform_mpi_forwards_env();
+
     int size, rank;
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Comm_size(comm, &size);

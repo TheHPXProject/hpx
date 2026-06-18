@@ -80,23 +80,36 @@ namespace hpx::execution::experimental {
             return sched_;
         }
 
-        // clang-format off
-        template <typename Parameters,
-            HPX_CONCEPT_REQUIRES_(
-                hpx::traits::is_executor_parameters_v<Parameters>
-            )>
-        // clang-format on
-        friend auto tag_invoke(
-            hpx::execution::experimental::processing_units_count_t tag,
-            Parameters&& params, explicit_scheduler_executor const& exec,
+        template <typename Parameters>
+            requires(hpx::traits::is_executor_parameters_v<Parameters>)
+        [[nodiscard]] auto query(processing_units_count_t, Parameters&& params,
             hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0)
-            -> decltype(std::declval<
-                hpx::execution::experimental::processing_units_count_t>()(
-                std::declval<Parameters>(), std::declval<BaseScheduler>(),
-                std::declval<hpx::chrono::steady_duration>(), 0))
+            std::size_t = 0) const
         {
-            return tag(HPX_FORWARD(Parameters, params), exec.sched_);
+            return sched_.query(processing_units_count_t{},
+                HPX_FORWARD(Parameters, params), hpx::chrono::null_duration, 0);
+        }
+
+        template <typename Tag, typename Property>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag> &&
+                requires(BaseScheduler const& sched, Tag tag, Property prop) {
+                    sched.query(tag, HPX_FORWARD(Property, prop));
+                })
+        [[nodiscard]] auto query(Tag tag, Property&& prop) const
+        {
+            return explicit_scheduler_executor{
+                sched_.query(tag, HPX_FORWARD(Property, prop))};
+        }
+
+        template <typename Tag>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag> &&
+                requires(
+                    BaseScheduler const& sched, Tag tag) { sched.query(tag); })
+        [[nodiscard]] auto query(Tag tag) const
+        {
+            return sched_.query(tag);
         }
 
         // Associate the parallel_execution_tag executor tag type as a default
@@ -110,22 +123,19 @@ namespace hpx::execution::experimental {
 
         // NonBlockingOneWayExecutor interface
         template <typename F, typename... Ts>
-        friend void tag_invoke(hpx::parallel::execution::post_t,
-            explicit_scheduler_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            start_detached(then(schedule(exec.sched_),
+            start_detached(then(schedule(sched_),
                 hpx::util::deferred_call(
                     HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)));
         }
 
         // OneWayExecutor interface
         template <typename F, typename... Ts>
-        friend auto tag_invoke(hpx::parallel::execution::sync_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, Ts&&... ts)
+        auto sync_execute(F&& f, Ts&&... ts) const
         {
             auto result = hpx::this_thread::experimental::sync_wait(
-                hpx::parallel::execution::async_execute(
-                    exec, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
+                async_execute(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
             constexpr std::size_t size =
                 hpx::tuple_size<std::decay_t<decltype(*result)>>::value;
             if constexpr (size == 0)
@@ -141,21 +151,18 @@ namespace hpx::execution::experimental {
 
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend auto tag_invoke(hpx::parallel::execution::async_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, Ts&&... ts)
+        auto async_execute(F&& f, Ts&&... ts) const
         {
-            return then(schedule(exec.sched_),
+            return then(schedule(sched_),
                 hpx::util::deferred_call(
                     HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
         }
 
         template <typename F, typename Future, typename... Ts>
-        friend auto tag_invoke(hpx::parallel::execution::then_execute_t,
-            explicit_scheduler_executor const& exec, F&& f,
-            Future&& predecessor, Ts&&... ts)
+        auto then_execute(F&& f, Future&& predecessor, Ts&&... ts) const
         {
             auto&& predecessor_continues_on_sched = continues_on(
-                keep_future(HPX_FORWARD(Future, predecessor)), exec.sched_);
+                keep_future(HPX_FORWARD(Future, predecessor)), sched_);
 
             return then(HPX_MOVE(predecessor_continues_on_sched),
                 hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
@@ -165,22 +172,18 @@ namespace hpx::execution::experimental {
         // Integral shape overload - passes integral directly to bulk
         template <typename F, typename S, typename... Ts>
             requires(std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return bulk(schedule(exec.sched_), shape,
+            return bulk(schedule(sched_), shape,
                 hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
         }
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
             using shape_element = hpx::traits::range_traits<S>::value_type;
             using result_type = hpx::util::detail::invoke_deferred_result_t<F,
@@ -191,7 +194,7 @@ namespace hpx::execution::experimental {
                 // stdexec::bulk requires integral shape and execution policy
                 using size_type = decltype(std::ranges::size(shape));
                 size_type const n = std::ranges::size(shape);
-                return bulk(schedule(exec.sched_), n,
+                return bulk(schedule(sched_), n,
                     [shape,
                         bound_f = hpx::bind_back(HPX_FORWARD(F, f),
                             HPX_FORWARD(Ts, ts)...)](size_type i) mutable {
@@ -230,7 +233,7 @@ namespace hpx::execution::experimental {
                 return continues_on(
                            just(HPX_MOVE(result_vector), shape,
                                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...),
-                           exec.sched_) |
+                           sched_) |
                     bulk(shape_size, HPX_MOVE(f_wrapper)) |
                     then(HPX_MOVE(get_result));
             }
@@ -239,40 +242,33 @@ namespace hpx::execution::experimental {
         // Integral shape overload - passes integral directly
         template <typename F, typename S, typename... Ts>
             requires(std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_sync_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            hpx::this_thread::experimental::sync_wait(
-                hpx::parallel::execution::bulk_async_execute(
-                    exec, HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
+            hpx::this_thread::experimental::sync_wait(bulk_async_execute(
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
         }
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_sync_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            hpx::this_thread::experimental::sync_wait(
-                hpx::parallel::execution::bulk_async_execute(
-                    exec, HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
+            hpx::this_thread::experimental::sync_wait(bulk_async_execute(
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
         }
 
         // Integral shape overload - passes integral directly to bulk
         template <typename F, typename S, typename Future, typename... Ts>
             requires(std::is_integral_v<S>)
-        friend auto tag_invoke(hpx::parallel::execution::bulk_then_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
+        auto bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
             auto pre_req =
                 when_all(keep_future(HPX_FORWARD(Future, predecessor)));
 
-            return continues_on(HPX_MOVE(pre_req), exec.sched_) |
+            return continues_on(HPX_MOVE(pre_req), sched_) |
                 bulk(shape,
                     hpx::bind_back(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
         }
@@ -280,9 +276,8 @@ namespace hpx::execution::experimental {
         // Range shape overload
         template <typename F, typename S, typename Future, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend auto tag_invoke(hpx::parallel::execution::bulk_then_execute_t,
-            explicit_scheduler_executor const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
+        auto bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
             using result_type =
                 parallel::execution::detail::then_bulk_function_result_t<F, S,
@@ -296,7 +291,7 @@ namespace hpx::execution::experimental {
 
             using size_type = decltype(std::ranges::size(shape));
             size_type const n = std::ranges::size(shape);
-            return continues_on(HPX_MOVE(pre_req), exec.sched_) |
+            return continues_on(HPX_MOVE(pre_req), sched_) |
                 bulk(n,
                     [shape,
                         bound_f = hpx::bind_back(
@@ -317,36 +312,8 @@ namespace hpx::execution::experimental {
     explicit explicit_scheduler_executor(BaseScheduler&& sched)
         -> explicit_scheduler_executor<std::decay_t<BaseScheduler>>;
 
-    // support all properties exposed by the wrapped scheduler
-    // clang-format off
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename BaseScheduler,
-        typename Property,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    // clang-format on
-    auto tag_invoke(Tag tag,
-        explicit_scheduler_executor<BaseScheduler> const& exec, Property&& prop)
-        -> decltype(explicit_scheduler_executor<BaseScheduler>(
-            std::declval<Tag>()(
-                std::declval<BaseScheduler>(), std::declval<Property>())))
-    {
-        return explicit_scheduler_executor<BaseScheduler>(
-            tag(exec.sched(), HPX_FORWARD(Property, prop)));
-    }
-
-    // clang-format off
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename BaseScheduler,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    // clang-format on
-    auto tag_invoke(
-        Tag tag, explicit_scheduler_executor<BaseScheduler> const& exec)
-        -> decltype(std::declval<Tag>()(std::declval<BaseScheduler>()))
-    {
-        return tag(exec.sched());
-    }
+    // Scheduling property CPOs (and processing_units_count) detect the public
+    // query() member functions directly, so no tag_invoke bridge is needed.
 }    // namespace hpx::execution::experimental
 
 namespace hpx::execution::experimental {

@@ -17,16 +17,20 @@ set(tests
     broadcast_post
     broadcast_sync
     channel_communicator
+    cross_collective_hierarchical
     fold
     global_spmd_block
+    hierarchical_helpers
     reduce_direct
     remote_latch
+    subtree_gather_scatter
 )
 if(HPX_WITH_NETWORKING)
   set(tests
       ${tests}
       all_gather_hierarchical
       all_reduce_hierarchical
+      all_to_all_hierarchical
       barrier_hierarchical
       broadcast_direct
       concurrent_collectives
@@ -48,6 +52,9 @@ if(HPX_WITH_NETWORKING)
   foreach(test ${tests})
     set(${test}_PARAMETERS LOCALITIES 2)
   endforeach()
+
+  # The flat-vs-tree comparison needs a real tree: num_sites > arity (= 2).
+  set(hierarchical_flat_fallback_PARAMETERS LOCALITIES 3)
 endif()
 foreach(test ${tests})
   set(sources ${test}.cpp)
