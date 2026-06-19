@@ -2736,8 +2736,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            hpx::ranges::subrange_t<Iter, Sent>>::type
+        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+            hpx::ranges::subrange_t<Iter, Sent>>
         tag_fallback_invoke(find_last_if_t, ExPolicy&& policy, Iter first,
             Sent last, Pred&& pred, Proj&& proj = Proj())
         {
