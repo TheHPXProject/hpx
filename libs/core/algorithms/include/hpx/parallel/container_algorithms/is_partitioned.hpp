@@ -297,9 +297,9 @@ namespace hpx::ranges {
             )
         // clang-format on
         friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            bool>::type
-        tag_fallback_invoke(hpx::ranges::is_partitioned_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Pred pred, Proj proj = Proj())
+            bool>::type tag_fallback_invoke(hpx::ranges::is_partitioned_t,
+            ExPolicy&& policy, FwdIter first, Sent last, Pred pred,
+            Proj proj = Proj())
         {
             return hpx::parallel::detail::is_partitioned<FwdIter, Sent>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(pred),

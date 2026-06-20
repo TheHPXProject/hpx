@@ -2824,17 +2824,21 @@ namespace hpx::ranges {
                     >::value_type>
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            find_last_if_t, Rng&& rng, Pred pred, Proj proj = Proj())
+        friend hpx::ranges::subrange_t<std::ranges::iterator_t<Rng>,
+            std::ranges::sentinel_t<Rng>> tag_fallback_invoke(find_last_if_t,
+            Rng&& rng, Pred pred, Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
             static_assert(std::bidirectional_iterator<iterator_type>,
                 "Requires at least bidirectional iterator.");
 
-            return hpx::parallel::detail::find_last_if<iterator_type>().call(
-                hpx::execution::seq, hpx::util::begin(rng), hpx::util::end(rng),
-                HPX_MOVE(pred), HPX_MOVE(proj));
+            return hpx::ranges::subrange_t<iterator_type,
+                std::ranges::sentinel_t<Rng>>(
+                hpx::parallel::detail::find_last_if<iterator_type>().call(
+                    hpx::execution::seq, hpx::util::begin(rng),
+                    hpx::util::end(rng), HPX_MOVE(pred), HPX_MOVE(proj)),
+                hpx::util::end(rng));
         }
     } find_last_if{};
 
