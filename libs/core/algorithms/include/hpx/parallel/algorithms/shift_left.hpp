@@ -116,7 +116,6 @@ namespace hpx {
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
@@ -140,14 +139,28 @@ namespace hpx::parallel {
     namespace detail {
 
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-            typename Sent>
+            typename Sent, typename Size>
         decltype(auto) shift_left_helper(
-            ExPolicy policy, FwdIter first, Sent last, FwdIter new_first)
+            ExPolicy policy, FwdIter first, Sent last, Size n)
         {
             constexpr bool has_scheduler_executor =
                 hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
             detail::reverse<FwdIter> r;
+
+            // Handle the [alg.shift] edge cases inside the implementation by
+            // clamping the reverse ranges, so the dispatch (parallel()) keeps a
+            // single homogeneous return type and no unique_any_sender is needed.
+            auto const dist =
+                static_cast<std::size_t>(detail::distance(first, last));
+            FwdIter const fin = std::next(first, dist);
+            bool const noop = static_cast<std::size_t>(n) >= dist;
+            // C++20 [alg.shift]: n==0 -> do nothing, return last;
+            //                    n>=dist -> do nothing, return first.
+            // Both degenerate cases collapse to empty-range reverses below.
+            FwdIter const rev1_begin = noop ? fin : std::next(first, n);
+            FwdIter const rev2_end = noop ? first : fin;
+            FwdIter const ret = noop ? first : std::next(first, dist - n);
 
             if constexpr (!has_scheduler_executor)
             {
@@ -162,16 +175,14 @@ namespace hpx::parallel {
                         f1.get();
 
                         hpx::future<FwdIter> f =
-                            r.call2(p, non_seq(), first, last);
+                            r.call2(p, non_seq(), first, rev2_end);
                         return f.then(
                             [=](hpx::future<FwdIter>&& fut) mutable -> FwdIter {
                                 fut.get();
-                                std::advance(
-                                    first, detail::distance(new_first, last));
-                                return first;
+                                return ret;
                             });
                     },
-                    r.call2(p, non_seq(), new_first, last));
+                    r.call2(p, non_seq(), rev1_begin, fin));
                 return result;
             }
             else
@@ -180,14 +191,17 @@ namespace hpx::parallel {
                 // primitives
                 namespace ex = hpx::execution::experimental;
 
-                return r.call(policy, new_first, last) |
+                // Both reverses use FwdIter-typed ends, so their sender types
+                // match and the pipeline stays homogeneous.
+                static_assert(
+                    std::is_same_v<decltype(r.call(policy, rev1_begin, fin)),
+                        decltype(r.call(policy, first, rev2_end))>);
+
+                return r.call(policy, rev1_begin, fin) |
                     ex::let_value([=](FwdIter /*unused*/) mutable {
-                        return r.call(policy, first, last);
+                        return r.call(policy, first, rev2_end);
                     }) |
-                    ex::then([=](FwdIter) mutable -> FwdIter {
-                        std::advance(first, detail::distance(new_first, last));
-                        return first;
-                    });
+                    ex::then([=](FwdIter) mutable -> FwdIter { return ret; });
             }
         }
 
@@ -246,45 +260,12 @@ namespace hpx::parallel {
             static decltype(auto) parallel(
                 ExPolicy&& policy, FwdIter2 first, Sent last, Size n)
             {
-                namespace ex = hpx::execution::experimental;
-                constexpr bool has_scheduler_executor =
-                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
-
-                auto const dist =
-                    static_cast<std::size_t>(detail::distance(first, last));
-                // C++20 [alg.shift]: if n is 0, do nothing and return last.
-                if (n == 0)
-                {
-                    auto result =
-                        parallel::util::detail::algorithm_result<ExPolicy,
-                            FwdIter2>::get(std::next(first, dist));
-                    if constexpr (has_scheduler_executor)
-                        return ex::unique_any_sender<FwdIter2>(
-                            HPX_MOVE(result));
-                    else
-                        return result;
-                }
-                // C++20 [alg.shift]: if n >= dist, do nothing and return first.
-                if (static_cast<std::size_t>(n) >= dist)
-                {
-                    auto result =
-                        parallel::util::detail::algorithm_result<ExPolicy,
-                            FwdIter2>::get(HPX_MOVE(first));
-                    if constexpr (has_scheduler_executor)
-                        return ex::unique_any_sender<FwdIter2>(
-                            HPX_MOVE(result));
-                    else
-                        return result;
-                }
-
-                auto result =
-                    util::detail::algorithm_result<ExPolicy, FwdIter2>::get(
-                        shift_left_helper(
-                            policy, first, last, std::next(first, n)));
-                if constexpr (has_scheduler_executor)
-                    return ex::unique_any_sender<FwdIter2>(HPX_MOVE(result));
-                else
-                    return result;
+                // Edge cases (n==0, n>=dist) are handled inside
+                // shift_left_helper, so this dispatch keeps a single return
+                // type and needs no type erasure.
+                return util::detail::algorithm_result<ExPolicy, FwdIter2>::get(
+                    shift_left_helper(
+                        HPX_FORWARD(ExPolicy, policy), first, last, n));
             }
         };
         /// \endcond
