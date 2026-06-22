@@ -119,6 +119,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/reverse.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -151,9 +152,9 @@ namespace hpx::parallel {
             // Handle the [alg.shift] edge cases inside the implementation by
             // clamping the reverse ranges, so the dispatch (parallel()) keeps a
             // single homogeneous return type and no unique_any_sender is needed.
-            auto const dist =
-                static_cast<std::size_t>(detail::distance(first, last));
-            FwdIter const fin = std::next(first, dist);
+            auto fin = first;
+            auto const dist = static_cast<std::size_t>(
+                detail::advance_and_get_distance(fin, last));
             bool const noop = static_cast<std::size_t>(n) >= dist;
             // C++20 [alg.shift]: n==0 -> do nothing, return last;
             //                    n>=dist -> do nothing, return first.
