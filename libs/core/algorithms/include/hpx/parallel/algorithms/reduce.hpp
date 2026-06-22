@@ -469,7 +469,7 @@ namespace hpx::execution::experimental {
 }    // namespace hpx::execution::experimental
 
 namespace hpx::parallel::detail {
-
+    /// \cond NOINTERNAL
     // Helper function to reduce a partition without requiring an init value.
     template <typename ExPolicy, typename FwdIterB, typename T, typename Reduce>
     T reduce_partition(
@@ -570,6 +570,10 @@ namespace hpx::parallel::detail {
                 }
 
                 auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                    if (part_size == 1)
+                    {
+                        return *part_begin;
+                    }
                     return reduce_partition<ExPolicy, FwdIterB, T>(
                         part_begin, part_size, r);
                 };
@@ -595,6 +599,7 @@ namespace hpx::parallel::detail {
             }
         }
     };
+    /// \endcond
 }    // namespace hpx::parallel::detail
 
 namespace hpx {

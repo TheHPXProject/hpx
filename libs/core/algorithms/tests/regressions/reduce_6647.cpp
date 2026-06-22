@@ -75,6 +75,16 @@ int hpx_main()
         test_reduce_case(v, {1, i});
     }
 
+    // Larger inputs that force multiple partitions on any machine and
+    // exercise the num_elements % chunk_size == 1 edge case in
+    // reduce_executor_parameters.
+    for (int n : {997, 1000, 1024, 4096, 10000})
+    {
+        std::vector<int> v(n);
+        std::iota(v.begin(), v.end(), 1);
+        test_reduce_case(v, {1, n});
+    }
+
     return hpx::local::finalize();
 }
 

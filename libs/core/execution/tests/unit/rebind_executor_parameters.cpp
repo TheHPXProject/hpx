@@ -1063,6 +1063,30 @@ void verify_single_mark_begin_dispatch()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// test mark_begin_execution dispatching order with inner param providing marker
+void verify_single_mark_begin_dispatch_with_inner_marker()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    std::atomic<int> wrapping_wrapped_count(0);
+    std::atomic<int> wrapping_only_count(0);
+
+    // Use base_execution_markers as inner -- it provides mark_begin_execution
+    auto params = join_executor_parameters(base_execution_markers());
+    auto bound_params = rebind_executor_parameters(params,
+        test_dual_mark_begin_execution(
+            wrapping_wrapped_count, wrapping_only_count));
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+
+    parameters_test(policy);
+
+    // The wrapping-aware (3-arg) overload must be preferred
+    HPX_TEST_EQ(wrapping_wrapped_count.load(), 1);
+    HPX_TEST_EQ(wrapping_only_count.load(), 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // test mark_begin_execution with non-wrapping overload only
 struct test_non_wrapping_mark_begin_execution
 {
@@ -1121,6 +1145,7 @@ int hpx_main()
     replace_collect_execution_parameters();
     replace_adjust_chunk_size_and_max_chunks();
     verify_single_mark_begin_dispatch();
+    verify_single_mark_begin_dispatch_with_inner_marker();
     verify_non_wrapping_mark_begin_dispatch();
 
     return hpx::local::finalize();
