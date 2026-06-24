@@ -106,7 +106,7 @@ if(HPX_WITH_COMPILE_ONLY_TESTS)
 endif()
 
 # ##############################################################################
-set(subdirs shared_mutex)
+set(subdirs shared_mutex range_mutex)
 
 # add sub directories
 foreach(subdir ${subdirs})
