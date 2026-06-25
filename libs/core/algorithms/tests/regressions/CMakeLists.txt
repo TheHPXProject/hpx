@@ -22,6 +22,7 @@ set(tests
     num_cores
     prefetching_iterator
     reduce_3641
+    reduce_6647
     scan_different_inits
     scan_non_commutative
     scan_shortlength

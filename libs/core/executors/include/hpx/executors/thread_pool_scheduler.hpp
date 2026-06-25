@@ -180,7 +180,14 @@ namespace hpx::execution::experimental {
             thread_pool_policy_scheduler const& lhs,
             thread_pool_policy_scheduler const& rhs) noexcept
         {
-            return lhs.pool_ == rhs.pool_ && lhs.policy_ == rhs.policy_;
+            if constexpr (requires { lhs.policy_ == rhs.policy_; })
+            {
+                return lhs.pool_ == rhs.pool_ && lhs.policy_ == rhs.policy_;
+            }
+            else
+            {
+                return lhs.pool_ == rhs.pool_;
+            }
         }
 
         friend constexpr bool operator!=(

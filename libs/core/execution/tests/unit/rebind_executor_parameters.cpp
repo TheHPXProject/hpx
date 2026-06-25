@@ -478,6 +478,28 @@ struct test_replaced_execution_markers
     std::atomic<bool>* invoked_end_execution;
 };
 
+struct test_wrapping_replaced_execution_markers
+{
+    explicit test_wrapping_replaced_execution_markers(
+        std::atomic<bool>& invoked_begin) noexcept
+      : invoked_begin(&invoked_begin)
+    {
+    }
+
+    template <typename InnerParams, typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_wrapping_replaced_execution_markers self, InnerParams&& inner,
+        Executor&& exec) noexcept
+    {
+        hpx::execution::experimental::mark_begin_execution(
+            HPX_FORWARD(InnerParams, inner), HPX_FORWARD(Executor, exec));
+        *self.invoked_begin = true;
+    }
+
+    std::atomic<bool>* invoked_begin;
+};
+
 namespace hpx::execution::experimental {
 
     template <>
@@ -487,6 +509,12 @@ namespace hpx::execution::experimental {
 
     template <>
     struct is_executor_parameters<test_replaced_execution_markers>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_executor_parameters<test_wrapping_replaced_execution_markers>
       : std::true_type
     {
     };
@@ -575,6 +603,26 @@ void replace_execution_markers()
         HPX_TEST(invoked_begin);
         HPX_TEST(invoked_end);
         HPX_TEST(invoked_end_execution);
+    }
+
+    // test wrapped mark_begin_execution
+    {
+        std::atomic<bool> invoked_replaced(false);
+        std::atomic<bool> invoked_inner_replaced(false);
+        std::atomic<bool> invoked_inner_end(false);
+        std::atomic<bool> invoked_inner_end_execution(false);
+
+        auto params = join_executor_parameters(
+            test_replaced_execution_markers(invoked_inner_replaced,
+                invoked_inner_end, invoked_inner_end_execution));
+        auto rebound_params = rebind_executor_parameters(
+            params, test_wrapping_replaced_execution_markers(invoked_replaced));
+        auto policy =
+            create_rebound_policy(hpx::execution::par, rebound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+        HPX_TEST(invoked_inner_replaced);
     }
 }
 
@@ -806,6 +854,287 @@ void replace_collect_execution_parameters()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// test parameters object with adjust_chunk_size_and_max_chunks
+struct test_replaced_adjust_chunk_size_and_max_chunks
+{
+    explicit test_replaced_adjust_chunk_size_and_max_chunks(
+        std::atomic<bool>& invoked) noexcept
+      : invoked(&invoked)
+    {
+    }
+
+    template <typename Executor>
+    friend std::pair<std::size_t, std::size_t> tag_override_invoke(
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks_t,
+        test_replaced_adjust_chunk_size_and_max_chunks& self, Executor&&,
+        std::size_t num_elements, std::size_t num_cores, std::size_t num_chunks,
+        std::size_t chunk_size) noexcept
+    {
+        *self.invoked = true;
+
+        if (chunk_size == 0)
+        {
+            chunk_size = (num_elements + num_cores - 1) / num_cores;
+        }
+
+        if (chunk_size == 0)
+        {
+            chunk_size = 1;
+        }
+
+        if (num_chunks == 0)
+        {
+            num_chunks = (num_elements + chunk_size - 1) / chunk_size;
+        }
+
+        return {chunk_size, num_chunks};
+    }
+
+    std::atomic<bool>* invoked;
+};
+
+struct test_wrapping_adjust_chunk_size_and_max_chunks
+{
+    explicit test_wrapping_adjust_chunk_size_and_max_chunks(
+        std::atomic<bool>& invoked) noexcept
+      : invoked(&invoked)
+    {
+    }
+
+    template <typename InnerParams, typename Executor>
+    friend std::pair<std::size_t, std::size_t> tag_override_invoke(
+        hpx::execution::experimental::adjust_chunk_size_and_max_chunks_t,
+        test_wrapping_adjust_chunk_size_and_max_chunks& self,
+        InnerParams&& inner, Executor&& exec, std::size_t num_elements,
+        std::size_t num_cores, std::size_t num_chunks, std::size_t chunk_size)
+    {
+        auto result =
+            hpx::execution::experimental::adjust_chunk_size_and_max_chunks(
+                HPX_FORWARD(InnerParams, inner), HPX_FORWARD(Executor, exec),
+                num_elements, num_cores, num_chunks, chunk_size);
+
+        *self.invoked = true;
+        return result;
+    }
+
+    std::atomic<bool>* invoked;
+};
+
+namespace hpx::execution::experimental {
+
+    template <>
+    struct is_executor_parameters<
+        test_replaced_adjust_chunk_size_and_max_chunks> : std::true_type
+    {
+    };
+
+    template <>
+    struct is_executor_parameters<
+        test_wrapping_adjust_chunk_size_and_max_chunks> : std::true_type
+    {
+    };
+}    // namespace hpx::execution::experimental
+
+void replace_adjust_chunk_size_and_max_chunks()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    // replace chunk adjustment with another parameters object exposing it
+    {
+        std::atomic<bool> invoked_replaced(false);
+
+        auto params = join_executor_parameters(
+            hpx::execution::experimental::static_chunk_size());
+        auto bound_params = rebind_executor_parameters(params,
+            test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+    }
+
+    // replace a parameters object not exposing chunk adjustment
+    {
+        std::atomic<bool> invoked_replaced(false);
+
+        auto params = join_executor_parameters(
+            hpx::execution::experimental::max_num_chunks());
+        auto bound_params = rebind_executor_parameters(params,
+            test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+    }
+
+    // replace chunk adjustment with a parameters object not exposing it
+    {
+        std::atomic<bool> invoked_replaced(false);
+
+        auto params = join_executor_parameters(
+            test_replaced_adjust_chunk_size_and_max_chunks(invoked_replaced));
+        auto bound_params = rebind_executor_parameters(
+            params, hpx::execution::experimental::num_cores(4));
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+    }
+
+    // test wrapped chunk adjustment
+    {
+        std::atomic<bool> invoked_replaced(false);
+        std::atomic<bool> invoked_inner_replaced(false);
+
+        auto params = join_executor_parameters(
+            test_replaced_adjust_chunk_size_and_max_chunks(
+                invoked_inner_replaced));
+        auto bound_params = rebind_executor_parameters(params,
+            test_wrapping_adjust_chunk_size_and_max_chunks(invoked_replaced));
+        auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+        parameters_test(policy);
+
+        HPX_TEST(invoked_replaced);
+        HPX_TEST(invoked_inner_replaced);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// test mark_begin_execution dispatching order
+struct test_dual_mark_begin_execution
+{
+    explicit test_dual_mark_begin_execution(std::atomic<int>& wrapping_wrapped,
+        std::atomic<int>& wrapping_only) noexcept
+      : wrapping_wrapped(&wrapping_wrapped)
+      , wrapping_only(&wrapping_only)
+    {
+    }
+
+    template <typename InnerParams, typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_dual_mark_begin_execution const& self, InnerParams&&,
+        Executor&&) noexcept
+    {
+        ++*self.wrapping_wrapped;
+    }
+
+    template <typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_dual_mark_begin_execution const& self, Executor&&) noexcept
+    {
+        ++*self.wrapping_only;
+    }
+
+    std::atomic<int>* wrapping_wrapped;
+    std::atomic<int>* wrapping_only;
+};
+
+namespace hpx::execution::experimental {
+
+    template <>
+    struct is_executor_parameters<test_dual_mark_begin_execution>
+      : std::true_type
+    {
+    };
+}    // namespace hpx::execution::experimental
+
+void verify_single_mark_begin_dispatch()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    std::atomic<int> wrapping_wrapped_count(0);
+    std::atomic<int> wrapping_only_count(0);
+
+    auto params =
+        join_executor_parameters(hpx::execution::experimental::num_cores(4));
+    auto bound_params = rebind_executor_parameters(params,
+        test_dual_mark_begin_execution(
+            wrapping_wrapped_count, wrapping_only_count));
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+
+    parameters_test(policy);
+
+    HPX_TEST_EQ(wrapping_wrapped_count.load(), 1);
+    HPX_TEST_EQ(wrapping_only_count.load(), 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// test mark_begin_execution dispatching order with inner param providing marker
+void verify_single_mark_begin_dispatch_with_inner_marker()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    std::atomic<int> wrapping_wrapped_count(0);
+    std::atomic<int> wrapping_only_count(0);
+
+    // Use base_execution_markers as inner -- it provides mark_begin_execution
+    auto params = join_executor_parameters(base_execution_markers());
+    auto bound_params = rebind_executor_parameters(params,
+        test_dual_mark_begin_execution(
+            wrapping_wrapped_count, wrapping_only_count));
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+
+    parameters_test(policy);
+
+    // The wrapping-aware (3-arg) overload must be preferred
+    HPX_TEST_EQ(wrapping_wrapped_count.load(), 1);
+    HPX_TEST_EQ(wrapping_only_count.load(), 0);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// test mark_begin_execution with non-wrapping overload only
+struct test_non_wrapping_mark_begin_execution
+{
+    explicit test_non_wrapping_mark_begin_execution(
+        std::atomic<int>& wrapping_only) noexcept
+      : wrapping_only(&wrapping_only)
+    {
+    }
+
+    template <typename Executor>
+    friend void tag_override_invoke(
+        hpx::execution::experimental::mark_begin_execution_t,
+        test_non_wrapping_mark_begin_execution const& self, Executor&&) noexcept
+    {
+        ++*self.wrapping_only;
+    }
+
+    std::atomic<int>* wrapping_only;
+};
+
+namespace hpx::execution::experimental {
+
+    template <>
+    struct is_executor_parameters<test_non_wrapping_mark_begin_execution>
+      : std::true_type
+    {
+    };
+}    // namespace hpx::execution::experimental
+
+void verify_non_wrapping_mark_begin_dispatch()
+{
+    using namespace hpx::execution;
+    using namespace hpx::execution::experimental;
+
+    std::atomic<int> wrapping_only_count(0);
+
+    auto params =
+        join_executor_parameters(hpx::execution::experimental::num_cores(4));
+    auto bound_params = rebind_executor_parameters(
+        params, test_non_wrapping_mark_begin_execution(wrapping_only_count));
+    auto policy = create_rebound_policy(hpx::execution::par, bound_params);
+
+    parameters_test(policy);
+
+    HPX_TEST_EQ(wrapping_only_count.load(), 1);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     replace_chunk_size();
@@ -814,6 +1143,10 @@ int hpx_main()
     replace_execution_markers();
     replace_processing_units_count();
     replace_collect_execution_parameters();
+    replace_adjust_chunk_size_and_max_chunks();
+    verify_single_mark_begin_dispatch();
+    verify_single_mark_begin_dispatch_with_inner_marker();
+    verify_non_wrapping_mark_begin_dispatch();
 
     return hpx::local::finalize();
 }
