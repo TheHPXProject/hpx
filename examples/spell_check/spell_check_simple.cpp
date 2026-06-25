@@ -10,6 +10,9 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/actions.hpp>
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/actions_base/reflect_action.hpp>
+#endif
 #include <hpx/include/async.hpp>
 #include <hpx/include/lcos.hpp>
 #include <hpx/include/runtime.hpp>
@@ -25,7 +28,11 @@ std::vector<std::string> words;
 
 std::string search(int start, int end, std::string const& word);
 
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+HPX_ACTION(search, search_action)
+#else
 HPX_PLAIN_ACTION(search, search_action)
+#endif
 
 std::string search(int start, int end, std::string const& word)
 {
