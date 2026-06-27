@@ -65,14 +65,12 @@ namespace hpx::execution::experimental {
         using has_variable_chunk_size = std::true_type;
 
         template <typename Executor>
-        friend constexpr std::size_t tag_override_invoke(
-            hpx::execution::experimental::get_chunk_size_t,
-            guided_chunk_size const& this_, Executor&& /* exec */,
+        constexpr std::size_t get_chunk_size(Executor&& /* exec */,
             hpx::chrono::steady_duration const&, std::size_t const cores,
-            std::size_t const num_tasks) noexcept
+            std::size_t const num_tasks) const noexcept
         {
-            return (std::max) (this_.min_chunk_size_,
-                (num_tasks + cores - 1) / cores);
+            return (
+                std::max) (min_chunk_size_, (num_tasks + cores - 1) / cores);
         }
         /// \endcond
 

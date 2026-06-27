@@ -11,9 +11,9 @@
 #include <hpx/chrono.hpp>
 #include <hpx/format.hpp>
 #include <hpx/init.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/program_options.hpp>
 
 #include <algorithm>
@@ -100,11 +100,8 @@ struct compute_chunk_size
     //}
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::get_chunk_size_t,
-        compute_chunk_size& this_, Executor&,
-        hpx::chrono::steady_duration const&, std::size_t const cores,
-        std::size_t const num_iterations)
+    std::size_t get_chunk_size(Executor&&, hpx::chrono::steady_duration const&,
+        std::size_t const cores, std::size_t const num_iterations) const
     {
         if (cores == 1)
         {
@@ -115,7 +112,7 @@ struct compute_chunk_size
         // number of chunks the sizes of which are equal (except for the last
         // chunk, which may be smaller by not more than the number of chunks in
         // terms of elements).
-        std::size_t const num_chunks = this_.times_cores_ * cores;
+        std::size_t const num_chunks = times_cores_ * cores;
         std::size_t chunk_size = (num_iterations + num_chunks - 1) / num_chunks;
 
         // we should not consider more chunks than we have elements
@@ -143,9 +140,7 @@ struct hpx::execution::experimental::is_executor_parameters<compute_chunk_size>
 struct enable_fast_idle_mode
 {
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_begin_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);
@@ -162,9 +157,7 @@ struct enable_fast_idle_mode
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        enable_fast_idle_mode, Executor&& exec)
+    void mark_end_execution(Executor&& exec)
     {
         auto const pu_mask =
             hpx::execution::experimental::get_processing_units_mask(exec);
@@ -292,7 +285,7 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 
     std::cout << "--- run_merge_benchmark_par ---" << std::endl;
 
-    HPX_ITT_RESUME();
+    HPX_TRACING_RESUME();
 
     //hpx::threads::thread_schedule_hint hint(
     //    hpx::threads::thread_sharing_hint::do_not_share_function);
@@ -305,13 +298,13 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
     double const time_par = run_merge_benchmark_hpx(
         test_count, policy.with(ccs), first1, last1, first2, last2, dest);
 
-    HPX_ITT_PAUSE();
+    HPX_TRACING_PAUSE();
 
     std::cout << "--- run_merge_benchmark_par_stackless ---" << std::endl;
 
     hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    HPX_ITT_RESUME();
+    HPX_TRACING_RESUME();
 
     double time_par_stackless = 0;
     {
@@ -322,14 +315,14 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
             stackless_policy.with(ccs), first1, last1, first2, last2, dest);
     }
 
-    HPX_ITT_PAUSE();
+    HPX_TRACING_PAUSE();
 
     std::cout << "--- run_merge_benchmark_par_stackless_fast_idle ---"
               << std::endl;
 
     hpx::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    HPX_ITT_RESUME();
+    HPX_TRACING_RESUME();
 
     double time_par_stackless_fast_idle = 0;
     {
@@ -342,7 +335,7 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
             dest);
     }
 
-    HPX_ITT_PAUSE();
+    HPX_TRACING_PAUSE();
 
     std::cout << "--- run_merge_benchmark_par_fork_join ---" << std::endl;
     double time_par_fork_join = 0;
@@ -377,7 +370,7 @@ void run_benchmark(std::size_t vector_size1, std::size_t vector_size2,
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    HPX_ITT_PAUSE();
+    HPX_TRACING_PAUSE();
 
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -31,12 +31,15 @@ set(distribution_policies_compat_headers
 )
 # cmake-format: on
 
-set(distribution_policies_sources binpacking_distribution_policy.cpp)
+set(distribution_policies_sources binpacking_distribution_policy.cpp
+                                  distribution_policies.cpp
+)
 
 include(HPX_AddModule)
 add_hpx_module(
   full distribution_policies
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${distribution_policies_sources}
   HEADERS ${distribution_policies_headers}
   COMPAT_HEADERS ${distribution_policies_compat_headers}

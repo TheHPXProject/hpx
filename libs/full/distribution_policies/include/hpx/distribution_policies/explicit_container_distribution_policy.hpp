@@ -1,4 +1,4 @@
-//  Copyright (c) 2014-2024 Hartmut Kaiser
+//  Copyright (c) 2014-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,11 +7,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/distribution_policies/default_distribution_policy.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/serialization.hpp>
+
+#include <hpx/distribution_policies/default_distribution_policy.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -25,7 +26,7 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // This class specifies the block chunking policy parameters to use for the
     // partitioning of the data in a hpx::partitioned_vector
-    struct explicit_container_distribution_policy
+    HPX_CXX_EXPORT struct explicit_container_distribution_policy
       : components::default_distribution_policy
     {
         explicit_container_distribution_policy() = default;
@@ -102,8 +103,9 @@ namespace hpx {
         std::vector<std::size_t> sizes_;
     };
 
-    static explicit_container_distribution_policy const
-        explicit_container_layout{};
+    HPX_CXX_EXPORT
+    HPX_EXPORT extern explicit_container_distribution_policy const
+        explicit_container_layout;
 
     ///////////////////////////////////////////////////////////////////////////
     namespace traits {

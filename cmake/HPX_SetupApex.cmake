@@ -126,6 +126,5 @@ if(HPX_WITH_APEX AND NOT TARGET APEX::apex)
       ITTNotify::ittnotify SYSTEM INTERFACE ${Ittnotify_SOURCE_DIR}
     )
     target_link_libraries(APEX::apex INTERFACE ITTNotify::ittnotify)
-    hpx_add_config_define(HPX_HAVE_ITTNOTIFY 1)
   endif()
 endif()

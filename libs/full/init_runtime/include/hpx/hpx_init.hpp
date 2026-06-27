@@ -1,5 +1,5 @@
 //  Copyright (c)      2018 Mikael Simberg
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2010-2011 Phillip LeBlanc, Dylan Stark
 //  Copyright (c)      2011 Bryce Lelbach
 //
@@ -12,14 +12,15 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_finalize.hpp>
-#include <hpx/hpx_init_params.hpp>
-#include <hpx/hpx_main_winsocket.hpp>
-#include <hpx/hpx_suspend.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
+#include <hpx/hpx_finalize.hpp>
+#include <hpx/hpx_init_params.hpp>
+#include <hpx/hpx_suspend.hpp>
+#include <hpx/hpx_user_main_config.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -190,10 +191,10 @@ namespace hpx {
     ///                     command line options as described in the section
     ///                     'HPX Command Line Options'.
 #if !defined(HPX_HAVE_STATIC_LINKING)
-    inline
+    inline int init(init_params const& params = init_params());
+#else
+    int init(init_params const& params = init_params());
 #endif
-        int
-        init(init_params const& params = init_params());
 }    // namespace hpx
 
 #if !defined(DOXYGEN)
@@ -201,6 +202,6 @@ namespace hpx {
 // Pull in the implementation of the inlined hpx::init functions if we're not
 // compiling the core HPX library.
 #if !defined(HPX_EXPORTS)
-#include <hpx/hpx_init_impl.hpp>
+#include <hpx/init_runtime/init_impl.hpp>
 #endif
 #endif

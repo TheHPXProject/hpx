@@ -99,6 +99,7 @@ namespace hpx { namespace experimental {
 
 #include <hpx/config.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/sort.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
 
@@ -142,9 +143,9 @@ namespace hpx::experimental {
         ValueIter value_first, Compare comp = Compare())
     {
 #if !defined(HPX_HAVE_TUPLE_RVALUE_SWAP)
-        static_assert(sizeof(KeyIter) == 0,    // always false
-            "sort_by_key is not supported unless HPX_HAVE_TUPLE_RVALUE_SWAP "
-            "is defined");
+        static_assert(hpx::util::detail::always_false<KeyIter>::value,
+            "sort_by_key requires HPX_HAVE_TUPLE_RVALUE_SWAP. "
+            "Enable tuple rvalue swap support to use this algorithm.");
 #else
         static_assert(std::random_access_iterator<KeyIter>,
             "Requires a random access iterator.");
@@ -152,7 +153,8 @@ namespace hpx::experimental {
             "Requires a random access iterator.");
 
         ValueIter value_last = value_first;
-        std::advance(value_last, std::distance(key_first, key_last));
+        std::advance(
+            value_last, hpx::parallel::detail::distance(key_first, key_last));
 
         using iterator_type = hpx::util::zip_iterator<KeyIter, ValueIter>;
 

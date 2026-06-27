@@ -61,7 +61,7 @@ namespace hpx::util {
 
         [[nodiscard]] HPX_HOST_DEVICE constexpr std::ptrdiff_t size() const
         {
-            return std::distance(_iterator, _sentinel);
+            return std::ranges::distance(_iterator, _sentinel);
         }
 
         [[nodiscard]] HPX_HOST_DEVICE constexpr bool empty() const
@@ -127,5 +127,4 @@ namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT template <typename I, typename S = I>
     using subrange_t = hpx::util::iterator_range<I, S>;
-}
-// namespace hpx::ranges
+}    // namespace hpx::ranges

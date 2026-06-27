@@ -44,6 +44,34 @@ below:
 
       $ spack install hpx
 
+#. **Conan**
+
+   You can also use the `Conan <https://conan.io/>`_ package manager to build
+   and use |hpx| in your projects. First, export the |hpx| recipe from the |hpx|
+   repository to your local Conan cache:
+
+   .. code-block:: shell-session
+
+      $ git clone https://github.com/TheHPXProject/hpx.git
+      $ cd hpx
+      $ conan create . --build=missing
+
+   This builds |hpx| and makes it available in your local Conan cache. You can
+   then use it in your Conan-based projects by adding it to your ``conanfile.txt``:
+
+   .. code-block:: ini
+
+      [requires]
+      hpx/2.0.0
+
+      [generators]
+      CMakeDeps
+      CMakeToolchain
+
+   Then use ``find_package(HPX REQUIRED)`` in your ``CMakeLists.txt`` as usual.
+   Conan will automatically handle building |hpx| with your chosen configuration
+   options and provide the necessary CMake integration files.
+
 #. **Fedora**
 
    Installation can be done with

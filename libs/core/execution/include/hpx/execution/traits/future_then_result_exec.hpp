@@ -30,8 +30,7 @@ namespace hpx::traits {
             using type = typename continuation_not_callable<Future, F>::type;
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Future,
-            typename F>
+        template <typename Executor, typename Future, typename F>
         struct future_then_executor_result<Executor, Future, F,
             std::void_t<hpx::util::invoke_result_t<F&, Future>>>
         {

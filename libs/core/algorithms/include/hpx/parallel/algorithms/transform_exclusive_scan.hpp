@@ -296,7 +296,7 @@ namespace hpx::parallel {
                     FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
                     *dst++ = val;
 
-                    util::loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<std::decay_t<ExPolicy>>(
                         dst, part_size - 1, [&op, &val](FwdIter2 it) -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });

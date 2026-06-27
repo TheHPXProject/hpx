@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2024 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -63,6 +63,9 @@ namespace examples::server {
             }
             ~reset_id()
             {
+                auto const mtx = outer_.mtx_;
+                std::lock_guard<hpx::mutex> l(*mtx);
+
                 [[maybe_unused]] hpx::thread::id const old_value = outer_.id_;
                 outer_.id_ = hpx::thread::id();
                 HPX_ASSERT(old_value != hpx::thread::id());
@@ -104,11 +107,15 @@ namespace examples::server {
             });
 
             auto const mtx = mtx_;
-            std::unique_lock<hpx::mutex> l(*mtx);
-            [[maybe_unused]] hpx::util::ignore_while_checking il(&l);
 
-            HPX_ASSERT(id_ != hpx::thread::id());
-            hpx::thread::interrupt(id_);
+            std::unique_lock<hpx::mutex> l(*mtx);
+            auto const id = id_;
+
+            if (id != hpx::thread::id())
+            {
+                l.unlock();
+                hpx::thread::interrupt(id);
+            }
         }
 
         HPX_DEFINE_COMPONENT_ACTION(cancelable_action, do_it, do_it_action)

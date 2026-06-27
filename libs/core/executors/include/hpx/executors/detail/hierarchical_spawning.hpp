@@ -43,7 +43,7 @@ namespace hpx::parallel::execution::detail {
         HPX_ASSERT(pool);
 
         using result_type = std::vector<
-            hpx::future<typename detail::bulk_function_result_t<F, S, Ts...>>>;
+            hpx::future<detail::bulk_function_result_t<F, S, Ts...>>>;
 
         result_type results;
         std::size_t const size = hpx::util::size(shape);
@@ -60,9 +60,10 @@ namespace hpx::parallel::execution::detail {
             std::size_t const part_end = ((t + 1) * size) / num_threads;
             std::size_t const part_size = part_end - part_begin;
 
-            auto async_policy = hpx::execution::experimental::with_hint(policy,
-                threads::thread_schedule_hint{
-                    static_cast<std::int16_t>(first_thread + t)});
+            auto hint = hpx::execution::experimental::get_hint(policy);
+            hint.schedule_hint(static_cast<std::int16_t>(first_thread + t));
+            auto async_policy =
+                hpx::execution::experimental::with_hint(policy, hint);
 
             if (hierarchical_threshold != 0 &&
                 part_size > hierarchical_threshold)
@@ -152,10 +153,13 @@ namespace hpx::parallel::execution::detail {
                 auto it = std::begin(shape);
                 for (std::size_t t = 0; t != num_threads; ++t)
                 {
+                    auto inner_hint =
+                        hpx::execution::experimental::get_hint(policy);
+                    inner_hint.schedule_hint(
+                        static_cast<std::int16_t>(first_thread + t));
                     auto inner_post_policy =
-                        hpx::execution::experimental::with_hint(policy,
-                            threads::thread_schedule_hint{
-                                static_cast<std::int16_t>(first_thread + t)});
+                        hpx::execution::experimental::with_hint(
+                            policy, inner_hint);
 
                     std::size_t const end = ((t + 1) * size) / num_threads;
                     std::size_t const part_size = end - begin;

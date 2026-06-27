@@ -14,8 +14,8 @@
 #include <hpx/functional/detail/vtable/vtable.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <cstring>
@@ -145,12 +145,14 @@ namespace hpx::util::detail {
 #endif
     }
 
-    util::itt::string_handle function_base::get_function_annotation_itt() const
+    hpx::tracing::annotation_handle
+    function_base::get_function_annotation_tracing() const
     {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-        return vptr->get_function_annotation_itt(object);
+#if defined(HPX_HAVE_THREAD_DESCRIPTION)
+        return vptr->get_function_annotation_tracing(object);
 #else
-        return util::itt::string_handle{};
+        static auto sh = hpx::tracing::create_annotation_handle("function");
+        return sh;
 #endif
     }
 }    // namespace hpx::util::detail

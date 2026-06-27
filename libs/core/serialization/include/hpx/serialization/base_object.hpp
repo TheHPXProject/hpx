@@ -1,6 +1,7 @@
 //  Copyright (c) 2014 Thomas Heller
 //  Copyright (c) 2015 Anton Bikineev
 //  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Ujjwal Shekhar
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,6 +11,8 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 #include <hpx/serialization/access.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/serialize.hpp>
@@ -17,7 +20,32 @@
 
 #include <type_traits>
 
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <bit>
+#include <cstddef>
+#include <memory>
+#include <meta>
+#include <optional>
+#endif
+
 namespace hpx::serialization {
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+    namespace detail {
+
+        template <typename MemberType, typename T>
+        constexpr decltype(auto) at_offset(T& base, std::size_t offset) noexcept
+        {
+            using Type = std::conditional_t<std::is_const_v<T>,
+                MemberType const, MemberType>;
+
+            auto base_addr = std::bit_cast<std::byte*>(std::addressof(base));
+            auto member_ptr = std::bit_cast<Type*>(base_addr + offset);
+
+            return *member_ptr;
+        }
+    }    // namespace detail
+#endif
 
     HPX_CXX_CORE_EXPORT template <typename Derived, typename Base,
         typename Enable = void>
@@ -32,14 +60,38 @@ namespace hpx::serialization {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+            static constexpr std::optional<std::size_t> offset =
+                []() consteval -> std::optional<std::size_t> {
+                constexpr auto ctx = std::meta::access_context::unchecked();
+
+                for (auto b : std::meta::bases_of(^^Derived, ctx))
+                {
+                    if (std::meta::type_of(b) == ^^Base)
+                    {
+                        return static_cast<std::size_t>(
+                            std::meta::offset_of(b).bytes);
+                    }
+                }
+                return std::nullopt;
+            }();
+
+            static_assert(offset.has_value(),
+                "Base class not found in derived class's base list");
+
+            access::serialize(
+                ar, detail::at_offset<Base>(d_, offset.value()), 0);
+#else
+            // legacy path
             access::serialize(ar,
                 static_cast<Base&>(const_cast<std::decay_t<Derived>&>(d_)), 0);
+#endif
         }
     };
 
     // we need another specialization to explicitly specify non-virtual calls of
     // virtual functions in intrusively serialized base classes.
-    HPX_CXX_CORE_EXPORT template <typename Derived, typename Base>
+    template <typename Derived, typename Base>
     struct base_object_type<Derived, Base,
         std::enable_if_t<hpx::traits::is_intrusive_polymorphic_v<Derived>>>
     {

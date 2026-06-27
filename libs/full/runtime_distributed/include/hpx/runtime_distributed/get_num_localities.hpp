@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -10,8 +10,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/component_type.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/runtime_local.hpp>
@@ -35,7 +35,7 @@ namespace hpx {
     ///           from an HPX-thread. It will return 0 otherwise.
     ///
     /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
-    HPX_EXPORT hpx::future<std::uint32_t> get_num_localities(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future<std::uint32_t> get_num_localities(
         components::component_type t);
 
     /// \brief Synchronously return the number of localities which are
@@ -55,6 +55,7 @@ namespace hpx {
     ///           from an HPX-thread. It will return 0 otherwise.
     ///
     /// \see      \a hpx::find_all_localities, \a hpx::get_num_localities
-    HPX_EXPORT std::uint32_t get_num_localities(launch::sync_policy,
-        components::component_type t, error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT std::uint32_t get_num_localities(
+        launch::sync_policy, components::component_type t,
+        error_code& ec = throws);
 }    // namespace hpx

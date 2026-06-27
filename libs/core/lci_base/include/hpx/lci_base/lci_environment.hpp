@@ -59,7 +59,7 @@ namespace hpx::util {
         static LCT_log_ctx_t log_ctx;
 #endif
         static void log(
-            log_level_t level, const char* tag, const char* format, ...);
+            log_level_t level, char const* tag, char const* format, ...);
 
         // performance counter
         // clang-format off

@@ -1,4 +1,4 @@
-//  Copyright (c) 2014-2024 Hartmut Kaiser
+//  Copyright (c) 2014-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,21 +9,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_colocated/async_colocated_callback.hpp>
-#include <hpx/async_colocated/post_colocated_callback_fwd.hpp>
-#include <hpx/async_colocated/post_colocated_fwd.hpp>
-#include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/async_distributed/detail/post.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -36,7 +31,7 @@ namespace hpx::components {
     /// This class specifies the parameters for a distribution policy to use
     /// for creating a given number of items on the locality where a given
     /// object is currently placed.
-    struct colocating_distribution_policy
+    HPX_CXX_EXPORT struct colocating_distribution_policy
     {
         /// Default-construct a new instance of a \a colocating_distribution_policy.
         /// This policy will represent the local locality.
@@ -369,14 +364,15 @@ namespace hpx::components {
     /// A predefined instance of the co-locating \a distribution_policy. It
     /// will represent the local locality and will place all items to create
     /// here.
-    static colocating_distribution_policy const colocated{};
+    HPX_CXX_EXPORT HPX_EXPORT extern colocating_distribution_policy const
+        colocated;
 }    // namespace hpx::components
 
 /// \cond NOINTERNAL
 namespace hpx {
 
-    using hpx::components::colocated;
-    using hpx::components::colocating_distribution_policy;
+    HPX_CXX_EXPORT using hpx::components::colocated;
+    HPX_CXX_EXPORT using hpx::components::colocating_distribution_policy;
 
     template <>
     struct traits::is_distribution_policy<

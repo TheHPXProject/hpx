@@ -1,4 +1,5 @@
 //  Copyright (c) 2023 Panos Syskakis
+//  Copyright (c) 2024 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,7 +19,7 @@ int hpx_main()
 {
     hpx::threads::thread_id_type id = hpx::threads::get_self_id();
     hpx::threads::add_thread_exit_callback(id, [id]() {
-        hpx::threads::thread_id_type id1 = hpx::threads::get_self_id();
+        hpx::threads::thread_id_type const id1 = hpx::threads::get_self_id();
         HPX_TEST_EQ(id1, id);
 
         callback_called = true;

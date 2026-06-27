@@ -203,7 +203,7 @@ namespace hpx::util {
             template <typename> class Transformer>
         struct transform;
 
-        HPX_CXX_CORE_EXPORT template <template <typename> class Transformer,
+        template <template <typename> class Transformer,
             template <typename...> class Pack, typename... Ts>
         struct transform<Pack<Ts...>, Transformer>
         {
@@ -236,8 +236,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename Pack>
         struct unique;
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack,
-            typename... Ts>
+        template <template <typename...> class Pack, typename... Ts>
         struct unique<Pack<Ts...>> : unique_helper<Pack<>, Pack<Ts...>>
         {
         };
@@ -249,15 +248,14 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename... Packs>
         struct concat;
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack,
-            typename... Ts>
+        template <template <typename...> class Pack, typename... Ts>
         struct concat<Pack<Ts...>>
         {
             using type = Pack<Ts...>;
         };
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack,
-            typename... Ts, typename... Us, typename... Rest>
+        template <template <typename...> class Pack, typename... Ts,
+            typename... Us, typename... Rest>
         struct concat<Pack<Ts...>, Pack<Us...>, Rest...>
           : concat<Pack<Ts..., Us...>, Rest...>
         {
@@ -276,8 +274,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename Pack>
         struct concat_pack_of_packs;
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack,
-            typename... Ts>
+        template <template <typename...> class Pack, typename... Ts>
         struct concat_pack_of_packs<Pack<Ts...>>
         {
             using type = typename concat<Ts...>::type;
@@ -292,14 +289,13 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename Pack>
         struct concat_inner_packs;
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack>
+        template <template <typename...> class Pack>
         struct concat_inner_packs<Pack<>>
         {
             using type = Pack<>;
         };
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class Pack,
-            typename T, typename... Ts>
+        template <template <typename...> class Pack, typename T, typename... Ts>
         struct concat_inner_packs<Pack<T, Ts...>>
         {
             using type = Pack<typename concat<T, Ts...>::type>;
@@ -313,8 +309,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename Pack, typename T>
         struct prepend;
 
-        HPX_CXX_CORE_EXPORT template <typename T,
-            template <typename...> class Pack, typename... Ts>
+        template <typename T, template <typename...> class Pack, typename... Ts>
         struct prepend<Pack<Ts...>, T>
         {
             using type = Pack<T, Ts...>;
@@ -327,8 +322,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename Pack, typename T>
         struct append;
 
-        HPX_CXX_CORE_EXPORT template <typename T,
-            template <typename...> class Pack, typename... Ts>
+        template <typename T, template <typename...> class Pack, typename... Ts>
         struct append<Pack<Ts...>, T>
         {
             using type = Pack<Ts..., T>;
@@ -342,7 +336,7 @@ namespace hpx::util {
             typename OldPack>
         struct change_pack;
 
-        HPX_CXX_CORE_EXPORT template <template <typename...> class NewPack,
+        template <template <typename...> class NewPack,
             template <typename...> class OldPack, typename... Ts>
         struct change_pack<NewPack, OldPack<Ts...>>
         {

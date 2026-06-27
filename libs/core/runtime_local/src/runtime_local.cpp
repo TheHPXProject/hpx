@@ -6,8 +6,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/config/thread_name.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/itt_notify/thread_name.hpp>
+
 #include <hpx/modules/command_line_handling_local.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/debugging.hpp>
@@ -24,6 +25,7 @@
 #include <hpx/modules/threadmanager.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/topology.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 #include <hpx/runtime_local/config_entry.hpp>
@@ -1499,9 +1501,7 @@ namespace hpx {
 #endif
 
         // initialize instrumentation system
-#ifdef HPX_HAVE_APEX
-        util::external_timer::init(nullptr, 0, 1);
-#endif
+        hpx::tracing::tracing_init(nullptr, 0, nullptr);
 
         LRT_(info).format("cmd_line: {}", get_config().get_cmd_line());
 
@@ -1601,17 +1601,9 @@ namespace hpx {
             cond.notify_all();
         }
 
-        // register this thread with any possibly active Intel tool
         std::string const thread_name("main-thread#wait_helper");
-        HPX_ITT_THREAD_SET_NAME(thread_name.c_str());
-
         // set thread name as shown in Visual Studio
         util::set_thread_name(thread_name.c_str());
-
-#if defined(HPX_HAVE_APEX)
-        // not registering helper threads - for now
-        //util::external_timer::register_thread(thread_name.c_str());
-#endif
 
         wait_finalize();
 
@@ -1664,9 +1656,7 @@ namespace hpx {
         // stop runtime_local services (threads)
         thread_manager_->stop(false);    // just initiate shutdown
 
-#ifdef HPX_HAVE_APEX
-        util::external_timer::finalize();
-#endif
+        hpx::tracing::tracing_finalize();
 
         if (threads::get_self_ptr())
         {
@@ -1960,16 +1950,11 @@ namespace hpx {
         // initialize thread mapping for external libraries (i.e. PAPI)
         thread_support_->register_thread(name, type);
 
-        // register this thread with any possibly active Intel tool
-        HPX_ITT_THREAD_SET_NAME(name);
-
         // set thread name as shown in Visual Studio
         util::set_thread_name(name);
 
-#if defined(HPX_HAVE_APEX)
         if (std::strstr(name, "worker") != nullptr)
-            util::external_timer::register_thread(name);
-#endif
+            hpx::tracing::register_thread(name);
 
         // call thread-specific user-supplied on_start handler
         if (on_start_func_)

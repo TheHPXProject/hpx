@@ -221,7 +221,7 @@ namespace hpx::lcos::detail {
         using no_addref = typename frame_type::base_type::init_no_addref;
 
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         auto frame = hpx::util::traverse_pack_async_allocator(allocator_type{},
             hpx::util::async_traverse_in_place_tag<frame_type>{}, no_addref{},

@@ -56,6 +56,13 @@ void test_sorted1(ExPolicy&& policy, IteratorTag)
         iterator(std::end(c)), std::less<int>(), negate()));
     HPX_TEST(hpx::ranges::is_sorted(policy, iterator(std::begin(c)),
         iterator(std::end(c)), std::greater<int>(), negate()));
+
+    using element = std::pair<int, int>;
+    std::vector<element> sorted_c = {{10, 1}, {20, 3}, {30, 5}, {40, 8}};
+    auto proj = [](element const& p) { return p.second; };
+
+    HPX_TEST(hpx::ranges::is_sorted(
+        policy, sorted_c.begin(), sorted_c.end(), std::less<int>{}, proj));
 }
 
 template <typename ExPolicy, typename IteratorTag>

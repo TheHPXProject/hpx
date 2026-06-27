@@ -9,12 +9,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/thread_support.hpp>
-#if defined(HPX_HAVE_MODULE_TRACY)
-#include <hpx/modules/tracy.hpp>
-#endif
+#include <hpx/modules/tracing.hpp>
 
 #include <string>
 #include <utility>
@@ -32,90 +30,56 @@ namespace hpx::util {
 
     private:
         hpx::util::detail::spinlock m;
-#if defined(HPX_HAVE_MODULE_TRACY)
-        hpx::tracy::lock_data context_;
-#endif
+        HPX_NO_UNIQUE_ADDRESS hpx::tracing::lock_context context_;
 
     public:
         spinlock() noexcept
+          : context_("hpx::spinlock", this)
         {
-            HPX_ITT_SYNC_CREATE(this, "util::spinlock", nullptr);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            context_ = hpx::tracy::create("hpx::spinlock");
-#endif
         }
 
         explicit spinlock(char const* desc) noexcept
+          : context_("util::spinlock#", desc, this)
         {
-            HPX_ITT_SYNC_CREATE(this, "util::spinlock", desc);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            context_ =
-                hpx::tracy::create(std::string("util::spinlock#") + desc);
-#endif
         }
 
-        ~spinlock()
-        {
-            HPX_ITT_SYNC_DESTROY(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            hpx::tracy::destroy(context_);
-#endif
-        }
+        ~spinlock() = default;
 
         void lock() noexcept(
             noexcept(util::register_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_PREPARE(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            bool const run_after = hpx::tracy::lock_prepare(context_);
-#endif
+            bool const run_after = context_.before_lock();
             m.lock();
 
-            HPX_ITT_SYNC_ACQUIRED(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
             if (run_after)
-                hpx::tracy::lock_acquired(context_);
-#endif
+                context_.after_lock();
             util::register_lock(this);
         }
 
         bool try_lock() noexcept(
             noexcept(util::register_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_PREPARE(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            bool const run_after = hpx::tracy::lock_prepare(context_);
-#endif
+            bool const run_after = context_.before_lock();
 
             if (m.try_lock())
             {
-                HPX_ITT_SYNC_ACQUIRED(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
                 if (run_after)
-                    hpx::tracy::lock_acquired(context_, true);
-#endif
+                    context_.after_try_lock(true);
                 util::register_lock(this);
                 return true;
             }
-            HPX_ITT_SYNC_CANCEL(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
             if (run_after)
-                hpx::tracy::lock_acquired(context_, false);
-#endif
+                context_.after_try_lock(false);
             return false;
         }
 
         void unlock() noexcept(
             noexcept(util::unregister_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_RELEASING(this);
-
+            context_.before_unlock();
             m.unlock();
 
-            HPX_ITT_SYNC_RELEASED(this);
-#if defined(HPX_HAVE_MODULE_TRACY)
-            hpx::tracy::lock_released(context_);
-#endif
+            context_.after_unlock();
             util::unregister_lock(this);
         }
     };

@@ -566,7 +566,7 @@ namespace hpx::parallel {
                     FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
 
                     // MSVC 2015 fails if op is captured by reference
-                    util::loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<std::decay_t<ExPolicy>>(
                         dst, part_size, [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });

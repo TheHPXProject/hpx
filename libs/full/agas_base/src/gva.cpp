@@ -5,10 +5,11 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/gva.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/util.hpp>
+
+#include <hpx/agas_base/gva.hpp>
 
 #include <cstddef>
 #include <ostream>

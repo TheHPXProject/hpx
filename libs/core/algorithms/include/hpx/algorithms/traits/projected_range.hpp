@@ -9,7 +9,6 @@
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/modules/iterator_support.hpp>
-
 #include <ranges>
 #include <type_traits>
 
@@ -22,7 +21,7 @@ namespace hpx::parallel::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct projected_range_result_of<Proj, Rng,
         std::enable_if_t<std::ranges::range<Rng>>>
       : detail::projected_result_of<std::decay_t<Proj>,
@@ -37,7 +36,7 @@ namespace hpx::parallel::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct is_projected_range<Proj, Rng,
         std::enable_if_t<std::ranges::range<Rng>>>
       : detail::is_projected<std::decay_t<Proj>, std::ranges::iterator_t<Rng>>
@@ -55,7 +54,7 @@ namespace hpx::parallel::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Proj, typename Rng>
+    template <typename Proj, typename Rng>
     struct projected_range<Proj, Rng, std::enable_if_t<std::ranges::range<Rng>>>
     {
         using projector_type = std::decay_t<Proj>;

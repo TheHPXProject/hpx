@@ -140,6 +140,41 @@ namespace hpx::parallel::util {
 
     ///////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename I, typename O>
+    I get_first_element(util::in_out_result<I, O>&& p)
+    {
+        return p.in;
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename I, typename O>
+    hpx::future<I> get_first_element(hpx::future<util::in_out_result<I, O>>&& f)
+    {
+        return hpx::make_future<I>(
+            HPX_MOVE(f), [](util::in_out_result<I, O>&& p) { return p.in; });
+    }
+
+    namespace functional {
+
+        HPX_CXX_CORE_EXPORT struct get_first_element
+        {
+            template <typename T>
+            decltype(auto) operator()(T&& val) const
+            {
+                return hpx::parallel::util::get_first_element(
+                    HPX_FORWARD(T, val));
+            }
+        };
+    }    // namespace functional
+
+    HPX_CXX_CORE_EXPORT template <typename Sender>
+        requires(hpx::execution::experimental::is_sender_v<Sender>)
+    decltype(auto) get_first_element(Sender&& sender)
+    {
+        return hpx::execution::experimental::then(
+            HPX_FORWARD(Sender, sender), functional::get_first_element{});
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT template <typename I, typename O>
     O get_second_element(util::in_out_result<I, O>&& p)
     {
         return p.out;

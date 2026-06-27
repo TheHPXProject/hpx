@@ -1,4 +1,4 @@
-//  Copyright (c) 2023 Hartmut Kaiser
+//  Copyright (c) 2023-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,7 +8,6 @@
 
 #include <atomic>
 
-#if !defined(HPX_HAVE_STDEXEC)
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental::detail {
 
@@ -30,4 +29,3 @@ namespace hpx::execution::experimental::detail {
         }
     }
 }    // namespace hpx::execution::experimental::detail
-#endif

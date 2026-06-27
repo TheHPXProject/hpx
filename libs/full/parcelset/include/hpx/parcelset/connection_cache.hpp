@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2012 Thomas Heller
 //  Copyright (c)      2012 Bryce Adelstein-Lelbach
 //
@@ -25,6 +25,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -42,7 +43,7 @@ namespace hpx::util {
     ///////////////////////////////////////////////////////////////////////////
     /// This class implements an LRU cache to hold connections. It includes
     /// entries checked out from the cache in its cache size.
-    template <typename Connection, typename Key>
+    HPX_CXX_EXPORT template <typename Connection, typename Key>
     class connection_cache
     {
     public:
@@ -74,6 +75,8 @@ namespace hpx::util {
           , hits_(0)
           , misses_(0)
           , reclaims_(0)
+          , reservation_failures_(0)
+          , last_exhaustion_log_ns_(0)
         {
             if (max_connections_per_locality_ > max_connections_)
             {
@@ -280,6 +283,8 @@ namespace hpx::util {
                     {
                         // If we can't find or make space, give up.
                         ++misses_;
+                        ++reservation_failures_;
+                        maybe_log_exhaustion();
                         check_invariants();
                         return false;
                     }
@@ -301,6 +306,8 @@ namespace hpx::util {
                 // locality, and none of them are checked into the cache, so
                 // we have to give up.
                 ++misses_;
+                ++reservation_failures_;
+                maybe_log_exhaustion();
                 check_invariants();
                 return false;
             }
@@ -349,6 +356,18 @@ namespace hpx::util {
 
             if (ct != cache_.end())
             {
+                // Verify that there are actually outstanding (checked-out)
+                // connections for this locality. If all existing connections
+                // are already cached, this reclaim is a caller error.
+                if (cached_connections(ct->second).size() >=
+                    num_existing_connections(ct->second))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "connection_cache::reclaim",
+                        "reclaiming a connection that was not "
+                        "properly checked out");
+                }
+
                 // Update LRU meta data.
                 key_tracker_.splice(key_tracker_.end(), key_tracker_,
                     lru_reference(ct->second));
@@ -381,8 +400,6 @@ namespace hpx::util {
 #endif
                 }
 
-                // FIXME: Again, this should probably throw instead of asserting,
-                // as invariants could be invalidated here due to caller error.
                 check_invariants();
             }
         }
@@ -421,6 +438,22 @@ namespace hpx::util {
         void clear()
         {
             std::lock_guard<mutex_type> lock(mtx_);
+
+            // Verify that no connections are currently checked out. Clearing
+            // the cache while connections are outstanding is a caller error
+            // that would silently corrupt connection counts.
+            for (auto const& entry : cache_)
+            {
+                if (cached_connections(entry.second).size() <
+                    num_existing_connections(entry.second))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "connection_cache::clear",
+                        "clearing cache while connections are still "
+                        "checked out");
+                }
+            }
+
             key_tracker_.clear();
             cache_.clear();
             connections_ = 0;
@@ -430,9 +463,8 @@ namespace hpx::util {
             hits_ = 0;
             misses_ = 0;
             reclaims_ = 0;
+            reservation_failures_ = 0;
 
-            // FIXME: This should probably throw instead of asserting, as it
-            // can be triggered by caller error.
             check_invariants();
         }
 
@@ -450,6 +482,18 @@ namespace hpx::util {
             typename cache_type::iterator it = cache_.find(l);
             if (it != cache_.end())
             {
+                // Verify that no connections are currently checked out for
+                // this locality. Clearing while connections are outstanding
+                // is a caller error that would corrupt connection counts.
+                if (cached_connections(it->second).size() <
+                    num_existing_connections(it->second))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "connection_cache::clear",
+                        "clearing locality cache entry while connections "
+                        "are still checked out");
+                }
+
                 // Remove from LRU meta data.
                 key_tracker_.erase(lru_reference(it->second));
 
@@ -462,14 +506,13 @@ namespace hpx::util {
                 cache_.erase(it);
             }
 
-            // FIXME: This should probably throw instead of asserting, as it
-            // can be triggered by caller error.
             check_invariants();
         }
 
         /// Destroys all connections for the given locality in the cache, reset
         /// all associated counts.
-        void clear(key_type const& l, connection_type const& conn)
+        void clear(
+            key_type const& l, [[maybe_unused]] connection_type const& conn)
         {
             std::lock_guard<mutex_type> lock(mtx_);
 
@@ -477,6 +520,18 @@ namespace hpx::util {
             typename cache_type::iterator const it = cache_.find(l);
             if (it != cache_.end())
             {
+                // Verify that there are actually outstanding (checked-out)
+                // connections for this locality. If all existing connections
+                // are already cached, this clear is a caller error.
+                if (cached_connections(it->second).size() >=
+                    num_existing_connections(it->second))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "connection_cache::clear",
+                        "clearing a connection that was not "
+                        "properly checked out");
+                }
+
                 // Adjust the number of existing connections for this key.
                 decrement_connection_count(it->second);
 
@@ -486,8 +541,6 @@ namespace hpx::util {
                 // the connection itself will go out of scope on return
 #if defined(HPX_TRACK_STATE_OF_OUTGOING_TCP_CONNECTION)
                 conn->set_state(Connection::state_deleting);
-#else
-                HPX_UNUSED(conn);
 #endif
             }
 
@@ -525,7 +578,54 @@ namespace hpx::util {
             return util::get_and_reset_value(reclaims_, reset);
         }
 
+        // Returns the cumulative count of times get_or_reserve returned false
+        // because the connection pool was fully checked out (pool saturation).
+        // Unlike cache-misses, this counter is zero during normal operation and
+        // only increments when parcels must be deferred due to exhaustion.
+        std::int64_t get_reservation_failures(bool reset)
+        {
+            std::lock_guard<mutex_type> lock(mtx_);
+            return util::get_and_reset_value(reservation_failures_, reset);
+        }
+
+        // Returns the current number of connections tracked by the cache
+        // (both available and checked-out). Use together with
+        // get_max_connections() to compute the pool utilisation ratio.
+        std::int64_t get_num_connections() const
+        {
+            std::lock_guard<mutex_type> lock(mtx_);
+            return static_cast<std::int64_t>(connections_);
+        }
+
+        // Returns the configured maximum number of connections. This value is
+        // fixed at construction time (hpx.max_connections ini key).
+        std::int64_t get_max_connections() const
+        {
+            return static_cast<std::int64_t>(max_connections_);
+        }
+
     private:
+        // Emit a throttled LPT_(warning) when the pool is exhausted. Called
+        // while mtx_ is held; must not re-acquire it.  Logs at most once per
+        // 5 seconds to avoid flooding the log on sustained saturation.
+        void maybe_log_exhaustion()
+        {
+            using namespace std::chrono;
+            auto const now_ns =
+                static_cast<std::int64_t>(duration_cast<nanoseconds>(
+                    steady_clock::now().time_since_epoch())
+                        .count());
+            constexpr std::int64_t throttle_ns = 5'000'000'000LL;    // 5 s
+            if (now_ns - last_exhaustion_log_ns_ >= throttle_ns)
+            {
+                last_exhaustion_log_ns_ = now_ns;
+                LPT_(warning).format(
+                    "parcelport connection cache exhausted: {}/{} connections "
+                    "in use, {} deferred reservation(s) since last reset",
+                    connections_, max_connections_, reservation_failures_);
+            }
+        }
+
         /// Verify class invariants
         void check_invariants() const
         {
@@ -638,6 +738,14 @@ namespace hpx::util {
         std::int64_t hits_;
         std::int64_t misses_;
         std::int64_t reclaims_;
+
+        // Count of get_or_reserve() calls that returned false because every
+        // connection slot was checked out (pool exhaustion, not normal misses).
+        std::int64_t reservation_failures_;
+
+        // Timestamp of the last LPT_(warning) emission, in nanoseconds since
+        // epoch (std::chrono::steady_clock). Used for log throttling.
+        std::int64_t last_exhaustion_log_ns_;
     };
 }    // namespace hpx::util
 

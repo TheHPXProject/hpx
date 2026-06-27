@@ -12,9 +12,9 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/serialization.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/naming_base/naming_base.hpp>
 
 #include <cstddef>
@@ -260,7 +260,7 @@ namespace hpx::naming {
 
         void lock()
         {
-            HPX_ITT_SYNC_PREPARE(this);
+            hpx::tracing::detail::sync_prepare(this);
 
             while (!acquire_lock())
             {
@@ -270,32 +270,36 @@ namespace hpx::naming {
 
             util::register_lock(this);
 
-            HPX_ITT_SYNC_ACQUIRED(this);
+            hpx::tracing::detail::sync_acquired(this);
         }
 
         bool try_lock()
         {
-            HPX_ITT_SYNC_PREPARE(this);
+            hpx::tracing::detail::sync_prepare(this);
 
-            if (acquire_lock())
+            bool r = acquire_lock();
+            if (r)
+                hpx::tracing::detail::sync_acquired(this);
+            else
+                hpx::tracing::detail::sync_cancel(this);
+
+            if (r)
             {
-                HPX_ITT_SYNC_ACQUIRED(this);
                 util::register_lock(this);
                 return true;
             }
 
-            HPX_ITT_SYNC_CANCEL(this);
             return false;
         }
 
         void unlock()
         {
-            HPX_ITT_SYNC_RELEASING(this);
+            hpx::tracing::detail::sync_releasing(this);
 
             relinquish_lock();
             util::unregister_lock(this);
 
-            HPX_ITT_SYNC_RELEASED(this);
+            hpx::tracing::detail::sync_released(this);
         }
 
         constexpr mutex_type& get_mutex() const noexcept

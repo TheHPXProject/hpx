@@ -296,5 +296,4 @@ namespace hpx::concurrent {
             set_.reserve(count);
         }
     };
-
 }    // namespace hpx::concurrent

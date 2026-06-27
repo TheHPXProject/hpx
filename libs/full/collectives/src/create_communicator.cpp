@@ -1,5 +1,6 @@
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,23 +9,21 @@
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-
 #include <hpx/assert.hpp>
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
-#include <hpx/components/basename_registration.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/server/component.hpp>
+#include <hpx/collectives/detail/hierarchical_helpers.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/lock_registration.hpp>
+#include <hpx/modules/runtime_components.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
-#include <hpx/runtime_components/new.hpp>
-#include <hpx/runtime_distributed/server/runtime_support.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -161,7 +160,7 @@ namespace hpx::collectives {
             // involved.
             if (num_sites == 1)
             {
-                c.set_info(num_sites, this_site);
+                c.set_info(num_sites, this_site, root_site);
                 return c;
             }
 
@@ -287,7 +286,7 @@ namespace hpx::collectives {
             // involved.
             if (num_sites == 1)
             {
-                c.set_info(num_sites, this_site);
+                c.set_info(num_sites, this_site, root_site);
                 return c;
             }
 
@@ -376,8 +375,7 @@ namespace hpx::collectives {
         void recursively_fill_communicators(
             std::vector<hpx::tuple<communicator, this_site_arg>>& communicators,
             std::size_t left, std::size_t right, std::string const& basename,
-            arity_arg arity, this_site_arg this_site, num_sites_arg num_sites,
-            generation_arg generation)
+            arity_arg arity, this_site_arg this_site, generation_arg generation)
         {
             std::string name(basename);
             name += std::to_string(left) + "-" + std::to_string(right) + "/";
@@ -394,26 +392,27 @@ namespace hpx::collectives {
                 return;
             }
 
-            std::size_t division_steps = (right - left + 1) / arity;
-            for (std::size_t i = 0; i != arity; ++i)
+            auto const groups =
+                detail::get_top_level_groups(right - left + 1, arity);
+
+            for (std::size_t i = 0; i != groups.size(); ++i)
             {
-                std::size_t current_left = left + division_steps * i;
+                std::size_t const current_left = left + groups[i].left;
+                std::size_t const current_right = left + groups[i].right;
+
                 if (this_site == current_left)
                 {
                     auto c = create_communicator(name.c_str(),
-                        num_sites_arg(arity), this_site_arg(i),
+                        num_sites_arg(groups.size()), this_site_arg(i),
                         generation_arg(generation), root_site_arg(0));
 
                     communicators.emplace_back(HPX_MOVE(c), this_site_arg(i));
                 }
 
-                std::size_t current_right =
-                    (std::min) (current_left + division_steps - 1, right);
-                if (this_site >= current_left && this_site < current_right + 1)
+                if (this_site >= current_left && this_site <= current_right)
                 {
                     recursively_fill_communicators(communicators, current_left,
-                        current_right, basename, arity, this_site, num_sites,
-                        generation);
+                        current_right, basename, arity, this_site, generation);
                     break;
                 }
             }
@@ -422,7 +421,8 @@ namespace hpx::collectives {
 
     hierarchical_communicator create_hierarchical_communicator(
         char const* basename, num_sites_arg num_sites, this_site_arg this_site,
-        arity_arg arity, generation_arg generation, root_site_arg root_site)
+        arity_arg arity, generation_arg generation, root_site_arg root_site,
+        flat_fallback_threshold_arg threshold)
     {
         if (num_sites.is_default())
         {
@@ -431,19 +431,34 @@ namespace hpx::collectives {
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
-            if (root_site == static_cast<std::size_t>(-1))    //-V1051
-            {
-                root_site = 0;
-            }
+        }
+
+        if (root_site == static_cast<std::size_t>(-1))
+        {
+            root_site = 0;
         }
         if (root_site != 0)
         {
-            this_site = this_site - root_site % num_sites;
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::collectives::create_hierarchical_communicator",
+                "hierarchical communicators currently support only "
+                "root_site == 0");
         }
 
-        HPX_ASSERT(this_site < num_sites);
-        HPX_ASSERT(
-            root_site != static_cast<std::size_t>(-1) && root_site < num_sites);
+        if (num_sites == 0 || this_site >= num_sites)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::collectives::create_hierarchical_communicator",
+                "num_sites must be non-zero and this_site must be smaller "
+                "than the number of participating sites");
+        }
+
+        if (arity < 2)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::collectives::create_hierarchical_communicator",
+                "hierarchical communicators require arity >= 2");
+        }
 
         std::string name(basename);
         if (!generation.is_default())
@@ -451,9 +466,21 @@ namespace hpx::collectives {
             name += std::to_string(generation) + "/";
         }
 
+        // Flat fallback: below the threshold, hierarchical overhead exceeds
+        // its benefit. Overriding arity to num_sites makes the tree builder's
+        // leaf condition (right - left < arity) fire at the root call, which
+        // produces a single flat communicator spanning all sites; the
+        // hierarchical collectives dispatch on the same arity >= num_sites
+        // condition and collapse to a direct flat call. Pass threshold == 0
+        // to disable this fallback and always build a tree.
+        if (num_sites < threshold)
+        {
+            arity = static_cast<std::size_t>(num_sites);
+        }
+
         std::vector<hpx::tuple<communicator, this_site_arg>> communicators;
         recursively_fill_communicators(communicators, 0, num_sites - 1, name,
-            arity, this_site, num_sites, generation);
+            arity, this_site, generation);
         return hierarchical_communicator(
             HPX_MOVE(communicators), arity, root_site, num_sites, this_site);
     }

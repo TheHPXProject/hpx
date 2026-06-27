@@ -7,18 +7,19 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/route.hpp>
-#include <hpx/agas_base/server/primary_namespace.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components_base/agas_interface.hpp>
 #include <hpx/format.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
+
+#include <hpx/agas_base/route.hpp>
+#include <hpx/agas_base/server/primary_namespace.hpp>
 
 #include <atomic>
 #include <cstdint>

@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2018 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,12 +7,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_distributed/dataflow.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/modules/synchronization.hpp>
+
 #include <hpx/performance_counters/counters.hpp>
 
 #include <cstddef>
@@ -24,15 +25,16 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
+
     // Make a collection of performance counters available as a set
-    class HPX_EXPORT performance_counter_set
+    HPX_CXX_EXPORT class HPX_EXPORT performance_counter_set
     {
         using mutex_type = hpx::spinlock;
 
     public:
         /// Create an empty set of performance counters
-        performance_counter_set(bool print_counters_locally = false)
+        explicit performance_counter_set(bool print_counters_locally = false)
           : invocation_count_(0)
           , print_counters_locally_(print_counters_locally)
         {
@@ -132,6 +134,6 @@ namespace hpx { namespace performance_counters {
         mutable std::uint64_t invocation_count_;
         bool print_counters_locally_;    // handle only local counters
     };
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters
 
 #include <hpx/config/warnings_suffix.hpp>

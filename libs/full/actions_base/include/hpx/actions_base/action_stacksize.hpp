@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -7,13 +7,14 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/actions_base/traits/action_stacksize.hpp>
 #include <hpx/actions_base/traits/extract_action.hpp>
 #include <hpx/modules/coroutines.hpp>
 
 namespace hpx::actions {
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     constexpr threads::thread_stacksize action_stacksize() noexcept
     {
         //  The mapping to 'normal' is now done at the last possible moment in

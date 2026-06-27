@@ -41,7 +41,7 @@ namespace hpx::detail {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename ExPolicy>
+    template <typename Tag, typename ExPolicy>
     struct is_bound_algorithm<bound_algorithm<Tag, ExPolicy>> : std::true_type
     {
     };
@@ -65,9 +65,22 @@ namespace hpx::detail {
             // returns senders, we don't need to wrap the algorithm in any
             // specific way as it directly integrates with the given
             // predecessor.
-            return hpx::execution::experimental::let_value(
-                HPX_FORWARD(Predecessor, predecessor),
-                bound_algorithm<Tag, ExPolicy>{HPX_FORWARD(ExPolicy, policy)});
+            //
+            // We chain the result through `continues_on(sched)` so that the
+            // resulting sender's environment exposes
+            // `get_completion_scheduler<set_value_t>` (and through it
+            // `get_completion_domain<set_value_t>` -> `thread_pool_domain`).
+            // Without this, `sync_wait` on the returned sender resolves the
+            // completion domain as `default_domain`, which uses stdexec's
+            // run_loop and OS-blocks the calling thread (deadlocking when
+            // called from an HPX worker, especially with --hpx:threads=1).
+            auto sched = policy.executor().sched();
+            return hpx::execution::experimental::continues_on(
+                hpx::execution::experimental::let_value(
+                    HPX_FORWARD(Predecessor, predecessor),
+                    bound_algorithm<Tag, ExPolicy>{
+                        HPX_FORWARD(ExPolicy, policy)}),
+                HPX_MOVE(sched));
         }
         else if constexpr (hpx::execution::detail::has_async_execution_policy_v<
                                ExPolicy>)

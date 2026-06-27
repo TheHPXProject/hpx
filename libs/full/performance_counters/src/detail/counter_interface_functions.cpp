@@ -1,4 +1,4 @@
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,11 +7,12 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/detail/counter_interface_functions.hpp>
 
-namespace hpx { namespace performance_counters { namespace detail {
+namespace hpx::performance_counters::detail {
 
     hpx::future<id_type> (*create_performance_counter_async)(
-        id_type target_id, counter_info const& info) = nullptr;
-}}}    // namespace hpx::performance_counters::detail
+        id_type const& target_id, counter_info const& info) = nullptr;
+}    // namespace hpx::performance_counters::detail

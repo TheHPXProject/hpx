@@ -59,8 +59,6 @@ namespace hpx {
     {
         using mutex_type = hpx::spinlock;
 
-        void terminate(char const* function, char const* reason) const;
-
     public:
         class id;
         using native_handle_type = threads::thread_id_type;
@@ -71,7 +69,7 @@ namespace hpx {
             requires(!std::same_as<std::decay_t<F>, thread>)
         explicit thread(F&& f)
         {
-            auto thrd_data = threads::get_self_id_data();
+            auto const thrd_data = threads::get_self_id_data();
             HPX_ASSERT(thrd_data);
             start_thread(thrd_data->get_scheduler_base()->get_parent_pool(),
                 util::deferred_call(HPX_FORWARD(F, f)));
@@ -80,7 +78,7 @@ namespace hpx {
         template <typename F, typename... Ts>
         explicit thread(F&& f, Ts&&... vs)
         {
-            auto thrd_data = threads::get_self_id_data();
+            auto const thrd_data = threads::get_self_id_data();
             HPX_ASSERT(thrd_data);
             start_thread(thrd_data->get_scheduler_base()->get_parent_pool(),
                 util::deferred_call(HPX_FORWARD(F, f), HPX_FORWARD(Ts, vs)...));
@@ -144,7 +142,7 @@ namespace hpx {
         void interrupt(bool flag = true) const;
         bool interruption_requested() const;
 
-        static void interrupt(id, bool flag = true);
+        static void interrupt(id const&, bool flag = true);
 
         hpx::future<void> get_future(error_code& ec = throws) const;
 
@@ -299,7 +297,8 @@ namespace hpx {
         ///        (and if there are no other threads at the same priority,
         ///        yield has no effect).
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void yield() noexcept;
-        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void yield_to(thread::id) noexcept;
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void yield_to(
+            thread::id const&) noexcept;
 
         // extensions
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT threads::thread_priority
@@ -362,28 +361,32 @@ namespace hpx {
 
         HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT disable_interruption
         {
-        private:
-            disable_interruption(disable_interruption const&);
-            disable_interruption& operator=(disable_interruption const&);
+        public:
+            disable_interruption(disable_interruption&&) = delete;
+            disable_interruption& operator=(disable_interruption&&) = delete;
+            disable_interruption(disable_interruption const&) = delete;
+            disable_interruption& operator=(
+                disable_interruption const&) = delete;
 
             bool interruption_was_enabled_;
             friend class restore_interruption;
 
-        public:
             disable_interruption();
             ~disable_interruption();
         };
 
         HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT restore_interruption
         {
-        private:
-            restore_interruption(restore_interruption const&);
-            restore_interruption& operator=(restore_interruption const&);
+        public:
+            restore_interruption(restore_interruption&&) = delete;
+            restore_interruption& operator=(restore_interruption&&) = delete;
+            restore_interruption(restore_interruption const&) = delete;
+            restore_interruption& operator=(
+                restore_interruption const&) = delete;
 
             bool interruption_was_enabled_;
 
-        public:
-            explicit restore_interruption(disable_interruption& d);
+            explicit restore_interruption(disable_interruption const& d);
             ~restore_interruption();
         };
     }    // namespace this_thread
@@ -395,7 +398,7 @@ struct std::hash<::hpx::thread::id>
 {
     std::size_t operator()(::hpx::thread::id const& id) const noexcept
     {
-        std::hash<::hpx::threads::thread_id_ref_type> hasher_;
+        constexpr std::hash<::hpx::threads::thread_id_ref_type> hasher_;
         return hasher_(id.native_handle());
     }
 };

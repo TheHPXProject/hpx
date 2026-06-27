@@ -26,13 +26,13 @@ set(parcelport_tcp_sources connection_handler_tcp.cpp locality.cpp
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_tcp
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_tcp_sources}
   HEADERS ${parcelport_tcp_headers}
   COMPAT_HEADERS ${parcelport_tcp_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_actions hpx_command_line_handling hpx_parcelset
-                      hpx_parcelset_base
+                      hpx_parcelset_base hpx_plugin_factories
   CMAKE_SUBDIRS examples tests
 )
 

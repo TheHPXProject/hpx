@@ -6,11 +6,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#if defined(HPX_HAVE_STDEXEC)
 #include <hpx/modules/execution.hpp>
-#else
-#include <hpx/modules/execution.hpp>
-#endif
 #include <hpx/modules/testing.hpp>
 
 #include "algorithm_test_utils.hpp"
@@ -30,18 +26,10 @@ int main()
         auto s = ex::just_stopped();
 
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<>>(s);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<>>(s);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s);
-#endif
         check_sends_stopped<true>(s);
 
         auto r = expect_stopped_receiver{set_stopped_called};

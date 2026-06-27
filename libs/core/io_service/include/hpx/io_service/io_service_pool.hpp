@@ -10,39 +10,43 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/io_service/io_service_pool_fwd.hpp>
-#include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/threading_base.hpp>
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#include <winsock2.h>
-#endif
-#include <asio/executor_work_guard.hpp>
-#include <asio/io_context.hpp>
-#include <asio/version.hpp>
-#if ASIO_VERSION >= 103400
-#include <asio/post.hpp>
-#endif
-
-// The boost asio support includes termios.h. The termios.h file on ppc64le
-// defines these macros, which are also used by blaze, blaze_tensor as Template
-// names. Make sure we undefine them before continuing.
-#undef VT1
-#undef VT2
-
 #include <cstddef>
-#include <memory>
-#include <mutex>
 #include <thread>
-#include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util {
 
+    namespace detail {
+
+        struct HPX_CORE_EXPORT io_service_pool_base
+        {
+            virtual ~io_service_pool_base() = default;
+
+            virtual bool run(bool join_threads, barrier* startup) = 0;
+            virtual bool run(std::size_t num_threads, bool join_threads,
+                barrier* startup) = 0;
+            virtual void stop() = 0;
+            virtual void join() = 0;
+            virtual void clear() = 0;
+            virtual void wait() = 0;
+            virtual bool stopped() = 0;
+            virtual ::asio::io_context& get_io_service(int index = -1) = 0;
+            virtual std::thread& get_os_thread_handle(
+                std::size_t thread_num) = 0;
+            virtual std::size_t size() const noexcept = 0;
+            virtual void thread_run(
+                std::size_t index, barrier* startup) const = 0;
+            virtual char const* get_name() const noexcept = 0;
+            virtual void init(std::size_t pool_size) = 0;
+        };
+    }    // namespace detail
+
     /// A pool of io_service objects.
-    HPX_CXX_CORE_EXPORT class io_service_pool
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT io_service_pool
     {
     public:
         /// \brief Construct the io_service pool.
@@ -73,97 +77,46 @@ namespace hpx::util {
 
         /// Run all io_service objects in the pool. If join_threads is true
         /// this will also wait for all threads to complete
-        bool run(bool join_threads = true, barrier* startup = nullptr);
+        bool run(bool join_threads = true, barrier* startup = nullptr) const;
 
         /// Run all io_service objects in the pool. If join_threads is true
         /// this will also wait for all threads to complete
         bool run(std::size_t num_threads, bool join_threads = true,
-            barrier* startup = nullptr);
+            barrier* startup = nullptr) const;
 
         /// \brief Stop all io_service objects in the pool.
-        void stop();
+        void stop() const;
 
         /// \brief Join all io_service threads in the pool.
-        void join();
+        void join() const;
 
         /// \brief Clear all internal data structures
-        void clear();
+        void clear() const;
 
         /// \brief Wait for all work to be done
-        void wait();
+        void wait() const;
 
-        bool stopped();
+        bool stopped() const;
 
         /// \brief Get an io_service to use.
-        ::asio::io_context& get_io_service(int index = -1);
+        ::asio::io_context& get_io_service(int index = -1) const;
 
         /// \brief access underlying thread handle
-        std::thread& get_os_thread_handle(std::size_t thread_num);
+        std::thread& get_os_thread_handle(std::size_t thread_num) const;
 
         /// \brief Get number of threads associated with this I/O service.
-        [[nodiscard]] constexpr std::size_t size() const noexcept
-        {
-            return pool_size_;
-        }
+        [[nodiscard]] std::size_t size() const noexcept;
 
         /// \brief Activate the thread \a index for this thread pool
         void thread_run(std::size_t index, barrier* startup = nullptr) const;
 
         /// \brief Return name of this pool
-        [[nodiscard]] constexpr char const* get_name() const noexcept
-        {
-            return pool_name_;
-        }
+        [[nodiscard]] char const* get_name() const noexcept;
 
-        void init(std::size_t pool_size);
-
-    protected:
-        bool run_locked(
-            std::size_t num_threads, bool join_threads, barrier* startup);
-        void stop_locked();
-        void join_locked();
-        void clear_locked();
-        void wait_locked();
+        void init(std::size_t pool_size) const;
 
     private:
-        using io_service_ptr = std::unique_ptr<::asio::io_context>;
-
-        using raw_work_type =
-            ::asio::executor_work_guard<::asio::io_context::executor_type>;
-        using work_type = std::unique_ptr<raw_work_type>;
-
-        static work_type initialize_work(::asio::io_context& io_service);
-
-        std::mutex mtx_;
-
-        /// The pool of io_services.
-        std::vector<io_service_ptr> io_services_;
-        std::vector<std::thread> threads_;
-
-        /// The work that keeps the io_services running.
-        std::vector<work_type> work_;
-
-        /// The next io_service to use for a connection.
-        std::size_t next_io_service_;
-
-        /// set to true if stopped
-        bool stopped_;
-
-        /// initial number of OS threads to execute in this pool
-        std::size_t pool_size_;
-
-        /// call this for each thread start/stop
-        threads::policies::callback_notifier const& notifier_;
-
-        char const* pool_name_;
-        char const* pool_name_postfix_;
-
-        /// Set to true if waiting for work to finish
-        bool waiting_;
-
-        // Barriers for waiting for work to finish on all worker threads
-        std::unique_ptr<barrier> wait_barrier_;
-        std::unique_ptr<barrier> continue_barrier_;
+        detail::io_service_pool_base* pool_;
     };
 }    // namespace hpx::util
 

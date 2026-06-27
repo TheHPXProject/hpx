@@ -23,7 +23,7 @@ namespace hpx::plugins {
     ///////////////////////////////////////////////////////////////////////////
     /// The \a plugin_factory_base has to be used as a base class for all
     /// plugin factories.
-    struct HPX_EXPORT parcelport_factory_base
+    HPX_CXX_EXPORT struct HPX_EXPORT parcelport_factory_base
     {
         virtual ~parcelport_factory_base() = default;
 

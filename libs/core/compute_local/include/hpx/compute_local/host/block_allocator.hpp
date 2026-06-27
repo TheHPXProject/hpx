@@ -123,6 +123,27 @@ namespace hpx::compute::host {
                 return (std::numeric_limits<size_type>::max)();
             }
 
+            template <typename U, typename Iter>
+            static void cleanup_partition(
+                U* p, std::pair<Iter, Iter> r) noexcept
+            {
+                while (r.first != r.second)
+                {
+                    std::destroy_at(p + *r.first);
+                    ++r.first;
+                }
+            }
+
+            template <typename U, typename Iter>
+            static void cleanup_partition(
+                U* p, std::vector<std::pair<Iter, Iter>>& r) noexcept
+            {
+                for (auto& range : r)
+                {
+                    cleanup_partition(p, range);
+                }
+            }
+
             // Constructs count objects of type T in allocated uninitialized
             // storage pointed to by p, using placement-new. This will use the
             // underlying executors to distribute the memory according to first
@@ -173,7 +194,7 @@ namespace hpx::compute::host {
                                         arguments);
                                 },
                                 // cleanup function, called for all elements of
-                                // current partition which succeeded before
+                                // current partition that succeeded before
                                 // exception
                                 [p](iterator_type it) {
                                     std::destroy_at(p + *it);
@@ -184,15 +205,9 @@ namespace hpx::compute::host {
                     [](auto&&) {
                         // do nothing
                     },
-                    // cleanup function, called for each partition which didn't
+                    // cleanup function, called for each partition that didn't
                     // fail, but only if at least one failed
-                    [p](partition_result_type&& r) -> void {
-                        while (r.first != r.second)
-                        {
-                            std::destroy_at(p + *r.first);
-                            ++r.first;
-                        }
-                    });
+                    [p](auto&& r) -> void { cleanup_partition(p, r); });
             }
 
             // Constructs an object of type T in allocated uninitialized storage

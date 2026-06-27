@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/itt_notify.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -24,16 +24,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename F, typename Enable = void>
-    struct get_function_annotation_itt
+    struct get_function_annotation_tracing
     {
-        static util::itt::string_handle call(F const& f)
+        static hpx::tracing::annotation_handle call(F const& f)
         {
-            static util::itt::string_handle sh(
-                get_function_annotation<F>::call(f));
+            static hpx::tracing::annotation_handle sh =
+                hpx::tracing::create_annotation_handle(
+                    get_function_annotation<F>::call(f));
             return sh;
         }
     };
-#endif
 }    // namespace hpx::traits

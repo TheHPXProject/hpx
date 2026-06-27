@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -40,6 +41,14 @@ struct opt
     T operator()(T v1, T v2) const
     {
         return v1 + v2;
+    }
+};
+
+struct concat_op
+{
+    std::string operator()(std::string const& lhs, std::string const& rhs) const
+    {
+        return lhs + ">" + rhs;
     }
 };
 
@@ -348,6 +357,100 @@ void inclusive_scan_tests(std::vector<hpx::id_type>& localities)
 
     inclusive_scan_tests_inplace_with_policy<T>(
         length, hpx::container_layout(localities));
+
+    // subrange regression test in a single segment (sit == send path)
+    {
+        constexpr std::size_t n = 16;
+        constexpr std::size_t first_offset = 3;
+        constexpr std::size_t range_size = 8;
+        constexpr std::size_t dest_offset = 2;
+
+        hpx::partitioned_vector<T> in(n, hpx::container_layout(1));
+        iota_vector(in, T(0));
+
+        hpx::partitioned_vector<T> out(n, hpx::container_layout(1));
+        auto first = in.begin();
+        std::advance(first, first_offset);
+        auto last = first;
+        std::advance(last, range_size);
+        auto dest = out.begin();
+        std::advance(dest, dest_offset);
+
+        auto verify_subrange_result = [&]() {
+            std::vector<T> expected(n, T(-1));
+            T acc = T(0);
+            for (std::size_t i = 0; i < range_size; ++i)
+            {
+                acc = acc + T(first_offset + i);
+                expected[dest_offset + i] = acc;
+            }
+
+            std::size_t idx = 0;
+            for (auto it = out.begin(); it != out.end(); ++it, ++idx)
+            {
+                HPX_TEST_EQ(*it, expected[idx]);
+            }
+            HPX_TEST_EQ(idx, n);
+        };
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::inclusive_scan(
+            hpx::execution::seq, first, last, dest, opt<T>(), T(0));
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::inclusive_scan(
+            hpx::execution::par, first, last, dest, opt<T>(), T(0));
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::inclusive_scan(hpx::execution::seq(hpx::execution::task), first,
+            last, dest, opt<T>(), T(0))
+            .get();
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::inclusive_scan(hpx::execution::par(hpx::execution::task), first,
+            last, dest, opt<T>(), T(0))
+            .get();
+        verify_subrange_result();
+    }
+
+    // minimal regression for carry propagation order mismatch across segments
+    {
+        using S = std::string;
+
+        constexpr std::size_t n = 3;
+        hpx::partitioned_vector<S> in(n, hpx::container_layout(2, localities));
+        hpx::partitioned_vector<S> out_seq(
+            n, S(""), hpx::container_layout(2, localities));
+        hpx::partitioned_vector<S> out_par(
+            n, S(""), hpx::container_layout(2, localities));
+
+        std::vector<S> vals = {"a", "b", "c"};
+        auto it = in.begin();
+        for (auto const& s : vals)
+        {
+            *it++ = s;
+        }
+
+        concat_op op;
+        S init = "X";
+
+        hpx::inclusive_scan(hpx::execution::seq, in.begin(), in.end(),
+            out_seq.begin(), op, init);
+        hpx::inclusive_scan(hpx::execution::par, in.begin(), in.end(),
+            out_par.begin(), op, init);
+
+        auto seq_it = out_seq.begin();
+        auto par_it = out_par.begin();
+        for (std::size_t i = 0; i < n; ++i, ++seq_it, ++par_it)
+        {
+            S seq_val = *seq_it;
+            S par_val = *par_it;
+            HPX_TEST_EQ(seq_val, par_val);
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

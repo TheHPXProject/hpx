@@ -96,17 +96,6 @@ namespace hpx::actions::detail {
         register_per_action_data_counters<Action>::instance;
 }    // namespace hpx::actions::detail
 
-#define HPX_REGISTER_PER_ACTION_DATA_COUNTER_TYPES(Action)                     \
-    namespace hpx::actions::detail {                                           \
-        template register_per_action_data_counters<Action>                     \
-            register_per_action_data_counters<Action>::instance;               \
-    }                                                                          \
-    /**/
-
 #include <hpx/config/warnings_suffix.hpp>
-
-#else
-
-#define HPX_REGISTER_PER_ACTION_DATA_COUNTER_TYPES(Action)
 
 #endif

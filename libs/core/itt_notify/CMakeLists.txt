@@ -20,7 +20,7 @@ set(itt_notify_compat_headers
 )
 # cmake-format: on
 
-set(itt_notify_sources itt_notify.cpp thread_name.cpp)
+set(itt_notify_sources itt_notify.cpp)
 
 if(TARGET Amplifier::amplifier)
   set(itt_notify_optional_dependencies Amplifier::amplifier)

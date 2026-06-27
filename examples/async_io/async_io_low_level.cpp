@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2013 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,7 +12,14 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/include/util.hpp>
 #include <hpx/iostream.hpp>
+
 #include <hpx/modules/io_service.hpp>
+
+#include <asio/io_context.hpp>
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
 
 #include <iostream>
 #include <memory>

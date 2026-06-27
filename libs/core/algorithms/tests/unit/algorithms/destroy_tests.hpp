@@ -98,7 +98,6 @@ void test_destroy(ExPolicy&& policy, IteratorTag)
     std::free(p);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_destroy_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -131,7 +130,6 @@ void test_destroy_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 
     std::free(p);
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_destroy_async(ExPolicy&& policy, IteratorTag)

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_distributed/continuation.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -21,7 +21,7 @@
 namespace hpx::util::functional {
 
     ///////////////////////////////////////////////////////////////////////////
-    struct extract_locality
+    HPX_CXX_EXPORT struct extract_locality
     {
         hpx::id_type operator()(
             hpx::id_type const& locality_id, hpx::id_type const& id) const
@@ -39,7 +39,7 @@ namespace hpx::util::functional {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        template <typename Bound, typename Continuation>
+        HPX_CXX_EXPORT template <typename Bound, typename Continuation>
         struct post_continuation_impl
         {
             using bound_type = std::decay_t<Bound>;
@@ -160,7 +160,7 @@ namespace hpx::util::functional {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        template <typename Bound, typename Continuation>
+        HPX_CXX_EXPORT template <typename Bound, typename Continuation>
         struct async_continuation_impl
         {
             using bound_type = std::decay_t<Bound>;

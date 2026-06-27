@@ -20,7 +20,7 @@ VERSION_FULL_NOTAG=${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_SUBMINOR}
 VERSION_FULL_TAG=v${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_SUBMINOR}${VERSION_TAG}
 VERSION_FULL_NOTAG_UNDERSCORE=${VERSION_MAJOR}_${VERSION_MINOR}_${VERSION_SUBMINOR}
 VERSION_TITLE="HPX V${VERSION_FULL_NOTAG}: The C++ Standards Library for Parallelism and Concurrency"
-VERSION_RELEASE_NOTES_URL="https://hpx-docs.stellar-group.org/tags/${VERSION_FULL_TAG}/html/releases/whats_new_${VERSION_FULL_NOTAG_UNDERSCORE}.html"
+VERSION_RELEASE_NOTES_URL="https://doc.hpx.dev/tags/${VERSION_FULL_TAG}/html/releases/whats_new_${VERSION_FULL_NOTAG_UNDERSCORE}.html"
 VERSION_DESCRIPTION="[Release notes](${VERSION_RELEASE_NOTES_URL})"
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
@@ -112,4 +112,4 @@ hub release create \
     "${VERSION_FULL_TAG}"
 
 echo ""
-echo "Now add the above URL to the downloads pages on stellar.cct.lsu.edu and stellar-group.org."
+echo "Now add the above URL to the downloads pages on hpx.dev."

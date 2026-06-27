@@ -6,15 +6,15 @@
 
 #pragma once
 
-#include <hpx/actions_base/traits/extract_action.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/naming_base.hpp>
 
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Launch, typename... Ts>
-    typename hpx::traits::extract_action_t<Action>::local_result_type
+    HPX_CXX_EXPORT template <typename Action, typename Launch, typename... Ts>
+    hpx::traits::extract_action_t<Action>::local_result_type
     async_unwrap_result_impl(
         Launch&& policy, hpx::id_type const& id, Ts&&... vs);
 }    // namespace hpx::detail

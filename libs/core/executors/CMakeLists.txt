@@ -16,6 +16,8 @@ set(executors_headers
     hpx/executors/detail/bulk_invoke_helper.hpp
     hpx/executors/detail/hierarchical_spawning.hpp
     hpx/executors/detail/index_queue_spawning.hpp
+    hpx/executors/detail/index_queue_spawning_result.hpp
+    hpx/executors/detail/index_queue_spawning_void.hpp
     hpx/executors/execute_on.hpp
     hpx/executors/exception_list.hpp
     hpx/executors/execution_policy_annotation.hpp
@@ -24,12 +26,16 @@ set(executors_headers
     hpx/executors/execution_policy_parameters.hpp
     hpx/executors/execution_policy_scheduling_property.hpp
     hpx/executors/execution_policy.hpp
+    hpx/executors/executor_scheduler.hpp
+    hpx/executors/executor_scheduler_bulk.hpp
     hpx/executors/explicit_scheduler_executor.hpp
     hpx/executors/fork_join_executor.hpp
     hpx/executors/limiting_executor.hpp
     hpx/executors/macros.hpp
     hpx/executors/parallel_executor_aggregated.hpp
     hpx/executors/parallel_executor.hpp
+    hpx/executors/parallel_scheduler.hpp
+    hpx/executors/parallel_scheduler_backend.hpp
     hpx/executors/post.hpp
     hpx/executors/restricted_thread_pool_executor.hpp
     hpx/executors/scheduler_executor.hpp
@@ -46,7 +52,10 @@ set(executors_macro_headers hpx/executors/macros.hpp)
 
 if(HPX_WITH_DATAPAR)
   set(executors_headers
-      ${executors_headers} hpx/executors/datapar/execution_policy_fwd.hpp
+      ${executors_headers}
+      hpx/executors/datapar/detail/execution_policy_mapping_members.hpp
+      hpx/executors/datapar/detail/execution_policy_mapping_members_impl.hpp
+      hpx/executors/datapar/execution_policy_fwd.hpp
       hpx/executors/datapar/execution_policy_mappings.hpp
       hpx/executors/datapar/execution_policy.hpp
   )
@@ -55,9 +64,6 @@ endif()
 if(HPX_LIKWID_WITH_LIKWID)
   set(executors_headers ${executors_headers} hpx/executors/likwid_executor.hpp)
   set(additional_dependencies hpx_likwid)
-endif()
-if(HPX_TRACY_WITH_TRACY)
-  set(additional_dependencies hpx_tracy)
 endif()
 
 # Default location is $HPX_ROOT/libs/executors/include_compatibility
@@ -94,8 +100,9 @@ if(HPX_WITH_DATAPAR)
 endif()
 # cmake-format: on
 
-set(executors_sources current_executor.cpp exception_list_callbacks.cpp
-                      fork_join_executor.cpp service_executors.cpp
+set(executors_sources
+    current_executor.cpp exception_list_callbacks.cpp fork_join_executor.cpp
+    parallel_scheduler.cpp service_executors.cpp
 )
 
 include(HPX_AddModule)
@@ -110,6 +117,7 @@ add_hpx_module(
   MODULE_DEPENDENCIES
     hpx_allocator_support
     hpx_async_base
+    hpx_async_combinators
     hpx_concepts
     hpx_concurrency
     hpx_config
@@ -125,7 +133,6 @@ add_hpx_module(
     hpx_hardware
     hpx_io_service
     hpx_iterator_support
-    hpx_itt_notify
     hpx_memory
     hpx_pack_traversal
     hpx_properties
@@ -136,6 +143,7 @@ add_hpx_module(
     hpx_timing
     hpx_threading
     hpx_threading_base
+    hpx_tracing
     hpx_topology
     hpx_type_support
     ${additional_dependencies}

@@ -1,4 +1,5 @@
 //  Copyright (c) 2020-2024 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -77,82 +78,69 @@ namespace executor_example {
             return *this;
         }
 
-    private:
+    public:
         // OneWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return hpx::parallel::execution::sync_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)},
+            return hpx::parallel::execution::sync_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)},
                 std::forward<Ts>(ts)...);
         }
 
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return hpx::parallel::execution::async_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)},
+            return hpx::parallel::execution::async_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)},
                 std::forward<Ts>(ts)...);
         }
 
         template <typename F, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::then_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+        decltype(auto) then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
         {
-            return hpx::parallel::execution::then_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)},
+            return hpx::parallel::execution::then_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)},
                 std::forward<Future>(predecessor), std::forward<Ts>(ts)...);
         }
 
         // NonBlockingOneWayExecutor (adapted) interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            executor_with_thread_hooks const& exec, F&& f, Ts&&... ts)
+        decltype(auto) post(F&& f, Ts&&... ts) const
         {
-            hpx::parallel::execution::post(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)},
+            hpx::parallel::execution::post(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)},
                 std::forward<Ts>(ts)...);
         }
 
         // BulkOneWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_sync_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return hpx::parallel::execution::bulk_sync_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)}, shape,
+            return hpx::parallel::execution::bulk_sync_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)}, shape,
                 std::forward<Ts>(ts)...);
         }
 
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, S const& shape,
-            Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return hpx::parallel::execution::bulk_async_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)}, shape,
+            return hpx::parallel::execution::bulk_async_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)}, shape,
                 std::forward<Ts>(ts)...);
         }
 
         template <typename F, typename S, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            executor_with_thread_hooks const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
-            return hpx::parallel::execution::bulk_then_execute(exec.exec_,
-                hook_wrapper<F>{exec, std::forward<F>(f)}, shape,
+            return hpx::parallel::execution::bulk_then_execute(exec_,
+                hook_wrapper<F>{*this, std::forward<F>(f)}, shape,
                 std::forward<Future>(predecessor), std::forward<Ts>(ts)...);
         }
 

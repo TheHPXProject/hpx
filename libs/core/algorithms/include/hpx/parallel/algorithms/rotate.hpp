@@ -467,7 +467,7 @@ namespace hpx {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
 
-            return parallel::util::get_second_element(
+            return parallel::util::get_first_element(
                 hpx::parallel::detail::rotate<
                     hpx::parallel::util::in_out_result<FwdIter, FwdIter>>()
                     .call(hpx::execution::seq, first, new_first, last));
@@ -490,7 +490,7 @@ namespace hpx {
                 hpx::is_sequenced_execution_policy_v<ExPolicy> ||
                     !std::bidirectional_iterator<FwdIter>>;
 
-            return parallel::util::get_second_element(
+            return parallel::util::get_first_element(
                 hpx::parallel::detail::rotate<
                     hpx::parallel::util::in_out_result<FwdIter, FwdIter>>()
                     .call2(HPX_FORWARD(ExPolicy, policy), is_seq(), first,

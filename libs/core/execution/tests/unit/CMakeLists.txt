@@ -6,9 +6,10 @@
 
 set(tests
     algorithm_as_sender
+    algorithm_as_sender_with_scheduler
     algorithm_bulk
+    algorithm_continues_on
     algorithm_ensure_started
-    algorithm_execute
     algorithm_just
     algorithm_just_error
     algorithm_just_stopped
@@ -21,8 +22,6 @@ set(tests
     algorithm_sync_wait
     algorithm_sync_wait_with_variant
     algorithm_then
-    algorithm_transfer
-    algorithm_transfer_just
     algorithm_transfer_when_all
     algorithm_when_all
     algorithm_when_all_vector
@@ -31,6 +30,7 @@ set(tests
     executor_parameters
     executor_parameters_dispatching
     executor_parameters_timer_hooks
+    executor_parameters_partition_hooks
     forwarding_env_query
     forwarding_scheduler_query
     forwarding_sender_query
@@ -39,6 +39,7 @@ set(tests
     minimal_async_executor
     minimal_sync_executor
     persistent_executor_parameters
+    query_get_allocator
     rebind_executor_parameters
 )
 
@@ -67,3 +68,27 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.execution" ${test} ${${test}_PARAMETERS})
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
+  # Clang (last tested version is v22) fails compiling the following tests when
+  # C++ module support is enabled.
+  set(failing_clang_tests
+      algorithm_bulk
+      algorithm_ensure_started
+      algorithm_just
+      algorithm_just_error
+      algorithm_just_stopped
+      algorithm_let_error
+      algorithm_let_stopped
+      algorithm_let_value
+      algorithm_run_loop
+      algorithm_split
+      algorithm_when_all
+      algorithm_transfer_when_all
+  )
+  foreach(test ${failing_clang_tests})
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()

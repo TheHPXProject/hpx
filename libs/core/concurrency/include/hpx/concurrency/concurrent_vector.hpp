@@ -251,5 +251,4 @@ namespace hpx::concurrent {
             return old_size;
         }
     };
-
 }    // namespace hpx::concurrent

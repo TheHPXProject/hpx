@@ -1,4 +1,4 @@
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,9 +10,11 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/components_base/server/component_base.hpp>
+#include <hpx/assert.hpp>
+#include <hpx/collectives/argument_types.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -198,11 +200,14 @@ namespace hpx::collectives::detail {
                 needs_initialization_ = false;
                 data_available_ = false;
 
-                auto const new_size = get_num_sites(num_values);
-                auto const* data = hpx::any_cast<std::vector<T>>(&data_);
-                if (data == nullptr || data->size() < new_size)
+                if constexpr (!std::is_void_v<T>)
                 {
-                    data_ = std::vector<T>(new_size);
+                    auto const new_size = get_num_sites(num_values);
+                    auto const* data = hpx::any_cast<std::vector<T>>(&data_);
+                    if (data == nullptr || data->size() < new_size)
+                    {
+                        data_ = std::vector<T>(new_size);
+                    }
                 }
             }
         }
@@ -229,13 +234,12 @@ namespace hpx::collectives::detail {
         }
 
         template <typename F, typename Lock>
-        auto get_future_and_synchronize(
-            std::size_t generation, std::size_t capacity, F&& f, Lock& l)
+        auto get_future_and_synchronize(std::size_t generation, F&& f, Lock& l)
         {
             HPX_ASSERT_OWNS_LOCK(l);
 
             // Wait for the requested generation to be processed.
-            gate_.synchronize(generation == static_cast<std::size_t>(-1) ?
+            gate_.synchronize(generation == generation_arg{} ?
                     gate_.generation(l) :
                     generation,
                 l);
@@ -245,8 +249,7 @@ namespace hpx::collectives::detail {
             // generation.
             auto sf = gate_.get_shared_future(l);
 
-            traits::detail::get_shared_state(sf)->reserve_callbacks(
-                get_num_sites(capacity));
+            traits::detail::get_shared_state(sf)->reserve_callbacks(num_sites_);
 
             return sf.then(hpx::launch::sync, HPX_FORWARD(F, f));
         }
@@ -268,7 +271,7 @@ namespace hpx::collectives::detail {
                         basename_, operation, which, generation);
                 }
 
-                if (generation == static_cast<std::size_t>(-1) ||
+                if (generation == generation_arg{} ||
                     generation == gate_.generation(l))
                 {
                     current_operation_ = operation;
@@ -284,10 +287,20 @@ namespace hpx::collectives::detail {
         // set or get).
         //
         // Finalizer will be invoked under lock after all sites have checked in.
+        // num_generations is how many internal generations this operation
+        // consumes on this communicator's gate (default generation_mode::
+        // single_step). A hierarchical collective that touches a communicator
+        // only once per user call but has to stay in lock-step with collectives
+        // that touch it twice passes generation_mode::double_step, advancing the
+        // gate by two in a single step so the skipped generation is consumed
+        // here instead of through a second round-trip. It comes before
+        // num_values so the common callers (which never override num_values) can
+        // leave that argument off.
         template <typename Data, typename Step, typename Finalizer>
         auto handle_data(char const* operation, std::size_t which,
             std::size_t generation, [[maybe_unused]] Step&& step,
             Finalizer&& finalizer,
+            generation_mode num_generations = generation_mode::single_step,
             std::size_t num_values = static_cast<std::size_t>(-1))
         {
             auto on_ready = [this, operation, which, generation, num_values,
@@ -337,16 +350,24 @@ namespace hpx::collectives::detail {
                         "number of on_ready callbacks have been invoked before "
                         "the end of the collective operation {}, which {}, "
                         "generation {}. Expected count {}, received count {}.",
-                        basename_, operation, which, generation,
-                        on_ready_count_, num_sites_);
+                        basename_, operation, which, generation, num_sites_,
+                        on_ready_count_);
                 }
 
                 if constexpr (!std::is_same_v<std::nullptr_t,
                                   std::decay_t<Finalizer>>)
                 {
-                    // call provided finalizer
-                    return HPX_FORWARD(Finalizer, finalizer)(
-                        access_data<Data>(num_values), data_available_, which);
+                    if constexpr (std::is_void_v<Data>)
+                    {
+                        return HPX_FORWARD(Finalizer, finalizer)(
+                            data_available_, which);
+                    }
+                    else
+                    {
+                        return HPX_FORWARD(Finalizer, finalizer)(
+                            access_data<Data>(num_values), data_available_,
+                            which);
+                    }
                 }
                 else
                 {
@@ -363,8 +384,8 @@ namespace hpx::collectives::detail {
             // operations on the same communicator.
             set_operation_and_check_sequencing(l, operation, which, generation);
 
-            auto f = get_future_and_synchronize(
-                generation, num_values, HPX_MOVE(on_ready), l);
+            auto f =
+                get_future_and_synchronize(generation, HPX_MOVE(on_ready), l);
 
             // We may have just finished a different operation, thus we have to
             // possibly reset the operation type stored in this communicator.
@@ -382,16 +403,28 @@ namespace hpx::collectives::detail {
                     generation);
             }
 
+            if constexpr (std::is_void_v<Data>)
+            {
+                reinitialize_data<void>(num_values);
+            }
+
             if constexpr (!std::is_same_v<std::nullptr_t, std::decay_t<Step>>)
             {
-                // Call provided step function for each invocation site.
-                HPX_FORWARD(Step, step)(access_data<Data>(num_values), which);
+                if constexpr (std::is_void_v<Data>)
+                {
+                    HPX_FORWARD(Step, step)(which);
+                }
+                else
+                {
+                    HPX_FORWARD(Step, step)(
+                        access_data<Data>(num_values), which);
+                }
             }
 
             // Make sure next generation is enabled only after previous
             // generation has finished executing.
             gate_.set(which, l,
-                [this, operation, which, generation](
+                [this, operation, which, generation, num_generations](
                     auto& l, auto& gate, error_code& ec) {
                     // This callback is invoked synchronously once for each
                     // collective operation after all data has been received and
@@ -410,7 +443,7 @@ namespace hpx::collectives::detail {
                             "been invoked at the end of the collective {} "
                             "operation. Expected count {}, received count {}, "
                             "which {}, generation {}.",
-                            operation, on_ready_count_, num_sites_, which,
+                            operation, num_sites_, on_ready_count_, which,
                             generation);
                         return;
                     }
@@ -420,8 +453,22 @@ namespace hpx::collectives::detail {
                     invalidate_data(l);
 
                     // Release threads possibly waiting for the next generation
-                    // to be handled.
-                    gate.next_generation(l, generation, ec);
+                    // to be handled. When this operation consumes more than one
+                    // generation, advance the gate past the skipped ones in a
+                    // single step (the gate only requires that the next value
+                    // is not smaller than the current one). An auto generation
+                    // (the default sentinel) always advances by one; the assert
+                    // enforces that a multi-generation step is only requested
+                    // with an explicit generation. Note that the step reduces to
+                    // generation when num_generations == single_step.
+                    HPX_ASSERT(
+                        num_generations == generation_mode::single_step ||
+                        generation != generation_arg{});
+                    std::size_t const next_gen =
+                        generation == generation_arg{} ? generation :
+                                                         generation +
+                            static_cast<std::size_t>(num_generations) - 1;
+                    gate.next_generation(l, next_gen, ec);
                 });
 
             return f;

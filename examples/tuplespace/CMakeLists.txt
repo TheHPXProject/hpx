@@ -38,3 +38,12 @@ foreach(example_program ${example_programs})
     )
   endif()
 endforeach()
+
+if(HPX_WITH_CXX_MODULES
+   AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+   AND (NOT (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 1952))
+)
+  target_compile_definitions(
+    simple_central_tuplespace_client PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+  )
+endif()

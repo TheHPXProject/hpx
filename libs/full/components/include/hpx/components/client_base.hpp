@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,13 +11,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/is_client.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/components/basename_registration.hpp>
 #include <hpx/components/components_fwd.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/stub_base.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
@@ -178,81 +177,86 @@ namespace hpx::lcos::detail {
     using registered_name_tracker = std::string;
 }    // namespace hpx::lcos::detail
 
-// This is explicitly instantiated to ensure that the id is stable across shared
-// libraries.
-template <>
-struct hpx::util::extra_data_helper<hpx::lcos::detail::registered_name_tracker>
-{
-    HPX_EXPORT static extra_data_id_type id() noexcept;
-    HPX_EXPORT static void reset(
-        lcos::detail::registered_name_tracker*) noexcept;
-};    // namespace hpx::util
+namespace hpx::util {
 
-// Specialization for shared state of id_type, additionally (optionally) holds a
-// registered name for the object it refers to.
-template <>
-struct HPX_EXPORT hpx::lcos::detail::future_data<hpx::id_type>
-  : future_data_base<id_type>
-{
-    using init_no_addref = future_data_base<hpx::id_type>::init_no_addref;
-
-    future_data() = default;
-
-    future_data(future_data const&) = delete;
-    future_data(future_data&&) = delete;
-    future_data& operator=(future_data const&) = delete;
-    future_data& operator=(future_data&&) = delete;
-
-    explicit future_data(init_no_addref no_addref)
-      : future_data_base(no_addref)
+    // This is explicitly instantiated to ensure that the id is stable across
+    // shared libraries.
+    template <>
+    struct extra_data_helper<hpx::lcos::detail::registered_name_tracker>
     {
-    }
+        HPX_EXPORT static extra_data_id_type id() noexcept;
+        HPX_EXPORT static void reset(
+            lcos::detail::registered_name_tracker*) noexcept;
+    };    // namespace hpx::util
+}    // namespace hpx::util
 
-    template <typename... Ts>
-    future_data(init_no_addref no_addref, std::in_place_t in_place, Ts&&... ts)
-      : future_data_base(no_addref, in_place, HPX_FORWARD(Ts, ts)...)
+namespace hpx::lcos::detail {
+    // Specialization for shared state of id_type, additionally (optionally) holds a
+    // registered name for the object it refers to.
+    template <>
+    struct HPX_EXPORT future_data<hpx::id_type> : future_data_base<id_type>
     {
-    }
+        using init_no_addref = future_data_base<hpx::id_type>::init_no_addref;
 
-    future_data(init_no_addref no_addref, std::exception_ptr const& e)
-      : future_data_base(no_addref, e)
-    {
-    }
-    future_data(init_no_addref no_addref, std::exception_ptr&& e)
-      : future_data_base(no_addref, HPX_MOVE(e))
-    {
-    }
+        future_data() = default;
 
-    // The constructor for the base template is defaulted. Some compilers
-    // generate duplicate symbols for this is the destructor definition is not
-    // visible to it. We hide the implementation in tidy() instead.
-    ~future_data() noexcept override
-    {
-        tidy();
-    }
+        future_data(future_data const&) = delete;
+        future_data(future_data&&) = delete;
+        future_data& operator=(future_data const&) = delete;
+        future_data& operator=(future_data&&) = delete;
 
-    void tidy() const noexcept;
+        explicit future_data(init_no_addref no_addref)
+          : future_data_base(no_addref)
+        {
+        }
 
-    [[nodiscard]] std::string const& get_registered_name() const noexcept;
-    void set_registered_name(std::string name);
-    bool register_as(std::string name, bool manage_lifetime);
+        template <typename... Ts>
+        future_data(
+            init_no_addref no_addref, std::in_place_t in_place, Ts&&... ts)
+          : future_data_base(no_addref, in_place, HPX_FORWARD(Ts, ts)...)
+        {
+        }
 
-    // access extra data stored
-    template <typename T>
-    T& get_extra_data()
-    {
-        return extra_data_.get<T>();
-    }
+        future_data(init_no_addref no_addref, std::exception_ptr const& e)
+          : future_data_base(no_addref, e)
+        {
+        }
+        future_data(init_no_addref no_addref, std::exception_ptr&& e)
+          : future_data_base(no_addref, HPX_MOVE(e))
+        {
+        }
 
-    // try accessing extra data stored, might return nullptr
-    template <typename T>
-    [[nodiscard]] T* try_get_extra_data() const noexcept
-    {
-        return extra_data_.try_get<T>();
-    }
+        // The constructor for the base template is defaulted. Some compilers
+        // generate duplicate symbols for this is the destructor definition is not
+        // visible to it. We hide the implementation in tidy() instead.
+        ~future_data() noexcept override
+        {
+            tidy();
+        }
 
-    util::extra_data extra_data_;
-};    // namespace hpx::lcos::detail
+        void tidy() const noexcept;
+
+        [[nodiscard]] std::string const& get_registered_name() const noexcept;
+        void set_registered_name(std::string name);
+        bool register_as(std::string name, bool manage_lifetime);
+
+        // access extra data stored
+        template <typename T>
+        T& get_extra_data()
+        {
+            return extra_data_.get<T>();
+        }
+
+        // try accessing extra data stored, might return nullptr
+        template <typename T>
+        [[nodiscard]] T* try_get_extra_data() const noexcept
+        {
+            return extra_data_.try_get<T>();
+        }
+
+        util::extra_data extra_data_;
+    };
+}    // namespace hpx::lcos::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::components {
@@ -290,7 +294,7 @@ namespace hpx::components {
     /// @tparam Derived The derived client component type.
     /// @tparam Stub The stub type used for communication.
     /// @tparam Data The extra data type used for additional information.
-    template <typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     class client_base : public detail::make_stub<Stub>::type
     {
         template <typename T, typename Enable>
@@ -702,14 +706,14 @@ namespace hpx::components {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     [[nodiscard]] bool operator==(client_base<Derived, Stub, Data> const& lhs,
         client_base<Derived, Stub, Data> const& rhs)
     {
         return lhs.get() == rhs.get();
     }
 
-    template <typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     [[nodiscard]] bool operator<(client_base<Derived, Stub, Data> const& lhs,
         client_base<Derived, Stub, Data> const& rhs)
     {
@@ -719,7 +723,8 @@ namespace hpx::components {
 
 namespace hpx::serialization {
 
-    template <typename Archive, typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Archive, typename Derived, typename Stub,
+        typename Data>
     HPX_FORCEINLINE void serialize(Archive& ar,
         ::hpx::components::client_base<Derived, Stub, Data>& f,
         unsigned version)

@@ -1,5 +1,6 @@
 //  Copyright (c) 2021 Srinivas Yadav
 //  copyright (c) 2014 Grant Mercer
+//  Copyright (c) 2024 Aneek Barman
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +10,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "findfirstof_tests.hpp"
@@ -78,6 +80,35 @@ void find_first_of_bad_alloc_test()
     test_find_first_of_bad_alloc<std::forward_iterator_tag>();
 }
 
+////////////////////////////////////////////////////////////////////////////
+template <typename IteratorTag>
+void test_find_first_of_edge_cases()
+{
+    using namespace hpx::execution;
+
+    // 1. Invocation count and simple boundary checks (random access only)
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of_edge_cases(seq);
+        test_find_first_of_edge_cases(par);
+        test_find_first_of_edge_cases(par_unseq);
+    }
+
+    // 2. Empty needle: exercised individually per policy
+    test_find_first_of_empty_needle(seq, IteratorTag());
+    test_find_first_of_empty_needle(par, IteratorTag());
+    test_find_first_of_empty_needle(par_unseq, IteratorTag());
+
+    // 3. Cross-policy consistency
+    test_find_first_of_cross_policy(IteratorTag());
+}
+
+void find_first_of_edge_cases_test()
+{
+    test_find_first_of_edge_cases<std::random_access_iterator_tag>();
+    test_find_first_of_edge_cases<std::forward_iterator_tag>();
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -89,6 +120,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     find_first_of_test();
     find_first_of_exception_test();
     find_first_of_bad_alloc_test();
+    find_first_of_edge_cases_test();
+
     return hpx::local::finalize();
 }
 

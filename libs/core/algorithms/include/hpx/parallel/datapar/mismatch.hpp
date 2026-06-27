@@ -36,15 +36,25 @@ namespace hpx::parallel::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static void call(std::size_t base_idx,
             ZipIterator it, std::size_t part_count, Token& tok, F&& f)
         {
+            bool cancelled = false;
+            std::size_t cancel_pos = 0;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_count, tok,
-                [&f, &tok](auto t, std::size_t i) mutable -> void {
-                    auto msk = !hpx::invoke(f, hpx::get<0>(t), hpx::get<1>(t));
-                    int offset = hpx::parallel::traits::find_first_of(msk);
-                    if (offset != -1)
+                [&f, &cancelled, &cancel_pos](
+                    auto t, std::size_t i) mutable -> void {
+                    if (!cancelled)
                     {
-                        tok.cancel(i + offset);
+                        auto msk =
+                            !hpx::invoke(f, hpx::get<0>(t), hpx::get<1>(t));
+                        int offset = hpx::parallel::traits::find_first_of(msk);
+                        if (offset != -1)
+                        {
+                            cancelled = true;
+                            cancel_pos = i + offset;
+                        }
                     }
                 });
+            if (cancelled)
+                tok.cancel(cancel_pos);
         }
 
         template <typename Iter1, typename Sent, typename Iter2, typename F>
@@ -98,9 +108,7 @@ namespace hpx::parallel::detail {
         F&& f)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_mismatch<ExPolicy>::call(
                 first1, last1, first2, HPX_FORWARD(F, f));
@@ -125,18 +133,26 @@ namespace hpx::parallel::detail {
             ZipIterator it, std::size_t part_count, Token& tok, F&& f,
             Proj1&& proj1, Proj2&& proj2)
         {
+            bool cancelled = false;
+            std::size_t cancel_pos = 0;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_count, tok,
-                [&f, &proj1, &proj2, &tok](
+                [&f, &proj1, &proj2, &cancelled, &cancel_pos](
                     auto t, std::size_t i) mutable -> void {
-                    auto msk =
-                        !hpx::invoke(f, hpx::invoke(proj1, hpx::get<0>(t)),
-                            hpx::invoke(proj2, hpx::get<1>(t)));
-                    int offset = hpx::parallel::traits::find_first_of(msk);
-                    if (offset != -1)
+                    if (!cancelled)
                     {
-                        tok.cancel(i + offset);
+                        auto msk =
+                            !hpx::invoke(f, hpx::invoke(proj1, hpx::get<0>(t)),
+                                hpx::invoke(proj2, hpx::get<1>(t)));
+                        int offset = hpx::parallel::traits::find_first_of(msk);
+                        if (offset != -1)
+                        {
+                            cancelled = true;
+                            cancel_pos = i + offset;
+                        }
                     }
                 });
+            if (cancelled)
+                tok.cancel(cancel_pos);
         }
 
         template <typename Iter1, typename Sent1, typename Iter2,
@@ -202,9 +218,7 @@ namespace hpx::parallel::detail {
         Iter2 first2, Sent2 last2, F&& f, Proj1&& proj1, Proj2&& proj2)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_mismatch_binary<ExPolicy>::call2(first1, last1,
                 first2, last2, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),

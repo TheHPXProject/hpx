@@ -11,8 +11,8 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)
 
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_lcw/parcelport_lcw.hpp>
-#include <hpx/parcelset/parcelport_connection.hpp>
 
 #include <cstddef>
 #include <cstdint>

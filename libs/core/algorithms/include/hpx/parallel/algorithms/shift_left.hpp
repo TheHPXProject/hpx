@@ -44,7 +44,10 @@ namespace hpx {
     ///
     /// \returns  The \a shift_left algorithm returns \a FwdIter.
     ///           The \a shift_left algorithm returns an iterator to the
-    ///           end of the resulting range.
+    ///           end of the resulting range. Specifically:
+    ///           If \a n is 0 or \a n >= (last - first), does nothing and
+    ///           returns \a last and \a first respectively.
+    ///           Otherwise returns \a first + ((last - first) - n).
     ///
     template <typename FwdIter, typename Size>
     FwdIter shift_left(FwdIter first, FwdIter last, Size n);
@@ -95,7 +98,10 @@ namespace hpx {
     ///           \a parallel_task_policy and
     ///           returns \a FwdIter otherwise.
     ///           The \a shift_left algorithm returns an iterator to the
-    ///           end of the resulting range.
+    ///           end of the resulting range. Specifically:
+    ///           If \a n is 0, does nothing and returns \a last.
+    ///           If \a n >= (last - first), does nothing and returns \a first.
+    ///           Otherwise returns \a first + ((last - first) - n).
     ///
     template <typename ExPolicy, typename FwdIter, typename Size>
     typename hpx::parallel::util::detail::algorithm_result<ExPolicy, FwdIter>
@@ -194,7 +200,13 @@ namespace hpx::parallel {
             {
                 auto dist =
                     static_cast<std::size_t>(detail::distance(first, last));
-                if (n <= 0 || static_cast<std::size_t>(n) >= dist)
+                // C++20 [alg.shift]: if n is 0, do nothing and return last.
+                if (n == 0)
+                {
+                    return std::next(first, dist);
+                }
+                // C++20 [alg.shift]: if n >= dist, do nothing and return first.
+                if (static_cast<std::size_t>(n) >= dist)
                 {
                     return first;
                 }
@@ -209,7 +221,14 @@ namespace hpx::parallel {
             {
                 auto const dist =
                     static_cast<std::size_t>(detail::distance(first, last));
-                if (n <= 0 || static_cast<std::size_t>(n) >= dist)
+                // C++20 [alg.shift]: if n is 0, do nothing and return last.
+                if (n == 0)
+                {
+                    return parallel::util::detail::algorithm_result<ExPolicy,
+                        FwdIter2>::get(std::next(first, dist));
+                }
+                // C++20 [alg.shift]: if n >= dist, do nothing and return first.
+                if (static_cast<std::size_t>(n) >= dist)
                 {
                     return parallel::util::detail::algorithm_result<ExPolicy,
                         FwdIter2>::get(HPX_MOVE(first));

@@ -25,9 +25,12 @@ using std::string;
 namespace boost { namespace inspect {
     typedef std::set<string> string_set;
 
-    const char* line_break();
+    char const* line_break();
 
     path search_root_path();
+    path search_root_git_path();
+    std::string search_root_git_commit();
+    std::string search_root_git_blob_prefix();
 
     class inspector
     {
@@ -37,19 +40,19 @@ namespace boost { namespace inspect {
     public:
         virtual ~inspector() {}
 
-        virtual const char* name() const = 0;    // example: "tab-check"
-        virtual const char* desc() const = 0;    // example: "verify no tabs"
+        virtual char const* name() const = 0;    // example: "tab-check"
+        virtual char const* desc() const = 0;    // example: "verify no tabs"
 
         // always called:
-        virtual void inspect(const string& /*library_name*/,    // "filesystem"
-            const path& /*full_path*/)
+        virtual void inspect(string const& /*library_name*/,    // "filesystem"
+            path const& /*full_path*/)
         {
         }    // "c:/foo/boost/filesystem/path.hpp"
 
         // called only for registered leaf() signatures:
-        virtual void inspect(const string& library_name,    // "filesystem"
-            const path& full_path,     // "c:/foo/boost/filesystem/path.hpp"
-            const string& contents)    // contents of file
+        virtual void inspect(string const& library_name,    // "filesystem"
+            path const& full_path,     // "c:/foo/boost/filesystem/path.hpp"
+            string const& contents)    // contents of file
             = 0;
 
         // called after all paths visited, but still in time to call error():
@@ -59,20 +62,20 @@ namespace boost { namespace inspect {
 
         // callback used by constructor to register leaf() signature.
         // Signature can be a full file name (Jamfile) or partial (.cpp)
-        void register_signature(const string& signature);
-        void register_skip_signature(const string& signature);
-        const string_set& signatures() const
+        void register_signature(string const& signature);
+        void register_skip_signature(string const& signature);
+        string_set const& signatures() const
         {
             return m_signatures;
         }
-        const string_set& skip_signatures() const
+        string_set const& skip_signatures() const
         {
             return m_skip_signatures;
         }
 
         // report error callback (from inspect(), close() ):
-        void error(const string& library_name, const path& full_path,
-            const string& msg,
+        void error(string const& library_name, path const& full_path,
+            string const& msg,
             std::size_t line_number =
                 0);    // 0 if not available or not applicable
 
@@ -105,7 +108,7 @@ namespace boost { namespace inspect {
         hypertext_inspector();
     };
 
-    inline string relative_to(const path& src_arg, const path& base_arg)
+    inline string relative_to(path const& src_arg, path const& base_arg)
     {
         path base(base_arg);
         base = base.lexically_normal();
@@ -120,6 +123,6 @@ namespace boost { namespace inspect {
         return src.string();
     }
 
-    string impute_library(const path& full_dir_path);
+    string impute_library(path const& full_dir_path);
 
 }}    // namespace boost::inspect

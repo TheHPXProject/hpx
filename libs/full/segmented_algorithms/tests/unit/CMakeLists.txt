@@ -14,6 +14,7 @@ set(tests
     partitioned_vector_any_of1
     partitioned_vector_any_of2
     partitioned_vector_copy
+    partitioned_vector_equal
     partitioned_vector_for_each
     partitioned_vector_for_each_double
     partitioned_vector_for_each_n
@@ -26,6 +27,7 @@ set(tests
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
     partitioned_vector_minmax_element2
+    partitioned_vector_mismatch
     partitioned_vector_move
     partitioned_vector_target
     partitioned_vector_transform1
@@ -43,6 +45,8 @@ set(tests
     partitioned_vector_find2
     partitioned_vector_inclusive_scan
     partitioned_vector_inclusive_scan2
+    partitioned_vector_is_sorted
+    partitioned_vector_is_partitioned
     partitioned_vector_exclusive_scan
     partitioned_vector_exclusive_scan2
     partitioned_vector_none1
@@ -50,6 +54,8 @@ set(tests
     partitioned_vector_transform_scan
     partitioned_vector_transform_scan2
     partitioned_vector_reduce
+    partitioned_vector_replace
+    partitioned_vector_replace_copy
 )
 
 set(partitioned_vector_inclusive_scan_PARAMETERS RUN_SERIAL)

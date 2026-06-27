@@ -75,16 +75,12 @@ void test_one(std::vector<int> a)
     std::vector<int> b(n), c(n), d(n);
     std::vector<int> b_ans(n), c_ans(n), d_ans(n);
 
-    auto p_copy_if = hpx::ranges::copy_if(par, a.begin(), a.end(), b.begin(),
-        [](int bar) { return bar % 2 == 1; });
-    auto p_remove_copy_if = hpx::remove_copy_if(par, a.begin(), a.end(),
-        c.begin(), [](int bar) { return bar % 2 != 1; });
-    auto p_remove_copy =
+    [[maybe_unused]] auto p_copy_if = hpx::ranges::copy_if(par, a.begin(),
+        a.end(), b.begin(), [](int bar) { return bar % 2 == 1; });
+    [[maybe_unused]] auto p_remove_copy_if = hpx::remove_copy_if(par, a.begin(),
+        a.end(), c.begin(), [](int bar) { return bar % 2 != 1; });
+    [[maybe_unused]] auto p_remove_copy =
         hpx::remove_copy(par, a.begin(), a.end(), d.begin(), 0);
-
-    HPX_UNUSED(p_copy_if);
-    HPX_UNUSED(p_remove_copy_if);
-    HPX_UNUSED(p_remove_copy);
 
     std::copy_if(a.begin(), a.end(), b_ans.begin(),
         [](int bar) { return bar % 2 == 1; });

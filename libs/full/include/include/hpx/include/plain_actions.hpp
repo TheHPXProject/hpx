@@ -7,5 +7,5 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/async_distributed/continuation.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>

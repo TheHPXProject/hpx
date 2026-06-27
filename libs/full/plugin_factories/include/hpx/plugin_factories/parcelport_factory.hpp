@@ -1,5 +1,5 @@
 //  Copyright (c)      2014 Thomas Heller
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2020 Google
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -9,6 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/prefix.hpp>
@@ -16,7 +17,7 @@
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/string_util.hpp>
-
+#include <hpx/plugin_factories/macros.hpp>
 #include <hpx/plugin_factories/parcelport_factory_base.hpp>
 #include <hpx/plugin_factories/plugin_factory_base.hpp>
 #include <hpx/plugin_factories/unique_plugin_name.hpp>
@@ -37,7 +38,7 @@ namespace hpx::plugins {
     ///
     /// \tparam Parcelport The parcelport type this factory should be
     ///                        responsible for.
-    template <typename Parcelport>
+    HPX_CXX_EXPORT template <typename Parcelport>
     struct parcelport_factory : parcelport_factory_base
     {
         /// \brief Construct a new factory instance
@@ -167,28 +168,5 @@ namespace hpx::plugins {
         }
     };
 }    // namespace hpx::plugins
-
-///////////////////////////////////////////////////////////////////////////////
-/// This macro is used create and to register a minimal component factory with
-/// Hpx.Plugin.
-#define HPX_REGISTER_PARCELPORT_(Parcelport, pluginname, pp)                   \
-    using HPX_PP_CAT(pluginname, _plugin_factory_type) =                       \
-        hpx::plugins::parcelport_factory<Parcelport>;                          \
-    HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
-        HPX_PP_CAT(pluginname, _plugin_factory_type), pp)                      \
-    template struct hpx::plugins::parcelport_factory<Parcelport>;              \
-    HPX_EXPORT hpx::plugins::parcelport_factory_base* HPX_PP_CAT(              \
-        pluginname, _factory_init)(                                            \
-        std::vector<hpx::plugins::parcelport_factory_base*> & factories)       \
-    {                                                                          \
-        static HPX_PP_CAT(pluginname, _plugin_factory_type)                    \
-            factory(factories);                                                \
-        return &factory;                                                       \
-    }                                                                          \
-    /**/
-
-#define HPX_REGISTER_PARCELPORT(Parcelport, pluginname)                        \
-    HPX_REGISTER_PARCELPORT_(                                                  \
-        Parcelport, HPX_PP_CAT(parcelport_, pluginname), pluginname)
 
 #endif

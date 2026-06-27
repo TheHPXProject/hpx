@@ -8,12 +8,5 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/util.hpp>
-
-#include <hpx/performance_counters/base_performance_counter.hpp>
-#include <hpx/performance_counters/counter_creators.hpp>
-#include <hpx/performance_counters/counters.hpp>
-#include <hpx/performance_counters/manage_counter.hpp>
-#include <hpx/performance_counters/manage_counter_type.hpp>
-#include <hpx/performance_counters/performance_counter.hpp>
-#include <hpx/performance_counters/performance_counter_set.hpp>

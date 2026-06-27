@@ -37,7 +37,7 @@ namespace hpx::threads::policies {
     // The background_scheduler_scheduler runs only background work
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
-        typename StagedQueuing = lockfree_fifo,
+        typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
             default_background_scheduler_terminated_queue>
     class background_scheduler final

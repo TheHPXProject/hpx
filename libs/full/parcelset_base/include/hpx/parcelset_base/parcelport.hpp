@@ -171,7 +171,18 @@ namespace hpx::parcelset {
             connection_cache_evictions = 1,
             connection_cache_hits = 2,
             connection_cache_misses = 3,
-            connection_cache_reclaims = 4
+            connection_cache_reclaims = 4,
+            // Number of get_or_reserve() calls that returned false because all
+            // connection slots were checked out (pool saturation, distinct from
+            // normal cache misses which do not cause parcel deferral).
+            connection_cache_reservation_failures = 5,
+            // Current number of connections tracked by the cache (in-use +
+            // available). Use with connection_cache_max_connections to compute
+            // pool utilisation.
+            connection_cache_num_connections = 6,
+            // Configured maximum total connections (hpx.max_connections ini
+            // key). Fixed at startup; returned without reset semantics.
+            connection_cache_max_connections = 7
         };
 
         // invoke pending background work

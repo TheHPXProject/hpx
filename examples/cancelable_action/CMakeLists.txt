@@ -33,3 +33,12 @@ if(HPX_WITH_TESTS AND HPX_WITH_TESTS_EXAMPLES)
     "cancelable_action" cancelable_action_client THREADS_PER_LOCALITY 4
   )
 endif()
+
+if(HPX_WITH_CXX_MODULES
+   AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+   AND (NOT (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 1952))
+)
+  target_compile_definitions(
+    cancelable_action_client PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+  )
+endif()

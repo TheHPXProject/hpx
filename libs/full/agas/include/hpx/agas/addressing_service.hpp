@@ -11,17 +11,17 @@
 
 #include <hpx/config.hpp>
 #include <hpx/agas/agas_fwd.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
 #include <hpx/modules/agas_base.hpp>
 #include <hpx/modules/cache.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -37,13 +37,13 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
 #if defined(HPX_HAVE_NETWORKING)
-    HPX_EXPORT void destroy_big_boot_barrier();
+    HPX_CXX_EXPORT HPX_EXPORT void destroy_big_boot_barrier();
 #endif
 
-    struct addressing_service
+    HPX_CXX_EXPORT struct addressing_service
     {
     public:
         HPX_NON_COPYABLE(addressing_service);
@@ -115,7 +115,6 @@ namespace hpx { namespace agas {
 #if defined(HPX_HAVE_NETWORKING)
         ~addressing_service()
         {
-            // TODO: Free the future pools?
             destroy_big_boot_barrier();
         }
 #else
@@ -1217,7 +1216,6 @@ namespace hpx { namespace agas {
         // Pre-cache locality endpoints in hosted locality namespace
         void pre_cache_endpoints(std::vector<parcelset::endpoints_type> const&);
     };
-
-}}    // namespace hpx::agas
+}    // namespace hpx::agas
 
 #include <hpx/config/warnings_suffix.hpp>

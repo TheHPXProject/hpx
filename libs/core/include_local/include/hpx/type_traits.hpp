@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 
 namespace hpx {

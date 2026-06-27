@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2017 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,18 +6,20 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#include <hpx/version.hpp>
+
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/manage_counter.hpp>
-#include <hpx/version.hpp>
 
 #include <memory>
 
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
+
     struct manage_counter
     {
         manage_counter()
@@ -70,11 +72,14 @@ namespace hpx { namespace performance_counters {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    static void counter_shutdown(std::shared_ptr<manage_counter> const& p)
-    {
-        HPX_ASSERT(p);
-        p->uninstall();
-    }
+    namespace {
+
+        void counter_shutdown(std::shared_ptr<manage_counter> const& p)
+        {
+            HPX_ASSERT(p);
+            p->uninstall();
+        }
+    }    // namespace
 
     void install_counter(
         hpx::id_type const& id, counter_info const& info, error_code& ec)
@@ -88,4 +93,4 @@ namespace hpx { namespace performance_counters {
         get_runtime().add_shutdown_function(
             hpx::bind_front(&counter_shutdown, p));
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

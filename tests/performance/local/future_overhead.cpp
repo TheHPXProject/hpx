@@ -9,7 +9,7 @@
 
 #include <hpx/config.hpp>
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME) && !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/actions_base/plain_action.hpp>
+#include <hpx/modules/actions.hpp>
 #endif
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>

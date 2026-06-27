@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -34,7 +34,7 @@ namespace hpx {
     ///
     /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
     ///           function doesn't throw but returns the result code using the
-    ///           parameter \a ec. Otherwise it throws an instance of
+    ///           parameter \a ec. Otherwise, it throws an instance of
     ///           hpx::exception.
     ///
     /// \note     This function will return meaningful results only if called
@@ -42,5 +42,5 @@ namespace hpx {
     ///           otherwise.
     ///
     /// \see      \a hpx::find_all_localities(), \a hpx::find_locality()
-    HPX_EXPORT hpx::id_type find_here(error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT hpx::id_type find_here(error_code& ec = throws);
 }    // namespace hpx

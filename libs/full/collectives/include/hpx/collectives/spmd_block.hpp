@@ -7,12 +7,11 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/collectives/barrier.hpp>
-#include <hpx/collectives/broadcast_direct.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -23,6 +22,9 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/collectives/barrier.hpp>
+#include <hpx/collectives/broadcast_direct.hpp>
 
 #include <array>
 #include <atomic>
@@ -38,7 +40,7 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace lcos {
+namespace hpx::lcos {
 
     /// The class spmd_block defines an interface for launching
     /// multiple images while giving handles to each image to interact with
@@ -47,7 +49,7 @@ namespace hpx { namespace lcos {
     /// separate thread. A temporary spmd block object is created and diffused
     /// to each image. The constraint for the action given to the
     /// define_spmd_block function is to accept a spmd_block as first parameter.
-    struct spmd_block
+    HPX_CXX_EXPORT struct spmd_block
     {
     private:
         using barrier_type = hpx::distributed::barrier;
@@ -326,7 +328,8 @@ namespace hpx { namespace lcos {
                     hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
                 hpx::parallel::execution::bulk_sync_execute(
-                    hpx::execution::experimental::with_hint(exec, hint),
+                    hpx::execution::to_hierarchical_spawning(
+                        hpx::execution::experimental::with_hint(exec, hint)),
                     detail::spmd_block_helper<F>{
                         name, images_per_locality, num_images},
                     hpx::util::counting_shape(
@@ -336,7 +339,7 @@ namespace hpx { namespace lcos {
         };
     }    // namespace detail
 
-    template <typename F, typename... Args>
+    HPX_CXX_EXPORT template <typename F, typename... Args>
         requires(hpx::traits::is_action_v<F>)
     hpx::future<void> define_spmd_block(std::string&& name,
         std::size_t images_per_locality, F&& /* f */, Args&&... args)
@@ -369,6 +372,6 @@ namespace hpx { namespace lcos {
             HPX_FORWARD(std::string, name), images_per_locality, num_images,
             HPX_FORWARD(Args, args)...);
     }
-}}    // namespace hpx::lcos
+}    // namespace hpx::lcos
 
 #endif

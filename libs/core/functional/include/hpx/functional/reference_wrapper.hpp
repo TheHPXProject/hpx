@@ -71,7 +71,7 @@ namespace hpx {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct needs_reference_semantics<T const> : needs_reference_semantics<T>
         {
         };
@@ -81,7 +81,7 @@ namespace hpx {
             needs_reference_semantics<T>::value;
     }    // namespace traits
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct reference_wrapper<T,
         std::enable_if_t<traits::needs_reference_semantics_v<T>>>
     {

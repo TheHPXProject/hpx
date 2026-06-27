@@ -7,5 +7,6 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/algorithms.hpp>
-#include <hpx/parallel/segmented_algorithms/for_each.hpp>
+#include <hpx/modules/segmented_algorithms.hpp>

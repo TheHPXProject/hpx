@@ -256,11 +256,11 @@ namespace hpx::parallel {
                     HPX_FORWARD(ExPolicy, policy), first, count, val);
             }
 
-            template <typename ExPolicy, typename T>
-            static decltype(auto) parallel(ExPolicy&& policy, FwdIter first,
+            template <typename ExPolicy, typename FwdIter_, typename T>
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter_ first,
                 std::size_t count, T const& val)
             {
-                return for_each_n<FwdIter>().call(
+                return for_each_n<FwdIter_>().call(
                     HPX_FORWARD(ExPolicy, policy), first, count,
                     [val](auto&& v) -> void { v = val; }, hpx::identity_v);
             }

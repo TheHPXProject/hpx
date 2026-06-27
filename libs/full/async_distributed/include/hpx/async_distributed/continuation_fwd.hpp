@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2020 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,14 +7,14 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_continuation.hpp>
+#include <hpx/modules/actions_base.hpp>
 
-namespace hpx { namespace actions {
+namespace hpx::actions {
 
-    class HPX_EXPORT continuation;
+    HPX_CXX_EXPORT class HPX_EXPORT continuation;
 
-    template <typename Result, typename RemoteResult, typename F,
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult, typename F,
         typename... Ts>
     void trigger(
         typed_continuation<Result, RemoteResult>&&, F&&, Ts&&...) noexcept;
-}}    // namespace hpx::actions
+}    // namespace hpx::actions

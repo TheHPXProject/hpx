@@ -1,3 +1,18 @@
+# Copyright (c) 2021 Auriane Reverdell
+# Copyright (c) 2026 Hartmut Kaiser
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
 ---
 exclude_paths:
-  - "tools/perftests_ci/**"
+  - "tools/**"
+  - ".github/**"
+
+tools:
+  duplication:
+    exclude:
+      - "examples/**"
+      - "tests/**"
+      - "**/tests/**"

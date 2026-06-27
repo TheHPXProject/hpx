@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2015-2017 Thomas Heller
 //  Copyright (c)      2011 Bryce Lelbach
 //
@@ -46,7 +46,7 @@ namespace hpx::components::detail {
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component, typename Enable>
+    HPX_CXX_EXPORT template <typename Component, typename Enable>
     struct component_heap_type
     {
         using type = hpx::components::detail::simple_heap<Component>;
@@ -56,7 +56,7 @@ namespace hpx::traits {
 namespace hpx::components {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     class component : public Component
     {
     public:

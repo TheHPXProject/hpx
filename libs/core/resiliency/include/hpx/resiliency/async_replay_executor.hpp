@@ -127,7 +127,7 @@ namespace hpx::resiliency::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Pred, typename F, typename Tuple>
+        template <typename Pred, typename F, typename Tuple>
         struct async_replay_executor_helper<void, Pred, F, Tuple>
           : std::enable_shared_from_this<
                 async_replay_executor_helper<void, Pred, F, Tuple>>

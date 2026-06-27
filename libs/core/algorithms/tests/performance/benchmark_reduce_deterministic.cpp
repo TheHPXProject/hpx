@@ -17,6 +17,7 @@
 #include <iostream>
 #include <numeric>
 #include <random>
+#include <type_traits>
 #include <vector>
 
 int seed = 1000;

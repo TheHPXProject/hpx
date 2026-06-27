@@ -203,10 +203,6 @@ namespace hpx {
 #include <type_traits>
 #include <utility>
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
-#include <ranges>
-#endif
-
 namespace hpx::parallel {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -231,11 +227,7 @@ namespace hpx::parallel {
                 for (auto tail = last2; !(first == tail || first == --tail);
                     ++first)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first, tail);
-#else
-                    std::iter_swap(first, tail);
-#endif
                 }
                 return last2;
             }
@@ -258,12 +250,8 @@ namespace hpx::parallel {
                                 hpx::util::counting_iterator<std::size_t>(0),
                                 size / 2,
                                 [first, last2](std::size_t i) -> void {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                                     std::ranges::iter_swap(
                                         first + i, last2 - 1 - i);
-#else
-                                    std::iter_swap(first + i, last2 - 1 - i);
-#endif
                                 },
                                 hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });
@@ -284,7 +272,7 @@ namespace hpx::parallel {
                             size / 2,
                             [](reference t) -> void {
                                 using hpx::get;
-                                std::swap(get<0>(t), get<1>(t));
+                                std::ranges::swap(get<0>(t), get<1>(t));
                             },
                             hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });

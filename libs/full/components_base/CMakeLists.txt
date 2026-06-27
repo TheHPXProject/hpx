@@ -20,6 +20,7 @@ set(components_base_headers
     hpx/components_base/component_startup_shutdown.hpp
     hpx/components_base/detail/agas_interface_functions.hpp
     hpx/components_base/generate_unique_ids.hpp
+    hpx/components_base/macros.hpp
     hpx/components_base/pinned_ptr.hpp
     hpx/components_base/server/abstract_component_base.hpp
     hpx/components_base/server/abstract_migration_support.hpp
@@ -47,6 +48,8 @@ set(components_base_headers
     hpx/components_base/traits/is_component.hpp
     hpx/components_base/traits/managed_component_policies.hpp
 )
+
+set(components_base_macros_headers hpx/components_base/macros.hpp)
 
 # Default location is $HPX_ROOT/libs/components_base/include_compatibility
 # cmake-format: off
@@ -105,8 +108,11 @@ include(HPX_AddModule)
 add_hpx_module(
   full components_base
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
+  ADD_TO_GLOBAL_HEADER "hpx/components_base/detail/agas_interface_functions.hpp"
   SOURCES ${components_base_sources}
   HEADERS ${components_base_headers}
+  MACRO_HEADERS ${components_base_macros_headers}
   COMPAT_HEADERS ${components_base_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_naming_base hpx_parcelset_base

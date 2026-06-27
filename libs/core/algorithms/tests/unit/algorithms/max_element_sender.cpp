@@ -46,7 +46,7 @@ void test_max_element_sender(
             tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(end),
                               std::less<std::size_t>()) |
                 hpx::max_element(ex_policy.on(exec)));
-        iterator result = hpx::get<0>(*snd_result);
+        iterator result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result != end);
 
@@ -60,7 +60,7 @@ void test_max_element_sender(
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::max_element(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result != end);
 
@@ -75,7 +75,7 @@ void test_max_element_sender(
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::max_element(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result == iterator(std::begin(c)));
     }

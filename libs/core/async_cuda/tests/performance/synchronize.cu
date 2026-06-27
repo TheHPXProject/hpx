@@ -98,7 +98,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         hpx::chrono::high_resolution_timer timer;
         for (std::size_t i = 0; i != iterations; ++i)
         {
-            cu::transform_stream(ex::just(), f, cuda_stream) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream));
         }
         double elapsed = timer.elapsed();
         std::cout
@@ -123,7 +123,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
             // We have to manually unroll this loop, because the type of the
             // sender changes for each additional transform_stream call. The
             // number of unrolled calls must match batch_size above.
-            cu::transform_stream(ex::just(), f, cuda_stream) |
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
@@ -132,12 +132,12 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
-                cu::transform_stream(f, cuda_stream) | tt::sync_wait();
+                cu::transform_stream(f, cuda_stream));
         }
         // Do the remainder one-by-one
         for (std::size_t i = 0; i < non_batch_iterations; ++i)
         {
-            cu::transform_stream(ex::just(), f, cuda_stream) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream));
         }
         double elapsed = timer.elapsed();
         std::cout
@@ -165,21 +165,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
             // intentionally insert dummy then([]{}) calls between the
             // transform_stream calls to force synchronization between the
             // kernel launches.
-            cu::transform_stream(ex::just(), f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | ex::then([] {}) |
-                cu::transform_stream(f, cuda_stream) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream) |
+                ex::then([] {}) | cu::transform_stream(f, cuda_stream));
         }
         // Do the remainder one-by-one
         for (std::size_t i = 0; i < non_batch_iterations; ++i)
         {
-            cu::transform_stream(ex::just(), f, cuda_stream) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream));
         }
         double elapsed = timer.elapsed();
         std::cout
@@ -201,12 +201,12 @@ int hpx_main(hpx::program_options::variables_map& vm)
         hpx::chrono::high_resolution_timer timer;
         for (std::size_t i = 0; i != iterations; ++i)
         {
-            cu::transform_stream(ex::just(), f, cuda_stream) |
-                ex::transfer(ex::thread_pool_scheduler{}) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream) |
+                ex::continues_on(ex::thread_pool_scheduler{}));
         }
         double elapsed = timer.elapsed();
         std::cout
-            << "transform_stream with transfer:                                "
+            << "transform_stream with continues_on:                            "
             << elapsed << '\n';
     }
 
@@ -227,7 +227,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
             // We have to manually unroll this loop, because the type of the
             // sender changes for each additional transform_stream call. The
             // number of unrolled calls must match batch_size above.
-            cu::transform_stream(ex::just(), f, cuda_stream) |
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
@@ -237,17 +237,17 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
                 cu::transform_stream(f, cuda_stream) |
-                ex::transfer(ex::thread_pool_scheduler{}) | tt::sync_wait();
+                ex::continues_on(ex::thread_pool_scheduler{}));
         }
         // Do the remainder one-by-one
         for (std::size_t i = 0; i < non_batch_iterations; ++i)
         {
-            cu::transform_stream(ex::just(), f, cuda_stream) |
-                ex::transfer(ex::thread_pool_scheduler{}) | tt::sync_wait();
+            tt::sync_wait(cu::transform_stream(ex::just(), f, cuda_stream) |
+                ex::continues_on(ex::thread_pool_scheduler{}));
         }
         double elapsed = timer.elapsed();
         std::cout
-            << "transform_stream with transfer batched:                        "
+            << "transform_stream with continues_on batched:                    "
             << elapsed << '\n';
     }
 

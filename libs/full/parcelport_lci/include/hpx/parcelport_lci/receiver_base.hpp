@@ -13,8 +13,8 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCI)
 
 #include <hpx/assert.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_lci/header.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
 
 #include <algorithm>
 #include <cstddef>

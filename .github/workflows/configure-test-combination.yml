@@ -14,6 +14,10 @@ on:
       - 'release**'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   configure-test-combinations:
     runs-on: ubuntu-latest
@@ -21,7 +25,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       
       - name: Create build directory
         run: mkdir -p build
@@ -64,6 +68,37 @@ jobs:
               -DHPX_WITH_EXAMPLES=On
           rm -rf *
       
+      - name: Running CMake with distributed runtime off
+        working-directory: build
+        run: |
+          cmake \
+              .. \
+              -G "Ninja" \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=Off \
+              -DHPX_WITH_DISTRIBUTED_RUNTIME=OFF \
+              -DHPX_WITH_NETWORKING=OFF \
+              -DHPX_WITH_TESTS=On \
+              -DHPX_WITH_EXAMPLES=On
+          rm -rf *
+
+      - name: Running CMake with invalid tracing combination (should fail)
+        working-directory: build
+        run: |
+          if cmake \
+              .. \
+              -G "Ninja" \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=Off \
+              -DHPX_WITH_APEX=On \
+              -DHPX_WITH_FETCH_APEX=ON \
+              -DHPX_WITH_TRACY=On \
+              -DHPX_WITH_FETCH_TRACY=ON; then
+            echo "CMake succeeded when it should have failed!"
+            exit 1
+          fi
+          echo "CMake failed as expected."
+          rm -rf *
       - name: Upload build directory
         uses: actions/upload-artifact@v7
         with:

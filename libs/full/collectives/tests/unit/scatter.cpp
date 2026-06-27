@@ -23,6 +23,7 @@
 using namespace hpx::collectives;
 
 constexpr char const* scatter_direct_basename = "/test/scatter_direct/";
+constexpr char const* scatter_validation_basename = "/test/scatter_validation/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 100;
 #else
@@ -181,13 +182,40 @@ void test_local_use(std::uint32_t num_sites)
             auto const elapsed = t.elapsed();
             if (site == 0)
             {
-                std::cout << "local timing: " << elapsed / (10 * ITERATIONS)
+                std::cout << "local timing: " << elapsed / ITERATIONS
                           << "[s]\n";
             }
         }));
     }
 
     hpx::wait_all(std::move(sites));
+}
+
+void test_scatter_to_undersized_payload(std::uint32_t num_sites)
+{
+    constexpr std::size_t generation = 1;
+
+    auto const scatter_direct_client = create_local_communicator(
+        scatter_validation_basename, num_sites_arg(num_sites), this_site_arg(0),
+        generation_arg(generation));
+
+    std::vector<std::uint32_t> data(num_sites - 1);
+    std::iota(data.begin(), data.end(), 42);
+
+    bool caught_exception = false;
+    try
+    {
+        [[maybe_unused]] auto result =
+            scatter_to(hpx::launch::sync, scatter_direct_client,
+                std::move(data), generation_arg(generation), this_site_arg(0));
+    }
+    catch (hpx::exception const& e)
+    {
+        caught_exception = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+
+    HPX_TEST(caught_exception);
 }
 
 int hpx_main()
@@ -205,6 +233,9 @@ int hpx_main()
     {
         test_local_use(1);
         test_local_use(10);
+
+        // Reproducer for malformed scatter payloads in local mode.
+        test_scatter_to_undersized_payload(4);
     }
 
     return hpx::finalize();

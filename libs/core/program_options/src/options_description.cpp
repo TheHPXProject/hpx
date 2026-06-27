@@ -51,9 +51,24 @@ namespace hpx::program_options {
     }
 
     option_description::option_description(
+        char const* name, std::unique_ptr<value_semantic const> s)
+      : m_value_semantic(s.release())
+    {
+        this->set_names(name);
+    }
+
+    option_description::option_description(
         char const* names, value_semantic const* s, char const* description)
       : m_description(description)
       , m_value_semantic(s)
+    {
+        this->set_names(names);
+    }
+
+    option_description::option_description(char const* names,
+        std::unique_ptr<value_semantic const> s, char const* description)
+      : m_description(description)
+      , m_value_semantic(s.release())
     {
         this->set_names(names);
     }
@@ -253,10 +268,15 @@ namespace hpx::program_options {
     {
         // Create untyped semantic which accepts zero tokens: i.e.
         // no value can be specified on command line.
-        // FIXME: does not look exception-safe
+        //
+        // By creating a unique_ptr first, and passing it to the new
+        // option_description constructor that accepts a unique_ptr, we avoid
+        // any possibility of a memory leak if allocation fails.
+        std::unique_ptr<value_semantic const> semantic =
+            std::make_unique<untyped_value>(true);
         std::shared_ptr<option_description> d =
             std::make_shared<option_description>(
-                name, new untyped_value(true), description);
+                name, HPX_MOVE(semantic), description);
 
         owner->add(HPX_MOVE(d));
         return *this;

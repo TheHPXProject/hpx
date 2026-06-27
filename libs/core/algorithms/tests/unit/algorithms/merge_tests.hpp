@@ -600,6 +600,89 @@ void test_merge_etc(
     }
 }
 
+template <typename IteratorTag>
+void test_merge_partial_ordering(IteratorTag)
+{
+    using value_type = std::pair<int, int>;
+    using base_iterator = typename std::vector<value_type>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    constexpr std::size_t size1 = 300007;
+    constexpr std::size_t size2 = 123456;
+    std::vector<value_type> src1(size1), src2(size2), dest_res(size1 + size2),
+        dest_sol(size1 + size2);
+
+    std::size_t index = 0;
+    auto rf = random_fill(0, 10);
+    std::generate(std::begin(src1), std::end(src1), [&index, &rf]() {
+        return std::make_pair(rf(), static_cast<int>(index++));
+    });
+    std::generate(std::begin(src2), std::end(src2), [&index, &rf]() {
+        return std::make_pair(rf(), static_cast<int>(index++));
+    });
+
+    auto comp = [](value_type const& a, value_type const& b) -> bool {
+        return a.first < b.first;
+    };
+
+    std::stable_sort(std::begin(src1), std::end(src1), comp);
+    std::stable_sort(std::begin(src2), std::end(src2), comp);
+
+    auto result = hpx::merge(iterator(std::begin(src1)),
+        iterator(std::end(src1)), iterator(std::begin(src2)),
+        iterator(std::end(src2)), iterator(std::begin(dest_res)), comp);
+    auto solution = std::merge(std::begin(src1), std::end(src1),
+        std::begin(src2), std::end(src2), std::begin(dest_sol), comp);
+
+    bool equality = test::equal(
+        std::begin(dest_res), result.base(), std::begin(dest_sol), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_merge_partial_ordering(ExPolicy&& policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using value_type = std::pair<int, int>;
+    using base_iterator = typename std::vector<value_type>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    constexpr std::size_t size1 = 300007;
+    constexpr std::size_t size2 = 123456;
+    std::vector<value_type> src1(size1), src2(size2), dest_res(size1 + size2),
+        dest_sol(size1 + size2);
+
+    std::size_t index = 0;
+    auto rf = random_fill(0, 10);
+    std::generate(std::begin(src1), std::end(src1), [&index, &rf]() {
+        return std::make_pair(rf(), static_cast<int>(index++));
+    });
+    std::generate(std::begin(src2), std::end(src2), [&index, &rf]() {
+        return std::make_pair(rf(), static_cast<int>(index++));
+    });
+
+    auto comp = [](value_type const& a, value_type const& b) -> bool {
+        return a.first < b.first;
+    };
+
+    std::stable_sort(std::begin(src1), std::end(src1), comp);
+    std::stable_sort(std::begin(src2), std::end(src2), comp);
+
+    auto result = hpx::merge(policy, iterator(std::begin(src1)),
+        iterator(std::end(src1)), iterator(std::begin(src2)),
+        iterator(std::end(src2)), iterator(std::begin(dest_res)), comp);
+    auto solution = std::merge(std::begin(src1), std::end(src1),
+        std::begin(src2), std::end(src2), std::begin(dest_sol), comp);
+
+    bool equality = test::equal(
+        std::begin(dest_res), result.base(), std::begin(dest_sol), solution);
+
+    HPX_TEST(equality);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
 void test_merge()
@@ -693,6 +776,12 @@ void test_merge()
     test_merge_etc(seq, IteratorTag(), user_defined_type(), rand_base);
     test_merge_etc(par, IteratorTag(), user_defined_type(), rand_base);
     test_merge_etc(par_unseq, IteratorTag(), user_defined_type(), rand_base);
+
+    ////////// Test cases for partial ordering merge.
+    test_merge_partial_ordering(IteratorTag());
+    test_merge_partial_ordering(seq, IteratorTag());
+    test_merge_partial_ordering(par, IteratorTag());
+    test_merge_partial_ordering(par_unseq, IteratorTag());
 }
 
 ///////////////////////////////////////////////////////////////////////////////

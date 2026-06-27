@@ -16,17 +16,10 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/serialization.hpp>
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
 
 #include <hpx/actions/actions_fwd.hpp>
-#include <hpx/actions_base/actions_base_fwd.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/detail/action_factory.hpp>
-#include <hpx/actions_base/traits/action_continuation.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 
@@ -44,7 +37,7 @@ namespace hpx::actions {
     // The \a base_action class is an abstract class used as the base class
     // for all action types. It's main purpose is to allow polymorphic
     // serialization of action instances through a unique_ptr.
-    struct base_action
+    HPX_CXX_EXPORT struct base_action
     {
         /// Destructor
         virtual ~base_action();
@@ -131,17 +124,10 @@ namespace hpx::actions {
         /// The function \a get_serialization_id returns the id which has been
         /// associated with this action (mainly used for serialization purposes).
         virtual std::uint32_t get_action_id() const = 0;
-
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-        /// The function \a get_action_name_itt returns the name of this action
-        /// as an ITT string_handle
-        virtual util::itt::string_handle const& get_action_name_itt() const = 0;
-#endif
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    struct base_action_data : base_action
+    HPX_CXX_EXPORT struct base_action_data : base_action
     {
         base_action_data() = default;
 
@@ -187,119 +173,17 @@ namespace hpx::actions {
 // serialization support for basic_action
 namespace hpx::serialization {
 
-    template <typename Archive, typename Component, typename R,
+    HPX_CXX_EXPORT template <typename Archive, typename Component, typename R,
         typename... Args, typename Derived>
-    HPX_FORCEINLINE void serialize(Archive& /* ar */,
-        ::hpx::actions::basic_action<Component, R(Args...), Derived>& /* t */,
-        unsigned int const /* version */ = 0)
+    constexpr void serialize(Archive&,
+        ::hpx::actions::basic_action<Component, R(Args...), Derived>&,
+        unsigned int const) noexcept
     {
     }
 }    // namespace hpx::serialization
 
 #include <hpx/config/warnings_suffix.hpp>
-
-// Helper macro for action serialization, each of the defined actions needs to
-// be registered with the serialization library
-#define HPX_DEFINE_GET_ACTION_NAME(action)                                     \
-    HPX_DEFINE_GET_ACTION_NAME_(action, action)                                \
-    /**/
-
-#define HPX_DEFINE_GET_ACTION_NAME_(action, actionname)                        \
-    HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)                         \
-    namespace hpx::actions::detail {                                           \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT char const* get_action_name</**/ action>() noexcept  \
-        {                                                                      \
-            return HPX_PP_STRINGIZE(actionname);                               \
-        }                                                                      \
-    }                                                                          \
-    /**/
-/**/
-
-///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)                     \
-    namespace hpx::actions::detail {                                           \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT util::itt::string_handle const&                      \
-        get_action_name_itt</**/ action>() noexcept                            \
-        {                                                                      \
-            static util::itt::string_handle sh(HPX_PP_STRINGIZE(actionname));  \
-            return sh;                                                         \
-        }                                                                      \
-    }                                                                          \
-    /**/
-
-#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action)            \
-    namespace hpx::actions::detail {                                           \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT util::itt::string_handle const&                      \
-        get_action_name_itt</**/ action>() noexcept;                           \
-    }                                                                          \
-/**/
-#else    // HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)          /**/
-#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action) /**/
-#endif    // HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-
-#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID(action)                \
-    HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action)                \
-    namespace hpx::actions::detail {                                           \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT char const* get_action_name<action>() noexcept;      \
-    }                                                                          \
-    HPX_REGISTER_ACTION_EXTERN_DECLARATION(action)                             \
-                                                                               \
-    namespace hpx::traits {                                                    \
-        template <>                                                            \
-        struct is_action</**/ action> : std::true_type                         \
-        {                                                                      \
-        };                                                                     \
-        template <>                                                            \
-        struct needs_automatic_registration</**/ action> : std::false_type     \
-        {                                                                      \
-        };                                                                     \
-    }                                                                          \
-    /**/
-
-#define HPX_REGISTER_ACTION_DECLARATION_2(action, actionname)                  \
-    HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID(action)                    \
-    /**/
-
-#if defined(HPX_MSVC) || defined(HPX_MINGW)
-#define HPX_REGISTER_ACTION_2(action, actionname)                              \
-    HPX_DEFINE_GET_ACTION_NAME_(action, actionname)                            \
-    HPX_REGISTER_ACTION_INVOCATION_COUNT(action)                               \
-    HPX_REGISTER_PER_ACTION_DATA_COUNTER_TYPES(action)                         \
-    namespace hpx::actions {                                                   \
-        template struct HPX_ALWAYS_EXPORT transfer_action</**/ action>;        \
-        template struct HPX_ALWAYS_EXPORT                                      \
-            transfer_continuation_action</**/ action>;                         \
-    }                                                                          \
-/**/
-#define HPX_REGISTER_ACTION_EXTERN_DECLARATION(action) /**/
-
-#else    // defined(HPX_MSVC) || defined(HPX_MINGW)
-
-#define HPX_REGISTER_ACTION_2(action, actionname)                              \
-    HPX_DEFINE_GET_ACTION_NAME_(action, actionname)                            \
-    HPX_REGISTER_ACTION_INVOCATION_COUNT(action)                               \
-    HPX_REGISTER_PER_ACTION_DATA_COUNTER_TYPES(action)                         \
-    namespace hpx::actions {                                                   \
-        template struct transfer_action</**/ action>;                          \
-        template struct transfer_continuation_action</**/ action>;             \
-    }                                                                          \
-/**/
-#define HPX_REGISTER_ACTION_EXTERN_DECLARATION(action)                         \
-    namespace hpx::actions {                                                   \
-        extern template struct HPX_ALWAYS_IMPORT transfer_action</**/ action>; \
-        extern template struct HPX_ALWAYS_IMPORT                               \
-            transfer_continuation_action</**/ action>;                         \
-    }                                                                          \
-    /**/
-
-#endif    // defined(HPX_MSVC) || defined(HPX_MINGW)
+#include <hpx/actions/macros.hpp>
 
 HPX_TRAITS_SERIALIZED_WITH_ID(hpx::actions::base_action)
 HPX_TRAITS_SERIALIZED_WITH_ID(hpx::actions::base_action_data)

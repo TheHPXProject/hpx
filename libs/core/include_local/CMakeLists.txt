@@ -29,6 +29,7 @@ set(include_local_headers
     hpx/tuple.hpp
     hpx/type_traits.hpp
     hpx/unwrap.hpp
+    hpx/include_local/iostream.hpp
     hpx/experimental/run_on_all.hpp
     hpx/experimental/scope.hpp
     hpx/experimental/task_group.hpp
@@ -41,6 +42,8 @@ if(NOT HPX_WITH_DISTRIBUTED_RUNTIME)
       hpx/channel.hpp
       hpx/compute.hpp
       hpx/future.hpp
+      hpx/init.hpp
+      hpx/iostream.hpp
       hpx/latch.hpp
       hpx/runtime.hpp
   )
@@ -103,6 +106,7 @@ add_hpx_module(
     hpx_format
     hpx_functional
     hpx_futures
+    hpx_init_runtime_local
     hpx_lcos_local
     hpx_memory
     hpx_pack_traversal

@@ -7,18 +7,19 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
-#include <hpx/agas_base/detail/hosted_component_namespace.hpp>
-#include <hpx/agas_base/server/component_namespace.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <hpx/agas_base/detail/hosted_component_namespace.hpp>
+#include <hpx/agas_base/server/component_namespace.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
+namespace hpx::agas::detail {
 
     hosted_component_namespace::hosted_component_namespace(naming::address addr)
       : gid_(naming::gid_type(agas::component_ns_msb, agas::component_ns_lsb),
@@ -116,6 +117,6 @@ namespace hpx { namespace agas { namespace detail {
         return hpx::make_ready_future(std::uint32_t(1));
 #endif
     }
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail
 
 #endif

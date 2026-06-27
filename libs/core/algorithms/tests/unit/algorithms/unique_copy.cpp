@@ -40,6 +40,17 @@ void unique_copy_bad_alloc_test()
     test_unique_copy_bad_alloc<std::forward_iterator_tag>();
 }
 
+void unique_copy_constraint_test()
+{
+    std::cout << "--- unique_copy_constraint_test ---" << std::endl;
+    // Exercises the corrected predicate constraint in hpx::unique_copy:
+    // the requires clause must check iter_value_t<InIter> for both arguments,
+    // not iter_value_t<OutIter> for the second argument.
+    test_unique_copy_constraint<std::random_access_iterator_tag>();
+    test_unique_copy_constraint<std::bidirectional_iterator_tag>();
+    test_unique_copy_constraint<std::forward_iterator_tag>();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -53,6 +64,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     unique_copy_test();
     unique_copy_exception_test();
     unique_copy_bad_alloc_test();
+    unique_copy_constraint_test();
 
     std::cout << "Test Finish!" << std::endl;
 

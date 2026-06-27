@@ -11,9 +11,9 @@ set(DATAPAR_BACKEND "NONE")
 hpx_option(
   HPX_WITH_DATAPAR_BACKEND
   STRING
-  "Define which vectorization library should be used. Options are: VC, EVE, STD_EXPERIMENTAL_SIMD, SVE; NONE"
+  "Define which vectorization library should be used. Options are: VC, EVE, STD_EXPERIMENTAL_SIMD, SVE, EMULATE, NONE"
   ${DATAPAR_BACKEND}
-  STRINGS "VC;EVE;STD_EXPERIMENTAL_SIMD;SVE;NONE"
+  STRINGS "VC;EVE;STD_EXPERIMENTAL_SIMD;SVE;EMULATE;NONE"
 )
 include(HPX_AddDefinitions)
 
@@ -88,7 +88,6 @@ if("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "STD_EXPERIMENTAL_SIMD")
   endif()
 endif()
 
-# #
 # ##############################################################################
 # # HPX SVE configuration #
 # ##############################################################################
@@ -122,8 +121,22 @@ if("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "SVE")
   hpx_add_config_define(HPX_HAVE_DATAPAR)
 endif()
 
+# Enable datapar emulation for unsupported backends
+if("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "EMULATE")
+  hpx_add_config_define(HPX_HAVE_DATAPAR_EMULATION)
+  hpx_option(
+    HPX_WITH_DATAPAR
+    BOOL
+    "Enable data parallel algorithm support using a simd emulation layer (default: ON)"
+    ON
+    ADVANCED
+  )
+  hpx_add_config_define(HPX_HAVE_DATAPAR)
+endif()
+
 if(("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "STD_EXPERIMENTAL_SIMD")
    OR ("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "SVE")
+   OR ("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "EMULATE")
 )
   hpx_add_config_define(HPX_HAVE_DATAPAR_EXPERIMENTAL_SIMD)
 endif()

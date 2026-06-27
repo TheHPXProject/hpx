@@ -14,7 +14,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/plugin/abstract_factory.hpp>
 #include <hpx/plugin/dll.hpp>
-#include <hpx/plugin/export_plugin.hpp>
+#include <hpx/plugin/macros.hpp>
 #include <hpx/plugin/virtual_constructor.hpp>
 
 #include <algorithm>
@@ -188,8 +188,7 @@ namespace hpx::util::plugin {
             typename Parameters>
         struct HPX_PLUGIN_EXPORT_API plugin_factory_item;
 
-        HPX_CXX_CORE_EXPORT template <typename BasePlugin, typename Base,
-            typename... Parameters>
+        template <typename BasePlugin, typename Base, typename... Parameters>
         struct HPX_PLUGIN_EXPORT_API plugin_factory_item<BasePlugin, Base,
             hpx::util::pack<Parameters...>> : public Base
         {
@@ -256,8 +255,7 @@ namespace hpx::util::plugin {
             typename Parameters>
         struct HPX_PLUGIN_EXPORT_API static_plugin_factory_item;
 
-        HPX_CXX_CORE_EXPORT template <typename BasePlugin, typename Base,
-            typename... Parameters>
+        template <typename BasePlugin, typename Base, typename... Parameters>
         struct HPX_PLUGIN_EXPORT_API static_plugin_factory_item<BasePlugin,
             Base, hpx::util::pack<Parameters...>> : public Base
         {

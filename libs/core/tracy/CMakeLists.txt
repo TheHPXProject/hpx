@@ -4,8 +4,8 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-# Enable Tracy module only if HPX_TRACY_WITH_TRACY is set
-if(NOT ${HPX_TRACY_WITH_TRACY})
+# Enable Tracy module only if HPX_WITH_TRACY is set
+if(NOT ${HPX_WITH_TRACY})
   return()
 endif()
 
@@ -29,5 +29,5 @@ add_hpx_module(
   HEADERS ${tracy_headers}
   MODULE_DEPENDENCIES hpx_config
   PRIVATE_DEPENDENCIES tracy::tracy
-  CMAKE_SUBDIRS
+  CMAKE_SUBDIRS tests
 )

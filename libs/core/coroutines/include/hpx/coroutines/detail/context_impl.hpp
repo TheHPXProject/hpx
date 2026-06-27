@@ -31,8 +31,6 @@
 
 #include <hpx/config.hpp>
 
-#include <boost/version.hpp>
-
 #include <cstddef>
 
 #if defined(HPX_HAVE_UNISTD_H)

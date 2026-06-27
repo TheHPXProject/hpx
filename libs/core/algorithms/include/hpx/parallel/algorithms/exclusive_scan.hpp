@@ -409,8 +409,8 @@ namespace hpx::parallel {
                     *dst++ = val;
 
                     // MSVC 2015 fails if op is captured by reference
-                    util::loop_n<std::decay_t<ExPolicy>>(dst, part_size - 1,
-                        [=, &val](FwdIter2 it) mutable -> void {
+                    util::const_loop_n<std::decay_t<ExPolicy>>(dst,
+                        part_size - 1, [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
                 };
@@ -495,8 +495,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
+        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
         tag_fallback_invoke(hpx::exclusive_scan_t, ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, T init)
         {
@@ -557,8 +556,7 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
+        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
         tag_fallback_invoke(hpx::exclusive_scan_t, ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, T init, Op op)
         {

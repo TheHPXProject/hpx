@@ -44,7 +44,10 @@ namespace hpx {
     ///
     /// \returns  The \a shift_right algorithm returns \a FwdIter.
     ///           The \a shift_right algorithm returns an iterator to the
-    ///           end of the resulting range.
+    ///           beginning of the resulting range. Specifically:
+    ///           If \a n is 0 or \a n >= (last - first), does nothing and
+    ///           returns \a first and \a last respectively.
+    ///           Otherwise returns \a first + n.
     ///
     template <typename FwdIter, typename Size>
     FwdIter shift_right(FwdIter first, FwdIter last, Size n);
@@ -95,7 +98,10 @@ namespace hpx {
     ///           \a parallel_task_policy and
     ///           returns \a FwdIter otherwise.
     ///           The \a shift_right algorithm returns an iterator to the
-    ///           end of the resulting range.
+    ///           beginning of the resulting range. Specifically:
+    ///           If \a n is 0, does nothing and returns \a first.
+    ///           If \a n >= (last - first), does nothing and returns \a last.
+    ///           Otherwise returns \a first + n.
     ///
     template <typename ExPolicy, typename FwdIter, typename Size>
     typename hpx::parallel::util::detail::algorithm_result<ExPolicy, FwdIter>
@@ -152,7 +158,9 @@ namespace hpx::parallel {
                     return f.then(
                         [=](hpx::future<FwdIter>&& f) mutable -> FwdIter {
                             f.get();
-                            return new_first;
+                            std::advance(
+                                first, detail::distance(new_first, last));
+                            return first;
                         });
                 },
                 r.call2(p, non_seq(), first, new_first));
@@ -172,7 +180,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename I, typename Tag, typename = void>
         inline constexpr bool is_category = false;
 
-        HPX_CXX_CORE_EXPORT template <typename I, typename Tag>
+        template <typename I, typename Tag>
         inline constexpr bool is_category<I, Tag,
             std::enable_if_t<
                 std::is_convertible_v<iterator_category_t<I>, Tag>>> = true;
@@ -214,7 +222,7 @@ namespace hpx::parallel {
                                 HPX_MOVE(trail));
                             return result;
                         }
-                        std::iter_swap(mid, trail);
+                        std::ranges::iter_swap(mid, trail);
                     }
                 }
             }
@@ -235,9 +243,15 @@ namespace hpx::parallel {
             {
                 auto dist =
                     static_cast<std::size_t>(detail::distance(first, last));
-                if (n <= 0 || static_cast<std::size_t>(n) >= dist)
+                // C++20 [alg.shift]: if n is 0, do nothing and return first.
+                if (n == 0)
                 {
                     return first;
+                }
+                // C++20 [alg.shift]: if n >= dist, do nothing and return last.
+                if (static_cast<std::size_t>(n) >= dist)
+                {
+                    return std::next(first, dist);
                 }
 
                 auto last_iter = detail::advance_to_sentinel(first, last);
@@ -252,10 +266,17 @@ namespace hpx::parallel {
             {
                 auto dist =
                     static_cast<std::size_t>(detail::distance(first, last));
-                if (n <= 0 || static_cast<std::size_t>(n) >= dist)
+                // C++20 [alg.shift]: if n is 0, do nothing and return first.
+                if (n == 0)
                 {
                     return parallel::util::detail::algorithm_result<ExPolicy,
                         FwdIter2>::get(HPX_MOVE(first));
+                }
+                // C++20 [alg.shift]: if n >= dist, do nothing and return last.
+                if (static_cast<std::size_t>(n) >= dist)
+                {
+                    return parallel::util::detail::algorithm_result<ExPolicy,
+                        FwdIter2>::get(std::next(first, dist));
                 }
 
                 auto new_first = std::next(first, dist - n);
@@ -300,8 +321,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter>::type
+        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
         tag_fallback_invoke(shift_right_t, ExPolicy&& policy, FwdIter first,
             FwdIter last, Size n)
         {

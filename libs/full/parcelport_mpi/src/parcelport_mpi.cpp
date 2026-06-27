@@ -14,8 +14,10 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/mpi_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
@@ -24,8 +26,12 @@
 #include <hpx/parcelport_mpi/locality.hpp>
 #include <hpx/parcelport_mpi/receiver.hpp>
 #include <hpx/parcelport_mpi/sender.hpp>
-#include <hpx/parcelset/parcelport_impl.hpp>
-#include <hpx/plugin_factories/parcelport_factory.hpp>
+
+#include <asio/io_context.hpp>
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
 
 #include <atomic>
 #include <cstddef>

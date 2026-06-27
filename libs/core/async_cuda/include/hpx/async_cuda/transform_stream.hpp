@@ -132,9 +132,7 @@ namespace hpx::cuda::experimental {
         HPX_CXX_CORE_EXPORT template <typename R, typename F>
         struct transform_stream_receiver
         {
-#if defined(HPX_HAVE_STDEXEC)
             using receiver_concept = hpx::execution::experimental::receiver_t;
-#endif
             std::decay_t<R> r;
             std::decay_t<F> f;
             cudaStream_t stream;
@@ -148,17 +146,15 @@ namespace hpx::cuda::experimental {
             }
 
             template <typename E>
-            friend void tag_invoke(hpx::execution::experimental::set_error_t,
-                transform_stream_receiver&& r, E&& e) noexcept
+            void set_error(E&& e) noexcept
             {
                 hpx::execution::experimental::set_error(
-                    HPX_MOVE(r.r), HPX_FORWARD(E, e));
+                    HPX_MOVE(r), HPX_FORWARD(E, e));
             }
 
-            friend void tag_invoke(hpx::execution::experimental::set_stopped_t,
-                transform_stream_receiver&& r) noexcept
+            void set_stopped() noexcept
             {
-                hpx::execution::experimental::set_stopped(HPX_MOVE(r.r));
+                hpx::execution::experimental::set_stopped(HPX_MOVE(r));
             }
 
             template <typename... Ts>
@@ -256,151 +252,100 @@ namespace hpx::cuda::experimental {
                             HPX_MOVE(r), HPX_MOVE(ep));
                     });
             }
-
-#if defined(HPX_HAVE_STDEXEC)
-            template <typename... Ts>
-            friend void tag_invoke(hpx::execution::experimental::set_value_t,
-                transform_stream_receiver&& r, Ts&&... ts) noexcept
-            {
-                // set_value is in a member function only because of a
-                // compiler bug in GCC 7. When the body of set_value is
-                // inlined here compilation fails with an internal compiler
-                // error.
-                r.set_value(HPX_FORWARD(Ts, ts)...);
-            }
-#endif
         };
 
-#if !defined(HPX_HAVE_STDEXEC)
-        // This should be a hidden friend in transform_stream_receiver. However,
-        // nvcc does not know how to compile it with some argument types
-        // ("error: no instance of overloaded function std::forward matches the
-        // argument list").
-        HPX_CXX_CORE_EXPORT template <typename R, typename F, typename... Ts>
-        void tag_invoke(hpx::execution::experimental::set_value_t,
-            transform_stream_receiver<R, F>&& r, Ts&&... ts)
-        {
-            r.set_value(HPX_FORWARD(Ts, ts)...);
-        }
-#endif
-
-        HPX_CXX_CORE_EXPORT template <typename S, typename F>
+        template <typename S, typename F>
         struct transform_stream_sender
         {
             std::decay_t<S> s;
             std::decay_t<F> f;
             cudaStream_t stream{};
 
-#if defined(HPX_HAVE_STDEXEC)
             using sender_concept = hpx::execution::experimental::sender_t;
 
-            template <typename... Args>
-            struct invoke_function_transformation_helper
+            struct invoke_function_transformation_fn
             {
-                template <bool IsVoid, typename T>
-                struct set_value_void_checked
+                template <typename... Args>
+                consteval auto operator()() const noexcept
                 {
-                    using type = hpx::execution::experimental::set_value_t(T);
-                };
+                    static_assert(hpx::is_invocable_v<F, Args..., cudaStream_t>,
+                        "F not invocable with the value_types specified.");
 
-                template <typename T>
-                struct set_value_void_checked<true, T>
-                {
-                    using type = hpx::execution::experimental::set_value_t();
-                };
+                    using result_type =
+                        hpx::util::invoke_result_t<F, Args..., cudaStream_t>;
 
-                static_assert(hpx::is_invocable_v<F, Args..., cudaStream_t>,
-                    "F not invocable with the value_types specified.");
-
-                using result_type =
-                    hpx::util::invoke_result_t<F, Args..., cudaStream_t>;
-                using set_value_result_type =
-                    typename set_value_void_checked<std::is_void_v<result_type>,
-                        result_type>::type;
-                using type =
-                    hpx::execution::experimental::completion_signatures<
-                        set_value_result_type>;
+                    if constexpr (std::is_void_v<result_type>)
+                    {
+                        return hpx::execution::experimental::
+                            completion_signatures<
+                                hpx::execution::experimental::set_value_t(),
+                                hpx::execution::experimental::set_error_t(
+                                    std::exception_ptr)>{};
+                    }
+                    else
+                    {
+                        return hpx::execution::experimental::
+                            completion_signatures<
+                                hpx::execution::experimental::set_value_t(
+                                    result_type),
+                                hpx::execution::experimental::set_error_t(
+                                    std::exception_ptr)>{};
+                    }
+                }
             };
 
-            template <typename... Args>
-            using invoke_function_transformation =
-                invoke_function_transformation_helper<Args...>::type;
+            struct default_set_error_fn
+            {
+                template <typename Err>
+                consteval auto operator()() const noexcept
+                {
+                    return hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_error_t(Err)>{};
+                }
+            };
 
             // clang-format off
-            template <typename Env>
-            friend auto tag_invoke(
-                hpx::execution::experimental::get_completion_signatures_t,
-                transform_stream_sender const&, Env const&)
-                -> hpx::execution::experimental::transform_completion_signatures_of<
-                    S, Env,
+            template <typename Self, typename Env>
+            static consteval auto get_completion_signatures() noexcept
+            ->  decltype(hpx::execution::experimental::transform_completion_signatures(
+                    hpx::execution::experimental::completion_signatures_of_t<
+                        S, Env>{},
+                    invoke_function_transformation_fn{},
+                    default_set_error_fn{},
+                    hpx::execution::experimental::ignore_completion{},
                     hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_error_t(std::exception_ptr)
-                    >,
-                    invoke_function_transformation
-                    // stop and error channel will be forwarded if they are present.
-                >;
-            // clang-format on
-
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_env_t,
-                transform_stream_sender const& s) noexcept
+                        hpx::execution::experimental::set_stopped_t()>{}))
             {
-                return hpx::execution::experimental::get_env(s.s);
+                return hpx::execution::experimental::transform_completion_signatures(
+                    hpx::execution::experimental::completion_signatures_of_t<
+                        S, Env>{},
+                    invoke_function_transformation_fn{},
+                    default_set_error_fn{},
+                    hpx::execution::experimental::ignore_completion{},
+                    hpx::execution::experimental::completion_signatures<
+                        hpx::execution::experimental::set_stopped_t()>{});
             }
-#else
-            template <typename Tuple>
-            struct invoke_result_helper;
-
-            template <template <typename...> class Tuple, typename... Ts>
-            struct invoke_result_helper<Tuple<Ts...>>
-            {
-                static_assert(hpx::is_invocable_v<F, Ts..., cudaStream_t>,
-                    "F not invocable with the value_types specified.");
-
-                using result_type =
-                    hpx::util::invoke_result_t<F, Ts..., cudaStream_t>;
-
-                using type = std::conditional_t<std::is_void_v<result_type>,
-                    Tuple<>, Tuple<result_type>>;
-            };
-
-            template <typename Env>
-            struct generate_completion_signatures
-            {
-                template <template <typename...> class Tuple,
-                    template <typename...> class Variant>
-                using value_types =
-                    hpx::util::detail::unique_t<hpx::util::detail::transform_t<
-                        hpx::execution::experimental::value_types_of_t<S, Env,
-                            Tuple, Variant>,
-                        invoke_result_helper>>;
-
-                template <template <typename...> class Variant>
-                using error_types =
-                    hpx::util::detail::unique_t<hpx::util::detail::prepend_t<
-                        hpx::execution::experimental::error_types_of_t<S, Env,
-                            Variant>,
-                        std::exception_ptr>>;
-
-                static constexpr bool sends_stopped = false;
-            };
-
-            // clang-format off
-            template <typename Env>
-            friend auto tag_invoke(
-                hpx::execution::experimental::get_completion_signatures_t,
-                transform_stream_sender const&, Env) noexcept
-                -> generate_completion_signatures<Env>;
             // clang-format on
-#endif
+
+            constexpr auto get_env() const noexcept
+            {
+                return hpx::execution::experimental::get_env(s);
+            }
 
             template <typename R>
-            friend auto tag_invoke(hpx::execution::experimental::connect_t,
-                transform_stream_sender&& s, R&& r)
+            auto connect(R&& r) &&
             {
-                return hpx::execution::experimental::connect(HPX_MOVE(s.s),
+                return hpx::execution::experimental::connect(HPX_MOVE(s),
                     transform_stream_receiver<R, F>{
-                        HPX_FORWARD(R, r), HPX_MOVE(s.f), s.stream});
+                        HPX_FORWARD(R, r), HPX_MOVE(f), stream});
+            }
+
+            template <typename R>
+            auto connect(R&& r) &
+            {
+                return hpx::execution::experimental::connect(s,
+                    transform_stream_receiver<R, F>{
+                        HPX_FORWARD(R, r), f, stream});
             }
         };
     }    // namespace detail

@@ -48,9 +48,10 @@ namespace hpx { namespace parallel { namespace detail {
             {
                 return for_each_n<InIter>().call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    std::distance(first, last),
+                    detail::distance(first, last),
                     [old_value, new_value, proj = HPX_FORWARD(Proj, proj)](
                         auto& v) -> void {
+                        using var_type = std::decay_t<decltype(v)>;
                         traits::mask_assign(
                             HPX_INVOKE(proj, v) == var_type(old_value), v,
                             var_type(new_value));
@@ -207,8 +208,8 @@ namespace hpx { namespace parallel { namespace detail {
                           InIter>::value)
         {
             return datapar_replace_copy<ExPolicy>::call(
-                (HPX_FORWARD(ExPolicy, policy), first, sent, dest, old_value,
-                    new_value, HPX_FORWARD(Proj, proj)));
+                HPX_FORWARD(ExPolicy, policy), first, sent, dest, old_value,
+                new_value, HPX_FORWARD(Proj, proj));
         }
         else
         {

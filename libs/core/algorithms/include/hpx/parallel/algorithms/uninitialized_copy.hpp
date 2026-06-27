@@ -303,7 +303,7 @@ namespace hpx::parallel {
             static util::in_out_result<InIter1, FwdIter2> sequential(
                 ExPolicy&& policy, InIter1 first, Sent last, FwdIter2 dest)
             {
-                std::size_t n = std::distance(first, last);
+                std::size_t n = detail::distance(first, last);
                 return hpx::parallel::util::uninit_copy_n(
                     HPX_FORWARD(ExPolicy, policy), first, n, dest);
             }

@@ -67,7 +67,7 @@ namespace hpx::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Action>
+    template <typename Action>
     struct sync_launch_policy_dispatch<Action,
         std::enable_if_t<!traits::is_action_v<Action>>>
     {

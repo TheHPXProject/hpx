@@ -103,10 +103,10 @@ void test_aux(
         HPX_TEST(hpx::get<0>(c) + chunk_size == hpx::get<0>(*std::next(p)));
     }
 
-    // prove that a reference can be formed to these values
-    using value = typename Iterator::value_type;
-    value const* q = &*start;
-    (void) q;    // suppress unused variable warning
+    //// prove that a reference can be formed to these values
+    //using value = typename Iterator::value_type;
+    //value const* q = &*start;
+    //(void) q;    // suppress unused variable warning
 }
 
 template <typename Iterator>
@@ -117,10 +117,31 @@ template <typename Integer>
 void test_integer(
     Integer start, Integer end, std::size_t chunk_size, std::size_t count)
 {
+    static_assert(std::random_access_iterator<chunk_size_iterator<Integer>>,
+        "chunk_size_iterator<Integer> must be random access");
+
     auto first = chunk_size_iterator<Integer>(start, chunk_size, count);
     auto last = chunk_size_iterator<Integer>(end, chunk_size, count, count);
     test_aux(first, last, start, chunk_size);
 }
+
+template <typename Iterator,
+    typename Tag = std::iterator_traits<Iterator>::iterator_category>
+struct iterator_test;
+
+template <typename Iterator>
+struct iterator_test<Iterator, std::random_access_iterator_tag>
+{
+    constexpr static bool value =
+        std::random_access_iterator<chunk_size_iterator<Iterator>>;
+};
+
+template <typename Iterator>
+struct iterator_test<Iterator, std::bidirectional_iterator_tag>
+{
+    constexpr static bool value =
+        std::bidirectional_iterator<chunk_size_iterator<Iterator>>;
+};
 
 template <typename Container>
 void test_container(std::size_t chunk_size)
@@ -131,6 +152,9 @@ void test_container(std::size_t chunk_size)
     std::iota(c.begin(), c.end(), 0);
 
     using iterator = typename Container::iterator;
+
+    static_assert(iterator_test<iterator>::value,
+        "chunk_size_iterator<iterator> must of the correct category");
 
     iterator const start = c.begin();
 

@@ -8,13 +8,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_init.hpp>
-
 #include <hpx/assert.hpp>
-#include <hpx/hpx_finalize.hpp>
-#include <hpx/hpx_main_winsocket.hpp>
-#include <hpx/hpx_suspend.hpp>
-#include <hpx/hpx_user_main_config.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/command_line_handling.hpp>
 #include <hpx/modules/coroutines.hpp>
@@ -38,28 +32,31 @@
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/hpx_user_main_config.hpp>
+#include <hpx/init.hpp>
+#include <hpx/init_runtime/detail/main_winsocket.hpp>
+#include <hpx/init_runtime/finalize.hpp>
+#include <hpx/init_runtime/suspend.hpp>
 
 #ifdef HPX_HAVE_MODULE_MPI_BASE
 #include <hpx/modules/mpi_base.hpp>
 #endif
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/async_distributed/bind_action.hpp>
-#include <hpx/components_base/agas_interface.hpp>
 #include <hpx/init_runtime/pre_main.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming.hpp>
 #if defined(HPX_HAVE_NETWORKING)
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcelports/init_all_parcelports.hpp>
-#include <hpx/parcelset/parcelhandler.hpp>
 #endif
-#include <hpx/performance_counters/counters.hpp>
-#include <hpx/performance_counters/query_counters.hpp>
-#include <hpx/runtime_distributed.hpp>
-#include <hpx/runtime_distributed/runtime_fwd.hpp>
-#include <hpx/runtime_distributed/runtime_support.hpp>
+#include <hpx/modules/performance_counters.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 #endif
 #if defined(HPX_HAVE_LOGGING)
 #include <hpx/init_runtime/detail/init_logging.hpp>
@@ -756,10 +753,8 @@ namespace hpx {
 
             hpx::assertion::set_assertion_handler(&detail::assertion_handler);
             hpx::util::set_test_failure_handler(&detail::test_failure_handler);
-#if defined(HPX_HAVE_APEX)
-            hpx::util::set_enable_parent_task_handler(
+            hpx::tracing::set_enable_parent_task_handler(
                 &detail::enable_parent_task_handler);
-#endif
             hpx::set_custom_exception_info_handler(
                 &detail::custom_exception_info);
             hpx::serialization::detail::set_save_custom_exception_handler(

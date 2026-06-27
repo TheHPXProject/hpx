@@ -18,8 +18,6 @@
 # cp tools/pre-commit .git/hooks/pre-commit
 # chmod +x .git/hooks/pre-commit
 
-# @todo : add support for the hpx inspect tool to be run as well
-
 red=$(tput setaf 1)
 green=$(tput setaf 2)
 yellow=$(tput setaf 3)
@@ -44,13 +42,29 @@ for file in `git diff --cached --name-only --diff-filter=ACMRT | grep -E "(CMake
     rm $tmpfile
 done
 
+inspectroots=()
+for file in `git diff --cached --name-only --diff-filter=ACMRT`; do
+    dir=$(dirname "${file}")
+    already_added=0
+    for existing in "${inspectroots[@]}"; do
+        if [ "${existing}" = "${dir}" ]; then
+            already_added=1
+            break
+        fi
+    done
+
+    if [ "${already_added}" -eq 0 ]; then
+        inspectroots+=("${dir}")
+    fi
+done
+
 returncode=0
 full_list=
 
 if [ -n "${cxxfiles}" ]; then
     printf "# ${blue}clang-format ${red}error pre-commit${normal} : To fix run the following (use git commit ${yellow}--no-verify${normal} to bypass)\n"
     for f in "${cxxfiles[@]}" ; do
-        rel=$(realpath --relative-to "./$GIT_PREFIX" $f)
+        rel=${f#${GIT_PREFIX}}
         printf "clang-format -i %s\n" "$rel"
         full_list="${rel} ${full_list}"
     done
@@ -60,11 +74,61 @@ fi
 if [ -n "${cmakefiles}" ]; then
     printf "# ${green}cmake-format ${red}error pre-commit${normal} : To fix run the following (use git commit ${yellow}--no-verify${normal} to bypass)\n"
     for f in "${cmakefiles[@]}" ; do
-        rel=$(realpath --relative-to "./$GIT_PREFIX" $f)
+        rel=${f#${GIT_PREFIX}}
         printf "cmake-format -i %s\n" "$rel"
         full_list="${rel} ${full_list}"
     done
     returncode=1
+fi
+
+if [ ${#inspectroots[@]} -ne 0 ]; then
+    inspect=
+    inspect_error=0
+    if [ -n "${HPX_INSPECT}" ]; then
+        if [ -x "${HPX_INSPECT}" ]; then
+            inspect="${HPX_INSPECT}"
+        else
+            printf "# ${blue}hpx inspect ${red}error pre-commit${normal} : HPX_INSPECT is set but not executable: %s\n" "${HPX_INSPECT}"
+            returncode=1
+            inspect_error=1
+        fi
+    elif [ -x "$(pwd)/build/bin/inspect" ]; then
+        inspect="$(pwd)/build/bin/inspect"
+    elif command -v inspect >/dev/null 2>&1; then
+        inspect="$(command -v inspect)"
+    fi
+
+    if [ "${inspect_error}" -eq 1 ]; then
+        :
+    elif [ -z "${inspect}" ]; then
+        printf "# ${blue}hpx inspect ${red}error pre-commit${normal} : inspect tool was not found (use git commit ${yellow}--no-verify${normal} to bypass)\n"
+        printf "# To build it, run:\n"
+        printf "cmake -S . -B build -G Ninja -DHPX_WITH_TOOLS=On\n"
+        printf "cmake --build build --target tools.inspect\n"
+        printf "# Or set HPX_INSPECT to the inspect executable path\n"
+        returncode=1
+    else
+        repo_root=$(git rev-parse --show-toplevel)
+        inspectpaths=()
+        for d in "${inspectroots[@]}"; do
+            if [ "${d}" = "." ]; then
+                abs="${repo_root}"
+            else
+                abs="${repo_root}/${d}"
+            fi
+
+            if [ -d "${abs}" ]; then
+                inspectpaths+=("${abs}")
+            fi
+        done
+
+        if [ ${#inspectpaths[@]} -ne 0 ]; then
+            if ! "${inspect}" --all --text "${inspectpaths[@]}"; then
+                printf "# ${blue}hpx inspect ${red}error pre-commit${normal} : violations found (use git commit ${yellow}--no-verify${normal} to bypass)\n"
+                returncode=1
+            fi
+        fi
+    fi
 fi
 
 if [ ! -z "$full_list" ]; then

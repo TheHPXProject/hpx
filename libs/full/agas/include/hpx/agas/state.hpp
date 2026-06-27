@@ -9,8 +9,8 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/threading_base.hpp>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     // return whether resolver client is in state described by 'mask'
-    HPX_EXPORT bool router_is(state st);
-}}    // namespace hpx::agas
+    HPX_CXX_EXPORT HPX_EXPORT bool router_is(state st);
+}    // namespace hpx::agas

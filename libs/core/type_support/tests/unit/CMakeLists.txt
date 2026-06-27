@@ -32,7 +32,7 @@ endforeach()
 
 if(HPX_WITH_COMPILE_ONLY_TESTS)
   # add compile time tests
-  set(compile_tests is_contiguous_iterator is_relocatable
+  set(compile_tests is_contiguous_iterator is_relocatable is_replaceable
                     is_trivially_relocatable
   )
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2018 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,19 +7,20 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #include <hpx/performance_counters/counters_fwd.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
+
     //[performance_counter_interface
     // Abstract base interface for all Performance Counters.
-    struct performance_counter_base
+    HPX_CXX_EXPORT struct performance_counter_base
     {
-        //<-
-        /// Destructor, needs to be virtual to allow for clean destruction of
-        /// derived objects
+        // Destructor, needs to be virtual to allow for clean destruction of
+        // derived objects
         virtual ~performance_counter_base() = default;
-        //->
+
         // Retrieve the descriptive information about the Performance Counter.
         virtual counter_info get_counter_info() const = 0;
 
@@ -46,4 +47,4 @@ namespace hpx { namespace performance_counters {
         virtual void reinit(bool reset) = 0;
     };
     //]
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

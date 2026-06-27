@@ -21,7 +21,7 @@ the spirit in which it's intended - a guide to make it easier to enrich all of
 us and the technical communities in which we participate.
 
 This code of conduct applies to all spaces managed by the
-[HPX](https://github.com/STEllAR-GROUP/hpx) project or
+[HPX](https://github.com/TheHPXProject/hpx) project or
 [STE||AR Group](http://stellar-group.org). This includes IRC, the mailing
 lists, the issue tracker, and any other forums created by the project team
 which the community uses for communication. In addition, violations of this

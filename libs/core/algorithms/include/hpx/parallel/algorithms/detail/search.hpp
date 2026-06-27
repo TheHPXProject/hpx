@@ -12,7 +12,9 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
@@ -30,6 +32,100 @@
 
 namespace hpx::parallel::detail {
     /// \cond NOINTERNAL
+
+    ///////////////////////////////////////////////////////////////////////////
+    // sequential_search dispatch tag
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy>
+    struct sequential_search_t final
+      : hpx::functional::detail::tag_fallback<sequential_search_t<ExPolicy>>
+    {
+    private:
+        // Partitioned path: called from search::parallel() f1 for each chunk.
+        // Checks each starting position in [base_idx, base_idx+part_size) for a
+        // needle match; cancels tok at the first match position found.
+        template <typename Iter1, typename Iter2, typename Token, typename Pred,
+            typename Proj1, typename Proj2>
+        friend inline constexpr void tag_fallback_invoke(
+            sequential_search_t<ExPolicy>, Iter1 it, Iter2 s_first,
+            std::size_t base_idx, std::size_t part_size, std::size_t diff,
+            std::size_t count, Token& tok, Pred&& op, Proj1&& proj1,
+            Proj2&& proj2)
+        {
+            using reference = typename std::iterator_traits<Iter1>::reference;
+            Iter1 curr = it;
+            util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
+                [diff, count, s_first, &tok, &curr, op = HPX_FORWARD(Pred, op),
+                    proj1 = HPX_FORWARD(Proj1, proj1),
+                    proj2 = HPX_FORWARD(Proj2, proj2)](
+                    reference v, std::size_t i) mutable -> void {
+                    ++curr;
+                    if (HPX_INVOKE(op, HPX_INVOKE(proj1, v),
+                            HPX_INVOKE(proj2, *s_first)))
+                    {
+                        std::size_t local_count = 1;
+                        Iter2 needle = s_first;
+                        Iter1 mid = curr;
+                        // clang-format off
+                        for (std::size_t len = 0;
+                            local_count != diff && len != count;
+                            ++local_count, ++len, ++mid)
+                        // clang-format on
+                        {
+                            if (!HPX_INVOKE(op, HPX_INVOKE(proj1, *mid),
+                                    HPX_INVOKE(proj2, *++needle)))
+                                break;
+                        }
+                        if (local_count == diff)
+                            tok.cancel(i);
+                    }
+                });
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // sequential_search_n dispatch tag
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy>
+    struct sequential_search_n_t final
+      : hpx::functional::detail::tag_fallback<sequential_search_n_t<ExPolicy>>
+    {
+    private:
+        // Partitioned path: called from search_n::parallel() f1 for each chunk.
+        // Checks each starting position in [base_idx, base_idx+part_size) for
+        // count consecutive elements equal to value_proj.
+        template <typename Iter, typename Size, typename V, typename Token,
+            typename Pred, typename Proj>
+        friend inline constexpr void tag_fallback_invoke(
+            sequential_search_n_t<ExPolicy>, Iter it, std::size_t base_idx,
+            std::size_t part_size, std::ptrdiff_t max_start, Size count,
+            V const& value_proj, Token& tok, Pred&& pred, Proj&& proj)
+        {
+            using difference_type =
+                typename std::iterator_traits<Iter>::difference_type;
+            using reference = typename std::iterator_traits<Iter>::reference;
+            std::size_t idx = 0;
+            util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
+                [max_start, count, it, &value_proj, &tok, &idx,
+                    pred = HPX_FORWARD(Pred, pred),
+                    proj = HPX_FORWARD(Proj, proj)](
+                    reference, std::size_t abs_idx) mutable -> void {
+                    if (static_cast<difference_type>(abs_idx) >= max_start)
+                        return;
+                    Iter start = it;
+                    std::advance(start, static_cast<difference_type>(idx));
+                    ++idx;
+                    Iter curr = start;
+                    Size matched = 0;
+                    while (matched < count &&
+                        HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
+                    {
+                        ++curr;
+                        ++matched;
+                    }
+                    if (matched == count)
+                        tok.cancel(abs_idx);
+                });
+        }
+    };
 
     ///////////////////////////////////////////////////////////////////////////
     // search
@@ -69,7 +165,6 @@ namespace hpx::parallel::detail {
             Sent last, FwdIter2 s_first, Sent2 s_last, Pred&& op, Proj1&& proj1,
             Proj2&& proj2)
         {
-            using reference = typename std::iterator_traits<FwdIter>::reference;
             using difference_type =
                 typename std::iterator_traits<FwdIter>::difference_type;
             using s_difference_type =
@@ -130,38 +225,10 @@ namespace hpx::parallel::detail {
                           proj2 = HPX_FORWARD(Proj2, proj2)](FwdIter it,
                           std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
-                FwdIter curr = it;
-
-                hpx::parallel::util::loop_idx_n<policy_type>(base_idx, it,
-                    part_size, tok,
-                    [diff, count, s_first, &tok, &curr,
-                        op = HPX_FORWARD(Pred, op),
-                        proj1 = HPX_FORWARD(Proj1, proj1),
-                        proj2 = HPX_FORWARD(Proj2, proj2)](
-                        reference v, std::size_t i) -> void {
-                        ++curr;
-                        if (HPX_INVOKE(op, HPX_INVOKE(proj1, v),
-                                HPX_INVOKE(proj2, *s_first)))
-                        {
-                            difference_type local_count = 1;
-                            FwdIter2 needle = s_first;
-                            FwdIter mid = curr;
-
-                            // clang-format off
-                            for (difference_type len = 0;
-                                local_count != diff && len != count;
-                                ++local_count, ++len, ++mid)
-                            // clang-format on
-                            {
-                                if (!HPX_INVOKE(op, HPX_INVOKE(proj1, *mid),
-                                        HPX_INVOKE(proj2, *++needle)))
-                                    break;
-                            }
-
-                            if (local_count == diff)
-                                tok.cancel(i);
-                        }
-                    });
+                sequential_search_t<policy_type>{}(it, s_first, base_idx,
+                    part_size, static_cast<std::size_t>(diff),
+                    static_cast<std::size_t>(count), tok, HPX_FORWARD(Pred, op),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
             };
 
             auto f2 = [=](auto&&... data) mutable -> FwdIter {
@@ -172,15 +239,7 @@ namespace hpx::parallel::detail {
                 util::detail::clear_container(data...);
 
                 difference_type search_res = tok.get_data();
-                if (search_res != count)
-                {
-                    std::advance(first, search_res);
-                }
-                else
-                {
-                    std::advance(
-                        first, hpx::parallel::detail::distance(first, last));
-                }
+                std::advance(first, search_res);
 
                 return HPX_MOVE(first);
             };
@@ -212,10 +271,12 @@ namespace hpx::parallel::detail {
             if (count <= 0)
                 return first;
             if (first == last)
-                return last;
-            difference_type n = std::distance(first, last);
+                return first;
+            difference_type n = hpx::parallel::detail::distance(first, last);
             if (static_cast<difference_type>(count) > n)
-                return last;
+            {
+                return hpx::parallel::detail::advance_to_sentinel(first, last);
+            }
 
             auto value_proj = proj(value);
 
@@ -238,7 +299,7 @@ namespace hpx::parallel::detail {
                     return it;
             }
 
-            return last;
+            return hpx::parallel::detail::advance_to_sentinel(first, last);
         }
         template <typename ExPolicy, typename Size, typename T, typename Pred,
             typename Proj>
@@ -255,11 +316,14 @@ namespace hpx::parallel::detail {
                 return result_type::get(HPX_MOVE(first));
 
             if (first == last)
-                return result_type::get(HPX_MOVE(last));
+                return result_type::get(HPX_MOVE(first));
 
-            difference_type n = std::distance(first, last);
+            difference_type n = hpx::parallel::detail::distance(first, last);
             if (static_cast<difference_type>(count) > n)
-                return result_type::get(HPX_MOVE(last));
+            {
+                return result_type::get(
+                    hpx::parallel::detail::advance_to_sentinel(first, last));
+            }
 
             // Number of valid starting positions
             difference_type max_start =
@@ -278,33 +342,14 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::cancellation_token<difference_type> tok(
                 max_start);
 
-            auto f1 = [first, max_start, count, value_proj,
+            auto f1 = [max_start, count, value_proj,
                           pred = HPX_FORWARD(Pred, pred),
                           proj = HPX_FORWARD(Proj, proj),
                           tok](FwdIter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
-                util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                    [=, &tok](auto&&, std::size_t idx) mutable -> void {
-                        difference_type start_idx =
-                            static_cast<difference_type>(idx);
-                        if (start_idx >= max_start)
-                            return;
-
-                        FwdIter start = first;
-                        std::advance(start, start_idx);
-
-                        FwdIter curr = start;
-                        Size matched = 0;
-
-                        while (matched < count && pred(proj(*curr), value_proj))
-                        {
-                            ++curr;
-                            ++matched;
-                        }
-
-                        if (matched == count)
-                            tok.cancel(start_idx);
-                    });
+                sequential_search_n_t<policy_type>{}(it, base_idx, part_size,
+                    static_cast<std::ptrdiff_t>(max_start), count, value_proj,
+                    tok, HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
             };
 
             auto f2 = [first, last, max_start, tok](
@@ -313,7 +358,10 @@ namespace hpx::parallel::detail {
 
                 difference_type idx = tok.get_data();
                 if (idx == max_start)
-                    return HPX_MOVE(last);
+                {
+                    return HPX_MOVE(hpx::parallel::detail::advance_to_sentinel(
+                        first, last));
+                }
 
                 std::advance(first, idx);
                 return HPX_MOVE(first);

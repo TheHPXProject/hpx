@@ -496,7 +496,6 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
-                    // NOLINT(bugprone-empty-catch)
                     util::detail::handle_local_exceptions<ExPolicy>::call(
                         std::current_exception(), errors);
                 }

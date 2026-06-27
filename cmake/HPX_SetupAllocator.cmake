@@ -131,20 +131,6 @@ if(NOT TARGET hpx_dependencies_allocator)
 
   hpx_info("Using ${HPX_WITH_MALLOC} allocator.")
 
-  # Setup Intel amplifier
-  if((NOT HPX_WITH_APEX) AND HPX_WITH_ITTNOTIFY)
-
-    find_package(Amplifier)
-    if(NOT Amplifier_FOUND)
-      hpx_error(
-        "Intel Amplifier could not be found and HPX_WITH_ITTNOTIFY=On, please specify Amplifier_ROOT to point to the root of your Amplifier installation"
-      )
-    endif()
-
-    hpx_add_config_define(HPX_HAVE_ITTNOTIFY 1)
-    hpx_add_config_define(HPX_HAVE_THREAD_DESCRIPTION)
-  endif()
-
   # convey selected allocator type to the build configuration
   hpx_add_config_define(HPX_HAVE_MALLOC "\"${HPX_WITH_MALLOC}\"")
   if(${HPX_WITH_MALLOC} STREQUAL "jemalloc")

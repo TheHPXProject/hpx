@@ -89,6 +89,7 @@ set(_hpx_core_modules
     timing
     topology
     tracy
+    tracing
     type_support
     util
     version

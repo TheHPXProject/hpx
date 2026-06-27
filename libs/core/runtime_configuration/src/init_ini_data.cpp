@@ -278,6 +278,80 @@ namespace hpx::util {
         return registries;
     }
 
+    ///////////////////////////////////////////////////////////////////////////
+    // iterate over all statically registered plugin modules and construct
+    // default ini settings. Mirrors load_component_factory_static above, but
+    // targets plugin_registry_base and injects `static = 1` into every
+    // generated [hpx.plugins.*] section.
+    std::vector<std::shared_ptr<plugins::plugin_registry_base>>
+    load_plugin_factory_static(util::section& ini, std::string const& name,
+        hpx::util::plugin::get_plugins_list_type const get_factory,
+        error_code& ec)
+    {
+        hpx::util::plugin::static_plugin_factory<
+            plugins::plugin_registry_base> const pf(get_factory);
+        std::vector<std::shared_ptr<plugins::plugin_registry_base>> registries;
+
+        std::vector<std::string> names;
+        pf.get_names(names, ec);
+        if (ec)
+            return registries;
+
+        std::vector<std::string> ini_data;
+        if (names.empty())
+        {
+            // module exports no plugin registries - nothing to inject
+            return registries;
+        }
+
+        registries.reserve(names.size());
+        for (std::string const& s : names)
+        {
+            std::shared_ptr<plugins::plugin_registry_base> registry(
+                pf.create(s, ec));
+            if (ec)
+                continue;
+
+            registry->get_plugin_info(ini_data);
+            registries.push_back(HPX_MOVE(registry));
+        }
+
+        // Inject `static = 1` into every [hpx.plugins.*] section the
+        // registries just emitted. plugin_registry_base::get_plugin_info
+        // doesn't know about static linking, so we mark the sections here
+        // before handing them to the ini parser. Without this, load_plugins
+        // would fall through to the dynamic branch and throw.
+        std::vector<std::string> marked;
+        marked.reserve(ini_data.size() + names.size());
+        bool in_plugin_section = false;
+        bool static_line_pending = false;
+        auto flush_static_line = [&]() {
+            if (static_line_pending)
+            {
+                marked.emplace_back("static = 1");
+                static_line_pending = false;
+            }
+        };
+        for (std::string const& line : ini_data)
+        {
+            std::string trimmed = line;
+            hpx::string_util::trim(trimmed);
+            if (!trimmed.empty() && trimmed.front() == '[')
+            {
+                flush_static_line();
+                in_plugin_section = trimmed.rfind("[hpx.plugins.", 0) == 0;
+                if (in_plugin_section)
+                    static_line_pending = true;
+            }
+            marked.push_back(line);
+        }
+        flush_static_line();
+
+        ini.parse("<plugin registry>", marked, false, false);
+        (void) name;    // retained for parity with component loader
+        return registries;
+    }
+
     static void load_component_factory(hpx::util::plugin::dll& d,
         util::section& ini, std::string const& curr,
         std::vector<std::shared_ptr<components::component_registry_base>>&

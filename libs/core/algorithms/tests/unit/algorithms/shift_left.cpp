@@ -176,6 +176,120 @@ void shift_left_test()
     test_shift_left<std::forward_iterator_tag>();
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Return-iterator tests for hpx::shift_left
+template <typename ExPolicy>
+void test_shift_left_return_iterator(ExPolicy&& policy)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    // n == 0: no-op, returns last
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(std::begin(c), std::end(c), std::size_t(1));
+
+        auto result = hpx::shift_left(policy, c.begin(), c.end(), 0);
+        HPX_TEST(result == c.end());
+    }
+
+    // n >= dist: no-op, returns first
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(std::begin(c), std::end(c), std::size_t(1));
+
+        auto r1 = hpx::shift_left(policy, c.begin(), c.end(), 100);
+        HPX_TEST(r1 == c.begin());
+
+        auto r2 = hpx::shift_left(policy, c.begin(), c.end(), 9999);
+        HPX_TEST(r2 == c.begin());
+    }
+
+    // 0 < n < dist: returns first + (dist - n)
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(std::begin(c), std::end(c), std::size_t(1));
+
+        constexpr std::size_t n = 25;
+        auto result = hpx::shift_left(policy, c.begin(), c.end(), n);
+        auto expected = c.begin() + static_cast<std::ptrdiff_t>(100 - n);
+        HPX_TEST(result == expected);
+
+        bool values_ok = true;
+        for (std::size_t i = 0; i != 75; ++i)
+        {
+            if (c[i] != i + 26)
+            {
+                values_ok = false;
+                break;
+            }
+        }
+        HPX_TEST(values_ok);
+    }
+
+    // n == dist: returns first
+    {
+        std::vector<std::size_t> c = {42};
+        auto result = hpx::shift_left(policy, c.begin(), c.end(), 1);
+        HPX_TEST(result == c.begin());
+    }
+
+    // empty range: returns last
+    {
+        std::vector<std::size_t> empty;
+        auto result = hpx::shift_left(policy, empty.begin(), empty.end(), 0);
+        HPX_TEST(result == empty.end());
+    }
+}
+
+template <typename IteratorTag>
+void test_shift_left_return_iterator()
+{
+    using namespace hpx::execution;
+    test_shift_left_return_iterator(seq);
+    test_shift_left_return_iterator(par);
+    test_shift_left_return_iterator(par_unseq);
+}
+
+// Cross-policy consistency: seq, par, par_unseq must all return the SAME
+// iterator for each case (relative to the range begin).
+void test_shift_left_cross_policy()
+{
+    using namespace hpx::execution;
+
+    auto verify_consistency = [](std::vector<std::size_t> c, int n) {
+        std::vector<std::size_t> c_par = c;
+        std::vector<std::size_t> c_pu = c;
+
+        auto rs = hpx::shift_left(seq, c.begin(), c.end(), n);
+        auto rp = hpx::shift_left(par, c_par.begin(), c_par.end(), n);
+        auto ru = hpx::shift_left(par_unseq, c_pu.begin(), c_pu.end(), n);
+
+        auto ds = std::distance(c.begin(), rs);
+        auto dp = std::distance(c_par.begin(), rp);
+        auto du = std::distance(c_pu.begin(), ru);
+
+        HPX_TEST(ds == dp);
+        HPX_TEST(ds == du);
+    };
+
+    std::vector<std::size_t> base(50);
+    std::iota(base.begin(), base.end(), std::size_t(1));
+
+    verify_consistency(base, 0);
+    verify_consistency(base, 50);
+    verify_consistency(base, 99);
+    verify_consistency(base, 25);
+    verify_consistency(base, 1);
+    verify_consistency(base, 49);
+}
+
+void shift_left_return_iterator_test()
+{
+    test_shift_left_return_iterator<std::random_access_iterator_tag>();
+    test_shift_left_cross_policy();
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -186,6 +300,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::srand(seed);
 
     shift_left_test();
+    shift_left_return_iterator_test();
     return hpx::local::finalize();
 }
 

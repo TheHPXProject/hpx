@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/transform_loop.hpp>
 
 #include <algorithm>
@@ -138,8 +139,9 @@ namespace hpx::parallel::util {
                 if constexpr (iterators_are_random_access)
                 {
                     auto&& in_out = util::transform_loop_n<
-                        hpx::execution::unsequenced_policy>(
-                        it, std::distance(it, last), dest, HPX_FORWARD(F, f));
+                        hpx::execution::unsequenced_policy>(it,
+                        hpx::parallel::detail::distance(it, last), dest,
+                        HPX_FORWARD(F, f));
 
                     return util::in_out_result<InIter, OutIter>{
                         HPX_MOVE(hpx::get<0>(in_out)),
@@ -197,8 +199,9 @@ namespace hpx::parallel::util {
                 if constexpr (iterators_are_random_access)
                 {
                     auto&& in_out = util::transform_loop_n_ind<
-                        hpx::execution::unsequenced_policy>(
-                        it, std::distance(it, last), dest, HPX_FORWARD(F, f));
+                        hpx::execution::unsequenced_policy>(it,
+                        hpx::parallel::detail::distance(it, last), dest,
+                        HPX_FORWARD(F, f));
 
                     return util::in_out_result<InIter, OutIter>{
                         HPX_MOVE(hpx::get<0>(in_out)),
@@ -315,8 +318,8 @@ namespace hpx::parallel::util {
                 {
                     auto&& in_in_out = util::transform_binary_loop_n<
                         hpx::execution::unsequenced_policy>(first1,
-                        std::distance(first1, last1), first2, dest,
-                        HPX_FORWARD(F, f));
+                        hpx::parallel::detail::distance(first1, last1), first2,
+                        dest, HPX_FORWARD(F, f));
 
                     return util::in_in_out_result<InIter1, InIter2, OutIter>{
                         HPX_MOVE(hpx::get<0>(in_in_out)),
@@ -349,8 +352,8 @@ namespace hpx::parallel::util {
                 {
                     // clang-format off
                     std::size_t count = (std::min) (
-                        std::distance(first1, last1),
-                        std::distance(first2, last2));
+                        hpx::parallel::detail::distance(first1, last1),
+                        hpx::parallel::detail::distance(first2, last2));
                     // clang-format on
 
                     auto&& in_in_out = util::transform_binary_loop_n<
@@ -477,8 +480,8 @@ namespace hpx::parallel::util {
                 {
                     auto&& in_in_out = util::transform_binary_loop_ind_n<
                         hpx::execution::unsequenced_policy>(first1,
-                        std::distance(first1, last1), first2, dest,
-                        HPX_FORWARD(F, f));
+                        hpx::parallel::detail::distance(first1, last1), first2,
+                        dest, HPX_FORWARD(F, f));
 
                     return util::in_in_out_result<InIter1, InIter2, OutIter>{
                         HPX_MOVE(hpx::get<0>(in_in_out)),
@@ -511,8 +514,8 @@ namespace hpx::parallel::util {
                 {
                     // clang-format off
                     std::size_t count = (std::min) (
-                        std::distance(first1, last1),
-                        std::distance(first2, last2));
+                        hpx::parallel::detail::distance(first1, last1),
+                        hpx::parallel::detail::distance(first2, last2));
                     // clang-format on
 
                     auto&& in_in_out = util::transform_binary_loop_ind_n<

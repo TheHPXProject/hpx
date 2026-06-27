@@ -280,10 +280,150 @@ void test_partition_copy()
     test_partition_copy_sent(par_unseq);
 }
 
+////////////////////////////////////////////////////////////////////////////
+// Projection tests: project on the 'val' field of user_defined_type and
+// apply a simple integer threshold predicate, distinct from the name-aware
+// operator<(int) used by the existing tests.
+void test_partition_copy_projection()
+{
+    using DataType = user_defined_type;
+    using hpx::get;
+
+    std::size_t const size = 10007;
+    int rand_base = std::rand();
+
+    // pred operates on the projected int value
+    auto proj = [](DataType const& t) -> int { return t.val; };
+    auto pred = [rand_base](int v) -> bool { return v < rand_base; };
+    // oracle: apply proj then pred inline
+    auto std_pred = [rand_base, &proj](DataType const& e) -> bool {
+        return proj(e) < rand_base;
+    };
+
+    // No-policy (sequential) - range form
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto res = hpx::ranges::partition_copy(
+            c, std::begin(d_true), std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+
+    // seq policy
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto res = hpx::ranges::partition_copy(hpx::execution::seq, c,
+            std::begin(d_true), std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+
+    // par policy
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto res = hpx::ranges::partition_copy(hpx::execution::par, c,
+            std::begin(d_true), std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+
+    // par_unseq policy
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto res = hpx::ranges::partition_copy(hpx::execution::par_unseq, c,
+            std::begin(d_true), std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+
+    // seq(task) - async
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto f = hpx::ranges::partition_copy(
+            hpx::execution::seq(hpx::execution::task), c, std::begin(d_true),
+            std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+        auto res = f.get();
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+
+    // par(task) - async
+    {
+        std::vector<DataType> c(size), d_true(size), d_false(size), t_sol(size),
+            f_sol(size);
+        std::generate(
+            std::begin(c), std::end(c), random_fill(rand_base, size / 10));
+
+        auto f = hpx::ranges::partition_copy(
+            hpx::execution::par(hpx::execution::task), c, std::begin(d_true),
+            std::begin(d_false), pred, proj);
+        auto sol = std::partition_copy(std::begin(c), std::end(c),
+            std::begin(t_sol), std::begin(f_sol), std_pred);
+        auto res = f.get();
+
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(
+            std::begin(d_true), res.out1, std::begin(t_sol), sol.first));
+        HPX_TEST(test::equal(
+            std::begin(d_false), res.out2, std::begin(f_sol), sol.second));
+    }
+}
+
 void test_partition_copy()
 {
     test_partition_copy<int>();
     test_partition_copy<user_defined_type>();
+    test_partition_copy_projection();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

@@ -340,7 +340,7 @@ namespace hpx::util::detail {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T, typename E>
+        template <typename T, typename E>
         struct has_push_back<T, E,
             std::void_t<decltype(std::declval<T>().push_back(
                 std::declval<E>()))>> : std::true_type

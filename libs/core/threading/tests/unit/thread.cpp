@@ -123,8 +123,7 @@ void test_id_comparison()
 void interruption_point_thread(hpx::spinlock* m, bool* failed)
 {
     std::unique_lock<hpx::spinlock> lk(*m);
-    hpx::util::ignore_while_checking il(&lk);
-    HPX_UNUSED(il);
+    [[maybe_unused]] hpx::util::ignore_while_checking il(&lk);
 
     hpx::this_thread::interruption_point();
     *failed = true;
@@ -182,8 +181,7 @@ void do_test_thread_no_interrupt_if_interrupts_disabled_at_interruption_point()
     try
     {
         std::unique_lock<hpx::spinlock> lk(m);
-        hpx::util::ignore_while_checking il(&lk);
-        HPX_UNUSED(il);
+        [[maybe_unused]] hpx::util::ignore_while_checking il(&lk);
 
         thrd.interrupt();
     }

@@ -318,15 +318,15 @@ namespace hpx::ranges {
             )
         // clang-format on
         friend bool tag_fallback_invoke(hpx::ranges::is_partitioned_t,
-            Rng&& rng, Pred& pred, Proj proj = Proj())
+            Rng&& rng, Pred pred, Proj proj = Proj())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
 
             return hpx::parallel::detail::is_partitioned<iterator_type,
                 iterator_type>()
-                .call(hpx::execution::seq, std::begin(rng), std::end(rng),
-                    HPX_MOVE(pred), HPX_MOVE(proj));
+                .call(hpx::execution::seq, hpx::util::begin(rng),
+                    hpx::util::end(rng), HPX_MOVE(pred), HPX_MOVE(proj));
         }
 
         template <typename ExPolicy, typename Rng, typename Pred,

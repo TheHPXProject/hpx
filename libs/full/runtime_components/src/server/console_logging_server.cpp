@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -6,14 +6,14 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <hpx/runtime_components/console_logging.hpp>
 #include <hpx/runtime_components/server/console_logging.hpp>
 
@@ -24,7 +24,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // definitions related to console logging
 
-namespace hpx { namespace util { namespace detail {
+namespace hpx::util::detail {
 
     struct log_lock_tag
     {
@@ -35,7 +35,7 @@ namespace hpx { namespace util { namespace detail {
         hpx::util::static_<hpx::util::spinlock, log_lock_tag> lock;
         return lock.get();
     }
-}}}    // namespace hpx::util::detail
+}    // namespace hpx::util::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 // This must be in global namespace

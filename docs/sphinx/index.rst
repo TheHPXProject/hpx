@@ -54,9 +54,9 @@ by the Boost collection of C++ libraries. We aim to improve the scalability of
 today's applications and to expose new levels of parallelism which are necessary
 to take advantage of the exascale systems of the future.
 
-HPX is a member of the High-Performance Software Foundation (|hpsf|)
+HPX is a member of the High-Performance Software Foundation (|hpsf|_)
 network, which signals its commitment to the open-source, high-performance
-computing (HPC) community. By joining |hpsf| - and, concurrently, the Linux
+computing (HPC) community. By joining |hpsf|_ - and, concurrently, the Linux
 Foundation - HPX gains access to a broader collaborative ecosystem that
 promotes shared standards, interoperable tools, and joint research
 initiatives, all of which accelerates the development of scalable parallel
@@ -65,7 +65,7 @@ contributors and industry partners who value the rigorous governance and
 transparent development practices upheld by both organizations. Consequently,
 HPX can more effectively influence the direction of future HPC frameworks
 while benefiting from the collective expertise, resources, and industry
-backing provided by |hpsf| and the Linux Foundation.
+backing provided by |hpsf|_ and the Linux Foundation.
 
 What's so special about |hpx|?
 ==============================

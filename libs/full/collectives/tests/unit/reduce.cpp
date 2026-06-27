@@ -187,7 +187,7 @@ void test_local_use(std::uint32_t num_sites)
             auto const elapsed = t.elapsed();
             if (site == 0)
             {
-                std::cout << "local timing: " << elapsed / (10 * ITERATIONS)
+                std::cout << "local timing: " << elapsed / ITERATIONS
                           << "[s]\n";
             }
         }));

@@ -19,6 +19,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/partitioner_iteration.hpp>
@@ -75,8 +76,7 @@ namespace hpx::parallel::util::detail {
             // We attempt to perform some optimizations in case of non-task
             // execution.
             if constexpr (Optimize &&
-                !hpx::is_async_execution_policy_v<ExPolicy> &&
-                !hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
+                !hpx::is_async_execution_policy_v<ExPolicy>)
             {
                 // Switch to sequential execution for one-core, one-chunk case
                 // if the executor supports it.
@@ -398,7 +398,29 @@ namespace hpx::parallel::util::detail {
 
                 scoped_params.mark_end_of_scheduling();
 
-                return reduce(HPX_MOVE(items), HPX_FORWARD(F2, f2));
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy_>)
+                {
+                    namespace ex = hpx::execution::experimental;
+                    namespace tt = hpx::this_thread::experimental;
+                    auto sender =
+                        ex::then(HPX_MOVE(items), HPX_FORWARD(F2, f2));
+                    auto result = tt::sync_wait(HPX_MOVE(sender));
+                    if constexpr (hpx::tuple_size_v<
+                                      std::decay_t<decltype(*result)>> == 0)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        auto value = hpx::get<0>(HPX_MOVE(*result));
+                        return value;
+                    }
+                }
+                else
+                {
+                    return reduce(HPX_MOVE(items), HPX_FORWARD(F2, f2));
+                }
             }
             catch (...)
             {
@@ -646,8 +668,17 @@ namespace hpx::parallel::util::detail {
 
                     handle_local_exceptions::call(r);
 
-                    return hpx::util::void_guard<R>(),
-                           f(HPX_FORWARD(decltype(r), r));
+                    if constexpr (hpx::traits::is_future_v<decltype((r))> &&
+                        !std::is_void_v<
+                            hpx::traits::future_traits_t<decltype((r))>>)
+                    {
+                        return hpx::util::void_guard<R>(), f(r.get());
+                    }
+                    else
+                    {
+                        return hpx::util::void_guard<R>(),
+                               f(HPX_FORWARD(decltype(r), r));
+                    }
                 },
                 HPX_FORWARD(Items, workitems));
 #endif
@@ -669,4 +700,25 @@ namespace hpx::parallel::util {
             detail::task_static_partitioner>::template apply<R, Result>
     {
     };
+
+    // Helper to call partitioner and wrap the result with
+    // algorithm_result::get(). Handles both void and non-void return types.
+    template <typename ExPolicy, typename... Args>
+    decltype(auto) call_with_algorithm_result(ExPolicy&& policy, Args&&... args)
+    {
+        if constexpr (std::is_void_v<decltype(partitioner<ExPolicy>::call(
+                          HPX_FORWARD(ExPolicy, policy),
+                          HPX_FORWARD(Args, args)...))>)
+        {
+            partitioner<ExPolicy>::call(
+                HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...);
+            return detail::algorithm_result<ExPolicy>::get();
+        }
+        else
+        {
+            return detail::algorithm_result<ExPolicy>::get(
+                partitioner<ExPolicy>::call(
+                    HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
+        }
+    }
 }    // namespace hpx::parallel::util

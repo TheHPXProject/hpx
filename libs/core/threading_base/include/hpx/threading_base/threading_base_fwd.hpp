@@ -17,29 +17,26 @@
 #include <cstdint>
 #include <utility>
 
-#if defined(HPX_HAVE_APEX)
-#include <memory>
+namespace hpx::tracing {
 
-namespace hpx::util::external_timer {
-
-    HPX_CXX_CORE_EXPORT struct task_wrapper;
-}    // namespace hpx::util::external_timer
-#endif
+    HPX_CXX_CORE_EXPORT struct task_timer_data;
+}    // namespace hpx::tracing
 
 namespace hpx::threads {
 
-    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT
-        thread_data;    // forward declaration only
+    // forward declaration only
+    HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT thread_data;
     HPX_CXX_CORE_EXPORT class thread_data_stackful;
     HPX_CXX_CORE_EXPORT class thread_data_stackless;
 
     HPX_CXX_CORE_EXPORT class thread_init_data;
-    HPX_CXX_CORE_EXPORT struct thread_description;
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT thread_description;
 
     namespace policies {
 
         HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT scheduler_base;
-    }
+    }    // namespace policies
+
     HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT thread_pool_base;
 
     /// \cond NOINTERNAL
@@ -63,13 +60,10 @@ namespace hpx::threads {
     HPX_CXX_CORE_EXPORT using thread_self_impl_type =
         coroutines::detail::coroutine_impl;
 
-#if defined(HPX_HAVE_APEX)
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT
-        std::shared_ptr<hpx::util::external_timer::task_wrapper>
-        get_self_timer_data();
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::task_timer_data
+    get_self_timer_data();
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_self_timer_data(
-        std::shared_ptr<hpx::util::external_timer::task_wrapper> data);
-#endif
+        tracing::task_timer_data data);
     /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
@@ -108,11 +102,15 @@ namespace hpx::threads {
 
     /// The function \a get_outer_self_id returns the HPX thread id of
     /// the current outer thread (or zero if the current thread is not a HPX
-    /// thread). This usually returns the same as \a get_self_id, except for
-    /// directly executed threads, in which case this returns the thread id
-    /// of the outermost HPX thread.
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT thread_id_type
-    get_outer_self_id() noexcept;
+    /// thread). This now always returns the same as \a get_self_id, even for
+    /// directly executed threads.
+    HPX_DEPRECATED_V(2, 0,
+        "hpx::threads::get_outer_self_id is deprecated, use "
+        "hpx::threads::get_self_id instead")
+    inline thread_id_type get_outer_self_id() noexcept
+    {
+        return get_self_id();
+    }
 
     /// The function \a get_parent_id returns the HPX thread id of the
     /// current thread's parent (or zero if the current thread is not a

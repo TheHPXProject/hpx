@@ -51,11 +51,11 @@ while getopts "hnt:d:v:c:x:" OPTION; do case $OPTION in
         ;;
     d)
         # Try to make the directories.
-        mkdir -p $OPTARG/release > /dev/null 2>&1
-        mkdir -p $OPTARG/debug > /dev/null 2>&1
+        mkdir -p "$OPTARG/release" > /dev/null 2>&1
+        mkdir -p "$OPTARG/debug" > /dev/null 2>&1
 
-        if [[ -d $OPTARG/release && -w $OPTARG/release ]] && \
-           [[ -d $OPTARG/debug   && -w $OPTARG/debug   ]];
+        if [[ -d "$OPTARG/release" && -w $OPTARG/release ]] && \
+           [[ -d "$OPTARG/debug" && -w $OPTARG/debug   ]];
         then
             DIRECTORY=$OPTARG
         else
@@ -127,7 +127,7 @@ error()
     exit 1
 }
 
-cd $DIRECTORY
+cd "$DIRECTORY"
 
 if [[ $DOWNLOAD == "1" ]]; then
     wget downloads.sourceforge.net/sourceforge/boost/boost/$DOT_VERSION/boost_$US_VERSION.tar.bz2
@@ -139,59 +139,59 @@ if ! [[ $? == "0" ]]; then echo "ERROR: Unable to unpack `pwd`/boost_$US_VERSION
 
 mv boost_$US_VERSION source
 
-cd $DIRECTORY/source
+cd "$DIRECTORY/source"
 
 # Bootstrap the Boost build system, Boost.Build.
 $DIRECTORY/source/bootstrap.sh $EXCLUDES $COMPILER
 
-$BJAM --stagedir=$DIRECTORY/debug/stage variant=debug -j${THREADS}
+$BJAM --stagedir="$DIRECTORY/debug/stage" variant=debug -j${THREADS}
 if ! [[ $? == "0" ]]; then echo "ERROR: Debug build of Boost failed"; error; fi
 
-$BJAM --stagedir=$DIRECTORY/release/stage variant=release -j${THREADS}
+$BJAM --stagedir="$DIRECTORY/release/stage" variant=release -j${THREADS}
 if ! [[ $? == "0" ]]; then echo "ERROR: Release build of Boost failed"; error; fi
 
 # Build the Boost.Wave preprocessor.
-cd $DIRECTORY/source/tools/wave/build
+cd "$DIRECTORY/source/tools/wave/build"
 $BJAM dist-bin -j${THREADS} variant=release
 
 # Build the Quickbook documentation framework.
-cd $DIRECTORY/source/tools/quickbook
+cd "$DIRECTORY/source/tools/quickbook"
 $BJAM dist-bin -j${THREADS} variant=release
 
 # Copy over the BoostBook DTD and XML code to the staging directory.
-cd $DIRECTORY/source/tools
+cd "$DIRECTORY/source/tools"
 $BJAM dist-share-boostbook
 
 # Build the auto_index indexing tool.
-cd $DIRECTORY/source/tools/auto_index/build
+cd "$DIRECTORY/source/tools/auto_index/build"
 $BJAM i -j${THREADS} variant=release
 
 # These links are necessary to ensure that the stage directories are usable
 # Boost source trees.
 create_links()
 {
-    ln -fs $DIRECTORY/source/bjam bjam
-    ln -fs $DIRECTORY/source/boost boost
-    ln -fs $DIRECTORY/source/boost-build.jam boost-build.jam
-    ln -fs $DIRECTORY/source/boostcpp.jam boostcpp.jam
-    ln -fs $DIRECTORY/source/boost.css boost.css
-    ln -fs $DIRECTORY/source/boost.png boost.png
-    ln -fs $DIRECTORY/source/dist dist
-    ln -fs $DIRECTORY/source/doc doc
-    ln -fs $DIRECTORY/source/index.htm index.htm
-    ln -fs $DIRECTORY/source/index.html index.html
-    ln -fs $DIRECTORY/source/Jamroot Jamroot
-    ln -fs $DIRECTORY/source/libs libs
-    ln -fs $DIRECTORY/source/LICENSE_1_0.txt LICENSE_1_0.txt
-    ln -fs $DIRECTORY/source/project-config.jam project-config.jam
-    ln -fs $DIRECTORY/source/rst.css rst.css
-    ln -fs $DIRECTORY/source/tools tools
+    ln -fs "$DIRECTORY/source/bjam" bjam
+    ln -fs "$DIRECTORY/source/boost" boost
+    ln -fs "$DIRECTORY/source/boost-build.jam" boost-build.jam
+    ln -fs "$DIRECTORY/source/boostcpp.jam" boostcpp.jam
+    ln -fs "$DIRECTORY/source/boost.css" boost.css
+    ln -fs "$DIRECTORY/source/boost.png" boost.png
+    ln -fs "$DIRECTORY/source/dist" dist
+    ln -fs "$DIRECTORY/source/doc" doc
+    ln -fs "$DIRECTORY/source/index.htm" index.htm
+    ln -fs "$DIRECTORY/source/index.html" index.html
+    ln -fs "$DIRECTORY/source/Jamroot" Jamroot
+    ln -fs "$DIRECTORY/source/libs" libs
+    ln -fs "$DIRECTORY/source/LICENSE_1_0.txt" LICENSE_1_0.txt
+    ln -fs "$DIRECTORY/source/project-config.jam" project-config.jam
+    ln -fs "$DIRECTORY/source/rst.css" rst.css
+    ln -fs "$DIRECTORY/source/tools" tools
 }
 
-cd $DIRECTORY/debug
+cd "$DIRECTORY/debug"
 create_links
 
-cd $DIRECTORY/release
+cd "$DIRECTORY/release"
 create_links
 
 echo

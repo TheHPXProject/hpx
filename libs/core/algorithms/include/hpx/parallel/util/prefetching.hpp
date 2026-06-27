@@ -17,7 +17,6 @@
 #include <cstddef>
 #include <functional>
 #include <iterator>
-#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -160,16 +159,14 @@ namespace hpx::parallel::util {
                 return tmp;
             }
 
-            // FIXME: should other members be compared too?
             bool operator==(prefetching_iterator const& rhs) const
             {
                 return idx_ == rhs.idx_ && base_ == rhs.base_;
             }
 
-            // FIXME: should the base iterators be compared too?
             bool operator!=(prefetching_iterator const& rhs) const
             {
-                return idx_ != rhs.idx_;
+                return !(*this == rhs);
             }
             bool operator>(prefetching_iterator const& rhs) const
             {
@@ -350,6 +347,17 @@ namespace hpx::parallel::util {
                 it, count, HPX_FORWARD(F, f), std::true_type());
         }
 
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Itr,
+            typename... Ts, typename F>
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE constexpr prefetching_iterator<Itr, Ts...>
+            tag_invoke(hpx::parallel::util::const_loop_n_t<ExPolicy>,
+                prefetching_iterator<Itr, Ts...> it, std::size_t count, F&& f)
+        {
+            return loop_n_helper::call(
+                it, count, HPX_FORWARD(F, f), std::true_type());
+        }
+
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT struct loop_n_ind_helper
         {
@@ -452,7 +460,7 @@ namespace hpx::parallel::util {
     namespace detail {
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Itr, typename... Ts>
+        template <typename Itr, typename... Ts>
         struct loop<prefetching::prefetching_iterator<Itr, Ts...>>
         {
             using iterator_type = prefetching::prefetching_iterator<Itr, Ts...>;
@@ -512,7 +520,7 @@ namespace hpx::parallel::util {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Itr, typename... Ts>
+        template <typename Itr, typename... Ts>
         struct loop_ind<prefetching::prefetching_iterator<Itr, Ts...>>
         {
             using iterator_type = prefetching::prefetching_iterator<Itr, Ts...>;

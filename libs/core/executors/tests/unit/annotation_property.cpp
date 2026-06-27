@@ -201,8 +201,8 @@ void test_bulk_sync()
     auto hint = hpx::execution::experimental::get_hint(executor);
     hint.sharing_mode(hpx::threads::thread_sharing_hint::do_not_share_function |
         hpx::threads::thread_sharing_hint::do_not_combine_tasks);
-    auto no_sharing_exec =
-        hpx::execution::experimental::with_hint(executor, hint);
+    auto no_sharing_exec = hpx::execution::to_hierarchical_spawning(
+        hpx::execution::experimental::with_hint(executor, hint));
 
     std::string desc("test_bulk_sync");
     {

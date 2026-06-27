@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //  Copyright (c)      2011 Thomas Heller
 //
@@ -10,11 +10,12 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 namespace hpx::actions {
 
     /// \cond NOINTERNAL
-    enum preassigned_action_id
-    {
+    HPX_CXX_EXPORT enum preassigned_action_id {
         register_worker_action_id = 0,
         notify_worker_action_id,
         allocate_action_id,

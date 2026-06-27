@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //  Copyright (c)      2011 Thomas Heller
 //
@@ -19,6 +19,7 @@
 #include <hpx/actions_base/detail/action_factory.hpp>
 #include <hpx/actions_base/detail/invocation_count_registry.hpp>
 #include <hpx/actions_base/detail/per_action_data_counter_registry.hpp>
+#include <hpx/actions_base/macros.hpp>
 #include <hpx/actions_base/preassigned_action_id.hpp>
 #include <hpx/actions_base/traits/action_continuation.hpp>
 #include <hpx/actions_base/traits/action_priority.hpp>
@@ -26,10 +27,9 @@
 #include <hpx/actions_base/traits/action_stacksize.hpp>
 #include <hpx/actions_base/traits/action_trigger_continuation_fwd.hpp>
 #include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/traits/action_decorate_function.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
@@ -42,10 +42,6 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
 
 #include <atomic>
 #include <cstddef>
@@ -72,7 +68,7 @@ namespace hpx::actions {
             naming::component_type comptype;
 
             template <typename... Ts>
-            HPX_FORCEINLINE typename Action::internal_result_type operator()(
+            HPX_FORCEINLINE Action::internal_result_type operator()(
                 Ts&&... vs) const
             {
                 return Action::invoke(lva, comptype, HPX_FORWARD(Ts, vs)...);
@@ -148,7 +144,7 @@ namespace hpx::actions {
             hpx::id_type target_;
             naming::address_type lva_;
             naming::component_type comptype_;
-            typename Action::arguments_type args_;
+            Action::arguments_type args_;
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -158,9 +154,8 @@ namespace hpx::actions {
         public:
             template <typename... Ts>
             explicit continuation_thread_function(hpx::id_type&& target,
-                typename Action::continuation_type&& cont,
-                naming::address_type lva, naming::component_type comptype,
-                Ts&&... vs)
+                Action::continuation_type&& cont, naming::address_type lva,
+                naming::component_type comptype, Ts&&... vs)
               : target_(HPX_MOVE(target))
               , cont_(HPX_MOVE(cont))
               , lva_(lva)
@@ -189,10 +184,10 @@ namespace hpx::actions {
         private:
             // This holds the target alive, if necessary.
             hpx::id_type target_;
-            typename Action::continuation_type cont_;
+            Action::continuation_type cont_;
             naming::address_type lva_;
             naming::component_type comptype_;
-            typename Action::arguments_type args_;
+            Action::arguments_type args_;
         };
 
         ///////////////////////////////////////////////////////////////////////
@@ -235,18 +230,17 @@ namespace hpx::actions {
         using derived_type = Derived;
 
         // result_type represents the type returned when invoking operator()
-        using result_type = typename traits::promise_local_result<R>::type;
+        using result_type = traits::promise_local_result<R>::type;
 
         // The remote_result_type is the remote type for the type_continuation
-        using remote_result_type =
-            typename traits::action_remote_result<R>::type;
+        using remote_result_type = traits::action_remote_result<R>::type;
 
         // The local_result_type is the local type for the type_continuation
         using local_result_type =
-            typename traits::promise_local_result<remote_result_type>::type;
+            traits::promise_local_result<remote_result_type>::type;
 
         using continuation_type =
-            typename traits::action_continuation<basic_action>::type;
+            traits::action_continuation<basic_action>::type;
 
         static constexpr std::size_t arity = sizeof...(Args);
 
@@ -445,7 +439,7 @@ namespace hpx::actions {
 
     namespace detail {
 
-        template <typename Action>
+        HPX_CXX_EXPORT template <typename Action>
         void register_local_action_invocation_count(
             invocation_count_registry& registry)
         {
@@ -458,7 +452,7 @@ namespace hpx::actions {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        template <typename Action, typename Derived = void>
+        HPX_CXX_EXPORT template <typename Action, typename Derived = void>
         struct action_type
         {
             using type = Derived;
@@ -470,17 +464,17 @@ namespace hpx::actions {
             using type = Action;
         };
 
-        template <typename Action, typename Derived>
-        using action_type_t = typename action_type<Action, Derived>::type;
+        HPX_CXX_EXPORT template <typename Action, typename Derived>
+        using action_type_t = action_type<Action, Derived>::type;
 
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename TF, TF F, typename Derived = void>
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived = void>
     struct action;
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename TF, TF F, typename Derived = void>
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived = void>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
     struct direct_action
       : action<TF, F,
@@ -501,7 +495,7 @@ namespace hpx::actions {
     // Base template allowing to generate a concrete action type from a function
     // pointer. It is instantiated only if the supplied pointer is not a
     // supported function pointer.
-    template <typename TF, TF F, typename Derived = void,
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived = void,
         typename Direct = std::false_type>
     struct make_action
     {
@@ -514,18 +508,17 @@ namespace hpx::actions {
         using type = direct_action<TF, F, Derived>;
     };
 
-    template <typename TF, TF F, typename Derived = void,
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived = void,
         typename Direct = std::false_type>
-    using make_action_t = typename make_action<TF, F, Derived, Direct>::type;
+    using make_action_t = make_action<TF, F, Derived, Direct>::type;
 
-    template <typename TF, TF F, typename Derived = void>
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived = void>
     struct make_direct_action : make_action<TF, F, Derived, std::true_type>
     {
     };
 
-    template <typename TF, TF F, typename Derived>
-    using make_direct_action_t =
-        typename make_direct_action<TF, F, Derived>::type;
+    HPX_CXX_EXPORT template <typename TF, TF F, typename Derived>
+    using make_direct_action_t = make_direct_action<TF, F, Derived>::type;
 
     /// \endcond
 }    // namespace hpx::actions
@@ -534,281 +527,3 @@ namespace hpx::actions {
 #include <hpx/config/warnings_suffix.hpp>
 
 /// \cond NOINTERNAL
-
-// Macros usable to refer to an action given the function to expose
-#define HPX_MAKE_ACTION(func)                                                  \
-    hpx::actions::make_action<decltype(&func), &func> /**/ /**/
-#define HPX_MAKE_DIRECT_ACTION(func)                                           \
-    hpx::actions::make_direct_action<decltype(&func), &func> /**/ /**/
-
-///////////////////////////////////////////////////////////////////////////////
-/// \def HPX_DECLARE_ACTION(func, name)
-/// \brief Declares an action type
-///
-#define HPX_DECLARE_ACTION(...)                                                \
-    HPX_DECLARE_ACTION_(__VA_ARGS__)                                           \
-    /**/
-
-/// \cond NOINTERNAL
-
-#define HPX_DECLARE_DIRECT_ACTION(...)                                         \
-    HPX_DECLARE_ACTION(__VA_ARGS__)                                            \
-    /**/
-
-#define HPX_DECLARE_ACTION_(...)                                               \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_DECLARE_ACTION_, HPX_PP_NARGS(__VA_ARGS__))(  \
-        __VA_ARGS__))                                                          \
-    /**/
-
-#define HPX_DECLARE_ACTION_1(func)                                             \
-    HPX_DECLARE_ACTION_2(func, HPX_PP_CAT(func, _action))                      \
-    /**/
-
-#define HPX_DECLARE_ACTION_2(func, name)                                       \
-    struct name;                                                               \
-    /**/
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_ACTION_(...)                                              \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_ACTION_, HPX_PP_NARGS(__VA_ARGS__))( \
-        __VA_ARGS__))                                                          \
-/**/
-#define HPX_REGISTER_ACTION_1(action)                                          \
-    HPX_REGISTER_ACTION_2(action, action)                                      \
-    /**/
-
-#if !defined(HPX_HAVE_NETWORKING)
-
-#define HPX_DEFINE_GET_ACTION_NAME(action) /**/
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname) /**/
-#endif
-#define HPX_REGISTER_ACTION_EXTERN_DECLARATION(action) /**/
-
-#define HPX_REGISTER_ACTION_2(action, actionname)                              \
-    HPX_REGISTER_ACTION_INVOCATION_COUNT(action)                               \
-    HPX_REGISTER_PER_ACTION_DATA_COUNTER_TYPES(action)                         \
-    /**/
-
-#define HPX_REGISTER_ACTION_DECLARATION_2(action, actionname) /**/
-
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_ACTION_USES_STACK(action, size)  /**/
-#define HPX_ACTION_USES_SMALL_STACK(action)  /**/
-#define HPX_ACTION_USES_MEDIUM_STACK(action) /**/
-#define HPX_ACTION_USES_LARGE_STACK(action)  /**/
-#define HPX_ACTION_USES_HUGE_STACK(action)   /**/
-#else
-#define HPX_ACTION_USES_STACK(action, size)                                    \
-    namespace hpx::traits {                                                    \
-        template <>                                                            \
-        struct action_stacksize<action>                                        \
-        {                                                                      \
-            static constexpr threads::thread_stacksize value = size;           \
-        };                                                                     \
-    }                                                                          \
-    /**/
-
-#define HPX_ACTION_USES_SMALL_STACK(action)                                    \
-    HPX_ACTION_USES_STACK(action, threads::thread_stacksize::small_)           \
-/**/
-#define HPX_ACTION_USES_MEDIUM_STACK(action)                                   \
-    HPX_ACTION_USES_STACK(action, threads::thread_stacksize::medium)           \
-/**/
-#define HPX_ACTION_USES_LARGE_STACK(action)                                    \
-    HPX_ACTION_USES_STACK(action, threads::thread_stacksize::large)            \
-/**/
-#define HPX_ACTION_USES_HUGE_STACK(action)                                     \
-    HPX_ACTION_USES_STACK(action, threads::thread_stacksize::huge)             \
-/**/
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_ACTION_HAS_PRIORITY(action, priority)      /**/
-#define HPX_ACTION_HAS_LOW_PRIORITY(action)            /**/
-#define HPX_ACTION_HAS_NORMAL_PRIORITY(action)         /**/
-#define HPX_ACTION_HAS_HIGH_PRIORITY(action)           /**/
-#define HPX_ACTION_HAS_HIGH_RECURSIVE_PRIORITY(action) /**/
-// obsolete, kept for compatibility
-#define HPX_ACTION_HAS_CRITICAL_PRIORITY(action) /**/
-#else
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_ACTION_HAS_PRIORITY(action, priority)                              \
-    namespace hpx::traits {                                                    \
-        template <>                                                            \
-        struct action_priority<action>                                         \
-        {                                                                      \
-            static constexpr threads::thread_priority value = priority;        \
-        };                                                                     \
-        /* make sure the action is not executed directly */                    \
-        template <>                                                            \
-        struct has_decorates_action<action> : std::true_type                   \
-        {                                                                      \
-        };                                                                     \
-    }                                                                          \
-    /**/
-
-#define HPX_ACTION_HAS_LOW_PRIORITY(action)                                    \
-    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::low)             \
-/**/
-#define HPX_ACTION_HAS_NORMAL_PRIORITY(action)                                 \
-    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::normal)          \
-/**/
-#define HPX_ACTION_HAS_HIGH_PRIORITY(action)                                   \
-    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::high)            \
-/**/
-#define HPX_ACTION_HAS_HIGH_RECURSIVE_PRIORITY(action)                         \
-    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::high_recursive)  \
-/**/
-
-// obsolete, kept for compatibility
-#define HPX_ACTION_HAS_CRITICAL_PRIORITY(action)                               \
-    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::high_recursive)  \
-/**/
-#endif
-
-/// \endcond
-
-/// \def HPX_REGISTER_ACTION_DECLARATION(action)
-///
-/// \brief Declare the necessary component action boilerplate code.
-///
-/// The macro \a HPX_REGISTER_ACTION_DECLARATION can be used to declare all the
-/// boilerplate code which is required for proper functioning of component
-/// actions in the context of HPX.
-///
-/// The parameter \a action is the type of the action to declare the
-/// boilerplate for.
-///
-/// This macro can be invoked with an optional second parameter. This parameter
-/// specifies a unique name of the action to be used for serialization purposes.
-/// The second parameter has to be specified if the first parameter is not
-/// usable as a plain (non-qualified) C++ identifier, i.e. the first parameter
-/// contains special characters which cannot be part of a C++ identifier, such
-/// as '<', '>', or ':'.
-///
-/// \par Example:
-///
-/// \code
-///      namespace app
-///      {
-///          // Define a simple component exposing one action 'print_greeting'
-///          class HPX_COMPONENT_EXPORT server
-///            : public hpx::components::component_base<server>
-///          {
-///              void print_greeting ()
-///              {
-///                  hpx::cout << "Hey, how are you?\n" << std::flush;
-///              }
-///
-///              // Component actions need to be declared, this also defines the
-///              // type 'print_greeting_action' representing the action.
-///              HPX_DEFINE_COMPONENT_ACTION(server,
-///                  print_greeting, print_greeting_action);
-///          };
-///      }
-///
-///      // Declare boilerplate code required for each of the component actions.
-///      HPX_REGISTER_ACTION_DECLARATION(app::server::print_greeting_action)
-/// \endcode
-///
-/// \note This macro has to be used once for each of the component actions
-/// defined using one of the \a HPX_DEFINE_COMPONENT_ACTION macros. It has to
-/// be visible in all translation units using the action, thus it is
-/// recommended to place it into the header file defining the component.
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_REGISTER_ACTION_DECLARATION(...) /**/
-#else
-#define HPX_REGISTER_ACTION_DECLARATION(...)                                   \
-    HPX_REGISTER_ACTION_DECLARATION_(__VA_ARGS__)                              \
-    /**/
-
-#define HPX_REGISTER_ACTION_DECLARATION_(...)                                  \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_ACTION_DECLARATION_,                 \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-/**/
-#define HPX_REGISTER_ACTION_DECLARATION_1(action)                              \
-    HPX_REGISTER_ACTION_DECLARATION_2(action, action)                          \
-/**/
-#endif
-
-/// \def HPX_REGISTER_ACTION(action)
-///
-/// \brief Define the necessary component action boilerplate code.
-///
-/// The macro \a HPX_REGISTER_ACTION can be used to define all the
-/// boilerplate code which is required for proper functioning of component
-/// actions in the context of HPX.
-///
-/// The parameter \a action is the type of the action to define the
-/// boilerplate for.
-///
-/// This macro can be invoked with an optional second parameter. This parameter
-/// specifies a unique name of the action to be used for serialization purposes.
-/// The second parameter has to be specified if the first parameter is not
-/// usable as a plain (non-qualified) C++ identifier, i.e. the first parameter
-/// contains special characters which cannot be part of a C++ identifier, such
-/// as '<', '>', or ':'.
-///
-/// \note This macro has to be used once for each of the component actions
-/// defined using one of the \a HPX_DEFINE_COMPONENT_ACTION or
-/// \a HPX_DEFINE_PLAIN_ACTION macros. It has to occur exactly once for each of
-/// the actions, thus it is recommended to place it into the source file defining
-/// the component.
-///
-/// \note Only one of the forms of this macro \a HPX_REGISTER_ACTION or
-///       \a HPX_REGISTER_ACTION_ID should be used for a particular action,
-///       never both.
-///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_REGISTER_ACTION(...) /**/
-#else
-#define HPX_REGISTER_ACTION(...)                                               \
-    HPX_REGISTER_ACTION_(__VA_ARGS__)                                          \
-/**/
-#endif
-
-/// \def HPX_REGISTER_ACTION_ID(action, actionname, actionid)
-///
-/// \brief Define the necessary component action boilerplate code and assign a
-///        predefined unique id to the action.
-///
-/// The macro \a HPX_REGISTER_ACTION can be used to define all the
-/// boilerplate code which is required for proper functioning of component
-/// actions in the context of HPX.
-///
-/// The parameter \a action is the type of the action to define the
-/// boilerplate for.
-///
-/// The parameter \a actionname specifies an unique name of the action to be
-/// used for serialization purposes.
-/// The second parameter has to be usable as a plain (non-qualified) C++
-/// identifier, it should not contain special characters which cannot be part
-/// of a C++ identifier, such as '<', '>', or ':'.
-///
-/// The parameter \a actionid specifies an unique integer value which will be
-/// used to represent the action during serialization.
-///
-/// \note This macro has to be used once for each of the component actions
-/// defined using one of the \a HPX_DEFINE_COMPONENT_ACTION or global actions
-/// \a HPX_DEFINE_PLAIN_ACTION macros. It has to occur exactly once for each of
-/// the actions, thus it is recommended to place it into the source file defining
-/// the component.
-///
-/// \note Only one of the forms of this macro \a HPX_REGISTER_ACTION or
-///       \a HPX_REGISTER_ACTION_ID should be used for a particular action,
-///       never both.
-///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_REGISTER_ACTION_ID(action, actionname, actionid) /**/
-#else
-#define HPX_REGISTER_ACTION_ID(action, actionname, actionid)                   \
-    HPX_REGISTER_ACTION_2(action, actionname)                                  \
-    HPX_REGISTER_ACTION_FACTORY_ID(actionname, actionid)                       \
-/**/
-#endif

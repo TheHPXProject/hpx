@@ -8,18 +8,19 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/naming_base.hpp>
-#include <hpx/runtime_components/new.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/components/process/child.hpp>
 
 #include <type_traits>
 #include <utility>
 
-namespace hpx { namespace components { namespace process {
+namespace hpx::components::process {
+
     ///////////////////////////////////////////////////////////////////////////
     template <typename... Ts>
     child execute(hpx::id_type const& id, Ts&&... ts)
     {
         return hpx::new_<child>(id, HPX_FORWARD(Ts, ts)...);
     }
-}}}    // namespace hpx::components::process
+}    // namespace hpx::components::process

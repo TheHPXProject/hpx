@@ -1,4 +1,5 @@
 //  Copyright (c) 2020-2024 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -48,63 +49,37 @@ namespace executor_example {
         // Add two executor API functions that will be called before the
         // parallel algorithm starts executing and after it has finished
         // executing.
-        template <typename Parameters>
-        friend void tag_invoke(
-            hpx::execution::experimental::mark_begin_execution_t, Parameters&&,
-            disable_thread_stealing_executor const& exec)
+        template <typename Executor>
+        void mark_begin_execution(Executor&&) const
         {
             auto const pu_mask =
-                hpx::execution::experimental::get_processing_units_mask(exec);
+                hpx::execution::experimental::get_processing_units_mask(*this);
             hpx::threads::remove_scheduler_mode(
                 hpx::threads::policies::scheduler_mode::enable_stealing,
                 pu_mask);
         }
 
-        template <typename Parameters>
-        friend void tag_invoke(
-            hpx::execution::experimental::mark_end_execution_t, Parameters&&,
-            disable_thread_stealing_executor const& exec)
+        template <typename Executor>
+        void mark_end_execution(Executor&&) const
         {
             auto const pu_mask =
-                hpx::execution::experimental::get_processing_units_mask(exec);
+                hpx::execution::experimental::get_processing_units_mask(*this);
             hpx::threads::add_scheduler_mode(
                 hpx::threads::policies::scheduler_mode::enable_stealing,
                 pu_mask);
         }
+
+        // support scheduling properties via query() for new CPO dispatch
+        template <typename Tag, typename... Args>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag>)
+        auto query(Tag tag, Args&&... args) const -> decltype(tag(
+            std::declval<BaseExecutor const&>(), HPX_FORWARD(Args, args)...))
+        {
+            return tag(static_cast<BaseExecutor const&>(*this),
+                HPX_FORWARD(Args, args)...);
+        }
     };
-
-    // support all properties exposed by the wrapped executor
-    // clang-format off
-    template <typename Tag, typename BaseExecutor, typename Property,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    // clang-format on
-    auto tag_invoke(Tag tag,
-        disable_thread_stealing_executor<BaseExecutor> const& exec,
-        Property&& prop)
-        -> decltype(disable_thread_stealing_executor<BaseExecutor>(
-            std::declval<Tag>()(
-                std::declval<BaseExecutor>(), std::declval<Property>())))
-    // clang-format on
-    {
-        return disable_thread_stealing_executor<BaseExecutor>(
-            tag(static_cast<BaseExecutor const&>(exec),
-                HPX_FORWARD(Property, prop)));
-    }
-
-    // clang-format off
-    template <typename Tag, typename BaseExecutor,
-        HPX_CONCEPT_REQUIRES_(
-            hpx::execution::experimental::is_scheduling_property_v<Tag>
-        )>
-    // clang-format on
-    auto tag_invoke(
-        Tag tag, disable_thread_stealing_executor<BaseExecutor> const& exec)
-        -> decltype(std::declval<Tag>()(std::declval<BaseExecutor>()))
-    {
-        return tag(static_cast<BaseExecutor const&>(exec));
-    }
 
     template <typename BaseExecutor>
     auto make_disable_thread_stealing_executor(BaseExecutor&& exec)
@@ -161,7 +136,8 @@ int hpx_main()
 
     // The following for_loop will be executed while thread stealing is disabled
     auto exec = executor_example::make_disable_thread_stealing_executor(
-        hpx::execution::par.executor());
+        hpx::execution::to_hierarchical_spawning(
+            hpx::execution::par.executor()));
 
     // This may lead to deadlock situations if the main thread executes some of
     // the chunks synchronously.

@@ -1,4 +1,5 @@
 //  Copyright (c) 2020 John Biddiscombe
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2020 Teodor Nikolov
 //  Copyright (c) 2024-2025 Hartmut Kaiser
 //
@@ -133,25 +134,6 @@ namespace hpx::cuda::experimental {
         // -------------------------------------------------------------------------
         // OneWay Execution
         // -------------------------------------------------------------------------
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        // -------------------------------------------------------------------------
-        // TwoWay Execution
-        // -------------------------------------------------------------------------
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-    protected:
         // This is a simple wrapper for any cublas call, pass in the same arguments
         // that you would use for a cublas call except the cublas handle which is omitted
         // as the wrapper will supply that for you
@@ -184,6 +166,16 @@ namespace hpx::cuda::experimental {
                 cuda_function, HPX_FORWARD(Args, args)...);
         }
 
+        // -------------------------------------------------------------------------
+        // TwoWay Execution
+        // -------------------------------------------------------------------------
+        template <typename F, typename... Ts>
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
+        {
+            return async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+        }
+
+    protected:
         // -------------------------------------------------------------------------
         // launch a cuBlas function and return a future that will become ready
         // when the task completes, this allows integration of GPU kernels with

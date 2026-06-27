@@ -12,7 +12,6 @@
 #include <iostream>
 #include <iterator>
 #include <numeric>
-#include <ranges>
 #include <string>
 #include <vector>
 

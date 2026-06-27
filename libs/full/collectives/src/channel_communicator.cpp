@@ -1,4 +1,4 @@
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,19 +7,17 @@
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-
 #include <hpx/assert.hpp>
-#include <hpx/collectives/channel_communicator.hpp>
-#include <hpx/components/basename_registration.hpp>
-#include <hpx/components/client.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/server/component.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/runtime_components/new.hpp>
+
+#include <hpx/collectives/channel_communicator.hpp>
 
 #include <cstddef>
 #include <memory>

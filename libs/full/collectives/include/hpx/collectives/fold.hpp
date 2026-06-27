@@ -1,4 +1,4 @@
-//  Copyright (c) 2013-2023 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //  Copyright (c) 2013 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -155,16 +155,16 @@ namespace hpx { namespace lcos {
     inverse_fold_with_index(std::vector<hpx::id_type> const& ids,
         FoldOp&& fold_op, Init&& init, ArgN argN, ...);
 }}    // namespace hpx::lcos
+
 #else
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/async_combinators.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
@@ -172,17 +172,19 @@ namespace hpx { namespace lcos {
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <hpx/collectives/macros.hpp>
+
 #include <cstddef>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace lcos {
+namespace hpx::lcos {
 
     namespace detail {
 
         ///////////////////////////////////////////////////////////////////////
-        template <typename Action>
+        HPX_CXX_EXPORT template <typename Action>
         struct fold_with_index
         {
             using arguments_type = typename Action::arguments_type;
@@ -238,7 +240,7 @@ namespace hpx { namespace lcos {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        template <typename Action, typename Is>
+        HPX_CXX_EXPORT template <typename Action, typename Is>
         struct make_fold_action_impl;
 
         template <typename Action, std::size_t... Is>
@@ -261,7 +263,7 @@ namespace hpx { namespace lcos {
             };
         };
 
-        template <typename Action>
+        HPX_CXX_EXPORT template <typename Action>
         struct make_fold_action
           : make_fold_action_impl<Action,
                 typename util::make_index_pack<Action::arity>::type>
@@ -346,7 +348,8 @@ namespace hpx { namespace lcos {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename FoldOp, typename Init,
+        typename... Ts>
     hpx::future<typename detail::fold_result<Action>::type> fold(
         std::vector<hpx::id_type> const& ids, FoldOp&& fold_op, Init&& init,
         Ts const&... vs)
@@ -368,8 +371,8 @@ namespace hpx { namespace lcos {
             vs...);
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename FoldOp, typename Init, typename... Ts>
     hpx::future<typename detail::fold_result<Derived>::type> fold(
         hpx::actions::basic_action<Component, Signature, Derived> /* act */
         ,
@@ -380,7 +383,8 @@ namespace hpx { namespace lcos {
             ids, HPX_FORWARD(FoldOp, fold_op), HPX_FORWARD(Init, init), vs...);
     }
 
-    template <typename Action, typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename FoldOp, typename Init,
+        typename... Ts>
     hpx::future<typename detail::fold_result<Action>::type> fold_with_index(
         std::vector<hpx::id_type> const& ids, FoldOp&& fold_op, Init&& init,
         Ts const&... vs)
@@ -389,8 +393,8 @@ namespace hpx { namespace lcos {
             ids, HPX_FORWARD(FoldOp, fold_op), HPX_FORWARD(Init, init), vs...);
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename FoldOp, typename Init, typename... Ts>
     hpx::future<typename detail::fold_result<Derived>::type> fold_with_index(
         hpx::actions::basic_action<Component, Signature, Derived> /* act */
         ,
@@ -402,7 +406,8 @@ namespace hpx { namespace lcos {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename FoldOp, typename Init,
+        typename... Ts>
     hpx::future<typename detail::fold_result<Action>::type> inverse_fold(
         std::vector<hpx::id_type> const& ids, FoldOp&& fold_op, Init&& init,
         Ts const&... vs)
@@ -436,8 +441,8 @@ namespace hpx { namespace lcos {
             -static_cast<long>(inverted_ids.size() - 1), vs...);
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename FoldOp, typename Init, typename... Ts>
     hpx::future<typename detail::fold_result<Derived>::type> inverse_fold(
         hpx::actions::basic_action<Component, Signature, Derived> /* act */
         ,
@@ -448,7 +453,8 @@ namespace hpx { namespace lcos {
             ids, HPX_FORWARD(FoldOp, fold_op), HPX_FORWARD(Init, init), vs...);
     }
 
-    template <typename Action, typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename FoldOp, typename Init,
+        typename... Ts>
     hpx::future<typename detail::fold_result<Action>::type>
     inverse_fold_with_index(std::vector<hpx::id_type> const& ids,
         FoldOp&& fold_op, Init&& init, Ts const&... vs)
@@ -457,8 +463,8 @@ namespace hpx { namespace lcos {
             ids, HPX_FORWARD(FoldOp, fold_op), HPX_FORWARD(Init, init), vs...);
     }
 
-    template <typename Component, typename Signature, typename Derived,
-        typename FoldOp, typename Init, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename FoldOp, typename Init, typename... Ts>
     hpx::future<typename detail::fold_result<Derived>::type>
     inverse_fold_with_index(
         hpx::actions::basic_action<Component, Signature, Derived> /* act */
@@ -469,91 +475,6 @@ namespace hpx { namespace lcos {
         return inverse_fold<detail::fold_with_index<Derived>>(
             ids, HPX_FORWARD(FoldOp, fold_op), HPX_FORWARD(Init, init), vs...);
     }
-}}    // namespace hpx::lcos
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_FOLD_ACTION_DECLARATION(...)                              \
-    HPX_REGISTER_FOLD_ACTION_DECLARATION_(__VA_ARGS__)                         \
-/**/
-#define HPX_REGISTER_FOLD_ACTION_DECLARATION_(...)                             \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_FOLD_ACTION_DECLARATION_,            \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_FOLD_ACTION_DECLARATION_2(Action, FoldOp)                 \
-    HPX_REGISTER_ACTION_DECLARATION(::hpx::lcos::detail::make_fold_action<     \
-                                        Action>::fold_invoker<FoldOp>::type,   \
-        HPX_PP_CAT(HPX_PP_CAT(fold_, Action), FoldOp))                         \
-/**/
-#define HPX_REGISTER_FOLD_ACTION_DECLARATION_3(Action, FoldOp, Name)           \
-    HPX_REGISTER_ACTION_DECLARATION(::hpx::lcos::detail::make_fold_action<     \
-                                        Action>::fold_invoker<FoldOp>::type,   \
-        HPX_PP_CAT(fold_, Name))                                               \
-/**/
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_FOLD_ACTION(...)                                          \
-    HPX_REGISTER_FOLD_ACTION_(__VA_ARGS__)                                     \
-/**/
-#define HPX_REGISTER_FOLD_ACTION_(...)                                         \
-    HPX_PP_EXPAND(HPX_PP_CAT(                                                  \
-        HPX_REGISTER_FOLD_ACTION_, HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))    \
-    /**/
-
-#define HPX_REGISTER_FOLD_ACTION_2(Action, FoldOp)                             \
-    HPX_REGISTER_ACTION(::hpx::lcos::detail::make_fold_action<                 \
-                            Action>::fold_invoker<FoldOp>::type,               \
-        HPX_PP_CAT(HPX_PP_CAT(fold_, Action), FoldOp))                         \
-/**/
-#define HPX_REGISTER_FOLD_ACTION_3(Action, FoldOp, Name)                       \
-    HPX_REGISTER_ACTION(::hpx::lcos::detail::make_fold_action<                 \
-                            Action>::fold_invoker<FoldOp>::type,               \
-        HPX_PP_CAT(fold_, Name))                                               \
-/**/
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION(...)                   \
-    HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION_(__VA_ARGS__)              \
-/**/
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION_(...)                  \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION_, \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION_2(Action, FoldOp)      \
-    HPX_REGISTER_ACTION_DECLARATION(                                           \
-        ::hpx::lcos::detail::make_fold_action<::hpx::lcos::detail::            \
-                fold_with_index<Action>>::fold_invoker<FoldOp>::type,          \
-        HPX_PP_CAT(HPX_PP_CAT(fold_, Action), FoldOp))                         \
-/**/
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_DECLARATION_3(                     \
-    Action, FoldOp, Name)                                                      \
-    HPX_REGISTER_ACTION_DECLARATION(                                           \
-        ::hpx::lcos::detail::make_fold_action<::hpx::lcos::detail::            \
-                fold_with_index<Action>>::fold_invoker<FoldOp>::type,          \
-        HPX_PP_CAT(fold_, Name))                                               \
-/**/
-
-///////////////////////////////////////////////////////////////////////////////
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION(...)                               \
-    HPX_REGISTER_FOLD_WITH_INDEX_ACTION_(__VA_ARGS__)                          \
-/**/
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_(...)                              \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_FOLD_WITH_INDEX_ACTION_,             \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_2(Action, FoldOp)                  \
-    HPX_REGISTER_ACTION(                                                       \
-        ::hpx::lcos::detail::make_fold_action<::hpx::lcos::detail::            \
-                fold_with_index<Action>>::fold_invoker<FoldOp>::type,          \
-        HPX_PP_CAT(HPX_PP_CAT(fold_, Action), FoldOp))                         \
-/**/
-#define HPX_REGISTER_FOLD_WITH_INDEX_ACTION_3(Action, FoldOp, Name)            \
-    HPX_REGISTER_ACTION(                                                       \
-        ::hpx::lcos::detail::make_fold_action<::hpx::lcos::detail::            \
-                fold_with_index<Action>>::fold_invoker<FoldOp>::type,          \
-        HPX_PP_CAT(fold_, Name))                                               \
-    /**/
+}    // namespace hpx::lcos
 
 #endif    // DOXYGEN

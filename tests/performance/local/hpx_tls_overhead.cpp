@@ -37,7 +37,7 @@ inline void worker(std::uint64_t updates)
 {
     global_scratch.reset(new double);
 
-    for (double i = 0.; i < updates; ++i)
+    for (double i = 0.; i < static_cast<double>(updates); ++i)
         *global_scratch += 1. / (2. * i + 1.);
 
     global_scratch.reset();

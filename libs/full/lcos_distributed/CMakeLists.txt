@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,9 +10,12 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(lcos_distributed_headers hpx/lcos_distributed/channel.hpp
-                             hpx/lcos_distributed/server/channel.hpp
+set(lcos_distributed_headers
+    hpx/lcos_distributed/channel.hpp hpx/lcos_distributed/macros.hpp
+    hpx/lcos_distributed/server/channel.hpp
 )
+
+set(lcos_distributed_macro_headers hpx/lcos_distributed/macros.hpp)
 
 # cmake-format: off
 set(lcos_distributed_compat_headers
@@ -27,10 +30,13 @@ include(HPX_AddModule)
 add_hpx_module(
   full lcos_distributed
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${lcos_distributed_sources}
   HEADERS ${lcos_distributed_headers}
+  MACRO_HEADERS ${lcos_distributed_macro_headers}
   COMPAT_HEADERS ${lcos_distributed_compat_headers}
   DEPENDENCIES hpx_core
-  MODULE_DEPENDENCIES hpx_actions hpx_async_distributed hpx_naming
+  MODULE_DEPENDENCIES hpx_actions_base hpx_actions hpx_async_distributed
+                      hpx_components_base hpx_naming hpx_runtime_components
   CMAKE_SUBDIRS examples tests
 )

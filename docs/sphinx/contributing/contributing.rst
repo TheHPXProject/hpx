@@ -13,7 +13,7 @@ Contributing to |hpx|
 
 The main source of information to understand the process of how to contribute
 to HPX can be found in
-`this document <https://github.com/STEllAR-GROUP/hpx/blob/master/.github/CONTRIBUTING.md>`_.
+`this document <https://github.com/TheHPXProject/hpx/blob/master/.github/CONTRIBUTING.md>`_.
 This is a living document that is constantly updated with relevant information.
 
 

@@ -63,8 +63,7 @@ namespace hpx { namespace util {
                 this->_parent->addProfile(
                     this->_title, std::make_tuple(elapsed, 0, 1));
                 std::for_each(this->_profiles.begin(), this->_profiles.end(),
-                    [HPX_CXX20_CAPTURE_THIS(=)](
-                        std::map<char const*, valtype>::value_type& p) {
+                    [=, this](std::map<char const*, valtype>::value_type& p) {
                         this->_parent->addProfile(p.first, p.second);
                     });
             }

@@ -13,6 +13,7 @@
 
 #include <exception>
 #include <iostream>
+#include <type_traits>
 #include <utility>
 
 template <typename Error, typename... Values>
@@ -28,14 +29,15 @@ auto signature_all(Error, Values...)
 template <typename Signatures>
 struct non_awaitable_sender
 {
+    using sender_concept = hpx::execution::experimental::sender_t;
     using is_sender = void;
     using completion_signatures = Signatures;
-};
 
-#if !defined(HPX_HAVE_STDEXEC)
-using dependent = hpx::execution::experimental::dependent_completion_signatures<
-    hpx::execution::experimental::no_env>;
-#endif
+    template <typename Env>
+    friend auto tag_invoke(
+        hpx::execution::experimental::get_completion_signatures_t,
+        non_awaitable_sender const&, Env&&) -> completion_signatures;
+};
 
 template <typename Awaiter>
 struct promise
@@ -87,31 +89,22 @@ struct awaitable_sender_1
     }
 };
 
-#if !defined(HPX_HAVE_STDEXEC)
-struct awaitable_sender_2
-{
-    using promise_type = promise<hpx::suspend_always>;
-
-private:
-    friend dependent operator co_await(awaitable_sender_2);
-};
-#endif
-
 struct awaitable_sender_3
 {
     using promise_type = promise<awaiter>;
 
 private:
-#if defined(HPX_HAVE_STDEXEC)
     friend awaiter operator co_await(awaitable_sender_3);
-#else
-    friend dependent operator co_await(awaitable_sender_3);
-#endif
 };
 
 struct awaitable_sender_4
 {
     using promise_type = promise<hpx::suspend_always>;
+
+    hpx::execution::experimental::empty_env get_env() const noexcept
+    {
+        return {};
+    }
 
 private:
     template <typename Promise>
@@ -120,19 +113,15 @@ private:
     {
         return {};
     }
-#if !defined(HPX_HAVE_STDEXEC)
-    friend dependent tag_invoke(hpx::execution::experimental::as_awaitable_t,
-        awaitable_sender_4,
-        hpx::execution::experimental::detail::env_promise<
-            hpx::execution::experimental::no_env>&)
-    {
-        return {};
-    }
-#endif
 };
 
 struct awaitable_sender_5
 {
+    hpx::execution::experimental::empty_env get_env() const noexcept
+    {
+        return {};
+    }
+
 private:
     template <typename Promise>
     friend awaiter tag_invoke(hpx::execution::experimental::as_awaitable_t,
@@ -145,23 +134,16 @@ private:
 struct recv_set_value
 {
     using is_receiver = void;
+    using receiver_concept = hpx::execution::experimental::receiver_t;
     using dependent = awaiter;
 
-    friend void tag_invoke(hpx::execution::experimental::set_value_t,
-        recv_set_value,
-        decltype(std::declval<dependent>().await_ready())) noexcept
+    void set_value(
+        decltype(std::declval<dependent>().await_ready())) && noexcept
     {
     }
-    friend void tag_invoke(
-        hpx::execution::experimental::set_stopped_t, recv_set_value) noexcept
-    {
-    }
-    friend void tag_invoke(hpx::execution::experimental::set_error_t,
-        recv_set_value, std::exception_ptr) noexcept
-    {
-    }
-    friend dependent tag_invoke(
-        hpx::execution::experimental::get_env_t, recv_set_value const&) noexcept
+    void set_stopped() && noexcept {}
+    void set_error(std::exception_ptr) && noexcept {}
+    dependent get_env() const noexcept
     {
         return {};
     }
@@ -197,53 +179,12 @@ int main()
 {
     namespace ex = hpx::execution::experimental;
 
-    // clang-format off
-    {
-        // clang-format off
-        static_assert(
-            std::is_same_v<ex::single_sender_value_t<non_awaitable_sender<decltype(
-                               signature_all(std::exception_ptr(), int()))>>,
-                int>);
-        static_assert(
-            std::is_same_v<ex::single_sender_value_t<non_awaitable_sender<decltype(
-                               signature_all(std::exception_ptr()))>>,
-                void>);
-        // clang-format on
-    }
-    // clang-format on
-
-    // single sender value
-    {
-        static_assert(std::is_same_v<
-            ex::single_sender_value_t<awaitable_sender_1<awaiter>>, bool>);
-        static_assert(std::is_same_v<
-            ex::single_sender_value_t<awaitable_sender_1<hpx::suspend_always>>,
-            void>);
-    }
-
-    // connect awaitable
-    {
-        static_assert(std::is_same_v<decltype(ex::connect_awaitable(
-                                         awaitable_sender_1<awaiter>{},
-                                         recv_set_value{})),
-            ex::operation_t<recv_set_value>>);
-
-        static_assert(
-            std::is_same_v<decltype(ex::connect(awaitable_sender_1<awaiter>{},
-                               recv_set_value{})),
-                ex::operation_t<recv_set_value>>);
-    }
-
     // Promise env
     {
         static_assert(ex::is_awaiter_v<awaiter>);
 
         static_assert(!ex::detail::has_free_operator_co_await_v<
             awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(
-            ex::detail::has_free_operator_co_await_v<awaitable_sender_2>);
-#endif
         static_assert(
             ex::detail::has_free_operator_co_await_v<awaitable_sender_3>);
         static_assert(
@@ -253,10 +194,6 @@ int main()
 
         static_assert(ex::detail::has_member_operator_co_await_v<
             awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(
-            !ex::detail::has_member_operator_co_await_v<awaitable_sender_2>);
-#endif
         static_assert(
             !ex::detail::has_member_operator_co_await_v<awaitable_sender_3>);
         static_assert(
@@ -265,16 +202,9 @@ int main()
             !ex::detail::has_member_operator_co_await_v<awaitable_sender_5>);
 
         static_assert(ex::is_awaitable_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_awaitable_v<awaitable_sender_2>);
-#endif
         static_assert(ex::is_awaitable_v<awaitable_sender_3>);
         static_assert(!ex::is_awaitable_v<awaitable_sender_4>);
         static_assert(!ex::is_awaitable_v<awaitable_sender_5>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_awaitable_v<awaitable_sender_2,
-            ::promise<hpx::suspend_always>>);
-#endif
         static_assert(
             ex::is_awaitable_v<awaitable_sender_3, ::promise<awaiter>>);
         static_assert(
@@ -285,51 +215,15 @@ int main()
             hpx::functional::tag_invoke_result_t<ex::as_awaitable_t,
                 awaitable_sender_4, ::promise<awaiter>&>,
             awaiter>);
-#if !defined(HPX_HAVE_STDEXEC)
-        // P2300 does not have dependent completion signatures.
-        static_assert(std::is_same_v<
-            hpx::functional::tag_invoke_result_t<ex::as_awaitable_t,
-                awaitable_sender_4, ex::detail::env_promise<ex::no_env>&>,
-            ex::detail::dependent_completion_signatures<ex::no_env>>);
-        static_assert(std::is_same_v<
-            decltype(ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr))),
-            ex::detail::dependent_completion_signatures<ex::no_env>>);
-        // clang-format off
-        static_assert(ex::is_awaiter_v<decltype(
-                ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                    static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr)))>);
-        static_assert(ex::detail::has_await_suspend_v<decltype(
-                ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                    static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr)))>);
-        static_assert(ex::detail::is_with_await_suspend_v<
-            decltype(ex::get_awaiter(std::declval<awaitable_sender_4>(),
-                static_cast<ex::detail::env_promise<ex::no_env>*>(nullptr))),
-            ex::detail::env_promise<ex::no_env>>);
-        // clang-format on
-        static_assert(ex::is_awaitable_v<awaitable_sender_4,
-            ex::detail::env_promise<ex::no_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_4,
-            ex::detail::env_promise<ex::empty_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_5,
-            ex::detail::env_promise<ex::no_env>>);
-        static_assert(ex::is_awaitable_v<awaitable_sender_5,
-            ex::detail::env_promise<ex::empty_env>>);
-#endif
     }
 
-    // Operation base
-    {
-        static_assert(
-            ex::is_operation_state_v<ex::operation_t<recv_set_value>>);
-    }
-
-    // Connect result type
-    {
-        static_assert(std::is_same_v<
-            ex::connect_result_t<awaitable_sender_1<awaiter>, recv_set_value>,
-            ex::operation_t<recv_set_value>>);
-    }
+    // Note: tests for `single_sender_value_t<non_awaitable_sender<...>>`,
+    // `single_sender_value_t<awaitable_sender_1<...>>`, `connect_awaitable`
+    // and `connect_result_t<awaitable_sender_1, ...>` were removed in the
+    // post-stdexec cleanup. Under stdexec, awaitables are not standalone
+    // senders outside a coroutine context (they require
+    // `with_awaitable_senders`), so those tests relied on HPX's removed
+    // awaitable-as-sender path and are no longer applicable.
 
     // As awaitable
     {
@@ -344,24 +238,17 @@ int main()
     // sender
     {
         static_assert(ex::is_sender_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_v<awaitable_sender_2>);
-        static_assert(ex::detail::is_enable_sender_v<awaitable_sender_2>);
-        static_assert(
-            ex::detail::is_sender_plain_v<awaitable_sender_2, ex::no_env>);
-#endif
         static_assert(ex::is_sender_v<awaitable_sender_3>);
-        static_assert(ex::is_sender_v<awaitable_sender_4>);
+        // awaitable_sender_4 and awaitable_sender_5 are not standalone senders
+        // under stdexec - they require with_awaitable_senders context
     }
 
     // env promise
     {
         static_assert(is_sender_with_env_v<awaitable_sender_1<awaiter>>);
-#if !defined(HPX_HAVE_STDEXEC)
-        static_assert(is_sender_with_env_v<awaitable_sender_2>);
-#endif
         static_assert(is_sender_with_env_v<awaitable_sender_3>);
-        static_assert(is_sender_with_env_v<awaitable_sender_4>);
+        // awaitable_sender_4 and awaitable_sender_5 are not standalone senders
+        // under stdexec - they require with_awaitable_senders context
     }
 
     try

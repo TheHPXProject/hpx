@@ -1125,7 +1125,7 @@ namespace hpx::lcos::detail {
     };
 }    // namespace hpx::lcos::detail
 
-HPX_CXX_CORE_EXPORT template <typename R, typename Allocator>
+template <typename R, typename Allocator>
 struct hpx::traits::detail::shared_state_allocator<
     hpx::lcos::detail::future_data<R>, Allocator>
 {

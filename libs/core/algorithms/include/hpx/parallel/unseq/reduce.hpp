@@ -10,6 +10,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/reduce.hpp>
 #include <hpx/parallel/unseq/reduce_helpers.hpp>
 
@@ -32,8 +33,9 @@ namespace hpx::parallel::detail {
         if constexpr (std::random_access_iterator<InIterB>)
         {
             return hpx::parallel::util::detail::unseq_reduce_n::reduce(first,
-                std::distance(first, last), HPX_FORWARD(T, init),
-                HPX_FORWARD(Reduce, r), [&](auto const v) { return v; });
+                hpx::parallel::detail::distance(first, last),
+                HPX_FORWARD(T, init), HPX_FORWARD(Reduce, r),
+                [&](auto const v) { return v; });
         }
         else
         {
@@ -73,8 +75,9 @@ namespace hpx::parallel::detail {
         if constexpr (std::random_access_iterator<Iter>)
         {
             return hpx::parallel::util::detail::unseq_reduce_n::reduce(first,
-                std::distance(first, last), HPX_FORWARD(T, init),
-                HPX_FORWARD(Reduce, r), HPX_FORWARD(Convert, conv));
+                hpx::parallel::detail::distance(first, last),
+                HPX_FORWARD(T, init), HPX_FORWARD(Reduce, r),
+                HPX_FORWARD(Convert, conv));
         }
         else
         {
@@ -120,7 +123,7 @@ namespace hpx::parallel::detail {
         if constexpr (iterators_are_random_access)
         {
             return hpx::parallel::util::detail::unseq_binary_reduce_n::reduce(
-                first1, first2, std::distance(first1, last1),
+                first1, first2, hpx::parallel::detail::distance(first1, last1),
                 HPX_FORWARD(T, init), HPX_FORWARD(Reduce, r),
                 HPX_FORWARD(Convert, conv));
         }

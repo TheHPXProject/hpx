@@ -10,13 +10,17 @@
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/lcos.hpp>
+#include <hpx/modules/collectives.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
 #include <cstddef>
+#include <exception>
 #include <functional>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -99,9 +103,91 @@ void remote_test_single(hpx::program_options::variables_map& vm)
     }
 }
 
+void test_release_from_non_hpx_thread(hpx::program_options::variables_map& vm)
+{
+    std::size_t iterations = 0;
+    if (vm.count("iterations"))
+        iterations = vm["iterations"].as<std::size_t>();
+
+    for (std::size_t i = 0; i != iterations; ++i)
+    {
+        auto b = std::make_shared<hpx::distributed::barrier>(
+            hpx::util::format(
+                "/test/barrier/release_from_external_thread/{}/{}",
+                hpx::get_locality_id(), i),
+            1, 0);
+
+        // Avoid joining a std::thread from hpx_main when running with a single
+        // HPX worker thread. release() from the external thread internally uses
+        // run_as_hpx_thread and needs the HPX scheduler to make progress.
+        hpx::promise<void> release_finished;
+        hpx::future<void> release_done = release_finished.get_future();
+
+        std::thread t([b, p = HPX_MOVE(release_finished)]() mutable {
+            try
+            {
+                b->release();
+                p.set_value();
+            }
+            catch (...)
+            {
+                p.set_exception(std::current_exception());
+            }
+        });
+        t.detach();
+
+        // This suspends the current HPX thread and allows the scheduler to run
+        // the HPX work queued by run_as_hpx_thread.
+        release_done.get();
+    }
+}
+
+void collectives_barrier_generation_tests()
+{
+    using namespace hpx::collectives;
+
+    auto const default_generation_client = create_local_communicator(
+        "/test/barrier/collectives/default_generation/", num_sites_arg(1),
+        this_site_arg(0));
+    hpx::collectives::barrier(
+        default_generation_client, this_site_arg(0), generation_arg())
+        .get();
+
+    auto const zero_generation_client =
+        create_local_communicator("/test/barrier/collectives/zero_generation/",
+            num_sites_arg(1), this_site_arg(0));
+
+    bool caught_exception = false;
+    try
+    {
+        hpx::collectives::barrier(
+            zero_generation_client, this_site_arg(0), generation_arg(0))
+            .get();
+    }
+    catch (hpx::exception const& e)
+    {
+        caught_exception = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(caught_exception);
+
+    hpx::collectives::barrier("/test/barrier/collectives/basename_async/",
+        num_sites_arg(1), this_site_arg(0), generation_arg(1))
+        .get();
+
+    hpx::collectives::barrier(hpx::launch::sync,
+        "/test/barrier/collectives/basename_sync/", num_sites_arg(1),
+        this_site_arg(0), generation_arg(1));
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
+    // Regression test for release() from non-HPX threads.
+    test_release_from_non_hpx_thread(vm);
+
+    collectives_barrier_generation_tests();
+
     local_tests(vm);
 
     remote_test_single(vm);

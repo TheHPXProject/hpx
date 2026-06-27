@@ -1,5 +1,5 @@
 //  Copyright (c) 2020 Agustin Berge
-//  Copyright (c) 2007-2017 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0

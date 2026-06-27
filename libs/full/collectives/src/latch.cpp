@@ -1,24 +1,23 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/detail/action_factory.hpp>
+#include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/collectives/latch.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/performance_counters.hpp>
+#include <hpx/modules/runtime_components.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/performance_counters/counters.hpp>
-#include <hpx/runtime_components/derived_component_factory.hpp>
-#include <hpx/runtime_components/new.hpp>
-#include <hpx/runtime_distributed/find_here.hpp>
+
+#include <hpx/collectives/latch.hpp>
 
 #include <cstddef>
 #include <exception>

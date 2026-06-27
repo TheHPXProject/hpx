@@ -11,8 +11,7 @@
 #include <hpx/include/parallel_move.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/include/runtime.hpp>
-#include <hpx/parallel/segmented_algorithms/detail/transfer.hpp>
-
+#include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //  Copyright (c)      2011 Thomas Heller
 //
@@ -8,12 +8,15 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
     /// \tparam Component         component type
     /// \tparam Signature         return type and arguments
     /// \tparam Derived           derived action class
-    template <typename Component, typename Signature, typename Derived>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived>
     struct basic_action;
 }    // namespace hpx::actions

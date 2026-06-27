@@ -1,5 +1,5 @@
 //  Copyright (c)      2014 Thomas Heller
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -20,11 +20,11 @@
 #include <hpx/modules/threadmanager.hpp>
 #include <hpx/modules/timing.hpp>
 
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
-#include <hpx/plugin_factories/parcelport_factory_base.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -46,7 +46,7 @@ namespace hpx::parcelset {
     /// The \a parcelhandler is the representation of the parcelset inside a
     /// locality. It is built on top of a single parcelport. Several
     /// parcel-handlers may be connected to a single parcelport.
-    class HPX_EXPORT parcelhandler
+    HPX_CXX_EXPORT class HPX_EXPORT parcelhandler
     {
     public:
         parcelhandler(parcelhandler const&) = delete;
@@ -470,7 +470,8 @@ namespace hpx::parcelset {
         static void init(hpx::resource::partitioner& rp);
     };
 
-    std::vector<std::string> load_runtime_configuration();
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<std::string>
+    load_runtime_configuration();
 }    // namespace hpx::parcelset
 
 #include <hpx/config/warnings_suffix.hpp>

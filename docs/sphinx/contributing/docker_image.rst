@@ -14,7 +14,7 @@ Using docker for development
 Although it can often be useful to set up a local development environment with
 system-provided or self-built dependencies, |docker|_ provides a convenient
 alternative to quickly get all the dependencies needed to start development of
-|hpx|. Our testing setup on |circleci|_ uses a docker image to run all tests.
+|hpx|. Our testing setup on |github|_ uses a docker image to run all tests.
 
 To get started you need to install |docker|_ using whatever means is most
 convenient on your system. Once you have |docker|_ installed, you can pull or

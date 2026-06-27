@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -19,7 +19,7 @@ namespace hpx::util {
 
     // The unique_id_ranges class is a type responsible for generating unique
     // ids for components, parcels, threads etc.
-    class HPX_EXPORT unique_id_ranges
+    HPX_CXX_EXPORT class HPX_EXPORT unique_id_ranges
     {
         // size of the id range returned by get_id
         static constexpr std::size_t range_delta = 0x100000;

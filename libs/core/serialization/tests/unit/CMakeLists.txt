@@ -7,7 +7,6 @@
 set(tests
     not_bitwise_serializable
     serialization_array
-    serialization_brace_initializable
     serialization_valarray
     serialization_builtins
     serialization_complex
@@ -36,7 +35,12 @@ if(HPX_SERIALIZATION_WITH_BOOST_TYPES)
   set(tests ${tests} serialization_boost_variant)
 endif()
 
+if(NOT HPX_SERIALIZATION_WITH_ALLOW_AUTO_GENERATE)
+  set(tests ${tests} serialization_brace_initializable)
+endif()
+
 add_subdirectory(polymorphic)
+add_subdirectory(refl)
 
 # tests that can run without HPX
 foreach(test ${tests})

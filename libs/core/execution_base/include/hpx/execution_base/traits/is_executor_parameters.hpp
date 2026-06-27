@@ -36,7 +36,7 @@ namespace hpx::execution::experimental {
         using type = sequential_executor_parameters;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor>
+    template <typename Executor>
     struct extract_executor_parameters<Executor,
         std::void_t<typename Executor::executor_parameters_type>>
     {
@@ -57,14 +57,14 @@ namespace hpx::execution::experimental {
         // by default, assume equally sized chunks
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Parameters>
+    template <typename Parameters>
     struct extract_has_variable_chunk_size<Parameters,
         std::void_t<typename Parameters::has_variable_chunk_size>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Parameters>
+    template <typename Parameters>
     struct extract_has_variable_chunk_size<::std::reference_wrapper<Parameters>>
       : extract_has_variable_chunk_size<Parameters>
     {
@@ -86,7 +86,7 @@ namespace hpx::execution::experimental {
 
 #if !defined(DOXYGEN)
     // doxygen gets confused by the following construct
-    HPX_CXX_CORE_EXPORT template <typename Parameters>
+    template <typename Parameters>
     struct extract_invokes_testing_function<Parameters,
         std::void_t<typename Parameters::invokes_testing_function>>
       : std::true_type
@@ -94,7 +94,7 @@ namespace hpx::execution::experimental {
     };
 #endif
 
-    HPX_CXX_CORE_EXPORT template <typename Parameters>
+    template <typename Parameters>
     struct extract_invokes_testing_function<
         ::std::reference_wrapper<Parameters>>
       : extract_invokes_testing_function<Parameters>

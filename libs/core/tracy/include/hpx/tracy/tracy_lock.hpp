@@ -8,33 +8,34 @@
 
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_MODULE_TRACY)
+#if defined(HPX_HAVE_TRACY)
 
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::tracy {
 
-    HPX_CXX_EXPORT struct lock_data
+    HPX_CXX_CORE_EXPORT struct lock_data
     {
         void* context = nullptr;
     };
 
-    HPX_CXX_EXPORT HPX_CORE_EXPORT lock_data create(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT lock_data create(
         char const* name = nullptr) noexcept;
-    HPX_CXX_EXPORT HPX_CORE_EXPORT lock_data create(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT lock_data create(
         std::string const& name) noexcept;
 
-    HPX_CXX_EXPORT HPX_CORE_EXPORT void destroy(lock_data const&) noexcept;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void destroy(lock_data const&) noexcept;
 
-    HPX_CXX_EXPORT HPX_CORE_EXPORT bool lock_prepare(lock_data const&) noexcept;
-
-    HPX_CXX_EXPORT HPX_CORE_EXPORT void lock_acquired(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool lock_prepare(
         lock_data const&) noexcept;
-    HPX_CXX_EXPORT HPX_CORE_EXPORT void lock_acquired(
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void lock_acquired(
+        lock_data const&) noexcept;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void lock_acquired(
         lock_data const&, bool acquired) noexcept;
 
-    HPX_CXX_EXPORT HPX_CORE_EXPORT void lock_released(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void lock_released(
         lock_data const&) noexcept;
 }    // namespace hpx::tracy
 

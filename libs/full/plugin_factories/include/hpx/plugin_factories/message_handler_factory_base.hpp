@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,9 +10,9 @@
 
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/errors.hpp>
-#include <hpx/modules/plugin.hpp>
-
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/plugin.hpp>
+#include <hpx/plugin_factories/macros.hpp>
 #include <hpx/plugin_factories/plugin_factory_base.hpp>
 
 #include <cstddef>
@@ -23,11 +23,12 @@ namespace hpx::plugins {
     ///////////////////////////////////////////////////////////////////////////
     /// The \a plugin_factory_base has to be used as a base class for all
     /// plugin factories.
-    struct HPX_EXPORT message_handler_factory_base : plugin_factory_base
+    HPX_CXX_EXPORT struct HPX_EXPORT message_handler_factory_base
+      : plugin_factory_base
     {
         ~message_handler_factory_base() override = default;
 
-        /// Register a action for this message handler type
+        /// Register an action for this message handler type
         virtual void register_action(char const* action, error_code& ec) = 0;
 
         /// Create a new instance of a message handler
@@ -39,13 +40,5 @@ namespace hpx::plugins {
             std::size_t interval) = 0;
     };
 }    // namespace hpx::plugins
-
-///////////////////////////////////////////////////////////////////////////////
-/// This macro is used to register the given component factory with
-/// Hpx.Plugin. This macro has to be used for each of the component factories.
-#define HPX_REGISTER_MESSAGE_HANDLER_FACTORY_BASE(FactoryType, pluginname)     \
-    HPX_PLUGIN_EXPORT(HPX_PLUGIN_PLUGIN_PREFIX,                                \
-        hpx::plugins::plugin_factory_base, FactoryType, pluginname, factory)   \
-    /**/
 
 #endif

@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2023 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -7,13 +7,13 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
-#include <hpx/agas/agas_fwd.hpp>
-#include <hpx/agas_base/server/symbol_namespace.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/format.hpp>
+#include <hpx/modules/agas.hpp>
+#include <hpx/modules/async_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+
 #include <hpx/performance_counters/agas_namespace_action_code.hpp>
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
@@ -70,7 +70,8 @@ namespace hpx::agas::server {
             performance_counters::install_counter_type(
                 agas::performance_counter_basename + name, type, help, creator,
                 &performance_counters::locality_counter_discoverer,
-                HPX_PERFORMANCE_COUNTER_V1, symbol_namespace_service.uom_, ec);
+                performance_counters::HPX_PERFORMANCE_COUNTER_V1,
+                symbol_namespace_service.uom_, ec);
             if (ec)
                 return;
         }
@@ -113,7 +114,8 @@ namespace hpx::agas::server {
                     symbol_namespace_service.name_,
                 type, help, creator,
                 &performance_counters::locality_counter_discoverer,
-                HPX_PERFORMANCE_COUNTER_V1, symbol_namespace_service.uom_, ec);
+                performance_counters::HPX_PERFORMANCE_COUNTER_V1,
+                symbol_namespace_service.uom_, ec);
             if (ec)
             {
                 return;

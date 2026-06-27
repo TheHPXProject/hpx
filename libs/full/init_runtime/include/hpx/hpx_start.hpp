@@ -1,5 +1,5 @@
 //  Copyright (c)      2018 Mikael Simberg
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,13 +10,15 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_finalize.hpp>
-#include <hpx/hpx_init_params.hpp>
-#include <hpx/hpx_main_winsocket.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
+#include <hpx/hpx_finalize.hpp>
+#include <hpx/hpx_init_params.hpp>
+#include <hpx/hpx_suspend.hpp>
+#include <hpx/hpx_user_main_config.hpp>
 
 #include <cstddef>
 #include <functional>
@@ -193,7 +195,11 @@ namespace hpx {
     ///                     runtime system will not support any of the default
     ///                     command line options as described in the section
     ///                     'HPX Command Line Options'.
+#if !defined(HPX_HAVE_STATIC_LINKING)
     inline bool start(init_params const& params = init_params());
+#else
+    bool start(init_params const& params = init_params());
+#endif
 }    // namespace hpx
 
 #if !defined(DOXYGEN)
@@ -201,6 +207,6 @@ namespace hpx {
 // Pull in the implementation of the inlined hpx::init functions if we're not
 // compiling the core HPX library.
 #if !defined(HPX_EXPORTS)
-#include <hpx/hpx_start_impl.hpp>
+#include <hpx/init_runtime/start_impl.hpp>
 #endif
 #endif

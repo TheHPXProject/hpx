@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2024 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,12 +15,13 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/modules/async_local.hpp>
 #endif
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/futures.hpp>
+#include <hpx/modules/runtime_components.hpp>
+#include <hpx/modules/serialization.hpp>
+
 #include <hpx/compute/detail/target_distribution_policy.hpp>
 #include <hpx/compute/host/distributed_target.hpp>
-#include <hpx/modules/futures.hpp>
-#include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -32,7 +33,7 @@
 namespace hpx::compute::host {
 
     /// A target_distribution_policy used for CPU bound localities.
-    struct target_distribution_policy
+    HPX_CXX_EXPORT struct target_distribution_policy
       : compute::detail::target_distribution_policy<host::distributed::target>
     {
         using base_type = compute::detail::target_distribution_policy<
@@ -249,26 +250,30 @@ namespace hpx::compute::host {
     /// A predefined instance of the \a target_distribution_policy for
     /// localities. It will represent all NUMA domains of the given locality
     /// and will place all items to create here.
-    static target_distribution_policy const target_layout;
+    HPX_CXX_EXPORT HPX_EXPORT extern target_distribution_policy const
+        target_layout;
 }    // namespace hpx::compute::host
 
 /// \cond NOINTERNAL
-template <>
-struct hpx::traits::is_distribution_policy<
-    hpx::compute::host::target_distribution_policy> : std::true_type
-{
-};
+namespace hpx::traits {
 
-template <>
-struct hpx::traits::num_container_partitions<
-    hpx::compute::host::target_distribution_policy>
-{
-    static std::size_t call(
-        hpx::compute::host::target_distribution_policy const& policy)
+    template <>
+    struct is_distribution_policy<
+        hpx::compute::host::target_distribution_policy> : std::true_type
     {
-        return policy.get_num_partitions();
-    }
-};
+    };
+
+    template <>
+    struct num_container_partitions<
+        hpx::compute::host::target_distribution_policy>
+    {
+        static std::size_t call(
+            hpx::compute::host::target_distribution_policy const& policy)
+        {
+            return policy.get_num_partitions();
+        }
+    };
+}    // namespace hpx::traits
 /// \endcond
 
 #endif

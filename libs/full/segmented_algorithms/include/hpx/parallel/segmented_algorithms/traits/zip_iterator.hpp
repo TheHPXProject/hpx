@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2014 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,6 +12,7 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/parallel/segmented_algorithms/functional/segmented_iterator_helpers.hpp>
 
 #include <cstddef>
@@ -24,7 +25,7 @@ namespace hpx::traits {
     ///////////////////////////////////////////////////////////////////////////
     namespace functional {
 
-        struct get_raw_iterator
+        HPX_CXX_EXPORT struct get_raw_iterator
         {
             template <typename Iterator>
             struct apply
@@ -38,7 +39,7 @@ namespace hpx::traits {
             };
         };
 
-        struct get_remote_iterator
+        HPX_CXX_EXPORT struct get_remote_iterator
         {
             template <typename Iterator>
             struct apply

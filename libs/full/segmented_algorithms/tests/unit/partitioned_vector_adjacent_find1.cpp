@@ -14,6 +14,7 @@
 
 #include <cstddef>
 #include <iostream>
+#include <iterator>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -77,6 +78,50 @@ void adjacent_find_tests(std::vector<hpx::id_type>& localities)
         hpx::execution::seq(hpx::execution::task), xvalues);
     test_adjacent_find_async(
         hpx::execution::par(hpx::execution::task), xvalues);
+
+    // subrange regression test in a single segment (sit == send path)
+    {
+        constexpr std::size_t n = 16;
+        constexpr std::size_t first_offset = 3;
+        constexpr std::size_t range_size = 8;
+
+        hpx::partitioned_vector<T> vals(n, T(0), hpx::container_layout(1));
+
+        auto it = vals.begin();
+        for (T value = T(0); it != vals.end(); ++it, value = T(value + 1))
+        {
+            *it = value;
+        }
+        auto dup = vals.begin();
+        std::advance(dup, 6);
+        *dup = T(5);
+
+        auto first = vals.begin();
+        std::advance(first, first_offset);
+        auto last = first;
+        std::advance(last, range_size);
+
+        auto verify_subrange_result =
+            [&](typename hpx::partitioned_vector<T>::iterator r) {
+                HPX_TEST_EQ(std::distance(vals.begin(), r), 5);
+            };
+
+        auto result = hpx::adjacent_find(hpx::execution::seq, first, last);
+        verify_subrange_result(result);
+
+        auto rpar = hpx::adjacent_find(hpx::execution::par, first, last);
+        verify_subrange_result(rpar);
+
+        auto r2 = hpx::adjacent_find(
+            hpx::execution::seq(hpx::execution::task), first, last)
+                      .get();
+        verify_subrange_result(r2);
+
+        auto r3 = hpx::adjacent_find(
+            hpx::execution::par(hpx::execution::task), first, last)
+                      .get();
+        verify_subrange_result(r3);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

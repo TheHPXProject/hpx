@@ -19,11 +19,17 @@ write_basic_package_version_file(
   COMPATIBILITY AnyNewerVersion
 )
 
-# Export HPXInternalTargets in the build directory
+# Export HPXInternalTargets in the build directory. Use the EXPORT signature so
+# CMake also generates the per-target C++ module metadata files.
+set(_cxx_modules_directory_arg)
+if(HPX_WITH_CXX_MODULES)
+  set(_cxx_modules_directory_arg CXX_MODULES_DIRECTORY cxx-modules)
+endif()
 export(
   TARGETS ${HPX_EXPORT_INTERNAL_TARGETS}
   NAMESPACE HPXInternal::
   FILE "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXInternalTargets.cmake"
+       ${_cxx_modules_directory_arg}
 )
 
 # Export HPXInternalTargets in the install directory
@@ -35,11 +41,13 @@ install(
   COMPONENT cmake
 )
 
-# Export HPXTargets in the build directory
+# Export HPXTargets in the build directory. Use the EXPORT signature so CMake
+# also generates the per-target C++ module metadata files.
 export(
   TARGETS ${HPX_EXPORT_TARGETS}
   NAMESPACE HPX::
   FILE "${CMAKE_CURRENT_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXTargets.cmake"
+       ${_cxx_modules_directory_arg}
 )
 
 # Add aliases with the namespace for use within HPX

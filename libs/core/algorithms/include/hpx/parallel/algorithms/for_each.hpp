@@ -245,6 +245,7 @@ namespace hpx {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
@@ -327,7 +328,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
+        template <typename ExPolicy, typename F>
         struct for_each_iteration<ExPolicy, F, hpx::identity>
         {
             using execution_policy_type = std::decay_t<ExPolicy>;
@@ -684,20 +685,20 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             parallel::detail::for_each_iteration<ExPolicy, F, Proj> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
+
 }    // namespace hpx::traits
+
 #endif
 
 #endif

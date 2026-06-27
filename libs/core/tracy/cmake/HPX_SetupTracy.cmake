@@ -15,25 +15,28 @@ if(TRACY_ROOT AND NOT Tracy_ROOT)
   unset(TRACY_ROOT CACHE)
 endif()
 
-if(NOT HPX_TRACY_WITH_TRACY_TAG)
-  set(HPX_TRACY_WITH_TRACY_TAG "v0.13.1")
+if(NOT HPX_WITH_TRACY_TAG)
+  set(HPX_WITH_TRACY_TAG "v0.13.1")
 endif()
 
-if(NOT HPX_TRACY_WITH_FETCH_TRACY)
-  find_package(Tracy ${HPX_TRACY_WITH_TRACY_TAG})
+if(NOT HPX_WITH_FETCH_TRACY)
+  find_package(Tracy)
   if(NOT Tracy_FOUND)
     hpx_error(
-      "Could not find Tracy. Set Tracy_ROOT as a CMake or environment variable to point to the Tracy root install directory. Alternatively, set HPX_TRACY_WITH_FETCH_TRACY=ON to fetch Tracy using CMake's FetchContent (when using this option Asio will be installed together with HPX, be careful about conflicts with separately installed versions of Tracy)."
+      "Could not find Tracy. Set Tracy_ROOT as a CMake or environment variable to point to the Tracy root install directory. Alternatively, set HPX_WITH_FETCH_TRACY=ON to fetch Tracy using CMake's FetchContent (when using this option Asio will be installed together with HPX, be careful about conflicts with separately installed versions of Tracy)."
     )
+  endif()
+  if(TARGET Tracy::TracyClient AND NOT TARGET tracy::tracy)
+    add_library(tracy::tracy ALIAS Tracy::TracyClient)
   endif()
 elseif(NOT TARGET tracy::tracy)
   if(FETCHCONTENT_SOURCE_DIR_TRACY)
     hpx_info(
-      "HPX_TRACY_WITH_FETCH_TRACY=${HPX_TRACY_WITH_FETCH_TRACY}, Tracy will be used through CMake's FetchContent and installed alongside HPX (FETCHCONTENT_SOURCE_DIR_TRACY=${FETCHCONTENT_SOURCE_DIR_TRACY})"
+      "HPX_WITH_FETCH_TRACY=${HPX_WITH_FETCH_TRACY}, Tracy will be used through CMake's FetchContent and installed alongside HPX (FETCHCONTENT_SOURCE_DIR_TRACY=${FETCHCONTENT_SOURCE_DIR_TRACY})"
     )
   else()
     hpx_info(
-      "HPX_TRACY_WITH_FETCH_TRACY=${HPX_TRACY_WITH_FETCH_TRACY}, TRACY will be fetched using CMake's FetchContent and installed alongside HPX (HPX_TRACY_WITH_TRACY_TAG=${HPX_TRACY_WITH_TRACY_TAG})"
+      "HPX_WITH_FETCH_TRACY=${HPX_WITH_FETCH_TRACY}, TRACY will be fetched using CMake's FetchContent and installed alongside HPX (HPX_WITH_TRACY_TAG=${HPX_WITH_TRACY_TAG})"
     )
   endif()
 
@@ -41,7 +44,7 @@ elseif(NOT TARGET tracy::tracy)
   fetchcontent_declare(
     tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy
-    GIT_TAG ${HPX_TRACY_WITH_TRACY_TAG}
+    GIT_TAG ${HPX_WITH_TRACY_TAG}
     GIT_SHALLOW TRUE
   )
 

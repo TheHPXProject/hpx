@@ -94,8 +94,8 @@ namespace sheneos {
             // Unregister all symbolic names.
             for (std::size_t i = 0; i < partitions_.size(); ++i)
             {
-                hpx::agas::unregister_name(hpx::launch::sync,
-                    data.symbolic_name_ + std::to_string(i++));
+                hpx::agas::unregister_name(
+                    hpx::launch::sync, data.symbolic_name_ + std::to_string(i));
             }
         }
     }

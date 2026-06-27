@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,12 +9,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_distributed/async.hpp>
-#include <hpx/components_base/traits/is_component.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/runtime_distributed/server/copy_component.hpp>
 
 #include <type_traits>
@@ -39,13 +40,9 @@ namespace hpx::components {
     /// \note The new component instance is created on the locality of the
     ///       component instance which is to be copied.
     ///
-    template <typename Component>
-#if defined(DOXYGEN)
-    future<hpx::id_type>
-#else
-    std::enable_if_t<traits::is_component_v<Component>, future<hpx::id_type>>
-#endif
-    copy(hpx::id_type const& to_copy)
+    HPX_CXX_EXPORT template <typename Component>
+        requires(traits::is_component_v<Component>)
+    future<hpx::id_type> copy(hpx::id_type const& to_copy)
     {
         using action_type = server::copy_component_action_here<Component>;
         return hpx::detail::async_colocated<action_type>(to_copy, to_copy);
@@ -68,13 +65,10 @@ namespace hpx::components {
     /// \returns A future representing the global id of the newly (copied)
     ///          component instance.
     ///
-    template <typename Component>
-#if defined(DOXYGEN)
-    future<hpx::id_type>
-#else
-    std::enable_if_t<traits::is_component_v<Component>, future<hpx::id_type>>
-#endif
-    copy(hpx::id_type const& to_copy, hpx::id_type const& target_locality)
+    HPX_CXX_EXPORT template <typename Component>
+        requires(traits::is_component_v<Component>)
+    future<hpx::id_type> copy(
+        hpx::id_type const& to_copy, hpx::id_type const& target_locality)
     {
         using action_type = server::copy_component_action<Component>;
         return hpx::detail::async_colocated<action_type>(
@@ -105,7 +99,7 @@ namespace hpx::components {
     ///       new component instance is created on the locality of the
     ///       component instance which is to be copied.
     ///
-    template <typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     Derived copy(client_base<Derived, Stub, Data> const& to_copy,
         hpx::id_type const& target_locality = hpx::invalid_id)
     {

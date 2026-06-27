@@ -7,16 +7,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_select_direct_execution.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/detail/async_implementations.hpp>
 #include <hpx/async_distributed/detail/async_unwrap_result_implementations_fwd.hpp>
 #include <hpx/async_distributed/detail/sync_implementations.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
-#include <hpx/components_base/traits/component_supports_migration.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 
 #include <utility>
@@ -25,8 +22,8 @@ namespace hpx::detail {
 
     /// \cond NOINTERNAL
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
-    typename hpx::traits::extract_action_t<Action>::local_result_type
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
+    hpx::traits::extract_action_t<Action>::local_result_type
     async_local_unwrap_impl(launch policy, hpx::id_type const& id,
         naming::address& addr, std::pair<bool, components::pinned_ptr>& r,
         Ts&&... vs)
@@ -57,8 +54,8 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Launch, typename... Ts>
-    typename hpx::traits::extract_action_t<Action>::local_result_type
+    HPX_CXX_EXPORT template <typename Action, typename Launch, typename... Ts>
+    hpx::traits::extract_action_t<Action>::local_result_type
     async_unwrap_result_impl(
         Launch&& policy, hpx::id_type const& id, Ts&&... vs)
     {

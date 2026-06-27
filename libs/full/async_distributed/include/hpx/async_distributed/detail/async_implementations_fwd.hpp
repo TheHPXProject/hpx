@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <hpx/actions_base/traits/extract_action.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/futures.hpp>
@@ -15,31 +15,31 @@
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Launch, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Launch, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_impl(Launch&& policy, hpx::id_type const& id, Ts&&... vs);
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(
         launch policy, hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::sync_policy, hpx::id_type const& id,
         Callback&& cb, Ts&&... vs);
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::async_policy, hpx::id_type const& id,
         Callback&& cb, Ts&&... vs);
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::deferred_policy, hpx::id_type const& id,

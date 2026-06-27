@@ -382,13 +382,10 @@ namespace hpx::parallel {
             parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
                 FwdIter2 dest, F&& f, Proj&& proj)
             {
-                using value_type =
-                    typename std::iterator_traits<FwdIter1>::value_type;
-
                 return copy_if<IterPair>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, dest,
-                    [f = HPX_FORWARD(F, f)](value_type const& a) -> bool {
-                        return !HPX_INVOKE(f, a);
+                    [f = HPX_FORWARD(F, f)](auto&& a) -> bool {
+                        return !HPX_INVOKE(f, HPX_FORWARD(decltype(a), a));
                     },
                     HPX_FORWARD(Proj, proj));
             }
@@ -444,10 +441,12 @@ namespace hpx {
                 >
             )
         // clang-format on
+        // clang-format off
         friend typename parallel::util::detail::algorithm_result<ExPolicy,
             FwdIter2>::type
         tag_fallback_invoke(hpx::remove_copy_if_t, ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, Pred pred)
+        // clang-format on
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -503,10 +502,12 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
+        // clang-format off
         friend typename parallel::util::detail::algorithm_result<ExPolicy,
             FwdIter2>::type
         tag_fallback_invoke(hpx::remove_copy_t, ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, T const& value)
+        // clang-format on
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");

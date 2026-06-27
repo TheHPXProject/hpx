@@ -105,7 +105,7 @@ namespace hpx::iostream {
             using streambuf_type = linked_streambuf<Ch, Tr>;
             using list_type = std::list<streambuf_type*>;
 
-        protected:
+        private:
             chain_base()
               : pimpl_(std::make_shared<chain_impl>())
             {
@@ -118,6 +118,8 @@ namespace hpx::iostream {
             chain_base& operator=(chain_base&&) noexcept = default;
 
             ~chain_base() = default;
+
+            friend Self;
 
         public:
             // dual_use is a pseudo-mode to facilitate filter writing, not a
@@ -320,7 +322,7 @@ namespace hpx::iostream {
                 if (is_complete())
                     throw std::logic_error("chain complete");
 
-                streambuf_type* prev = !empty() ? list().back() : 0;
+                streambuf_type* prev = !empty() ? list().back() : nullptr;
                 buffer_size =
                     buffer_size != -1 ? buffer_size : optimal_buffer_size(t);
                 pback_size =
@@ -856,7 +858,7 @@ namespace hpx::iostream {
             streambuf_type* buf = nullptr;
             std::swap(buf, list().back());
             buf->set_auto_close(false);
-            buf->set_next(0);
+            buf->set_next(nullptr);
             delete buf;
 
             list().pop_back();

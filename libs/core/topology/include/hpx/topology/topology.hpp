@@ -135,6 +135,24 @@ namespace hpx::threads {
             return numa_node_numbers_[num_thread % num_of_pus_];
         }
 
+        /// \brief Return the hardware latency distance between two NUMA nodes.
+        ///        Values are sourced from hwloc's distance matrix when
+        ///        available; otherwise a standard default (10 = local,
+        ///        20 = remote) is returned.
+        ///
+        /// \param node_a [in] logical index of the first NUMA node
+        /// \param node_b [in] logical index of the second NUMA node
+        std::size_t get_numa_distance(
+            std::size_t node_a, std::size_t node_b) const noexcept
+        {
+            if (node_a < numa_node_distances_.size() &&
+                node_b < numa_node_distances_[node_a].size())
+            {
+                return numa_node_distances_[node_a][node_b];
+            }
+            return node_a == node_b ? 10u : 20u;
+        }
+
         /// \brief Return a bit mask where each set bit corresponds to a
         ///        processing unit available to the application.
         ///
@@ -421,6 +439,13 @@ namespace hpx::threads {
         std::vector<mask_type> numa_node_affinity_masks_;
         std::vector<mask_type> core_affinity_masks_;
         std::vector<mask_type> thread_affinity_masks_;
+
+        // numa_node_distances_[i][j] holds the hardware latency distance
+        // between NUMA node i and NUMA node j as reported by hwloc.
+        // Indexed by logical NUMA node number.
+        std::vector<std::vector<std::size_t>> numa_node_distances_;
+
+        void init_numa_node_distances();
     };
 
 #include <hpx/config/warnings_suffix.hpp>

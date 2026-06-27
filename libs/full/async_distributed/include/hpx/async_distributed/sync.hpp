@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -37,16 +37,14 @@ namespace hpx {
 #else
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_client.hpp>
-#include <hpx/actions_base/traits/is_valid_action.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/bind_action.hpp>
 #include <hpx/async_distributed/detail/sync_implementations.hpp>
 #include <hpx/async_distributed/sync.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -67,7 +65,7 @@ namespace hpx::detail {
     };
 
     template <typename Action>
-    using sync_result_t = typename sync_result<Action>::type;
+    using sync_result_t = sync_result<Action>::type;
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename Action>
@@ -109,8 +107,8 @@ namespace hpx::detail {
             components::client_base<Client, Stub, Data> const& c, Ts&&... ts)
         {
             // make sure the action is compatible with the component type
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Action, component_type>,
                 "The action to invoke is not supported by the target");
@@ -179,7 +177,7 @@ namespace hpx::detail {
 
 namespace hpx {
 
-    template <typename Action, typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename F, typename... Ts>
     HPX_FORCEINLINE auto sync(F&& f, Ts&&... ts)
         -> decltype(detail::sync_action_dispatch<Action, std::decay_t<F>>::call(
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...))
@@ -212,8 +210,8 @@ namespace hpx::detail {
             hpx::actions::basic_action<Component, Signature, Derived> const&,
             components::client_base<Client, Stub, Data> const& c, Ts&&... vs)
         {
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Action, component_type>,
                 "The action to invoke is not supported by the target");
@@ -248,8 +246,8 @@ namespace hpx::detail {
             hpx::actions::basic_action<Component, Signature, Derived> const&,
             components::client_base<Client, Stub, Data> const& c, Ts&&... ts)
         {
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Derived, component_type>,
                 "The action to invoke is not supported by the target");

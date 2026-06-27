@@ -70,7 +70,6 @@ void test_find_if_not(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == iterator(test_index));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_find_if_not_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -97,14 +96,13 @@ void test_find_if_not_sender(
                           [](auto v) { return v != int(1); }) |
             hpx::find_if_not(ex_policy.on(exec)));
 
-    iterator index = hpx::get<0>(*snd_result);
+    iterator index = hpx::get<0>(snd_result.value());
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
 
     HPX_TEST(index == iterator(test_index));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_if_not_async(ExPolicy&& p, IteratorTag)

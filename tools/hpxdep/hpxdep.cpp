@@ -2605,7 +2605,7 @@ static void output_pkgconfig(std::string const& module,
     std::cout << "Name: " << m2 << '\n';
     std::cout << "Description: HPX C++ Module'" << module_name(module) << "'\n";
     std::cout << "Version: " << version << '\n';
-    std::cout << "URL: https://github.com/STEllAR-GROUP/hpx/libs/"
+    std::cout << "URL: https://github.com/TheHPXProject/hpx/libs/"
               << module_name(module) << '\n';
     std::cout << "Cflags: -I${includedir}\n";
 
@@ -2869,7 +2869,7 @@ std::string format_version()
     std::stringstream ss;
     ss << HPX_VERSION_MAJOR << "." << HPX_VERSION_MINOR << "."
        << HPX_VERSION_SUBMINOR << HPX_VERSION_TAG
-       << " (<a href=\"https://github.com/STEllAR-GROUP/hpx/commit/"
+       << " (<a href=\"https://github.com/TheHPXProject/hpx/commit/"
        << HPX_HAVE_GIT_COMMIT << "\">" << std::string(HPX_HAVE_GIT_COMMIT, 10)
        << "</a>)";
     return ss.str();
@@ -3046,8 +3046,9 @@ int main(int argc, char const* argv[])
 
     std::string html_prefix = R"(
     <table><tr>
-        <td><a href="https://github.com/STEllAR-GROUP/hpx">
-        <img src="http://stellar-group.org/files/stellar100.png" alt="STE||AR logo" />
+        <td><a href="https://github.com/TheHPXProject/hpx">
+        <img src="https://docs.hpx.dev/branches/master/html/_static/favicon.png"
+            alt="HPX logo" width="100" height="100"/>
         </a></td>
         <td><div class='logo'>
             <div class='upper'>HPX</div>

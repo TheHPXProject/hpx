@@ -147,7 +147,7 @@ namespace hpx::parallel {
                 HPX_FORWARD(ExPolicy, policy), zip_iterator(first1, first2), n,
                 [](reference t) -> void {
                     using hpx::get;
-                    std::swap(get<0>(t), get<1>(t));
+                    std::ranges::swap(get<0>(t), get<1>(t));
                 },
                 hpx::identity_v));
         }
@@ -167,11 +167,7 @@ namespace hpx::parallel {
             {
                 while (first1 != last1)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first1++, first2++);
-#else
-                    std::iter_swap(first1++, first2++);
-#endif
                 }
                 return first2;
             }
@@ -184,11 +180,7 @@ namespace hpx::parallel {
             {
                 while (first1 != last1 && first2 != last2)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first1++, first2++);
-#else
-                    std::iter_swap(first1++, first2++);
-#endif
                 }
                 return swap_ranges_result<FwdIter1, FwdIter2>{first1, first2};
             }

@@ -506,7 +506,6 @@ void test_unique_bad_alloc()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -535,7 +534,7 @@ void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)), pred) |
             hpx::unique(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto solution = std::unique(std::begin(d), std::end(d), pred);
 
@@ -551,7 +550,7 @@ void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)), pred) |
             hpx::unique(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto solution = std::unique(std::begin(d), std::begin(d), pred);
 
@@ -567,7 +566,7 @@ void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c)), pred) |
             hpx::unique(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto solution = std::unique(std::begin(d), ++std::begin(d), pred);
 
@@ -577,4 +576,3 @@ void test_unique_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         HPX_TEST(equality);
     }
 }
-#endif

@@ -21,15 +21,6 @@
 
 namespace ex = hpx::execution::experimental;
 
-// This overload is only used to check dispatching. It is not a useful
-// implementation.
-template <typename F>
-auto tag_invoke(ex::let_value_t, custom_sender_tag_invoke s, F&&)
-{
-    s.tag_invoke_overload_called = true;
-    return void_sender{};
-}
-
 int main()
 {
     // Success path
@@ -43,11 +34,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s2);
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
@@ -72,11 +59,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s2);
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
@@ -101,11 +84,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(
@@ -133,11 +112,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(
@@ -163,11 +138,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -191,11 +162,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -209,25 +176,6 @@ int main()
         HPX_TEST(let_value_callback_called);
     }
 
-    // tag_invoke overload
-    {
-        std::atomic<bool> tag_invoke_overload_called{false};
-        auto s = custom_sender_tag_invoke{tag_invoke_overload_called} |
-            ex::let_value([]() { return ex::just(); });
-        HPX_TEST(tag_invoke_overload_called);
-
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<>>(s);
-        check_sends_stopped<false>(s);
-    }
-
     // Failure path
     {
         std::atomic<bool> set_error_called{false};
@@ -239,11 +187,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s2);
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
@@ -282,11 +226,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s2);
         check_error_types<hpx::variant<std::exception_ptr>>(s2);

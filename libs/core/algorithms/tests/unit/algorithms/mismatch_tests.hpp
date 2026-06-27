@@ -481,7 +481,6 @@ void test_mismatch_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -510,7 +509,7 @@ void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
     {
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2)) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -527,7 +526,7 @@ void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2)) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -545,11 +544,106 @@ void test_mismatch_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             tt::sync_wait(ex::just(iterator(std::begin(c1)),
                               iterator(std::begin(c1)), std::begin(c2)) |
                 hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST(result.first.base() == std::begin(c1));
         HPX_TEST(result.second == std::begin(c2));
     }
 }
-#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Cross-policy consistency tests for hpx::mismatch
+//
+// Extends the empty-range coverage gap: the STDEXEC sender path
+// (test_mismatch_sender) has an empty-range check, but the standard policy
+// overloads test_mismatch1 / test_mismatch2 do not. This function exercises
+// seq, par, and par_unseq for empty range and several boundary conditions.
+//
+// Datasets covered:
+//   1. Empty range              -> result.first == first1, result.second == first2
+//   2. Single element, equal   -> no mismatch, result at end
+//   3. Mismatch at position 0  -> first pair differs
+//   4. Mismatch at last pos    -> last pair differs
+//   5. Fully matching range    -> result at end for all policies
+//   6. Cross-policy agreement  -> seq, par, par_unseq must agree on all above
+template <typename IteratorTag>
+void test_mismatch_cross_policy(IteratorTag)
+{
+    using namespace hpx::execution;
+
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    auto check_policy = [&](std::vector<int>& a, std::vector<int>& b,
+                            char const* scenario) {
+        auto rs = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        auto rp = hpx::mismatch(
+            par, iterator(a.begin()), iterator(a.end()), b.begin());
+        auto ru = hpx::mismatch(
+            par_unseq, iterator(a.begin()), iterator(a.end()), b.begin());
+        HPX_TEST_MSG(rs == rp, scenario);
+        HPX_TEST_MSG(rs == ru, scenario);
+    };
+
+    // 1. Empty range (fixes the sender-only coverage gap)
+    {
+        std::vector<int> a, b;
+        auto rs = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        auto rp = hpx::mismatch(
+            par, iterator(a.begin()), iterator(a.end()), b.begin());
+        auto ru = hpx::mismatch(
+            par_unseq, iterator(a.begin()), iterator(a.end()), b.begin());
+        // All must agree
+        HPX_TEST_MSG(rs == rp, "mismatch: empty range, seq==par");
+        HPX_TEST_MSG(rs == ru, "mismatch: empty range, seq==par_unseq");
+        // Result must be {first1, first2}
+        HPX_TEST_MSG(rs.first == iterator(a.begin()),
+            "mismatch: empty range, first1 returned");
+        HPX_TEST_MSG(
+            rs.second == b.begin(), "mismatch: empty range, first2 returned");
+    }
+
+    // 2. Single element, equal
+    {
+        std::vector<int> a = {7}, b = {7};
+        check_policy(a, b, "mismatch: single element, equal");
+        // Validate: no mismatch -> result is at end
+        auto r = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        HPX_TEST(r.first == iterator(a.end()));
+    }
+
+    // 3. Mismatch at position 0 (first elements differ)
+    {
+        std::vector<int> a(500, 1), b(500, 1);
+        a[0] = 9;
+        check_policy(a, b, "mismatch: diff at index 0");
+        auto r = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        HPX_TEST_EQ(std::size_t(std::distance(iterator(a.begin()), r.first)),
+            std::size_t(0));
+    }
+
+    // 4. Mismatch at last position
+    {
+        std::vector<int> a(500, 1), b(500, 1);
+        a[499] = 9;
+        check_policy(a, b, "mismatch: diff at last index");
+        auto r = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        HPX_TEST_EQ(std::size_t(std::distance(iterator(a.begin()), r.first)),
+            std::size_t(499));
+    }
+
+    // 5. Fully matching range - result must be at end for all policies
+    {
+        std::vector<int> a(500, 3), b(500, 3);
+        check_policy(a, b, "mismatch: fully matching");
+        auto r = hpx::mismatch(
+            seq, iterator(a.begin()), iterator(a.end()), b.begin());
+        HPX_TEST(r.first == iterator(a.end()));
+    }
+}

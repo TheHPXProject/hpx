@@ -461,6 +461,12 @@ namespace hpx::threads {
             runs_as_child_mode_bits = static_cast<std::uint8_t>(bits);
         }
 
+        void schedule_hint(std::int16_t core) noexcept
+        {
+            mode = thread_schedule_hint_mode::thread;
+            hint = core;
+        }
+
         /// The hint associated with the mode. The interpretation of this hint
         /// depends on the given mode.
         std::int16_t hint = -1;

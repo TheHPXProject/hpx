@@ -1,4 +1,4 @@
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,14 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
-#if defined(HPX_HAVE_STDEXEC)
-#include <hpx/modules/execution_base.hpp>
-#else
-
 #include <hpx/assert.hpp>
-#include <hpx/execution/queries/get_scheduler.hpp>
-#include <hpx/execution/queries/get_stop_token.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -25,10 +18,15 @@
 
 #include <exception>
 #include <mutex>
+#include <type_traits>
 
 namespace hpx::execution::experimental {
 
+    HPX_CXX_CORE_EXPORT struct make_future_t;
+
     namespace detail {
+
+        HPX_CXX_CORE_EXPORT struct sync_wait_domain;
 
         HPX_CXX_CORE_EXPORT struct run_loop_data;
 
@@ -118,183 +116,162 @@ namespace hpx::execution::experimental {
             }
         };
 
-        template <typename ReceiverId>
-        struct run_loop_opstate
+        template <typename Receiver>
+        struct run_loop_opstate : run_loop_opstate_base
         {
-            using Receiver = hpx::meta::type<ReceiverId>;
+            run_loop* loop;
+            HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
 
-            struct type : run_loop_opstate_base
+            template <typename Receiver_>
+            run_loop_opstate(run_loop_opstate_base* tail, run_loop* loop,
+                Receiver_&& receiver) noexcept(noexcept(std::
+                    is_nothrow_constructible_v<std::decay_t<Receiver>,
+                        Receiver_>))
+              : run_loop_opstate_base(tail)
+              , loop(loop)
+              , receiver(HPX_FORWARD(Receiver_, receiver))
             {
-                using id = run_loop_opstate;
+            }
 
-                run_loop& loop;
-                HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
+            static void execute(run_loop_opstate_base* p) noexcept
+            {
+                auto& receiver = static_cast<run_loop_opstate*>(p)->receiver;
+                hpx::detail::try_catch_exception_ptr(
+                    [&]() {
+                        if (get_stop_token(get_env(receiver)).stop_requested())
+                        {
+                            hpx::execution::experimental::set_stopped(
+                                HPX_MOVE(receiver));
+                        }
+                        else
+                        {
+                            hpx::execution::experimental::set_value(
+                                HPX_MOVE(receiver));
+                        }
+                    },
+                    [&](std::exception_ptr ep) {
+                        hpx::execution::experimental::set_error(
+                            HPX_MOVE(receiver), HPX_MOVE(ep));
+                    });
+            }
 
-                template <typename Receiver_>
-                type(run_loop_opstate_base* tail, run_loop& loop,
-                    Receiver_&& receiver) noexcept(noexcept(std::
-                        is_nothrow_constructible_v<std::decay_t<Receiver>,
-                            Receiver_>))
-                  : run_loop_opstate_base(tail)
-                  , loop(loop)
-                  , receiver(HPX_FORWARD(Receiver_, receiver))
-                {
-                }
+            run_loop_opstate(
+                run_loop_opstate_base* next, run_loop* loop, Receiver r)
+              : run_loop_opstate_base(next, &execute)
+              , loop(loop)
+              , receiver(HPX_MOVE(r))
+            {
+            }
 
-                static void execute(run_loop_opstate_base* p) noexcept
-                {
-                    auto& receiver = static_cast<type*>(p)->receiver;
-                    hpx::detail::try_catch_exception_ptr(
-                        [&]() {
-                            if (get_stop_token(get_env(receiver))
-                                    .stop_requested())
-                            {
-                                hpx::execution::experimental::set_stopped(
-                                    HPX_MOVE(receiver));
-                            }
-                            else
-                            {
-                                hpx::execution::experimental::set_value(
-                                    HPX_MOVE(receiver));
-                            }
-                        },
-                        [&](std::exception_ptr ep) {
-                            hpx::execution::experimental::set_error(
-                                HPX_MOVE(receiver), HPX_MOVE(ep));
-                        });
-                }
+            void start() & noexcept;
+        };
 
-                type(run_loop_opstate_base* next, run_loop& loop, Receiver r)
-                  : run_loop_opstate_base(next, &execute)
-                  , loop(loop)
-                  , receiver(HPX_MOVE(r))
-                {
-                }
+        struct env_t
+        {
+            [[nodiscard]]
+            auto query(get_completion_scheduler_t<set_value_t>) const noexcept;
 
-                friend void tag_invoke(
-                    hpx::execution::experimental::start_t, type& os) noexcept
-                {
-                    os.start();
-                }
+            [[nodiscard]]
+            auto query(
+                get_completion_scheduler_t<set_stopped_t>) const noexcept;
 
-                void start() & noexcept;
-            };
+            // P3826R5: advertise the HPX-aware sync_wait domain on this
+            // env so that stdexec::sync_wait routes through
+            // detail::sync_wait_domain instead of default_domain. The body
+            // is defined in detail/sync_wait_domain.hpp after sync_wait_domain
+            // is complete; this header only forward-declares it (see top of
+            // file). Templating on CPO defers instantiation until the
+            // domain type is fully visible to the caller.
+            template <typename CPO>
+            [[nodiscard]]
+            static auto query(get_completion_domain_t<CPO>) noexcept
+                -> detail::sync_wait_domain;
+
+            run_loop* loop;
         };
 
     public:
-        class run_loop_scheduler
+        class run_loop_scheduler : public env_t
         {
         public:
-            using type = run_loop_scheduler;
-            using id = run_loop_scheduler;
-
             struct run_loop_sender
             {
-                using is_sender = void;
-                using type = run_loop_sender;
-                using id = run_loop_sender;
+                using sender_concept = hpx::execution::experimental::sender_t;
 
-                explicit run_loop_sender(run_loop& loop) noexcept
-                  : loop(loop)
+                template <typename Receiver>
+                run_loop_opstate<Receiver> connect(
+                    Receiver&& receiver) const noexcept
                 {
+                    return run_loop_opstate<Receiver>(
+                        &loop->head, loop, HPX_FORWARD(Receiver, receiver));
+                }
+
+                template <typename ReceiverEnv>
+                static consteval auto get_completion_signatures() noexcept
+                {
+                    return completion_signatures<set_value_t(),
+                        set_error_t(std::exception_ptr), set_stopped_t()>{};
+                }
+
+                [[nodiscard]] constexpr env_t get_env() const noexcept
+                {
+                    return env_t{loop};
                 }
 
             private:
                 friend run_loop_scheduler;
 
-                template <typename Receiver>
-                using operation_state = hpx::meta::type<
-                    run_loop_opstate<hpx::meta::get_id_t<Receiver>>>;
-
-                template <typename Receiver>
-                friend operation_state<Receiver> tag_invoke(
-                    hpx::execution::experimental::connect_t,
-                    run_loop_sender const& s,
-                    Receiver&& receiver) noexcept(noexcept(std::
-                        is_nothrow_constructible_v<operation_state<Receiver>,
-                            run_loop_opstate_base*, run_loop&>))
+                constexpr explicit run_loop_sender(run_loop* loop) noexcept
+                  : loop(loop)
                 {
-                    return operation_state<Receiver>(
-                        &s.loop.head, s.loop, HPX_FORWARD(Receiver, receiver));
                 }
 
-                // clang-format off
-                template <typename CPO,
-                    HPX_CONCEPT_REQUIRES_(
-                        meta::value<meta::one_of<
-                            std::decay_t<CPO>, set_value_t, set_stopped_t>>
-                    )>
-                // clang-format on
-                friend run_loop_scheduler tag_invoke(
-                    hpx::execution::experimental::get_completion_scheduler_t<
-                        CPO>,
-                    run_loop_sender const& s) noexcept
-                {
-                    return run_loop_scheduler{s.loop};
-                }
-
-                using completion_signatures =
-                    hpx::execution::experimental::completion_signatures<
-                        hpx::execution::experimental::set_value_t(),
-                        hpx::execution::experimental::set_error_t(
-                            std::exception_ptr),
-                        hpx::execution::experimental::set_stopped_t()>;
-
-                // clang-format off
-                template <typename Env>
-                friend auto tag_invoke(
-                    hpx::execution::experimental::get_completion_signatures_t,
-                    run_loop_sender const&,
-                    Env) noexcept -> completion_signatures;
-                // clang-format on
-
-                run_loop& loop;
+                run_loop* loop;
             };
 
             friend run_loop;
 
         public:
-            explicit run_loop_scheduler(run_loop& loop) noexcept
-              : loop(loop)
+            explicit run_loop_scheduler(run_loop* loop) noexcept
+              : env_t(loop)
             {
             }
 
             run_loop& get_run_loop() const noexcept
             {
-                return loop;
+                return *loop;
             }
 
-        private:
-            friend run_loop_sender tag_invoke(
-                hpx::execution::experimental::schedule_t,
-                run_loop_scheduler const& sched) noexcept
+            run_loop_sender schedule() const noexcept
             {
-                return run_loop_sender(sched.loop);
+                return run_loop_sender(loop);
             }
 
-            friend constexpr hpx::execution::experimental::
-                forward_progress_guarantee
-                tag_invoke(hpx::execution::experimental::
-                               get_forward_progress_guarantee_t,
-                    run_loop_scheduler const&) noexcept
+            using env_t::query;
+
+            [[nodiscard]] static constexpr auto query(
+                get_forward_progress_guarantee_t) noexcept
             {
-                return hpx::execution::experimental::
-                    forward_progress_guarantee::parallel;
+                return forward_progress_guarantee::parallel;
             }
 
-            friend constexpr bool operator==(run_loop_scheduler const& lhs,
+            template <typename Sender,
+                typename Allocator = hpx::util::internal_allocator<>>
+            [[nodiscard]] auto query(make_future_t, Sender&& sender,
+                Allocator const& allocator = Allocator{}) const;
+
+            [[nodiscard]] friend constexpr bool operator==(
+                run_loop_scheduler const& lhs,
                 run_loop_scheduler const& rhs) noexcept
             {
-                return &lhs.loop == &rhs.loop;
+                return lhs.loop == rhs.loop;
             }
-            friend constexpr bool operator!=(run_loop_scheduler const& lhs,
+            [[nodiscard]] friend constexpr bool operator!=(
+                run_loop_scheduler const& lhs,
                 run_loop_scheduler const& rhs) noexcept
             {
                 return !(lhs == rhs);
             }
-
-        private:
-            run_loop& loop;
         };
 
     private:
@@ -371,7 +348,7 @@ namespace hpx::execution::experimental {
         // [exec.run_loop.members] Member functions:
         run_loop_scheduler get_scheduler()
         {
-            return run_loop_scheduler(*this);
+            return run_loop_scheduler(this);
         }
 
         void run()
@@ -395,18 +372,34 @@ namespace hpx::execution::experimental {
         }
     };
 
+    ///////////////////////////////////////////////////////////////////////////
+    inline auto run_loop::env_t::query(
+        get_completion_scheduler_t<set_value_t>) const noexcept
+    {
+        return run_loop_scheduler(loop);
+    }
+
+    inline auto run_loop::env_t::query(
+        get_completion_scheduler_t<set_stopped_t>) const noexcept
+    {
+        return query(get_completion_scheduler<set_value_t>);
+    }
+
+    // run_loop::env_t::query(get_completion_domain_t<CPO>) is defined in
+    // detail/sync_wait_domain.hpp once sync_wait_domain is complete.
+
+    ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT using run_loop_scheduler = run_loop::run_loop_scheduler;
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename ReceiverId>
-    inline void run_loop::run_loop_opstate<ReceiverId>::type::start() & noexcept
+    template <typename Receiver>
+    inline void run_loop::run_loop_opstate<Receiver>::start() & noexcept
     try
     {
-        loop.push_back(this);
+        loop->push_back(this);
     }
     catch (...)
     {
         set_error(HPX_MOVE(receiver), std::current_exception());
     }
 }    // namespace hpx::execution::experimental
-#endif

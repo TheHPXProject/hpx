@@ -107,8 +107,8 @@ namespace hpx::iostream {
                 non_blocking_adapter<sink_t> nb(snk);
                 while (true)
                 {
-                    std::streamsize const amt = iostream::read(
-                        HPX_FORWARD(Source, src), buf.data(), buffer_size);
+                    std::streamsize const amt =
+                        iostream::read(src, buf.data(), buffer_size);
                     if (amt == -1)
                         break;
 

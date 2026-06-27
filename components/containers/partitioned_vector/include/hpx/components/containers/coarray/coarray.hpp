@@ -9,11 +9,12 @@
 
 #pragma once
 
-#include <hpx/collectives/spmd_block.hpp>
+#include <hpx/modules/collectives.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
+#include <hpx/modules/type_support.hpp>
+
 #include <hpx/components/containers/partitioned_vector/partitioned_vector.hpp>
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_view.hpp>
-#include <hpx/modules/type_support.hpp>
-#include <hpx/runtime_distributed/find_all_localities.hpp>
 
 #include <algorithm>
 #include <array>

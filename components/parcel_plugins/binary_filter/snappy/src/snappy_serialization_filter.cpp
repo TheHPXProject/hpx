@@ -10,10 +10,9 @@
 #include <snappy.h>
 
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 
 #include <hpx/binary_filter/snappy_serialization_filter.hpp>
-#include <hpx/plugin_factories/binary_filter_factory.hpp>
-#include <hpx/plugin_factories/plugin_registry.hpp>
 
 #include <algorithm>
 #include <cstddef>

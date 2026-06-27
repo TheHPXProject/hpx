@@ -53,13 +53,11 @@ namespace hpx::execution::experimental {
 
         /// \cond NOINTERNAL
         template <typename Executor>
-        friend constexpr std::size_t tag_override_invoke(
-            hpx::execution::experimental::get_chunk_size_t,
-            dynamic_chunk_size const& this_, Executor&&,
+        constexpr std::size_t get_chunk_size(Executor&&,
             hpx::chrono::steady_duration const&, std::size_t,
-            std::size_t) noexcept
+            std::size_t) const noexcept
         {
-            return this_.chunk_size_;
+            return chunk_size_;
         }
         /// \endcond
 

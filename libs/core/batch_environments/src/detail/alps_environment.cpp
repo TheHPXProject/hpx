@@ -5,8 +5,9 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <hpx/batch_environments/detail/alps_environment.hpp>
 #include <hpx/modules/format.hpp>
+
+#include <hpx/batch_environments/detail/alps_environment.hpp>
 
 #include <cstddef>
 #include <string>

@@ -1,5 +1,5 @@
 //  Copyright (c) 2011-2017 Thomas Heller
-//  Copyright (c) 2024-2025 Hartmut Kaiser
+//  Copyright (c) 2024-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/components_base/macros.hpp>
 #include <hpx/modules/static_reinit.hpp>
 
 namespace hpx::components {
@@ -19,36 +20,23 @@ namespace hpx::components {
     // macros
     namespace detail {
 
-        template <typename Component>
-        struct component_heap_impl;
+        HPX_CXX_EXPORT template <typename Component>
+        struct HPX_ALWAYS_EXPORT component_heap_impl;
 
-        template <typename Component>
-        typename Component::heap_type& component_heap_helper(
+        HPX_CXX_EXPORT template <typename Component>
+        Component::heap_type& component_heap_helper(
             typename detail::component_heap_impl<Component>::valid*)
         {
             return detail::component_heap_impl<Component>::call();
         }
 
-        template <typename Component>
-        HPX_ALWAYS_EXPORT typename Component::heap_type& component_heap_helper(
-            ...);
+        HPX_CXX_EXPORT template <typename Component>
+        HPX_ALWAYS_EXPORT Component::heap_type& component_heap_helper(...);
     }    // namespace detail
 
-    template <typename Component>
-    typename Component::heap_type& component_heap()
+    HPX_CXX_EXPORT template <typename Component>
+    Component::heap_type& component_heap()
     {
         return detail::component_heap_helper<Component>(nullptr);
     }
 }    // namespace hpx::components
-
-#define HPX_REGISTER_COMPONENT_HEAP(Component)                                 \
-    namespace hpx::components::detail {                                        \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT Component::heap_type&                                \
-        component_heap_helper<Component>(...)                                  \
-        {                                                                      \
-            util::reinitializable_static<Component::heap_type> heap;           \
-            return heap.get();                                                 \
-        }                                                                      \
-    }                                                                          \
-    /**/

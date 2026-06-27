@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Lelbach
 //  Copyright (c) 2007 Richard D. Guidry Jr.
 //
@@ -17,11 +17,13 @@
 
 namespace hpx::naming::detail {
 
-    HPX_EXPORT hpx::future_or_value<gid_type> split_gid_if_needed(gid_type& id);
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future_or_value<gid_type>
+    split_gid_if_needed(gid_type& id);
 
-    HPX_EXPORT gid_type split_gid_if_needed(
+    HPX_CXX_EXPORT HPX_EXPORT gid_type split_gid_if_needed(
         hpx::launch::sync_policy, gid_type& id);
 
-    HPX_EXPORT hpx::future_or_value<gid_type> split_gid_if_needed_locked(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future_or_value<gid_type>
+    split_gid_if_needed_locked(
         std::unique_lock<gid_type::mutex_type>& l, gid_type& gid);
 }    // namespace hpx::naming::detail

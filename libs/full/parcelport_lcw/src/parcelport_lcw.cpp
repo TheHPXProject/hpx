@@ -27,6 +27,12 @@
 
 #include <hpx/assert.hpp>
 
+#include <asio/io_context.hpp>
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
+
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -93,8 +99,13 @@ namespace hpx::parcelset::policies::lcw {
         sender_p->run();
         for (std::size_t i = 0; i != io_service_pool_.size(); ++i)
         {
-            io_service_pool_.get_io_service(int(i)).post(
+#if ASIO_VERSION >= 103400
+            ::asio::post(io_service_pool_.get_io_service(static_cast<int>(i)),
                 hpx::bind(&parcelport::io_service_work, this));
+#else
+            io_service_pool_.get_io_service(static_cast<int>(i))
+                .post(hpx::bind(&parcelport::io_service_work, this));
+#endif
         }
         return true;
     }

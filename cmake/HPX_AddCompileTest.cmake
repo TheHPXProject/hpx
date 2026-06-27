@@ -53,6 +53,10 @@ function(add_hpx_compile_test category name)
   )
 
   if(${name}_FAILURE_EXPECTED)
+    # Disable clang-tidy for intentional fail-to-compile targets (files starting
+    # with 'fail_'). These contain deliberately invalid code that clang-tidy
+    # cannot analyse without emitting errors.
+    set_target_properties(${test_name} PROPERTIES CXX_CLANG_TIDY "")
     set_tests_properties("${category}.${name}" PROPERTIES WILL_FAIL TRUE)
   endif()
 

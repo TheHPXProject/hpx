@@ -17,7 +17,6 @@
 
 #include <asio/basic_waitable_timer.hpp>
 
-#include <boost/parameter/aux_/preprocessor/nullptr.hpp>
 #include <chrono>
 #include <memory>
 #include <mutex>

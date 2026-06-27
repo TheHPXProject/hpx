@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Arpit Patrick Diehl
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+#
+name: DCO
+on: [pull_request]
+
+jobs:
+  commits_check_job:
+    runs-on: ubuntu-latest
+    name: Commits Check
+    steps:
+    - name: Get PR Commits
+      id: 'get-pr-commits'
+      uses: tim-actions/get-pr-commits@master
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: DCO Check
+      uses: tim-actions/dco@master
+      with:
+        commits: ${{ steps.get-pr-commits.outputs.commits }}

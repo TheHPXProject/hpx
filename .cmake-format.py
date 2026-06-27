@@ -392,7 +392,6 @@ with section("parse"):
                                              'SOURCES': '+',
                                              'SOURCE_ROOT': 1,
                                              'ARGS': '+',
-                                             'EXECUTABLE': 1,
                                              'PSEUDO_DEPS_NAME': 1,
                                              'LOCALITIES': 1,
                                              'PARCELPORTS': '+',
@@ -585,6 +584,12 @@ with section("parse"):
     'hpx_extract_includes_from_file': { 'kwargs': { 'SOURCE': 1,
                                                     'INCLUDE_DIRS': '+',
                                                     'FOUND_HEADERS': 1},
+                          'pargs': { 'flags': [], 'nargs': '1+'}},
+    'hpx_configure_module_producer': { 'kwargs': {},
+                          'pargs': { 'flags': [], 'nargs': '1+'}},
+    'hpx_configure_if_changed': { 'kwargs': { 'INPUT': 1,
+                                              'OUTPUT': 1,
+                                              'CONFIGURE_ARGS': '+'},
                           'pargs': { 'flags': [], 'nargs': '1+'}}
   }
 

@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/basic_action.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 
 #include <utility>
@@ -30,7 +30,7 @@ namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // action definition exposing invoke_function<>
-    template <typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename F, typename... Ts>
     struct invoke_function_action
       : ::hpx::actions::action<util::invoke_result_t<F, Ts...> (*)(F, Ts...),
             &detail::invoke_function<F, Ts...>::call,

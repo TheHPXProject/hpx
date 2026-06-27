@@ -10,11 +10,11 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/chrono.hpp>
-#include <hpx/components_base/server/locking_hook.hpp>
 #include <hpx/hpx.hpp>
 #include <hpx/include/actions.hpp>
 #include <hpx/include/components.hpp>
 #include <hpx/include/lcos_local.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include <mutex>
 

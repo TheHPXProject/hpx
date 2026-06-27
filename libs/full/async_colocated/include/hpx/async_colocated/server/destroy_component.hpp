@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011-2017 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -8,9 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/component_heap.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -19,11 +17,11 @@
 namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_EXPORT void destroy_component(
+    HPX_CXX_EXPORT HPX_EXPORT void destroy_component(
         naming::gid_type const& gid, naming::address const& addr);
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     void destroy(naming::gid_type const& gid, naming::address const& addr)
     {
         // make sure this component is located here
@@ -61,7 +59,7 @@ namespace hpx::components::server {
         component_heap<Component>().free(c, 1);
     }
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     void destroy(naming::gid_type const& gid)
     {
         naming::address addr;

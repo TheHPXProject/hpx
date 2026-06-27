@@ -495,8 +495,7 @@ namespace hpx::lcos::local {
 
 namespace hpx::traits::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename F, typename Base,
-        typename Allocator>
+    template <typename Result, typename F, typename Base, typename Allocator>
     struct shared_state_allocator<
         lcos::local::detail::task_object<Result, F, void, Base>, Allocator>
     {
@@ -504,8 +503,7 @@ namespace hpx::traits::detail {
             Result, F, Base>;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename F,
-        typename Allocator>
+    template <typename Result, typename F, typename Allocator>
     struct shared_state_allocator<
         lcos::local::detail::cancelable_task_object<Result, F, void>, Allocator>
     {
@@ -735,7 +733,7 @@ namespace hpx::lcos::local {
         };
     }    // namespace detail
 
-    HPX_CXX_CORE_EXPORT template <typename Result, bool Cancelable>
+    template <typename Result, bool Cancelable>
     class futures_factory<Result(), Cancelable>
     {
     protected:
@@ -767,7 +765,7 @@ namespace hpx::lcos::local {
         explicit futures_factory(F&& f)
           : task_(detail::create_task_object<Result, Cancelable>::call(
                 hpx::util::thread_local_caching_allocator<
-                    hpx::lockfree::variable_size_stack, char,
+                    hpx::lockfree::variable_size_stack,
                     hpx::util::internal_allocator<>>{},
                 HPX_FORWARD(F, f)))
         {
@@ -776,7 +774,7 @@ namespace hpx::lcos::local {
         explicit futures_factory(Result (*f)())
           : task_(detail::create_task_object<Result, Cancelable>::call(
                 hpx::util::thread_local_caching_allocator<
-                    hpx::lockfree::variable_size_stack, char,
+                    hpx::lockfree::variable_size_stack,
                     hpx::util::internal_allocator<>>{},
                 f))
         {

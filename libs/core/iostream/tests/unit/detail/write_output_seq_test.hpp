@@ -15,9 +15,9 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstddef>
 #include <fstream>
 #include <vector>
-
 #include "sequence.hpp"
 #include "temp_file.hpp"
 #include "verification.hpp"

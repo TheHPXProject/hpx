@@ -19,15 +19,6 @@
 
 namespace ex = hpx::execution::experimental;
 
-// This overload is only used to check dispatching. It is not a useful
-// implementation.
-template <typename F>
-auto tag_invoke(ex::let_error_t, custom_sender_tag_invoke s, F&&)
-{
-    s.tag_invoke_overload_called = true;
-    return void_sender{};
-}
-
 int main()
 {
     // "Success" path, i.e. let_error gets to handle the error
@@ -42,11 +33,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s2);
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
@@ -71,19 +58,11 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         /*TODO: the following is unclear: https://rentry.org/4rzhctgx
          * So this is volatile to internal stdexec changes, and is thus disabled
          * check_value_types<hpx::variant<hpx::tuple<>, hpx::tuple<int>>>(s2);*/
-#else
-        check_value_types<hpx::variant<hpx::tuple<int>, hpx::tuple<>>>(s2);
-#endif
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
         check_sends_stopped<false>(s2);
 
@@ -107,21 +86,11 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         /* Disabled due to ambiguous order
          * check_value_types<hpx::variant<hpx::tuple<>,
          *   hpx::tuple<custom_type_non_default_constructible>>>(s2); */
-#else
-        check_value_types<hpx::variant<
-            hpx::tuple<custom_type_non_default_constructible>, hpx::tuple<>>>(
-            s2);
-#endif
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
         check_sends_stopped<false>(s2);
 
@@ -146,22 +115,12 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         /* Disabled due to ambiguous order
          * check_value_types<hpx::variant<hpx::tuple<>,
          *   hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(
          *   s2); */
-#else
-        check_value_types<hpx::variant<
-            hpx::tuple<custom_type_non_default_constructible_non_copyable>,
-            hpx::tuple<>>>(s2);
-#endif
         check_error_types<hpx::variant<std::exception_ptr>>(s2);
         check_sends_stopped<false>(s2);
 
@@ -185,11 +144,7 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
@@ -213,18 +168,10 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
 
-#if defined(HPX_HAVE_STDEXEC)
         /* Disabled due to ambiguous order
          * check_value_types<hpx::variant<hpx::tuple<>, hpx::tuple<int>>>(s); */
-#else
-        check_value_types<hpx::variant<hpx::tuple<int>, hpx::tuple<>>>(s);
-#endif
         check_error_types<hpx::variant<std::exception_ptr>>(s);
         check_sends_stopped<false>(s);
 
@@ -235,25 +182,6 @@ int main()
         ex::start(os);
         HPX_TEST(set_value_called);
         HPX_TEST(let_error_callback_called);
-    }
-
-    // tag_invoke overload
-    {
-        std::atomic<bool> tag_invoke_overload_called{false};
-        auto s = custom_sender_tag_invoke{tag_invoke_overload_called} |
-            ex::let_error([&](std::exception_ptr) { return ex::just(); });
-        HPX_TEST(tag_invoke_overload_called);
-
-        static_assert(ex::is_sender_v<decltype(s)>);
-#if defined(HPX_HAVE_STDEXEC)
-        static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s), ex::empty_env>);
-#endif
-
-        check_value_types<hpx::variant<hpx::tuple<>>>(s);
-        check_error_types<hpx::variant<>>(s);
-        check_sends_stopped<false>(s);
     }
 
     // "Failure" path, i.e. let_error has no error to handle
@@ -267,19 +195,11 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<hpx::tuple<int>>>(s2);
-#if defined(HPX_HAVE_STDEXEC)
         // the returned sender does not throw any errors
         check_error_types<hpx::variant<>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<false>(s2);
 
         auto f = [](int x) { HPX_TEST_EQ(x, 42); };
@@ -301,20 +221,12 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<
             hpx::variant<hpx::tuple<custom_type_non_default_constructible>>>(
             s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<false>(s2);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };
@@ -338,20 +250,12 @@ int main()
         });
 
         static_assert(ex::is_sender_v<decltype(s2)>);
-#if defined(HPX_HAVE_STDEXEC)
         static_assert(ex::is_sender_in_v<decltype(s2), ex::empty_env>);
-#else
-        static_assert(ex::is_sender_v<decltype(s2), ex::empty_env>);
-#endif
 
         check_value_types<hpx::variant<
             hpx::tuple<custom_type_non_default_constructible_non_copyable>>>(
             s2);
-#if defined(HPX_HAVE_STDEXEC)
         check_error_types<hpx::variant<>>(s2);
-#else
-        check_error_types<hpx::variant<std::exception_ptr>>(s2);
-#endif
         check_sends_stopped<false>(s2);
 
         auto f = [](auto x) { HPX_TEST_EQ(x.x, 42); };

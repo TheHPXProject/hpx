@@ -144,10 +144,10 @@ void test_aux(CountingIterator start, CountingIterator finish, Value v1)
         HPX_TEST(++c == *std::next(p));
     }
 
-    // prove that a reference can be formed to these values
-    using value = typename CountingIterator::value_type;
-    value const* q = &*start;
-    (void) q;    // suppress unused variable warning
+    //// prove that a reference can be formed to these values
+    //using value = typename CountingIterator::value_type;
+    //value const* q = &*start;
+    //(void) q;    // suppress unused variable warning
 }
 
 template <typename Incrementable>

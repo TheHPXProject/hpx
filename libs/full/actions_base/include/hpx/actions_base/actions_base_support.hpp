@@ -29,7 +29,7 @@ namespace hpx::actions::detail {
     // Figure out what priority the action has to be associated with a
     // dynamically specified default priority results in using the static
     // Priority.
-    template <threads::thread_priority Priority>
+    HPX_CXX_EXPORT template <threads::thread_priority Priority>
     struct thread_priority
     {
         constexpr static threads::thread_priority call(
@@ -61,7 +61,7 @@ namespace hpx::actions::detail {
     // Figure out what stacksize the action has to be associated with a
     // dynamically specified default stacksize results in using the static
     // Stacksize.
-    template <threads::thread_stacksize Stacksize>
+    HPX_CXX_EXPORT template <threads::thread_stacksize Stacksize>
     struct thread_stacksize
     {
         constexpr static threads::thread_stacksize call(
@@ -88,7 +88,7 @@ namespace hpx::actions::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     std::uint32_t get_action_id()
     {
         static std::uint32_t id =

@@ -11,23 +11,21 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/component_heap.hpp>
-#include <hpx/components_base/server/managed_component_base.hpp>
-#include <hpx/components_base/traits/component_type_database.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <exception>
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::lcos::detail {
 
-    template <typename Result, typename RemoteResult>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult>
     class promise_lco;
-}
+}    // namespace hpx::lcos::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename Result, typename RemoteResult>
@@ -40,7 +38,7 @@ struct hpx::traits::managed_component_dtor_policy<
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::lcos::detail {
 
-    template <typename Result, typename RemoteResult>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult>
     class promise_lco_base
       : public lcos::base_lco_with_value<Result, RemoteResult>
     {
@@ -50,7 +48,7 @@ namespace hpx::lcos::detail {
 
         using base_type = lcos::base_lco_with_value<Result, RemoteResult>;
 
-        using result_type = typename base_type::result_type;
+        using result_type = base_type::result_type;
 
     public:
         explicit promise_lco_base(shared_state_ptr const& shared_state)
@@ -91,7 +89,7 @@ namespace hpx::lcos::detail {
         friend void intrusive_ptr_release(promise_lco_base* /*p*/) noexcept {}
     };
 
-    template <typename Result, typename RemoteResult>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult>
     class promise_lco : public promise_lco_base<Result, RemoteResult>
     {
     protected:
@@ -100,7 +98,7 @@ namespace hpx::lcos::detail {
 
         using base_type = promise_lco_base<Result, RemoteResult>;
 
-        using result_type = typename base_type::result_type;
+        using result_type = base_type::result_type;
 
     public:
         explicit promise_lco(shared_state_ptr const& shared_state)
@@ -170,8 +168,11 @@ namespace hpx::lcos::detail {
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {
+
     namespace traits {
+
         namespace detail {
+
             HPX_EXPORT extern util::atomic_count unique_type;
         }
 
@@ -220,15 +221,15 @@ namespace hpx {
             lcos::detail::promise_lco<void, hpx::util::unused_type>>>(...);
 
         template <typename Result, typename RemoteResult>
-        struct component_heap_impl<hpx::components::managed_component<
-            lcos::detail::promise_lco<Result, RemoteResult>>>
+        struct HPX_ALWAYS_EXPORT
+            component_heap_impl<hpx::components::managed_component<
+                lcos::detail::promise_lco<Result, RemoteResult>>>
         {
             using valid = void;
 
-            HPX_ALWAYS_EXPORT static
-                typename hpx::components::managed_component<
-                    lcos::detail::promise_lco<Result, RemoteResult>>::heap_type&
-                call()
+            static hpx::components::managed_component<
+                lcos::detail::promise_lco<Result, RemoteResult>>::heap_type&
+            call()
             {
                 util::reinitializable_static<
                     typename hpx::components::managed_component<lcos::detail::
@@ -238,5 +239,4 @@ namespace hpx {
             }
         };
     }    // namespace components::detail
-    // namespace components::detail
 }    // namespace hpx

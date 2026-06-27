@@ -28,7 +28,7 @@ namespace hpx::parallel {
             typename Enable = void>
         struct handle_exception_impl;
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Result>
+        template <typename ExPolicy, typename Result>
         struct handle_exception_impl<ExPolicy, Result,
             std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy> &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy> &&
@@ -84,7 +84,7 @@ namespace hpx::parallel {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Result>
+        template <typename ExPolicy, typename Result>
         struct handle_exception_impl<ExPolicy, Result,
             std::enable_if_t<hpx::is_async_execution_policy_v<ExPolicy> &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy> &&
@@ -160,7 +160,7 @@ namespace hpx::parallel {
         ///////////////////////////////////////////////////////////////////////
         // any exceptions thrown by algorithms executed with an unsequenced
         // policy are to call terminate.
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Result>
+        template <typename ExPolicy, typename Result>
         struct handle_exception_impl<ExPolicy, Result,
             std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy> &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy> &&
@@ -185,7 +185,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Result>
+        template <typename ExPolicy, typename Result>
         struct handle_exception_impl<ExPolicy, Result,
             std::enable_if_t<hpx::is_async_execution_policy_v<ExPolicy> &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy> &&
@@ -210,7 +210,7 @@ namespace hpx::parallel {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Result>
+        template <typename ExPolicy, typename Result>
         struct handle_exception_impl<ExPolicy, Result,
             std::enable_if_t<
                 hpx::execution_policy_has_scheduler_executor_v<ExPolicy>>>

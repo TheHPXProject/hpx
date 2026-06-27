@@ -95,9 +95,9 @@ namespace hpx {
         [[nodiscard]] HPX_CORE_EXPORT std::exception_ptr
         construct_lightweight_exception(Exception const& e);
 
-        HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
+        extern template HPX_CORE_EXPORT std::exception_ptr
         construct_lightweight_exception(hpx::exception_list const&);
-        HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
+        extern template HPX_CORE_EXPORT std::exception_ptr
         construct_lightweight_exception(hpx::thread_interrupted const&);
     }    // namespace detail
     /// \endcond

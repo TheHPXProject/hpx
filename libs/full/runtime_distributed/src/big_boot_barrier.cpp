@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Lelbach & Katelyn Kufahl
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2015 Anton Bikineev
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -9,27 +9,25 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/agas/addressing_service.hpp>
-#include <hpx/agas_base/detail/hosted_component_namespace.hpp>
-#include <hpx/agas_base/detail/hosted_locality_namespace.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/put_parcel.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/server/managed_component_base.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/agas_base.hpp>
+#include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/static_reinit.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/topology.hpp>
-#include <hpx/parcelset/detail/parcel_await.hpp>
+
 #include <hpx/runtime_distributed.hpp>
 #include <hpx/runtime_distributed/big_boot_barrier.hpp>
 #include <hpx/runtime_distributed/runtime_fwd.hpp>

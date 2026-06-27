@@ -53,7 +53,9 @@ namespace hpx::traits {
         struct acquire_future_impl
         {
             static_assert(!is_future_or_future_range_v<T>,
-                "!is_future_or_future_range_v<T>");
+                "T is a future or future range and must be acquired "
+                "using the hpx::traits::acquire_future<T> "
+                "specialization, not the default implementation.");
 
             using type = T;
 
@@ -65,7 +67,7 @@ namespace hpx::traits {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename R>
+        template <typename R>
         struct acquire_future_impl<hpx::future<R>>
         {
             using type = hpx::future<R>;
@@ -83,7 +85,7 @@ namespace hpx::traits {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename R>
+        template <typename R>
         struct acquire_future_impl<hpx::shared_future<R>>
         {
             using type = hpx::shared_future<R>;
@@ -105,7 +107,7 @@ namespace hpx::traits {
         HPX_HAS_MEMBER_XXX_TRAIT_DEF(push_back)
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Range>
+        template <typename Range>
         struct acquire_future_impl<Range,
             std::enable_if_t<hpx::traits::is_future_range_v<Range>>>
         {

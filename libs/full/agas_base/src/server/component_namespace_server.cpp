@@ -8,15 +8,16 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/server/component_namespace.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/naming.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/util.hpp>
-#include <hpx/naming/credit_handling.hpp>
+
+#include <hpx/agas_base/server/component_namespace.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -25,8 +26,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-// TODO: Remove the use of the name "prefix"
 
 namespace hpx::agas {
 

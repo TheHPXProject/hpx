@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,11 +6,13 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
     // Customization point for Action::does_termination_detection
-    template <typename Action, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct action_does_termination_detection
     {
         static constexpr bool call() noexcept

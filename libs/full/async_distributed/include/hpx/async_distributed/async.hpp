@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -37,17 +37,14 @@ namespace hpx {
 #else
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_client.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/actions_base/traits/is_valid_action.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/async_continue.hpp>
 #include <hpx/async_distributed/bind_action.hpp>
 #include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -104,8 +101,8 @@ namespace hpx::detail {
             components::client_base<Client, Stub, Data> const& c, Ts&&... ts)
         {
             // make sure the action is compatible with the component type
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Action, component_type>,
                 "The action to invoke is not supported by the target");
@@ -126,7 +123,7 @@ namespace hpx::detail {
 
         // distribution policy
         template <typename Policy_, typename DistPolicy, typename... Ts>
-        HPX_FORCEINLINE static typename util::lazy_enable_if<
+        HPX_FORCEINLINE static util::lazy_enable_if<
             traits::is_distribution_policy_v<DistPolicy>,
             typename DistPolicy::template async_result<Action>>::type
         call(Policy_&& launch_policy, DistPolicy const& policy, Ts&&... ts)
@@ -190,8 +187,9 @@ namespace hpx::detail {
     struct async_launch_policy_dispatch<Action,
         std::enable_if_t<traits::is_action<Action>::value>>
     {
-        using result_type = typename traits::promise_local_result<typename hpx::
-                traits::extract_action<Action>::remote_result_type>::type;
+        using result_type =
+            traits::promise_local_result<typename hpx::traits::extract_action<
+                Action>::remote_result_type>::type;
 
         template <typename Policy, typename... Ts>
         HPX_FORCEINLINE static auto call(
@@ -211,7 +209,7 @@ namespace hpx {
 
     // different versions of clang-format disagree
     // clang-format off
-    template <typename Action, typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename F, typename... Ts>
     HPX_FORCEINLINE auto async(F&& f, Ts&&... ts) -> decltype(
         detail::async_action_dispatch<Action, std::decay_t<F>>::call(
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...))
@@ -253,8 +251,8 @@ namespace hpx::detail {
         call(hpx::actions::basic_action<Component, Signature, Derived> const&,
             components::client_base<Client, Stub, Data> const& c, Ts&&... vs)
         {
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Derived, component_type>,
                 "The action to invoke is not supported by the target");
@@ -302,8 +300,8 @@ namespace hpx::detail {
             hpx::actions::basic_action<Component, Signature, Derived> const&,
             components::client_base<Client, Stub, Data> const& c, Ts&&... ts)
         {
-            using component_type = typename components::client_base<Client,
-                Stub, Data>::server_component_type;
+            using component_type = components::client_base<Client, Stub,
+                Data>::server_component_type;
 
             static_assert(traits::is_valid_action_v<Derived, component_type>,
                 "The action to invoke is not supported by the target");
@@ -314,7 +312,7 @@ namespace hpx::detail {
 
         template <typename Policy_, typename Component, typename Signature,
             typename Derived, typename DistPolicy, typename... Ts>
-        HPX_FORCEINLINE static typename util::lazy_enable_if<
+        HPX_FORCEINLINE static util::lazy_enable_if<
             traits::is_distribution_policy_v<DistPolicy>,
             typename DistPolicy::template async_result<Derived>>::type
         call(Policy_&& launch_policy,
@@ -329,18 +327,22 @@ namespace hpx::detail {
 
 #include <hpx/async_distributed/sync.hpp>
 
-// bound action
-template <typename Bound>
-struct hpx::detail::async_dispatch<Bound,
-    std::enable_if_t<hpx::is_bound_action_v<Bound>>>
-{
-    template <typename Action, typename Is, typename... Ts, typename... Us>
-    HPX_FORCEINLINE static hpx::future<
-        typename hpx::detail::bound_action<Action, Is, Ts...>::result_type>
-    call(hpx::detail::bound_action<Action, Is, Ts...> const& bound, Us&&... vs)
+namespace hpx::detail {
+
+    // bound action
+    template <typename Bound>
+    struct async_dispatch<Bound,
+        std::enable_if_t<hpx::is_bound_action_v<Bound>>>
     {
-        return bound.async(HPX_FORWARD(Us, vs)...);
-    }
-};
+        template <typename Action, typename Is, typename... Ts, typename... Us>
+        HPX_FORCEINLINE static hpx::future<
+            typename hpx::detail::bound_action<Action, Is, Ts...>::result_type>
+        call(hpx::detail::bound_action<Action, Is, Ts...> const& bound,
+            Us&&... vs)
+        {
+            return bound.async(HPX_FORWARD(Us, vs)...);
+        }
+    };
+}    // namespace hpx::detail
 
 #endif

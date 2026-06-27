@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/actions_base/plain_action.hpp>
 
 #include <string>
@@ -94,7 +95,7 @@ namespace hpx::actions {
         };
     }    // namespace detail
 
-    template <typename F>
+    HPX_CXX_EXPORT template <typename F>
     constexpr auto lambda_to_action(F&& f) noexcept
         -> decltype(hpx::actions::detail::action_maker() +=
             true ? nullptr : hpx::actions::detail::addr_add() + f)

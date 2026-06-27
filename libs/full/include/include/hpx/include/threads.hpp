@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/thread_pool_util.hpp>
 #include <hpx/modules/thread_pools.hpp>

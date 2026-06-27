@@ -14,11 +14,10 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/mpi_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcelport_mpi/header.hpp>
 #include <hpx/parcelport_mpi/locality.hpp>
-#include <hpx/parcelset/parcelport_connection.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
 #include <hpx/modules/timing.hpp>
 #endif

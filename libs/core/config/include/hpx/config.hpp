@@ -25,20 +25,12 @@
 #include <hpx/config/export_definitions.hpp>
 #include <hpx/config/forceinline.hpp>
 #include <hpx/config/forward.hpp>
-#include <hpx/config/lambda_capture_this.hpp>
 #include <hpx/config/manual_profiling.hpp>
 #include <hpx/config/modules_enabled.hpp>
 #include <hpx/config/move.hpp>
 #include <hpx/config/threads_stack.hpp>
 #include <hpx/config/version.hpp>
 #include <hpx/config/weak_symbol.hpp>
-
-#include <boost/version.hpp>
-
-#if BOOST_VERSION < 107100
-// Please update your Boost installation (see www.boost.org for details).
-#error HPX cannot be compiled with a Boost version earlier than 1.71.0
-#endif
 
 #include <hpx/modules/preprocessor.hpp>
 
@@ -399,6 +391,12 @@
 // initializing a thread queue.
 #if !defined(HPX_THREAD_QUEUE_INIT_THREADS_COUNT)
 #  define HPX_THREAD_QUEUE_INIT_THREADS_COUNT 10
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Number of thread objects to cache.
+#if !defined(HPX_THREAD_QUEUE_CACHED_THREADS_COUNT)
+#  define HPX_THREAD_QUEUE_CACHED_THREADS_COUNT 1000
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////

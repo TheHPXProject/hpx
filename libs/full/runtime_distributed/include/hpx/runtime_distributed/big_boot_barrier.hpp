@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2011 Bryce Lelbach
-//  Copyright (c) 2007-2017 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -16,10 +16,10 @@
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <condition_variable>
 #include <cstddef>
@@ -32,14 +32,17 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
-    struct notification_header;
+    HPX_CXX_EXPORT struct notification_header;
 
-    struct HPX_EXPORT big_boot_barrier
+    HPX_CXX_EXPORT struct HPX_EXPORT big_boot_barrier
     {
     public:
-        HPX_NON_COPYABLE(big_boot_barrier);
+        big_boot_barrier(big_boot_barrier const&) = delete;
+        big_boot_barrier(big_boot_barrier&&) = delete;
+        big_boot_barrier& operator=(big_boot_barrier const&) = delete;
+        big_boot_barrier& operator=(big_boot_barrier&&) = delete;
 
     private:
         parcelset::parcelport* pp;
@@ -130,15 +133,14 @@ namespace hpx { namespace agas {
             parcelset::endpoints_type const& endpoints);
     };
 
-    HPX_EXPORT void create_big_boot_barrier(parcelset::parcelport* pp_,
-        parcelset::endpoints_type const& endpoints_,
+    HPX_CXX_EXPORT HPX_EXPORT void create_big_boot_barrier(
+        parcelset::parcelport* pp_, parcelset::endpoints_type const& endpoints_,
         util::runtime_configuration const& ini_);
 
-    HPX_EXPORT void destroy_big_boot_barrier();
+    HPX_CXX_EXPORT HPX_EXPORT void destroy_big_boot_barrier();
 
-    HPX_EXPORT big_boot_barrier& get_big_boot_barrier();
-
-}}    // namespace hpx::agas
+    HPX_CXX_EXPORT HPX_EXPORT big_boot_barrier& get_big_boot_barrier();
+}    // namespace hpx::agas
 
 #include <hpx/config/warnings_suffix.hpp>
 

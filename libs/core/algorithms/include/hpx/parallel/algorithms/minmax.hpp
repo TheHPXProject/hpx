@@ -1,4 +1,5 @@
-//  Copyright (c) 2014-2025 Hartmut Kaiser
+//  Copyright (c) 2014-2026 Hartmut Kaiser
+//  Copyright (c) 2024-2026 The STE||AR Group
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -33,7 +34,7 @@ namespace hpx {
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param f            The binary predicate which returns true if the
-    ///                     the left argument is less than the right element.
+    ///                     left argument is less than the right element.
     ///                     The signature
     ///                     of the predicate function should be equivalent to
     ///                     the following:
@@ -67,9 +68,9 @@ namespace hpx {
     ///                     N = std::distance(first, last).
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
-    ///                     It describes the manner in which the execution
-    ///                     of the algorithm may be parallelized and the manner
-    ///                     in which it executes the assignments.
+    ///                     It describes the manner in which the execution of
+    ///                     the algorithm may be parallelized and the manner in
+    ///                     which it executes the assignments.
     /// \tparam FwdIter     The type of the source iterators used (deduced).
     ///                     This iterator type must meet the requirements of a
     ///                     forward iterator.
@@ -85,39 +86,37 @@ namespace hpx {
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param f            The binary predicate which returns true if the
-    ///                     the left argument is less than the right element.
-    ///                     The signature
-    ///                     of the predicate function should be equivalent to
-    ///                     the following:
+    ///                     left argument is less than the right element. The
+    ///                     signature of the predicate function should be
+    ///                     equivalent to the following:
     ///                     \code
     ///                     bool pred(const Type1 &a, const Type1 &b);
     ///                     \endcode \n
-    ///                     The signature does not need to have const &, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The type \a Type1 must be such that objects of
-    ///                     type \a FwdIter can be dereferenced and then
+    ///                     The signature does not need to have const &, but the
+    ///                     function must not modify the objects passed to it.
+    ///                     The type \a Type1 must be such that objects of type
+    ///                     \a FwdIter can be dereferenced and then
     ///                     implicitly converted to \a Type1.
     ///
-    /// The comparisons in the parallel \a min_element algorithm invoked with
-    /// an execution policy object of type \a sequenced_policy
-    /// execute in sequential order in the calling thread.
+    /// The comparisons in the parallel \a min_element algorithm invoked with an
+    /// execution policy object of type \a sequenced_policy execute in
+    /// sequential order in the calling thread.
     ///
-    /// The comparisons in the parallel \a min_element algorithm invoked with
-    /// an execution policy object of type \a parallel_policy or
+    /// The comparisons in the parallel \a min_element algorithm invoked with an
+    /// execution policy object of type \a parallel_policy or
     /// \a parallel_task_policy are permitted to execute in an unordered
-    /// fashion in unspecified threads, and indeterminately sequenced
-    /// within each thread.
+    /// fashion in unspecified threads, and indeterminately sequenced within
+    /// each thread.
     ///
     /// \returns  The \a min_element algorithm returns a \a hpx::future<FwdIter>
     ///           if the execution policy is of type
     ///           \a sequenced_task_policy or
     ///           \a parallel_task_policy
-    ///           and returns \a FwdIter otherwise.
-    ///           The \a min_element algorithm returns the iterator to the
-    ///           smallest element in the range [first, last). If several
-    ///           elements in the range are equivalent to the smallest element,
-    ///           returns the iterator to the first such element. Returns last
-    ///           if the range is empty.
+    ///           and returns \a FwdIter otherwise. The \a min_element algorithm
+    ///           returns the iterator to the smallest element in the range
+    ///           [first, last). If several elements in the range are equivalent
+    ///           to the smallest element, returns the iterator to the first
+    ///           such element. Returns last if the range is empty.
     ///
     template <typename ExPolicy, typename FwdIter,
         typename F = hpx::parallel::detail::less>
@@ -141,23 +140,23 @@ namespace hpx {
     ///                     the algorithm will be applied to.
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
-    /// \param f            The binary predicate which returns true if the
+    /// \param f            The binary predicate which returns true if left
+    ///                     argument is less than the right element.
     ///                     This argument is optional and defaults to std::less.
     ///                     the left argument is less than the right element.
-    ///                     The signature
-    ///                     of the predicate function should be equivalent to
-    ///                     the following:
+    ///                     The signature of the predicate function should be
+    ///                     equivalent to the following:
     ///                     \code
     ///                     bool pred(const Type1 &a, const Type1 &b);
     ///                     \endcode \n
-    ///                     The signature does not need to have const &, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The type \a Type1 must be such that objects of
-    ///                     type \a FwdIter can be dereferenced and then
+    ///                     The signature does not need to have const &, but the
+    ///                     function must not modify the objects passed to it.
+    ///                     The type \a Type1 must be such that objects of type
+    ///                     \a FwdIter can be dereferenced and then
     ///                     implicitly converted to \a Type1.
     ///
-    /// The comparisons in the parallel \a min_element algorithm
-    /// execute in sequential order in the calling thread.
+    /// The comparisons in the parallel \a min_element algorithm execute in
+    /// sequential order in the calling thread.
     ///
     /// \returns  The \a max_element algorithm returns \a FwdIter.
     ///           The \a max_element algorithm returns the iterator to the
@@ -170,17 +169,17 @@ namespace hpx {
     FwdIter max_element(FwdIter first, FwdIter last, F&& f);
 
     /////////////////////////////////////////////////////////////////////////////
-    /// Removes all elements satisfying specific criteria from the range
-    /// Finds the largest element in the range [first, last) using the given
+    /// Removes all elements satisfying specific criteria from the range Finds
+    /// the largest element in the range [first, last) using the given
     /// comparison function \a f. Executed according to the policy.
     ///
     /// \note   Complexity: Exactly \a max(N-1, 0) comparisons, where
     ///                     N = std::distance(first, last).
     ///
     /// \tparam ExPolicy    The type of the execution policy to use (deduced).
-    ///                     It describes the manner in which the execution
-    ///                     of the algorithm may be parallelized and the manner
-    ///                     in which it executes the assignments.
+    ///                     It describes the manner in which the execution of
+    ///                     the algorithm may be parallelized and the manner in
+    ///                     which it executes the assignments.
     /// \tparam FwdIter     The type of the source iterators used (deduced).
     ///                     This iterator type must meet the requirements of a
     ///                     forward iterator.
@@ -195,41 +194,40 @@ namespace hpx {
     ///                     the algorithm will be applied to.
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
-    /// \param f            The binary predicate which returns true if the
+    /// \param f            The binary predicate which returns true if left
+    ///                     argument is less than the right element.
     ///                     This argument is optional and defaults to std::less.
     ///                     the left argument is less than the right element.
-    ///                     The signature
-    ///                     of the predicate function should be equivalent to
-    ///                     the following:
+    ///                     The signature of the predicate function should be
+    ///                     equivalent to the following:
     ///                     \code
     ///                     bool pred(const Type1 &a, const Type1 &b);
     ///                     \endcode \n
-    ///                     The signature does not need to have const &, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The type \a Type1 must be such that objects of
-    ///                     type \a FwdIter can be dereferenced and then
+    ///                     The signature does not need to have const &, but the
+    ///                     function must not modify the objects passed to it.
+    ///                     The type \a Type1 must be such that objects of type
+    ///                     \a FwdIter can be dereferenced and then
     ///                     implicitly converted to \a Type1.
     ///
-    /// The comparisons in the parallel \a max_element algorithm invoked with
-    /// an execution policy object of type \a sequenced_policy
-    /// execute in sequential order in the calling thread.
+    /// The comparisons in the parallel \a max_element algorithm invoked with an
+    /// execution policy object of type \a sequenced_policy execute in
+    /// sequential order in the calling thread.
     ///
-    /// The comparisons in the parallel \a max_element algorithm invoked with
-    /// an execution policy object of type \a parallel_policy or
+    /// The comparisons in the parallel \a max_element algorithm invoked with an
+    /// execution policy object of type \a parallel_policy or
     /// \a parallel_task_policy are permitted to execute in an unordered
-    /// fashion in unspecified threads, and indeterminately sequenced
-    /// within each thread.
+    /// fashion in unspecified threads, and indeterminately sequenced within
+    /// each thread.
     ///
     /// \returns  The \a max_element algorithm returns a \a hpx::future<FwdIter>
     ///           if the execution policy is of type
     ///           \a sequenced_task_policy or
     ///           \a parallel_task_policy
-    ///           and returns \a FwdIter otherwise.
-    ///           The \a max_element algorithm returns the iterator to the
-    ///           smallest element in the range [first, last). If several
-    ///           elements in the range are equivalent to the smallest element,
-    ///           returns the iterator to the first such element. Returns last
-    ///           if the range is empty.
+    ///           and returns \a FwdIter otherwise. The \a max_element algorithm
+    ///           returns the iterator to the smallest element in the range
+    ///           [first, last). If several elements in the range are equivalent
+    ///           to the smallest element, returns the iterator to the first
+    ///           such element. Returns last if the range is empty.
     ///
     template <typename ExPolicy, typename FwdIter,
         typename F = hpx::parallel::detail::less>
@@ -255,29 +253,29 @@ namespace hpx {
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param f            The binary predicate which returns true if the
-    ///                     the left argument is less than the right element.
-    ///                     This argument is optional and defaults to std::less.
-    ///                     The signature
-    ///                     of the predicate function should be equivalent to
-    ///                     the following:
+    ///                     left argument is less than the right element. This
+    ///                     argument is optional and defaults to std::less. The
+    ///                     signature of the predicate function should be
+    ///                     equivalent to the following:
     ///                     \code
     ///                     bool pred(const Type1 &a, const Type1 &b);
     ///                     \endcode \n
-    ///                     The signature does not need to have const &, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The type \a Type1 must be such that objects of
-    ///                     type \a FwdIter can be dereferenced and then
+    ///                     The signature does not need to have const &, but the
+    ///                     function must not modify the objects passed to it.
+    ///                     The type \a Type1 must be such that objects of type
+    ///                     \a FwdIter can be dereferenced and then
     ///                     implicitly converted to \a Type1.
     ///
-    /// The comparisons in the parallel \a minmax_element algorithm
-    /// execute in sequential order in the calling thread.
+    /// The comparisons in the parallel \a minmax_element algorithm execute in
+    /// sequential order in the calling thread.
     ///
     /// \returns  The \a minmax_element algorithm returns a
     ///           \a minmax_element_result<FwdIter>
     ///           The \a minmax_element algorithm returns a pair consisting of
-    ///           an iterator to the smallest element as the min element and
-    ///           an iterator to the largest element as the max element. Returns
-    ///           \a minmax_element_result<FwdIter>{first,first} if the range is empty. If
+    ///           an iterator to the smallest element as the min element and an
+    ///           iterator to the largest element as the max element. Returns
+    ///           \a minmax_element_result<FwdIter>{first,first} if the range is
+    ///              empty. If
     ///           several elements are equivalent to the smallest element, the
     ///           iterator to the first such element is returned. If several
     ///           elements are equivalent to the largest element, the iterator
@@ -313,7 +311,7 @@ namespace hpx {
     /// \param last         Refers to the end of the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param f            The binary predicate which returns true if the
-    ///                     the left argument is less than the right element.
+    ///                     left argument is less than the right element.
     ///                     This argument is optional and defaults to std::less.
     ///                     The signature
     ///                     of the predicate function should be equivalent to
@@ -364,13 +362,15 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
-#include <hpx/algorithms/traits/is_value_proxy.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/algorithms/traits/is_value_proxy.hpp>
+#include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -398,21 +398,49 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
             typename F, typename Proj>
         constexpr FwdIter sequential_min_element(ExPolicy&&, FwdIter it,
-            std::size_t count, F const& f, Proj const& proj)
+            std::size_t const count, F const& f, Proj const& proj)
         {
             if (count == 0 || count == 1)
                 return it;
 
-            using element_type = hpx::traits::proxy_value_t<
-                typename std::iterator_traits<FwdIter>::value_type>;
+            auto smallest = it;
+
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
+
+            element_type value = HPX_INVOKE(proj, *smallest);
+            util::const_loop_n<std::decay_t<ExPolicy>>(
+                ++it, count - 1, [&](FwdIter const& curr) -> void {
+                    if (element_type curr_value = HPX_INVOKE(proj, *curr);
+                        HPX_INVOKE(f, curr_value, value))
+                    {
+                        smallest = curr;
+                        value = HPX_MOVE(curr_value);
+                    }
+                });
+
+            return smallest;
+        }
+
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
+            typename F>
+        constexpr FwdIter sequential_min_element(ExPolicy&&, FwdIter it,
+            std::size_t const count, F const& f, hpx::identity)
+        {
+            if (count == 0 || count == 1)
+                return it;
 
             auto smallest = it;
 
-            element_type value = HPX_INVOKE(proj, *smallest);
-            util::loop_n<std::decay_t<ExPolicy>>(
+            using element_type =
+                hpx::traits::proxy_value_t<hpx::traits::iter_value_t<FwdIter>>;
+
+            element_type value = *smallest;
+            util::const_loop_n<std::decay_t<ExPolicy>>(
                 ++it, count - 1, [&](FwdIter const& curr) -> void {
-                    element_type curr_value = HPX_INVOKE(proj, *curr);
-                    if (HPX_INVOKE(f, curr_value, value))
+                    if (element_type curr_value = *curr;
+                        HPX_INVOKE(f, curr_value, value))
                     {
                         smallest = curr;
                         value = HPX_MOVE(curr_value);
@@ -424,7 +452,7 @@ namespace hpx::parallel {
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename Iter>
-        struct min_element : public algorithm<min_element<Iter>, Iter>
+        struct min_element : algorithm<min_element<Iter>, Iter>
         {
             // this has to be a member of the algorithm type as we access this
             // generically from the segmented algorithms
@@ -433,7 +461,38 @@ namespace hpx::parallel {
             static constexpr hpx::traits::proxy_value_t<
                 typename std::iterator_traits<FwdIter>::value_type>
             sequential_minmax_element_ind(ExPolicy&&, FwdIter it,
-                std::size_t count, F const& f, Proj const& proj)
+                std::size_t const count, F const& f, Proj const& proj)
+            {
+                HPX_ASSERT(count != 0);
+
+                if (count == 1)
+                    return *it;
+
+                auto smallest = *it;
+
+                using element_type = hpx::traits::proxy_value_t<
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
+
+                element_type value = HPX_INVOKE(proj, *smallest);
+                util::const_loop_n<std::decay_t<ExPolicy>>(
+                    ++it, count - 1, [&](FwdIter const& curr) -> void {
+                        if (element_type curr_value = HPX_INVOKE(proj, **curr);
+                            HPX_INVOKE(f, curr_value, value))
+                        {
+                            smallest = *curr;
+                            value = HPX_MOVE(curr_value);
+                        }
+                    });
+
+                return smallest;
+            }
+
+            template <typename ExPolicy, typename FwdIter, typename F>
+            static constexpr hpx::traits::proxy_value_t<
+                typename std::iterator_traits<FwdIter>::value_type>
+            sequential_minmax_element_ind(ExPolicy&&, FwdIter it,
+                std::size_t const count, F const& f, hpx::identity)
             {
                 HPX_ASSERT(count != 0);
 
@@ -443,14 +502,13 @@ namespace hpx::parallel {
                 auto smallest = *it;
 
                 using element_type =
-                    hpx::traits::proxy_value_t<typename std::iterator_traits<
-                        decltype(smallest)>::value_type>;
+                    hpx::traits::proxy_value_t<hpx::traits::iter_value_t<Iter>>;
 
-                element_type value = HPX_INVOKE(proj, *smallest);
-                util::loop_n<std::decay_t<ExPolicy>>(
+                element_type value = *smallest;
+                util::const_loop_n<std::decay_t<ExPolicy>>(
                     ++it, count - 1, [&](FwdIter const& curr) -> void {
-                        element_type curr_value = HPX_INVOKE(proj, **curr);
-                        if (HPX_INVOKE(f, curr_value, value))
+                        if (element_type curr_value = **curr;
+                            HPX_INVOKE(f, curr_value, value))
                         {
                             smallest = *curr;
                             value = HPX_MOVE(curr_value);
@@ -473,16 +531,44 @@ namespace hpx::parallel {
                 if (first == last)
                     return first;
 
+                auto smallest = first;
+
                 using element_type = hpx::traits::proxy_value_t<
-                    typename std::iterator_traits<FwdIter>::value_type>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
+
+                element_type value = HPX_INVOKE(proj, *smallest);
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
+                    [&](FwdIter const& curr) -> void {
+                        if (element_type curr_value = HPX_INVOKE(proj, *curr);
+                            HPX_INVOKE(f, curr_value, value))
+                        {
+                            smallest = curr;
+                            value = HPX_MOVE(curr_value);
+                        }
+                    });
+
+                return smallest;
+            }
+
+            template <typename ExPolicy, typename FwdIter, typename Sent,
+                typename F>
+            static constexpr FwdIter sequential(ExPolicy&& policy,
+                FwdIter first, Sent last, F&& f, hpx::identity)
+            {
+                if (first == last)
+                    return first;
 
                 auto smallest = first;
 
-                element_type value = HPX_INVOKE(proj, *smallest);
-                util::loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
+                using element_type = hpx::traits::proxy_value_t<
+                    hpx::traits::iter_value_t<FwdIter>>;
+
+                element_type value = *smallest;
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
                     [&](FwdIter const& curr) -> void {
-                        element_type curr_value = HPX_INVOKE(proj, *curr);
-                        if (HPX_INVOKE(f, curr_value, value))
+                        if (element_type curr_value = *curr;
+                            HPX_INVOKE(f, curr_value, value))
                         {
                             smallest = curr;
                             value = HPX_MOVE(curr_value);
@@ -551,21 +637,49 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
             typename F, typename Proj>
         constexpr FwdIter sequential_max_element(ExPolicy&&, FwdIter it,
-            std::size_t count, F const& f, Proj const& proj)
+            std::size_t const count, F const& f, Proj const& proj)
         {
             if (count == 0 || count == 1)
                 return it;
 
-            using element_type = hpx::traits::proxy_value_t<
-                typename std::iterator_traits<FwdIter>::value_type>;
+            auto largest = it;
+
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
+
+            element_type value = HPX_INVOKE(proj, *largest);
+            util::const_loop_n<std::decay_t<ExPolicy>>(
+                ++it, count - 1, [&](FwdIter const& curr) -> void {
+                    if (element_type curr_value = HPX_INVOKE(proj, *curr);
+                        HPX_INVOKE(f, value, curr_value))
+                    {
+                        largest = curr;
+                        value = HPX_MOVE(curr_value);
+                    }
+                });
+
+            return largest;
+        }
+
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
+            typename F>
+        constexpr FwdIter sequential_max_element(ExPolicy&&, FwdIter it,
+            std::size_t const count, F const& f, hpx::identity)
+        {
+            if (count == 0 || count == 1)
+                return it;
 
             auto largest = it;
 
-            element_type value = HPX_INVOKE(proj, *largest);
-            util::loop_n<std::decay_t<ExPolicy>>(
+            using element_type =
+                hpx::traits::proxy_value_t<hpx::traits::iter_value_t<FwdIter>>;
+
+            element_type value = *largest;
+            util::const_loop_n<std::decay_t<ExPolicy>>(
                 ++it, count - 1, [&](FwdIter const& curr) -> void {
-                    element_type curr_value = HPX_INVOKE(proj, *curr);
-                    if (!HPX_INVOKE(f, curr_value, value))
+                    if (element_type curr_value = *curr;
+                        HPX_INVOKE(f, value, curr_value))
                     {
                         largest = curr;
                         value = HPX_MOVE(curr_value);
@@ -583,9 +697,41 @@ namespace hpx::parallel {
             // generically from the segmented algorithms
             template <typename ExPolicy, typename FwdIter, typename F,
                 typename Proj>
-            static constexpr typename std::iterator_traits<FwdIter>::value_type
+            static constexpr hpx::traits::proxy_value_t<
+                typename std::iterator_traits<FwdIter>::value_type>
             sequential_minmax_element_ind(ExPolicy&&, FwdIter it,
-                std::size_t count, F const& f, Proj const& proj)
+                std::size_t const count, F const& f, Proj const& proj)
+            {
+                HPX_ASSERT(count != 0);
+
+                if (count == 1)
+                    return *it;
+
+                auto largest = *it;
+
+                using element_type = hpx::traits::proxy_value_t<
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
+
+                element_type value = HPX_INVOKE(proj, *largest);
+                util::const_loop_n<std::decay_t<ExPolicy>>(
+                    ++it, count - 1, [&](FwdIter const& curr) -> void {
+                        if (element_type curr_value = HPX_INVOKE(proj, **curr);
+                            HPX_INVOKE(f, value, curr_value))
+                        {
+                            largest = *curr;
+                            value = HPX_MOVE(curr_value);
+                        }
+                    });
+
+                return largest;
+            }
+
+            template <typename ExPolicy, typename FwdIter, typename F>
+            static constexpr hpx::traits::proxy_value_t<
+                typename std::iterator_traits<FwdIter>::value_type>
+            sequential_minmax_element_ind(ExPolicy&&, FwdIter it,
+                std::size_t const count, F const& f, hpx::identity)
             {
                 HPX_ASSERT(count != 0);
 
@@ -595,14 +741,13 @@ namespace hpx::parallel {
                 auto largest = *it;
 
                 using element_type =
-                    hpx::traits::proxy_value_t<typename std::iterator_traits<
-                        decltype(largest)>::value_type>;
+                    hpx::traits::proxy_value_t<hpx::traits::iter_value_t<Iter>>;
 
-                element_type value = HPX_INVOKE(proj, *largest);
-                util::loop_n<std::decay_t<ExPolicy>>(
+                element_type value = *largest;
+                util::const_loop_n<std::decay_t<ExPolicy>>(
                     ++it, count - 1, [&](FwdIter const& curr) -> void {
-                        element_type curr_value = HPX_INVOKE(proj, **curr);
-                        if (!HPX_INVOKE(f, curr_value, value))
+                        if (element_type curr_value = **curr;
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = *curr;
                             value = HPX_MOVE(curr_value);
@@ -625,16 +770,44 @@ namespace hpx::parallel {
                 if (first == last)
                     return first;
 
+                auto largest = first;
+
                 using element_type = hpx::traits::proxy_value_t<
-                    typename std::iterator_traits<FwdIter>::value_type>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
+
+                element_type value = HPX_INVOKE(proj, *largest);
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
+                    [&](FwdIter const& curr) -> void {
+                        if (element_type curr_value = HPX_INVOKE(proj, *curr);
+                            HPX_INVOKE(f, value, curr_value))
+                        {
+                            largest = curr;
+                            value = HPX_MOVE(curr_value);
+                        }
+                    });
+
+                return largest;
+            }
+
+            template <typename ExPolicy, typename FwdIter, typename Sent,
+                typename F>
+            static constexpr FwdIter sequential(ExPolicy&& policy,
+                FwdIter first, Sent last, F&& f, hpx::identity)
+            {
+                if (first == last)
+                    return first;
 
                 auto largest = first;
 
-                element_type value = HPX_INVOKE(proj, *largest);
-                util::loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
+                using element_type = hpx::traits::proxy_value_t<
+                    hpx::traits::iter_value_t<FwdIter>>;
+
+                element_type value = *largest;
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), ++first, last,
                     [&](FwdIter const& curr) -> void {
-                        element_type curr_value = HPX_INVOKE(proj, *curr);
-                        if (!HPX_INVOKE(f, curr_value, value))
+                        if (element_type curr_value = *curr;
+                            HPX_INVOKE(f, value, curr_value))
                         {
                             largest = curr;
                             value = HPX_MOVE(curr_value);
@@ -703,19 +876,20 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
             typename F, typename Proj>
         minmax_element_result<FwdIter> sequential_minmax_element(ExPolicy&&,
-            FwdIter it, std::size_t count, F const& f, Proj const& proj)
+            FwdIter it, std::size_t const count, F const& f, Proj const& proj)
         {
             minmax_element_result<FwdIter> result = {it, it};
 
             if (count == 0 || count == 1)
                 return result;
 
-            using element_type = hpx::traits::proxy_value_t<
-                typename std::iterator_traits<FwdIter>::value_type>;
+            using element_type =
+                hpx::traits::proxy_value_t<std::decay_t<std::invoke_result_t<
+                    Proj, hpx::traits::iter_reference_t<FwdIter>>>>;
 
             element_type min_value = HPX_INVOKE(proj, *it);
             element_type max_value = min_value;
-            util::loop_n<std::decay_t<ExPolicy>>(
+            util::const_loop_n<std::decay_t<ExPolicy>>(
                 ++it, count - 1, [&](FwdIter const& curr) -> void {
                     element_type curr_value = HPX_INVOKE(proj, *curr);
                     if (HPX_INVOKE(f, curr_value, min_value))
@@ -734,31 +908,67 @@ namespace hpx::parallel {
             return result;
         }
 
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
+            typename F>
+        minmax_element_result<FwdIter> sequential_minmax_element(ExPolicy&&,
+            FwdIter it, std::size_t const count, F const& f, hpx::identity)
+        {
+            minmax_element_result<FwdIter> result = {it, it};
+
+            if (count == 0 || count == 1)
+                return result;
+
+            using element_type =
+                hpx::traits::proxy_value_t<hpx::traits::iter_value_t<FwdIter>>;
+
+            element_type min_value = *it;
+            element_type max_value = min_value;
+            util::const_loop_n<std::decay_t<ExPolicy>>(
+                ++it, count - 1, [&](FwdIter const& curr) -> void {
+                    element_type curr_value = *curr;
+                    if (HPX_INVOKE(f, curr_value, min_value))
+                    {
+                        result.min = curr;
+                        min_value = curr_value;
+                    }
+
+                    if (!HPX_INVOKE(f, curr_value, max_value))
+                    {
+                        result.max = curr;
+                        max_value = HPX_MOVE(curr_value);
+                    }
+                });
+
+            return result;
+        }
+
         HPX_CXX_CORE_EXPORT template <typename Iter>
         struct minmax_element
-          : public algorithm<minmax_element<Iter>, minmax_element_result<Iter>>
+          : algorithm<minmax_element<Iter>, minmax_element_result<Iter>>
         {
             // this has to be a member of the algorithm type as we access this
             // generically from the segmented algorithms
             template <typename ExPolicy, typename PairIter, typename F,
                 typename Proj>
-            static typename std::iterator_traits<PairIter>::value_type
+            static constexpr hpx::traits::proxy_value_t<
+                typename std::iterator_traits<PairIter>::value_type>
             sequential_minmax_element_ind(ExPolicy&&, PairIter it,
-                std::size_t count, F const& f, Proj const& proj)
+                std::size_t const count, F const& f, Proj const& proj)
             {
                 HPX_ASSERT(count != 0);
 
                 if (count == 1)
                     return *it;
 
-                using element_type = hpx::traits::proxy_value_t<
-                    typename std::iterator_traits<Iter>::value_type>;
-
                 auto result = *it;
+
+                using element_type = hpx::traits::proxy_value_t<
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<Iter>>>>;
 
                 element_type min_value = HPX_INVOKE(proj, *result.min);
                 element_type max_value = HPX_INVOKE(proj, *result.max);
-                util::loop_n<std::decay_t<ExPolicy>>(
+                util::const_loop_n<std::decay_t<ExPolicy>>(
                     ++it, count - 1, [&](PairIter const& curr) -> void {
                         element_type curr_min_value =
                             HPX_INVOKE(proj, *curr->min);
@@ -770,6 +980,44 @@ namespace hpx::parallel {
 
                         element_type curr_max_value =
                             HPX_INVOKE(proj, *curr->max);
+                        if (!HPX_INVOKE(f, curr_max_value, max_value))
+                        {
+                            result.max = curr->max;
+                            max_value = HPX_MOVE(curr_max_value);
+                        }
+                    });
+
+                return result;
+            }
+
+            template <typename ExPolicy, typename PairIter, typename F>
+            static constexpr hpx::traits::proxy_value_t<
+                typename std::iterator_traits<PairIter>::value_type>
+            sequential_minmax_element_ind(ExPolicy&&, PairIter it,
+                std::size_t const count, F const& f, hpx::identity)
+            {
+                HPX_ASSERT(count != 0);
+
+                if (count == 1)
+                    return *it;
+
+                auto result = *it;
+
+                using element_type =
+                    hpx::traits::proxy_value_t<hpx::traits::iter_value_t<Iter>>;
+
+                element_type min_value = *result.min;
+                element_type max_value = *result.max;
+                util::const_loop_n<std::decay_t<ExPolicy>>(
+                    ++it, count - 1, [&](PairIter const& curr) -> void {
+                        element_type curr_min_value = *curr->min;
+                        if (HPX_INVOKE(f, curr_min_value, min_value))
+                        {
+                            result.min = curr->min;
+                            min_value = HPX_MOVE(curr_min_value);
+                        }
+
+                        element_type curr_max_value = *curr->max;
                         if (!HPX_INVOKE(f, curr_max_value, max_value))
                         {
                             result.max = curr->max;
@@ -800,13 +1048,52 @@ namespace hpx::parallel {
                 }
 
                 using element_type = hpx::traits::proxy_value_t<
-                    typename std::iterator_traits<FwdIter>::value_type>;
+                    std::decay_t<std::invoke_result_t<Proj,
+                        hpx::traits::iter_reference_t<FwdIter>>>>;
 
                 element_type min_value = HPX_INVOKE(proj, *min);
                 element_type max_value = HPX_INVOKE(proj, *max);
-                util::loop(HPX_FORWARD(ExPolicy, policy), first, last,
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), first, last,
                     [&](FwdIter const& curr) -> void {
                         element_type curr_value = HPX_INVOKE(proj, *curr);
+                        if (HPX_INVOKE(f, curr_value, min_value))
+                        {
+                            min = curr;
+                            min_value = curr_value;
+                        }
+
+                        if (!HPX_INVOKE(f, curr_value, max_value))
+                        {
+                            max = curr;
+                            max_value = HPX_MOVE(curr_value);
+                        }
+                    });
+
+                return minmax_element_result<FwdIter>{min, max};
+            }
+
+            template <typename ExPolicy, typename FwdIter, typename Sent,
+                typename F>
+            static constexpr minmax_element_result<FwdIter> sequential(
+                ExPolicy&& policy, FwdIter first, Sent last, F&& f,
+                hpx::identity)
+            {
+                auto min = first, max = first;
+
+                // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions)
+                if (first == last || ++first == last)
+                {
+                    return minmax_element_result<FwdIter>{min, max};
+                }
+
+                using element_type = hpx::traits::proxy_value_t<
+                    hpx::traits::iter_value_t<FwdIter>>;
+
+                element_type min_value = *min;
+                element_type max_value = *max;
+                util::const_loop(HPX_FORWARD(ExPolicy, policy), first, last,
+                    [&](FwdIter const& curr) -> void {
+                        element_type curr_value = *curr;
                         if (HPX_INVOKE(f, curr_value, min_value))
                         {
                             min = curr;

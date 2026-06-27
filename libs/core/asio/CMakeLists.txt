@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,7 +6,9 @@
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(asio_headers hpx/asio/asio_util.hpp hpx/asio/map_hostnames.hpp)
+set(asio_headers hpx/asio/asio_util.hpp hpx/asio/map_hostnames.hpp
+                 hpx/asio/tcp_util.hpp
+)
 
 # cmake-format: off
 set(asio_compat_headers
@@ -25,6 +27,7 @@ add_hpx_module(
   SOURCES ${asio_sources}
   HEADERS ${asio_headers}
   COMPAT_HEADERS ${asio_compat_headers}
+  EXCLUDE_FROM_GLOBAL_HEADER "hpx/asio/asio_util.hpp"
   DEPENDENCIES Asio::asio
   MODULE_DEPENDENCIES hpx_assertion hpx_config hpx_errors hpx_format
                       hpx_functional

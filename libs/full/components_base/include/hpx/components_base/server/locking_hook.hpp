@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -55,7 +55,8 @@ namespace hpx::components {
     // This hook can be inserted into the derivation chain of any component
     // allowing to automatically lock all action invocations for any instance
     // of the given component.
-    template <typename BaseComponent, typename Mutex = hpx::spinlock>
+    HPX_CXX_EXPORT template <typename BaseComponent,
+        typename Mutex = hpx::spinlock>
     struct locking_hook : BaseComponent
     {
     private:

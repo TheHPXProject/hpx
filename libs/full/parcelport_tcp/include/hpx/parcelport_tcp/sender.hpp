@@ -15,13 +15,12 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/asio.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/parcelset.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
-
-#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcelport_tcp/locality.hpp>
-#include <hpx/parcelset/parcelport_connection.hpp>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #include <winsock2.h>

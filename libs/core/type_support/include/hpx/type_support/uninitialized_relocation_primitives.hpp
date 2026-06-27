@@ -198,6 +198,7 @@ namespace hpx::experimental::util {
                 // with current language features.
                 std::memmove(dst_byte, first_byte, n_bytes);
 
+                first += n;
                 dst += n;
             }
 
@@ -335,8 +336,10 @@ namespace hpx::experimental::util {
             auto n_objects = std::distance(first, last);
             BiIter2 dst_first = std::prev(dst_last, n_objects);
 
-            return uninitialized_relocate_n_primitive_helper(
+            uninitialized_relocate_n_primitive_helper(
                 first, n_objects, dst_first, buffer_memcpy_tag{});
+
+            return {first, dst_first};
         }
 
         HPX_CXX_CORE_EXPORT template <typename BiIter1, typename BiIter2>
@@ -505,6 +508,6 @@ namespace hpx::experimental::util {
             first, last, dst_last, iterators_are_contiguous_default_t{});
     }
 
-#endif    // defined(__cpp_lib_trivially_relocatable)
+#endif    // defined(HPX_HAVE_P1144_RELOCATE_AT)
 
 }    // namespace hpx::experimental::util

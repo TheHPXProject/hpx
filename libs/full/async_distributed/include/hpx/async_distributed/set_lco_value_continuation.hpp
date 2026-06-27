@@ -12,10 +12,10 @@
 
 #include <utility>
 
-namespace hpx { namespace actions {
+namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    struct set_lco_value_continuation
+    HPX_CXX_EXPORT struct set_lco_value_continuation
     {
         template <typename T>
         HPX_FORCEINLINE T operator()(hpx::id_type const& lco, T&& t) const
@@ -29,7 +29,7 @@ namespace hpx { namespace actions {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    struct set_lco_value_unmanaged_continuation
+    HPX_CXX_EXPORT struct set_lco_value_unmanaged_continuation
     {
         template <typename T>
         HPX_FORCEINLINE T operator()(hpx::id_type const& lco, T&& t) const
@@ -41,4 +41,4 @@ namespace hpx { namespace actions {
             return HPX_FORWARD(T, t);    // NOLINT(bugprone-use-after-move)
         }
     };
-}}    // namespace hpx::actions
+}    // namespace hpx::actions

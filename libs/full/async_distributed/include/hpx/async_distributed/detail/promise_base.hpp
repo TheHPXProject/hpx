@@ -10,9 +10,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/async_distributed/detail/promise_lco.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/server/component_heap.hpp>
-#include <hpx/components_base/server/managed_component_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -26,7 +24,7 @@
 
 namespace hpx::lcos::detail {
 
-    template <typename Result>
+    HPX_CXX_EXPORT template <typename Result>
     struct promise_data : task_base<Result>
     {
         using init_no_addref = typename task_base<Result>::init_no_addref;

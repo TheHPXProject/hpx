@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,21 +7,21 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/thread_support.hpp>
+
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/performance_counter_base.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters { namespace server {
+namespace hpx::performance_counters::server {
 
-    class HPX_EXPORT base_performance_counter
+    HPX_CXX_EXPORT class HPX_EXPORT base_performance_counter
       : public hpx::performance_counters::performance_counter_base
       , public hpx::traits::detail::component_tag
     {
@@ -112,7 +112,7 @@ namespace hpx { namespace performance_counters { namespace server {
         hpx::performance_counters::counter_info info_;
         util::atomic_count invocation_count_;
     };
-}}}    // namespace hpx::performance_counters::server
+}    // namespace hpx::performance_counters::server
 
 #include <hpx/config/warnings_suffix.hpp>
 

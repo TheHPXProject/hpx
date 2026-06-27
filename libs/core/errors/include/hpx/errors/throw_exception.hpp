@@ -38,44 +38,44 @@ namespace hpx::detail {
     [[noreturn]] HPX_CORE_EXPORT void throw_exception(Exception const& e,
         std::string const& func, std::string const& file, long line);
 
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::exception const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::system_error const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::exception const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::detail::std_exception const&, std::string const&,
         std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::bad_exception const&, std::string const&, std::string const&,
         long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::detail::bad_exception const&, std::string const&,
         std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::bad_typeid const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::detail::bad_typeid const&, std::string const&, std::string const&,
         long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::bad_cast const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::detail::bad_cast const&, std::string const&, std::string const&,
         long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::bad_alloc const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         hpx::detail::bad_alloc const&, std::string const&, std::string const&,
         long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::logic_error const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::runtime_error const&, std::string const&, std::string const&,
         long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::out_of_range const&, std::string const&, std::string const&, long);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT void throw_exception(
+    extern template HPX_CORE_EXPORT void throw_exception(
         std::invalid_argument const&, std::string const&, std::string const&,
         long);
 
@@ -96,54 +96,54 @@ namespace hpx::detail {
         std::string const& file = "<unknown>", long line = -1,
         std::string const& auxinfo = "");
 
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::exception const&, std::string const&, std::string const&,
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::exception const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::system_error const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::exception const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::detail::std_exception const&, std::string const&,
+        std::string const&, long, std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::bad_exception const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::detail::bad_exception const&, std::string const&,
+        std::string const&, long, std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::bad_typeid const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::detail::bad_typeid const&, std::string const&, std::string const&,
         long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::system_error const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::exception const&, std::string const&, std::string const&,
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::bad_cast const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::detail::bad_cast const&, std::string const&, std::string const&,
         long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::detail::std_exception const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::bad_exception const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::detail::bad_exception const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::bad_typeid const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::detail::bad_typeid const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::bad_cast const&, std::string const&, std::string const&,
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::bad_alloc const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        hpx::detail::bad_alloc const&, std::string const&, std::string const&,
         long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::detail::bad_cast const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::bad_alloc const&, std::string const&, std::string const&,
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::logic_error const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::runtime_error const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::out_of_range const&, std::string const&, std::string const&, long,
+        std::string const&);
+    extern template HPX_CORE_EXPORT std::exception_ptr get_exception(
+        std::invalid_argument const&, std::string const&, std::string const&,
         long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(hpx::detail::bad_alloc const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::logic_error const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::runtime_error const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::out_of_range const&, std::string const&,
-        std::string const&, long, std::string const&);
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::exception_ptr
-    get_exception(std::invalid_argument const&, std::string const&,
-        std::string const&, long, std::string const&);
 
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::exception_ptr
     get_exception(hpx::error errcode, std::string const& msg, throwmode mode,

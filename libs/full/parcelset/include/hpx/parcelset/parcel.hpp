@@ -1,4 +1,4 @@
-//  Copyright (c) 2021-2023 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,7 +13,7 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/threading_base.hpp>
 
-#include <hpx/actions/base_action.hpp>
+#include <hpx/modules/actions.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 
@@ -28,7 +28,7 @@
 
 namespace hpx::parcelset::detail {
 
-    struct HPX_EXPORT parcel_data
+    HPX_CXX_EXPORT struct HPX_EXPORT parcel_data
     {
     public:
         inline parcel_data();
@@ -55,7 +55,7 @@ namespace hpx::parcelset::detail {
     };
 
     // actual parcel implementation
-    class HPX_EXPORT parcel final : public parcel_base
+    HPX_CXX_EXPORT class HPX_EXPORT parcel final : public parcel_base
     {
     private:
         parcel(parcel const&) = delete;
@@ -157,7 +157,8 @@ namespace hpx::parcelset::detail {
         std::size_t num_chunks_;
     };
 
-    HPX_EXPORT std::ostream& operator<<(std::ostream& os, parcel const& p);
+    HPX_CXX_EXPORT HPX_EXPORT std::ostream& operator<<(
+        std::ostream& os, parcel const& p);
 }    // namespace hpx::parcelset::detail
 
 #include <hpx/config/warnings_suffix.hpp>

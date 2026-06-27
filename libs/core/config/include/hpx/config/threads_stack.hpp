@@ -55,7 +55,7 @@
 #      endif
 #    endif
 #  endif
-
+#
 #  if HPX_SMALL_STACK_SIZE_TARGET < (2 * HPX_THREADS_STACK_OVERHEAD)
 #    define HPX_SMALL_STACK_SIZE (2 * HPX_THREADS_STACK_OVERHEAD)
 #  else

@@ -32,13 +32,13 @@ hpx_setup_mpi()
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_mpi
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_mpi_sources}
   HEADERS ${parcelport_mpi_headers}
   COMPAT_HEADERS ${parcelport_mpi_compat_headers}
   DEPENDENCIES hpx_core hpx_dependencies_boost Mpi::mpi
   MODULE_DEPENDENCIES hpx_actions hpx_command_line_handling hpx_parcelset
-                      hpx_parcelset_base
+                      hpx_parcelset_base hpx_plugin_factories
   CMAKE_SUBDIRS examples tests
 )
 

@@ -11,9 +11,9 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/parallel/segmented_algorithms/traits/zip_iterator.hpp>
 
 #include <cstddef>
 #include <iterator>

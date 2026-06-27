@@ -6,7 +6,7 @@
 
 #include <hpx/config.hpp>
 
-#if defined(HPX_HAVE_MODULE_TRACY)
+#if defined(HPX_HAVE_TRACY)
 
 #include <hpx/tracy/tracy_lock.hpp>
 

@@ -202,7 +202,7 @@ namespace hpx::lcos::local {
                 hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
         return hpx::parallel::execution::bulk_async_execute(
-            hinted_policy.executor(),
+            hpx::execution::to_hierarchical_spawning(hinted_policy.executor()),
             detail::spmd_block_helper<F>{
                 barrier, barriers, mtx, HPX_FORWARD(F, f), num_images},
             hpx::util::counting_shape(num_images), HPX_FORWARD(Args, args)...);
@@ -243,7 +243,8 @@ namespace hpx::lcos::local {
             hpx::execution::experimental::adapt_sharing_mode(policy,
                 hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
-        hpx::parallel::execution::bulk_sync_execute(hinted_policy.executor(),
+        hpx::parallel::execution::bulk_sync_execute(
+            hpx::execution::to_hierarchical_spawning(hinted_policy.executor()),
             detail::spmd_block_helper<F>{
                 barrier, barriers, mtx, HPX_FORWARD(F, f), num_images},
             hpx::util::counting_shape(num_images), HPX_FORWARD(Args, args)...);

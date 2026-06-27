@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2021 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,15 +7,17 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/post.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/lcos_distributed/server/channel.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming.hpp>
-#include <hpx/runtime_components/new.hpp>
+#include <hpx/modules/runtime_components.hpp>
+
+#include <hpx/lcos_distributed/server/channel.hpp>
 
 #include <cstddef>
 #include <type_traits>
@@ -24,15 +26,15 @@
 namespace hpx::lcos {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T = void>
+    HPX_CXX_EXPORT template <typename T = void>
     class channel;
-    template <typename T = void>
+    HPX_CXX_EXPORT template <typename T = void>
     class receive_channel;
-    template <typename T = void>
+    HPX_CXX_EXPORT template <typename T = void>
     class send_channel;
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T, typename Channel>
+    HPX_CXX_EXPORT template <typename T, typename Channel>
     class channel_iterator
       : public hpx::util::iterator_facade<channel_iterator<T, Channel>, T const,
             std::input_iterator_tag>
@@ -158,7 +160,7 @@ namespace hpx::lcos {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     class channel
       : public components::client_base<channel<T>, lcos::server::channel<T>>
     {
@@ -338,7 +340,7 @@ namespace hpx::lcos {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     class receive_channel
       : public components::client_base<receive_channel<T>,
             lcos::server::channel<T>>
@@ -421,7 +423,7 @@ namespace hpx::lcos {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     class send_channel
       : public components::client_base<send_channel<T>,
             lcos::server::channel<T>>
@@ -561,7 +563,7 @@ namespace hpx::lcos {
 
 namespace hpx::distributed {
 
-    using hpx::lcos::channel;
+    HPX_CXX_EXPORT using hpx::lcos::channel;
 }    // namespace hpx::distributed
 
 #endif

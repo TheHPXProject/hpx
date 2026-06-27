@@ -108,7 +108,7 @@ namespace hpx {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
+        template <typename F, typename... Ts>
         struct is_nothrow_invocable_impl<F(Ts...), true>
           : std::integral_constant<bool,
                 noexcept(std::declval<F>()(std::declval<Ts>()...))>

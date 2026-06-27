@@ -14,6 +14,7 @@ set(execution_base_headers
     hpx/execution_base/completion_signatures.hpp
     hpx/execution_base/context_base.hpp
     hpx/execution_base/coroutine_utils.hpp
+    hpx/execution_base/detail/execution_member_detect.hpp
     hpx/execution_base/detail/spinlock_deadlock_detection.hpp
     hpx/execution_base/execution.hpp
     hpx/execution_base/get_env.hpp

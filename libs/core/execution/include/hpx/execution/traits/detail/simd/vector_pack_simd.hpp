@@ -12,6 +12,23 @@
 
 #include <cstddef>
 
+#if defined(HPX_HAVE_DATAPAR_EMULATION)
+#include <hpx/experimental/emulate_simd.hpp>
+
+namespace hpx::datapar::experimental {
+
+    HPX_CXX_CORE_EXPORT template <typename Vector, typename T>
+    HPX_HOST_DEVICE HPX_FORCEINLINE auto set(
+        Vector& vec, std::size_t index, T val) noexcept
+    {
+        vec.set(static_cast<int>(index), val);
+    }
+
+    HPX_CXX_CORE_EXPORT using simd_abi::native;
+}    // namespace hpx::datapar::experimental
+
+#endif
+
 #if defined(HPX_HAVE_DATAPAR_STD_EXPERIMENTAL_SIMD)
 #include <experimental/simd>
 

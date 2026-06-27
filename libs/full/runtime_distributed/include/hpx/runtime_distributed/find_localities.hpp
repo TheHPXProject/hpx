@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2020 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,7 +12,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/runtime_distributed/find_all_localities.hpp>
@@ -55,7 +55,7 @@ namespace hpx {
     ///           from an HPX-thread. It will return an empty vector otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
-    HPX_EXPORT std::vector<hpx::id_type> find_all_localities(
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<hpx::id_type> find_all_localities(
         components::component_type type, error_code& ec = throws);
 
     /// \brief Return the list of locality ids of remote localities supporting
@@ -89,7 +89,7 @@ namespace hpx {
     ///           from an HPX-thread. It will return an empty vector otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
-    HPX_EXPORT std::vector<hpx::id_type> find_remote_localities(
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<hpx::id_type> find_remote_localities(
         components::component_type type, error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
@@ -127,6 +127,6 @@ namespace hpx {
     ///           otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_all_localities()
-    HPX_EXPORT hpx::id_type find_locality(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::id_type find_locality(
         components::component_type type, error_code& ec = throws);
 }    // namespace hpx

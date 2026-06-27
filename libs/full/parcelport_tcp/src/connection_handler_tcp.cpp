@@ -15,18 +15,17 @@
 #include <hpx/modules/asio.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/util.hpp>
 
-#include <hpx/modules/parcelset_base.hpp>
+#include <hpx/asio/asio_util.hpp>
+
 #include <hpx/parcelport_tcp/connection_handler.hpp>
 #include <hpx/parcelport_tcp/locality.hpp>
 #include <hpx/parcelport_tcp/receiver.hpp>
 #include <hpx/parcelport_tcp/sender.hpp>
 
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#include <winsock2.h>
-#endif
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
 

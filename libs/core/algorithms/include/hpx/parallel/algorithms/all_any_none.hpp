@@ -344,6 +344,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -390,8 +391,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
@@ -465,8 +465,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
@@ -539,8 +538,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,

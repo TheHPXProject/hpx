@@ -51,8 +51,10 @@ void test_includes1_sender(
 
     HPX_TEST_LTE(start, end);
 
-    base_iterator start_it = std::next(std::begin(c1), start);
-    base_iterator end_it = std::next(std::begin(c1), end);
+    base_iterator start_it =
+        std::next(std::begin(c1), static_cast<std::ptrdiff_t>(start));
+    base_iterator end_it =
+        std::next(std::begin(c1), static_cast<std::ptrdiff_t>(end));
 
     {
         auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
@@ -62,7 +64,7 @@ void test_includes1_sender(
                               iterator(std::end(c1)), start_it, end_it) |
                 hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::includes(std::begin(c1), std::end(c1), start_it, end_it);
@@ -93,7 +95,7 @@ void test_includes1_sender(
                     std::begin(c2), std::end(c2)) |
                 hpx::includes(ex_policy.on(exec)));
 
-            bool result = hpx::get<0>(*snd_result);
+            bool result = hpx::get<0>(snd_result.value());
 
             bool expected = std::includes(
                 std::begin(c1), std::end(c1), std::begin(c2), std::end(c2));
@@ -130,8 +132,10 @@ void test_includes2_sender(
 
     HPX_TEST_LTE(start, end);
 
-    base_iterator start_it = std::next(std::begin(c1), start);
-    base_iterator end_it = std::next(std::begin(c1), end);
+    base_iterator start_it =
+        std::next(std::begin(c1), static_cast<std::ptrdiff_t>(start));
+    base_iterator end_it =
+        std::next(std::begin(c1), static_cast<std::ptrdiff_t>(end));
 
     {
         auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
@@ -141,7 +145,7 @@ void test_includes2_sender(
                 end_it, std::less<std::size_t>()) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected = std::includes(std::begin(c1), std::end(c1), start_it,
             end_it, std::less<std::size_t>());
@@ -172,7 +176,7 @@ void test_includes2_sender(
                     std::begin(c2), std::end(c2), std::less<std::size_t>()) |
                 hpx::includes(ex_policy.on(exec)));
 
-            bool result = hpx::get<0>(*snd_result);
+            bool result = hpx::get<0>(snd_result.value());
 
             bool expected = std::includes(std::begin(c1), std::end(c1),
                 std::begin(c2), std::end(c2), std::less<std::size_t>());
@@ -210,7 +214,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::end(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected = std::includes(std::begin(c), std::begin(c),
             std::begin(c), std::end(c), std::less<std::size_t>{});
@@ -227,7 +231,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::begin(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected = std::includes(std::begin(c), std::end(c), std::begin(c),
             std::begin(c), std::less<std::size_t>{});
@@ -244,7 +248,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::begin(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected = std::includes(std::begin(c), std::begin(c),
             std::begin(c), std::begin(c), std::less<std::size_t>{});
@@ -298,7 +302,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     includes_sender_test1<std::forward_iterator_tag>();
     includes_sender_test1<std::random_access_iterator_tag>();

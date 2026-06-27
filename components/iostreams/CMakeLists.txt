@@ -50,5 +50,15 @@ target_compile_definitions(
 
 add_hpx_pseudo_dependencies(components.iostreams iostreams_component)
 
+# MSVC V1951 and V1952 exposes ICE compiling this in C++20 module mode
+if(HPX_WITH_CXX_MODULES
+   AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+   AND ((MSVC_VERSION EQUAL 1951) OR (MSVC_VERSION EQUAL 1952))
+)
+  target_compile_definitions(
+    iostreams_component PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+  )
+endif()
+
 add_subdirectory(tests)
 add_subdirectory(examples)

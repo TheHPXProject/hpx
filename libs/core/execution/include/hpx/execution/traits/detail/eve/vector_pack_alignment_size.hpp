@@ -10,6 +10,8 @@
 
 #if defined(HPX_HAVE_DATAPAR_EVE)
 
+#include <hpx/execution/traits/detail/eve/vector_pack_simd.hpp>
+
 #include <cstddef>
 #include <type_traits>
 

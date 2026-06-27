@@ -136,14 +136,18 @@ namespace hpx {
 #include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/pivot.hpp>
 #include <hpx/parallel/algorithms/minmax.hpp>
 #include <hpx/parallel/algorithms/partial_sort.hpp>
 #include <hpx/parallel/algorithms/partition.hpp>
+#include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -178,8 +182,13 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <class RandomIt, typename Compare,
             typename Proj>
         constexpr void nth_element_seq(RandomIt first, RandomIt nth,
-            RandomIt end, std::uint32_t level, Compare&& comp, Proj&& proj)
+            RandomIt end, std::uint32_t const level, Compare&& comp,
+            Proj&& proj)
         {
+            using wrapped_comp_type =
+                hpx::parallel::util::compare_projected<std::decay_t<Compare>,
+                    std::decay_t<Proj>>;
+
             constexpr std::uint32_t nmin_sort = 24;
             auto nelem = end - first;
 
@@ -192,11 +201,7 @@ namespace hpx::parallel {
 
                 if (it != first)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(it, first);
-#else
-                    std::iter_swap(it, first);
-#endif
                 }
 
                 return;
@@ -208,15 +213,16 @@ namespace hpx::parallel {
                     HPX_FORWARD(Compare, comp), HPX_FORWARD(Proj, proj));
                 return;
             }
+
             if (level == 0)
             {
-                std::make_heap(first, end, comp);
-                std::sort_heap(first, nth, comp);
+                std::make_heap(first, end, wrapped_comp_type(comp, proj));
+                std::sort_heap(first, nth, wrapped_comp_type(comp, proj));
                 return;
             }
 
             // Filter the range and check which part contains the nth element
-            RandomIt c_last = filter(first, end, comp);
+            RandomIt c_last = filter(first, end, wrapped_comp_type(comp, proj));
 
             if (c_last == nth)
                 return;
@@ -234,7 +240,7 @@ namespace hpx::parallel {
         }
 
         HPX_CXX_CORE_EXPORT template <typename Iter>
-        struct nth_element : public algorithm<nth_element<Iter>, Iter>
+        struct nth_element : algorithm<nth_element<Iter>, Iter>
         {
             constexpr nth_element() noexcept
               : algorithm<nth_element, Iter>("nth_element")
@@ -247,10 +253,10 @@ namespace hpx::parallel {
                 RandomIt nth, Sent last, Pred&& pred, Proj&& proj)
             {
                 auto end = detail::advance_to_sentinel(first, last);
-
                 auto nelem = end - first;
                 if (nelem == 0)
                     return first;
+
                 HPX_ASSERT(nelem >= 0 && nth - first + 1 > 0 &&
                     nth - first + 1 <= nelem);
 
@@ -263,84 +269,145 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename RandomIt, typename Sent,
                 typename Pred, typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, RandomIt>
-            parallel(ExPolicy&& policy, RandomIt first, RandomIt nth, Sent last,
-                Pred&& pred, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, RandomIt first,
+                RandomIt nth, Sent last, Pred&& pred, Proj&& proj)
             {
-                using value_type =
-                    typename std::iterator_traits<RandomIt>::value_type;
+                using wrapped_comp_type =
+                    hpx::parallel::util::compare_projected<std::decay_t<Pred>,
+                        std::decay_t<Proj>>;
 
-                RandomIt partition_iter, return_last;
+                constexpr bool has_scheduler_executor =
+                    hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
-                if (first == last)
+                if constexpr (has_scheduler_executor)
                 {
-                    return util::detail::algorithm_result<ExPolicy,
-                        RandomIt>::get(HPX_MOVE(first));
+                    namespace ex = hpx::execution::experimental;
+                    return ex::just(first, nth, last) |
+                        ex::then([policy = HPX_FORWARD(ExPolicy, policy),
+                                     comp = wrapped_comp_type(
+                                         HPX_FORWARD(Pred, pred),
+                                         HPX_FORWARD(Proj, proj))](
+                                     RandomIt begin, RandomIt nth_it,
+                                     RandomIt end) mutable -> RandomIt {
+                            auto last_iter =
+                                detail::advance_to_sentinel(begin, end);
+
+                            while (begin != last_iter)
+                            {
+                                detail::pivot9(begin, last_iter, comp);
+
+                                RandomIt partition_iter =
+                                    hpx::parallel::detail::partition<RandomIt>()
+                                        .sequential(
+                                            hpx::execution::seq, begin + 1,
+                                            last_iter,
+                                            [val = *begin, &comp](
+                                                auto const& elem) {
+                                                return HPX_INVOKE(
+                                                    comp, elem, val);
+                                            },
+                                            hpx::identity_v);
+
+                                --partition_iter;
+
+                                // swap first element and partitionIter
+                                // (ending element of first group)
+                                std::ranges::iter_swap(begin, partition_iter);
+
+                                // if nth element < partitioned index,
+                                // it lies in [first, partitionIter)
+                                if (partition_iter < nth_it)
+                                {
+                                    begin = partition_iter + 1;
+                                }
+                                // else it lies in [partitionIter + 1, last)
+                                else if (partition_iter > nth_it)
+                                {
+                                    last_iter = partition_iter;
+                                }
+                                else
+                                {
+                                    // partitionIter == nth
+                                    break;
+                                }
+                            }
+
+                            return last_iter;
+                        });
                 }
-
-                if (nth == last)
+                else
                 {
-                    return util::detail::algorithm_result<ExPolicy,
-                        RandomIt>::get(HPX_MOVE(nth));
-                }
-
-                try
-                {
-                    RandomIt last_iter =
-                        detail::advance_to_sentinel(first, last);
-                    return_last = last_iter;
-
-                    while (first != last_iter)
+                    if (first == last)
                     {
-                        detail::pivot9(first, last_iter, pred);
+                        return util::detail::algorithm_result<ExPolicy,
+                            RandomIt>::get(HPX_MOVE(first));
+                    }
 
-                        partition_iter =
-                            hpx::parallel::detail::partition<RandomIt>().call(
-                                policy(hpx::execution::non_task), first + 1,
-                                last_iter,
-                                [val = HPX_INVOKE(proj, *first), &pred](
-                                    value_type const& elem) {
-                                    return HPX_INVOKE(pred, elem, val);
-                                },
-                                proj);
+                    if (nth == last)
+                    {
+                        return util::detail::algorithm_result<ExPolicy,
+                            RandomIt>::get(HPX_MOVE(nth));
+                    }
 
-                        --partition_iter;
+                    RandomIt partition_iter, return_last;
 
-                        // swap first element and partitionIter
-                        // (ending element of first group)
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
-                        std::ranges::iter_swap(first, partition_iter);
-#else
-                        std::iter_swap(first, partition_iter);
-#endif
+                    try
+                    {
+                        RandomIt last_iter =
+                            detail::advance_to_sentinel(first, last);
+                        return_last = last_iter;
 
-                        // if nth element < partitioned index,
-                        // it lies in [first, partitionIter)
-                        if (partition_iter < nth)
+                        auto comp = wrapped_comp_type(
+                            HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
+                        while (first != last_iter)
                         {
-                            first = partition_iter + 1;
-                        }
-                        // else it lies in [partitionIter + 1, last)
-                        else if (partition_iter > nth)
-                        {
-                            last_iter = partition_iter;
-                        }
-                        // partitionIter == nth
-                        else
-                        {
-                            break;
+                            detail::pivot9(first, last_iter, comp);
+
+                            partition_iter =
+                                hpx::parallel::detail::partition<RandomIt>()
+                                    .call(
+                                        policy(hpx::execution::non_task),
+                                        first + 1, last_iter,
+                                        [val = *first, &comp](
+                                            auto const& elem) {
+                                            return HPX_INVOKE(comp, elem, val);
+                                        },
+                                        hpx::identity_v);
+
+                            --partition_iter;
+
+                            // swap first element and partitionIter
+                            // (ending element of first group)
+                            std::ranges::iter_swap(first, partition_iter);
+
+                            // if nth element < partitioned index,
+                            // it lies in [first, partitionIter)
+                            if (partition_iter < nth)
+                            {
+                                first = partition_iter + 1;
+                            }
+                            // else it lies in [partitionIter + 1, last)
+                            else if (partition_iter > nth)
+                            {
+                                last_iter = partition_iter;
+                            }
+                            else
+                            {
+                                // partitionIter == nth
+                                break;
+                            }
                         }
                     }
-                }
-                catch (...)
-                {
-                    return util::detail::algorithm_result<ExPolicy,
-                        RandomIt>::get(detail::handle_exception<ExPolicy,
-                        RandomIt>::call(std::current_exception()));
-                }
+                    catch (...)
+                    {
+                        return util::detail::algorithm_result<ExPolicy,
+                            RandomIt>::get(detail::handle_exception<ExPolicy,
+                            RandomIt>::call(std::current_exception()));
+                    }
 
-                return util::detail::algorithm_result<ExPolicy, RandomIt>::get(
-                    HPX_MOVE(return_last));
+                    return util::detail::algorithm_result<ExPolicy,
+                        RandomIt>::get(HPX_MOVE(return_last));
+                }
             }
         };
         /// \endcond
@@ -388,9 +455,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::nth_element_t, ExPolicy&& policy,
-            RandomIt first, RandomIt nth, RandomIt last, Pred pred = Pred())
+        friend decltype(auto) tag_fallback_invoke(hpx::nth_element_t,
+            ExPolicy&& policy, RandomIt first, RandomIt nth, RandomIt last,
+            Pred pred = Pred())
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random iterator.");

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -37,17 +38,17 @@ namespace hpx::traits {
         HPX_HAS_XXX_TRAIT_DEF(decorates_action)
     }    // namespace detail
 
-    template <typename Action, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct has_decorates_action
       : detail::has_decorates_action<typename Action::component_type>
     {
     };
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     inline constexpr bool has_decorates_action_v =
         has_decorates_action<Action>::value;
 
-    template <typename Action, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct action_decorate_function
     {
         static constexpr bool value = has_decorates_action_v<Action>;
@@ -62,16 +63,16 @@ namespace hpx::traits {
         }
     };
 
-    template <typename Component, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Component, typename Enable = void>
     struct component_decorates_action : detail::has_decorates_action<Component>
     {
     };
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     inline constexpr bool component_decorates_action_v =
         component_decorates_action<Component>::value;
 
-    template <typename Component, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Component, typename Enable = void>
     struct component_decorate_function
     {
         template <typename F>

@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_init.hpp>
+#include <hpx/init.hpp>
 
 // The following implementation has been divided for Linux and Mac OSX
 #if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) &&                                      \
@@ -32,7 +32,7 @@ namespace hpx_start {
 #endif
     // The default application name is populated by including hpx/hpx_main.hpp
     // or if HPX_AUTO_WRAP_MAIN_ACTIVATE is defined.
-    HPX_SYMBOL_EXPORT extern const char* app_name_libhpx_wrap;
+    HPX_SYMBOL_EXPORT extern char const* app_name_libhpx_wrap;
     HPX_SYMBOL_EXPORT const char* app_name_libhpx_wrap __attribute__((weak)) =
         HPX_APPLICATION_STRING;
 
@@ -43,7 +43,6 @@ namespace hpx_start {
     HPX_SYMBOL_EXPORT bool is_linked = true;
 }    // namespace hpx_start
 
-#include <hpx/hpx_finalize.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 

@@ -10,10 +10,8 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -63,9 +61,7 @@ namespace hpx::threads {
         };
 
         data data_;
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-        util::itt::string_handle desc_itt_;
-#endif
+        hpx::tracing::annotation_handle desc_tracing_{};
 
         HPX_CORE_EXPORT void init_from_alternative_name(char const* altname);
 
@@ -85,20 +81,18 @@ namespace hpx::threads {
         {
         }
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
         thread_description(
-            char const* desc, util::itt::string_handle sh) noexcept
+            char const* desc, hpx::tracing::annotation_handle sh) noexcept
           : data_(desc ? desc : "<unknown>")
-          , desc_itt_(HPX_MOVE(sh))
+          , desc_tracing_(HPX_MOVE(sh))
         {
         }
 
-        thread_description(std::string desc, util::itt::string_handle sh)
+        thread_description(std::string desc, hpx::tracing::annotation_handle sh)
           : data_(hpx::detail::store_function_annotation(HPX_MOVE(desc)))
-          , desc_itt_(HPX_MOVE(sh))
+          , desc_tracing_(HPX_MOVE(sh))
         {
         }
-#endif
 
         // The priority of description is name, altname, address
         template <typename F,
@@ -108,14 +102,15 @@ namespace hpx::threads {
         explicit thread_description(
             F const& f, char const* altname = nullptr) noexcept
         {
+            bool has_tracing_name = false;
             // If a name exists, use it, not the altname.
             if (char const* name = traits::get_function_annotation<F>::call(f);
                 name != nullptr)    // -V547
             {
                 altname = name;
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                desc_itt_ = traits::get_function_annotation_itt<F>::call(f);
-#endif
+                desc_tracing_ =
+                    traits::get_function_annotation_tracing<F>::call(f);
+                has_tracing_name = true;
             }
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION_FULL)
@@ -132,12 +127,11 @@ namespace hpx::threads {
             init_from_alternative_name(altname);
 #endif
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            if (!desc_itt_)
+            if (data_.type_ == data_type::description && !has_tracing_name)
             {
-                desc_itt_ = util::itt::string_handle(get_description());
+                desc_tracing_ =
+                    hpx::tracing::create_annotation_handle(get_description());
             }
-#endif
         }
 
         template <typename Action,
@@ -145,9 +139,8 @@ namespace hpx::threads {
         explicit thread_description(
             Action, char const* /* altname */ = nullptr) noexcept
           : data_(hpx::actions::detail::get_action_name<Action>())
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-          , desc_itt_(hpx::actions::detail::get_action_name_itt<Action>())
-#endif
+          , desc_tracing_(
+                hpx::actions::detail::get_action_name_tracing<Action>())
         {
         }
 
@@ -162,35 +155,12 @@ namespace hpx::threads {
             return data_.desc_;
         }
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-        [[nodiscard]] util::itt::string_handle get_description_itt()
+        [[nodiscard]] hpx::tracing::annotation_handle get_description_tracing()
             const noexcept
         {
             HPX_ASSERT(data_.type_ == data_type::description);
-            return desc_itt_ ? desc_itt_ :
-                               util::itt::string_handle(get_description());
+            return desc_tracing_;
         }
-
-        [[nodiscard]] util::itt::task get_task_itt(
-            util::itt::domain const& domain) const noexcept
-        {
-            switch (kind())
-            {
-            case threads::thread_description::data_type::description:
-                return {domain, get_description_itt()};
-
-            case threads::thread_description::data_type::address:
-                return {
-                    domain, util::itt::string_handle("address"), get_address()};
-
-            default:
-                HPX_ASSERT(false);
-                break;
-            }
-
-            return {domain, util::itt::string_handle("<error>")};
-        }
-#endif
 
         [[nodiscard]] constexpr std::size_t get_address() const noexcept
         {
@@ -225,7 +195,7 @@ namespace hpx::threads {
 
     private:
         // expose for ABI compatibility reasons
-        HPX_CORE_EXPORT void init_from_alternative_name(char const* altname);
+        void init_from_alternative_name(char const* altname);
 
     public:
         thread_description() noexcept = default;
@@ -261,34 +231,6 @@ namespace hpx::threads {
         {
             return "<unknown>";
         }
-
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-        [[nodiscard]] util::itt::string_handle get_description_itt()
-            const noexcept
-        {
-            HPX_ASSERT(data_.type_ == data_type::description);
-            return util::itt::string_handle(get_description());
-        }
-
-        [[nodiscard]] util::itt::task get_task_itt(
-            util::itt::domain const& domain) const noexcept
-        {
-            switch (kind())
-            {
-            case threads::thread_description::data_type::description:
-                return {domain, get_description_itt()};
-
-            case threads::thread_description::data_type::address:
-                return {domain, "address", get_address()};
-
-            default:
-                HPX_ASSERT(false);
-                break;
-            }
-
-            return {domain, "<error>"};
-        }
-#endif
 
         [[nodiscard]] static constexpr std::size_t get_address() noexcept
         {

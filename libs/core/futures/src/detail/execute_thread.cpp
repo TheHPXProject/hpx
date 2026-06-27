@@ -14,6 +14,7 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -131,30 +132,15 @@ namespace hpx::threads::detail {
             // meantime
             if (thrdptr->runs_as_child())
             {
-#if defined(HPX_HAVE_APEX)
-                // get the APEX data pointer, in case we are resuming the thread
+                // get the tracing data, in case we are resuming the thread
                 // and have to restore any leaf timers from direct actions, etc.
-                util::external_timer::scoped_timer profiler(
+                hpx::tracing::scoped_task_timer profiler(
                     thrdptr->get_timer_data());
 
                 thrd_stat = handle_execute_thread(thrd.noref());
 
-                thread_schedule_state s = thrd_stat.get_previous();
-                if (s == thread_schedule_state::terminated ||
-                    s == thread_schedule_state::deleted)
-                {
-                    profiler.stop();
-
-                    // just in case, clean up the now dead pointer.
-                    thrdptr->set_timer_data(nullptr);
-                }
-                else
-                {
-                    profiler.yield();
-                }
-#else
-                thrd_stat = handle_execute_thread(thrd.noref());
-#endif
+                profiler.handle_post_execution(
+                    thrdptr, thrd_stat.get_previous());
             }
             else
             {

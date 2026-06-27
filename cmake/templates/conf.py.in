@@ -335,13 +335,13 @@ rst_prolog += '''
 .. |stellar_hpx_users| replace:: |hpx| Users
 .. _stellar_hpx_users: https://hpx.stellar-group.org/hpx-users/
 .. |hpx_github| replace:: Github
-.. _hpx_github: https://github.com/STEllAR-GROUP/hpx/
+.. _hpx_github: https://github.com/TheHPXProject/hpx/
 .. |hpx_github_issues| replace:: |hpx| Issues
-.. _hpx_github_issues: https://github.com/STEllAR-GROUP/hpx/issues
+.. _hpx_github_issues: https://github.com/TheHPXProject/hpx/issues
 .. |hpx_github_closed_issues| replace:: |hpx| Closed issues
-.. _hpx_github_closed_issues: https://github.com/STEllAR-GROUP/hpx/issues?q=is%3Aissue+is%3Aclosed
+.. _hpx_github_closed_issues: https://github.com/TheHPXProject/hpx/issues?q=is%3Aissue+is%3Aclosed
 .. |hpx_github_support| replace:: |hpx| Support
-.. _hpx_github_support: https://github.com/STEllAR-GROUP/hpx/blob/master/.github/SUPPORT.md
+.. _hpx_github_support: https://github.com/TheHPXProject/hpx/blob/master/.github/SUPPORT.md
 .. |hpx_stackoverflow| replace:: StackOverflow |hpx| questions
 .. _hpx_stackoverflow: https://stackoverflow.com/questions/tagged/hpx
 .. |hpx_buildbot| replace:: |hpx| Buildbot Website
@@ -353,7 +353,7 @@ rst_prolog += '''
 .. |cdash| replace:: CDash
 .. _cdash: https://www.kitware.com/cdash/project/about.html
 .. |hpx_circleci| replace:: CircleCI HPX dashboard
-.. _hpx_circleci: https://circleci.com/gh/STEllAR-GROUP/hpx
+.. _hpx_circleci: https://circleci.com/gh/TheHPXProject/hpx
 .. |hpx_cdash| replace:: CDash HPX dashboard
 .. _hpx_cdash: https://cdash.rostam.cct.lsu.edu/index.php?project=HPX
 .. |support| replace:: Support Website
@@ -379,7 +379,7 @@ rst_prolog += '''
 .. _hpxcl: https://github.com/STEllAR-GROUP/hpxcl/
 
 .. |hpsf| replace:: HPSF
-.. _hpsf: https://hpsf.io/
+.. _hpsf: https://hpsf.io/projects/hpx/
 
 .. |lsu| replace:: Louisiana State University (LSU)
 .. _lsu: https://www.lsu.edu
@@ -699,8 +699,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'HPX'
-project_copyright = f"2008-{datetime.now().year}, The STE||AR Group"
-author = 'The STE||AR Group'
+project_copyright = f"{datetime.now().year}, HPX Project, a Series of LF Projects, LLC"
+author = 'The HPX project'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -737,6 +737,7 @@ add_function_parentheses = False
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
+pygments_dark_style = 'monokai'
 
 # A list of ignored prefixes for module index sorting.
 modindex_common_prefix = [ 'hpx' ]
@@ -756,7 +757,7 @@ html_theme = 'sphinx_book_theme'
 # documentation.
 html_theme_options = {
     "home_page_in_toc": True,
-    "repository_url": "https://github.com/STEllAR-GROUP/hpx",
+    "repository_url": "https://github.com/TheHPXProject/hpx",
     "use_repository_button": True,
     "use_issues_button": True
 }
@@ -775,8 +776,9 @@ html_favicon = '_static/images/favicon.png'
 html_static_path = ['_static']
 html_css_files = ['custom.css']
 html_context = {
+    'default_mode': 'auto',
     'display_github': True,
-    'github_user': 'STEllAR-GROUP',
+    'github_user': 'TheHPXProject',
     'github_repo': 'hpx',
     'github_version': 'master/docs/sphinx/',
 }

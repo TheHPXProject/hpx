@@ -21,14 +21,6 @@
 namespace ex = hpx::execution::experimental;
 namespace tt = hpx::this_thread::experimental;
 
-// NOTE: This is not a conforming sync_wait implementation. It only exists to
-// check that the tag_invoke overload is called.
-std::optional<std::tuple<>> tag_invoke(tt::sync_wait_t, custom_sender2 s)
-{
-    s.tag_invoke_overload_called = true;
-    return {};
-}
-
 // NOLINTBEGIN(bugprone-unchecked-optional-access)
 int hpx_main()
 {
@@ -93,42 +85,15 @@ int hpx_main()
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
         std::atomic<bool> tag_invoke_overload_called{false};
-#if defined(HPX_HAVE_STDEXEC)
         tt::sync_wait(custom_sender{
             start_called, connect_called, tag_invoke_overload_called});
-#else
-        custom_sender{
-            start_called, connect_called, tag_invoke_overload_called} |
-            tt::sync_wait();
-#endif
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
         HPX_TEST(!tag_invoke_overload_called);
     }
 
     {
-#if defined(HPX_HAVE_STDEXEC)
         HPX_TEST_EQ(hpx::get<0>(*tt::sync_wait(ex::just(3))), 3);
-#else
-        HPX_TEST_EQ(hpx::get<0>(*(ex::just(3) | tt::sync_wait())), 3);
-#endif
-    }
-
-    // tag_invoke overload
-    {
-        std::atomic<bool> start_called{false};
-        std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-#if defined(HPX_HAVE_STDEXEC)
-        tt::sync_wait(custom_sender2{custom_sender{
-            start_called, connect_called, tag_invoke_overload_called}});
-#else
-        tt::sync_wait(custom_sender2{custom_sender{
-            start_called, connect_called, tag_invoke_overload_called}});
-#endif
-        HPX_TEST(!start_called);
-        HPX_TEST(!connect_called);
-        HPX_TEST(tag_invoke_overload_called);
     }
 
     // Failure path
@@ -149,11 +114,7 @@ int hpx_main()
 
     // cancellation path
     {
-#if defined(HPX_HAVE_STDEXEC)
         auto result = tt::sync_wait(stopped_sender_with_value_type{});
-#else
-        auto result = stopped_sender_with_value_type{} | tt::sync_wait();
-#endif
         HPX_TEST(!result);    // returned optional should be empty
     }
 

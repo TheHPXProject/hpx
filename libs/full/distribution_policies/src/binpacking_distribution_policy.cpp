@@ -1,11 +1,12 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/modules/performance_counters.hpp>
+
 #include <hpx/distribution_policies/binpacking_distribution_policy.hpp>
-#include <hpx/performance_counters/counters.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +16,12 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace components { namespace detail {
+namespace hpx::components {
+
+    binpacking_distribution_policy const binpacked{};
+}
+
+namespace hpx::components::detail {
 
     std::vector<std::size_t> get_items_count(
         std::size_t count, std::vector<std::uint64_t> const& values)
@@ -128,4 +134,4 @@ namespace hpx { namespace components { namespace detail {
 
         return localities[best_locality];
     }
-}}}    // namespace hpx::components::detail
+}    // namespace hpx::components::detail

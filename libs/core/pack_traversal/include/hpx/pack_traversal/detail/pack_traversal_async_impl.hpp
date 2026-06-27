@@ -229,8 +229,7 @@ namespace hpx::util::detail {
 
 namespace hpx::traits::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Visitor, typename... Args,
-        typename Allocator>
+    template <typename Visitor, typename... Args, typename Allocator>
     struct shared_state_allocator<
         util::detail::async_traversal_frame<Visitor, Args...>, Allocator>
     {

@@ -310,7 +310,8 @@ namespace tests {
         {
             HPX_TEST(i == j + c);
             HPX_TEST(*i == vals[c]);
-            HPX_TEST(*i == detail::implicit_cast<value_type>(j[c]));
+            auto result = detail::implicit_cast<value_type>(j[c]);
+            HPX_TEST(*i == result);
             HPX_TEST(*i == *(j + c));
             HPX_TEST(*i == *(c + j));
             ++i;
@@ -325,7 +326,8 @@ namespace tests {
         {
             HPX_TEST(i == k - c);
             HPX_TEST(*i == vals[N - 1 - c]);
-            HPX_TEST(*i == detail::implicit_cast<value_type>(j[N - 1 - c]));
+            auto result = detail::implicit_cast<value_type>(j[N - 1 - c]);
+            HPX_TEST(*i == result);
             Iterator q = k - c;
             HPX_TEST(*i == *q);
             HPX_TEST(j < i);

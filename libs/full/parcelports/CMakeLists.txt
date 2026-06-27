@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -40,10 +40,12 @@ foreach(parcelport ${HPX_STATIC_PARCELPORT_PLUGINS})
   )
 endforeach()
 
-configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/static_parcelports.hpp.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/include/hpx/parcelports/static_parcelports.hpp"
-  @ONLY
+include(HPX_ConfigureIfChanged)
+hpx_configure_if_changed(
+  INPUT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/static_parcelports.hpp.in"
+  OUTPUT
+    "${CMAKE_CURRENT_BINARY_DIR}/include/hpx/parcelports/static_parcelports.hpp"
+  CONFIGURE_ARGS @ONLY
 )
 
 include(HPX_AddModule)
@@ -54,5 +56,6 @@ add_hpx_module(
   SOURCES ${parcelports_sources}
   HEADERS ${parcelports_headers}
   DEPENDENCIES hpx_core
-  MODULE_DEPENDENCIES hpx_parcelset ${parcelport_module_dependencies}
+  MODULE_DEPENDENCIES hpx_parcelset hpx_plugin_factories
+                      ${parcelport_module_dependencies}
 )

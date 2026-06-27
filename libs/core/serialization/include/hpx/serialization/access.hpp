@@ -9,6 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #include <hpx/serialization/config/defines.hpp>
 #include <hpx/serialization/brace_initializable_fwd.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
@@ -39,6 +40,12 @@ namespace hpx::serialization {
         {
             serialize(ar, t, 0);
         }
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+        // Forward declare
+        HPX_CXX_CORE_EXPORT template <typename Archive, typename T>
+        void refl_serialize(Archive& ar, T& t, unsigned /*version*/);
+#endif
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -109,6 +116,8 @@ namespace hpx::serialization {
                     // the archive functions
                     ar.invoke(t);
                 }
+
+#if !defined(HPX_HAVE_CXX26_REFLECTION)
                 else if constexpr (hpx::traits::has_struct_serialization_v<dT>)
                 {
                     // This is automatic serialization for types that are simple
@@ -116,6 +125,13 @@ namespace hpx::serialization {
                     // field has to be serializable and public.
                     serialize_struct(ar, t, 0);
                 }
+#else
+                else if constexpr (    // TODO: I think this is too wide a filter
+                    std::is_class_v<dT>)
+                {
+                    detail::refl_serialize(ar, t, 0);
+                }
+#endif
                 else
                 {
                     static_assert(hpx::traits::has_serialize_adl_v<dT> ||
@@ -167,3 +183,12 @@ namespace hpx::traits {
     };
 }    // namespace hpx::traits
 #endif
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+// We need to include refl_serialize_impl.hpp here to avoid circular
+// dependencies as refl_serialize_impl.hpp depends on base_object.hpp
+#include <hpx/serialization/detail/refl_serialize_impl.hpp>
+#endif
+
+// To avoid circular dependencies, we include polymorphic_nonintrusive_factory_impl.hpp
+#include <hpx/serialization/detail/polymorphic_nonintrusive_factory_impl.hpp>

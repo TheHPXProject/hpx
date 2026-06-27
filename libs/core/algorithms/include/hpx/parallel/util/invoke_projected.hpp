@@ -51,7 +51,7 @@ namespace hpx::parallel::util {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Pred>
+    template <typename Pred>
     struct invoke_projected<Pred, hpx::identity>
     {
         using pred_type = std::decay_t<Pred>;
@@ -107,7 +107,7 @@ namespace hpx::parallel::util {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename F>
+    template <typename F>
     struct invoke_projected_ind<F, hpx::identity>
     {
         using pred_type = std::decay_t<F>;

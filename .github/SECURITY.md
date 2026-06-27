@@ -10,7 +10,7 @@
 
 If you believe you have found a security vulnerability in HPX, don't hesitate to _report them_.
 
- 1. Use any of the [means of contact](https://github.com/STEllAR-GROUP/hpx/blob/master/.github/SUPPORT.md).
+ 1. Use any of the [means of contact](https://github.com/TheHPXProject/hpx/blob/master/.github/SUPPORT.md).
 
     **Please do not report security vulnerabilities through public GitHub issues.**
 

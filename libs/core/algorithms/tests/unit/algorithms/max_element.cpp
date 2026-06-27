@@ -36,6 +36,8 @@ void test_max_element(IteratorTag)
         std::max_element(std::begin(c), std::end(c), std::less<std::size_t>());
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *r);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), r));
 
     r = hpx::max_element(iterator(std::begin(c)), iterator(std::end(c)));
     HPX_TEST(r != end);
@@ -43,6 +45,8 @@ void test_max_element(IteratorTag)
     ref = std::max_element(std::begin(c), std::end(c));
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *r);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), r));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -67,6 +71,8 @@ void test_max_element(ExPolicy policy, IteratorTag)
         std::max_element(std::begin(c), std::end(c), std::less<std::size_t>());
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *r);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), r));
 
     r = hpx::max_element(
         policy, iterator(std::begin(c)), iterator(std::end(c)));
@@ -75,6 +81,8 @@ void test_max_element(ExPolicy policy, IteratorTag)
     ref = std::max_element(std::begin(c), std::end(c));
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *r);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), r));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -97,6 +105,8 @@ void test_max_element_async(ExPolicy p, IteratorTag)
         std::max_element(std::begin(c), std::end(c), std::less<std::size_t>());
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *rit);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), rit));
 
     r = hpx::max_element(p, iterator(std::begin(c)), iterator(std::end(c)));
     rit = r.get();
@@ -105,6 +115,8 @@ void test_max_element_async(ExPolicy p, IteratorTag)
     ref = std::max_element(std::begin(c), std::end(c));
     HPX_TEST(ref != ref_end);
     HPX_TEST_EQ(*ref, *rit);
+    HPX_TEST_EQ(std::distance(std::begin(c), ref),
+        std::distance(iterator(std::begin(c)), rit));
 }
 
 template <typename IteratorTag>

@@ -15,10 +15,8 @@
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/threading.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/util.hpp>
-#if defined(HPX_HAVE_APEX)
-#include <hpx/modules/threading_base.hpp>
-#endif
 
 #include <hpx/parcelset_base/parcelport.hpp>
 
@@ -404,9 +402,8 @@ namespace hpx::parcelset {
             return;
         }
 
-#if defined(HPX_HAVE_APEX) && defined(HPX_HAVE_PARCEL_PROFILING)
-        // tell APEX about the parcel sent
-        util::external_timer::send(
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+        hpx::tracing::send_parcel(
             p.parcel_id().get_lsb(), p.size(), p.destination_locality_id());
 #endif
     }

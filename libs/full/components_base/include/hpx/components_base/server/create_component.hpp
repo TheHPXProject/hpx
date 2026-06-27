@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011-2017 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -22,7 +22,7 @@ namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     /// Create a component and forward the passed parameters
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     naming::gid_type create(Ts&&... ts)
     {
         component_type const type =
@@ -63,7 +63,7 @@ namespace hpx::components::server {
         return gid;
     }
 
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     naming::gid_type create_migrated(
         naming::gid_type const& gid, void** p, Ts&&... ts)
     {
@@ -115,7 +115,7 @@ namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     /// Create count components and forward the passed parameters
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     std::vector<naming::gid_type> bulk_create(std::size_t count, Ts&&... ts)
     {
         component_type const type =

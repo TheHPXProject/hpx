@@ -10,6 +10,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 
@@ -49,6 +50,16 @@ void test_processing_mask(ExecutorArgs&&... args)
 
     auto const cores_mask = hpx::execution::experimental::get_cores_mask(exec);
     HPX_TEST(cores_mask == expected_mask);
+
+    auto const expected_pu_count = hpx::threads::count(pus_mask);
+    HPX_TEST_EQ(expected_pu_count, hpx::threads::count(expected_mask));
+
+    auto const pu_count =
+        hpx::execution::experimental::processing_units_count(exec);
+    HPX_TEST_EQ(pu_count, expected_pu_count);
+
+    auto const first_core = hpx::execution::experimental::get_first_core(exec);
+    HPX_TEST_EQ(first_core, hpx::threads::find_first(expected_mask));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -502,16 +513,41 @@ void test_fork_join_static_large_range()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_get_scheduler()
+{
+    namespace ex = hpx::execution::experimental;
+    namespace tt = hpx::this_thread::experimental;
+
+    std::cerr << "test_get_scheduler\n";
+
+    // Test 1: get_scheduler returns a valid scheduler
+    fork_join_executor exec{};
+    auto sched = ex::get_scheduler(exec);
+
+    // Test 2: scheduler can be used to schedule work via then + sync_wait
+    auto result = hpx::get<0>(
+        *(tt::sync_wait(ex::then(ex::schedule(sched), []() { return 42; }))));
+    HPX_TEST_EQ(result, 42);
+
+    // Test 3: scheduled work runs on an HPX worker thread
+    hpx::thread::id scheduled_thread_id{};
+    tt::sync_wait(ex::then(ex::schedule(sched),
+        [&]() { scheduled_thread_id = hpx::this_thread::get_id(); }));
+    HPX_TEST(scheduled_thread_id != hpx::thread::id{});
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     static_check_executor();
 
+    // P2300 get_scheduler bridge test
+    test_get_scheduler();
+
     // Call regression test for #6922
     test_fork_join_static_large_range();
 
-    // thread_stacksize::nostack cannot be used with the fork_join_executor
-    // because it prevents other work from running when yielding. Using
-    // thread_priority::low hangs for unknown reasons.
+    // Using thread_priority::low hangs for unknown reasons.
     for (auto const priority : {
              // hpx::threads::thread_priority::low,
              hpx::threads::thread_priority::normal,
@@ -520,7 +556,7 @@ int hpx_main()
          })
     {
         for (auto const stacksize : {
-                 // hpx::threads::thread_stacksize::nostack,
+                 hpx::threads::thread_stacksize::nostack,
                  hpx::threads::thread_stacksize::small_,
              })
         {

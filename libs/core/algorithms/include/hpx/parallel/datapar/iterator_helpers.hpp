@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2025 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,9 +10,11 @@
 
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/assert.hpp>
+#include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -24,13 +26,29 @@
 namespace hpx::parallel::util::detail {
 
     ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT template <typename T>
+    struct is_lvalue_ref : std::is_lvalue_reference<T>
+    {
+    };
+
+    template <typename... Ts>
+    struct is_lvalue_ref<hpx::tuple<Ts...>>
+      : hpx::util::all_of<std::is_lvalue_reference<Ts>...>
+    {
+    };
+
+    HPX_CXX_CORE_EXPORT template <typename It>
+    inline constexpr bool dereference_is_lvalue_ref_v =
+        is_lvalue_ref<decltype(*std::declval<It&>())>::value;
+
+    ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename Iter>
     struct is_data_aligned_impl
     {
         static HPX_FORCEINLINE bool call(Iter& it) noexcept
         {
-            using value_type = typename std::iterator_traits<
-                std::remove_const_t<Iter>>::value_type;
+            using value_type =
+                std::iterator_traits<std::remove_const_t<Iter>>::value_type;
             using pack_type = traits::vector_pack_type_t<value_type>;
 
             return (reinterpret_cast<std::uintptr_t>(std::addressof(*it)) &
@@ -52,10 +70,8 @@ namespace hpx::parallel::util::detail {
         using iterator1_type = std::decay_t<Iter1>;
         using iterator2_type = std::decay_t<Iter2>;
 
-        using value1_type =
-            typename std::iterator_traits<iterator1_type>::value_type;
-        using value2_type =
-            typename std::iterator_traits<iterator2_type>::value_type;
+        using value1_type = std::iterator_traits<iterator1_type>::value_type;
+        using value2_type = std::iterator_traits<iterator2_type>::value_type;
 
         using pack1_type = traits::vector_pack_type_t<value1_type>;
         using pack2_type = traits::vector_pack_type_t<value2_type>;
@@ -89,7 +105,7 @@ namespace hpx::parallel::util::detail {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iter>
+    template <typename Iter>
     struct iterator_datapar_compatible<Iter,
         std::enable_if_t<std::random_access_iterator<Iter>>>
       : iterator_datapar_compatible_impl<std::decay_t<Iter>>::type
@@ -101,10 +117,11 @@ namespace hpx::parallel::util::detail {
         iterator_datapar_compatible<Iter>::value;
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
+    HPX_CXX_CORE_EXPORT template <typename Iter, bool IsConst = false,
+        typename Enable = void>
     struct datapar_loop_step
     {
-        using value_type = typename std::iterator_traits<Iter>::value_type;
+        using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
         using V = traits::vector_pack_type_t<value_type>;
@@ -114,8 +131,19 @@ namespace hpx::parallel::util::detail {
             F&& f, Iter& it)
         {
             V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
-            HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            if constexpr (IsConst)
+            {
+                HPX_INVOKE(f, static_cast<V1 const*>(&tmp));
+            }
+            else
+            {
+                HPX_INVOKE(f, &tmp);
+                if constexpr (dereference_is_lvalue_ref_v<Iter>)
+                {
+                    traits::vector_pack_store<V1, value_type>::unaligned(
+                        tmp, it);
+                }
+            }
             ++it;
         }
 
@@ -124,14 +152,58 @@ namespace hpx::parallel::util::detail {
             F&& f, Iter& it)
         {
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
-            HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            if constexpr (IsConst)
+            {
+                HPX_INVOKE(f, static_cast<V const*>(&tmp));
+            }
+            else
+            {
+                HPX_INVOKE(f, &tmp);
+                if constexpr (dereference_is_lvalue_ref_v<Iter>)
+                {
+                    traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+                }
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
+        }
+
+        template <typename F>
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void calls(
+            F&& f, Iter& it)
+        {
+            constexpr auto size = traits::vector_pack_size_v<V>;
+
+            Iter it1 = it;
+
+            V tmp;
+            for (std::size_t e = 0; e != size; (void) ++it1, ++e)
+                traits::set(tmp, e, *it1);
+
+            if constexpr (IsConst)
+            {
+                HPX_INVOKE(f, static_cast<V const*>(&tmp));
+                std::advance(it, size);
+            }
+            else
+            {
+                HPX_INVOKE(f, &tmp);
+
+                if constexpr (dereference_is_lvalue_ref_v<Iter>)
+                {
+                    for (std::size_t e = 0; e != size; (void) ++it, ++e)
+                        *it = traits::get(tmp, e);
+                }
+                else
+                {
+                    std::advance(it, size);
+                }
+            }
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename I>
-    struct datapar_loop_step<I, std::enable_if_t<std::is_integral_v<I>>>
+    template <typename I, bool IsConst>
+    struct datapar_loop_step<I, IsConst,
+        std::enable_if_t<std::is_integral_v<I>>>
     {
         using V1 = traits::vector_pack_type_t<I, 1>;
         using V = traits::vector_pack_type_t<I>;
@@ -147,11 +219,18 @@ namespace hpx::parallel::util::detail {
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void callv(F&& f, I& i)
         {
+            constexpr auto size = traits::vector_pack_size_v<V>;
             V tmp;
-            for (std::size_t e = 0; e != traits::size(tmp); ++e)
+            for (std::size_t e = 0; e != size; ++e)
                 traits::set(tmp, e, static_cast<I>(i + e));
             HPX_INVOKE(f, tmp);
-            i += traits::vector_pack_size_v<V>;
+            i += size;
+        }
+
+        template <typename F>
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void calls(F&& f, I& i)
+        {
+            callv(HPX_FORWARD(F, f), i);
         }
     };
 
@@ -159,12 +238,12 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
     struct datapar_loop_pred_step
     {
-        using value_type = typename std::iterator_traits<Iter>::value_type;
+        using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
         using V = traits::vector_pack_type_t<value_type>;
 
-        // Return -1 if the element does not satisfies predicate.
+        // Return -1 if the element does not satisfy predicate.
         // Return 0 if predicate satisfies.
         // Note 0 is treated as index since call1() is on scalars,
         // the first element satisfying the predicate would be 0.
@@ -174,7 +253,10 @@ namespace hpx::parallel::util::detail {
         {
             V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
             int const idx = HPX_INVOKE(pred, &tmp);
-            traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            }
             return idx;
         }
 
@@ -186,7 +268,10 @@ namespace hpx::parallel::util::detail {
         {
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
             int const idx = HPX_INVOKE(pred, &tmp);
-            traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            }
             return idx;
         }
     };
@@ -195,7 +280,7 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
     struct datapar_loop_step_ind
     {
-        using value_type = typename std::iterator_traits<Iter>::value_type;
+        using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
         using V = traits::vector_pack_type_t<value_type>;
@@ -206,7 +291,10 @@ namespace hpx::parallel::util::detail {
         {
             V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
             HPX_INVOKE(f, tmp);
-            traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            }
             ++it;
         }
 
@@ -216,8 +304,36 @@ namespace hpx::parallel::util::detail {
         {
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
             HPX_INVOKE(f, tmp);
-            traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
+        }
+
+        template <typename F>
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void calls(
+            F&& f, Iter& it)
+        {
+            constexpr auto size = traits::vector_pack_size_v<V>;
+
+            Iter it1 = it;
+
+            V tmp;
+            for (std::size_t e = 0; e != size; (void) ++it1, ++e)
+                traits::set(tmp, e, *it1);
+
+            HPX_INVOKE(f, tmp);
+
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                for (std::size_t e = 0; e != size; (void) ++it, ++e)
+                    *it = traits::get(tmp, e);
+            }
+            else
+            {
+                std::advance(it, size);
+            }
         }
     };
 
@@ -225,7 +341,7 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter>
     struct datapar_loop_idx_step
     {
-        using value_type = typename std::iterator_traits<Iter>::value_type;
+        using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
         using V = traits::vector_pack_type_t<value_type>;
@@ -236,7 +352,10 @@ namespace hpx::parallel::util::detail {
         {
             V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
             HPX_INVOKE(f, tmp, base_idx);
-            traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            }
         }
 
         template <typename F>
@@ -245,7 +364,10 @@ namespace hpx::parallel::util::detail {
         {
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
             HPX_INVOKE(f, tmp, base_idx);
-            traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            }
         }
     };
 
@@ -253,7 +375,7 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
     struct datapar_loop_step_tok
     {
-        using value_type = typename std::iterator_traits<Iter>::value_type;
+        using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
         using V = traits::vector_pack_type_t<value_type>;
@@ -264,7 +386,10 @@ namespace hpx::parallel::util::detail {
         {
             V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
             HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
+            }
         }
 
         template <typename F>
@@ -273,7 +398,10 @@ namespace hpx::parallel::util::detail {
         {
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
             HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            if constexpr (dereference_is_lvalue_ref_v<Iter>)
+            {
+                traits::vector_pack_store<V, value_type>::aligned(tmp, it);
+            }
             return traits::vector_pack_size_v<V>;
         }
     };
@@ -290,10 +418,8 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<Iter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<Iter2>::value_type;
+            using value_type1 = std::iterator_traits<Iter1>::value_type;
+            using value_type2 = std::iterator_traits<Iter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::aligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::aligned(it2));
@@ -312,10 +438,8 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<Iter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<Iter2>::value_type;
+            using value_type1 = std::iterator_traits<Iter1>::value_type;
+            using value_type2 = std::iterator_traits<Iter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::unaligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::unaligned(it2));
@@ -338,10 +462,8 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<Iter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<Iter2>::value_type;
+            using value_type1 = std::iterator_traits<Iter1>::value_type;
+            using value_type2 = std::iterator_traits<Iter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::aligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::aligned(it2));
@@ -359,10 +481,8 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<Iter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<Iter2>::value_type;
+            using value_type1 = std::iterator_traits<Iter1>::value_type;
+            using value_type2 = std::iterator_traits<Iter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::unaligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::unaligned(it2));
@@ -377,8 +497,8 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2>
     struct datapar_loop_step2
     {
-        using value1_type = typename std::iterator_traits<Iter1>::value_type;
-        using value2_type = typename std::iterator_traits<Iter2>::value_type;
+        using value1_type = std::iterator_traits<Iter1>::value_type;
+        using value2_type = std::iterator_traits<Iter2>::value_type;
 
         using V11 = traits::vector_pack_type_t<value1_type, 1>;
         using V12 = traits::vector_pack_type_t<value2_type, 1>;
@@ -411,8 +531,8 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2>
     struct datapar_loop_step2_ind
     {
-        using value1_type = typename std::iterator_traits<Iter1>::value_type;
-        using value2_type = typename std::iterator_traits<Iter2>::value_type;
+        using value1_type = std::iterator_traits<Iter1>::value_type;
+        using value2_type = std::iterator_traits<Iter2>::value_type;
 
         using V11 = traits::vector_pack_type_t<value1_type, 1>;
         using V12 = traits::vector_pack_type_t<value2_type, 1>;
@@ -445,15 +565,16 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call_aligned(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
 
             auto ret = HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<decltype(ret), value_type>::aligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type>::aligned(
+                    ret, dest);
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
         }
@@ -462,15 +583,16 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call_unaligned(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             V tmp(traits::vector_pack_load<V, value_type>::unaligned(it));
 
             auto ret = HPX_INVOKE(f, &tmp);
-            traits::vector_pack_store<decltype(ret), value_type>::unaligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type>::unaligned(
+                    ret, dest);
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
         }
@@ -483,15 +605,16 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call_aligned(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
 
             auto ret = HPX_INVOKE(f, tmp);
-            traits::vector_pack_store<decltype(ret), value_type>::aligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type>::aligned(
+                    ret, dest);
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
         }
@@ -500,15 +623,16 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call_unaligned(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             V tmp(traits::vector_pack_load<V, value_type>::unaligned(it));
 
             auto ret = HPX_INVOKE(f, tmp);
-            traits::vector_pack_store<decltype(ret), value_type>::unaligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type>::unaligned(
+                    ret, dest);
+            }
             std::advance(it, traits::vector_pack_size_v<V>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
         }
@@ -526,18 +650,18 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::aligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::aligned(it2));
 
             auto ret = HPX_INVOKE(f, &tmp1, &tmp2);
-            traits::vector_pack_store<decltype(ret), value_type1>::aligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type1>::aligned(
+                    ret, dest);
+            }
             std::advance(it1, traits::vector_pack_size_v<V1>);
             std::advance(it2, traits::vector_pack_size_v<V2>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
@@ -552,18 +676,18 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::unaligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::unaligned(it2));
 
             auto ret = HPX_INVOKE(f, &tmp1, &tmp2);
-            traits::vector_pack_store<decltype(ret), value_type1>::unaligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret),
+                    value_type1>::unaligned(ret, dest);
+            }
             std::advance(it1, traits::vector_pack_size_v<V1>);
             std::advance(it2, traits::vector_pack_size_v<V2>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
@@ -582,18 +706,18 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::aligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::aligned(it2));
 
             auto ret = HPX_INVOKE(f, tmp1, tmp2);
-            traits::vector_pack_store<decltype(ret), value_type1>::aligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret), value_type1>::aligned(
+                    ret, dest);
+            }
             std::advance(it1, traits::vector_pack_size_v<V1>);
             std::advance(it2, traits::vector_pack_size_v<V2>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
@@ -608,18 +732,18 @@ namespace hpx::parallel::util::detail {
                     traits::vector_pack_size_v<V2>,
                 "the sizes of the vector-packs should be equal");
 
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             V1 tmp1(traits::vector_pack_load<V1, value_type1>::unaligned(it1));
             V2 tmp2(traits::vector_pack_load<V2, value_type2>::unaligned(it2));
 
             auto ret = HPX_INVOKE(f, tmp1, tmp2);
-            traits::vector_pack_store<decltype(ret), value_type1>::unaligned(
-                ret, dest);
-
+            if constexpr (dereference_is_lvalue_ref_v<OutIter>)
+            {
+                traits::vector_pack_store<decltype(ret),
+                    value_type1>::unaligned(ret, dest);
+            }
             std::advance(it1, traits::vector_pack_size_v<V1>);
             std::advance(it2, traits::vector_pack_size_v<V2>);
             std::advance(dest, traits::vector_pack_size_v<decltype(ret)>);
@@ -632,8 +756,7 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             using V1 = traits::vector_pack_type_t<value_type, 1>;
 
@@ -646,10 +769,8 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
             F&& f, InIter1& it1, InIter2& it2, OutIter& dest)
         {
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             using V1 = traits::vector_pack_type_t<value_type1, 1>;
             using V2 = traits::vector_pack_type_t<value_type2, 1>;
@@ -663,8 +784,7 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void callv(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             using V = traits::vector_pack_type_t<value_type>;
 
@@ -678,10 +798,8 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void callv(
             F&& f, InIter1& it1, InIter2& it2, OutIter& dest)
         {
-            using value1_type =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value2_type =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value1_type = std::iterator_traits<InIter1>::value_type;
+            using value2_type = std::iterator_traits<InIter2>::value_type;
 
             using V1 = traits::vector_pack_type_t<value1_type>;
             using V2 = traits::vector_pack_type_t<value2_type>;
@@ -699,8 +817,7 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             using V1 = traits::vector_pack_type_t<value_type, 1>;
 
@@ -713,10 +830,8 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
             F&& f, InIter1& it1, InIter2& it2, OutIter& dest)
         {
-            using value_type1 =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value_type2 =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value_type1 = std::iterator_traits<InIter1>::value_type;
+            using value_type2 = std::iterator_traits<InIter2>::value_type;
 
             using V1 = traits::vector_pack_type_t<value_type1, 1>;
             using V2 = traits::vector_pack_type_t<value_type2, 1>;
@@ -730,8 +845,7 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void callv(
             F&& f, InIter& it, OutIter& dest)
         {
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
+            using value_type = std::iterator_traits<InIter>::value_type;
 
             using V = traits::vector_pack_type_t<value_type>;
 
@@ -745,10 +859,8 @@ namespace hpx::parallel::util::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void callv(
             F&& f, InIter1& it1, InIter2& it2, OutIter& dest)
         {
-            using value1_type =
-                typename std::iterator_traits<InIter1>::value_type;
-            using value2_type =
-                typename std::iterator_traits<InIter2>::value_type;
+            using value1_type = std::iterator_traits<InIter1>::value_type;
+            using value2_type = std::iterator_traits<InIter2>::value_type;
 
             using V1 = traits::vector_pack_type_t<value1_type>;
             using V2 = traits::vector_pack_type_t<value2_type>;

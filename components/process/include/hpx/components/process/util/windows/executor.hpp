@@ -3,7 +3,7 @@
 // Copyright (c) 2009 Boris Schaeling
 // Copyright (c) 2010 Felipe Tanus, Boris Schaeling
 // Copyright (c) 2011, 2012 Jeff Flinn, Boris Schaeling
-// Copyright (c) 2016-2022 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,9 +15,8 @@
 
 #if defined(HPX_WINDOWS)
 #include <hpx/components/process/util/windows/child.hpp>
-#include <windows.h>
 
-namespace hpx { namespace components { namespace process { namespace windows {
+namespace hpx::components::process::windows {
 
     struct executor
     {
@@ -60,7 +59,7 @@ namespace hpx { namespace components { namespace process { namespace windows {
             {
             }
 
-            template <class Arg>
+            template <typename Arg>
             void operator()(Arg& arg) const
             {
                 arg.on_CreateProcess_setup(e_);
@@ -76,7 +75,7 @@ namespace hpx { namespace components { namespace process { namespace windows {
             {
             }
 
-            template <class Arg>
+            template <typename Arg>
             void operator()(Arg& arg) const
             {
                 arg.on_CreateProcess_error(e_);
@@ -92,7 +91,7 @@ namespace hpx { namespace components { namespace process { namespace windows {
             {
             }
 
-            template <class Arg>
+            template <typename Arg>
             void operator()(Arg& arg) const
             {
                 arg.on_CreateProcess_success(e_);
@@ -134,7 +133,6 @@ namespace hpx { namespace components { namespace process { namespace windows {
 #endif
         PROCESS_INFORMATION proc_info;
     };
-
-}}}}    // namespace hpx::components::process::windows
+}    // namespace hpx::components::process::windows
 
 #endif

@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <type_traits>
 
 #if defined(HPX_IOSTREAM_HAVE_WIDE_STREAMS)
 #include <cwchar>

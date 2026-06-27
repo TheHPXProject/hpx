@@ -6,15 +6,5 @@
 
 #pragma once
 
-#include <hpx/collectives/all_gather.hpp>
-#include <hpx/collectives/all_reduce.hpp>
-#include <hpx/collectives/all_to_all.hpp>
-#include <hpx/collectives/argument_types.hpp>
-#include <hpx/collectives/broadcast.hpp>
-#include <hpx/collectives/channel_communicator.hpp>
-#include <hpx/collectives/create_communicator.hpp>
-#include <hpx/collectives/exclusive_scan.hpp>
-#include <hpx/collectives/gather.hpp>
-#include <hpx/collectives/inclusive_scan.hpp>
-#include <hpx/collectives/reduce.hpp>
-#include <hpx/collectives/scatter.hpp>
+#include <hpx/config.hpp>
+#include <hpx/modules/collectives.hpp>

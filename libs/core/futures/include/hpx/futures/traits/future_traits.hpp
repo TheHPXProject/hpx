@@ -28,29 +28,29 @@ namespace hpx::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Future>
+    template <typename Future>
     struct future_traits<Future const> : future_traits<Future>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Future>
+    template <typename Future>
     struct future_traits<Future&> : future_traits<Future>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Future>
+    template <typename Future>
     struct future_traits<Future const&> : future_traits<Future>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename R>
+    template <typename R>
     struct future_traits<hpx::future<R>>
     {
         using type = R;
         using result_type = R;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename R>
+    template <typename R>
     struct future_traits<hpx::shared_future<R>>
     {
         using type = R;
@@ -73,7 +73,7 @@ namespace hpx::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Future>
+    template <typename Future>
     struct is_future_void<Future, std::enable_if_t<is_future_v<Future>>>
       : std::is_void<future_traits_t<Future>>
     {

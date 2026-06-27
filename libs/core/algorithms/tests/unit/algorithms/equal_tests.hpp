@@ -105,7 +105,6 @@ void test_equal1(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -133,7 +132,7 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(std::begin(c1), std::end(c1), std::begin(c2)) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -151,7 +150,7 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                               iterator(std::end(c1)), std::begin(c2)) |
                 hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -168,12 +167,11 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                               iterator(std::begin(c1)), std::begin(c2)) |
                 hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result);
     }
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_equal1_async(ExPolicy&& p, IteratorTag)
@@ -296,7 +294,6 @@ void test_equal2(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -325,7 +322,7 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -343,7 +340,7 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -360,12 +357,11 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result);
     }
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_equal2_async(ExPolicy&& p, IteratorTag)

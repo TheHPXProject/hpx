@@ -33,12 +33,12 @@ namespace hpx::parallel::detail {
 
         for (Iter alfa = first + 1; alfa != last; ++alfa)
         {
-            value_type aux = HPX_MOVE(*alfa);
+            value_type aux = std::ranges::iter_move(alfa);
             Iter beta = alfa;
 
             while (beta != first && comp(aux, *(beta - 1)))
             {
-                *beta = HPX_MOVE(*(beta - 1));
+                *beta = std::ranges::iter_move(beta - 1);
                 --beta;
             }
 

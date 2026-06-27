@@ -21,7 +21,7 @@ namespace hpx::detail {
     HPX_CXX_CORE_EXPORT template <typename Func, typename Enable = void>
     struct sync_dispatch_launch_policy_helper;
 
-    HPX_CXX_CORE_EXPORT template <typename Func>
+    template <typename Func>
     struct sync_dispatch_launch_policy_helper<Func,
         std::enable_if_t<!traits::is_action_v<Func>>>
     {
@@ -38,7 +38,7 @@ namespace hpx::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Policy>
+    template <typename Policy>
     struct sync_dispatch<Policy,
         std::enable_if_t<traits::is_launch_policy_v<Policy>>>
     {
@@ -78,7 +78,7 @@ namespace hpx::detail {
 
     // The overload for hpx::sync taking an executor simply forwards to the
     // corresponding executor customization point.
-    HPX_CXX_CORE_EXPORT template <typename Executor>
+    template <typename Executor>
     struct sync_dispatch<Executor,
         std::enable_if_t<traits::is_one_way_executor_v<Executor> ||
             traits::is_two_way_executor_v<Executor>>>

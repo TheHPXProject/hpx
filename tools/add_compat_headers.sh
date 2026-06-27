@@ -23,8 +23,8 @@ function extra_usage_message() {
 
 if [[ $# -lt 1 ]]; then
     arg=${BASH_SOURCE[0]}
-    echo "Usage : "$arg" -m <module_name> --old_path <include_path> --new_path <include_path>"
-    echo "Example: "$arg" -m cache -o hpx/util/cache -n hpx/cache"
+    echo "Usage : \"$arg\" -m <module_name> --old_path <include_path> --new_path <include_path>"
+    echo "Example: \"$arg\" -m cache -o hpx/util/cache -n hpx/cache"
     extra_usage_message
     exit
 fi

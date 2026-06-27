@@ -63,5 +63,5 @@ Continuous testing
 ==================
 
 In addition to manual testing, we run automated tests on various platforms. We also 
-run tests on all pull requests using both |circleci|_ and a combination of |cdash|_ 
-and |pycicle|_. You can see the dashboards here: |hpx_circleci|_ and |hpx_cdash|_ .
+run tests on all pull requests using both |github|_. You can see the dashboards
+|hpx_cdash|_ .

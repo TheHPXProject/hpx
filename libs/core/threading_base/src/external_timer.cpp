@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2013 Kevin Huck
+//  Copyright (c) 2026 Vansh Dobhal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,8 +8,11 @@
 
 #include <hpx/config.hpp>
 
+#include <string>
+
 #ifdef HPX_HAVE_APEX
 #include <hpx/assert.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/external_timer.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 
@@ -38,8 +42,11 @@ namespace hpx::util {
             if (parent_task != nullptr && enable_parent_task_handler &&
                 enable_parent_task_handler())
             {
-                parent_wrapper =
+                auto const parent_timer =
                     get_thread_id_data(parent_task)->get_timer_data();
+                parent_wrapper = std::static_pointer_cast<task_wrapper>(
+                    hpx::tracing::detail::task_timer_data_access::get(
+                        parent_timer));
             }
 
             if (description.kind() ==
@@ -132,5 +139,115 @@ namespace hpx::util {
         yield_t* yield_function{nullptr};
     }    // namespace external_timer
 }    // namespace hpx::util
+
+namespace hpx::tracing {
+
+    task_timer_data create_task_timer(
+        threads::thread_description const& description,
+        std::uint32_t const parent_locality_id,
+        threads::thread_id const& parent_task)
+    {
+        return task_timer_data(util::external_timer::new_task(
+            description, parent_locality_id, parent_task));
+    }
+
+    void update_task_timer(task_timer_data& timer, char const* new_name)
+    {
+        timer.data = util::external_timer::update_task(
+            timer.data, std::string(new_name != nullptr ? new_name : ""));
+    }
+
+    scoped_task_timer::scoped_task_timer(task_timer_data data) noexcept
+      : stopped_(false)
+      , data_(HPX_MOVE(data))
+    {
+        if (data_.data != nullptr)
+        {
+            util::external_timer::start(data_.data);
+        }
+    }
+
+    scoped_task_timer::~scoped_task_timer()
+    {
+        stop();
+    }
+
+    void scoped_task_timer::stop() noexcept
+    {
+        if (!stopped_)
+        {
+            stopped_ = true;
+
+            if (data_.data != nullptr)
+            {
+                util::external_timer::stop(data_.data);
+            }
+        }
+    }
+
+    void scoped_task_timer::yield() noexcept
+    {
+        if (!stopped_)
+        {
+            stopped_ = true;
+
+            if (data_.data != nullptr)
+            {
+                util::external_timer::yield(data_.data);
+            }
+        }
+    }
+
+    void tracing_init(char const* name, int, char**, std::uint32_t const rank,
+        std::uint32_t const size)
+    {
+        util::external_timer::init(name, rank, size);
+    }
+
+    void tracing_finalize()
+    {
+        util::external_timer::finalize();
+    }
+
+    void register_thread(char const* name)
+    {
+        util::external_timer::register_thread(
+            std::string(name != nullptr ? name : ""));
+    }
+
+    void create_counter(std::string const&, std::string const&) noexcept
+    {
+        // APEX does not require explicit counter registration.
+    }
+
+    void sample_counter(std::string const& name, std::string const&,
+        double const value) noexcept
+    {
+        if (util::external_timer::sample_value_function != nullptr)
+        {
+            util::external_timer::sample_value_function(name, value);
+        }
+    }
+
+    void send_parcel(std::uint64_t const tag, std::uint64_t const size,
+        std::uint64_t const target_locality_id) noexcept
+    {
+        util::external_timer::send(tag, size, target_locality_id);
+    }
+
+    void recv_parcel(std::uint64_t const tag, std::uint64_t const size,
+        std::uint64_t const source_locality_id,
+        std::uint64_t const source_thread_id) noexcept
+    {
+        util::external_timer::recv(
+            tag, size, source_locality_id, source_thread_id);
+    }
+
+    void set_enable_parent_task_handler(enable_parent_task_handler_type f)
+    {
+        util::set_enable_parent_task_handler(f);
+    }
+
+}    // namespace hpx::tracing
 
 #endif

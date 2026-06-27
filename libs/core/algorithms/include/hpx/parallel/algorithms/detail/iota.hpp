@@ -102,30 +102,25 @@ namespace hpx::parallel::detail {
             {
                 auto dist = hpx::parallel::detail::distance(first, last);
 
-                // clang-format off
                 auto f = [value](FwdIter part_begin, std::size_t part_size,
                              std::size_t global_index) {
                     T cur_value = value + global_index;
-                    return util::loop_n<std::decay_t<Expolicy>>(
-                        part_begin,
-                        part_size,
+                    return util::const_loop_n<std::decay_t<Expolicy>>(
+                        part_begin, part_size,
                         [&cur_value](FwdIter it) { *it = cur_value++; });
                 };
 
-                return util::partitioner<Expolicy, FwdIter, FwdIter>::call_with_index(
-                    HPX_FORWARD(Expolicy, policy),
-                    first,
-                    dist, 1,
-                    std::move(f),
+                return util::partitioner<Expolicy, FwdIter,
+                    FwdIter>::call_with_index(HPX_FORWARD(Expolicy, policy),
+                    first, dist, 1, std::move(f),
                     [last = first + dist](auto&&) { return last; });
-                // clang-format on
             }
             else
             {
                 return sequential_iota(
                     HPX_FORWARD(Expolicy, policy), first, last, value);
             }
-        };
+        }
     };
 
 }    // namespace hpx::parallel::detail

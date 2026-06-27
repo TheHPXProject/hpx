@@ -70,3 +70,11 @@ foreach(example_program ${example_programs})
     )
   endif()
 endforeach()
+
+if(HPX_WITH_CXX_MODULES AND MSVC)
+  foreach(example oversubscribing_resource_partitioner
+                  simple_resource_partitioner
+  )
+    target_compile_definitions(${example} PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES)
+  endforeach()
+endif()

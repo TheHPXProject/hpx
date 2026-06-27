@@ -209,7 +209,7 @@ namespace hpx::parallel {
             return util::foreach_partitioner<ExPolicy>::call(
                 HPX_FORWARD(ExPolicy, policy), first, count,
                 [](Iter first, std::size_t count, std::size_t) {
-                    return util::loop_n<std::decay_t<ExPolicy>>(
+                    return util::const_loop_n<std::decay_t<ExPolicy>>(
                         first, count, [](Iter it) -> void {
                             std::destroy_at(std::addressof(*it));
                         });

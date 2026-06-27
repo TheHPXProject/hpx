@@ -9,15 +9,17 @@ name: Windows CI (Tracy, Debug, VS2022 toolset)
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
-    - uses: actions/checkout@v6
-    - uses: jwlawson/actions-setup-cmake@v2.1
-      with:
-        github-api-token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.3.4
 
     - name: Install dependencies
       run: |
@@ -43,8 +45,8 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
-              -DHPX_TRACY_WITH_TRACY=ON \
-              -DHPX_TRACY_WITH_FETCH_TRACY=ON
+              -DHPX_WITH_TRACY=ON \
+              -DHPX_WITH_FETCH_TRACY=ON
     - name: Build
       shell: bash
       run: |
@@ -57,12 +59,11 @@ jobs:
           cmake --install build --config Debug
     - name: Test
       run: |
-          Set-Alias -Name grep -Value 'C:\Program Files\Git\usr\bin\grep.exe'
-          Set-Alias -Name sed -Value 'C:\Program Files\Git\usr\bin\sed.exe'
+          $exclude_regex = & "$env:GITHUB_WORKSPACE/.github/ci-scripts/generate_ctest_exclude_regex.ps1" `
+            "$env:GITHUB_WORKSPACE/.github/workflows/tests.examples.targets"
           cd build
           ctest `
           --output-on-failure `
             --build-config Debug `
             --tests-regex tests.examples `
-            --exclude-regex `
-                 $(grep -v  -e ^# -e ^$ D:/a/hpx/hpx/.github/workflows/tests.examples.targets | sed ':b;N;$!bb;s/\n/|/g')
+            --exclude-regex $exclude_regex

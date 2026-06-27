@@ -21,8 +21,8 @@ namespace hpx::util::plugin {
             typename Base, typename Parameter>
         struct HPX_PLUGIN_EXPORT_API concrete_factory_item;
 
-        HPX_CXX_CORE_EXPORT template <typename BasePlugin, typename Concrete,
-            typename Base, typename... Parameters>
+        template <typename BasePlugin, typename Concrete, typename Base,
+            typename... Parameters>
         struct HPX_PLUGIN_EXPORT_API concrete_factory_item<BasePlugin, Concrete,
             Base, hpx::util::pack<Parameters...>> : public Base
         {

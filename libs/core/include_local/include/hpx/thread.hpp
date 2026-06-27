@@ -6,5 +6,6 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/threading_base.hpp>

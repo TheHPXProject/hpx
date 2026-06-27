@@ -15,9 +15,9 @@ namespace hpx::util {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct lazy_enable_if<true, T>
     {
-        using type = typename T::type;
+        using type = T::type;
     };
 }    // namespace hpx::util

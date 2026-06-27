@@ -461,3 +461,29 @@
         };                                                                     \
     }                                                                          \
     /**/
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#define HPX_POLYMORPHIC_AUTO_REGISTER(Class)                                   \
+    namespace hpx::serialization::detail {                                     \
+        inline struct HPX_PP_CAT(register_class_helper_, __LINE__)             \
+        {                                                                      \
+            HPX_PP_CAT(register_class_helper_, __LINE__)()                     \
+            {                                                                  \
+                [[maybe_unused]] static auto& _ =                              \
+                    hpx::serialization::detail::register_class<                \
+                        /**/ Class>::instance(); /* force instantiation */     \
+            }                                                                  \
+        } HPX_PP_CAT(register_class_helper_instance_, __LINE__);               \
+                                                                               \
+        inline hpx::serialization::detail::register_class</**/ Class>          \
+            HPX_PP_CAT(hpx_register_class_instance_, __LINE__){};              \
+    }                                                                          \
+                                                                               \
+    namespace hpx::traits {                                                    \
+        template <>                                                            \
+        struct is_nonintrusive_polymorphic<Class> : std::true_type             \
+        {                                                                      \
+        };                                                                     \
+    }
+/**/
+#endif

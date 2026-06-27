@@ -1,5 +1,5 @@
 //  Copyright (c) 2014 Thomas Heller
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2007 Richard D Guidry Jr
 //  Copyright (c) 2011 Bryce Lelbach
 //  Copyright (c) 2011 Katelyn Kufahl
@@ -52,10 +52,10 @@
 namespace hpx::parcelset {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename ConnectionHandler>
+    HPX_CXX_EXPORT template <typename ConnectionHandler>
     struct connection_handler_traits;
 
-    template <typename ConnectionHandler>
+    HPX_CXX_EXPORT template <typename ConnectionHandler>
     class HPX_EXPORT parcelport_impl : public parcelport
     {
         using connection = typename connection_handler_traits<
@@ -444,6 +444,15 @@ namespace hpx::parcelset {
 
             case connection_cache_reclaims:
                 return connection_cache_.get_cache_reclaims(reset);
+
+            case connection_cache_reservation_failures:
+                return connection_cache_.get_reservation_failures(reset);
+
+            case connection_cache_num_connections:
+                return connection_cache_.get_num_connections();
+
+            case connection_cache_max_connections:
+                return connection_cache_.get_max_connections();
 
             default:
                 break;

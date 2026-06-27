@@ -30,8 +30,8 @@ namespace hpx::iostream::test {
     bool compare_streams_in_chars(
         std::basic_istream<Ch, Tr>& first, std::basic_istream<Ch, Tr>& second)
     {
-        for (int z = 0; z < data_reps; ++z)
-            for (int w = 0; w < data_length(); ++w)
+        for (std::size_t z = 0; z < data_reps; ++z)
+            for (int w = 0; w < static_cast<int>(data_length()); ++w)
                 if (first.eof() != second.eof() || first.get() != second.get())
                     return false;
         return true;
@@ -74,8 +74,10 @@ namespace hpx::iostream::test {
         {
             if ((first == last) != is.eof())
                 return false;
-            if (first != last && *first++ != is.get())
+            if (first != last && *first != is.get())
                 return false;
+            if (first != last)
+                ++first;
         } while (first != last);
         return true;
     }
@@ -91,8 +93,8 @@ namespace hpx::iostream::test {
     template <typename Ch, typename Tr>
     void write_data_in_chars(std::basic_ostream<Ch, Tr>& os)
     {
-        for (int z = 0; z < data_reps; ++z)
-            for (int w = 0; w < data_length(); ++w)
+        for (std::size_t z = 0; z < data_reps; ++z)
+            for (int w = 0; w < static_cast<int>(data_length()); ++w)
                 os.put(detail::data((Ch*) nullptr)[w]);
         os.flush();
     }
@@ -100,15 +102,15 @@ namespace hpx::iostream::test {
     template <typename Ch, typename Tr>
     void write_data_in_chunks(std::basic_ostream<Ch, Tr>& os)
     {
-        Ch const* buf = detail::data((Ch*) 0);
-        for (int z = 0; z < data_reps; ++z)
+        Ch const* buf = detail::data((Ch*) nullptr);
+        for (std::size_t z = 0; z < data_reps; ++z)
             os.write(buf, data_length());
         os.flush();
     }
 
     bool test_seekable_in_chars(std::iostream& io)
     {
-        int i;    // old 'for' scope workaround.
+        std::size_t i;    // old 'for' scope workaround.
 
         // Test seeking with ios::cur
         for (i = 0; i < data_reps; ++i)
@@ -164,7 +166,7 @@ namespace hpx::iostream::test {
 
     bool test_seekable_in_chunks(std::iostream& io)
     {
-        int i;    // old 'for' scope workaround.
+        std::size_t i;    // old 'for' scope workaround.
 
         // Test seeking with ios::cur
         for (i = 0; i < data_reps; ++i)
@@ -214,7 +216,7 @@ namespace hpx::iostream::test {
 
     bool test_input_seekable(std::istream& io)
     {
-        int i;    // old 'for' scope workaround.
+        std::size_t i;    // old 'for' scope workaround.
 
         // Test seeking with ios::cur
         for (i = 0; i < data_reps; ++i)
@@ -264,7 +266,7 @@ namespace hpx::iostream::test {
 
     bool test_output_seekable(std::ostream& io)
     {
-        int i;    // old 'for' scope workaround.
+        std::size_t i;    // old 'for' scope workaround.
 
         // Test seeking with ios::cur
         for (i = 0; i < data_reps; ++i)
@@ -302,7 +304,7 @@ namespace hpx::iostream::test {
 
     bool test_dual_seekable(std::iostream& io)
     {
-        int i;    // old 'for' scope workaround.
+        std::size_t i;    // old 'for' scope workaround.
 
         // Test seeking with ios::cur
         for (i = 0; i < data_reps; ++i)

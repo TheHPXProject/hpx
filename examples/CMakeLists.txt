@@ -29,6 +29,10 @@ set(subdirs
     transpose
 )
 
+if(HPX_WITH_ITTNOTIFY)
+  set(subdirs ${subdirs} itt_notify)
+endif()
+
 if(HPX_WITH_EXAMPLES_HDF5)
   set(subdirs ${subdirs} interpolate1d sheneos)
 endif()

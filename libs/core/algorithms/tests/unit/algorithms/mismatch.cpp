@@ -101,6 +101,19 @@ void mismatch_bad_alloc_test()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+template <typename IteratorTag>
+void test_mismatch_cross_policy()
+{
+    test_mismatch_cross_policy(IteratorTag());
+}
+
+void mismatch_cross_policy_test()
+{
+    test_mismatch_cross_policy<std::random_access_iterator_tag>();
+    test_mismatch_cross_policy<std::forward_iterator_tag>();
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -114,6 +127,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     mismatch_test2();
     mismatch_exception_test();
     mismatch_bad_alloc_test();
+    mismatch_cross_policy_test();
     return hpx::local::finalize();
 }
 

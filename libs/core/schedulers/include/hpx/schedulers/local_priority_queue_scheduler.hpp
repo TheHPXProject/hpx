@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <mutex>
 #include <string_view>
 #include <type_traits>
@@ -55,7 +56,7 @@ namespace hpx::threads::policies {
     /// whenever no other work is available.
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
-        typename StagedQueuing = lockfree_fifo,
+        typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
             default_local_priority_queue_scheduler_terminated_queue>
     class local_priority_queue_scheduler : public scheduler_base
@@ -69,13 +70,13 @@ namespace hpx::threads::policies {
         // the scheduler type takes two initialization parameters:
         //    the number of queues
         //    the number of high priority queues
-        //    the maxcount per queue
+        //    the max-count per queue
         struct init_parameter
         {
-            init_parameter(std::size_t num_queues,
+            init_parameter(std::size_t const num_queues,
                 detail::affinity_data const& affinity_data,
-                std::size_t num_high_priority_queues = static_cast<std::size_t>(
-                    -1),
+                std::size_t const num_high_priority_queues =
+                    static_cast<std::size_t>(-1),
                 thread_queue_init_parameters const& thread_queue_init =
                     thread_queue_init_parameters{},
                 char const* description =
@@ -91,7 +92,7 @@ namespace hpx::threads::policies {
             {
             }
 
-            init_parameter(std::size_t num_queues,
+            init_parameter(std::size_t const num_queues,
                 detail::affinity_data const& affinity_data,
                 char const* description) noexcept
               : num_queues_(num_queues)
@@ -110,7 +111,7 @@ namespace hpx::threads::policies {
         using init_parameter_type = init_parameter;
 
         explicit local_priority_queue_scheduler(init_parameter_type const& init,
-            bool deferred_initialization = true)
+            bool const deferred_initialization = true)
           : scheduler_base(
                 init.num_queues_, init.description_, init.thread_queue_init_)
           , curr_queue_(0)
@@ -122,6 +123,7 @@ namespace hpx::threads::policies {
           , queues_(num_queues_)
           , high_priority_queues_(num_queues_)
           , victims_(num_queues_)
+          , thread_numa_domain_(num_queues_, 0)
         {
             if (!deferred_initialization)
             {
@@ -541,24 +543,46 @@ namespace hpx::threads::policies {
         void create_thread(thread_init_data& data, thread_id_ref_type* id,
             error_code& ec) override
         {
-            // NOTE: This scheduler ignores NUMA hints.
             std::size_t num_thread = static_cast<std::size_t>(-1);
             thread_priority priority = data.priority;
 
-            // If the user specified a concrete thread to use, and the initial
-            // priority is initially_bound, then schedule the thread as
-            // initially bound to make sure the thread starts running on the
-            // specified core.
+            // If the initial priority is initially_bound, promote it to
+            // bound for the first scheduling step, regardless of hint mode.
+            if (data.priority == thread_priority::initially_bound)
+            {
+                priority = thread_priority::bound;
+                data.priority = thread_priority::normal;
+            }
+
             if (data.schedulehint.mode == thread_schedule_hint_mode::thread)
             {
                 HPX_ASSERT(data.schedulehint.hint >= 0);
                 num_thread = data.schedulehint.hint;
+            }
+            else if (data.schedulehint.mode == thread_schedule_hint_mode::numa)
+            {
+                // Route to a worker thread on the requested NUMA domain.
+                // Fall back to round-robin if the domain has no threads.
+                HPX_ASSERT(data.schedulehint.hint >= 0);
+                auto const& topo = create_topology();
+                std::size_t num_nodes = topo.get_number_of_numa_nodes();
+                if (num_nodes == 0)
+                    num_nodes = 1;
+                std::size_t const requested_domain =
+                    static_cast<std::size_t>(data.schedulehint.hint) %
+                    num_nodes;
 
-                if (data.priority == thread_priority::initially_bound)
+                std::size_t const start = curr_queue_++ % num_queues_;
+                for (std::size_t i = 0; i < num_queues_; ++i)
                 {
-                    priority = thread_priority::bound;
-                    data.priority = thread_priority::normal;
+                    std::size_t const idx = (start + i) % num_queues_;
+                    if (thread_numa_domain_[idx] == requested_domain)
+                    {
+                        num_thread = idx;
+                        break;
+                    }
                 }
+                data.schedulehint.mode = thread_schedule_hint_mode::thread;
             }
             else
             {
@@ -669,129 +693,185 @@ namespace hpx::threads::policies {
             }
         }
 
+        template <typename Body>
+        static bool for_each_circular(
+            std::size_t const start_idx, std::size_t const count, Body&& body)
+        {
+            for (std::size_t i = start_idx; i < count; ++i)
+            {
+                if (body(i))
+                    return true;
+            }
+            for (std::size_t i = 0; i < start_idx; ++i)
+            {
+                if (body(i))
+                    return true;
+            }
+            return false;
+        }
+
         bool attempt_stealing_pending(std::size_t num_thread,
             threads::thread_id_ref_type& thrd,
             [[maybe_unused]] thread_queue_type* this_high_priority_queue,
             [[maybe_unused]] thread_queue_type* this_queue)
         {
-            std::size_t const offset =
-                victims_[num_thread].data_.victim_offset_++;
+            // Helper to increment steal counters only when enabled.
+            constexpr auto increment_counters =
+                []([[maybe_unused]] thread_queue_type* from_q,
+                    [[maybe_unused]] thread_queue_type* to_q) noexcept {
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
+                    from_q->increment_num_stolen_from_pending();
+                    to_q->increment_num_stolen_to_pending();
+#endif
+                };
+
             std::vector<std::size_t> const& victim_threads =
                 victims_[num_thread].data_.victim_threads_;
             std::size_t const victim_count = victim_threads.size();
-
             if (victim_count == 0)
                 return false;
 
-            std::size_t const start_idx = offset % victim_count;
-
-            auto steal = [&](std::size_t idx) -> bool {
+            auto const steal = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
-                thread_queue_type* q = nullptr;
 
-                if (num_thread < num_high_priority_queues_ &&
-                    idx < num_high_priority_queues_)
+                if (thread_queue_type* q = queues_[idx].data_;
+                    q->get_next_thread(thrd, true, true))
                 {
-                    q = high_priority_queues_[idx].data_;
-                    if (q->get_next_thread(thrd, true, true))
-                    {
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                        q->increment_num_stolen_from_pending();
-                        this_high_priority_queue
-                            ->increment_num_stolen_to_pending();
-#endif
-                        return true;
-                    }
-                }
-
-                q = queues_[idx].data_;
-                if (q->get_next_thread(thrd, true, true))
-                {
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                    q->increment_num_stolen_from_pending();
-                    this_queue->increment_num_stolen_to_pending();
-#endif
+                    increment_counters(q, this_queue);
                     return true;
                 }
                 return false;
             };
 
-            for (std::size_t i = start_idx; i < victim_count; ++i)
-            {
-                if (steal(victim_threads[i]))
-                    return true;
-            }
+            std::size_t const num_high = num_high_priority_queues_;
+            auto const steal_hp = [&](std::size_t idx) -> bool {
+                HPX_ASSERT(idx != num_thread);
 
-            for (std::size_t i = 0; i < start_idx; ++i)
-            {
-                if (steal(victim_threads[i]))
-                    return true;
-            }
+                if (idx < num_high)
+                {
+                    if (thread_queue_type* q = high_priority_queues_[idx].data_;
+                        q->get_next_thread(thrd, true, true))
+                    {
+                        increment_counters(q, this_high_priority_queue);
+                        return true;
+                    }
+                }
+                return steal(idx);
+            };
 
-            return false;
+            std::size_t const offset =
+                victims_[num_thread].data_.victim_offset_++;
+            if (num_thread < num_high)
+            {
+                return for_each_circular(offset % victim_count, victim_count,
+                    [&](std::size_t const i) {
+                        return steal_hp(victim_threads[i]);
+                    });
+            }
+            else
+            {
+                return for_each_circular(offset % victim_count, victim_count,
+                    [&](std::size_t const i) {
+                        return steal(victim_threads[i]);
+                    });
+            }
         }
 
         // Return the next thread to be executed, return false if none is
         // available
-        bool get_next_thread(std::size_t num_thread, bool running,
+        bool get_next_thread(std::size_t num_thread, bool const running,
             threads::thread_id_ref_type& thrd, bool enable_stealing)
         {
-            HPX_ASSERT(num_thread < num_queues_);
-            thread_queue_type* this_high_priority_queue = nullptr;
+            // tri-state result for trying a queue:
+            // - nothing: no work found, no staged items
+            // - found: a thread was popped and 'thrd' is valid -> return true
+            // - staged_non_empty: no thread popped but there is staged work ->
+            //   give up and return false
+            enum class try_result : std::int8_t
+            {
+                staged_non_empty = 0,
+                found = 1,
+                nothing = 2
+            };
 
+            // Helper: try a single queue. Returns
+            // - try_result::staged_non_empty if staged items exist (signal to
+            //   give up)
+            // - try_result::found if a thread was obtained
+            // - try_result::nothing otherwise
+            constexpr auto try_queue =
+                [](thread_queue_type* q,
+                    thread_id_ref_type& next_thrd) noexcept -> try_result {
+                bool const found = q->get_next_thread(next_thrd);
+
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
+                q->increment_num_pending_accesses();
+                if (found)
+                    return try_result::found;
+                q->increment_num_pending_misses();
+#else
+                if (found)
+                    return try_result::found;
+#endif
+
+                // If there is staged work waiting to be converted, signal
+                // caller to give up so conversion can proceed instead of
+                // continuing to try other queues.
+                if (q->get_staged_queue_length(std::memory_order_relaxed) != 0)
+                    return try_result::staged_non_empty;
+
+                return try_result::nothing;
+            };
+
+            thread_queue_type* this_high_priority_queue = nullptr;
             if (num_thread < num_high_priority_queues_)
             {
                 this_high_priority_queue =
                     high_priority_queues_[num_thread].data_;
-                bool result = this_high_priority_queue->get_next_thread(thrd);
 
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                this_high_priority_queue->increment_num_pending_accesses();
-                if (result)
+                if (auto const r = try_queue(this_high_priority_queue, thrd);
+                    r == try_result::found)
+                {
+                    // We successfully popped a thread from the queue
                     return true;
-                this_high_priority_queue->increment_num_pending_misses();
-#else
-                if (result)
-                    return true;
-#endif
+                }
+                else if (r == try_result::staged_non_empty)
+                {
+                    // Staged work exists; give up so it can be converted
+                    return false;
+                }
             }
 
-            thread_queue_type* this_queue = queues_[num_thread].data_;
-            bool result = false;
-
-            auto f = [&](thread_queue_type* q) {
-                result = q->get_next_thread(thrd);
-
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                q->increment_num_pending_accesses();
-                if (result)
-                    return true;
-                q->increment_num_pending_misses();
-#else
-                if (result)
-                    return true;
-#endif
-
-                // Give up, we should have work to convert.
-                if (q->get_staged_queue_length(std::memory_order_relaxed) != 0)
-                    return true;
-
-                return false;
-            };
-
-            result = false;
-            if (f(bound_queues_[num_thread].data_))
-                return result;
-
-            result = false;
-            if (f(this_queue))
-                return result;
-
-            if (!running)
+            // Try the bound queue (per-thread bound-to-thread queue).
+            if (auto const r = try_queue(bound_queues_[num_thread].data_, thrd);
+                r == try_result::found)
+            {
+                return true;
+            }
+            else if (r == try_result::staged_non_empty)
             {
                 return false;
             }
 
+            // Try the "this" queue (main per-thread queue).
+            thread_queue_type* this_queue = queues_[num_thread].data_;
+            if (auto const r = try_queue(this_queue, thrd);
+                r == try_result::found)
+            {
+                return true;
+            }
+            else if (r == try_result::staged_non_empty)
+            {
+                return false;
+            }
+
+            // If the thread system is shutting down (not running), give up.
+            if (!running)
+                return false;
+
+            // Attempt stealing from other queues if enabled. If stealing
+            // succeeds, attempt_stealing_pending returns true, and we return
+            // true (thread obtained).
             if (enable_stealing &&
                 attempt_stealing_pending(
                     num_thread, thrd, this_high_priority_queue, this_queue))
@@ -799,12 +879,13 @@ namespace hpx::threads::policies {
                 return true;
             }
 
+            // Final fallback: try the global low-priority queue
             return low_priority_queue_.get_next_thread(thrd);
         }
 
         // Schedule the passed thread
         void schedule_thread(threads::thread_id_ref_type thrd,
-            threads::thread_schedule_hint schedulehint,
+            threads::thread_schedule_hint const schedulehint,
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
@@ -915,7 +996,7 @@ namespace hpx::threads::policies {
         }
 
         void schedule_thread_last(threads::thread_id_ref_type thrd,
-            threads::thread_schedule_hint schedulehint,
+            threads::thread_schedule_hint const schedulehint,
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
@@ -1335,68 +1416,82 @@ namespace hpx::threads::policies {
             return wait_time / (count + 1);
         }
 #endif
+
         bool attempt_stealing(std::size_t num_thread, std::size_t& added,
             thread_queue_type* this_high_priority_queue,
             thread_queue_type* this_queue)
         {
-            std::size_t const offset =
-                victims_[num_thread].data_.victim_offset_++;
+            constexpr auto increment_counters =
+                []([[maybe_unused]] thread_queue_type* from_q,
+                    [[maybe_unused]] thread_queue_type* to_q) noexcept {
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
+                    from_q->increment_num_stolen_from_staged();
+                    to_q->increment_num_stolen_to_staged();
+#endif
+                };
+
             std::vector<std::size_t> const& victim_threads =
                 victims_[num_thread].data_.victim_threads_;
             std::size_t const victim_count = victim_threads.size();
-
             if (victim_count == 0)
                 return false;
 
-            std::size_t const start_idx = offset % victim_count;
             bool result = true;
 
-            auto steal = [&](std::size_t idx) -> bool {
+            auto const steal = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
-                thread_queue_type* q = nullptr;
 
-                if (num_thread < num_high_priority_queues_ &&
-                    idx < num_high_priority_queues_)
+                thread_queue_type* q = queues_[idx].data_;
+                result = this_queue->wait_or_add_new(true, added, q) && result;
+
+                if (0 != added)
                 {
-                    q = high_priority_queues_[idx].data_;
+                    increment_counters(q, this_queue);
+                    return true;
+                }
+                return false;
+            };
+
+            std::size_t const num_high = num_high_priority_queues_;
+            auto const steal_hp = [&](std::size_t idx) -> bool {
+                HPX_ASSERT(idx != num_thread);
+
+                // If the stealing thread has a high-priority queue, try
+                // high-priority victims first (and then their normal queues).
+                // Otherwise, only try normal queues.
+                if (idx < num_high)
+                {
+                    thread_queue_type* q = high_priority_queues_[idx].data_;
                     result = this_high_priority_queue->wait_or_add_new(
                                  true, added, q) &&
                         result;
 
                     if (0 != added)
                     {
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                        q->increment_num_stolen_from_staged(added);
-                        this_high_priority_queue
-                            ->increment_num_stolen_to_staged(added);
-#endif
+                        increment_counters(q, this_high_priority_queue);
                         return true;
                     }
                 }
 
-                q = queues_[idx].data_;
-                result = this_queue->wait_or_add_new(true, added, q) && result;
-
-                if (0 != added)
-                {
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                    q->increment_num_stolen_from_staged(added);
-                    this_queue->increment_num_stolen_to_staged(added);
-#endif
-                    return true;
-                }
-                return false;
+                return steal(idx);
             };
 
-            for (std::size_t i = start_idx; i < victim_count; ++i)
+            std::size_t const offset =
+                victims_[num_thread].data_.victim_offset_++;
+            if (num_thread < num_high)
             {
-                if (steal(victim_threads[i]))
+                if (for_each_circular(offset % victim_count, victim_count,
+                        [&](std::size_t const i) {
+                            return steal_hp(victim_threads[i]);
+                        }))
                     return result;
             }
-
-            for (std::size_t i = 0; i < start_idx; ++i)
+            else
             {
-                if (steal(victim_threads[i]))
+                if (for_each_circular(offset % victim_count, victim_count,
+                        [&](std::size_t const i) {
+                            return steal(victim_threads[i]);
+                        }))
                     return result;
             }
 
@@ -1451,7 +1546,7 @@ namespace hpx::threads::policies {
         // be terminated (i.e. no more work has to be done).
         bool wait_or_add_new(std::size_t num_thread, bool running,
             [[maybe_unused]] std::int64_t& idle_loop_count,
-            bool enable_stealing, std::size_t& added,
+            bool const enable_stealing, std::size_t& added,
             thread_id_ref_type* = nullptr)
         {
             added = 0;
@@ -1573,6 +1668,10 @@ namespace hpx::threads::policies {
                 victims_[num_thread].data_.victim_threads_;
             victim_threads.reserve(num_threads);
 
+            // Record this thread's NUMA domain for use in create_thread().
+            thread_numa_domain_[num_thread] =
+                static_cast<std::size_t>(numa_domains[num_thread]);
+
             std::size_t const num_pu = affinity_data_.get_pu_num(num_thread);
             mask_cref_type pu_mask = topo.get_thread_affinity_mask(num_pu);
             mask_cref_type numa_mask = numa_masks[num_thread];
@@ -1623,12 +1722,12 @@ namespace hpx::threads::policies {
             };
 
             // check for threads which share the same core...
-            iterate([&](std::size_t other_num_thread) {
+            iterate([&](std::size_t const other_num_thread) {
                 return any(core_mask & core_masks[other_num_thread]);
             });
 
             // check for threads which share the same NUMA domain...
-            iterate([&](std::size_t other_num_thread) {
+            iterate([&](std::size_t const other_num_thread) {
                 return !any(core_mask & core_masks[other_num_thread]) &&
                     any(numa_mask & numa_masks[other_num_thread]);
             });
@@ -1639,19 +1738,41 @@ namespace hpx::threads::policies {
                     num_thread) &&
                 any(first_mask & pu_mask))
             {
-                iterate([&](std::size_t other_num_thread) {
-                    // allow stealing from neighboring NUMA domain only
-                    std::ptrdiff_t const numa_distance =
-                        numa_domains[num_thread] -
-                        numa_domains[other_num_thread];
-                    if (numa_distance > 1 || numa_distance < -1)
-                        return false;
-                    // steal of even cores from neighboring NUMA domains
-                    if (numa_distance == 1 || numa_distance == -1)
-                        return other_num_thread % 2 == 0;
-                    // cores from our domain are handled above
-                    return false;
-                });
+                // Build a list of (hardware_latency_distance, domain_id)
+                // for all NUMA domains other than our own, then sweep them
+                // in ascending distance order so that the victim list
+                // prefers closer domains over farther ones.
+                std::size_t const my_domain =
+                    static_cast<std::size_t>(numa_domains[num_thread]);
+                std::size_t num_nodes = topo.get_number_of_numa_nodes();
+                if (num_nodes == 0)
+                    num_nodes = 1;
+
+                // Only steal from directly neighboring NUMA domains
+                // (minimum distance) to limit cross-NUMA traffic.
+                std::size_t min_dist =
+                    (std::numeric_limits<std::size_t>::max)();
+                for (std::size_t n = 0; n < num_nodes; ++n)
+                {
+                    if (n != my_domain)
+                    {
+                        std::size_t const d =
+                            topo.get_numa_distance(my_domain, n);
+                        if (d < min_dist)
+                            min_dist = d;
+                    }
+                }
+                for (std::size_t n = 0; n < num_nodes; ++n)
+                {
+                    if (n == my_domain)
+                        continue;
+                    if (topo.get_numa_distance(my_domain, n) != min_dist)
+                        continue;
+                    iterate([&](std::size_t const other_num_thread) {
+                        return static_cast<std::size_t>(
+                                   numa_domains[other_num_thread]) == n;
+                    });
+                }
             }
         }
 
@@ -1715,6 +1836,11 @@ namespace hpx::threads::policies {
             std::size_t victim_offset_ = 0;
         };
         std::vector<util::cache_line_data<victims>> victims_;
+
+        // NUMA domain index for each worker thread, indexed by thread number.
+        // Populated during on_start_thread(); used for NUMA-hint routing in
+        // create_thread() and for distance-ordered victim list construction.
+        std::vector<std::size_t> thread_numa_domain_;
     };    // namespace hpx::threads::policies
 }    // namespace hpx::threads::policies
 

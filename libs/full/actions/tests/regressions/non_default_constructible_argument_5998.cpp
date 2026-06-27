@@ -86,9 +86,9 @@ auto call_remote()
     for (auto const& id : remote)
     {
         EventContext ec{23, {"a"s, "b"s}};
-        auto f = {"foo"s, "bar"s};
-        futures.emplace_back(
-            hpx::async<print_params_action>(id, std::move(ec), std::move(f)));
+        std::vector<std::string> data{"foo"s, "bar"s};
+        futures.emplace_back(hpx::async<print_params_action>(
+            id, std::move(ec), std::move(data)));
     }
     return hpx::when_all(futures);
 }

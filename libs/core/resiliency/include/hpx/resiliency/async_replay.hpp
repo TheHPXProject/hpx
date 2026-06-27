@@ -1,6 +1,6 @@
 //  Copyright (c) 2019 National Technology & Engineering Solutions of Sandia,
 //                     LLC (NTESS).
-//  Copyright (c) 2018-2024 Hartmut Kaiser
+//  Copyright (c) 2018-2026 Hartmut Kaiser
 //  Copyright (c) 2018-2019 Adrian Serio
 //  Copyright (c) 2019 Nikunj Gupta
 //
@@ -14,6 +14,7 @@
 #include <hpx/resiliency/resiliency_cpos.hpp>
 #include <hpx/resiliency/util.hpp>
 
+#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/tag_invoke.hpp>
@@ -97,15 +98,7 @@ namespace hpx::resiliency::experimental {
                             throw abort_replay_exception();
                         }
 
-                        if (n != 0)
-                        {
-                            // return result
-                            return hpx::make_ready_future(HPX_MOVE(result));
-                        }
-
-                        // throw aborting exception as attempts were
-                        // exhausted
-                        throw abort_replay_exception();
+                        return hpx::make_ready_future(HPX_MOVE(result));
                     });
             }
 

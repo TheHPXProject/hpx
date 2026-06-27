@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +12,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/performance_counter.hpp>
 #include <hpx/performance_counters/performance_counter_set.hpp>
@@ -26,7 +27,8 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
+
     performance_counter_set::performance_counter_set(
         std::string const& name, bool reset)
       : invocation_count_(0)
@@ -398,4 +400,4 @@ namespace hpx { namespace performance_counters {
         std::unique_lock<mutex_type> l(mtx_);
         return invocation_count_;
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

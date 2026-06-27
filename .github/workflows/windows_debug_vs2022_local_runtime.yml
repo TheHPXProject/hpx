@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Abhishek Bansal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Debug, VS2022 toolset, Local Runtime)
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.3.4
+
+    - name: Install dependencies
+      run: |
+        md C:\projects
+        $client = new-object System.Net.WebClient
+        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z","C:\projects\vcpkg-export-hpx-dependencies.7z")
+        7z x C:\projects\vcpkg-export-hpx-dependencies.7z -y -oC:\projects\vcpkg
+    - name: Configure
+      shell: bash
+      run: |
+          cmake . -Bbuild -G'Visual Studio 17 2022' \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
+              -DHPX_WITH_DISTRIBUTED_RUNTIME=OFF \
+              -DHPX_WITH_NETWORKING=OFF \
+              -DHPX_WITH_EXAMPLES=ON \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_EXAMPLES=ON \
+              -DHPX_WITH_TESTS_UNIT=ON \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+              -DHPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION=ON \
+              -DHPX_WITH_VERIFY_LOCKS=ON \
+              -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --config Debug \
+          --target ALL_BUILD \
+          -- -maxcpucount:2 -verbosity:minimal -nologo
+    - name: Install
+      shell: bash
+      run: |
+          cmake --install build --config Debug
+    - name: Test
+      run: |
+          $exclude_regex = & "$env:GITHUB_WORKSPACE/.github/ci-scripts/generate_ctest_exclude_regex.ps1" `
+            "$env:GITHUB_WORKSPACE/.github/workflows/tests.examples.targets"
+          cd build
+          ctest `
+          --output-on-failure `
+            --build-config Debug `
+            --tests-regex tests.examples `
+            --exclude-regex $exclude_regex

@@ -38,6 +38,7 @@ function(hpx_setup_target target)
       HPX_PREFIX
       HEADER_ROOT
       SCAN_FOR_MODULES
+      CXX_STANDARD
   )
   set(multi_value_args DEPENDENCIES COMPONENT_DEPENDENCIES COMPILE_FLAGS
                        LINK_FLAGS INSTALL_FLAGS INSTALL_PDB
@@ -85,6 +86,13 @@ function(hpx_setup_target target)
   if(target_LINK_FLAGS)
     hpx_append_property(${target} LINK_FLAGS "${target_LINK_FLAGS}")
     hpx_debug("setup_target.${target}" "LINK_FLAGS: ${target_LINK_FLAGS}")
+  endif()
+
+  if(target_CXX_STANDARD)
+    set_target_properties(
+      ${target} PROPERTIES CXX_STANDARD ${target_CXX_STANDARD}
+    )
+    hpx_debug("setup_target.${target}" "CXX_STANDARD: ${target_CXX_STANDARD}")
   endif()
 
   if(target_NAME)
@@ -232,9 +240,21 @@ function(hpx_setup_target target)
   if(HPX_WITH_CXX_MODULES AND target_SCAN_FOR_MODULES)
     hpx_debug("setup_target.${target} SCAN_FOR_MODULES: ON")
 
-    hpx_configure_module_consumer(${target} hpx_core_module_if)
+    if(TARGET hpx_core_module_if)
+      hpx_configure_module_consumer(${target} hpx_core_module_if)
+    elseif(TARGET HPXInternal::hpx_core_module_if)
+      hpx_configure_module_consumer(${target} HPXInternal::hpx_core_module_if)
+    else()
+      hpx_error(
+        "setup_target.${target}: C++ modules scanning is enabled, but neither "
+        "hpx_core_module_if nor HPXInternal::hpx_core_module_if exists"
+      )
+    endif()
+
     if(TARGET hpx_full_module_if)
       hpx_configure_module_consumer(${target} hpx_full_module_if)
+    elseif(TARGET HPXInternal::hpx_full_module_if)
+      hpx_configure_module_consumer(${target} HPXInternal::hpx_full_module_if)
     endif()
   else()
     hpx_debug("setup_target.${target} SCAN_FOR_MODULES: OFF")
@@ -244,20 +264,21 @@ function(hpx_setup_target target)
       target_compile_definitions(
         ${target} PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
       )
-
-      # If modules are enabled, Clang emits DWARF v5, which requires using lld
-      # instead of ld.
-      if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES
-                                                  "AppleClang"
-      )
-        get_target_property(_type ${target} TYPE)
-        if((_type STREQUAL "SHARED_LIBRARY") OR (_type STREQUAL "EXECUTABLE"))
-          target_link_options(${target} PRIVATE "-fuse-ld=lld")
-        endif()
-      endif()
     endif()
 
     set_target_properties(${target} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+  endif()
+
+  # Newer Clang emits DWARF v5, which requires using lld instead of ld.
+  if(HPX_WITH_CXX_MODULES
+     AND (NOT MSVC)
+     AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+     AND (NOT (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang"))
+  )
+    get_target_property(_type ${target} TYPE)
+    if((_type STREQUAL "SHARED_LIBRARY") OR (_type STREQUAL "EXECUTABLE"))
+      target_link_options(${target} PRIVATE "-fuse-ld=lld")
+    endif()
   endif()
 
   get_target_property(target_EXCLUDE_FROM_ALL ${target} EXCLUDE_FROM_ALL)

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,10 +18,10 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
-    class registry
+    HPX_CXX_EXPORT class registry
     {
     private:
         struct counter_data
@@ -171,4 +171,4 @@ namespace hpx { namespace performance_counters {
     public:
         static registry& instance();
     };
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

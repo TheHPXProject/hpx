@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -23,7 +23,7 @@ namespace hpx::components {
     ///
     /// @tparam Component The type of the component.
     /// @tparam Data The type of the data associated with the client (default is void).
-    template <typename Component, typename Data = void>
+    HPX_CXX_EXPORT template <typename Component, typename Data = void>
     class client : public client_base<client<Component, Data>, Component, Data>
     {
         using base_type = client_base<client, Component, Data>;

@@ -20,45 +20,44 @@ using hpx::filesystem::path;
 // When you have a specific line and the line is the location of the link
 inline std::string linelink(path const& full_path, std::string const& linenumb)
 {
-    std::string commit = HPX_HAVE_GIT_COMMIT;
+    std::string blob_prefix = boost::inspect::search_root_git_blob_prefix();
+    if (blob_prefix.empty())
+    {
+        return linenumb;
+    }
+
     std::string location = boost::inspect::relative_to(
-        full_path, boost::inspect::search_root_path());
-    //The erase function for location is to get rid of the first /hpx that will always
-    //be present in any full path this tool is used for (repeated in wordlink and
-    // loclink)
-    std::string total =
-        "<a href = \"https://github.com/STEllAR-GROUP/hpx/blob/" + commit +
-        location + "#L" + linenumb + "\">";
-    total = total + linenumb;
-    total = total + "</a>";
-    return total;
+        full_path, boost::inspect::search_root_git_path());
+    return "<a href = \"" + blob_prefix + location + "#L" + linenumb + "\">" +
+        linenumb + "</a>";
 }
 
 // When you have a specific line, but a word is the location of the link
 inline std::string wordlink(
     path const& full_path, std::string const& linenumb, std::string const& word)
 {
-    std::string commit = HPX_HAVE_GIT_COMMIT;
+    std::string blob_prefix = boost::inspect::search_root_git_blob_prefix();
+    if (blob_prefix.empty())
+    {
+        return word;
+    }
+
     std::string location = boost::inspect::relative_to(
-        full_path, boost::inspect::search_root_path());
-    std::string total =
-        "<a href = \"https://github.com/STEllAR-GROUP/hpx/blob/" + commit +
-        location + "#L" + linenumb + "\">";
-    total = total + word;
-    total = total + "</a>";
-    return total;
+        full_path, boost::inspect::search_root_git_path());
+    return "<a href = \"" + blob_prefix + location + "#L" + linenumb + "\">" +
+        word + "</a>";
 }
 
 // When you don't have a specific line
 inline std::string loclink(path const& full_path, std::string const& word)
 {
-    std::string commit = HPX_HAVE_GIT_COMMIT;
+    std::string blob_prefix = boost::inspect::search_root_git_blob_prefix();
+    if (blob_prefix.empty())
+    {
+        return word;
+    }
+
     std::string location = boost::inspect::relative_to(
-        full_path, boost::inspect::search_root_path());
-    std::string total =
-        "<a href = \"https://github.com/STEllAR-GROUP/hpx/blob/" + commit +
-        location + "\">";
-    total = total + word;
-    total = total + "</a>";
-    return total;
+        full_path, boost::inspect::search_root_git_path());
+    return "<a href = \"" + blob_prefix + location + "\">" + word + "</a>";
 }

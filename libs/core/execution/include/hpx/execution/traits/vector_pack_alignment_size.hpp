@@ -55,7 +55,7 @@ namespace hpx::parallel::traits {
     HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
     struct vector_pack_alignment;
 
-    HPX_CXX_CORE_EXPORT template <typename... Vector>
+    template <typename... Vector>
     struct vector_pack_alignment<hpx::tuple<Vector...>,
         std::enable_if_t<hpx::util::all_of_v<is_vector_pack_t<Vector>...>>>
     {
@@ -74,7 +74,7 @@ namespace hpx::parallel::traits {
     HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
     struct vector_pack_size;
 
-    HPX_CXX_CORE_EXPORT template <typename... Vector>
+    template <typename... Vector>
     struct vector_pack_size<hpx::tuple<Vector...>,
         std::enable_if_t<hpx::util::all_of_v<is_vector_pack_t<Vector>...>>>
     {

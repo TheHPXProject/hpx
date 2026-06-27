@@ -10,10 +10,12 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -140,7 +142,7 @@ void test_sorted_until_async_exception(ExPolicy p, IteratorTag)
     {
         hpx::future<iterator> f = hpx::ranges::is_sorted_until(p,
             iterator(std::begin(c)), iterator(std::end(c)),
-            [](int, int) -> int { throw std::runtime_error("test"); });
+            [](int, int) -> bool { throw std::runtime_error("test"); });
         f.get();
 
         HPX_TEST(false);
@@ -220,7 +222,7 @@ void test_sorted_until_seq_exception(IteratorTag)
     {
         hpx::ranges::is_sorted_until(iterator(std::begin(c)),
             iterator(std::end(c)),
-            [](int, int) -> int { throw std::runtime_error("test"); });
+            [](int, int) -> bool { throw std::runtime_error("test"); });
     }
     catch (hpx::exception_list const& e)
     {
@@ -314,7 +316,7 @@ void test_sorted_until_async_exception(ExPolicy p)
     try
     {
         auto f = hpx::ranges::is_sorted_until(
-            p, c, [](int, int) -> int { throw std::runtime_error("test"); });
+            p, c, [](int, int) -> bool { throw std::runtime_error("test"); });
         f.get();
 
         HPX_TEST(false);
@@ -364,7 +366,7 @@ void test_sorted_until_seq_exception()
     try
     {
         hpx::ranges::is_sorted_until(
-            c, [](int, int) -> int { throw std::runtime_error("test"); });
+            c, [](int, int) -> bool { throw std::runtime_error("test"); });
     }
     catch (hpx::exception_list const& e)
     {
@@ -544,7 +546,7 @@ void test_sorted_until_async_bad_alloc(ExPolicy p, IteratorTag)
     {
         hpx::future<iterator> f = hpx::ranges::is_sorted_until(p,
             iterator(std::begin(c)), iterator(std::end(c)),
-            [](int, int) -> int { throw std::runtime_error("test"); });
+            [](int, int) -> bool { throw std::runtime_error("test"); });
         f.get();
 
         HPX_TEST(false);
@@ -620,7 +622,7 @@ void test_sorted_until_seq_bad_alloc(IteratorTag)
     {
         hpx::ranges::is_sorted_until(iterator(std::begin(c)),
             iterator(std::end(c)),
-            [](int, int) -> int { throw std::runtime_error("test"); });
+            [](int, int) -> bool { throw std::runtime_error("test"); });
     }
     catch (hpx::exception_list const&)
     {
@@ -708,7 +710,7 @@ void test_sorted_until_async_bad_alloc(ExPolicy p)
     try
     {
         auto f = hpx::ranges::is_sorted_until(
-            p, c, [](int, int) -> int { throw std::runtime_error("test"); });
+            p, c, [](int, int) -> bool { throw std::runtime_error("test"); });
         f.get();
 
         HPX_TEST(false);
@@ -756,7 +758,7 @@ void test_sorted_until_seq_bad_alloc()
     try
     {
         hpx::ranges::is_sorted_until(
-            c, [](int, int) -> int { throw std::runtime_error("test"); });
+            c, [](int, int) -> bool { throw std::runtime_error("test"); });
     }
     catch (hpx::exception_list const&)
     {

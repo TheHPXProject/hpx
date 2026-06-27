@@ -40,22 +40,11 @@ namespace hpx::program_options {
 
         /** Initializes the object with the passed data.
 
-            Note: it would be nice to make the second parameter auto_ptr,
-            to explicitly pass ownership. Unfortunately, it's often needed to
-            create objects of types derived from 'value_semantic':
-               options_description d;
-               d.add_options()("a", parameter<int>("n")->default_value(1));
-            Here, the static type returned by 'parameter' should be derived
-            from value_semantic.
-
-            Alas, derived->base conversion for auto_ptr does not really work,
-            see
-            http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2000/n1232.pdf
-            http://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#84
-
-            So, we have to use plain old pointers. Besides, users are not
-            expected to use the constructor directly.
-
+            Note: it is generally preferred to use the std::unique_ptr
+            overloads to explicitly pass ownership. We retain the raw pointer
+            overloads for backward compatibility with legacy code that
+            relies on implicit derived-to-base conversions which were historically
+            problematic with std::auto_ptr.
 
             The 'name' parameter is interpreted by the following rules:
             - if there's no "," character in 'name', it specifies long name
@@ -67,7 +56,17 @@ namespace hpx::program_options {
         /** Initializes the class with the passed data.
          */
         option_description(
+            char const* name, std::unique_ptr<value_semantic const> s);
+
+        /** Initializes the class with the passed data.
+         */
+        option_description(
             char const* name, value_semantic const* s, char const* description);
+
+        /** Initializes the class with the passed data.
+         */
+        option_description(char const* name,
+            std::unique_ptr<value_semantic const> s, char const* description);
 
         virtual ~option_description();
 

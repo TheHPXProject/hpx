@@ -7,10 +7,9 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/detail/agas_interface_functions.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/checkpoint_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/futures.hpp>
@@ -21,6 +20,7 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/thread_support.hpp>
+
 #include <hpx/naming/credit_handling.hpp>
 #include <hpx/naming/detail/preprocess_gid_types.hpp>
 #include <hpx/naming/split_gid.hpp>

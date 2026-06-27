@@ -1,4 +1,4 @@
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -102,12 +102,13 @@ namespace hpx { namespace collectives {
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
 
-    /// Create a new communicator object usable with any collective operation
+    /// Create a new hierarchical communicator object usable with collective
+    /// operations
     ///
     /// This functions creates a new hierarchical_communicator object that can
     /// be called in order to pre-allocate a communicator object usable with
-    /// multiple invocations of any of the collective operations (such as \a
-    /// all_gather, \a all_reduce, \a all_to_all, \a broadcast, etc.).
+    /// multiple invocations of a collective operation (such as \a all_gather,
+    /// \a all_reduce, \a all_to_all, \a broadcast, etc.).
     ///
     /// \param  basename    The base name identifying the collective operation
     /// \param  num_sites   The number of participating sites (default: all
@@ -126,6 +127,31 @@ namespace hpx { namespace collectives {
     /// \param  root_site   The site that is responsible for creating the
     ///                     collective support object. This value is optional
     ///                     and defaults to '0' (zero).
+    /// \param  threshold   The site-count threshold below which the
+    ///                     communicator collapses to a single flat
+    ///                     communicator spanning all sites (strict
+    ///                     comparison: num_sites < threshold). The default
+    ///                     is 16; pass 0 to disable the fallback and always
+    ///                     build a tree.
+    ///
+    /// \note   The sub-communicators of a hierarchical_communicator share one
+    ///         generation sequence per registered name. Every hierarchical
+    ///         collective advances each sub-communicator it touches by exactly
+    ///         two internal generations per call (a single-pass collective
+    ///         such as \a broadcast, \a gather, \a scatter or \a reduce, and
+    ///         the inter-group exchange of \a all_to_all, skip the second
+    ///         generation in one step rather than performing a second
+    ///         round-trip). A single hierarchical_communicator instance may
+    ///         therefore be shared freely across collective operations,
+    ///         provided every call uses an explicit, strictly consecutive
+    ///         generation number so the shared sequence stays gap-free. Because
+    ///         the two-phase hierarchical collectives (\a all_gather, \a
+    ///         all_reduce, \a all_to_all and the hierarchical \a barrier)
+    ///         derive their phase generations from that explicit number, they
+    ///         require it and reject an auto (default) generation. The
+    ///         non-hierarchical (flat) collectives keep supporting the default
+    ///         generation, falling back to the internal per-communicator
+    ///         counter maintained in the and_gate.
     ///
     /// \returns    This function returns a new communicator object usable
     ///             with the collective operation.
@@ -136,8 +162,8 @@ namespace hpx { namespace collectives {
         this_site_arg this_site = this_site_arg(),
         arity_arg arity = arity_arg(),
         generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
-
+        root_site_arg root_site = root_site_arg(),
+        flat_fallback_threshold_arg threshold = flat_fallback_threshold_arg());
 }}
 // clang-format on
 
@@ -146,12 +172,13 @@ namespace hpx { namespace collectives {
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/collectives/argument_types.hpp>
-#include <hpx/collectives/detail/communicator.hpp>
-#include <hpx/components/client_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/collectives/argument_types.hpp>
+#include <hpx/collectives/detail/communicator.hpp>
 
 #include <cstddef>
 #include <utility>
@@ -169,21 +196,24 @@ namespace hpx::collectives::detail {
     };
 }    // namespace hpx::collectives::detail
 
-// This is explicitly instantiated to ensure that the id is stable across
-// shared libraries.
-template <>
-struct hpx::util::extra_data_helper<hpx::collectives::detail::communicator_data>
-{
-    HPX_EXPORT static extra_data_id_type id() noexcept;
-    static constexpr void reset(
-        collectives::detail::communicator_data*) noexcept
+namespace hpx::util {
+
+    // This is explicitly instantiated to ensure that the id is stable across
+    // shared libraries.
+    template <>
+    struct extra_data_helper<hpx::collectives::detail::communicator_data>
     {
-    }
-};    // namespace hpx::util
+        HPX_EXPORT static extra_data_id_type id() noexcept;
+        static constexpr void reset(
+            collectives::detail::communicator_data*) noexcept
+        {
+        }
+    };    // namespace hpx::util
+}    // namespace hpx::util
 
 namespace hpx::collectives {
 
-    struct communicator
+    HPX_CXX_EXPORT struct communicator
       : hpx::components::client_base<communicator, detail::communicator_server,
             detail::communicator_data>
     {
@@ -229,13 +259,16 @@ namespace hpx::collectives {
 
         [[nodiscard]] bool is_root() const
         {
-            return !base_type::registered_name().empty();
+            auto const* client_data =
+                this->try_get_extra_data<detail::communicator_data>();
+            return client_data != nullptr &&
+                client_data->this_site_ == client_data->root_site_;
         }
     };
 
     ///////////////////////////////////////////////////////////////////////////
     // Predefined global communicator (refers to all localities)
-    HPX_EXPORT communicator get_world_communicator();
+    HPX_CXX_EXPORT HPX_EXPORT communicator get_world_communicator();
 
     namespace detail {
 
@@ -246,7 +279,7 @@ namespace hpx::collectives {
     ///////////////////////////////////////////////////////////////////////////
     // Predefined local communicator (refers to all threads on the calling
     // locality)
-    HPX_EXPORT communicator get_local_communicator();
+    HPX_CXX_EXPORT HPX_EXPORT communicator get_local_communicator();
 
     namespace detail {
 
@@ -255,39 +288,42 @@ namespace hpx::collectives {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_EXPORT communicator create_communicator(char const* basename,
+    HPX_CXX_EXPORT HPX_EXPORT communicator create_communicator(
+        char const* basename, num_sites_arg num_sites = num_sites_arg(),
+        this_site_arg this_site = this_site_arg(),
+        generation_arg generation = generation_arg(),
+        root_site_arg root_site = root_site_arg());
+
+    HPX_CXX_EXPORT HPX_EXPORT communicator create_communicator(
+        hpx::launch::sync_policy, char const* basename,
         num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg(),
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
 
-    HPX_EXPORT communicator create_communicator(hpx::launch::sync_policy,
-        char const* basename, num_sites_arg num_sites = num_sites_arg(),
-        this_site_arg this_site = this_site_arg(),
-        generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
-
-    HPX_EXPORT communicator create_local_communicator(char const* basename,
-        num_sites_arg num_sites, this_site_arg this_site,
-        generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
-
-    HPX_EXPORT communicator create_local_communicator(hpx::launch::sync_policy,
+    HPX_CXX_EXPORT HPX_EXPORT communicator create_local_communicator(
         char const* basename, num_sites_arg num_sites, this_site_arg this_site,
         generation_arg generation = generation_arg(),
         root_site_arg root_site = root_site_arg());
 
-    ///////////////////////////////////////////////////////////////////////////
-    struct hierarchical_communicator;
+    HPX_CXX_EXPORT HPX_EXPORT communicator create_local_communicator(
+        hpx::launch::sync_policy, char const* basename, num_sites_arg num_sites,
+        this_site_arg this_site, generation_arg generation = generation_arg(),
+        root_site_arg root_site = root_site_arg());
 
-    HPX_EXPORT hierarchical_communicator create_hierarchical_communicator(
-        char const* basename, num_sites_arg num_sites = num_sites_arg(),
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_EXPORT struct hierarchical_communicator;
+
+    HPX_CXX_EXPORT HPX_EXPORT hierarchical_communicator
+    create_hierarchical_communicator(char const* basename,
+        num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg(),
         arity_arg arity = arity_arg(),
         generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
+        root_site_arg root_site = root_site_arg(),
+        flat_fallback_threshold_arg threshold = flat_fallback_threshold_arg());
 
-    struct hierarchical_communicator
+    HPX_CXX_EXPORT struct hierarchical_communicator
     {
     private:
         hierarchical_communicator(
@@ -305,7 +341,8 @@ namespace hpx::collectives {
         friend HPX_EXPORT hierarchical_communicator
         create_hierarchical_communicator(char const* basename,
             num_sites_arg num_sites, this_site_arg this_site, arity_arg arity,
-            generation_arg generation, root_site_arg root_site);
+            generation_arg generation, root_site_arg root_site,
+            flat_fallback_threshold_arg threshold);
 
     public:
         hpx::tuple<communicator, this_site_arg>& operator[](std::size_t idx)
@@ -368,13 +405,13 @@ namespace hpx::collectives {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     struct is_communicator
       : hpx::meta::one_of<T, communicator, hierarchical_communicator>
     {
     };
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     inline constexpr bool is_communicator_v = is_communicator<T>::value;
 }    // namespace hpx::collectives
 

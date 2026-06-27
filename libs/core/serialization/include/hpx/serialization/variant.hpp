@@ -48,7 +48,7 @@ namespace hpx::serialization {
         HPX_CXX_CORE_EXPORT template <typename... Ts>
         struct std_variant_impl;
 
-        HPX_CXX_CORE_EXPORT template <typename T, typename... Ts>
+        template <typename T, typename... Ts>
         struct std_variant_impl<T, Ts...>
         {
             template <typename V>

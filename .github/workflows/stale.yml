@@ -1,0 +1,23 @@
+# Copyright (c) 2019-2026 Hartmut Kaiser
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: 'Close stale issues and PRs'
+on:
+  schedule:
+    - cron: '30 1 * * *'
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10
+        with:
+          stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs. Thank you for your contributions.'
+          close-issue-message: 'This issue has been automatically closed. Please re-open if necessary.'
+          days-before-issue-stale: 180
+          days-before-issue-close: 30
+          stale-issue-label: 'tag: wontfix'
+          exempt-issue-labels: 'tag: pinned'

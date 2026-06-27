@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Lelbach
-//  Copyright (c) 2012-2021 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -9,19 +9,19 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/futures.hpp>
+#include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 
 #include <hpx/agas_base/agas_fwd.hpp>
 #include <hpx/agas_base/locality_namespace.hpp>
 #include <hpx/agas_base/server/locality_namespace.hpp>
-#include <hpx/modules/futures.hpp>
-#include <hpx/modules/naming_base.hpp>
-#include <hpx/modules/parcelset_base.hpp>
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
+namespace hpx::agas::detail {
 
     struct bootstrap_locality_namespace : locality_namespace
     {
@@ -68,4 +68,4 @@ namespace hpx { namespace agas { namespace detail {
     private:
         server::locality_namespace server_;
     };
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail

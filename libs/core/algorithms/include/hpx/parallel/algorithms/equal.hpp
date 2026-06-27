@@ -465,6 +465,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -554,8 +555,7 @@ namespace hpx::parallel {
 
                 using policy_type = decltype(policy);
                 using zip_iterator = hpx::util::zip_iterator<Iter1, Iter2>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
 
@@ -635,7 +635,7 @@ namespace hpx::parallel {
 
                 using difference_type =
                     typename std::iterator_traits<FwdIter1>::difference_type;
-                difference_type count = std::distance(first1, last1);
+                difference_type count = detail::distance(first1, last1);
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
@@ -645,8 +645,7 @@ namespace hpx::parallel {
                 using policy_type = std::decay_t<decltype(policy)>;
                 using zip_iterator =
                     hpx::util::zip_iterator<FwdIter1, FwdIter2>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [f, tok](

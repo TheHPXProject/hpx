@@ -1,0 +1,56 @@
+# Copyright (c) 2026 Surya Teja
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Linux CI (Release, GCC Trunk Reflection)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: stellargroup/gcc_trunk_build_env:1
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Configure
+      shell: bash
+      run: |
+        cmake \
+          . \
+          -Bbuild \
+          -GNinja \
+          -DHPX_WITH_MALLOC=system \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DHPX_WITH_CXX_STANDARD=26 \
+          -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++ \
+          -DCMAKE_CXX_FLAGS="-freflection -std=c++26 -latomic" \
+          -DCMAKE_EXE_LINKER_FLAGS="-latomic" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-latomic" \
+          -DCMAKE_REQUIRED_LIBRARIES="atomic" \
+          -DHPX_INTERNAL_CACHE_LINE_SIZE_DETECT=64 \
+          -DHPX_WITH_FETCH_ASIO=ON \
+          -DHPX_WITH_EXAMPLES=OFF \
+          -DHPX_WITH_TESTS=ON \
+          -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+          -DHPX_SERIALIZATION_WITH_ALLOW_AUTO_GENERATE=ON \
+          -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --target all
+          cmake --build build --target tests.unit.modules.serialization
+    - name: Test
+      shell: bash
+      run: |
+          cd build
+          ctest \
+            --output-on-failure \
+            --tests-regex "tests.unit.modules.serialization"

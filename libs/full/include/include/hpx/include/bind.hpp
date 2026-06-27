@@ -9,4 +9,4 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
 
-#include <hpx/async_distributed/bind_action.hpp>
+#include <hpx/modules/async_distributed.hpp>

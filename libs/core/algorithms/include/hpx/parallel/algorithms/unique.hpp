@@ -339,11 +339,11 @@ namespace hpx::parallel {
             if (first == last)
                 return first;
 
-            using element_type =
-                typename std::iterator_traits<FwdIter>::value_type;
+            using projected_type = std::decay_t<std::invoke_result_t<Proj,
+                typename std::iterator_traits<FwdIter>::reference>>;
 
             FwdIter result = first;
-            element_type result_projected = HPX_INVOKE(proj, *result);
+            projected_type result_projected = HPX_INVOKE(proj, *result);
             while (++first != last)
             {
                 if (!HPX_INVOKE(
@@ -351,7 +351,7 @@ namespace hpx::parallel {
                 {
                     if (++result != first)
                     {
-                        *result = HPX_MOVE(*first);
+                        *result = std::ranges::iter_move(first);
                     }
                     result_projected = HPX_INVOKE(proj, *result);
                 }
@@ -416,7 +416,7 @@ namespace hpx::parallel {
                     // below makes gcc generate errors
 
                     // MSVC complains if pred or proj is captured by ref below
-                    util::loop_n<std::decay_t<ExPolicy>>(++part_begin,
+                    util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin,
                         part_size,
                         [base, pred, proj](zip_iterator it) mutable -> void {
                             bool r = hpx::invoke(pred, hpx::invoke(proj, *base),
@@ -437,12 +437,13 @@ namespace hpx::parallel {
                     if (dest == get<0>(part_begin.get_iterator_tuple()))
                     {
                         // Self-assignment must be detected.
-                        util::loop_n<execution_policy_type>(
+                        util::const_loop_n<execution_policy_type>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
                                 {
                                     if (dest != get<0>(it.get_iterator_tuple()))
-                                        *dest++ = HPX_MOVE(get<0>(*it));
+                                        *dest++ = std::ranges::iter_move(
+                                            get<0>(it.get_iterator_tuple()));
                                     else
                                         ++dest;
                                 }
@@ -451,10 +452,11 @@ namespace hpx::parallel {
                     else
                     {
                         // Self-assignment can't be performed.
-                        util::loop_n<execution_policy_type>(
+                        util::const_loop_n<execution_policy_type>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
-                                    *dest++ = HPX_MOVE(get<0>(*it));
+                                    *dest++ = std::ranges::iter_move(
+                                        get<0>(it.get_iterator_tuple()));
                             });
                     }
 
@@ -498,12 +500,12 @@ namespace hpx::parallel {
                     HPX_MOVE(first), HPX_MOVE(dest)};
             }
 
-            using element_type =
-                typename std::iterator_traits<FwdIter>::value_type;
+            using projected_type = std::decay_t<std::invoke_result_t<Proj,
+                typename std::iterator_traits<FwdIter>::reference>>;
 
             FwdIter base = first;
             *dest++ = *first;
-            element_type base_projected = HPX_INVOKE(proj, *base);
+            projected_type base_projected = HPX_INVOKE(proj, *base);
 
             while (++first != last)
             {
@@ -531,8 +533,10 @@ namespace hpx::parallel {
 
             using element_type =
                 typename std::iterator_traits<InIter>::value_type;
+            using projected_type = std::decay_t<std::invoke_result_t<Proj,
+                typename std::iterator_traits<InIter>::reference>>;
             element_type base_val = *first;
-            element_type base_projected = HPX_INVOKE(proj, base_val);
+            projected_type base_projected = HPX_INVOKE(proj, base_val);
 
             *dest++ = base_val;
 
@@ -618,7 +622,7 @@ namespace hpx::parallel {
                     std::size_t curr = 0;
 
                     // MSVC complains if pred or proj is captured by ref below
-                    util::loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<std::decay_t<ExPolicy>>(
                         ++part_begin, part_size, [&](zip_iterator it) mutable {
                             bool r = HPX_INVOKE(pred, HPX_INVOKE(proj, *base),
                                 HPX_INVOKE(proj, get<0>(*it)));
@@ -638,7 +642,7 @@ namespace hpx::parallel {
                               std::size_t val) mutable -> void {
                     HPX_UNUSED(flags);
                     std::advance(dest, val);
-                    util::loop_n<std::decay_t<ExPolicy>>(++part_begin,
+                    util::const_loop_n<std::decay_t<ExPolicy>>(++part_begin,
                         part_size, [&dest](zip_iterator it) mutable {
                             if (!get<1>(*it))
                                 *dest++ = get<0>(*it);
@@ -746,7 +750,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<OutIter> &&
                 hpx::is_invocable_v<Pred,
                     hpx::traits::iter_value_t<InIter>,
-                    hpx::traits::iter_value_t<OutIter>
+                    hpx::traits::iter_value_t<InIter>
                 >
             )
         // clang-format on
@@ -773,12 +777,11 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2> &&
                 hpx::is_invocable_v<Pred,
                     hpx::traits::iter_value_t<FwdIter1>,
-                    hpx::traits::iter_value_t<FwdIter2>
+                    hpx::traits::iter_value_t<FwdIter1>
                 >
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
+        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
         tag_fallback_invoke(hpx::unique_copy_t, ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, Pred pred = Pred())
         {

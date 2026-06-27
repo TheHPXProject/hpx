@@ -14,6 +14,7 @@
 #include <hpx/functional/invoke.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -41,17 +42,15 @@ namespace hpx::util::detail {
         }
         char const* (*get_function_annotation)(void*) = nullptr;
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
         template <typename T>
-        HPX_FORCEINLINE static util::itt::string_handle
-        _get_function_annotation_itt(void* f)
+        HPX_FORCEINLINE static hpx::tracing::annotation_handle
+        _get_function_annotation_tracing(void* f)
         {
-            return traits::get_function_annotation_itt<T>::call(
+            return traits::get_function_annotation_tracing<T>::call(
                 vtable::get<T>(f));
         }
-        util::itt::string_handle (*get_function_annotation_itt)(
+        hpx::tracing::annotation_handle (*get_function_annotation_tracing)(
             void*) = nullptr;
-#endif
 #endif
 
         template <typename T>
@@ -61,10 +60,8 @@ namespace hpx::util::detail {
                 &callable_info_vtable::_get_function_address<T>)
           , get_function_annotation(
                 &callable_info_vtable::_get_function_annotation<T>)
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-          , get_function_annotation_itt(
-                &callable_info_vtable::_get_function_annotation_itt<T>)
-#endif
+          , get_function_annotation_tracing(
+                &callable_info_vtable::_get_function_annotation_tracing<T>)
 #endif
         {
         }

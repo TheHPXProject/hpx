@@ -195,15 +195,17 @@ namespace hpx::serialization::detail {
     };
 }    // namespace hpx::serialization::detail
 
-// This is explicitly instantiated to ensure that the id is stable across
-// shared libraries.
-template <>
-struct hpx::util::extra_data_helper<
-    hpx::serialization::detail::preprocess_futures>
-{
-    HPX_CORE_EXPORT static hpx::util::extra_data_id_type id() noexcept;
-    static constexpr void reset(
-        hpx::serialization::detail::preprocess_futures*) noexcept
+namespace hpx::util {
+
+    // This is explicitly instantiated to ensure that the id is stable across
+    // shared libraries.
+    template <>
+    struct extra_data_helper<hpx::serialization::detail::preprocess_futures>
     {
-    }
-};
+        HPX_CORE_EXPORT static hpx::util::extra_data_id_type id() noexcept;
+        static constexpr void reset(
+            hpx::serialization::detail::preprocess_futures*) noexcept
+        {
+        }
+    };
+}    // namespace hpx::util

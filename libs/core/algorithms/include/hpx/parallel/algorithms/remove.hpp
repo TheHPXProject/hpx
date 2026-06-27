@@ -256,7 +256,7 @@ namespace hpx::parallel {
                 for (Iter i = first; ++i != last;)
                     if (!HPX_INVOKE(pred, HPX_INVOKE(proj, *i)))
                     {
-                        *first++ = HPX_MOVE(*i);
+                        *first++ = std::ranges::iter_move(i);
                     }
             }
             return first;
@@ -311,8 +311,8 @@ namespace hpx::parallel {
                               zip_iterator part_begin,
                               std::size_t part_size) -> void {
                     // MSVC complains if pred or proj is captured by ref below
-                    util::loop_n<std::decay_t<ExPolicy>>(part_begin, part_size,
-                        [pred, proj](zip_iterator it) mutable {
+                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
+                        part_size, [pred, proj](zip_iterator it) mutable {
                             bool f = hpx::invoke(
                                 pred, hpx::invoke(proj, get<0>(*it)));
 
@@ -329,12 +329,13 @@ namespace hpx::parallel {
                     if (dest == get<0>(part_begin.get_iterator_tuple()))
                     {
                         // Self-assignment must be detected.
-                        util::loop_n<execution_policy_type>(
+                        util::const_loop_n<execution_policy_type>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
                                 {
                                     if (dest != get<0>(it.get_iterator_tuple()))
-                                        *dest++ = HPX_MOVE(get<0>(*it));
+                                        *dest++ = std::ranges::iter_move(
+                                            get<0>(it.get_iterator_tuple()));
                                     else
                                         ++dest;
                                 }
@@ -343,10 +344,11 @@ namespace hpx::parallel {
                     else
                     {
                         // Self-assignment can't be performed.
-                        util::loop_n<execution_policy_type>(
+                        util::const_loop_n<execution_policy_type>(
                             part_begin, part_size, [&dest](zip_iterator it) {
                                 if (!get<1>(*it))
-                                    *dest++ = HPX_MOVE(get<0>(*it));
+                                    *dest++ = std::ranges::iter_move(
+                                        get<0>(it.get_iterator_tuple()));
                             });
                     }
                     return dest;
@@ -447,7 +449,9 @@ namespace hpx {
             using Type = typename std::iterator_traits<FwdIter>::value_type;
 
             return hpx::remove_if(HPX_FORWARD(ExPolicy, policy), first, last,
-                [value](Type const& a) -> bool { return value == a; });
+                [value](Type const& a) -> bool {
+                    return static_cast<Type>(value) == a;
+                });
         }
     } remove{};
 }    // namespace hpx

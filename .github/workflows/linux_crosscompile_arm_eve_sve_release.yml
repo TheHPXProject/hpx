@@ -8,13 +8,17 @@ name: Linux CROSSCOMPILE ARM EVE SVE CI (Release)
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     container: stellargroup/crosscompile_arm_sve_build_env:1
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Configure
       shell: bash
       run: |
@@ -46,6 +50,7 @@ jobs:
           cmake --build build --target core
           cmake --build build --target tests.unit.modules.algorithms.datapar_algorithms
           cmake --build build --target tests.regressions.modules.algorithms.for_each_datapar
+          cmake --build build --target tests.regressions.modules.algorithms.counting_iterator_datapar
     - name: Test
       shell: bash
       run: |

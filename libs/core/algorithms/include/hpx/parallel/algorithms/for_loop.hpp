@@ -744,6 +744,7 @@ namespace hpx { namespace experimental {
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/for_loop_induction.hpp>
@@ -811,8 +812,7 @@ namespace hpx::parallel {
             typename S = void, typename Tuple = hpx::tuple<>>
         struct part_iterations;
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
-            typename... Ts>
+        template <typename ExPolicy, typename F, typename S, typename... Ts>
         struct part_iterations<ExPolicy, F, S, hpx::tuple<Ts...>>
         {
             using fun_type = std::decay_t<F>;
@@ -915,7 +915,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S>
+        template <typename ExPolicy, typename F, typename S>
         struct part_iterations<ExPolicy, F, S, hpx::tuple<>>
         {
             using fun_type = std::decay_t<F>;
@@ -953,7 +953,7 @@ namespace hpx::parallel {
                 B part_begin, std::size_t part_steps)
             {
                 HPX_ASSERT(stride_ == 1);
-                parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                     part_begin, part_steps, f_);
             }
 
@@ -1016,8 +1016,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-            typename... Ts>
+        template <typename ExPolicy, typename F, typename... Ts>
         struct part_iterations<ExPolicy, F, void, hpx::tuple<Ts...>>
         {
             using fun_type = std::decay_t<F>;
@@ -1079,7 +1078,7 @@ namespace hpx::parallel {
                     detail::init_iteration(
                         args_, pack, part_index, current_thread);
 
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_steps, [&](auto it) {
                             detail::invoke_iteration(
                                 args_, pack, f_, it, current_thread);
@@ -1097,7 +1096,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
+        template <typename ExPolicy, typename F>
         struct part_iterations<ExPolicy, F, void, hpx::tuple<>>
         {
             using fun_type = std::decay_t<F>;
@@ -1139,7 +1138,7 @@ namespace hpx::parallel {
                 {
                     static_assert(hpx::traits::is_iterator_v<IterOrR> ||
                         std::is_integral_v<IterOrR>);
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_steps, f_);
                 }
             }
@@ -1217,11 +1216,10 @@ namespace hpx::parallel {
                     if constexpr (hpx::is_async_execution_policy_v<ExPolicy> ||
                         is_scheduler_policy)
                     {
-                        return util::detail::algorithm_result<ExPolicy>::get(
-                            util::partitioner<ExPolicy>::call(
-                                HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
-                                part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
-                                hpx::util::empty_function{}));
+                        return util::call_with_algorithm_result<ExPolicy>(
+                            HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
+                            part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
+                            hpx::util::empty_function{});
                     }
                     else
                     {
@@ -1285,7 +1283,7 @@ namespace hpx::parallel {
             {
                 if (stride == 1)
                 {
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         first, count, HPX_FORWARD(F, f));
                 }
                 else if (stride > 0)
@@ -1871,20 +1869,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
         typename Tuple>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {
-        static util::itt::string_handle call(
+        static hpx::tracing::annotation_handle call(
             hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 #endif

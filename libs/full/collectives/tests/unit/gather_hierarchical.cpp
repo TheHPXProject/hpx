@@ -1,4 +1,5 @@
 //  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -37,7 +38,8 @@ void test_multiple_use(int arity = 2)
     // test functionality based on immediate local result value
     auto const gather_clients = create_hierarchical_communicator(
         gather_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -80,7 +82,8 @@ void test_multiple_use_with_generation(int arity = 2)
     // test functionality based on immediate local result value
     auto const gather_clients = create_hierarchical_communicator(
         gather_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -126,7 +129,8 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
         sites.push_back(hpx::async([=]() {
             auto const gather_clients = create_hierarchical_communicator(
                 gather_direct_basename, num_sites_arg(num_sites),
-                this_site_arg(site), arity_arg(arity));
+                this_site_arg(site), arity_arg(arity), generation_arg(),
+                root_site_arg(), flat_fallback_threshold_arg(0));
 
             hpx::chrono::high_resolution_timer const t;
 
@@ -166,6 +170,28 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
     hpx::wait_all(std::move(sites));
 }
 
+// Non-power-of-arity coverage. The hierarchical tree construction in
+// create_communicator.cpp handles uneven partitioning via the
+// division_steps + remainder logic and degenerate single-site leaves.
+// This test exercises site counts that are not clean multiples of the
+// arity, including cases where recursion produces size-1 subgroups.
+void test_non_power_of_arity()
+{
+    // arity=2 with site counts that force uneven splits and odd-sized
+    // subtrees at multiple levels of recursion.
+    for (std::uint32_t num_sites : {3u, 5u, 6u, 7u, 9u, 10u, 11u, 15u})
+    {
+        test_local_use(num_sites, 2);
+    }
+
+    // arity=4 with site counts not divisible by 4, exercising top-level
+    // partitioning into unequal subtrees.
+    for (std::uint32_t num_sites : {5u, 6u, 7u, 9u, 10u, 11u, 13u, 15u})
+    {
+        test_local_use(num_sites, 4);
+    }
+}
+
 int hpx_main()
 {
 #if defined(HPX_HAVE_NETWORKING)
@@ -194,6 +220,8 @@ int hpx_main()
                 }
             }
         }
+
+        test_non_power_of_arity();
     }
 
     return hpx::finalize();

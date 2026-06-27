@@ -395,5 +395,4 @@ namespace hpx::concurrent {
             map_.reserve(count);
         }
     };
-
 }    // namespace hpx::concurrent

@@ -11,10 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/debugging.hpp>
 #include <hpx/modules/serialization.hpp>
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
+#include <hpx/modules/tracing.hpp>
 
 namespace hpx::actions::detail {
 
@@ -47,21 +44,19 @@ namespace hpx::actions::detail {
 #endif
 
     ////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-
 #if !defined(HPX_HAVE_AUTOMATIC_SERIALIZATION_REGISTRATION)
     HPX_CXX_CORE_EXPORT template <typename Action>
-    [[nodiscard]] util::itt::string_handle const&
-    get_action_name_itt() noexcept;
+    [[nodiscard]] hpx::tracing::annotation_handle const&
+    get_action_name_tracing() noexcept;
 #else
     HPX_CXX_CORE_EXPORT template <typename Action>
-    [[nodiscard]] util::itt::string_handle const& get_action_name_itt() noexcept
+    [[nodiscard]] hpx::tracing::annotation_handle const&
+    get_action_name_tracing() noexcept
     {
-        static auto sh = util::itt::string_handle(get_action_name<Action>());
+        static auto sh =
+            hpx::tracing::create_annotation_handle(get_action_name<Action>());
         return sh;
     }
 #endif
 
-#endif
 }    // namespace hpx::actions::detail

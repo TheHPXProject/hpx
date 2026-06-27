@@ -10,10 +10,12 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/timing.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/set_thread_state_timed.hpp>
+#include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_description.hpp>
 #include <hpx/threading_base/thread_helpers.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
@@ -100,6 +102,9 @@ namespace hpx::threads {
 
     void interrupt_thread(thread_id_type const& id, bool flag, error_code& ec)
     {
+        // Copy id as the original `id` may get reset by the caller
+        // asynchronously.
+        auto const keep_alive = id;
         if (HPX_UNLIKELY(!id))
         {
             HPX_THROWS_IF(ec, hpx::error::null_thread_id,
@@ -114,7 +119,7 @@ namespace hpx::threads {
 
         // Set thread state to pending. If the thread is currently active we do
         // not retry. The thread will either exit or hit an interruption_point.
-        set_thread_state(id, thread_schedule_state::pending,
+        set_thread_state(keep_alive, thread_schedule_state::pending,
             thread_restart_state::abort, thread_priority::normal, false, ec);
     }
 
@@ -427,6 +432,26 @@ namespace hpx::threads {
 
 namespace hpx::this_thread {
 
+    namespace {
+#ifdef HPX_HAVE_TRACY
+        // Extract the suspend reason from the thread description so the fiber
+        // track in Tracy shows a meaningful label (e.g. the LCO being waited
+        // on) instead of a generic "this_thread::suspend" string.
+        char const* get_tracy_suspend_reason(
+            threads::thread_description const& description) noexcept
+        {
+            return threads::thread_data::get_tracy_description_name(
+                description, "this_thread::suspend");
+        }
+#else
+        constexpr char const* get_tracy_suspend_reason(
+            threads::thread_description const& /*description*/) noexcept
+        {
+            return "this_thread::suspend";
+        }
+#endif
+    }    // namespace
+
     // The function 'suspend' will return control to the thread manager
     // (suspends the current thread). It sets the new state of this thread to
     // the thread state passed as the parameter.
@@ -471,6 +496,8 @@ namespace hpx::this_thread {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
+            hpx::tracing::fiber_suspend_region tracy_suspend(
+                get_tracy_suspend_reason(description));
             // We might need to dispatch 'nextid' to it's correct scheduler only
             // if our current scheduler is the same, we should yield to the id
             if (nextid &&
@@ -551,6 +578,8 @@ namespace hpx::this_thread {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
+            hpx::tracing::fiber_suspend_region tracy_suspend(
+                get_tracy_suspend_reason(description));
             std::atomic<bool> timer_started(false);
             threads::thread_id_ref_type const timer_id =
                 threads::set_thread_state(id.noref(), abs_time, &timer_started,
@@ -644,6 +673,7 @@ namespace hpx::this_thread {
         {
             HPX_THROW_BAD_ALLOC("has_sufficient_stack_space");
         }
+
         bool const sufficient_stack_space =
             static_cast<std::size_t>(remaining_stack) >= space_needed;
 

@@ -11,33 +11,14 @@
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 
 namespace hpx::execution::experimental {
 
-    // Scheduling property implementations for execution policies that simply
-    // forwards to the embedded executor
-
-    HPX_CXX_CORE_EXPORT template <scheduling_property Tag,
-        execution_policy ExPolicy, typename Property>
-        requires(hpx::functional::is_tag_invocable_v<Tag,
-            typename std::decay_t<ExPolicy>::executor_type, Property>)
-    constexpr decltype(auto) tag_invoke(
-        Tag tag, ExPolicy&& policy, Property&& prop)
-    {
-        return hpx::execution::experimental::create_rebound_policy(policy,
-            tag(policy.executor(), HPX_FORWARD(Property, prop)),
-            policy.parameters());
-    }
-
-    HPX_CXX_CORE_EXPORT template <scheduling_property Tag,
-        execution_policy ExPolicy>
-        requires(hpx::functional::is_tag_invocable_v<Tag,
-            typename std::decay_t<ExPolicy>::executor_type>)
-    constexpr decltype(auto) tag_invoke(Tag tag, ExPolicy&& policy)
-    {
-        return tag(policy.executor());
-    }
+    // Scheduling property implementations for execution policies are provided
+    // through the public query() member functions on execution_policy (see
+    // hpx/executors/execution_policy.hpp). The scheduling property CPOs detect
+    // those members directly (via property_base), so no tag_invoke bridge is
+    // needed here.
 }    // namespace hpx::execution::experimental

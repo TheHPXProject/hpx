@@ -13,17 +13,16 @@
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/thread_support.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/thread_data.hpp>
-#if defined(HPX_HAVE_APEX)
-#include <hpx/threading_base/external_timer.hpp>
-#endif
-#if defined(HPX_HAVE_MODULE_TRACY)
+#if defined(HPX_HAVE_TRACY)
 #include <hpx/modules/tracy.hpp>
 #endif
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -40,7 +39,7 @@ namespace hpx::threads {
 
         void set_get_locality_id(get_locality_id_type* f)
         {
-            get_locality_id_f = HPX_MOVE(f);
+            get_locality_id_f = f;
         }
 
         std::uint32_t get_locality_id(hpx::error_code& ec)
@@ -111,8 +110,9 @@ namespace hpx::threads {
         if (0 == parent_locality_id_)
             parent_locality_id_ = detail::get_locality_id(hpx::throws);
 #endif
-#if defined(HPX_HAVE_APEX)
         set_timer_data(init_data.timer_data);
+#if defined(HPX_HAVE_TRACY)
+        tracy_fiber_name_[0] = '\0';
 #endif
     }
 
@@ -255,6 +255,10 @@ namespace hpx::threads {
         backtrace_ = nullptr;
 #endif
 
+#if defined(HPX_HAVE_TRACY)
+        tracy_fiber_name_[0] = '\0';
+#endif
+
         LTM_(debug).format("thread::thread({}), description({}), rebind", this,
             get_description());
 
@@ -274,9 +278,7 @@ namespace hpx::threads {
             parent_locality_id_ = detail::get_locality_id(hpx::throws);
         }
 #endif
-#if defined(HPX_HAVE_APEX)
         set_timer_data(init_data.timer_data);
-#endif
     }
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
@@ -294,9 +296,7 @@ namespace hpx::threads {
             spinlock_pool::spinlock_for(this));
         std::swap(description_, value);
 
-#if defined(HPX_HAVE_MODULE_TRACY)
-        tracy::rename_region(description_.get_description());
-#endif
+        hpx::tracing::rename_region(description_.get_description());
 
         return value;
     }
@@ -315,6 +315,46 @@ namespace hpx::threads {
             spinlock_pool::spinlock_for(this));
         std::swap(lco_description_, value);
         return value;
+    }
+#endif
+
+#if defined(HPX_HAVE_TRACY)
+    char const* thread_data::get_tracy_description_name(
+        threads::thread_description const& description,
+        char const* fallback) noexcept
+    {
+#if defined(HPX_HAVE_THREAD_DESCRIPTION)
+        if (description.kind() ==
+            threads::thread_description::data_type::description)
+        {
+            char const* description_name = description.get_description();
+            if (description_name != nullptr && description_name[0] != '\0')
+            {
+                return description_name;
+            }
+        }
+#else
+        char const* description_name = description.get_description();
+        if (description_name != nullptr && description_name[0] != '\0')
+        {
+            return description_name;
+        }
+#endif
+        return fallback;
+    }
+
+    char const* thread_data::get_tracy_fiber_name() const noexcept
+    {
+        if (tracy_fiber_name_[0] == '\0')
+        {
+            char const* name =
+                get_tracy_description_name(get_description(), "fiber");
+            // Use the HPX thread_id pointer as the unique numeric suffix
+            // so each HPX task gets its own fiber track in Tracy.
+            std::snprintf(tracy_fiber_name_, sizeof(tracy_fiber_name_), "%s_%p",
+                name, get_thread_id().get());
+        }
+        return tracy_fiber_name_;
     }
 #endif
 
@@ -374,16 +414,6 @@ namespace hpx::threads {
         if (thread_self const* self = get_self_ptr();
             HPX_LIKELY(nullptr != self))
         {
-            return self->get_thread_id();
-        }
-        return threads::invalid_thread_id;
-    }
-
-    thread_id_type get_outer_self_id() noexcept
-    {
-        if (thread_self const* self = get_self_ptr();
-            HPX_LIKELY(nullptr != self))
-        {
             return self->get_outer_thread_id();
         }
         return threads::invalid_thread_id;
@@ -394,7 +424,7 @@ namespace hpx::threads {
         if (thread_self const* self = get_self_ptr();
             HPX_LIKELY(nullptr != self))
         {
-            return get_thread_id_data(self->get_thread_id());
+            return get_thread_id_data(self->get_outer_thread_id());
         }
         return nullptr;
     }
@@ -473,32 +503,58 @@ namespace hpx::threads {
         if (thread_data const* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
-            return thrd_data->get_component_id();
+            return hpx::threads::thread_data::get_component_id();
         }
         return 0;
 #endif
     }
 
-#if defined(HPX_HAVE_APEX)
-    std::shared_ptr<hpx::util::external_timer::task_wrapper>
-    get_self_timer_data()
+    hpx::tracing::task_timer_data get_self_timer_data()
     {
         if (thread_data* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
             return thrd_data->get_timer_data();
         }
-        return nullptr;
+        return {};
     }
 
-    void set_self_timer_data(
-        std::shared_ptr<hpx::util::external_timer::task_wrapper> data)
+    void set_self_timer_data(hpx::tracing::task_timer_data data)
     {
         if (thread_data* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
-            thrd_data->set_timer_data(data);
+            thrd_data->set_timer_data(HPX_MOVE(data));
         }
     }
+
+#if defined(HPX_HAVE_TRACY)
+    tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
+    {
+        return {thrdptr->get_description().get_description(),
+            thrdptr->get_thread_phase(), thrdptr->is_stackless()};
+    }
+
+    tracing::fiber_region_init_data get_fiber_region_init_data(
+        thread_data const* thrdptr)
+    {
+        return {thrdptr->get_description().get_description(),
+            thrdptr->get_tracy_fiber_name(), thrdptr->is_stackless()};
+    }
+#elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
+    tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
+    {
+        threads::thread_description const desc = thrdptr->get_description();
+        if (desc.kind() == threads::thread_description::data_type::description)
+        {
+            return {desc.get_description(), thrdptr->get_thread_phase(),
+                thrdptr, thrdptr->is_stackless(), 0, false,
+                desc.get_description_tracing()};
+        }
+        return {"address", thrdptr->get_thread_phase(), thrdptr,
+            thrdptr->is_stackless(), desc.get_address(), true,
+            tracing::annotation_handle()};
+    }
 #endif
+
 }    // namespace hpx::threads

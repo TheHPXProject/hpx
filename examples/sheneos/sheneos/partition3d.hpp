@@ -76,7 +76,7 @@ namespace sheneos {
         void init(std::string const& datafilename, dimension const& dimx,
             dimension const& dimy, dimension const& dimz)
         {
-            init_async(datafilename, dimx, dimy, dimz), get();
+            init_async(datafilename, dimx, dimy, dimz).get();
         }
 
         /// Asynchronously perform an interpolation on this partition.

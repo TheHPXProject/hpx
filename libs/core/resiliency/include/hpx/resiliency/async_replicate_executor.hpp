@@ -33,11 +33,31 @@ namespace hpx::resiliency::experimental {
         HPX_CXX_CORE_EXPORT template <typename Result>
         struct async_replicate_vote_validate_executor
         {
+            template <typename Pred, typename T, typename U>
+            static void emplace_result(
+                Pred&& pred, std::vector<T>& valid_results, U&& result)
+            {
+                if (HPX_INVOKE(pred, result))
+                {
+                    valid_results.emplace_back(HPX_FORWARD(U, result));
+                }
+            }
+
+            template <typename Pred, typename T, typename U>
+            static void emplace_result(Pred&& pred,
+                std::vector<T>& valid_results, std::vector<U>&& results)
+            {
+                for (auto&& result : HPX_MOVE(results))
+                {
+                    emplace_result(pred, valid_results, HPX_MOVE(result));
+                }
+            }
+
             template <typename Executor, typename Vote, typename Pred,
                 typename F, typename... Ts>
-            static typename hpx::traits::executor_future<Executor, Result>::type
-            call(Executor&& exec, std::size_t n, Vote&& vote, Pred&& pred,
-                F&& f, Ts&&... ts)
+            static hpx::traits::executor_future_t<Executor, Result> call(
+                Executor&& exec, std::size_t n, Vote&& vote, Pred&& pred, F&& f,
+                Ts&&... ts)
             {
                 using result_type =
                     typename hpx::util::detail::invoke_deferred_result<F,
@@ -52,7 +72,9 @@ namespace hpx::resiliency::experimental {
                 };
 
                 auto&& results = hpx::parallel::execution::bulk_async_execute(
-                    HPX_FORWARD(Executor, exec), HPX_MOVE(func), n);
+                    hpx::execution::to_hierarchical_spawning(
+                        HPX_FORWARD(Executor, exec)),
+                    HPX_MOVE(func), n);
 
                 // wait for all threads to finish executing and return the first
                 // result that passes the predicate, properly handle exceptions
@@ -81,12 +103,8 @@ namespace hpx::resiliency::experimental {
                             }
                             else
                             {
-                                auto&& result = results.get();
-                                if (HPX_INVOKE(pred, result))
-                                {
-                                    valid_results.emplace_back(
-                                        HPX_MOVE(result));
-                                }
+                                emplace_result(HPX_FORWARD(Pred, pred),
+                                    valid_results, results.get());
                             }
                         }
                         else
@@ -156,7 +174,9 @@ namespace hpx::resiliency::experimental {
                 };
 
                 auto&& results = hpx::parallel::execution::bulk_async_execute(
-                    HPX_FORWARD(Executor, exec), HPX_MOVE(func), n);
+                    hpx::execution::to_hierarchical_spawning(
+                        HPX_FORWARD(Executor, exec)),
+                    HPX_MOVE(func), n);
 
                 // wait for all threads to finish executing and return the first
                 // result that passes the predicate, properly handle exceptions

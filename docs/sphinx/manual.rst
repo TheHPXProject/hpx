@@ -21,6 +21,7 @@ information on how to build and use |hpx| in different scenarios.
    manual/getting_hpx
    manual/building_hpx
    manual/cmake_variables
+   manual/using_hpx_on_compiler_explorer
    manual/migration_guide
    manual/building_tests_examples
    manual/creating_hpx_projects

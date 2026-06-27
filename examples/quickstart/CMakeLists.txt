@@ -42,6 +42,12 @@ if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" AND NOT HPX_WITH_STATIC_LINKING)
   set(example_programs ${example_programs} init_globally)
 endif()
 
+if(NOT ((MSVC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") AND HPX_WITH_CXX_MODULES
+       )
+)
+  list(APPEND example_programs sender_diamond)
+endif()
+
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   set(example_programs
       ${example_programs}
@@ -82,6 +88,15 @@ endif()
 set(disabled_tests error_handling fibonacci_await non_atomic_rma zerocopy_rdma)
 if(HPX_WITH_STATIC_LINKING)
   set(disabled_tests ${disabled_tests} hello_world_1)
+endif()
+# sender_diamond uses stdexec continues_on which fails on Clang <= 21 /
+# AppleClang <= 16 due to tag_invoke dispatch differences.
+if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION
+                                               VERSION_LESS_EQUAL "21")
+   OR (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+       AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL "16")
+)
+  set(disabled_tests ${disabled_tests} sender_diamond)
 endif()
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   set(disabled_tests ${disabled_tests} 1d_wave_equation)
@@ -134,6 +149,7 @@ set(hello_world_2_PARAMETERS THREADS_PER_LOCALITY 4)
 set(hello_world_distributed_PARAMETERS THREADS_PER_LOCALITY 4)
 set(interval_timer_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_channel_PARAMETERS THREADS_PER_LOCALITY 4)
+set(sender_diamond_PARAMETERS THREADS_PER_LOCALITY 4)
 set(sierpinski_PARAMETERS THREADS_PER_LOCALITY 4)
 set(partitioned_vector_spmd_foreach_PARAMETERS THREADS_PER_LOCALITY 4)
 set(pingpong_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -174,3 +190,25 @@ foreach(example_program ${example_programs})
     )
   endif()
 endforeach()
+
+if(HPX_WITH_CXX_MODULES
+   AND (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+   AND (NOT (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 1952))
+)
+  foreach(
+    example
+    barrier_docs
+    customize_async
+    component_ctors
+    component_in_executable
+    component_with_executor
+    custom_serialization
+    enumerate_threads
+    hello_world_distributed
+    latch_remote
+    latch_local
+    mutex_docs
+  )
+    target_compile_definitions(${example} PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES)
+  endforeach()
+endif()

@@ -9,3 +9,10 @@ code {
     color: #317d6e;
     background-color: #f2fbf9;
 }
+
+/* Dark mode overrides */
+html[data-theme="dark"] code {
+    color: #6cc4a1;
+    background-color: #1a2f2a;
+}
+

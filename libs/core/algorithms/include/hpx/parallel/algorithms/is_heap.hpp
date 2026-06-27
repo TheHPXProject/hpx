@@ -1,5 +1,5 @@
 //  Copyright (c) 2017 Taeguk Kwon
-//  Copyright (c) 2020-2023 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -209,7 +209,6 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
-#include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/execution.hpp>
@@ -218,6 +217,8 @@ namespace hpx {
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
@@ -240,37 +241,94 @@ namespace hpx::parallel {
     // is_heap
     namespace detail {
 
+        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
+            typename Comp, typename Proj>
+        constexpr Iter sequential_is_heap_until(
+            Iter first, Sent last, Comp&& comp, Proj&& proj)
+        {
+            Iter child = first;
+            if (child == last)
+            {
+                return child;
+            }
+
+            while (true)
+            {
+                ++child;
+                if (child == last ||
+                    HPX_INVOKE(comp, HPX_INVOKE(proj, *first),
+                        HPX_INVOKE(proj, *child)))
+                {
+                    break;
+                }
+
+                ++child;
+                if (child == last ||
+                    HPX_INVOKE(comp, HPX_INVOKE(proj, *first),
+                        HPX_INVOKE(proj, *child)))
+                {
+                    break;
+                }
+
+                ++first;
+            }
+
+            return child;
+        }
+
+        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
+            typename Comp>
+        constexpr Iter sequential_is_heap_until(
+            Iter first, Sent last, Comp&& comp, hpx::identity)
+        {
+            Iter child = first;
+            if (child == last)
+            {
+                return child;
+            }
+
+            while (true)
+            {
+                ++child;
+                if (child == last || HPX_INVOKE(comp, *first, *child))
+                {
+                    break;
+                }
+
+                ++child;
+                if (child == last || HPX_INVOKE(comp, *first, *child))
+                {
+                    break;
+                }
+
+                ++first;
+            }
+
+            return child;
+        }
+
         // sequential is_heap with projection function
         HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
             typename Comp, typename Proj>
         constexpr bool sequential_is_heap(
             Iter first, Sent last, Comp&& comp, Proj&& proj)
         {
-            using difference_type =
-                typename std::iterator_traits<Iter>::difference_type;
-
-            difference_type count = detail::distance(first, last);
-
-            for (difference_type i = 1; i < count; ++i)
-            {
-                if (HPX_INVOKE(comp, HPX_INVOKE(proj, *(first + (i - 1) / 2)),
-                        HPX_INVOKE(proj, *(first + i))))
-                    return false;
-            }
-            return true;
+            return sequential_is_heap_until(first, last,
+                       HPX_FORWARD(Comp, comp),
+                       HPX_FORWARD(Proj, proj)) == last;
         }
 
-        HPX_CXX_CORE_EXPORT struct is_heap_helper
+        struct is_heap_helper
         {
             template <typename ExPolicy, typename Iter, typename Sent,
                 typename Comp, typename Proj>
-            decltype(auto) operator()(ExPolicy&& orgpolicy, Iter first,
+            decltype(auto) operator()(ExPolicy&& org_policy, Iter first,
                 Sent last, Comp&& comp, Proj&& proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, bool>;
-                using type = typename std::iterator_traits<Iter>::value_type;
+                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
-                    typename std::iterator_traits<Iter>::difference_type;
+                    std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
                     hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
@@ -297,7 +355,7 @@ namespace hpx::parallel {
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
-                        HPX_FORWARD(ExPolicy, orgpolicy),
+                        HPX_FORWARD(ExPolicy, org_policy),
                         hpx::threads::thread_placement_hint::breadth_first);
 
                 using policy_type = std::decay_t<decltype(policy)>;
@@ -310,16 +368,35 @@ namespace hpx::parallel {
                               proj = HPX_FORWARD(Proj, proj)](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable -> void {
+                    bool cancelled = false;
                     util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                        [&tok, first, &comp, &proj](
-                            type const& v, std::size_t i) mutable -> void {
-                            if (hpx::invoke(comp,
-                                    hpx::invoke(proj, *(first + i / 2)),
-                                    hpx::invoke(proj, v)))
+                        [&cancelled, first, &comp, &proj](type const& v,
+                            std::size_t const i) mutable -> void {
+                            if constexpr (std::is_same_v<hpx::identity,
+                                              std::decay_t<Proj>>)
                             {
-                                tok.cancel(0);
+                                HPX_UNUSED(proj);
+                                if (!cancelled &&
+                                    hpx::invoke(comp, *(first + i / 2), v))
+                                {
+                                    cancelled = true;
+                                }
+                            }
+                            else
+                            {
+                                if (!cancelled &&
+                                    hpx::invoke(comp,
+                                        hpx::invoke(proj, *(first + i / 2)),
+                                        hpx::invoke(proj, v)))
+                                {
+                                    cancelled = true;
+                                }
                             }
                         });
+                    if (cancelled)
+                    {
+                        tok.cancel(0);
+                    }
                 };
 
                 auto f2 = [tok, count](auto&&... data) mutable -> bool {
@@ -344,7 +421,7 @@ namespace hpx::parallel {
         };
 
         HPX_CXX_CORE_EXPORT template <typename RandIter>
-        struct is_heap : public algorithm<is_heap<RandIter>, bool>
+        struct is_heap : algorithm<is_heap<RandIter>, bool>
         {
             constexpr is_heap() noexcept
               : algorithm<is_heap, bool>("is_heap")
@@ -375,37 +452,17 @@ namespace hpx::parallel {
     // is_heap_until
     namespace detail {
 
-        // sequential is_heap_until with projection function
-        HPX_CXX_CORE_EXPORT template <typename Iter, typename Sent,
-            typename Comp, typename Proj>
-        constexpr Iter sequential_is_heap_until(
-            Iter first, Sent last, Comp&& comp, Proj&& proj)
-        {
-            using difference_type =
-                typename std::iterator_traits<Iter>::difference_type;
-
-            difference_type count = detail::distance(first, last);
-
-            for (difference_type i = 1; i < count; ++i)
-            {
-                if (HPX_INVOKE(comp, HPX_INVOKE(proj, *(first + (i - 1) / 2)),
-                        HPX_INVOKE(proj, *(first + i))))
-                    return first + i;
-            }
-            return last;
-        }
-
-        HPX_CXX_CORE_EXPORT struct is_heap_until_helper
+        struct is_heap_until_helper
         {
             template <typename ExPolicy, typename Iter, typename Sent,
                 typename Comp, typename Proj>
-            decltype(auto) operator()(ExPolicy&& orgpolicy, Iter first,
+            decltype(auto) operator()(ExPolicy&& org_policy, Iter first,
                 Sent last, Comp comp, Proj proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, Iter>;
-                using type = typename std::iterator_traits<Iter>::value_type;
+                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
-                    typename std::iterator_traits<Iter>::difference_type;
+                    std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
                     hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
 
@@ -432,7 +489,7 @@ namespace hpx::parallel {
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
-                        HPX_FORWARD(ExPolicy, orgpolicy),
+                        HPX_FORWARD(ExPolicy, org_policy),
                         hpx::threads::thread_placement_hint::breadth_first);
 
                 using policy_type = std::decay_t<decltype(policy)>;
@@ -445,16 +502,39 @@ namespace hpx::parallel {
                               proj = HPX_FORWARD(Proj, proj)](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable {
+                    std::size_t cancelled = static_cast<std::size_t>(-1);
                     util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                        [&tok, first, &comp, &proj](
-                            type const& v, std::size_t i) -> void {
-                            if (hpx::invoke(comp,
-                                    hpx::invoke(proj, *(first + i / 2)),
-                                    hpx::invoke(proj, v)))
+                        [&cancelled, first, &comp, &proj](
+                            type const& v, std::size_t const i) -> void {
+                            if constexpr (std::is_same_v<hpx::identity,
+                                              std::decay_t<Proj>>)
                             {
-                                tok.cancel(i);
+                                HPX_UNUSED(proj);
+                                if (cancelled == static_cast<std::size_t>(-1))
+                                {
+                                    if (hpx::invoke(comp, *(first + i / 2), v))
+                                    {
+                                        cancelled = i;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (cancelled == static_cast<std::size_t>(-1))
+                                {
+                                    if (hpx::invoke(comp,
+                                            hpx::invoke(proj, *(first + i / 2)),
+                                            hpx::invoke(proj, v)))
+                                    {
+                                        cancelled = i;
+                                    }
+                                }
                             }
                         });
+                    if (cancelled != static_cast<std::size_t>(-1))
+                    {
+                        tok.cancel(cancelled);
+                    }
                 };
 
                 auto f2 = [tok, second](auto&&... data) mutable -> Iter {
@@ -481,8 +561,7 @@ namespace hpx::parallel {
         };
 
         HPX_CXX_CORE_EXPORT template <typename RandIter>
-        struct is_heap_until
-          : public algorithm<is_heap_until<RandIter>, RandIter>
+        struct is_heap_until : algorithm<is_heap_until<RandIter>, RandIter>
         {
             constexpr is_heap_until() noexcept
               : algorithm<is_heap_until, RandIter>("is_heap_until")

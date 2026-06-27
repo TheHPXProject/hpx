@@ -1,4 +1,5 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -32,7 +33,6 @@ namespace hpx {
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/concurrency.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -49,27 +49,57 @@ namespace hpx {
         // real function based API that dispatches to the CPO. Once
         // dataflow<Action>(...) has been removed, this CPO can be moved to
         // namespace hpx.
+        // Customization struct specialized in the heavy header
+        // (hpx/executors/dataflow.hpp)
+        template <typename F, typename Enable = void>
+        struct dataflow_dispatch_impl;
+
         HPX_CXX_CORE_EXPORT inline constexpr struct dataflow_t final
-          : hpx::functional::detail::tag_fallback<dataflow_t>
         {
-        private:
-            template <typename F, typename... Ts,
-                HPX_CONCEPT_REQUIRES_(
-                    !hpx::traits::is_allocator_v<std::decay_t<F>>)>
-            friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(
-                dataflow_t tag, F&& f, Ts&&... ts)
-                -> decltype(hpx::functional::tag_invoke(tag,
-                    hpx::util::thread_local_caching_allocator<
-                        hpx::lockfree::variable_size_stack, char,
-                        hpx::util::internal_allocator<>>{},
-                    HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...))
+            // Primary: target has .dataflow() member
+            template <typename Target, typename... Args>
+                requires requires(Target&& t, Args&&... args) {
+                    HPX_FORWARD(Target, t).dataflow(HPX_FORWARD(Args, args)...);
+                }
+            constexpr auto operator()(Target&& target, Args&&... args) const
             {
-                using allocator_type =
-                    hpx::util::thread_local_caching_allocator<
-                        hpx::lockfree::variable_size_stack, char,
-                        hpx::util::internal_allocator<>>;
-                return hpx::functional::tag_invoke(tag, allocator_type{},
-                    HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                return HPX_FORWARD(Target, target)
+                    .dataflow(HPX_FORWARD(Args, args)...);
+            }
+
+            // Non-member dispatch (handles both allocator and non-allocator)
+            template <typename F, typename... Ts>
+                requires(!requires(F&& f, Ts&&... ts) {
+                    HPX_FORWARD(F, f).dataflow(HPX_FORWARD(Ts, ts)...);
+                })
+            constexpr HPX_FORCEINLINE decltype(auto) operator()(
+                F&& f, Ts&&... ts) const
+            {
+                if constexpr (hpx::traits::is_allocator_v<std::decay_t<F>>)
+                {
+                    return dispatch_with_allocator(
+                        HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+                }
+                else
+                {
+                    using allocator_type =
+                        hpx::util::thread_local_caching_allocator<
+                            hpx::lockfree::variable_size_stack,
+                            hpx::util::internal_allocator<>>;
+                    return dataflow_dispatch_impl<std::decay_t<F>>::call(
+                        allocator_type{}, HPX_FORWARD(F, f),
+                        HPX_FORWARD(Ts, ts)...);
+                }
+            }
+
+        private:
+            template <typename Allocator, typename Func, typename... Rest>
+            constexpr HPX_FORCEINLINE decltype(auto) dispatch_with_allocator(
+                Allocator&& alloc, Func&& func, Rest&&... rest) const
+            {
+                return dataflow_dispatch_impl<std::decay_t<Func>>::call(
+                    HPX_FORWARD(Allocator, alloc), HPX_FORWARD(Func, func),
+                    HPX_FORWARD(Rest, rest)...);
             }
         } dataflow{};
     }    // namespace detail

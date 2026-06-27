@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,7 +7,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/server/component_base.hpp>
+#include <hpx/modules/components_base.hpp>
+
 #include <hpx/performance_counters/server/base_performance_counter.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -15,7 +16,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::performance_counters::server {
 
-    class HPX_EXPORT elapsed_time_counter
+    class elapsed_time_counter
       : public base_performance_counter
       , public components::component_base<elapsed_time_counter>
     {

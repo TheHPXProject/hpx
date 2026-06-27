@@ -237,7 +237,8 @@ namespace hpx::parallel {
                 util::loop_with_cleanup_n(
                     first, count, dest,
                     [](InIter1 it, InIter2 dest) -> void {
-                        hpx::construct_at(std::addressof(*dest), HPX_MOVE(*it));
+                        hpx::construct_at(
+                            std::addressof(*dest), std::ranges::iter_move(it));
                     },
                     [](InIter2 dest) -> void {
                         std::destroy_at(std::addressof(*dest));
@@ -323,7 +324,7 @@ namespace hpx::parallel {
             {
                 return hpx::parallel::util::uninit_move_n(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    std::distance(first, last), dest);
+                    hpx::parallel::detail::distance(first, last), dest);
             }
 
             template <typename ExPolicy, typename Iter, typename Sent,
@@ -333,7 +334,7 @@ namespace hpx::parallel {
             {
                 return parallel_uninitialized_move_n(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), dest);
+                    hpx::parallel::detail::distance(first, last), dest);
             }
         };
         /// \endcond
@@ -360,8 +361,10 @@ namespace hpx::parallel {
                 ExPolicy&& policy, InIter1 first, Sent1 last, FwdIter2 dest,
                 Sent2 last_d)
             {
-                std::size_t const dist1 = detail::distance(first, last);
-                std::size_t const dist2 = detail::distance(dest, last_d);
+                std::size_t const dist1 =
+                    hpx::parallel::detail::distance(first, last);
+                std::size_t const dist2 =
+                    hpx::parallel::detail::distance(dest, last_d);
                 std::size_t dist = dist1 <= dist2 ? dist1 : dist2;
 
                 return hpx::parallel::util::uninit_move_n(
@@ -373,8 +376,10 @@ namespace hpx::parallel {
             static decltype(auto) parallel(ExPolicy&& policy, Iter first,
                 Sent1 last, FwdIter2 dest, Sent2 last_d)
             {
-                std::size_t const dist1 = detail::distance(first, last);
-                std::size_t const dist2 = detail::distance(dest, last_d);
+                std::size_t const dist1 =
+                    hpx::parallel::detail::distance(first, last);
+                std::size_t const dist2 =
+                    hpx::parallel::detail::distance(dest, last_d);
                 std::size_t dist = dist1 <= dist2 ? dist1 : dist2;
 
                 return parallel_uninitialized_move_n(

@@ -134,11 +134,9 @@ function(hpx_extract_includes_from_file module)
   foreach(include ${includes})
     string(REGEX REPLACE "#include (<[^>]+>)" "\\1" filename ${include})
 
-    if(NOT filename MATCHES "\\.|/")
-      # Check if the include is a standard library header
-      if(${filename} IN_LIST STANDARD_LIBRARY_HEADERS)
-        list(APPEND found_includes ${filename})
-      endif()
+    if("${filename}" IN_LIST STANDARD_LIBRARY_HEADERS)
+      # Capture only headers explicitly listed in STANDARD_LIBRARY_HEADERS.
+      list(APPEND found_includes "${filename}")
     endif()
   endforeach()
 

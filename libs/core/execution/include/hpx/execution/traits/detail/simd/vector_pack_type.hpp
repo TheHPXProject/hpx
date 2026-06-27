@@ -51,7 +51,7 @@ namespace hpx::parallel::traits {
     };
 
     ////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct vector_pack_mask_type<T,
         std::enable_if_t<datapar::experimental::is_simd_v<T>>>
     {

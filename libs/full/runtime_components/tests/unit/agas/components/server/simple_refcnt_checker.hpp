@@ -10,10 +10,9 @@
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/components_base/server/component.hpp>
-#include <hpx/components_base/server/component_base.hpp>
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include <vector>
 

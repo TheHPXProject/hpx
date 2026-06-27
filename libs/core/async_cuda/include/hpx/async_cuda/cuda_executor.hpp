@@ -1,6 +1,7 @@
 //  Copyright (c) 2020 John Biddiscombe
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2020 Teodor Nikolov
-//  Copyright (c) 2024-2025 Hartmut Kaiser
+//  Copyright (c) 2024-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -124,29 +125,6 @@ namespace hpx::cuda::experimental {
 
         // -------------------------------------------------------------------------
         // OneWay Execution
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        // -------------------------------------------------------------------------
-        // TwoWay Execution
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
-        {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-    protected:
-        // -------------------------------------------------------------------------
-        // launch a kernel on our stream and return without a future
-        // the return value is the value returned from the cuda call
-        // (typically this will be cudaError_t).
-        // Throws cuda_exception if the async launch fails.
         template <typename R, typename... Params, typename... Args>
         void post(R (*cuda_function)(Params...), Args&&... args) const
         {
@@ -156,6 +134,14 @@ namespace hpx::cuda::experimental {
             // insert the stream handle in the arg list and call the cuda function
             detail::dispatch_helper<R, Params...> helper{};
             helper(cuda_function, HPX_FORWARD(Args, args)..., stream_);
+        }
+
+        // -------------------------------------------------------------------------
+        // TwoWay Execution
+        template <typename F, typename... Ts>
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
+        {
+            return async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         // -------------------------------------------------------------------------

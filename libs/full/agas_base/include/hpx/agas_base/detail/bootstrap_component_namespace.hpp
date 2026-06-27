@@ -1,4 +1,5 @@
 //  Copyright (c) 2016 Thomas Heller
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,24 +8,24 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/component_namespace.hpp>
-#include <hpx/agas_base/server/component_namespace.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
+#include <hpx/agas_base/component_namespace.hpp>
+#include <hpx/agas_base/server/component_namespace.hpp>
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
+namespace hpx::agas::detail {
 
     struct bootstrap_component_namespace : component_namespace
     {
-        typedef hpx::distributed::function<void(
-            std::string const&, components::component_type)>
-            iterate_types_function_type;
+        using iterate_types_function_type = hpx::distributed::function<void(
+            std::string const&, components::component_type)>;
 
         naming::address::address_type ptr() const
         {
@@ -61,5 +62,4 @@ namespace hpx { namespace agas { namespace detail {
     private:
         server::component_namespace server_;
     };
-
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Copyright (c) 2026 Abhishek Bansal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# ----------------------------------------------------------------
+# commit-msg hook script to enforce DCO signoff.
+#
+# This hook validates that the commit message contains a Signed-off-by trailer.
+#
+# To install this hook, copy this file to your git hooks as follows
+# cp tools/commit-msg .git/hooks/commit-msg
+# chmod +x .git/hooks/commit-msg
+
+msg_file="$1"
+
+if [ -z "${msg_file}" ] || [ ! -f "${msg_file}" ]; then
+    printf "# commit-msg error: missing commit message file argument\n"
+    exit 1
+fi
+
+if git interpret-trailers --parse "${msg_file}" | grep -iq '^Signed-off-by:[[:space:]]'; then
+    exit 0
+fi
+
+printf "# DCO signoff missing in commit message\n"
+printf "# Add signoff by committing with:\n"
+printf "#   git commit -s\n"
+printf "# Or amend the current commit with:\n"
+printf "#   git commit --amend -s\n"
+printf "# Use git commit --no-verify to bypass (not recommended).\n"
+
+exit 1

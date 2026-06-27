@@ -7,16 +7,13 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_COMPRESSION_ZLIB)
-#include <boost/iostreams/filter/zlib.hpp>
-
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/iostream.hpp>
 
 #include <hpx/binary_filter/zlib_serialization_filter.hpp>
-#include <hpx/plugin_factories/binary_filter_factory.hpp>
-#include <hpx/plugin_factories/plugin_registry.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 
 #include <algorithm>
 #include <cstddef>

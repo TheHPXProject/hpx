@@ -7,8 +7,7 @@
 
 #pragma once
 
-#include <hpx/distribution_policies/container_distribution_policy.hpp>
-#include <hpx/distribution_policies/explicit_container_distribution_policy.hpp>
+#include <hpx/modules/distribution_policies.hpp>
 
 #include <hpx/components/containers/partitioned_vector/export_definitions.hpp>
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_component_decl.hpp>

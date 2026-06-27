@@ -8,14 +8,11 @@
 //      http://msdn.microsoft.com/en-us/library/xcb2z8hs.aspx
 
 #include <hpx/config.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/thread_support/set_thread_name.hpp>
 
 #include <cstddef>
 #include <string>
-
-#if defined(HPX_HAVE_MODULE_TRACY)
-#include <hpx/modules/tracy.hpp>
-#endif
 
 #if (defined(WIN32) || defined(_WIN32) || defined(__WIN32__)) &&               \
     !defined(HPX_MINGW)
@@ -92,9 +89,7 @@ namespace hpx::util {
     void set_thread_name(char const* thread_name) noexcept
     {
         detail::set_thread_name(thread_name);
-#if defined(HPX_HAVE_MODULE_TRACY)
-        hpx::tracy::set_thread_name(thread_name);
-#endif
+        hpx::tracing::set_thread_name(thread_name);
     }
 }    // namespace hpx::util
 
@@ -106,9 +101,7 @@ namespace hpx::util {
     void set_thread_name(char const* thread_name) noexcept
     {
         pthread_setname_np(pthread_self(), thread_name);
-#if defined(HPX_HAVE_MODULE_TRACY)
-        hpx::tracy::set_thread_name(thread_name);
-#endif
+        hpx::tracing::set_thread_name(thread_name);
     }
 }    // namespace hpx::util
 
@@ -116,11 +109,9 @@ namespace hpx::util {
 
 namespace hpx::util {
 
-    void set_thread_name([[maybe_unused]] char const* thread_name) noexcept
+    void set_thread_name(char const* thread_name) noexcept
     {
-#if defined(HPX_HAVE_MODULE_TRACY)
-        hpx::tracy::set_thread_name(thread_name);
-#endif
+        hpx::tracing::set_thread_name(thread_name);
     }
 }    // namespace hpx::util
 

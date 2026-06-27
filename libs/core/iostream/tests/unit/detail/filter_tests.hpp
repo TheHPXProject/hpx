@@ -222,6 +222,7 @@ namespace hpx::iostream {
                             compose(in, non_blocking_source(temp, inc)),
                             iostream::back_inserter(dest));
                     }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
                     catch (std::ios_base::failure&)
                     {
                     }
@@ -258,6 +259,7 @@ namespace hpx::iostream {
                             iostream::copy(non_blocking_source(temp, inc),
                                 compose(in, iostream::back_inserter(dest)));
                         }
+                        // NOLINTNEXTLINE(bugprone-empty-catch)
                         catch (std::ios_base::failure&)
                         {
                         }

@@ -22,7 +22,9 @@ set(compute_compat_headers
 )
 # cmake-format: on
 
-set(compute_sources get_host_targets.cpp distributed_target.cpp)
+set(compute_sources get_host_targets.cpp distributed_target.cpp
+                    target_distribution_policy.cpp
+)
 
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   set(compute_optional_module_dependencies
@@ -41,6 +43,7 @@ include(HPX_AddModule)
 add_hpx_module(
   full compute
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${compute_sources}
   HEADERS ${compute_headers}
   COMPAT_HEADERS ${compute_compat_headers}

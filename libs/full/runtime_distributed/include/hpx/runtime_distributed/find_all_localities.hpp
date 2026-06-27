@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -47,7 +47,8 @@ namespace hpx {
     ///           otherwise.
     ///
     /// \see      \a hpx::find_all_localities(), \a hpx::find_locality()
-    HPX_EXPORT hpx::id_type find_root_locality(error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT hpx::id_type find_root_locality(
+        error_code& ec = throws);
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Return the list of global ids representing all localities
@@ -76,7 +77,7 @@ namespace hpx {
     ///           from an HPX-thread. It will return an empty vector otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
-    HPX_EXPORT std::vector<hpx::id_type> find_all_localities(
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<hpx::id_type> find_all_localities(
         error_code& ec = throws);
 
     /// \brief Return the list of locality ids of remote localities supporting
@@ -107,6 +108,6 @@ namespace hpx {
     ///           from an HPX-thread. It will return an empty vector otherwise.
     ///
     /// \see      \a hpx::find_here(), \a hpx::find_locality()
-    HPX_EXPORT std::vector<hpx::id_type> find_remote_localities(
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<hpx::id_type> find_remote_localities(
         error_code& ec = throws);
 }    // namespace hpx

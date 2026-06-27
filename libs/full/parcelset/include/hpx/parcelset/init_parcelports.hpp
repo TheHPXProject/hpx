@@ -9,13 +9,13 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
-#include <hpx/plugin_factories/parcelport_factory_base.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 
 #include <vector>
 
 namespace hpx::parcelset {
 
-    extern HPX_EXPORT void (*init_static_parcelport_factories)(
+    HPX_CXX_EXPORT extern HPX_EXPORT void (*init_static_parcelport_factories)(
         std::vector<plugins::parcelport_factory_base*>& factories);
 }
 

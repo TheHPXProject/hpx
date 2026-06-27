@@ -71,7 +71,7 @@ macro(commit_docs message)
 endmacro()
 
 if(NOT GIT_REPOSITORY)
-  set(GIT_REPOSITORY git@github.com:STEllAR-GROUP/hpx-docs.git --branch master)
+  set(GIT_REPOSITORY git@github.com:TheHPXProject/hpx-docs.git --branch master)
 endif()
 
 if(EXISTS "${HPX_BINARY_DIR}/docs/gh-pages")

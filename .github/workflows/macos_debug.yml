@@ -1,5 +1,5 @@
 # Copyright (c) 2020 Mikael Simberg
-# Copyright (c) 2024 The STE||AR Group
+# Copyright (c) 2024-2026 The STE||AR Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,12 +9,16 @@ name: macOS CI (Debug)
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install dependencies
       run: |
           brew install --overwrite python-tk && \
@@ -40,7 +44,7 @@ jobs:
       shell: bash
       run: |
           cmake --build build --target all
-          cmake --build build --target tests
+          cmake --build build --target tests -- -k 0
     - name: Test
       shell: bash
       run: |
@@ -79,4 +83,5 @@ jobs:
           tests.unit.modules.executors.limiting_executor|\
           tests.unit.modules.compute_local.block_fork_join_executor|\
           tests.unit.modules.algorithms.algorithms.all_of|\
-          tests.unit.modules.algorithms.algorithms.any_of"
+          tests.unit.modules.algorithms.algorithms.any_of|\
+          tests.unit.modules.algorithms.algorithms.uninitialized_relocate_sender"

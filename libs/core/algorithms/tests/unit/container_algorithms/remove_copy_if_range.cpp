@@ -21,6 +21,21 @@
 #include "test_utils.hpp"
 
 ////////////////////////////////////////////////////////////////////////////
+// projected_element: two-field struct for testing projection support.
+// 'key' is the value inspected by the projection; 'tag' distinguishes
+// elements that share the same key, allowing post-hoc identity checks.
+struct projected_element
+{
+    int key;
+    int tag;
+
+    bool operator==(projected_element const& o) const noexcept
+    {
+        return key == o.key && tag == o.tag;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////
 void test_remove_copy_if_sent()
 {
     using hpx::get;
@@ -252,6 +267,91 @@ void remove_copy_if_test()
     test_remove_copy_if<std::forward_iterator_tag>();
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Projection tests for hpx::ranges::remove_copy_if
+// The projection extracts 'key'; predicate removes elements with odd key.
+void test_remove_copy_if_projection()
+{
+    // Build input: 20 elements, keys cycling 0..4, tags unique
+    std::size_t const size = 20;
+    std::vector<projected_element> c(size);
+    for (std::size_t i = 0; i != size; ++i)
+        c[i] = {static_cast<int>(i % 5), static_cast<int>(i)};
+
+    auto proj = [](projected_element const& e) -> int { return e.key; };
+    // Remove elements where projected key is odd
+    auto pred = [](int k) -> bool { return k % 2 != 0; };
+
+    // Expected: only elements with even key are kept
+    std::vector<projected_element> expected;
+    for (auto const& e : c)
+        if (e.key % 2 == 0)
+            expected.push_back(e);
+
+    // No-policy (sequential) - range form
+    {
+        std::vector<projected_element> dest(size);
+        auto res = hpx::ranges::remove_copy_if(c, std::begin(dest), pred, proj);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+
+    // seq policy
+    {
+        std::vector<projected_element> dest(size);
+        auto res = hpx::ranges::remove_copy_if(
+            hpx::execution::seq, c, std::begin(dest), pred, proj);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+
+    // par policy
+    {
+        std::vector<projected_element> dest(size);
+        auto res = hpx::ranges::remove_copy_if(
+            hpx::execution::par, c, std::begin(dest), pred, proj);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+
+    // par_unseq policy
+    {
+        std::vector<projected_element> dest(size);
+        auto res = hpx::ranges::remove_copy_if(
+            hpx::execution::par_unseq, c, std::begin(dest), pred, proj);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+
+    // seq(task) - async
+    {
+        std::vector<projected_element> dest(size);
+        auto f = hpx::ranges::remove_copy_if(
+            hpx::execution::seq(hpx::execution::task), c, std::begin(dest),
+            pred, proj);
+        auto res = f.get();
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+
+    // par(task) - async
+    {
+        std::vector<projected_element> dest(size);
+        auto f = hpx::ranges::remove_copy_if(
+            hpx::execution::par(hpx::execution::task), c, std::begin(dest),
+            pred, proj);
+        auto res = f.get();
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dest), res.out, std::begin(expected),
+            std::end(expected)));
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 template <typename ExPolicy, typename IteratorTag>
 void test_remove_copy_if_exception(ExPolicy policy, IteratorTag)
@@ -445,6 +545,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     remove_copy_if_test();
     remove_copy_if_exception_test();
     remove_copy_if_bad_alloc_test();
+    test_remove_copy_if_projection();
     return hpx::local::finalize();
 }
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2019-2025 Hartmut Kaiser
+//  Copyright (c) 2019-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -24,7 +24,8 @@ namespace hpx::components {
     ///////////////////////////////////////////////////////////////////////////
     /// This hook has to be inserted into the derivation chain of any
     /// abstract_component_base for it to support migration.
-    template <typename BaseComponent, typename Mutex = hpx::spinlock>
+    HPX_CXX_EXPORT template <typename BaseComponent,
+        typename Mutex = hpx::spinlock>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
     struct abstract_base_migration_support : BaseComponent
     {
@@ -107,7 +108,7 @@ namespace hpx::components {
     ///////////////////////////////////////////////////////////////////////////
     /// This hook has to be inserted into the derivation chain of any component
     /// for it to support migration.
-    template <typename Derived, typename Base>
+    HPX_CXX_EXPORT template <typename Derived, typename Base>
     struct abstract_migration_support
       : migration_support<Derived>
       , Base

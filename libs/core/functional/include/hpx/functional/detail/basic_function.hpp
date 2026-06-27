@@ -17,6 +17,7 @@
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <cstring>
@@ -70,8 +71,8 @@ namespace hpx::util::detail {
 
         [[nodiscard]] std::size_t get_function_address() const;
         [[nodiscard]] char const* get_function_annotation() const;
-        [[nodiscard]] util::itt::string_handle get_function_annotation_itt()
-            const;
+        [[nodiscard]] hpx::tracing::annotation_handle
+        get_function_annotation_tracing() const;
 
     protected:
         vtable const* vptr;
@@ -247,7 +248,7 @@ namespace hpx::util::detail {
 
         using base_type::get_function_address;
         using base_type::get_function_annotation;
-        using base_type::get_function_annotation_itt;
+        using base_type::get_function_annotation_tracing;
 
     private:
         [[nodiscard]] static constexpr vtable const* get_empty_vtable() noexcept

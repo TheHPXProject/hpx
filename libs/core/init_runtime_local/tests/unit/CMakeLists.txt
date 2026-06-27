@@ -6,6 +6,10 @@
 
 set(tests on_finalize shutdown_suspended_thread_local)
 
+if(NOT HPX_WITH_DISTRIBUTED_RUNTIME)
+  list(APPEND tests iostreams_local_fallback)
+endif()
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -111,10 +111,13 @@ set(serialization_headers
     hpx/serialization/detail/polymorphic_id_factory.hpp
     hpx/serialization/detail/polymorphic_intrusive_factory.hpp
     hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp
+    hpx/serialization/detail/polymorphic_nonintrusive_factory_impl.hpp
     hpx/serialization/detail/preprocess_container.hpp
     hpx/serialization/detail/raw_ptr.hpp
     hpx/serialization/detail/serialize_collection.hpp
     hpx/serialization/detail/vc.hpp
+    hpx/serialization/detail/refl_qualified_name_of.hpp
+    hpx/serialization/detail/refl_serialize_impl.hpp
     hpx/serialization/array.hpp
     hpx/serialization/bitset.hpp
     hpx/serialization/complex.hpp
@@ -154,6 +157,7 @@ set(serialization_headers
     hpx/serialization/traits/is_bitwise_serializable.hpp
     hpx/serialization/traits/is_not_bitwise_serializable.hpp
     hpx/serialization/traits/is_serializable.hpp
+    hpx/serialization/traits/is_serialization_supported.hpp
     hpx/serialization/traits/needs_automatic_registration.hpp
     hpx/serialization/traits/polymorphic_traits.hpp
     hpx/serialization/traits/serialization_access_data.hpp
@@ -196,6 +200,7 @@ set(serialization_compat_headers
     hpx/runtime/serialization/serialize.hpp => hpx/serialization.hpp
     hpx/traits/brace_initializable_traits.hpp => hpx/serialization.hpp
     hpx/traits/is_bitwise_serializable.hpp => hpx/serialization.hpp
+    hpx/serialization/traits/is_serialization_supported.hpp => hpx/serialization.hpp
     hpx/traits/needs_automatic_registration.hpp => hpx/serialization.hpp
     hpx/traits/polymorphic_traits.hpp => hpx/serialization.hpp
     hpx/traits/serialization_access_data.hpp => hpx/serialization.hpp

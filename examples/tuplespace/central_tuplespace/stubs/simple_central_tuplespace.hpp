@@ -6,9 +6,9 @@
 
 #pragma once
 
-#include <hpx/components_base/stub_base.hpp>
 #include <hpx/include/applier.hpp>
 #include <hpx/include/async.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include "../server/simple_central_tuplespace.hpp"
 

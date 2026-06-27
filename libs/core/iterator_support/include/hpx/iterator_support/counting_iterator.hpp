@@ -1,4 +1,4 @@
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -38,8 +38,7 @@ namespace hpx::util {
             template <typename Iterator>
             struct iterator_category
             {
-                using type =
-                    typename std::iterator_traits<Iterator>::iterator_category;
+                using type = std::iterator_traits<Iterator>::iterator_category;
             };
 
             using base_traversal =
@@ -69,8 +68,7 @@ namespace hpx::util {
             template <typename Iterator>
             struct iterator_difference_type
             {
-                using type =
-                    typename std::iterator_traits<Iterator>::difference_type;
+                using type = std::iterator_traits<Iterator>::difference_type;
             };
 
             using base_difference =
@@ -84,7 +82,7 @@ namespace hpx::util {
 
             using type = iterator_adaptor<counting_iterator<Incrementable,
                                               CategoryOrTraversal, Difference>,
-                Incrementable, Incrementable, traversal, Incrementable const&,
+                Incrementable, Incrementable, traversal, Incrementable,
                 difference>;
         };
     }    // namespace detail
@@ -98,7 +96,7 @@ namespace hpx::util {
             CategoryOrTraversal, Difference>::type
     {
     private:
-        using base_type = typename detail::counting_iterator_base<Incrementable,
+        using base_type = detail::counting_iterator_base<Incrementable,
             CategoryOrTraversal, Difference>::type;
 
         friend class iterator_core_access;
@@ -117,27 +115,28 @@ namespace hpx::util {
         }
 
     private:
-        HPX_HOST_DEVICE constexpr typename base_type::reference dereference()
-            const
+        HPX_HOST_DEVICE constexpr base_type::reference dereference() const
         {
             return this->base_reference();
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Incrementable,
-        typename CategoryOrTraversal, typename Difference>
+    template <typename Incrementable, typename CategoryOrTraversal,
+        typename Difference>
     class counting_iterator<Incrementable, CategoryOrTraversal, Difference,
         std::enable_if_t<std::is_integral_v<Incrementable>>>
       : public detail::counting_iterator_base<Incrementable,
             CategoryOrTraversal, Difference>::type
     {
     private:
-        using base_type = typename detail::counting_iterator_base<Incrementable,
+        using base_type = detail::counting_iterator_base<Incrementable,
             CategoryOrTraversal, Difference>::type;
 
         friend class iterator_core_access;
 
     public:
+        using use_brackets_proxy = std::false_type;
+
         counting_iterator() = default;
         ~counting_iterator() = default;
         counting_iterator(counting_iterator&& rhs) = default;
@@ -171,22 +170,21 @@ namespace hpx::util {
         template <typename Distance>
         HPX_HOST_DEVICE void advance(Distance n) noexcept
         {
-            this->base_reference() +=
-                static_cast<typename base_type::base_type>(n);
+            this->base_reference() += static_cast<base_type::base_type>(n);
         }
 
-        HPX_HOST_DEVICE constexpr typename base_type::reference dereference()
+        HPX_HOST_DEVICE constexpr base_type::reference dereference()
             const noexcept
         {
             return this->base_reference();
         }
 
         template <typename OtherIncrementable>
-        HPX_HOST_DEVICE typename base_type::difference_type distance_to(
+        HPX_HOST_DEVICE base_type::difference_type distance_to(
             counting_iterator<OtherIncrementable, CategoryOrTraversal,
                 Difference> const& y) const noexcept
         {
-            using difference_type = typename base_type::difference_type;
+            using difference_type = base_type::difference_type;
             return static_cast<difference_type>(y.base()) -
                 static_cast<difference_type>(this->base());
         }

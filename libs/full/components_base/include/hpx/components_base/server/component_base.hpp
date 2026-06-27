@@ -1,5 +1,5 @@
 //  Copyright (c) 2015 Thomas Heller
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -25,7 +26,7 @@ namespace hpx::components {
 
     namespace detail {
 
-        struct base_component : traits::detail::component_tag
+        HPX_CXX_EXPORT struct base_component : traits::detail::component_tag
         {
             constexpr base_component() = default;
             HPX_EXPORT ~base_component();
@@ -86,7 +87,7 @@ namespace hpx::components {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
     class component_base : public detail::base_component
     {

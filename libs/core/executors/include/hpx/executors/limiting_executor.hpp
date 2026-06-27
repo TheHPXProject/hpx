@@ -203,38 +203,32 @@ namespace hpx::execution::experimental {
             return *this;
         }
 
-    private:
+    public:
         // --------------------------------------------------------------------
         // OneWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            limiting_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return hpx::parallel::execution::sync_execute(exec.executor_,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+            return hpx::parallel::execution::sync_execute(executor_,
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // --------------------------------------------------------------------
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t, limiting_executor& exec,
-            F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts)
         {
-            return hpx::parallel::execution::async_execute(exec.executor_,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+            return hpx::parallel::execution::async_execute(executor_,
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::then_execute_t, limiting_executor& exec,
-            F&& f, Future&& predecessor, Ts&&... ts)
+        decltype(auto) then_execute(F&& f, Future&& predecessor, Ts&&... ts)
         {
-            return hpx::parallel::execution::then_execute(exec.executor_,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+            return hpx::parallel::execution::then_execute(executor_,
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
@@ -243,11 +237,10 @@ namespace hpx::execution::experimental {
         // NonBlockingOneWayExecutor (adapted) interface
         // --------------------------------------------------------------------
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            limiting_executor& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts)
         {
-            hpx::parallel::execution::post(exec.executor_,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+            hpx::parallel::execution::post(executor_,
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Ts, ts)...);
         }
 
@@ -255,27 +248,22 @@ namespace hpx::execution::experimental {
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            limiting_executor& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(F&& f, S const& shape, Ts&&... ts)
         {
-            return hpx::parallel::execution::bulk_async_execute(exec.executor_,
+            return hpx::parallel::execution::bulk_async_execute(executor_,
                 shape,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // --------------------------------------------------------------------
         template <typename F, typename S, typename Future, typename... Ts>
             requires(!std::is_integral_v<S>)
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            limiting_executor& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts)
         {
-            return hpx::parallel::execution::bulk_then_execute(exec.executor_,
-                shape,
-                throttling_wrapper<F>(exec, exec.executor_, HPX_FORWARD(F, f)),
+            return hpx::parallel::execution::bulk_then_execute(executor_, shape,
+                throttling_wrapper<F>(*this, executor_, HPX_FORWARD(F, f)),
                 HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
@@ -342,42 +330,42 @@ namespace hpx::execution::experimental {
     // --------------------------------------------------------------------
     // simple forwarding implementations of executor traits
     // --------------------------------------------------------------------
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_one_way_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_one_way_executor<std::decay_t<BaseExecutor>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_never_blocking_one_way_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_never_blocking_one_way_executor<std::decay_t<BaseExecutor>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_two_way_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_two_way_executor<std::decay_t<BaseExecutor>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_bulk_one_way_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_bulk_one_way_executor<std::decay_t<BaseExecutor>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_bulk_two_way_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_bulk_two_way_executor<std::decay_t<BaseExecutor>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename BaseExecutor>
+    template <typename BaseExecutor>
     struct is_scheduler_executor<
         hpx::execution::experimental::limiting_executor<BaseExecutor>>
       : is_scheduler_executor<std::decay_t<BaseExecutor>>

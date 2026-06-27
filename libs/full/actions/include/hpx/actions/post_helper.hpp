@@ -9,11 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/actions/post_helper_fwd.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/traits/action_continuation.hpp>
-#include <hpx/actions_base/traits/action_decorate_continuation.hpp>
-#include <hpx/actions_base/traits/action_schedule_thread.hpp>
-#include <hpx/actions_base/traits/action_select_direct_execution.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/naming_base.hpp>
@@ -28,7 +24,7 @@
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     void call_async(threads::thread_init_data&& data,
         hpx::id_type const& target, naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs)
@@ -56,7 +52,8 @@ namespace hpx::detail {
         traits::action_schedule_thread<Action>::call(lva, comptype, data);
     }
 
-    template <typename Action, typename Continuation, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename... Ts>
     void call_async(threads::thread_init_data&& data, Continuation&& cont,
         hpx::id_type const& target, naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs)
@@ -78,14 +75,15 @@ namespace hpx::detail {
         traits::action_schedule_thread<Action>::call(lva, comptype, data);
     }
 
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     HPX_FORCEINLINE void call_sync(naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs)
     {
         Action::execute_function(lva, comptype, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Action, typename Continuation, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename... Ts>
     HPX_FORCEINLINE void call_sync(Continuation&& cont,
         naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs)

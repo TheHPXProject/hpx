@@ -59,6 +59,7 @@ set(tests
     foreachn
     foreachn_exception
     foreachn_bad_alloc
+    for_each_index
     for_loop
     for_loop_exception
     for_loop_induction
@@ -160,82 +161,81 @@ if(HPX_WITH_CXX17_STD_EXECUTION_POLICES)
   set(tests ${tests} foreach_std_policies)
 endif()
 
-if(HPX_WITH_STDEXEC)
-  set(tests
-      ${tests}
-      adjacentdifference_sender
-      adjacentfind_sender
-      all_of_sender
-      any_of_sender
-      copy_sender
-      copyn_sender
-      count_sender
-      countif_sender
-      destroy_sender
-      destroyn_sender
-      ends_with_sender
-      equal_sender
-      equal_binary_sender
-      fill_sender
-      filln_sender
-      find_sender
-      findend_sender
-      findfirstof_sender
-      findif_sender
-      findifnot_sender
-      foreach_sender
-      foreachn_sender
-      generate_sender
-      generaten_sender
-      is_heap_sender
-      is_heap_until_sender
-      includes_sender
-      is_partitioned_sender
-      is_sorted_sender
-      is_sorted_until_sender
-      lexicographical_compare_sender
-      max_element_sender
-      min_element_sender
-      minmax_element_sender
-      mismatch_sender
-      mismatch_binary_sender
-      move_sender
-      none_of_sender
-      reduce_sender
-      remove_sender
-      remove_if_sender
-      replace_sender
-      replace_if_sender
-      replace_copy_sender
-      replace_copy_if_sender
-      reverse_sender
-      reverse_copy_sender
-      rotate_sender
-      rotate_copy_sender
-      search_sender
-      starts_with_sender
-      swapranges_sender
-      transform_sender
-      transform_binary_sender
-      transform_binary2_sender
-      transform_reduce_sender
-      transform_reduce_binary_sender
-      uninitialized_copy_sender
-      uninitialized_copyn_sender
-      uninitialized_default_construct_sender
-      uninitialized_default_constructn_sender
-      uninitialized_fill_sender
-      uninitialized_filln_sender
-      uninitialized_move_sender
-      uninitialized_moven_sender
-      uninitialized_relocate_sender
-      uninitialized_relocate_backward_sender
-      uninitialized_relocaten_sender
-      uninitialized_value_construct_sender
-      uninitialized_value_constructn_sender
-      unique_sender
-  )
-endif()
+set(tests
+    ${tests}
+    adjacentdifference_sender
+    adjacentfind_sender
+    all_of_sender
+    any_of_sender
+    copy_sender
+    copyn_sender
+    count_sender
+    countif_sender
+    destroy_sender
+    destroyn_sender
+    ends_with_sender
+    equal_sender
+    equal_binary_sender
+    fill_sender
+    filln_sender
+    find_sender
+    findend_sender
+    findfirstof_sender
+    findif_sender
+    findifnot_sender
+    foreach_sender
+    foreachn_sender
+    generate_sender
+    generaten_sender
+    is_heap_sender
+    is_heap_until_sender
+    includes_sender
+    is_partitioned_sender
+    is_sorted_sender
+    is_sorted_until_sender
+    lexicographical_compare_sender
+    max_element_sender
+    min_element_sender
+    minmax_element_sender
+    mismatch_sender
+    mismatch_binary_sender
+    move_sender
+    none_of_sender
+    partial_sort_sender
+    reduce_sender
+    remove_sender
+    remove_if_sender
+    replace_sender
+    replace_if_sender
+    replace_copy_sender
+    replace_copy_if_sender
+    reverse_sender
+    reverse_copy_sender
+    rotate_sender
+    rotate_copy_sender
+    search_sender
+    starts_with_sender
+    swapranges_sender
+    transform_sender
+    transform_binary_sender
+    transform_binary2_sender
+    transform_reduce_sender
+    transform_reduce_binary_sender
+    uninitialized_copy_sender
+    uninitialized_copyn_sender
+    uninitialized_default_construct_sender
+    uninitialized_default_constructn_sender
+    uninitialized_fill_sender
+    uninitialized_filln_sender
+    uninitialized_move_sender
+    uninitialized_moven_sender
+    uninitialized_relocate_sender
+    uninitialized_relocate_backward_sender
+    uninitialized_relocaten_sender
+    uninitialized_value_construct_sender
+    uninitialized_value_constructn_sender
+    unique_sender
+)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
@@ -263,3 +263,23 @@ foreach(test ${tests})
     "modules.algorithms.algorithms" ${test} ${${test}_PARAMETERS}
   )
 endforeach()
+
+if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+  foreach(
+    test
+    all_of_sender
+    any_of_sender
+    copyn_sender
+    findifnot_sender
+    generate_sender
+    is_sorted_sender
+    min_element_sender
+    none_of_sender
+    reverse_copy_sender
+    transform_sender
+  )
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()

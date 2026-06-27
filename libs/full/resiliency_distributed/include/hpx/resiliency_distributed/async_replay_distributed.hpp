@@ -7,13 +7,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-
-#include <hpx/modules/resiliency.hpp>
-
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/async.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/resiliency.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -25,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace resiliency { namespace experimental {
+namespace hpx::resiliency::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -139,17 +138,16 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Asynchronously launch given Action \a action on locality \a id.
     // Repeat launching on error exactly \a n times (except if
     // abort_replay_exception is thrown).
-    template <typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
+    hpx::future<hpx::util::detail::invoke_deferred_result_t<Action,
+        hpx::id_type, Ts...>>
     tag_invoke(async_replay_t, std::vector<hpx::id_type> const& ids,
         Action&& action, Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
-        using result_type =
-            typename hpx::util::detail::invoke_deferred_result<Action,
-                hpx::id_type, Ts...>::type;
+        using result_type = hpx::util::detail::invoke_deferred_result_t<Action,
+            hpx::id_type, Ts...>;
 
         auto helper = detail::make_distributed_async_replay_helper<result_type>(
             detail::replay_validator{}, HPX_FORWARD(Action, action),
@@ -162,17 +160,16 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Asynchronously launch given Action \a action on locality \a id.
     // Repeat launching on error exactly \a n times (except if
     // abort_replay_exception is thrown).
-    template <typename Pred, typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
+    HPX_CXX_EXPORT template <typename Pred, typename Action, typename... Ts>
+    hpx::future<hpx::util::detail::invoke_deferred_result_t<Action,
+        hpx::id_type, Ts...>>
     tag_invoke(async_replay_validate_t, std::vector<hpx::id_type> const& ids,
         Pred&& pred, Action&& action, Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
-        using result_type =
-            typename hpx::util::detail::invoke_deferred_result<Action,
-                hpx::id_type, Ts...>::type;
+        using result_type = hpx::util::detail::invoke_deferred_result_t<Action,
+            hpx::id_type, Ts...>;
 
         auto helper = detail::make_distributed_async_replay_helper<result_type>(
             HPX_FORWARD(Pred, pred), HPX_FORWARD(Action, action),
@@ -180,7 +177,6 @@ namespace hpx { namespace resiliency { namespace experimental {
 
         return helper->call(ids);
     }
-
-}}}    // namespace hpx::resiliency::experimental
+}    // namespace hpx::resiliency::experimental
 
 #endif

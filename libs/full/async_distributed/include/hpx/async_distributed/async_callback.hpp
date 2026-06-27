@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,14 +7,11 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_client.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/actions_base/traits/is_valid_action.hpp>
 #include <hpx/async_distributed/async_callback_fwd.hpp>
 #include <hpx/async_distributed/detail/async_implementations_fwd.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 
@@ -140,7 +137,7 @@ namespace hpx::detail {
 namespace hpx {
 
     // clang-format off
-    template <typename Action, typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename F, typename... Ts>
     HPX_FORCEINLINE auto async_cb(F&& f, Ts&&... ts) -> decltype(
         detail::async_cb_action_dispatch<Action, std::decay_t<F>>::call(
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...))
@@ -262,7 +259,7 @@ namespace hpx {
 
     // different versions of clang-format disagree
     // clang-format off
-    template <typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename F, typename... Ts>
     HPX_FORCEINLINE auto async_cb(F&& f, Ts&&... ts) -> decltype(
         detail::async_cb_dispatch< std::decay_t<F>>::call(
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...))

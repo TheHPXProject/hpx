@@ -211,42 +211,34 @@ namespace hpx::parallel {
             // pivot selections
             pivot9(first, last, comp);
 
-            using reference =
-                typename std::iterator_traits<RandomIt>::reference;
+            using value_type =
+                typename std::iterator_traits<RandomIt>::value_type;
 
-            reference val = *first;
+            value_type val = *first;
             RandomIt c_first = first + 1, c_last = last - 1;
 
-            while (comp(*c_first, val))
+            while (c_first < last && comp(*c_first, val))
             {
                 ++c_first;
             }
-            while (comp(val, *c_last))
+            while (c_last > first && comp(val, *c_last))
             {
                 --c_last;
             }
             while (c_first < c_last)
             {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                 std::ranges::iter_swap(c_first++, c_last--);
-#else
-                std::iter_swap(c_first++, c_last--);
-#endif
-                while (comp(*c_first, val))
+                while (c_first < last && comp(*c_first, val))
                 {
                     ++c_first;
                 }
-                while (comp(val, *c_last))
+                while (c_last > first && comp(val, *c_last))
                 {
                     --c_last;
                 }
             }
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
             std::ranges::iter_swap(first, c_last);
-#else
-            std::iter_swap(first, c_last);
-#endif
 
             // spawn tasks for each sub section
             hpx::future<RandomIt> left = execution::async_execute(
@@ -258,6 +250,7 @@ namespace hpx::parallel {
                 policy, c_first, last, comp, chunk_size);
 
             return hpx::dataflow(
+                policy.executor(),
                 [last](hpx::future<RandomIt>&& leftf,
                     hpx::future<RandomIt>&& rightf) -> RandomIt {
                     if (leftf.has_exception() || rightf.has_exception())

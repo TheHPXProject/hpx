@@ -65,12 +65,13 @@ namespace hpx::threads::detail {
                     "hpx::threads::detail::get_self_or_default_pool",
                     "Attempting to use hpx_main.hpp functionality "
                     "without linking to libhpx_wrap. If you're using "
-                    "CMakeLists, make sure to add HPX::wrap_main to "
-                    "target_link_libraries. "
-                    "If you're using Makefile, make sure to link to "
-                    "libhpx_wrap when generating the executable. If "
-                    "you're linking explicitly, consult the HPX docs "
-                    "for library link order and other subtle nuances.");
+                    "CMake, make sure to add HPX::wrap_main to "
+                    "target_link_libraries. If you're linking "
+                    "manually (e.g., via Makefiles or Godbolt), "
+                    "ensure you pass '-Wl,-wrap=main' to the linker "
+                    "on Linux or '-Wl,-e,_initialize_main' on macOS. "
+                    "Consult the HPX documentation for the full "
+                    "library link order and other subtle nuances.");
             }
 #endif
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,

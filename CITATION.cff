@@ -7,7 +7,7 @@
 # Metadata for citation of this software according to the CFF format (https://citation-file-format.github.io/)
 cff-version: 1.2.0
 message: If you use this software, please cite it using these metadata.
-title: 'STEllAR-GROUP/hpx: HPX V1.11.0: The C++ Standards Library for Parallelism and
+title: 'TheHPXProject/hpx: HPX V1.11.0: The C++ Standards Library for Parallelism and
   Concurrency'
 doi: 10.5281/zenodo.5185328
 authors:
@@ -86,5 +86,5 @@ authors:
   affiliation: Louisiana State University
 version: 1.11.0
 date-released: 2025-06-30
-repository-code: https://github.com/STEllAR-GROUP/hpx
+repository-code: https://github.com/TheHPXProject/hpx
 license: BSL-1.0

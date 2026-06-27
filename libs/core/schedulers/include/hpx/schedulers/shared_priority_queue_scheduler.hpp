@@ -368,9 +368,10 @@ namespace hpx::threads::policies {
             case thread_schedule_hint_mode::thread:
             {
                 spq_deb.set(msg, "HINT_THREAD");
-                // @TODO. We should check that the thread num is valid
                 // Create thread on requested worker thread
-                thread_num = select_active_pu(data.schedulehint.hint);
+                thread_num = select_active_pu(
+                    fast_mod(static_cast<std::size_t>(data.schedulehint.hint),
+                        num_workers_));
                 domain_num = d_lookup_[thread_num];
                 q_index = q_lookup_[thread_num];
                 break;
@@ -775,13 +776,13 @@ namespace hpx::threads::policies {
             }
             case thread_schedule_hint_mode::thread:
             {
-                // @TODO. We should check that the thread num is valid
-                // Create thread on requested worker thread
                 spq_deb.set(msg, "HINT_THREAD");
                 spq_deb.debug(debug::str<>("schedule_thread"),
                     "received HINT_THREAD", debug::dec<3>(schedulehint.hint));
-                thread_num =
-                    select_active_pu(schedulehint.hint, allow_fallback);
+                thread_num = select_active_pu(
+                    fast_mod(static_cast<std::size_t>(schedulehint.hint),
+                        num_workers_),
+                    allow_fallback);
                 domain_num = d_lookup_[thread_num];
                 q_index = q_lookup_[thread_num];
                 break;

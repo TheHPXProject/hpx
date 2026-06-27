@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <mutex>
+#include <type_traits>
 #include <utility>
 
 namespace hpx::lcos::local {
@@ -50,7 +51,7 @@ namespace hpx::lcos::local {
           : received_segments_(count)
           , promise_(std::allocator_arg,
                 hpx::util::thread_local_caching_allocator<
-                    hpx::lockfree::variable_size_stack, char,
+                    hpx::lockfree::variable_size_stack,
                     hpx::util::internal_allocator<>>{})
           , generation_(1)
         {
@@ -209,7 +210,7 @@ namespace hpx::lcos::local {
                     // we have received the last missing segment
                     using allocator_type =
                         hpx::util::thread_local_caching_allocator<
-                            hpx::lockfree::variable_size_stack, char,
+                            hpx::lockfree::variable_size_stack,
                             hpx::util::internal_allocator<>>;
 
                     hpx::promise<void> p(std::allocator_arg, allocator_type{});

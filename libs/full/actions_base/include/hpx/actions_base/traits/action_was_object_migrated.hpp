@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,7 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/naming_base.hpp>
 
@@ -40,7 +40,7 @@ namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
     // Customization point for action capabilities
-    template <typename Action, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct action_was_object_migrated
     {
         // returns whether target was migrated to another locality

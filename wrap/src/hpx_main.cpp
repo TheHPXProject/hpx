@@ -4,10 +4,20 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <hpx/hpx_user_main_config.hpp>
+#include <hpx/config.hpp>
 
 #include <string>
 #include <vector>
+
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+#include <hpx/modules/init_runtime.hpp>
+#else
+namespace hpx_startup {
+
+    std::vector<std::string> (*user_main_config_function)(
+        std::vector<std::string> const&) = nullptr;
+}    // namespace hpx_startup
+#endif
 
 namespace hpx_startup {
 

@@ -18,7 +18,7 @@
 
 namespace hpx::util::detail {
 
-    HPX_CXX_EXPORT template <typename Sample>
+    template <typename Sample>
     struct rolling_max_impl : boost::accumulators::accumulator_base
     {
         using float_type = Sample;
@@ -78,7 +78,7 @@ namespace boost::accumulators {
 
     namespace tag {
 
-        HPX_CXX_EXPORT struct rolling_max : depends_on<rolling_window>
+        struct rolling_max : depends_on<rolling_window>
         {
             struct impl
             {
@@ -95,8 +95,7 @@ namespace boost::accumulators {
     // extract::rolling_max
     namespace extract {
 
-        HPX_CXX_EXPORT inline constexpr extractor<tag::rolling_max>
-            rolling_max = {};
+        inline constexpr extractor<tag::rolling_max> rolling_max = {};
     }    // namespace extract
 }    // namespace boost::accumulators
 // namespace boost::accumulators
@@ -105,9 +104,9 @@ namespace hpx::util {
 
     namespace tag {
 
-        HPX_CXX_EXPORT using boost::accumulators::tag::rolling_max;
+        using boost::accumulators::tag::rolling_max;
     }    // namespace tag
 
-    HPX_CXX_EXPORT using boost::accumulators::extract::rolling_max;
+    using boost::accumulators::extract::rolling_max;
 }    // namespace hpx::util
 // namespace hpx::util

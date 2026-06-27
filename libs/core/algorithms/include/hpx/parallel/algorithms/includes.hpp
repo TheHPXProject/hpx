@@ -170,6 +170,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -293,8 +294,7 @@ namespace hpx::parallel {
                     }
                 }
 
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
 

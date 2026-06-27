@@ -25,14 +25,16 @@ namespace hpx {
         namespace detail {
 
             // Get access to the registry of registered message handlers
-            HPX_EXPORT std::vector<hpx::tuple<char const*, char const*>>&
-            get_message_handler_registrations();
+            HPX_CXX_EXPORT HPX_EXPORT
+                std::vector<hpx::tuple<char const*, char const*>>&
+                get_message_handler_registrations();
         }    // namespace detail
 
-        HPX_EXPORT parcelset::policies::message_handler* get_message_handler(
-            char const* action, char const* message_handler_type,
-            std::size_t num_messages, std::size_t interval,
-            parcelset::locality const& loc, error_code& ec = throws);
+        HPX_CXX_EXPORT HPX_EXPORT parcelset::policies::message_handler*
+        get_message_handler(char const* action,
+            char const* message_handler_type, std::size_t num_messages,
+            std::size_t interval, parcelset::locality const& loc,
+            error_code& ec = throws);
     }    // namespace parcelset
     /// \endcond
 

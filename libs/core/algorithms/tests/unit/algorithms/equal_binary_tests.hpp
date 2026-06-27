@@ -465,7 +465,6 @@ void test_equal_binary_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal_binary_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -495,7 +494,7 @@ void test_equal_binary_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                 std::begin(c2), std::end(c2)) |
             hpx::equal(policy));
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -512,7 +511,7 @@ void test_equal_binary_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                 std::begin(c2), std::end(c2)) |
             hpx::equal(policy));
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -521,7 +520,6 @@ void test_equal_binary_sender(
         HPX_TEST_EQ(result, expected);
     }
 }
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -566,7 +564,6 @@ void test_equal_binary_edge_cases(ExPolicy&& policy, IteratorTag)
     }
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_equal_binary_edge_cases_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -594,7 +591,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c2), std::begin(c2)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result);
     }
@@ -606,7 +603,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::end(c1)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!result);
     }
@@ -618,7 +615,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::begin(c1)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!result);
     }
@@ -630,9 +627,8 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::begin(c1) + 2) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!result);
     }
 }
-#endif

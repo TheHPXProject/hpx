@@ -14,22 +14,11 @@ set(execution_headers
     hpx/execution/algorithms/detail/partial_algorithm.hpp
     hpx/execution/algorithms/detail/predicates.hpp
     hpx/execution/algorithms/detail/single_result.hpp
-    hpx/execution/algorithms/ensure_started.hpp
-    hpx/execution/algorithms/execute.hpp
-    hpx/execution/algorithms/just.hpp
+    hpx/execution/algorithms/detail/sync_wait_domain.hpp
     hpx/execution/algorithms/keep_future.hpp
-    hpx/execution/algorithms/let_error.hpp
-    hpx/execution/algorithms/let_stopped.hpp
-    hpx/execution/algorithms/let_value.hpp
     hpx/execution/algorithms/make_future.hpp
     hpx/execution/algorithms/run_loop.hpp
-    hpx/execution/algorithms/schedule_from.hpp
-    hpx/execution/algorithms/split.hpp
-    hpx/execution/algorithms/start_detached.hpp
     hpx/execution/algorithms/sync_wait.hpp
-    hpx/execution/algorithms/then.hpp
-    hpx/execution/algorithms/transfer.hpp
-    hpx/execution/algorithms/transfer_just.hpp
     hpx/execution/algorithms/when_all.hpp
     hpx/execution/algorithms/when_all_vector.hpp
     hpx/execution/detail/async_launch_policy_dispatch.hpp
@@ -57,11 +46,6 @@ set(execution_headers
     hpx/execution/executors/rebind_executor.hpp
     hpx/execution/executors/rebind_executor_parameters.hpp
     hpx/execution/executors/static_chunk_size.hpp
-    hpx/execution/queries/get_allocator.hpp
-    hpx/execution/queries/get_scheduler.hpp
-    hpx/execution/queries/get_delegatee_scheduler.hpp
-    hpx/execution/queries/get_stop_token.hpp
-    hpx/execution/queries/read.hpp
     hpx/execution/traits/detail/eve/vector_pack_alignment_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_all_any_none.hpp
     hpx/execution/traits/detail/eve/vector_pack_conditionals.hpp
@@ -70,6 +54,7 @@ set(execution_headers
     hpx/execution/traits/detail/eve/vector_pack_get_set.hpp
     hpx/execution/traits/detail/eve/vector_pack_load_store.hpp
     hpx/execution/traits/detail/eve/vector_pack_reduce.hpp
+    hpx/execution/traits/detail/eve/vector_pack_simd.hpp
     hpx/execution/traits/detail/eve/vector_pack_type.hpp
     hpx/execution/traits/detail/simd/vector_pack_alignment_size.hpp
     hpx/execution/traits/detail/simd/vector_pack_all_any_none.hpp
@@ -102,6 +87,7 @@ set(execution_headers
     hpx/execution/traits/vector_pack_load_store.hpp
     hpx/execution/traits/vector_pack_reduce.hpp
     hpx/execution/traits/vector_pack_type.hpp
+    hpx/synchronization/async_rw_mutex.hpp
 )
 
 set(execution_sources execution_parameter_callbacks.cpp
@@ -153,6 +139,10 @@ if(TARGET SVE::sve)
   set(execution_optional_dependencies SVE::sve)
 endif()
 
+if("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "EMULATE")
+  set(execution_headers ${execution_headers} hpx/experimental/emulate_simd.hpp)
+endif()
+
 include(HPX_AddModule)
 add_hpx_module(
   core execution
@@ -166,6 +156,7 @@ add_hpx_module(
     "hpx/execution/algorithms/detail/partial_algorithm.hpp"
     "hpx/execution/algorithms/detail/predicates.hpp"
     "hpx/execution/algorithms/detail/single_result.hpp"
+    "hpx/execution/algorithms/detail/sync_wait_domain.hpp"
     "hpx/execution/detail/async_launch_policy_dispatch.hpp"
     "hpx/execution/detail/execution_parameter_callbacks.hpp"
     "hpx/execution/detail/future_exec.hpp"

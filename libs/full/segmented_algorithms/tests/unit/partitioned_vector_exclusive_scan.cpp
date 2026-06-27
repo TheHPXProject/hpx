@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -43,6 +44,23 @@ struct opt
     T operator()(T v1, T v2) const
     {
         return v1 + v2;
+    }
+};
+
+template <typename T>
+struct sub_op
+{
+    T operator()(T v1, T v2) const
+    {
+        return v1 - v2;
+    }
+};
+
+struct concat_op
+{
+    std::string operator()(std::string const& lhs, std::string const& rhs) const
+    {
+        return lhs + ">" + rhs;
     }
 };
 
@@ -387,6 +405,141 @@ void exclusive_scan_tests(std::vector<hpx::id_type>& localities)
 
     exclusive_scan_tests_inplace_with_policy<T>(
         length, hpx::container_layout(localities));
+
+    // subrange regression test in a single segment (sit == send path)
+    {
+        constexpr std::size_t n = 16;
+        constexpr std::size_t first_offset = 3;
+        constexpr std::size_t range_size = 8;
+        constexpr std::size_t dest_offset = 2;
+
+        hpx::partitioned_vector<T> in(n, hpx::container_layout(1));
+        iota_vector(in, T(0));
+
+        hpx::partitioned_vector<T> out(n, hpx::container_layout(1));
+        auto first = in.begin();
+        std::advance(first, first_offset);
+        auto last = first;
+        std::advance(last, range_size);
+        auto dest = out.begin();
+        std::advance(dest, dest_offset);
+
+        auto verify_subrange_result = [&]() {
+            std::vector<T> expected(n, T(-1));
+            T acc = T(0);
+            for (std::size_t i = 0; i < range_size; ++i)
+            {
+                expected[dest_offset + i] = acc;
+                acc = acc + T(first_offset + i);
+            }
+
+            std::size_t idx = 0;
+            for (auto it = out.begin(); it != out.end(); ++it, ++idx)
+            {
+                HPX_TEST_EQ(*it, expected[idx]);
+            }
+            HPX_TEST_EQ(idx, n);
+        };
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::exclusive_scan(
+            hpx::execution::seq, first, last, dest, T(0), opt<T>());
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::exclusive_scan(
+            hpx::execution::par, first, last, dest, T(0), opt<T>());
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::exclusive_scan(hpx::execution::seq(hpx::execution::task), first,
+            last, dest, T(0), opt<T>())
+            .get();
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+        hpx::exclusive_scan(hpx::execution::par(hpx::execution::task), first,
+            last, dest, T(0), opt<T>())
+            .get();
+        verify_subrange_result();
+    }
+
+    // minimal regression for carry propagation order mismatch across segments
+    {
+        using S = std::string;
+
+        constexpr std::size_t n = 3;
+        hpx::partitioned_vector<S> in(n, hpx::container_layout(2, localities));
+        hpx::partitioned_vector<S> out_seq(
+            n, S(""), hpx::container_layout(2, localities));
+        hpx::partitioned_vector<S> out_par(
+            n, S(""), hpx::container_layout(2, localities));
+
+        std::vector<S> vals = {"a", "b", "c"};
+        auto it = in.begin();
+        for (auto const& s : vals)
+        {
+            *it++ = s;
+        }
+
+        concat_op op;
+        S init = "X";
+
+        hpx::exclusive_scan(hpx::execution::seq, in.begin(), in.end(),
+            out_seq.begin(), init, op);
+        hpx::exclusive_scan(hpx::execution::par, in.begin(), in.end(),
+            out_par.begin(), init, op);
+
+        auto seq_it = out_seq.begin();
+        auto par_it = out_par.begin();
+        for (std::size_t i = 0; i < n; ++i, ++seq_it, ++par_it)
+        {
+            S seq_val = *seq_it;
+            S par_val = *par_it;
+            HPX_TEST_EQ(seq_val, par_val);
+        }
+    }
+
+    // regression: same-segment subrange must not fall back to non-segmented
+    // scan path when output has more remaining room than input range
+    {
+        constexpr std::size_t n = 10;
+        constexpr std::size_t first_offset = 2;
+        constexpr std::size_t range_size = 4;
+        constexpr std::size_t dest_offset = 3;
+
+        hpx::partitioned_vector<T> in(n, hpx::container_layout(1));
+        iota_vector(in, T(1));
+
+        hpx::partitioned_vector<T> out(n, hpx::container_layout(1));
+        hpx::fill(hpx::execution::seq, out.begin(), out.end(), T(-1));
+
+        auto first = in.begin();
+        std::advance(first, first_offset);
+        auto last = first;
+        std::advance(last, range_size);
+        auto dest = out.begin();
+        std::advance(dest, dest_offset);
+
+        T const init = T(100);
+        hpx::exclusive_scan(
+            hpx::execution::seq, first, last, dest, init, sub_op<T>{});
+
+        std::vector<T> expected(n, T(-1));
+        T acc = init;
+        for (std::size_t i = 0; i < range_size; ++i)
+        {
+            expected[dest_offset + i] = acc;
+            acc = acc - T(first_offset + i + 1);
+        }
+
+        std::size_t idx = 0;
+        for (auto it = out.begin(); it != out.end(); ++it, ++idx)
+        {
+            HPX_TEST_EQ(*it, expected[idx]);
+        }
+        HPX_TEST_EQ(idx, n);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

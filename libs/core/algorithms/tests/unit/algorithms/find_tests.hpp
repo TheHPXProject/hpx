@@ -73,7 +73,6 @@ void test_find(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == iterator(test_index));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy, typename IteratorTag>
 void test_find_explicit_sender_direct(Policy l, ExPolicy&& policy, IteratorTag)
 {
@@ -133,7 +132,6 @@ void test_find_explicit_sender(Policy l, ExPolicy&& policy, IteratorTag)
 
     HPX_TEST(hpx::get<0>(*result) == iterator(test_index));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_async(ExPolicy&& p, IteratorTag)
@@ -160,7 +158,6 @@ void test_find_async(ExPolicy&& p, IteratorTag)
     HPX_TEST(f.get() == iterator(test_index));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy, typename IteratorTag>
 void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 {
@@ -184,7 +181,7 @@ void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 
     auto snd_result = tt::sync_wait(hpx::find(
         p.on(exec), iterator(std::begin(c)), iterator(std::end(c)), int(1)));
-    auto result = hpx::get<0>(*snd_result);
+    auto result = hpx::get<0>(snd_result.value());
 
     // create iterator at position of value to be found
     base_iterator test_index =
@@ -192,7 +189,6 @@ void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 
     HPX_TEST(result == iterator(test_index));
 }
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
@@ -369,4 +365,86 @@ void test_find_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
     HPX_TEST(caught_bad_alloc);
     HPX_TEST(returned_from_algorithm);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Cross-policy consistency tests for hpx::find
+//
+// Verifies that seq, par, and par_unseq always return the same iterator for
+// identical input data. This regression harness catches bugs where the
+// parallel partition / early-exit logic diverges from the sequential path.
+//
+// Datasets covered:
+//   1. Empty range              -> all policies must return last
+//   2. Single element, match    -> all policies must return begin
+//   3. Single element, no match -> all policies must return end (== begin+1)
+//   4. Match at position 0      -> boundary: very first chunk
+//   5. Match at last position   -> boundary: very last chunk
+//   6. No match anywhere        -> all policies must return end
+//   7. Multiple matches         -> all policies must return FIRST occurrence
+template <typename IteratorTag>
+void test_find_cross_policy(IteratorTag)
+{
+    using namespace hpx::execution;
+
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    auto check_policy = [&](std::vector<int>& c, int val,
+                            char const* scenario) {
+        auto r_seq =
+            hpx::find(seq, iterator(c.begin()), iterator(c.end()), val);
+        auto r_par =
+            hpx::find(par, iterator(c.begin()), iterator(c.end()), val);
+        auto r_par_u =
+            hpx::find(par_unseq, iterator(c.begin()), iterator(c.end()), val);
+        HPX_TEST_MSG(r_seq == r_par, scenario);
+        HPX_TEST_MSG(r_seq == r_par_u, scenario);
+    };
+
+    // 1. Empty range
+    {
+        std::vector<int> c;
+        check_policy(c, 42, "find: empty range");
+    }
+
+    // 2. Single element, match
+    {
+        std::vector<int> c = {42};
+        check_policy(c, 42, "find: single element found");
+    }
+
+    // 3. Single element, no match
+    {
+        std::vector<int> c = {1};
+        check_policy(c, 99, "find: single element not found");
+    }
+
+    // 4. Match at position 0 (first partition boundary)
+    {
+        std::vector<int> c(1013, 5);
+        c[0] = 7;
+        check_policy(c, 7, "find: match at index 0");
+    }
+
+    // 5. Match at last position (last partition boundary)
+    {
+        std::vector<int> c(1013, 5);
+        c[1012] = 7;
+        check_policy(c, 7, "find: match at last index");
+    }
+
+    // 6. No match anywhere - all policies must return end()
+    {
+        std::vector<int> c(1013, 5);
+        check_policy(c, 99, "find: no match, must return end");
+    }
+
+    // 7. Multiple matches - all policies must return the FIRST occurrence
+    {
+        std::vector<int> c(1013, 5);
+        c[100] = 7;
+        c[700] = 7;
+        check_policy(c, 7, "find: multiple matches, return first");
+    }
 }

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2014 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -20,7 +20,7 @@
 
 namespace hpx::parcelset {
 
-    template <typename BufferType = std::vector<char>,
+    HPX_CXX_EXPORT template <typename BufferType = std::vector<char>,
         typename ChunkType = serialization::serialization_chunk>
     struct parcel_buffer
     {

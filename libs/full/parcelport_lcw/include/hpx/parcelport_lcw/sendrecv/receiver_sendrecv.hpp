@@ -14,9 +14,9 @@
 
 #include <hpx/parcelport_lcw/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_lcw/parcelport_lcw.hpp>
 #include <hpx/parcelport_lcw/receiver_base.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
 
 #include <algorithm>
 #include <cstddef>

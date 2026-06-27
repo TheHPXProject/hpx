@@ -130,6 +130,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/adjacent_find.hpp>
 #include <hpx/parallel/algorithms/detail/adjacent_find.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
@@ -200,9 +201,13 @@ namespace hpx::parallel {
 
                 using policy_type = std::decay_t<decltype(policy)>;
 
+                difference_type count = detail::distance(first, last);
+
                 FwdIter next = first;
-                ++next;
-                difference_type count = std::distance(first, last);
+                if (count > 0)
+                {
+                    ++next;
+                }
                 util::cancellation_token<difference_type> tok(count);
 
                 util::invoke_projected<Pred, Proj> pred_projected{
@@ -215,8 +220,7 @@ namespace hpx::parallel {
                         base_idx, it, part_size, tok, pred_projected);
                 };
 
-                auto f2 = [tok, count, first, last](
-                              auto&&... data) mutable -> FwdIter {
+                auto f2 = [tok, first](auto&&... data) mutable -> FwdIter {
                     static_assert(sizeof...(data) < 2);
 
                     // make sure iterators embedded in function object that
@@ -224,14 +228,7 @@ namespace hpx::parallel {
                     util::detail::clear_container(data...);
 
                     difference_type adj_find_res = tok.get_data();
-                    if (adj_find_res != count)
-                    {
-                        std::advance(first, adj_find_res);
-                    }
-                    else
-                    {
-                        first = last;
-                    }
+                    std::advance(first, adj_find_res);
                     return first;
                 };
 

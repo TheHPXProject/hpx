@@ -293,16 +293,18 @@ if(HPX_WITH_DOCUMENTATION)
 endif()
 
 if(WIN32)
-  set(HPX_WITH_PSEUDO_DEPENDENCIES
-      OFF
-      CACHE INTERNAL "" FORCE
-  )
+  set(HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT OFF)
 else()
-  set(HPX_WITH_PSEUDO_DEPENDENCIES
-      ON
-      CACHE INTERNAL "" FORCE
-  )
+  set(HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT ON)
 endif()
+
+hpx_option(
+  HPX_WITH_PSEUDO_DEPENDENCIES
+  BOOL
+  "Turn compiler warnings into errors (default: ${HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT})"
+  ${HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT}
+  ADVANCED
+)
 
 hpx_option(
   HPX_WITH_UNITY_BUILD BOOL
@@ -620,13 +622,6 @@ hpx_option(
 )
 
 # ## HPX STDEXEC configuration ##
-
-hpx_option(
-  HPX_WITH_STDEXEC BOOL
-  "Use STDEXEC executors instead of native HPX.(default: OFF)" OFF
-  CATEGORY "Executor"
-  ADVANCED
-)
 
 hpx_option(
   HPX_WITH_FETCH_STDEXEC BOOL "Use FetchContent to fetch STDEXEC.(default: ON)"
@@ -1073,7 +1068,7 @@ hpx_option(
   ADVANCED
 )
 
-set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-21-0")
+set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-30-2")
 if(HPX_WITH_HIP)
   # newer versions of Asio currently fail when compiled with HIPCC
   set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-16-0")
@@ -1159,7 +1154,7 @@ hpx_option(
 )
 
 hpx_option(
-  HPX_TRACY_WITH_TRACY BOOL "Enable Tracy instrumentation support." OFF
+  HPX_WITH_TRACY BOOL "Enable Tracy instrumentation support." OFF
   CATEGORY "Profiling"
 )
 
@@ -1213,6 +1208,8 @@ endif()
 if(HPX_WITH_APEX AND NOT HPX_WITH_DISTRIBUTED_RUNTIME)
   hpx_error("HPX_WITH_DISTRIBUTED_RUNTIME=OFF requires HPX_WITH_APEX=OFF")
 endif()
+
+include(HPX_SetupTracing)
 
 if(HPX_WITH_NETWORKING)
   hpx_add_config_define(HPX_HAVE_NETWORKING)
@@ -1893,6 +1890,17 @@ hpx_option(
   ADVANCED
 )
 
+hpx_option(
+  HPX_WITH_CXX20_STD_EXECUTION_POLICES
+  BOOL
+  "Support using std execution policies for HPX parallel algorithms (default: ON)."
+  ON
+  ADVANCED
+)
+if(HPX_WITH_CXX20_STD_EXECUTION_POLICES)
+  hpx_add_config_define(HPX_HAVE_CXX20_STD_EXECUTION_POLICES)
+endif()
+
 # Need to include the CUDA setup before the config test to enable the CUDA
 # language
 include(HPX_SetupCUDA)
@@ -2053,6 +2061,13 @@ if(WIN32)
 
       # Make sure that __cplusplus is properly defined
       hpx_add_target_compile_option(-Zc:__cplusplus PUBLIC)
+
+      # stdexec requires the conforming MSVC preprocessor.
+      if(NOT (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang"
+              AND "x${CMAKE_CXX_SIMULATE_ID}" STREQUAL "xMSVC")
+      )
+        hpx_add_target_compile_option(-Zc:preprocessor PUBLIC)
+      endif()
 
       # Silence C++17 deprecation warnings
       hpx_add_config_cond_define(_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)

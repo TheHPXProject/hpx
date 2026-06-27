@@ -6,11 +6,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/async_distributed/detail/post.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/agas.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
@@ -22,6 +21,7 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threadmanager.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <hpx/runtime_components/console_logging.hpp>
 #include <hpx/runtime_components/server/console_logging.hpp>
 
@@ -33,7 +33,7 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components {
+namespace hpx::components {
 
     void fallback_console_logging_locked(
         messages_type const& msgs, std::string fail_msg = "")
@@ -346,4 +346,4 @@ namespace hpx { namespace components {
     {
         detail::logger().activate();
     }
-}}    // namespace hpx::components
+}    // namespace hpx::components

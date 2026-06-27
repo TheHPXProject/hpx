@@ -44,10 +44,10 @@ namespace hpx::meta {
     HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr auto value = T::value;
 
-    HPX_CXX_CORE_EXPORT template <typename T, typename U>
+    template <typename T, typename U>
     inline constexpr bool value<std::is_same<T, U>> = false;
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     inline constexpr bool value<std::is_same<T, T>> = true;
 
     ///////////////////////////////////////////////////////////////////////////
@@ -483,10 +483,11 @@ namespace hpx::meta {
         using apply = Fn<Args...>;
     };
 
+    // clang-format off
     HPX_CXX_CORE_EXPORT template <typename... As>
-    using single_t = std::enable_if_t < sizeof...(As) == 1,
-          meta::type < front < As... >>>
-        ;
+    using single_t =
+        std::enable_if_t<sizeof...(As) == 1, meta::type<front<As...>>>;
+    // clang-format on
 
     HPX_CXX_CORE_EXPORT template <typename Ty>
     struct single_or
@@ -499,7 +500,7 @@ namespace hpx::meta {
     HPX_CXX_CORE_EXPORT template <typename T, typename = void>
     inline constexpr bool has_id_v = false;
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     inline constexpr bool has_id_v<T, std::void_t<typename T::id>> = true;
 
     HPX_CXX_CORE_EXPORT template <typename T>
@@ -525,17 +526,12 @@ namespace hpx::meta {
     using get_id_t = hpx::type_identity_t<
         hpx::meta::invoke<get_id_func<value<has_id<T>>>, T>>;
 
-    // clang-format off
     HPX_CXX_CORE_EXPORT template <typename T, typename... As>
     inline constexpr bool is_constructible_from_v =
         std::is_destructible_v<T> && std::is_constructible_v<T, As...>;
-    // Clang format bug: thinks   ^^this is a double reference
 
     HPX_CXX_CORE_EXPORT template <typename T, typename... As>
     inline constexpr bool is_nothrow_constructible_from_v =
         is_constructible_from_v<T, As...> &&
-    // Clang format bug: thinks       this^^ is a double reference
         std::is_nothrow_constructible_v<T, As...>;
-    // clang-format on
-
 }    // namespace hpx::meta

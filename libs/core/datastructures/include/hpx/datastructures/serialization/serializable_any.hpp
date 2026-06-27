@@ -45,7 +45,7 @@ namespace hpx::util::detail::any {
 
     ////////////////////////////////////////////////////////////////////////////
     // serializable function pointer table
-    HPX_CXX_CORE_EXPORT template <typename IArch, typename OArch, typename Char>
+    template <typename IArch, typename OArch, typename Char>
         requires(!std::is_void_v<IArch> && !std::is_void_v<OArch>)
     struct fxn_ptr_table<IArch, OArch, Char, std::true_type>
     {
@@ -83,8 +83,7 @@ namespace hpx::util::detail::any {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename IArch, typename OArch,
-        typename Vtable, typename Char>
+    template <typename IArch, typename OArch, typename Vtable, typename Char>
     struct fxn_ptr<IArch, OArch, Vtable, Char, std::true_type>
       : fxn_ptr_table<IArch, OArch, Char, std::true_type>
     {
@@ -134,7 +133,7 @@ namespace hpx::util::detail::any {
 namespace hpx::util {
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename IArch, typename OArch, typename Char>
+    template <typename IArch, typename OArch, typename Char>
     class basic_any<IArch, OArch, Char, std::true_type>
     {
     public:
@@ -422,12 +421,11 @@ namespace hpx::util {
     };
 
     // explicitly instantiate the operator()()
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::size_t
-    hash_any::operator()(basic_any<serialization::input_archive,
-        serialization::output_archive, char, std::true_type> const& elem) const;
+    extern template HPX_CORE_EXPORT std::size_t hash_any::operator()(
+        basic_any<serialization::input_archive, serialization::output_archive,
+            char, std::true_type> const& elem) const;
 
-    HPX_CXX_CORE_EXPORT extern template HPX_CORE_EXPORT std::size_t
-    hash_any::operator()(
+    extern template HPX_CORE_EXPORT std::size_t hash_any::operator()(
         basic_any<serialization::input_archive, serialization::output_archive,
             wchar_t, std::true_type> const& elem) const;
 }    // namespace hpx::util

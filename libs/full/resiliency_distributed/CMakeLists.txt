@@ -20,9 +20,12 @@ include(HPX_AddModule)
 add_hpx_module(
   full resiliency_distributed
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${resiliency_distributed_sources}
   HEADERS ${resiliency_distributed_headers}
+  EXCLUDE_FROM_GLOBAL_HEADER
+    "hpx/resiliency_distributed/resiliency_distributed.hpp"
   DEPENDENCIES hpx_core
-  MODULE_DEPENDENCIES hpx_actions_base hpx_naming
+  MODULE_DEPENDENCIES hpx_actions_base hpx_async_distributed hpx_naming
   CMAKE_SUBDIRS examples tests
 )

@@ -42,7 +42,7 @@ namespace hpx::threads::policies {
     // any work stealing.
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
-        typename StagedQueuing = lockfree_fifo,
+        typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
             default_static_priority_queue_scheduler_terminated_queue>
     class static_priority_queue_scheduler final

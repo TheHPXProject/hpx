@@ -7,17 +7,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_select_direct_execution.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/detail/async_implementations_fwd.hpp>
 #include <hpx/async_distributed/packaged_action.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
-#include <hpx/components_base/traits/action_decorate_function.hpp>
-#include <hpx/components_base/traits/component_supports_migration.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -26,6 +22,7 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <utility>
@@ -143,7 +140,7 @@ namespace hpx::detail {
         {
             try
             {
-                using remote_result_type = typename Action::remote_result_type;
+                using remote_result_type = Action::remote_result_type;
                 using get_remote_result_type =
                     traits::get_remote_result<Result, remote_result_type>;
 
@@ -204,7 +201,7 @@ namespace hpx::detail {
 
                 using allocator_type =
                     hpx::util::thread_local_caching_allocator<
-                        hpx::lockfree::variable_size_stack, char,
+                        hpx::lockfree::variable_size_stack,
                         hpx::util::internal_allocator<>>;
                 lcos::packaged_action<Action, Result> p(
                     std::allocator_arg, allocator_type{});
@@ -219,21 +216,21 @@ namespace hpx::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_remote_impl(launch::sync_policy, hpx::id_type const& id,
         naming::address&& addr, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
+        using result_type = action_type::local_result_type;
 
         future<result_type> f;
         {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});
@@ -245,21 +242,21 @@ namespace hpx::detail {
         return f;
     }
 
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_remote_impl(launch::async_policy policy, hpx::id_type const& id,
         naming::address&& addr, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
+        using result_type = action_type::local_result_type;
 
         hpx::future<result_type> f;
         {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});
@@ -271,21 +268,21 @@ namespace hpx::detail {
         return f;
     }
 
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_remote_impl(launch::deferred_policy policy, hpx::id_type const& id,
         naming::address&& addr, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
+        using result_type = action_type::local_result_type;
 
         hpx::future<result_type> f;
         {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});
@@ -298,7 +295,7 @@ namespace hpx::detail {
     }
 
     // generic function for dynamic launch policy
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_remote_impl(launch policy, hpx::id_type const& id,
@@ -329,8 +326,8 @@ namespace hpx::detail {
     template <typename Action>
     struct action_invoker
     {
-        using remote_result_type = typename Action::remote_result_type;
-        using result_type = typename Action::local_result_type;
+        using remote_result_type = Action::remote_result_type;
+        using result_type = Action::local_result_type;
         using get_remote_result_type =
             traits::get_remote_result<result_type, remote_result_type>;
 
@@ -369,24 +366,22 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     template <typename Action>
-    struct get_function_annotation_itt<hpx::detail::action_invoker<Action>>
+    struct get_function_annotation_tracing<hpx::detail::action_invoker<Action>>
     {
-        static util::itt::string_handle call(
+        static hpx::tracing::annotation_handle call(
             hpx::detail::action_invoker<Action> const&) noexcept
         {
-            return hpx::actions::detail::get_action_name_itt<Action>();
+            return hpx::actions::detail::get_action_name_tracing<Action>();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_local_impl(launch policy, hpx::id_type const& id,
@@ -394,7 +389,7 @@ namespace hpx::detail {
         Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
+        using result_type = action_type::local_result_type;
 
         if (policy == launch::sync || action_type::direct_execution::value)
         {
@@ -418,13 +413,13 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename Launch, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Launch, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_impl(Launch&& policy, hpx::id_type const& id, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -477,15 +472,15 @@ namespace hpx::detail {
     ///////////////////////////////////////////////////////////////////////////
     /// \note This function is part of the invocation policy implemented by
     ///       this class
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(
         launch policy, hpx::id_type const& id, Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
-        using component_type = typename action_type::component_type;
+        using result_type = action_type::local_result_type;
+        using component_type = action_type::component_type;
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -549,7 +544,7 @@ namespace hpx::detail {
             {
                 using allocator_type =
                     hpx::util::thread_local_caching_allocator<
-                        hpx::lockfree::variable_size_stack, char,
+                        hpx::lockfree::variable_size_stack,
                         hpx::util::internal_allocator<>>;
                 lcos::packaged_action<action_type, result_type> p(
                     std::allocator_arg, allocator_type{});
@@ -564,7 +559,7 @@ namespace hpx::detail {
             {
                 using allocator_type =
                     hpx::util::thread_local_caching_allocator<
-                        hpx::lockfree::variable_size_stack, char,
+                        hpx::lockfree::variable_size_stack,
                         hpx::util::internal_allocator<>>;
                 lcos::packaged_action<action_type, result_type> p(
                     std::allocator_arg, allocator_type{});
@@ -582,15 +577,15 @@ namespace hpx::detail {
         return f;
     }
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::sync_policy policy, hpx::id_type const& id,
         Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
-        using component_type = typename action_type::component_type;
+        using result_type = action_type::local_result_type;
+        using component_type = action_type::component_type;
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -633,7 +628,7 @@ namespace hpx::detail {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});
@@ -646,15 +641,15 @@ namespace hpx::detail {
         return f;
     }
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::async_policy async_policy,
         hpx::id_type const& id, Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
-        using component_type = typename action_type::component_type;
+        using result_type = action_type::local_result_type;
+        using component_type = action_type::component_type;
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -713,7 +708,7 @@ namespace hpx::detail {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});
@@ -725,14 +720,14 @@ namespace hpx::detail {
         return f;
     }
 
-    template <typename Action, typename Callback, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<
         typename hpx::traits::extract_action_t<Action>::local_result_type>
     async_cb_impl(hpx::launch::deferred_policy policy, hpx::id_type const& id,
         Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
+        using result_type = action_type::local_result_type;
 
         naming::address addr;
         [[maybe_unused]] bool result = agas::is_local_address_cached(id, addr);
@@ -742,7 +737,7 @@ namespace hpx::detail {
             handle_managed_target<result_type> hmt(id, f);
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
             lcos::packaged_action<action_type, result_type> p(
                 std::allocator_arg, allocator_type{});

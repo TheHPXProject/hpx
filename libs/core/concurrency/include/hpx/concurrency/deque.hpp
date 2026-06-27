@@ -415,13 +415,14 @@ namespace hpx::lockfree {
             }
         }
 
-        // Not thread-safe.
+        // Thread-safe and non-blocking.
         // Complexity: O(Processes)
-        // FIXME: Should we check both pointers here?
-        [[nodiscard]] bool empty() const noexcept
+        [[nodiscard]] bool empty(
+            std::memory_order mo = std::memory_order_relaxed) const noexcept
         {
-            return anchor_.lrs(std::memory_order_relaxed).get_left_ptr() ==
-                nullptr;
+            anchor_pair lrs = anchor_.lrs(mo);
+            return lrs.get_left_ptr() == nullptr &&
+                lrs.get_right_ptr() == nullptr;
         }
 
         // Thread-safe and non-blocking.
@@ -449,8 +450,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_left_ptr() == nullptr)
+                if (lrs.get_left_ptr() == nullptr &&
+                    lrs.get_right_ptr() == nullptr)
                 {
                     // If the deque is empty, we simply install a new anchor
                     // which points to the new node as both its leftmost and
@@ -506,8 +507,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_right_ptr() == nullptr)
+                if (lrs.get_right_ptr() == nullptr &&
+                    lrs.get_left_ptr() == nullptr)
                 {
                     // If the deque is empty, we simply install a new anchor
                     // which points to the new node as both its leftmost and
@@ -526,7 +527,7 @@ namespace hpx::lockfree {
                     n->left.store(node_pointer(lrs.get_right_ptr()));
 
                     // Now we want to make the anchor point to our new node as
-                    // the leftmost node. We change the state to lpush as the
+                    // the rightmost node. We change the state to rpush as the
                     // deque will become unstable if this operation succeeds.
                     anchor_pair new_anchor(lrs.get_left_ptr(), n,
                         deque_status_type::rpush, lrs.get_right_tag() + 1);
@@ -557,8 +558,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_left_ptr() == nullptr)
+                if (lrs.get_left_ptr() == nullptr &&
+                    lrs.get_right_ptr() == nullptr)
                     return false;
 
                 // Check if the deque has 1 element.
@@ -625,8 +626,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_right_ptr() == nullptr)
+                if (lrs.get_right_ptr() == nullptr &&
+                    lrs.get_left_ptr() == nullptr)
                     return false;
 
                 // Check if the deque has 1 element.

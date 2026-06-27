@@ -8,12 +8,16 @@ name: macOS CI (Debug) with Boost Fetch
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install dependencies
       run: |
           brew install --overwrite python-tk && \
@@ -38,7 +42,7 @@ jobs:
       shell: bash
       run: |
           cmake --build build --target all
-          cmake --build build --target tests
+          cmake --build build --target tests -- -k 0
     - name: Test
       shell: bash
       run: |

@@ -14,7 +14,13 @@
 #include <atomic>
 #include <exception>
 #include <string>
+#include <type_traits>
 #include <utility>
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 
 namespace ex = hpx::execution::experimental;
 
@@ -47,11 +53,7 @@ public:
 template <typename... Ts>
 struct non_copyable_sender
 {
-#if defined(HPX_HAVE_STDEXEC)
     using sender_concept = ex::sender_t;
-#else
-    using is_sender = void;
-#endif
 
     hpx::tuple<std::decay_t<Ts>...> ts;
 
@@ -87,13 +89,12 @@ struct non_copyable_sender
         std::decay_t<R> r;
         hpx::tuple<std::decay_t<Ts>...> ts;
 
-        friend void tag_invoke(
-            hpx::execution::experimental::start_t, operation_state& os) noexcept
+        void start() & noexcept
         {
             hpx::invoke_fused(
                 hpx::bind_front(
-                    hpx::execution::experimental::set_value, std::move(os.r)),
-                std::move(os.ts));
+                    hpx::execution::experimental::set_value, std::move(r)),
+                std::move(ts));
         };
     };
 
@@ -112,6 +113,7 @@ struct example_sender
     hpx::tuple<std::decay_t<Ts>...> ts;
 
     using is_sender = void;
+    using sender_concept = ex::sender_t;
 
     // clang-format off
     template <typename Env>
@@ -145,13 +147,12 @@ struct example_sender
         std::decay_t<R> r;
         hpx::tuple<std::decay_t<Ts>...> ts;
 
-        friend void tag_invoke(
-            hpx::execution::experimental::start_t, operation_state& os) noexcept
+        void start() & noexcept
         {
             hpx::invoke_fused(
                 hpx::bind_front(
-                    hpx::execution::experimental::set_value, std::move(os.r)),
-                std::move(os.ts));
+                    hpx::execution::experimental::set_value, std::move(r)),
+                std::move(ts));
         };
     };
 
@@ -227,39 +228,34 @@ struct large_sender : example_sender<Ts...>
 
 struct error_receiver
 {
+    using receiver_concept = hpx::execution::experimental::receiver_t;
+
     std::atomic<bool>& set_error_called;
 
-    struct is_receiver
-    {
-    };
-
-    friend void tag_invoke(hpx::execution::experimental::set_error_t,
-        error_receiver&& r, std::exception_ptr&& e) noexcept
+    void set_error(std::exception_ptr e) && noexcept
     {
         try
         {
             std::rethrow_exception(std::move(e));
         }
-        catch (std::runtime_error const& e)
+        catch (std::runtime_error const& re)
         {
-            HPX_TEST_EQ(std::string(e.what()), std::string("error"));
+            HPX_TEST_EQ(std::string(re.what()), std::string("error"));
         }
         catch (...)
         {
             HPX_TEST(false);
         }
-        r.set_error_called = true;
+        set_error_called = true;
     }
 
-    friend void tag_invoke(
-        hpx::execution::experimental::set_stopped_t, error_receiver&&) noexcept
+    void set_stopped() && noexcept
     {
         HPX_TEST(false);
-    };
+    }
 
     template <typename... Ts>
-    friend void tag_invoke(hpx::execution::experimental::set_value_t,
-        error_receiver&&, Ts&&...) noexcept
+    void set_value(Ts&&...) && noexcept
     {
         HPX_TEST(false);
     }
@@ -276,20 +272,12 @@ void test_any_sender(F&& f, Ts&&... ts)
     ex::any_sender<std::decay_t<Ts>...> as1{s};
 
     static_assert(ex::is_sender_v<decltype(as1)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as1), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as1), ex::empty_env>);
-#endif
 
     auto as2 = as1;
 
     static_assert(ex::is_sender_v<decltype(as2)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as2), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as2), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
@@ -379,11 +367,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
     ex::unique_any_sender<std::decay_t<Ts>...> as1{std::move(s)};
 
     static_assert(ex::is_sender_v<decltype(as1)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as1), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as1), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as1);
     check_error_types<hpx::variant<std::exception_ptr>>(as1);
@@ -392,11 +376,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
     auto as2 = std::move(as1);
 
     static_assert(ex::is_sender_v<decltype(as2)>);
-#if defined(HPX_HAVE_STDEXEC)
     static_assert(ex::is_sender_in_v<decltype(as2), ex::empty_env>);
-#else
-    static_assert(ex::is_sender_v<decltype(as2), ex::empty_env>);
-#endif
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
@@ -579,14 +559,10 @@ void test_globals()
 {
     global_unique_any_sender =
         std::move(global_unique_any_sender) | ex::ensure_started();
-#if defined(HPX_HAVE_STDEXEC)
     // P2300R8's ensure started returns non-copyable senders, so we need to split
     // to pass it to a global_any_sender.
     global_any_sender =
         std::move(global_any_sender) | ex::ensure_started() | ex::split();
-#else
-    global_any_sender = std::move(global_any_sender) | ex::ensure_started();
-#endif
 }
 
 int main()
@@ -676,3 +652,7 @@ int main()
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif

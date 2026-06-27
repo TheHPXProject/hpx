@@ -8,18 +8,17 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/primary_namespace.hpp>
-#include <hpx/agas_base/server/primary_namespace.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/components_base/agas_interface.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/agas_base/primary_namespace.hpp>
+#include <hpx/agas_base/server/primary_namespace.hpp>
 
 #include <cstdint>
 #include <string>

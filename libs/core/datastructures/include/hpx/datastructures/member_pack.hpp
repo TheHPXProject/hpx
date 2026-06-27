@@ -111,7 +111,7 @@ namespace hpx::util {
     HPX_CXX_CORE_EXPORT template <typename Is, typename... Ts>
     struct HPX_EMPTY_BASES member_pack;
 
-    HPX_CXX_CORE_EXPORT template <std::size_t... Is, typename... Ts>
+    template <std::size_t... Is, typename... Ts>
     struct HPX_EMPTY_BASES member_pack<util::index_pack<Is...>, Ts...>
       : detail::member_leaf<Is, Ts>...
     {

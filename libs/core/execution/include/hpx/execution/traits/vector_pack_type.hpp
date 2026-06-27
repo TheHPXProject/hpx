@@ -27,7 +27,7 @@ namespace hpx::parallel::traits {
     using vector_pack_type_t = typename vector_pack_type<T, N, Abi>::type;
 
     // handle tuple<> transformations
-    HPX_CXX_CORE_EXPORT template <typename... T, std::size_t N, typename Abi>
+    template <typename... T, std::size_t N, typename Abi>
     struct vector_pack_type<hpx::tuple<T...>, N, Abi>
     {
         using type = hpx::tuple<vector_pack_type_t<T, N, Abi>...>;

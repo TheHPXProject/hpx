@@ -488,7 +488,7 @@ void test_partition()
 #if !defined(HPX_DEBUG) && !defined(HPX_HAVE_SANITIZERS)
     test_partition_heavy(
         par, IteratorTag(), int(),
-        [rand_base](const unsigned int n) -> bool { return n < rand_base; },
+        [rand_base](unsigned int const n) -> bool { return n < rand_base; },
         rand_base);
 #endif
 }

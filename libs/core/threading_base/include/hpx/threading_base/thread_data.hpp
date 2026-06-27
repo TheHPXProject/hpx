@@ -17,16 +17,16 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/thread_description.hpp>
 #include <hpx/threading_base/thread_init_data.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
-#if defined(HPX_HAVE_APEX)
-#include <hpx/threading_base/external_timer.hpp>
-#endif
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <forward_list>
 #include <limits>
 #include <memory>
@@ -283,6 +283,22 @@ namespace hpx::threads {
         threads::thread_description get_lco_description() const;
         threads::thread_description set_lco_description(
             threads::thread_description value);
+#endif
+
+#if defined(HPX_HAVE_TRACY)
+    private:
+        mutable char tracy_fiber_name_[64];
+
+    public:
+        static char const* get_tracy_description_name(
+            threads::thread_description const& description,
+            char const* fallback) noexcept;
+
+        // Returns a unique, stable string identifying this HPX task as a Tracy
+        // fiber. Built lazily on first call and cached in tracy_fiber_name_.
+        // Format: "<description>_<thread_id_ptr>" so each HPX task gets its
+        // own fiber track in the Tracy profiler.
+        char const* get_tracy_fiber_name() const noexcept;
 #endif
 
 #if !defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
@@ -559,18 +575,14 @@ namespace hpx::threads {
         virtual void init() = 0;
         virtual void rebind(thread_init_data& init_data) = 0;
 
-#if defined(HPX_HAVE_APEX)
-        std::shared_ptr<util::external_timer::task_wrapper> get_timer_data()
-            const noexcept
+        hpx::tracing::task_timer_data get_timer_data() const noexcept
         {
-            return timer_data_;
+            return this->timer_data_;
         }
-        void set_timer_data(
-            std::shared_ptr<util::external_timer::task_wrapper> data) noexcept
+        void set_timer_data(hpx::tracing::task_timer_data data) noexcept
         {
-            timer_data_ = data;
+            this->timer_data_ = HPX_MOVE(data);
         }
-#endif
 
         // Construct a new \a thread
         thread_data(thread_init_data& init_data, void* queue,
@@ -597,6 +609,7 @@ namespace hpx::threads {
         std::uint16_t last_worker_thread_num_;
 
         thread_stacksize stacksize_enum_;
+        HPX_NO_UNIQUE_ADDRESS hpx::tracing::task_timer_data timer_data_;
         std::int32_t stacksize_;
 
         mutable std::atomic<thread_state> current_state_;
@@ -633,11 +646,6 @@ namespace hpx::threads {
         util::backtrace const* backtrace_ = nullptr;
 #endif
 #endif
-
-    public:
-#if defined(HPX_HAVE_APEX)
-        std::shared_ptr<util::external_timer::task_wrapper> timer_data_;
-#endif
     };
 
     HPX_CXX_CORE_EXPORT HPX_FORCEINLINE constexpr thread_data*
@@ -651,6 +659,35 @@ namespace hpx::threads {
     {
         return static_cast<thread_data*>(tid.get());
     }
+
+#if defined(HPX_HAVE_TRACY)
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::region_init_data
+    get_region_init_data(thread_data const* thrdptr);
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::fiber_region_init_data
+    get_fiber_region_init_data(thread_data const* thrdptr);
+#elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::region_init_data
+    get_region_init_data(thread_data const* thrdptr);
+
+    HPX_CXX_CORE_EXPORT constexpr tracing::fiber_region_init_data
+    get_fiber_region_init_data(thread_data const*) noexcept
+    {
+        return {};
+    }
+#else
+    HPX_CXX_CORE_EXPORT constexpr tracing::region_init_data
+    get_region_init_data(thread_data const*) noexcept
+    {
+        return {};
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr tracing::fiber_region_init_data
+    get_fiber_region_init_data(thread_data const*) noexcept
+    {
+        return {};
+    }
+#endif
 }    // namespace hpx::threads
 
 #include <hpx/config/warnings_suffix.hpp>
@@ -668,8 +705,11 @@ namespace hpx::threads {
 
         if (is_stackless())
         {
+            HPX_ASSERT(dynamic_cast<thread_data_stackless*>(this) != nullptr);
             return static_cast<thread_data_stackless*>(this)->call();
         }
+
+        HPX_ASSERT(dynamic_cast<thread_data_stackful*>(this) != nullptr);
         return static_cast<thread_data_stackful*>(this)->call(agent_storage);
     }
 
@@ -679,8 +719,11 @@ namespace hpx::threads {
 
         if (is_stackless())
         {
+            HPX_ASSERT(dynamic_cast<thread_data_stackless*>(this) != nullptr);
             return static_cast<thread_data_stackless*>(this)->call();
         }
-        return static_cast<thread_data_stackful*>(this)->invoke_directly();
+
+        HPX_ASSERT(dynamic_cast<thread_data_stackful*>(this) != nullptr);
+        return static_cast<thread_data_stackful*>(this)->call_directly();
     }
 }    // namespace hpx::threads

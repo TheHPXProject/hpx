@@ -56,7 +56,6 @@ void test_adjacent_find(ExPolicy policy, IteratorTag)
     HPX_TEST(index == iterator(test_index));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_adjacent_find_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -86,8 +85,9 @@ void test_adjacent_find_sender(
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::adjacent_find(ex_policy.on(exec)));
+        HPX_TEST(snd_result.has_value());
 
-        iterator index = hpx::get<0>(*snd_result);
+        iterator index = hpx::get<0>(snd_result.value());
         base_iterator test_index =
             std::begin(c) + static_cast<std::ptrdiff_t>(random_pos);
 
@@ -100,12 +100,12 @@ void test_adjacent_find_sender(
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::adjacent_find(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        HPX_TEST(snd_result.has_value());
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(iterator(std::begin(c)) == result);
     }
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_adjacent_find_async(ExPolicy p, IteratorTag)
@@ -278,4 +278,79 @@ void test_adjacent_find_bad_alloc_async(ExPolicy p, IteratorTag)
 
     HPX_TEST(caught_bad_alloc);
     HPX_TEST(returned_from_algorithm);
+}
+
+////////////////////////////////////////////////////////////////////////////
+// Edge-case and boundary tests covering scenarios absent from the main
+// test_adjacent_find template:
+//
+//   1. Empty range            -> must return last
+//   2. Single-element range   -> must return last  (count-1 == 0 partition)
+//   3. All-unique range       -> no match, must return last
+//   4. Duplicate at index 0   -> first pair, boundary position
+//   5. Duplicate at index N-2 -> last pair, boundary position
+//   6. Binary predicate, empty range -> must return last
+//
+// These are exercised for every execution policy including simd/par_simd.
+template <typename ExPolicy>
+void test_adjacent_find_edge_cases(ExPolicy&& policy)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    // ------------------------------------------------------------------
+    // 1. Empty range: must return last
+    {
+        std::vector<int> c;
+        auto result = hpx::adjacent_find(policy, c.begin(), c.end());
+        HPX_TEST(result == c.end());
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Single-element range: no adjacent pair exists, must return last
+    {
+        std::vector<int> c = {42};
+        auto result = hpx::adjacent_find(policy, c.begin(), c.end());
+        HPX_TEST(result == c.end());
+    }
+
+    // ------------------------------------------------------------------
+    // 3. All-unique range (no match anywhere): must return last
+    {
+        std::vector<int> c(1000);
+        std::iota(std::begin(c), std::end(c), 0);
+        auto result = hpx::adjacent_find(policy, c.begin(), c.end());
+        HPX_TEST(result == c.end());
+    }
+
+    // ------------------------------------------------------------------
+    // 4. Duplicate at position 0 (first two elements equal)
+    //    Tests the boundary where the match is at the very beginning.
+    {
+        std::vector<int> c(1000);
+        std::iota(std::begin(c), std::end(c), 0);
+        c[0] = c[1];    // force a match at index 0
+        auto result = hpx::adjacent_find(policy, c.begin(), c.end());
+        HPX_TEST(result == c.begin());
+    }
+
+    // ------------------------------------------------------------------
+    // 5. Duplicate at index N-2 (last two elements equal)
+    //    Tests the boundary where the match is at the very end.
+    {
+        std::vector<int> c(1000);
+        std::iota(std::begin(c), std::end(c), 0);
+        c[998] = c[999];    // force a match at the last pair
+        auto result = hpx::adjacent_find(policy, c.begin(), c.end());
+        HPX_TEST(result == (c.end() - 2));
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Binary predicate variant, empty range: must return last
+    {
+        std::vector<int> c;
+        auto result = hpx::adjacent_find(
+            policy, c.begin(), c.end(), std::equal_to<int>());
+        HPX_TEST(result == c.end());
+    }
 }

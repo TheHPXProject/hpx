@@ -53,14 +53,14 @@ namespace hpx::lcos::detail {
     HPX_CXX_CORE_EXPORT template <typename Future, typename Enable = void>
     struct future_unwrap_result;
 
-    HPX_CXX_CORE_EXPORT template <template <typename> class Future, typename R>
+    template <template <typename> class Future, typename R>
     struct future_unwrap_result<Future<Future<R>>>
     {
         using type = R;
         using wrapped_type = Future<type>;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename R>
+    template <typename R>
     struct future_unwrap_result<hpx::future<hpx::shared_future<R>>>
     {
         using type = R;
@@ -86,7 +86,7 @@ namespace hpx::lcos::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct future_value<T&> : future_data_result<T&>
     {
         HPX_FORCEINLINE static T& get(T* u) noexcept
@@ -150,7 +150,7 @@ namespace hpx::lcos::detail {
     using continuation_result_t =
         typename continuation_result<ContResult>::type;
 
-    HPX_CXX_CORE_EXPORT template <typename ContResult>
+    template <typename ContResult>
     struct continuation_result<hpx::future<ContResult>>
     {
         using type = ContResult;
@@ -378,12 +378,12 @@ namespace hpx::lcos::detail {
         static auto then(Derived&& fut, F&& f, error_code& ec = throws)
             -> decltype(future_then_dispatch<std::decay_t<F>>::call_alloc(
                 hpx::util::thread_local_caching_allocator<
-                    hpx::lockfree::variable_size_stack, char,
+                    hpx::lockfree::variable_size_stack,
                     hpx::util::internal_allocator<>>{},
                 HPX_MOVE(fut), HPX_FORWARD(F, f)))
         {
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
 
             using result_type =
@@ -405,12 +405,12 @@ namespace hpx::lcos::detail {
         static auto then(Derived&& fut, T0&& t0, F&& f, error_code& ec = throws)
             -> decltype(future_then_dispatch<std::decay_t<T0>>::call_alloc(
                 hpx::util::thread_local_caching_allocator<
-                    hpx::lockfree::variable_size_stack, char,
+                    hpx::lockfree::variable_size_stack,
                     hpx::util::internal_allocator<>>{},
                 HPX_MOVE(fut), HPX_FORWARD(T0, t0), HPX_FORWARD(F, f)))
         {
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
 
             using result_type =
@@ -1249,7 +1249,7 @@ namespace hpx {
     make_ready_future(Ts&&... ts)
     {
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         return make_ready_future_alloc<T>(
             allocator_type{}, HPX_FORWARD(Ts, ts)...);
@@ -1275,7 +1275,7 @@ namespace hpx {
         T&& init)
     {
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         return hpx::make_ready_future_alloc<hpx::util::decay_unwrap_t<T>>(
             allocator_type{}, HPX_FORWARD(T, init));
@@ -1357,7 +1357,7 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT HPX_FORCEINLINE future<void> make_ready_future()
     {
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         return make_ready_future_alloc<void>(allocator_type{}, util::unused);
     }
@@ -1397,9 +1397,9 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT    /// \copydoc make_ready_future_after(hpx::chrono::steady_duration const& rel_time, T&& init)
-        inline future<void>
-        make_ready_future_after(hpx::chrono::steady_duration const& rel_time)
+    /// \copydoc make_ready_future_after(hpx::chrono::steady_duration const& rel_time, T&& init)
+    HPX_CXX_CORE_EXPORT inline future<void> make_ready_future_after(
+        hpx::chrono::steady_duration const& rel_time)
     {
         return hpx::make_ready_future_at(rel_time.from_now());
     }

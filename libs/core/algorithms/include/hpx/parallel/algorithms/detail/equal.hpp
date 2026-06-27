@@ -34,7 +34,7 @@ namespace hpx::parallel::detail {
         friend constexpr void tag_fallback_invoke(sequential_equal_t,
             ZipIterator it, std::size_t part_count, Token& tok, F&& f)
         {
-            util::loop_n<ExPolicy>(it, part_count, tok,
+            util::const_loop_n<ExPolicy>(it, part_count, tok,
                 [&f, &tok](auto const& curr) mutable -> void {
                     auto t = *curr;
                     if (!HPX_INVOKE(f, hpx::get<0>(t), hpx::get<1>(t)))
@@ -98,7 +98,7 @@ namespace hpx::parallel::detail {
             ZipIterator it, std::size_t part_count, Token& tok, F&& f,
             Proj1&& proj1, Proj2&& proj2)
         {
-            util::loop_n<ExPolicy>(it, part_count, tok,
+            util::const_loop_n<ExPolicy>(it, part_count, tok,
                 [&f, &proj1, &proj2, &tok](auto const& curr) mutable -> void {
                     auto t = *curr;
                     if (!hpx::invoke(f, hpx::invoke(proj1, hpx::get<0>(t)),

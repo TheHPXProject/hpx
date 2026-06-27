@@ -21,17 +21,19 @@
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/statistics.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcel_coalescing/counter_registry.hpp>
 #include <hpx/parcel_coalescing/message_handler.hpp>
-#include <hpx/plugin_factories/message_handler_factory.hpp>
 
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -42,7 +44,7 @@
 namespace hpx::traits {
 
     // Inject additional configuration data into the factory registry for this
-    // type. This information ends up in the system wide configuration database
+    // type. This information ends up in the systemwide configuration database
     // under the plugin specific section:
     //
     //      [hpx.plugins.coalescing_message_handler]
@@ -71,7 +73,8 @@ HPX_REGISTER_MESSAGE_HANDLER_FACTORY(
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::plugins::parcel {
 
-    namespace detail {
+    namespace detail { namespace {
+
         std::size_t get_num_messages(std::size_t num_messages)
         {
             return hpx::util::from_string<std::size_t>(hpx::get_config_entry(
@@ -92,18 +95,44 @@ namespace hpx::plugins::parcel {
                 "1");
             return !value.empty() && value[0] != '0';
         }
-    }    // namespace detail
+
+        ////////////////////////////////////////////////////////////////////////
+        struct histogram_collector final : histogram_collector_base
+        {
+            histogram_collector(std::int64_t min_boundary,
+                std::int64_t max_boundary, std::int64_t num_buckets)
+              : acc_(hpx::util::tag::histogram::num_bins =
+                         static_cast<double>(num_buckets),
+                    hpx::util::tag::histogram::min_range =
+                        static_cast<double>(min_boundary),
+                    hpx::util::tag::histogram::max_range =
+                        static_cast<double>(max_boundary))
+            {
+            }
+
+            void add_value(std::int64_t value) override
+            {
+                acc_(value);
+            }
+
+            // collects percentiles
+            using histogram_collector_type =
+                boost::accumulators::accumulator_set<double,
+                    boost::accumulators::features<hpx::util::tag::histogram>>;
+            histogram_collector_type acc_;
+        };
+    }}    // namespace detail
 
     void coalescing_message_handler::update_num_messages()
     {
-        std::lock_guard<mutex_type> l(mtx_);
+        std::scoped_lock<mutex_type> l(mtx_);
         num_coalesced_parcels_ =
             detail::get_num_messages(num_coalesced_parcels_);
     }
 
     void coalescing_message_handler::update_interval()
     {
-        std::lock_guard<mutex_type> l(mtx_);
+        std::scoped_lock<mutex_type> l(mtx_);
         interval_ = detail::get_interval(interval_);
     }
 
@@ -174,7 +203,7 @@ namespace hpx::plugins::parcel {
 
         // collect data for time between parcels histogram
         if (time_between_parcels_)
-            (*time_between_parcels_)(time_since_last_parcel);
+            time_between_parcels_->add_value(time_since_last_parcel);
 
         std::chrono::microseconds const interval(interval_);
 
@@ -201,22 +230,26 @@ namespace hpx::plugins::parcel {
             [[fallthrough]];
         case detail::message_buffer::message_buffer_append_state::normal:
             // start deadline timer to flush buffer
-            l.unlock();
-            timer_.start(interval);
+            {
+                l.unlock();
+                [[maybe_unused]] bool started = timer_.start(interval);
+            }
             break;
 
-        case detail::message_buffer::message_buffer_append_state::buffer_now_full:
+        case detail::message_buffer::message_buffer_append_state::
+            buffer_now_full:
             flush_locked(l,
                 parcelset::policies::message_handler::flush_mode_buffer_full,
                 false, true);
             break;
 
+        case detail::message_buffer::message_buffer_append_state::
+            singleton_buffer:
         default:
             l.unlock();
             HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                 "coalescing_message_handler::put_parcel",
                 "unexpected return value from message_buffer::append");
-            return;
         }
     }
 
@@ -270,14 +303,16 @@ namespace hpx::plugins::parcel {
         {
             stopped_ = true;
             {
+                // interrupt timer
                 hpx::unlock_guard<std::unique_lock<mutex_type>> ul(l);
-                timer_.stop();    // interrupt timer
+                [[maybe_unused]] bool stopped = timer_.stop();
             }
         }
         else if (cancel_timer)
         {
+            // interrupt timer
             hpx::unlock_guard<std::unique_lock<mutex_type>> ul(l);
-            timer_.stop();    // interrupt timer
+            [[maybe_unused]] bool stopped = timer_.stop();
         }
 
         if (buffer_.empty())
@@ -308,7 +343,7 @@ namespace hpx::plugins::parcel {
     std::int64_t coalescing_message_handler::get_average_time_between_parcels(
         bool reset)
     {
-        std::lock_guard<mutex_type> l(mtx_);
+        std::scoped_lock<mutex_type> l(mtx_);
         auto const now = static_cast<std::int64_t>(
             hpx::chrono::high_resolution_clock::now());
         if (num_parcels_ == 0)
@@ -404,7 +439,6 @@ namespace hpx::plugins::parcel {
                 "parcel-arrival-histogram counter was not initialized for "
                 "action type: {}",
                 action_name_);
-            return result;
         }
 
         // first add histogram parameters
@@ -412,7 +446,10 @@ namespace hpx::plugins::parcel {
         result.push_back(histogram_max_boundary_);
         result.push_back(histogram_num_buckets_);
 
-        auto const data = hpx::util::histogram(*time_between_parcels_);
+        auto const data = hpx::util::histogram(
+            static_cast<detail::histogram_collector&>(*time_between_parcels_)
+                .acc_);
+
         for (auto const& item : data)
         {
             result.push_back(static_cast<std::int64_t>(item.second * 1000));
@@ -426,7 +463,7 @@ namespace hpx::plugins::parcel {
         std::int64_t num_buckets,
         hpx::function<std::vector<std::int64_t>(bool)>& result)
     {
-        std::lock_guard<mutex_type> l(mtx_);
+        std::scoped_lock<mutex_type> l(mtx_);
         if (time_between_parcels_)
         {
             result = hpx::bind_front(
@@ -439,13 +476,9 @@ namespace hpx::plugins::parcel {
         histogram_max_boundary_ = max_boundary;
         histogram_num_buckets_ = num_buckets;
 
-        time_between_parcels_.reset(
-            new histogram_collector_type(hpx::util::tag::histogram::num_bins =
-                                             static_cast<double>(num_buckets),
-                hpx::util::tag::histogram::min_range =
-                    static_cast<double>(min_boundary),
-                hpx::util::tag::histogram::max_range =
-                    static_cast<double>(max_boundary)));
+        time_between_parcels_ = std::make_unique<detail::histogram_collector>(
+            min_boundary, max_boundary, num_buckets);
+
         last_parcel_time_ = static_cast<std::int64_t>(
             hpx::chrono::high_resolution_clock::now());
 

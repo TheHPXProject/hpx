@@ -91,8 +91,8 @@ int hpx_main()
 
         t = hpx::chrono::high_resolution_clock::now() - t;
 
-        std::cout << "Result 1: " << result.get() << " in " << (t / 1e6)
-                  << " ms.\n";
+        std::cout << "Result 1: " << result.get() << " in "
+                  << (static_cast<double>(t) / 1e6) << " ms.\n";
     }
 
     {
@@ -103,8 +103,8 @@ int hpx_main()
 
         t = hpx::chrono::high_resolution_clock::now() - t;
 
-        std::cout << "Result 2: " << result.get() << " in " << (t / 1e6)
-                  << " ms.\n";
+        std::cout << "Result 2: " << result.get() << " in "
+                  << (static_cast<double>(t) / 1e6) << " ms.\n";
     }
     return 0;
 }

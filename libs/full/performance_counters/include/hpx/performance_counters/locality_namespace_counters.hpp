@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2021 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,9 +12,9 @@
 #include <hpx/modules/errors.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     // Register all performance counter types exposed by the locality_namespace
-    HPX_EXPORT void locality_namespace_register_counter_types(
+    HPX_CXX_EXPORT HPX_EXPORT void locality_namespace_register_counter_types(
         error_code& ec = throws);
-}}    // namespace hpx::agas
+}    // namespace hpx::agas

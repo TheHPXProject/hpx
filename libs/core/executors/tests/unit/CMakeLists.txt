@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2025 The STE||AR-Group
+# Copyright (c) 2020-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,13 +9,18 @@ set(tests
     annotation_property
     created_executor
     execution_policy_mappings
+    executor_scheduler
+    executor_algorithm_bulk
     explicit_scheduler_executor
     fork_join_executor
+    fork_join_executor_from
     limiting_executor
     parallel_executor
     parallel_executor_parameters
+    parallel_executor_scheduler
     parallel_fork_executor
     parallel_policy_executor
+    parallel_scheduler
     polymorphic_executor
     scheduler_executor
     sequenced_executor
@@ -54,3 +59,16 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.executors" ${test} ${${test}_PARAMETERS})
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
+  # Clang (last tested version is v22) fails compiling the following tests when
+  # C++ module support is enabled.
+  set(failing_clang_tests explicit_scheduler_executor parallel_scheduler
+                          scheduler_executor thread_pool_scheduler
+  )
+  foreach(test ${failing_clang_tests})
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()

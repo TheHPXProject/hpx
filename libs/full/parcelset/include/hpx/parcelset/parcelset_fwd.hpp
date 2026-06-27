@@ -21,16 +21,18 @@
 
 namespace hpx::parcelset {
 
-    template <typename ConnectionHandler>
+    HPX_CXX_EXPORT template <typename ConnectionHandler>
     class parcelport_impl;
 
-    class HPX_EXPORT parcelhandler;
+    HPX_CXX_EXPORT class HPX_EXPORT parcelhandler;
 
     namespace policies {
+
         struct message_handler;
     }
 
     namespace detail {
+
         struct create_parcel;
     }    // namespace detail
 
@@ -42,27 +44,29 @@ namespace hpx::parcelset {
     /// \param num_thread this represents the number of threads.
     /// \param mode
     ///
-    HPX_EXPORT bool do_background_work(std::size_t num_thread = 0,
+    HPX_CXX_EXPORT HPX_EXPORT bool do_background_work(
+        std::size_t num_thread = 0,
         parcelport_background_mode mode = parcelport_background_mode::all);
 
-    using write_handler_type = parcel_write_handler_type;
+    HPX_CXX_EXPORT using write_handler_type = parcel_write_handler_type;
 
     ///////////////////////////////////////////////////////////////////////
     // default callback for put_parcel
-    HPX_EXPORT void default_write_handler(
+    HPX_CXX_EXPORT HPX_EXPORT void default_write_handler(
         std::error_code const&, parcel const&);
 
     ///////////////////////////////////////////////////////////////////////
     /// Hand a parcel to the underlying parcel layer for delivery.
-    HPX_EXPORT void put_parcel(
+    HPX_CXX_EXPORT HPX_EXPORT void put_parcel(
         parcel&& p, write_handler_type&& f = &default_write_handler);
 
     /// Hand a parcel to the underlying parcel layer for delivery.
     /// Wait for the operation to finish before returning to the user.
-    HPX_EXPORT void sync_put_parcel(parcelset::parcel&& p);
+    HPX_CXX_EXPORT HPX_EXPORT void sync_put_parcel(parcelset::parcel&& p);
 
     /// Return the maximally allowed size of an inbound message (in bytes)
-    HPX_EXPORT std::int64_t get_max_inbound_size(parcelport const&);
+    HPX_CXX_EXPORT HPX_EXPORT std::int64_t get_max_inbound_size(
+        parcelport const&);
 }    // namespace hpx::parcelset
 
 #endif

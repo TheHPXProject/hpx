@@ -13,12 +13,12 @@
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
-#include <hpx/modules/resiliency.hpp>
-
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/async.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/futures.hpp>
+
+#include <hpx/modules/resiliency.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -26,15 +26,15 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace resiliency { namespace experimental {
+namespace hpx::resiliency::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
         ///////////////////////////////////////////////////////////////////////
         template <typename Vote, typename Pred, typename Action, typename... Ts>
-        hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-            hpx::id_type, Ts...>::type>
+        hpx::future<hpx::util::detail::invoke_deferred_result_t<Action,
+            hpx::id_type, Ts...>>
         async_replicate_vote_validate(std::vector<hpx::id_type> const& ids,
             Vote&& vote, Pred&& pred, Action&& action, Ts&&... ts)
         {
@@ -105,10 +105,9 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Verify the result of those invocations using the given predicate \a pred.
     // Run all the valid results against a user provided voting function.
     // Return the valid output.
-    template <typename Vote, typename Pred, typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replicate_vote_validate_t,
+    HPX_CXX_EXPORT template <typename Vote, typename Pred, typename Action,
+        typename... Ts>
+    decltype(auto) tag_invoke(async_replicate_vote_validate_t,
         std::vector<hpx::id_type> const& ids, Vote&& vote, Pred&& pred,
         Action&& action, Ts&&... ts)
     {
@@ -125,11 +124,10 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Verify the result of those invocations using the given predicate \a pred.
     // Run all the valid results against a user provided voting function.
     // Return the valid output.
-    template <typename Vote, typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replicate_vote_t, std::vector<hpx::id_type> const& ids,
-        Vote&& vote, Action&& action, Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Vote, typename Action, typename... Ts>
+    decltype(auto) tag_invoke(async_replicate_vote_t,
+        std::vector<hpx::id_type> const& ids, Vote&& vote, Action&& action,
+        Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
@@ -144,11 +142,10 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Verify the result of those invocations using the given predicate \a pred.
     // Run all the valid results against a user provided voting function.
     // Return the valid output.
-    template <typename Pred, typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replicate_validate_t, std::vector<hpx::id_type> const& ids,
-        Pred&& pred, Action&& action, Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Pred, typename Action, typename... Ts>
+    decltype(auto) tag_invoke(async_replicate_validate_t,
+        std::vector<hpx::id_type> const& ids, Pred&& pred, Action&& action,
+        Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
@@ -163,11 +160,9 @@ namespace hpx { namespace resiliency { namespace experimental {
     // Verify the result of those invocations using the given predicate \a pred.
     // Run all the valid results against a user provided voting function.
     // Return the valid output.
-    template <typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replicate_t, std::vector<hpx::id_type> const& ids,
-        Action&& action, Ts&&... ts)
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
+    decltype(auto) tag_invoke(async_replicate_t,
+        std::vector<hpx::id_type> const& ids, Action&& action, Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
@@ -175,7 +170,6 @@ namespace hpx { namespace resiliency { namespace experimental {
             detail::replicate_voter{}, detail::replicate_validator{},
             HPX_FORWARD(Action, action), HPX_FORWARD(Ts, ts)...);
     }
-
-}}}    // namespace hpx::resiliency::experimental
+}    // namespace hpx::resiliency::experimental
 
 #endif

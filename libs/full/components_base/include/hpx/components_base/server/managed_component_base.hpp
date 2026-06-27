@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011-2017 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -159,7 +159,8 @@ namespace hpx::components {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        struct base_managed_component : traits::detail::managed_component_tag
+        HPX_CXX_EXPORT struct base_managed_component
+          : traits::detail::managed_component_tag
         {
             // finalize() will be called just before the instance gets destructed
             static constexpr void finalize() noexcept {}
@@ -182,8 +183,8 @@ namespace hpx::components {
         };
     }    // namespace detail
 
-    template <typename Component, typename Wrapper, typename CtorPolicy,
-        typename DtorPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename Wrapper,
+        typename CtorPolicy, typename DtorPolicy>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
     class managed_component_base : public detail::base_managed_component
     {
@@ -262,7 +263,7 @@ namespace hpx::components {
     };
 
     // reference counting
-    template <typename Component, typename Derived>
+    HPX_CXX_EXPORT template <typename Component, typename Derived>
     void intrusive_ptr_add_ref(
         managed_component<Component, Derived>* p) noexcept
     {
@@ -270,7 +271,8 @@ namespace hpx::components {
             traits::managed_component_dtor_policy_t<Component>>::addref(p
                 ->component_);
     }
-    template <typename Component, typename Derived>
+
+    HPX_CXX_EXPORT template <typename Component, typename Derived>
     void intrusive_ptr_release(
         managed_component<Component, Derived>* p) noexcept
     {
@@ -302,7 +304,7 @@ namespace hpx::components {
     /// \tparam Component Component type
     /// \tparam Derived Most derived component type
     ///
-    template <typename Component, typename Derived>
+    HPX_CXX_EXPORT template <typename Component, typename Derived>
     class managed_component
     {
     public:

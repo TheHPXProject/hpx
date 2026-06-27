@@ -9,6 +9,9 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR_EVE)
+
+#include <hpx/execution/traits/detail/eve/vector_pack_simd.hpp>
+
 #include <eve/eve.hpp>
 #include <eve/memory/aligned_ptr.hpp>
 #include <eve/module/core.hpp>

@@ -20,7 +20,7 @@ namespace hpx::compute::detail {
         using type = T;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct get_proxy_type_impl<T,
         std::void_t<typename std::decay_t<T>::proxy_type>>
     {

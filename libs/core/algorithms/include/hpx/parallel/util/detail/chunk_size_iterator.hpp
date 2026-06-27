@@ -26,28 +26,28 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename IterOrR, typename Enable = void>
     struct chunk_size_iterator_category;
 
-    HPX_CXX_CORE_EXPORT template <typename IterOrR>
+    template <typename IterOrR>
     struct chunk_size_iterator_category<IterOrR,
         std::enable_if_t<std::is_integral_v<IterOrR>>>
     {
         using type = std::random_access_iterator_tag;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iterator>
+    template <typename Iterator>
     struct chunk_size_iterator_category<Iterator,
         std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
     {
         using type = hpx::traits::iter_category_t<Iterator>;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Range>
+    template <typename Range>
     struct chunk_size_iterator_category<Range,
         std::enable_if_t<std::ranges::range<Range>>>
     {
         using type = hpx::traits::range_category_t<Range>;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Range>
+    template <typename Range>
     struct chunk_size_iterator_category<Range,
         std::enable_if_t<hpx::traits::is_range_generator_v<Range>>>
     {
@@ -56,12 +56,12 @@ namespace hpx::parallel::util::detail {
 
     HPX_CXX_CORE_EXPORT template <typename IterOrR>
     using chunk_size_iterator_category_t =
-        typename chunk_size_iterator_category<IterOrR>::type;
+        chunk_size_iterator_category<IterOrR>::type;
 
     HPX_CXX_CORE_EXPORT template <typename IterOrR, typename Enable = void>
     struct iterator_type;
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct iterator_type<T,
         std::enable_if_t<std::is_integral_v<T> ||
             hpx::traits::is_range_generator_v<T>>>
@@ -69,33 +69,35 @@ namespace hpx::parallel::util::detail {
         using type = T;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iterator>
+    template <typename Iterator>
     struct iterator_type<Iterator,
         std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
     {
         using type = Iterator;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Range>
+    template <typename Range>
     struct iterator_type<Range, std::enable_if_t<std::ranges::range<Range>>>
     {
         using type = std::ranges::iterator_t<Range>;
     };
 
     HPX_CXX_CORE_EXPORT template <typename IterOrR>
-    using iterator_type_t = typename iterator_type<IterOrR>::type;
+    using iterator_type_t = iterator_type<IterOrR>::type;
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename IterOrR>
     struct chunk_size_iterator
       : hpx::util::iterator_facade<chunk_size_iterator<IterOrR>,
-            hpx::tuple<IterOrR, std::size_t> const,
-            chunk_size_iterator_category_t<IterOrR>>
+            hpx::tuple<IterOrR, std::size_t>,
+            chunk_size_iterator_category_t<IterOrR>,
+            hpx::tuple<IterOrR, std::size_t>>
     {
     private:
         using base_type = hpx::util::iterator_facade<chunk_size_iterator,
-            hpx::tuple<IterOrR, std::size_t> const,
-            chunk_size_iterator_category_t<IterOrR>>;
+            hpx::tuple<IterOrR, std::size_t>,
+            chunk_size_iterator_category_t<IterOrR>,
+            hpx::tuple<IterOrR, std::size_t>>;
 
         static_assert(std::is_integral_v<IterOrR> ||
             hpx::traits::is_iterator_v<IterOrR> ||
@@ -154,7 +156,7 @@ namespace hpx::parallel::util::detail {
             }
         }
 
-        using use_brackets_proxy = std::true_type;
+        using use_brackets_proxy = std::false_type;
 
     private:
         HPX_HOST_DEVICE IterOrR& target() noexcept
@@ -241,7 +243,7 @@ namespace hpx::parallel::util::detail {
             current_ -= offset + chunk_size_;
             if (current_ == 0)
             {
-                // reached the begin of the sequence
+                // reached the start of the sequence
                 chunk() = current_ + chunk_size_ >= count_ ? last_chunk_size_ :
                                                              chunk_size_;
             }
@@ -328,13 +330,15 @@ namespace hpx::parallel::util::detail {
     HPX_CXX_CORE_EXPORT template <typename IterOrR>
     struct chunk_size_idx_iterator
       : hpx::util::iterator_facade<chunk_size_idx_iterator<IterOrR>,
-            hpx::tuple<IterOrR, std::size_t, std::size_t> const,
-            chunk_size_iterator_category_t<IterOrR>>
+            hpx::tuple<IterOrR, std::size_t, std::size_t>,
+            chunk_size_iterator_category_t<IterOrR>,
+            hpx::tuple<IterOrR, std::size_t, std::size_t>>
     {
     private:
         using base_type = hpx::util::iterator_facade<chunk_size_idx_iterator,
-            hpx::tuple<IterOrR, std::size_t, std::size_t> const,
-            chunk_size_iterator_category_t<IterOrR>>;
+            hpx::tuple<IterOrR, std::size_t, std::size_t>,
+            chunk_size_iterator_category_t<IterOrR>,
+            hpx::tuple<IterOrR, std::size_t, std::size_t>>;
 
         static_assert(std::is_integral_v<IterOrR> ||
             hpx::traits::is_iterator_v<IterOrR> ||
@@ -395,7 +399,7 @@ namespace hpx::parallel::util::detail {
             }
         }
 
-        using use_brackets_proxy = std::true_type;
+        using use_brackets_proxy = std::false_type;
 
     private:
         HPX_HOST_DEVICE IterOrR& target() noexcept
@@ -494,7 +498,7 @@ namespace hpx::parallel::util::detail {
             current_ -= offset + chunk_size_;
             if (current_ == 0)
             {
-                // reached the begin of the sequence
+                // reached the start of the sequence
                 chunk() = base_index() + chunk_size_ >= count_ ?
                     last_chunk_size_ :
                     chunk_size_;

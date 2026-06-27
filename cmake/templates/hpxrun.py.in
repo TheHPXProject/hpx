@@ -189,7 +189,7 @@ def run_mpi(cmd, localities, verbose):
     if mpiexec == '':
         msg = 'mpiexec not available on this platform. '
         msg += 'Please rerun CMake with HPX_PARCELPORT_MPI=True.'
-        print(msg, sys.stderr)
+        print(msg, file=sys.stderr)
         sys.exit(1)
     exec_cmd = [mpiexec, '@MPIEXEC_NUMPROC_FLAG@', str(localities)] + cmd
     if verbose:
@@ -282,32 +282,32 @@ def build_cmd(options, args):
 
 def check_options(parser, options, args):
     if 0 == len(args):
-        print('Error: You need to specify at least the application to start\n', sys.stderr)
+        print('Error: You need to specify at least the application to start\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
     if not os.path.exists(args[0]):
-        print('Executable ' + args[0] + ' does not exist', sys.stderr)
+        print('Executable ' + args[0] + ' does not exist', file=sys.stderr)
         sys.exit(1)
 
     if options.localities < 1:
-        print('Can not start less than one locality', sys.stderr)
+        print('Can not start less than one locality', file=sys.stderr)
         sys.exit(1)
 
     if options.threads < 1 and options.threads != -1 and options.threads != -2:
-        print('Can not start less than one thread per locality', sys.stderr)
+        print('Can not start less than one thread per locality', file=sys.stderr)
         sys.exit(1)
 
     check_valid_parcelport = (lambda x: x == 'mpi' or x == 'lci' or x == 'lcw' or x == 'gasnet' or x == 'tcp' or x == 'none');
     if not check_valid_parcelport(options.parcelport):
-        print('Error: Parcelport option not valid\n', sys.stderr)
+        print('Error: Parcelport option not valid\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
     check_valid_runwrapper = (lambda x:
             x == 'none' or x == 'mpi' or x == 'srun' or x =='jsrun' or x == 'gasnet' or x == 'gasnet-smp');
     if not check_valid_runwrapper(options.runwrapper):
-        print('Error: Runwrapper option not valid\n', sys.stderr)
+        print('Error: Runwrapper option not valid\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
@@ -445,7 +445,7 @@ Used by the tcp parcelport only.
             msg = 'Process 0 failed with an unexpected error '
             msg += 'code of ' + str(ret) + ' (expected ' + str(options.expected)
             msg += ')'
-            print(msg, sys.stderr)
+            print(msg, file=sys.stderr)
             sys.exit(1)
         sys.exit(0)
 

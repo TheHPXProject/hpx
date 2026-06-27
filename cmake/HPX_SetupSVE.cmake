@@ -37,7 +37,7 @@ if(("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "SVE") AND NOT TARGET SVE::sve)
     include(FetchContent)
     fetchcontent_declare(
       sve
-      GIT_REPOSITORY https://github.com/srinivasyadav18/sve.git
+      GIT_REPOSITORY https://github.com/TheHPXProject/sve.git
       GIT_TAG ${HPX_WITH_SVE_TAG}
     )
 

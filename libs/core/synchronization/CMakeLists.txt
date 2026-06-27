@@ -8,7 +8,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Default location is $HPX_ROOT/libs/synchronization/include
 set(synchronization_headers
-    hpx/synchronization/async_rw_mutex.hpp
     hpx/synchronization/barrier.hpp
     hpx/synchronization/binary_semaphore.hpp
     hpx/synchronization/channel_mpmc.hpp
@@ -62,7 +61,7 @@ set(synchronization_sources
     detail/sliding_semaphore.cpp local_barrier.cpp mutex.cpp stop_token.cpp
 )
 
-if(HPX_TRACY_WITH_TRACY)
+if(HPX_WITH_TRACY)
   set(additional_dependencies hpx_tracy)
 endif()
 
@@ -86,7 +85,6 @@ add_hpx_module(
     hpx_execution_base
     hpx_functional
     hpx_hashing
-    hpx_itt_notify
     hpx_lock_registration
     hpx_logging
     hpx_memory
@@ -95,6 +93,7 @@ add_hpx_module(
     hpx_thread_support
     hpx_timing
     hpx_topology
+    hpx_tracing
     hpx_type_support
     ${additional_dependencies}
   CMAKE_SUBDIRS examples tests

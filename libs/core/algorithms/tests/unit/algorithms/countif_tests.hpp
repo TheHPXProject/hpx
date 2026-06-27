@@ -83,7 +83,6 @@ void test_count_if(ExPolicy&& policy, IteratorTag)
     HPX_TEST_EQ(num_items, 50u);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_count_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -109,11 +108,10 @@ void test_count_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                           smaller_than_50()) |
             hpx::count_if(ex_policy.on(exec)));
 
-    diff_type num_items = hpx::get<0>(*snd_result);
+    diff_type num_items = hpx::get<0>(snd_result.value());
 
     HPX_TEST_EQ(num_items, 50u);
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_count_if_async(ExPolicy&& p, IteratorTag)

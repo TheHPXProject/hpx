@@ -29,6 +29,12 @@
 
 #include <hpx/assert.hpp>
 
+#include <asio/io_context.hpp>
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
+
 #include <atomic>
 #include <cstddef>
 #include <memory>

@@ -22,6 +22,7 @@
 #include <memory>
 #include <streambuf>
 #include <string>
+#include <type_traits>
 
 namespace hpx::iostream {
 

@@ -12,18 +12,11 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/thread_pools/detail/background_thread.hpp>
 #include <hpx/thread_pools/detail/scheduling_callbacks.hpp>
 #include <hpx/thread_pools/detail/scheduling_counters.hpp>
 #include <hpx/thread_pools/detail/scheduling_log.hpp>
-
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
-#if defined(HPX_HAVE_MODULE_TRACY)
-#include <hpx/modules/tracy.hpp>
-#endif
 
 #include <atomic>
 #include <cstddef>
@@ -89,16 +82,7 @@ namespace hpx::threads::detail {
         scheduling_counters& counters, scheduling_callbacks& params)
     {
         std::atomic<hpx::state>& this_state = scheduler.get_state(num_thread);
-
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-        util::itt::stack_context ctx;    // helper for itt support
-        util::itt::thread_domain const thread_domain;
-        util::itt::id threadid(thread_domain, &scheduler);
-        util::itt::string_handle const task_id("task_id");
-        util::itt::string_handle const task_phase("task_phase");
-        // util::itt::frame_context fctx(thread_domain);
-#endif
+        hpx::tracing::loop_context trace_ctx;
 
         std::int64_t& idle_loop_count = counters.idle_loop_count_;
         std::int64_t& busy_loop_count = counters.busy_loop_count_;
@@ -219,24 +203,14 @@ namespace hpx::threads::detail {
                                             is_active = false;
                                         });
 
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-                                util::itt::caller_context cctx(
-                                    ctx, !thrdptr->is_stackless());
-                                // util::itt::undo_frame_context undoframe(fctx);
-                                util::itt::task task =
-                                    thrdptr->get_description().get_task_itt(
-                                        thread_domain);
-                                task.add_metadata(task_id, thrdptr);
-                                task.add_metadata(
-                                    task_phase, thrdptr->get_thread_phase());
-#endif
-#if defined(HPX_HAVE_MODULE_TRACY)
-                                char const* name = thrdptr->get_description()
-                                                       .get_description();
-                                tracy::region rctx(name, num_thread,
-                                    thrdptr->get_thread_phase());
-#endif
+                                hpx::tracing::region rctx(trace_ctx,
+                                    threads::get_region_init_data(thrdptr),
+                                    num_thread);
+
+                                hpx::tracing::fiber_region fctx(
+                                    threads::get_fiber_region_init_data(
+                                        thrdptr),
+                                    num_thread);
 
 #ifdef HPX_HAVE_THREAD_IDLE_RATES
                                 // Record time elapsed in thread changing state
@@ -248,34 +222,16 @@ namespace hpx::threads::detail {
                                             idle_rate.collect_exec_time(ts);
                                         });
 #endif
-#if defined(HPX_HAVE_APEX)
-                                // get the APEX data pointer, in case we are
+                                // get the tracing data, in case we are
                                 // resuming the thread and have to restore any
                                 // leaf timers from direct actions, etc.
-
-                                // the address of tmp_data is getting stored by
-                                // APEX during this call
-                                util::external_timer::scoped_timer profiler(
+                                hpx::tracing::scoped_task_timer profiler(
                                     thrdptr->get_timer_data());
 
                                 thrd_stat = (*thrdptr)(context_storage);
 
-                                thread_schedule_state s =
-                                    thrd_stat.get_previous();
-                                if (s == thread_schedule_state::terminated ||
-                                    s == thread_schedule_state::deleted)
-                                {
-                                    profiler.stop();
-                                    // just in case, clean up the now dead pointer.
-                                    thrdptr->set_timer_data(nullptr);
-                                }
-                                else
-                                {
-                                    profiler.yield();
-                                }
-#else
-                                thrd_stat = (*thrdptr)(context_storage);
-#endif
+                                profiler.handle_post_execution(
+                                    thrdptr, thrd_stat.get_previous());
                             }
 
                             detail::write_state_log(scheduler, num_thread, thrd,

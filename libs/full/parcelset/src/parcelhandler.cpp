@@ -16,7 +16,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/io_service.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
@@ -27,16 +27,17 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/threadmanager.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelset/init_parcelports.hpp>
 #include <hpx/parcelset/message_handler_fwd.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
-#include <hpx/plugin_factories/parcelport_factory_base.hpp>
 
 #include <asio/error.hpp>
 
@@ -539,14 +540,10 @@ namespace hpx::parcelset {
             // invoke the original handler
             f(ec, p);
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static util::itt::event parcel_send("send_parcel");
-            util::itt::event_tick(parcel_send);
-#endif
+            HPX_TRACING_MARK_EVENT("send_parcel");
 
-#if defined(HPX_HAVE_APEX) && defined(HPX_HAVE_PARCEL_PROFILING)
-            // tell APEX about the sent parcel
-            util::external_timer::send(
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+            hpx::tracing::send_parcel(
                 p.parcel_id().get_lsb(), p.size(), p.destination_locality_id());
 #endif
         }

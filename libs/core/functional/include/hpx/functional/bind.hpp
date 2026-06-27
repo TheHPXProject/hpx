@@ -20,6 +20,7 @@
 #include <hpx/functional/traits/is_placeholder.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -96,8 +97,7 @@ namespace hpx {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T, std::size_t NumUs,
-            typename TD>
+        template <typename T, std::size_t NumUs, typename TD>
         struct bind_eval<T, NumUs, TD,
             std::enable_if_t<hpx::is_placeholder_v<TD> != 0 &&
                 (hpx::is_placeholder_v<TD> <= NumUs)>>
@@ -106,8 +106,7 @@ namespace hpx {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T, std::size_t NumUs,
-            typename TD>
+        template <typename T, std::size_t NumUs, typename TD>
         struct bind_eval<T, NumUs, TD,
             std::enable_if_t<hpx::is_bind_expression_v<TD>>>
         {
@@ -123,8 +122,7 @@ namespace hpx {
         HPX_CXX_CORE_EXPORT template <typename F, typename Ts, typename... Us>
         struct invoke_bound_result;
 
-        HPX_CXX_CORE_EXPORT template <typename F, typename... Ts,
-            typename... Us>
+        template <typename F, typename... Ts, typename... Us>
         struct invoke_bound_result<F, util::pack<Ts...>, Us...>
           : util::invoke_result<F,
                 decltype(bind_eval<Ts, sizeof...(Us)>::call(
@@ -140,8 +138,7 @@ namespace hpx {
         HPX_CXX_CORE_EXPORT template <typename F, typename Is, typename... Ts>
         class bound;
 
-        HPX_CXX_CORE_EXPORT template <typename F, std::size_t... Is,
-            typename... Ts>
+        template <typename F, std::size_t... Is, typename... Ts>
         class bound<F, util::index_pack<Is...>, Ts...>
         {
         public:
@@ -255,18 +252,17 @@ namespace hpx {
 #endif
             }
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            [[nodiscard]] util::itt::string_handle get_function_annotation_itt()
-                const
+            [[nodiscard]] hpx::tracing::annotation_handle
+            get_function_annotation_tracing() const
             {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-                return traits::get_function_annotation_itt<F>::call(_f);
+                return traits::get_function_annotation_tracing<F>::call(_f);
 #else
-                static util::itt::string_handle sh("bound");
+                static auto sh =
+                    hpx::tracing::create_annotation_handle("bound");
                 return sh;
 #endif
             }
-#endif
 
         private:
             F _f;
@@ -304,13 +300,13 @@ namespace hpx {
 namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
+    template <typename F, typename... Ts>
     struct is_bind_expression<hpx::detail::bound<F, Ts...>> : std::true_type
     {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <std::size_t I>
+    template <std::size_t I>
     struct is_placeholder<hpx::detail::placeholder<I>>
       : std::integral_constant<int, I>
     {
@@ -342,17 +338,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
-    struct get_function_annotation_itt<hpx::detail::bound<F, Ts...>>
+    struct get_function_annotation_tracing<hpx::detail::bound<F, Ts...>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             hpx::detail::bound<F, Ts...> const& f) noexcept
         {
-            return f.get_function_annotation_itt();
+            return f.get_function_annotation_tracing();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 

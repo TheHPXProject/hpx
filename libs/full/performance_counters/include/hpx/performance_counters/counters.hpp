@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +12,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/serialization.hpp>
+
 #include <hpx/performance_counters/counters_fwd.hpp>
 
 #include <cstddef>
@@ -23,39 +24,7 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
-    ///////////////////////////////////////////////////////////////////////////
-    constexpr char const counter_prefix[] = "/counters";
-    constexpr std::size_t counter_prefix_len = std::size(counter_prefix) - 1;
-
-    ///////////////////////////////////////////////////////////////////////////
-    inline std::string& ensure_counter_prefix(std::string& name)
-    {
-        if (name.compare(0, counter_prefix_len, counter_prefix) != 0)
-            name = counter_prefix + name;
-        return name;
-    }
-
-    inline std::string ensure_counter_prefix(    //-V659
-        std::string const& counter)
-    {
-        std::string name(counter);
-        return ensure_counter_prefix(name);
-    }
-
-    inline std::string& remove_counter_prefix(std::string& name)
-    {
-        if (name.compare(0, counter_prefix_len, counter_prefix) == 0)
-            name = name.substr(counter_prefix_len);
-        return name;
-    }
-
-    inline std::string remove_counter_prefix(    //-V659
-        std::string const& counter)
-    {
-        std::string name(counter);
-        return remove_counter_prefix(name);
-    }
+namespace hpx::performance_counters {
 
 #if defined(DOXYGEN)
     ///////////////////////////////////////////////////////////////////////////
@@ -174,13 +143,7 @@ namespace hpx { namespace performance_counters {
         /// through a separate \a get_counter_values_array() function.
         raw_values
     };
-#endif
 
-    ///////////////////////////////////////////////////////////////////////////
-    /// \brief Return the readable name of a given counter type
-    HPX_EXPORT char const* get_counter_type_name(counter_type state);
-
-#if defined(DOXYGEN)
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Status and error codes used by the functions related to
     ///        performance counters.
@@ -196,7 +159,13 @@ namespace hpx { namespace performance_counters {
     };
 #endif
 
-    inline bool status_is_valid(counter_status s)
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_EXPORT inline constexpr char const counter_prefix[] = "/counters";
+    HPX_CXX_EXPORT inline constexpr std::size_t counter_prefix_len =
+        std::size(counter_prefix) - 1;
+
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_EXPORT inline bool status_is_valid(counter_status s)
     {
         return s == counter_status::valid_data || s == counter_status::new_data;
     }
@@ -211,7 +180,7 @@ namespace hpx { namespace performance_counters {
     /// i.e.
     ///    /queue/length
     ///
-    struct counter_type_path_elements
+    HPX_CXX_EXPORT struct counter_type_path_elements
     {
         counter_type_path_elements() = default;
 
@@ -249,7 +218,7 @@ namespace hpx { namespace performance_counters {
     /// i.e.
     ///    /queue{localityprefix/thread#2}/length
     ///
-    struct counter_path_elements : counter_type_path_elements
+    HPX_CXX_EXPORT struct counter_path_elements : counter_type_path_elements
     {
         using base_type = counter_type_path_elements;
 
@@ -315,7 +284,7 @@ namespace hpx { namespace performance_counters {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    struct counter_info
+    HPX_CXX_EXPORT struct counter_info
     {
         explicit counter_info(counter_type type = counter_type::raw)
           : type_(type)
@@ -369,47 +338,185 @@ namespace hpx { namespace performance_counters {
     /// \brief This declares the type of a function, which will be
     ///        called by HPX whenever a new performance counter instance of a
     ///        particular type needs to be created.
-    using create_counter_func =
+    HPX_CXX_EXPORT using create_counter_func =
         hpx::function<naming::gid_type(counter_info const&, error_code&)>;
 
     ///////////////////////////////////////////////////////////////////////////
     /// \brief This declares a type of a function, which will be passed to
     ///        a \a discover_counters_func in order to be called for each
     ///        discovered performance counter instance.
-    using discover_counter_func =
+    HPX_CXX_EXPORT using discover_counter_func =
         hpx::function<bool(counter_info const&, error_code&)>;
 
     /// \brief This declares the type of a function, which will be called by
     ///        HPX whenever it needs to discover all performance counter
     ///        instances of a particular type.
-    using discover_counters_func = hpx::function<bool(counter_info const&,
-        discover_counter_func const&, discover_counters_mode, error_code&)>;
+    HPX_CXX_EXPORT using discover_counters_func =
+        hpx::function<bool(counter_info const&, discover_counter_func const&,
+            discover_counters_mode, error_code&)>;
 
-    ///////////////////////////////////////////////////////////////////////
-    inline counter_status add_counter_type(
-        counter_info const& info, error_code& ec)
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_EXPORT struct counter_value
     {
-        return add_counter_type(
-            info, create_counter_func(), discover_counters_func(), ec);
-    }
+        counter_value(std::int64_t value = 0, std::int64_t scaling = 1,
+            bool scale_inverse = false)
+          : time_()
+          , count_(0)
+          , value_(value)
+          , scaling_(scaling)
+          , status_(counter_status::new_data)
+          , scale_inverse_(scale_inverse)
+        {
+        }
 
-    inline hpx::id_type get_counter(std::string const& name, error_code& ec)
+        std::uint64_t time_;       ///< The local time when data was collected
+        std::uint64_t count_;      ///< The invocation counter for the data
+        std::int64_t value_;       ///< The current counter value
+        std::int64_t scaling_;     ///< The scaling of the current counter value
+        counter_status status_;    ///< The status of the counter value
+        bool scale_inverse_;       ///< If true, value_ needs to be divided by
+                                   ///< scaling_, otherwise it has to be
+                                   ///< multiplied.
+
+        /// \brief Retrieve the 'real' value of the counter_value, converted to
+        ///        the requested type \a T
+        template <typename T>
+        T get_value(error_code& ec = throws) const
+        {
+            if (!status_is_valid(status_))
+            {
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "counter_value::get_value<T>",
+                    "counter value is in invalid status");
+                return T();
+            }
+
+            T val = static_cast<T>(value_);
+
+            if (scaling_ != 1)
+            {
+                if (scaling_ == 0)
+                {
+                    HPX_THROWS_IF(ec, hpx::error::uninitialized_value,
+                        "counter_value::get_value<T>",
+                        "scaling should not be zero");
+                    return T();
+                }
+
+                // calculate and return the real counter value
+                if (scale_inverse_)
+                    return val / static_cast<T>(scaling_);
+
+                return val * static_cast<T>(scaling_);
+            }
+            return val;
+        }
+
+    private:
+        // serialization support
+        friend class hpx::serialization::access;
+
+        HPX_EXPORT void serialize(
+            serialization::output_archive& ar, unsigned int const) const;
+        HPX_EXPORT void serialize(
+            serialization::input_archive& ar, unsigned int const);
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    HPX_CXX_EXPORT struct counter_values_array
     {
-        hpx::future<hpx::id_type> f = get_counter_async(name, ec);
-        if (ec)
-            return hpx::invalid_id;
+        counter_values_array(
+            std::int64_t scaling = 1, bool scale_inverse = false)
+          : time_()
+          , count_(0)
+          , values_()
+          , scaling_(scaling)
+          , status_(counter_status::new_data)
+          , scale_inverse_(scale_inverse)
+        {
+        }
 
-        return f.get(ec);
-    }
+        counter_values_array(std::vector<std::int64_t>&& values,
+            std::int64_t scaling = 1, bool scale_inverse = false)
+          : time_()
+          , count_(0)
+          , values_(HPX_MOVE(values))
+          , scaling_(scaling)
+          , status_(counter_status::new_data)
+          , scale_inverse_(scale_inverse)
+        {
+        }
 
-    inline hpx::id_type get_counter(counter_info const& info, error_code& ec)
-    {
-        hpx::future<hpx::id_type> f = get_counter_async(info, ec);
-        if (ec)
-            return hpx::invalid_id;
+        counter_values_array(std::vector<std::int64_t> const& values,
+            std::int64_t scaling = 1, bool scale_inverse = false)
+          : time_()
+          , count_(0)
+          , values_(values)
+          , scaling_(scaling)
+          , status_(counter_status::new_data)
+          , scale_inverse_(scale_inverse)
+        {
+        }
 
-        return f.get(ec);
-    }
-}}    // namespace hpx::performance_counters
+        std::uint64_t time_;     ///< The local time when data was collected
+        std::uint64_t count_;    ///< The invocation counter for the data
+        std::vector<std::int64_t> values_;    ///< The current counter values
+        std::int64_t scaling_;    ///< The scaling of the current counter values
+        counter_status status_;    ///< The status of the counter value
+        bool scale_inverse_;       ///< If true, value_ needs to be divided by
+                                   ///< scaling_, otherwise it has to be
+                                   ///< multiplied.
+
+        /// \brief Retrieve the 'real' value of the counter_value, converted to
+        ///        the requested type \a T
+        template <typename T>
+        T get_value(std::size_t index, error_code& ec = throws) const
+        {
+            if (!status_is_valid(status_))
+            {
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "counter_values_array::get_value<T>",
+                    "counter value is in invalid status");
+                return T();
+            }
+            if (index >= values_.size())
+            {
+                HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                    "counter_values_array::get_value<T>",
+                    "index out of bounds");
+                return T();
+            }
+
+            T val = static_cast<T>(values_[index]);
+
+            if (scaling_ != 1)
+            {
+                if (scaling_ == 0)
+                {
+                    HPX_THROWS_IF(ec, hpx::error::uninitialized_value,
+                        "counter_values_array::get_value<T>",
+                        "scaling should not be zero");
+                    return T();
+                }
+
+                // calculate and return the real counter value
+                if (scale_inverse_)
+                    return val / static_cast<T>(scaling_);
+
+                return val * static_cast<T>(scaling_);
+            }
+            return val;
+        }
+
+    private:
+        // serialization support
+        friend class hpx::serialization::access;
+
+        HPX_EXPORT void serialize(
+            serialization::output_archive& ar, unsigned int const) const;
+        HPX_EXPORT void serialize(
+            serialization::input_archive& ar, unsigned int const);
+    };
+}    // namespace hpx::performance_counters
 
 #include <hpx/config/warnings_suffix.hpp>

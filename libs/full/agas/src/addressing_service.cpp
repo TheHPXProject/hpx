@@ -8,12 +8,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_priority.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/agas/addressing_service.hpp>
-#include <hpx/agas_base/detail/bootstrap_component_namespace.hpp>
-#include <hpx/agas_base/detail/bootstrap_locality_namespace.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -25,6 +22,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/naming.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -32,7 +30,8 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
-#include <hpx/naming/split_gid.hpp>
+
+#include <hpx/agas/addressing_service.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -1471,10 +1470,9 @@ namespace hpx::agas {
         {
             // reschedule this call as an HPX thread
             threads::thread_init_data data(
-                threads::make_thread_function_nullary(
-                    [HPX_CXX20_CAPTURE_THIS(=)]() -> void {
-                        return decref(raw, credit, throws);
-                    }),
+                threads::make_thread_function_nullary([=, this]() -> void {
+                    return decref(raw, credit, throws);
+                }),
                 "addressing_service::decref", threads::thread_priority::normal,
                 threads::thread_schedule_hint(),
                 threads::thread_stacksize::default_,
@@ -1728,10 +1726,9 @@ namespace hpx::agas {
             }
 
             threads::thread_init_data data(
-                threads::make_thread_function_nullary(
-                    [HPX_CXX20_CAPTURE_THIS(=)]() -> void {
-                        return update_cache_entry(id, g, throws);
-                    }),
+                threads::make_thread_function_nullary([=, this]() -> void {
+                    return update_cache_entry(id, g, throws);
+                }),
                 "addressing_service::update_cache_entry",
                 threads::thread_priority::normal,
                 threads::thread_schedule_hint(),

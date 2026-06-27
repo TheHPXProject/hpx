@@ -207,10 +207,107 @@ void test_unique_copy()
         hpx::execution::par(hpx::execution::task), DataType());
 }
 
+////////////////////////////////////////////////////////////////////////////
+// Projection tests: project on the 'val' field of user_defined_type so
+// that two elements with the same val but different name are considered
+// equal by the predicate, exercising the Proj code path.
+void test_unique_copy_projection()
+{
+    using hpx::get;
+    using DataType = user_defined_type;
+
+    // With range [0,6), many consecutive val-duplicates will exist
+    std::size_t const size = 10007;
+    std::vector<DataType> c(size), dest_res(size), dest_sol(size);
+    std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+
+    auto proj = [](DataType const& t) -> int { return t.val; };
+    auto pred = [](int a, int b) -> bool { return a == b; };
+    auto std_pred = [](DataType const& a, DataType const& b) -> bool {
+        return a.val == b.val;
+    };
+
+    // Sequential (no policy)
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto res = hpx::ranges::unique_copy(c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+
+    // seq policy
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto res = hpx::ranges::unique_copy(
+            hpx::execution::seq, c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+
+    // par policy
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto res = hpx::ranges::unique_copy(
+            hpx::execution::par, c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+
+    // par_unseq policy
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto res = hpx::ranges::unique_copy(
+            hpx::execution::par_unseq, c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+
+    // seq(task) - async
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto f =
+            hpx::ranges::unique_copy(hpx::execution::seq(hpx::execution::task),
+                c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        auto res = f.get();
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+
+    // par(task) - async
+    {
+        std::vector<DataType> dr(size), ds(size);
+        std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+        auto f =
+            hpx::ranges::unique_copy(hpx::execution::par(hpx::execution::task),
+                c, std::begin(dr), pred, proj);
+        auto sol = std::unique_copy(
+            std::begin(c), std::end(c), std::begin(ds), std_pred);
+        auto res = f.get();
+        HPX_TEST(res.in == std::end(c));
+        HPX_TEST(test::equal(std::begin(dr), res.out, std::begin(ds), sol));
+    }
+}
+
 void test_unique_copy()
 {
     test_unique_copy<int>();
     test_unique_copy<user_defined_type>();
+    test_unique_copy_projection();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

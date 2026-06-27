@@ -35,7 +35,7 @@ inline void worker(hpx::util::barrier& b, std::uint64_t updates)
 {
     b.wait();
 
-    for (double i = 0.; i < updates; ++i)
+    for (double i = 0.; i < static_cast<double>(updates); ++i)
     {
         global_scratch = new double;
 

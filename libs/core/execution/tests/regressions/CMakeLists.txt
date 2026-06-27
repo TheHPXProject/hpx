@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests annotated_minmax_2593 chunk_size_4118 is_executor_1691 fibonacci_sr)
+set(tests annotated_minmax_2593 chunk_size_4118 executor_parameters_num_chunks
+          is_executor_1691 fibonacci_sr
+)
 
 if(HPX_WITH_DATAPAR)
   set(tests ${tests} lambda_arguments_2403 lambda_return_type_2402

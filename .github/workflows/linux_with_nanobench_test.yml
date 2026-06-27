@@ -9,13 +9,17 @@ name: Linux CI (Debug) with Nanobench Benchmark Test
 on: [pull_request]
 
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     container: stellargroup/build_env:17
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Configure
       shell: bash
       run: |

@@ -1,4 +1,4 @@
-//  Copyright (c) 2021-2025 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -122,13 +122,16 @@ namespace hpx { namespace collectives {
 
 #else
 
+#include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/async_distributed/async.hpp>
+#include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/futures.hpp>
+
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/detail/channel_communicator.hpp>
-#include <hpx/components/client.hpp>
-#include <hpx/modules/async_base.hpp>
-#include <hpx/modules/futures.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -137,25 +140,25 @@ namespace hpx { namespace collectives {
 namespace hpx::collectives {
 
     // forward declarations
-    class channel_communicator;
+    HPX_CXX_EXPORT class channel_communicator;
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     hpx::future<T> get(
         channel_communicator, that_site_arg, tag_arg = tag_arg());
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     T get(hpx::launch::sync_policy, channel_communicator, that_site_arg,
         tag_arg = tag_arg());
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     hpx::future<void> set(
         channel_communicator, that_site_arg, T&&, tag_arg = tag_arg());
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     void set(hpx::launch::sync_policy, channel_communicator, that_site_arg, T&&,
         tag_arg = tag_arg());
 
-    class channel_communicator
+    HPX_CXX_EXPORT class channel_communicator
     {
     private:
         friend HPX_EXPORT hpx::future<channel_communicator>
@@ -218,24 +221,25 @@ namespace hpx::collectives {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_EXPORT hpx::future<channel_communicator> create_channel_communicator(
-        char const* basename, num_sites_arg num_sites = num_sites_arg(),
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future<channel_communicator>
+    create_channel_communicator(char const* basename,
+        num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg());
 
-    HPX_EXPORT channel_communicator create_channel_communicator(
+    HPX_CXX_EXPORT HPX_EXPORT channel_communicator create_channel_communicator(
         hpx::launch::sync_policy, char const* basename,
         num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg());
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     hpx::future<T> get(
         channel_communicator const comm, that_site_arg site, tag_arg tag)
     {
         return comm.comm_->get<T>(site.argument_, tag.argument_);
     }
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     T get(hpx::launch::sync_policy, channel_communicator const comm,
         that_site_arg site, tag_arg tag)
     {
@@ -243,7 +247,7 @@ namespace hpx::collectives {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     hpx::future<void> set(channel_communicator const comm, that_site_arg site,
         T&& value, tag_arg tag)
     {
@@ -251,7 +255,7 @@ namespace hpx::collectives {
             site.argument_, HPX_FORWARD(T, value), tag.argument_);
     }
 
-    template <typename T>
+    HPX_CXX_EXPORT template <typename T>
     void set(hpx::launch::sync_policy, channel_communicator const comm,
         that_site_arg site, T&& value, tag_arg tag)
     {
@@ -262,7 +266,8 @@ namespace hpx::collectives {
 
     ///////////////////////////////////////////////////////////////////////////
     // Predefined p2p communicator (refers to all localities)
-    HPX_EXPORT channel_communicator get_world_channel_communicator();
+    HPX_CXX_EXPORT HPX_EXPORT channel_communicator
+    get_world_channel_communicator();
 
     namespace detail {
 

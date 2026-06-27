@@ -1,10 +1,11 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //  Copyright (c) 2015-2016 Anton Bikineev
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/config.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/version.hpp>
@@ -22,7 +23,7 @@ std::size_t const kStringsCount = 100;
 std::string const kStringValue = "shgfkghsdfjhgsfjhfgjhfgjsffghgsfdhgsfdfkdjh"
                                  "fioukjhkfdljgdfkgvjafdhasgdfwurtjkghfsdjkfg";
 
-std::vector<std::int64_t> const kIntegers = {34492, 6603, 44033, 8874, 47607,
+std::vector<std::uint16_t> const kIntegers = {34492, 6603, 44033, 8874, 47607,
     38416, 20395, 29192, 38620, 36775, 35058, 20501, 39664, 64574, 11261, 35679,
     16607, 26020, 39476, 16699, 21505, 20947, 53587, 24746, 45980, 18827, 137,
     61753, 53340, 25406, 31601, 38267, 47951, 62073, 6738, 42983, 19246, 34384,
@@ -116,7 +117,7 @@ std::vector<std::int64_t> const kIntegers = {34492, 6603, 44033, 8874, 47607,
     19355, 32417, 16169, 64680, 1600};
 
 namespace hpx_test {
-    typedef std::vector<std::int64_t> Integers;
+    typedef std::vector<std::uint16_t> Integers;
     typedef std::vector<std::string> Strings;
 
     class Record
@@ -172,7 +173,7 @@ void hpx_serialization_test(std::size_t iterations)
     using namespace hpx_test;
 
     Record r1, r2;
-    for (std::int64_t kInteger : kIntegers)
+    for (auto kInteger : kIntegers)
     {
         r1.ids.push_back(kInteger);
     }
