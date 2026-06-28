@@ -29,22 +29,6 @@ namespace hpx::actions {
 
     /// \cond NOINTERNAL
     namespace detail {
-
-        /// Helper to extract function type from reflection for use
-        /// as basic_action template argument (two-step workaround for
-        /// GCC/Clang restriction on splice expressions as template args).
-        template <std::meta::info F>
-        struct reflect_action_base
-        {
-            using func_type = [:std::meta::type_of(F):];
-            using type = basic_action<hpx::actions::detail::plain_function,
-                func_type, reflect_action_base<F>>;
-        };
-
-    }    // namespace detail
-    /// \endcond
-    /// \cond NOINTERNAL
-    namespace detail {
         /// Strips cv/ref/noexcept qualifiers from a (possibly qualified)
         /// member function type, producing the plain "R(Args...)" form
         /// that matches basic_action's partial specialization. Member
@@ -102,6 +86,18 @@ namespace hpx::actions {
         template <typename T>
         using unqualify_function_type_t =
             typename unqualify_function_type<T>::type;
+
+        /// Helper to extract function type from reflection for use
+        /// as basic_action template argument (two-step workaround for
+        /// GCC/Clang restriction on splice expressions as template args).
+        template <std::meta::info F>
+        struct reflect_action_base
+        {
+            using func_type =
+                unqualify_function_type_t<typename[:std::meta::type_of(F):]>;
+            static constexpr std::size_t arity =
+                std::meta::parameters_of(F).size();
+        };
 
         /// Helper to extract component type and function type from a member
         /// function reflection for use as basic_action template arguments.
@@ -257,7 +253,8 @@ namespace hpx::actions {
             naming::address::component_type /*comptype*/, Ts&&... vs)
         {
             using base_t = basic_action<hpx::actions::detail::plain_function,
-                func_type, detail::action_type_t<reflect_action, Derived>>;
+                typename detail::reflect_action_base<F>::func_type,
+                detail::action_type_t<reflect_action, Derived>>;
             base_t::increment_invocation_count();
             return func_ptr(HPX_FORWARD(Ts, vs)...);
         }
