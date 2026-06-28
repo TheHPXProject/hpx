@@ -49,15 +49,14 @@ namespace hpx::parallel::util {
 
                 if constexpr (is_contiguous && datapar_compatible)
                 {
-                    while (!is_data_aligned(first) && first != last)
+                    while (first != last && !is_data_aligned(first))
                     {
                         datapar_loop_step<Begin, IsConst>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    End const lastV = last - size + 1;
-                    while (first < lastV)
+                    while (last - first >= static_cast<std::ptrdiff_t>(size))
                     {
                         datapar_loop_step<Begin, IsConst>::callv(f, first);
                     }
@@ -122,7 +121,7 @@ namespace hpx::parallel::util {
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Begin call(
                 Begin first, End last, Pred&& pred)
             {
-                while (!is_data_aligned(first) && first != last)
+                while (first != last && !is_data_aligned(first))
                 {
                     if (datapar_loop_pred_step<Begin>::call1(pred, first) != -1)
                         return first;
@@ -131,9 +130,7 @@ namespace hpx::parallel::util {
 
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                End const lastV = last - size + 1;
-
-                while (first < lastV)
+                while (last - first >= static_cast<std::ptrdiff_t>(size))
                 {
                     int offset =
                         datapar_loop_pred_step<Begin>::callv(pred, first);
@@ -176,15 +173,14 @@ namespace hpx::parallel::util {
 
                 if constexpr (is_contiguous && datapar_compatible)
                 {
-                    while (!is_data_aligned(first) && first != last)
+                    while (first != last && !is_data_aligned(first))
                     {
                         datapar_loop_step_ind<Begin>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    End const lastV = last - size + 1;
-                    while (first < lastV)
+                    while (last - first >= static_cast<std::ptrdiff_t>(size))
                     {
                         datapar_loop_step_ind<Begin>::callv(f, first);
                     }
@@ -241,8 +237,8 @@ namespace hpx::parallel::util {
 
                 using V = traits::vector_pack_type_t<value_type>;
 
-                while ((!is_data_aligned(it1) || !is_data_aligned(it2)) &&
-                    it1 != last1)
+                while (it1 != last1 &&
+                    (!is_data_aligned(it1) || !is_data_aligned(it2)))
                 {
                     datapar_loop_step2_ind<InIter1, InIter2>::call1(
                         f, it1, it2);
@@ -250,8 +246,7 @@ namespace hpx::parallel::util {
 
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                InIter1 const last1V = last1 - size + 1;
-                while (it1 < last1V)
+                while (last1 - it1 >= static_cast<std::ptrdiff_t>(size))
                 {
                     datapar_loop_step2_ind<InIter1, InIter2>::callv(
                         f, it1, it2);
@@ -295,7 +290,7 @@ namespace hpx::parallel::util {
                     std::size_t len = count;
 
                     // clang-format off
-                    for (/* */; !detail::is_data_aligned(first) && len != 0;
+                    for (/* */; len != 0 && !detail::is_data_aligned(first);
                         --len)
                     {
                         datapar_loop_step<InIter, IsConst>::call1(f, first);
@@ -303,12 +298,10 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    for (auto len_v =
-                             static_cast<std::int64_t>(len - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), len -= size)
+                    while (len >= size)
                     {
                         datapar_loop_step<InIter, IsConst>::callv(f, first);
+                        len -= size;
                     }
                     // clang-format on
 
@@ -376,11 +369,10 @@ namespace hpx::parallel::util {
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
                 // clang-format off
-                for (auto len_v = static_cast<std::int64_t>(len - size + 1);
-                    len_v > 0;
-                    len_v -= static_cast<std::int64_t>(size), len -= size)
+                while (len >= size)
                 {
                     datapar_loop_step<I, true>::callv(f, first);
+                    len -= size;
                 }
                 // clang-format on
 
@@ -426,7 +418,7 @@ namespace hpx::parallel::util {
                     std::size_t len = count;
 
                     // clang-format off
-                    for (/* */; !detail::is_data_aligned(first) && len != 0;
+                    for (/* */; len != 0 && !detail::is_data_aligned(first);
                         --len)
                     {
                         datapar_loop_step_ind<InIter>::call1(f, first);
@@ -434,12 +426,10 @@ namespace hpx::parallel::util {
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
-                    for (auto len_v =
-                             static_cast<std::int64_t>(len - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), len -= size)
+                    while (len >= size)
                     {
                         datapar_loop_step_ind<InIter>::callv(f, first);
+                        len -= size;
                     }
                     // clang-format on
 
@@ -495,7 +485,7 @@ namespace hpx::parallel::util {
             {
                 std::size_t len = count;
 
-                for (/* */; !detail::is_data_aligned(it) && len != 0; --len)
+                for (/* */; len != 0 && !detail::is_data_aligned(it); --len)
                 {
                     datapar_loop_idx_step<Iter>::call1(f, it, base_idx);
                     ++it;
@@ -505,13 +495,12 @@ namespace hpx::parallel::util {
                 constexpr std::size_t size = traits::vector_pack_size_v<V>;
 
                 // clang-format off
-                for (auto len_v = static_cast<std::int64_t>(len - size + 1);
-                    len_v > 0;
-                    len_v -= static_cast<std::int64_t>(size), len -= size)
+                while (len >= size)
                 {
                     datapar_loop_idx_step<Iter>::callv(f, it, base_idx);
                     std::advance(it, size);
                     base_idx += size;
+                    len -= size;
                 }
                 // clang-format on
 

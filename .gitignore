@@ -6,6 +6,7 @@
 
 *.pyc
 /build
+/build-pr6877
 .DS_Store
 .gitignore
 .ptp-sync-folder

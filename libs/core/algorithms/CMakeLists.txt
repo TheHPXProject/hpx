@@ -39,6 +39,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/pivot.hpp
     hpx/parallel/algorithms/detail/reduce.hpp
     hpx/parallel/algorithms/detail/reduce_deterministic.hpp
+    hpx/parallel/algorithms/detail/remove.hpp
     hpx/parallel/algorithms/detail/replace.hpp
     hpx/parallel/algorithms/detail/rfa.hpp
     hpx/parallel/algorithms/detail/rotate.hpp
@@ -240,6 +241,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/loop.hpp
       hpx/parallel/datapar/mismatch.hpp
       hpx/parallel/datapar/reduce.hpp
+      hpx/parallel/datapar/remove.hpp
       hpx/parallel/datapar/replace.hpp
       hpx/parallel/datapar/search.hpp
       hpx/parallel/datapar/transfer.hpp

@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <type_traits>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::traits {
@@ -56,7 +57,15 @@ namespace hpx::parallel::traits {
         HPX_HOST_DEVICE HPX_FORCEINLINE static void unaligned(
             V& value, Iter& iter)
         {
-            *iter = value;
+            if constexpr (std::is_class_v<V>)
+            {
+                value.copy_to(std::addressof(*iter),
+                    datapar::experimental::element_aligned);
+            }
+            else
+            {
+                *iter = value;
+            }
         }
     };
 }    // namespace hpx::parallel::traits
