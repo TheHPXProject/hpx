@@ -55,9 +55,29 @@ void test_transform_mpi_forwards_env()
     static_assert(std::is_same_v<scheduler_type, original_scheduler_type>);
 }
 
+void test_transform_mpi_sender_shape()
+{
+    auto s =
+        ex::just(static_cast<int*>(nullptr), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    auto transformed =
+        mpi::transform_mpi(std::move(s), [](MPI_Request* request) {
+            *request = MPI_REQUEST_NULL;
+            return MPI_SUCCESS;
+        });
+
+    using sender_type = decltype(transformed);
+    static_assert(ex::is_sender_v<sender_type>);
+
+    using sender_env_type = decltype(ex::get_env(std::declval<sender_type&>()));
+    using upstream_env_type =
+        decltype(ex::get_env(std::declval<decltype(s)&>()));
+    static_assert(std::is_same_v<sender_env_type, upstream_env_type>);
+}
+
 int hpx_main()
 {
     test_transform_mpi_forwards_env();
+    test_transform_mpi_sender_shape();
 
     int size, rank;
     MPI_Comm comm = MPI_COMM_WORLD;

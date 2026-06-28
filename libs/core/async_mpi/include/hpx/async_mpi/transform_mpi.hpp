@@ -140,9 +140,8 @@ namespace hpx::mpi::experimental {
                 hpx::execution::experimental::set_stopped(HPX_MOVE(r));
             }
 
-            template <typename... Ts,
-                typename = std::enable_if_t<
-                    hpx::is_invocable_v<F, Ts..., MPI_Request*>>>
+            template <typename... Ts>
+                requires(hpx::is_invocable_v<F, Ts..., MPI_Request*>)
             void set_value(Ts&&... ts) && noexcept
             {
                 hpx::detail::try_catch_exception_ptr(
