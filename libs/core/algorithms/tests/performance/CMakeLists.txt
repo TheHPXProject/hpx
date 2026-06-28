@@ -30,6 +30,57 @@ set(benchmarks
     transform_reduce_scaling
 )
 
+set(perftest_reports
+    foreach_report
+    transform_reduce_scaling
+    benchmark_is_heap_until
+    benchmark_merge
+    benchmark_inplace_merge
+    benchmark_is_heap
+    benchmark_remove
+    benchmark_remove_if
+    benchmark_partial_sort
+    benchmark_partial_sort_parallel
+    benchmark_nth_element
+    benchmark_nth_element_parallel
+)
+
+set(foreach_report_perftest_PARAMETERS
+    THREADS_PER_LOCALITY
+    4
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --vector_size=104857
+    --work_delay=1
+    --chunk_size=0
+    --test_count=200
+)
+
+set(transform_reduce_scaling_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                                 --test_count=100
+)
+
+set(benchmark_is_heap_until_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                                --test_count=100
+)
+
+set(benchmark_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4 --test_count=10)
+
+set(benchmark_inplace_merge_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                                --test_count=100
+)
+
+set(benchmark_is_heap_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                          --test_count=100
+)
+
+set(benchmark_remove_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                         --test_count=100
+)
+
+set(benchmark_remove_if_perftest_PARAMETERS THREADS_PER_LOCALITY 4
+                                            --test_count=100
+)
+
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)
 
@@ -46,4 +97,14 @@ foreach(benchmark ${benchmarks})
   add_hpx_performance_test(
     "modules.algorithms" ${benchmark} ${${benchmark}_PARAMETERS}
   )
+  if(HPX_WITH_TESTS_RUN_BENCHMARKS AND (${benchmark} IN_LIST perftest_reports))
+    add_hpx_performance_report_test(
+      "modules.algorithms" ${benchmark}_perftest
+      ${${benchmark}_perftest_PARAMETERS}
+    )
+    set_target_properties(
+      ${benchmark}_cdash_results
+      PROPERTIES FOLDER "Benchmarks/Modules/Core/Algorithms/CDashResults"
+    )
+  endif()
 endforeach()

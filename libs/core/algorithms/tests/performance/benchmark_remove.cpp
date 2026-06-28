@@ -83,54 +83,10 @@ struct array_type
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-template <typename OrgIter, typename InIter, typename ValueType>
-double run_remove_benchmark_std(int test_count, OrgIter org_first,
-    OrgIter org_last, InIter first, InIter last, ValueType value)
-{
-    std::uint64_t time = std::uint64_t(0);
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
-        [[maybe_unused]] auto result = std::remove(first, last, value);
-        time += hpx::chrono::high_resolution_clock::now() - elapsed;
-    }
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-template <typename ExPolicy, typename OrgIter, typename FwdIter,
-    typename ValueType>
-double run_remove_benchmark_hpx(int test_count, ExPolicy policy,
-    OrgIter org_first, OrgIter org_last, FwdIter first, FwdIter last,
-    ValueType value)
-{
-    std::uint64_t time = std::uint64_t(0);
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
-        hpx::remove(policy, first, last, value);
-        time += hpx::chrono::high_resolution_clock::now() - elapsed;
-    }
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag, typename DataType>
 void run_benchmark(std::size_t vector_size, int test_count,
     std::size_t random_range, IteratorTag, DataType)
 {
-    std::cout << "* Preparing Benchmark..." << std::endl;
-
     typedef test_container<IteratorTag, DataType> test_container;
     typedef typename test_container::type container;
 
@@ -147,41 +103,33 @@ void run_benchmark(std::size_t vector_size, int test_count,
 
     auto value = DataType(static_cast<int>(random_range / 2));
 
-    auto dest_dist = std::distance(first, std::remove(first, last, value));
+    // auto dest_dist = std::distance(first, std::remove(first, last, value));
 
     auto org_first = std::begin(org_v);
     auto org_last = std::end(org_v);
 
-    std::cout << "*** Distance of new range after performing the algorithm : "
-              << dest_dist << std::endl
-              << std::endl;
+    hpx::util::perftests_report("hpx::remove", "seq", test_count, [&] {
+        // Restore [first, last) with original data.
+        hpx::copy(hpx::execution::par, org_first, org_last, first);
 
-    std::cout << "* Running Benchmark..." << std::endl;
-    std::cout << "--- run_remove_benchmark_std ---" << std::endl;
-    double time_std = run_remove_benchmark_std(
-        test_count, org_first, org_last, first, last, value);
+        (void) hpx::remove(seq, first, last, value);
+    });
 
-    std::cout << "--- run_remove_benchmark_seq ---" << std::endl;
-    double time_seq = run_remove_benchmark_hpx(
-        test_count, seq, org_first, org_last, first, last, value);
+    hpx::util::perftests_report("hpx::remove", "par", test_count, [&] {
+        // Restore [first, last) with original data.
+        hpx::copy(hpx::execution::par, org_first, org_last, first);
 
-    std::cout << "--- run_remove_benchmark_par ---" << std::endl;
-    double time_par = run_remove_benchmark_hpx(
-        test_count, par, org_first, org_last, first, last, value);
+        (void) hpx::remove(par, first, last, value);
+    });
 
-    std::cout << "--- run_remove_benchmark_par_unseq ---" << std::endl;
-    double time_par_unseq = run_remove_benchmark_hpx(
-        test_count, par_unseq, org_first, org_last, first, last, value);
+    hpx::util::perftests_report("hpx::remove", "par_unseq", test_count, [&] {
+        // Restore [first, last) with original data.
+        hpx::copy(hpx::execution::par, org_first, org_last, first);
 
-    std::cout << "\n-------------- Benchmark Result --------------"
-              << std::endl;
-    auto fmt = "remove ({1}) : {2}(sec)";
-    hpx::util::format_to(std::cout, fmt, "std", time_std) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "seq", time_seq) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par", time_par) << std::endl;
-    hpx::util::format_to(std::cout, fmt, "par_unseq", time_par_unseq)
-        << std::endl;
-    std::cout << "----------------------------------------------" << std::endl;
+        (void) hpx::remove(par_unseq, first, last, value);
+    });
+
+    hpx::util::perftests_print_times();
 }
 
 template <typename IteratorTag>
@@ -248,21 +196,12 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::string data_type_str =
         correct_data_type_str(vm["data_type"].as<std::string>());
 
-    std::size_t const os_threads = hpx::get_os_thread_count();
+    [[maybe_unused]] std::size_t const os_threads = hpx::get_os_thread_count();
+
+    hpx::util::perftests_init(vm, "benchmark_remove");
 
     if (random_range < 1)
         random_range = 1;
-
-    std::cout << "-------------- Benchmark Config --------------" << std::endl;
-    std::cout << "seed         : " << seed << std::endl;
-    std::cout << "vector_size  : " << vector_size << std::endl;
-    std::cout << "random_range : " << random_range << std::endl;
-    std::cout << "iterator_tag : " << iterator_tag_str << std::endl;
-    std::cout << "data_type    : " << data_type_str << std::endl;
-    std::cout << "test_count   : " << test_count << std::endl;
-    std::cout << "os threads   : " << os_threads << std::endl;
-    std::cout << "----------------------------------------------\n"
-              << std::endl;
 
     run_benchmark(
         vector_size, test_count, random_range, iterator_tag_str, data_type_str);
@@ -285,13 +224,15 @@ int main(int argc, char* argv[])
         "the kind of iterator tag (random/bidirectional/forward)")("data_type",
         hpx::program_options::value<std::string>()->default_value("int"),
         "the kind of data type (int/vector/array)")("test_count",
-        hpx::program_options::value<int>()->default_value(10),
-        "number of tests to be averaged (default: 10)")("seed,s",
+        hpx::program_options::value<int>()->default_value(100),
+        "number of tests to be averaged (default: 100)")("seed,s",
         hpx::program_options::value<unsigned int>(),
         "the random number generator seed to use for this run");
 
     // initialize program
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+
+    hpx::util::perftests_cfg(desc_commandline);
 
     // Initialize and run HPX
     hpx::local::init_params init_args;

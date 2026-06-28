@@ -52,7 +52,7 @@ def run(command, log_output=None, **kwargs):
     if log_output is None:
         log_output = log.debug
 
-    log.info('Invoking', ' '.join(f'"{c}"' for c in command))
+    log.debug('Invoking', ' '.join(f'"{c}"' for c in command))
     start = time.time()
 
     try:
@@ -62,7 +62,7 @@ def run(command, log_output=None, **kwargs):
     output = loop.run_until_complete(_run_async(command, log_output, **kwargs))
 
     end = time.time()
-    log.info(f'{command[0]} finished in {end - start:.2f}s')
+    log.debug(f'{command[0]} finished in {end - start:.2f}s')
     return output
 
 

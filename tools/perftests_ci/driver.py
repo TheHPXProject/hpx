@@ -69,7 +69,7 @@ def build(build_type, environment, target, source_dir, build_dir, install_dir,
 
 
 try:
-    from pyutils import buildinfo
+    import buildinfo
 except ImportError:
     buildinfo = None
 
@@ -116,25 +116,26 @@ def perftest():
 
 
 if buildinfo:
+    import argparse
 
     @perftest.command(description='run performance tests')
     @args.arg('--local',
-              default=False,
-              help='run without slurm')
+                default=False,
+                help='run without slurm')
     @args.arg('--run_output',
-              '-o',
-              required=True,
-              help='output file path, extension .json is added if not given')
+                '-o',
+                required=True,
+                help='output file path, extension .json is added if not given')
     @args.arg('--targets-and-opts',
-              nargs='+',
-              type=str,
-              help='extra arguments to pass to the test\nWarning prefer = to \
-              space to assign values to hpx options')
+                nargs=argparse.REMAINDER,
+                type=str,
+                help='extra arguments to pass to the test\nWarning prefer = to \
+                space to assign values to hpx options')
     @args.arg('--n_executions',
-              default=1,
-              type=int,
-              help='number of executions of the benchmark executable, whose \
-              results are then merged together')
+                default=1,
+                type=int,
+                help='number of executions of the benchmark executable, whose \
+                results are then merged together')
     @args.arg('--environment', '-e', nargs='?', help='path to environment file')
     def run(local, run_output, targets_and_opts, n_executions, environment):
 

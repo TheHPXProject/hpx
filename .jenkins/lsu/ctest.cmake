@@ -82,7 +82,7 @@ set(ctest_submission_result ${ctest_submission_result} "Build: "
                             ${__build_result} "\n"
 )
 
-ctest_test(PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}")
+ctest_test(PARALLEL_LEVEL "${CTEST_TEST_PARALLELISM}" EXCLUDE "_perftest$")
 ctest_submit(
   PARTS Test
   BUILD_ID __ctest_build_id

@@ -161,7 +161,7 @@ int hpx_main(variables_map& vm)
             numa_sensitive = 0;
 
         bool test_all = (vm.count("test-all") > 0);
-        int const repetitions = vm["repetitions"].as<int>();
+        int const repetitions = vm["test_count"].as<int>();
 
         if (vm.count("info"))
             info_string = vm["info"].as<std::string>();
@@ -172,7 +172,7 @@ int hpx_main(variables_map& vm)
 
         std::uint64_t const count = vm["futures"].as<std::uint64_t>();
 
-        hpx::util::perftests_init(vm);
+        hpx::util::perftests_init(vm, "future_overhead_report");
 
         if (HPX_UNLIKELY(0 == count))
             throw std::logic_error("error: count of 0 futures specified\n");
@@ -202,8 +202,8 @@ int main(int argc, char* argv[])
          "number of iterations in the delay loop")
 
         ("test-all", "run all benchmarks")
-        ("repetitions", value<int>()->default_value(1),
-         "number of repetitions of the full benchmark")
+        ("test_count", value<int>()->default_value(100),
+         "number of repetitions of the full benchmark (default: 100)")
 
         ("info", value<std::string>()->default_value("no-info"),
          "extra info for plot output (e.g. branch name)");
