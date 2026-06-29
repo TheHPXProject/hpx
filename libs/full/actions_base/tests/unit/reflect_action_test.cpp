@@ -100,6 +100,17 @@ int main()
         static_assert(!std::is_void_v<registrar_type>,
             "invocation_count_registrar_ must exist");
     }
+    // Test: invoke() works for noexcept functions (verifies that
+    // unqualify_function_type_t correctly strips noexcept from the
+    // function type so basic_action instantiation succeeds)
+    {
+        HPX_ACTION(app::broadcast, broadcast_action);
+        hpx::naming::address_type lva{};
+        hpx::naming::component_type comptype{};
+        broadcast_action::invoke(lva, comptype, 42);
+        static_assert(broadcast_action::arity == std::size_t(1),
+            "arity must be a compile-time constant");
+    }
     return hpx::util::report_errors();
 }
 
