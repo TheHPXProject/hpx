@@ -1,10 +1,12 @@
-# Copyright (c) 2019-2025 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests assert_fail assert_succeed)
+
+set(assert_fail_PARAMETERS FAILURE_EXPECTED)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
@@ -19,10 +21,4 @@ foreach(test ${tests})
   )
 
   add_hpx_unit_test("modules.assertion" ${test} ${${test}_PARAMETERS})
-
 endforeach()
-
-set_tests_properties(
-  tests.unit.modules.assertion.assert_fail PROPERTIES WILL_FAIL
-                                                      $<$<CONFIG:Debug>:true>
-)

@@ -22,7 +22,7 @@ namespace hpx::detail {
         filesystem::path const p(file);
         hpx::detail::throw_exception(
             hpx::exception(errcode, msg, hpx::throwmode::plain), func,
-            filesystem::to_string(p), line);
+            hpx::filesystem::to_string(p), line);
     }
 
     [[noreturn]] void rethrow_exception(
@@ -39,7 +39,7 @@ namespace hpx::detail {
     {
         filesystem::path const p(file);
         return hpx::detail::get_exception(hpx::exception(errcode, msg, mode),
-            filesystem::to_string(p), file, line, auxinfo);
+            hpx::filesystem::to_string(p), file, line, auxinfo);
     }
 
     std::exception_ptr get_exception(std::error_code const& ec,

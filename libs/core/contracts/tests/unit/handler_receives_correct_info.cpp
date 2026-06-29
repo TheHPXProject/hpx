@@ -4,13 +4,9 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <hpx/contracts.hpp>
-#include <hpx/contracts/violation_handler.hpp>
-#include <hpx/modules/testing.hpp>
+#include <hpx/config.hpp>
 
-#include <cstring>
-
-#if !defined(HPX_HAVE_CXX26_CONTRACTS) && HPX_CONTRACTS_MODE == 2
+#if defined(HPX_HAVE_CXX26_CONTRACTS)
 
 int main()
 {
@@ -19,9 +15,14 @@ int main()
 
 #else
 
+#include <hpx/contracts.hpp>
+#include <hpx/modules/testing.hpp>
+
+#include <cstring>
+
 namespace {
     hpx::contracts::contract_violation captured{
-        hpx::contracts::contract_kind::assertion, nullptr, {}, {}};
+        hpx::contracts::contract_kind::assertion, nullptr, {}};
 
     void capturing_handler(hpx::contracts::contract_violation const& info)
     {

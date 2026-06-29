@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2013 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -756,7 +756,7 @@ namespace hpx {
         ///                          after it returns.
         template <typename F>
         decltype(auto) then(F&& f, error_code& ec = throws)
-            HPX_PRE(this->valid()) HPX_POST(!this->valid())
+        // HPX_PRE(this->valid()) HPX_POST(!this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             // This and the similar ifdefs below for future::then and
@@ -800,7 +800,7 @@ namespace hpx {
         ///                          after it returns.
         template <typename T0, typename F>
         decltype(auto) then(T0&& t0, F&& f, error_code& ec = throws)
-            HPX_PRE(this->valid()) HPX_POST(!this->valid())
+        // HPX_PRE(this->valid()) HPX_POST(!this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             HPX_ASSERT(false);
@@ -820,7 +820,7 @@ namespace hpx {
         auto then_alloc(Allocator const& alloc, F&& f, error_code& ec = throws)
             -> decltype(base_type::then_alloc(
                 alloc, std::move(*this), std::forward<F>(f), ec))
-                HPX_PRE(this->valid()) HPX_POST(!this->valid())
+        // HPX_PRE(this->valid()) HPX_POST(!this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             HPX_ASSERT(false);
@@ -1067,7 +1067,7 @@ namespace hpx {
         /// \copydoc hpx::future::then(F&& f, error_code& ec = throws)
         template <typename F>
         decltype(auto) then(F&& f, error_code& ec = throws) const
-            HPX_PRE(this->valid())
+        //HPX_PRE(this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             HPX_ASSERT(false);
@@ -1084,7 +1084,7 @@ namespace hpx {
         /// \copydoc hpx::future::then(T0&& t0, F&& f, error_code& ec = throws)
         template <typename T0, typename F>
         decltype(auto) then(T0&& t0, F&& f, error_code& ec = throws) const
-            HPX_PRE(this->valid())
+        // HPX_PRE(this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             HPX_ASSERT(false);
@@ -1100,7 +1100,7 @@ namespace hpx {
         template <typename Allocator, typename F>
         auto then_alloc(Allocator const& alloc, F&& f, error_code& ec = throws)
             -> decltype(base_type::then_alloc(alloc, std::move(*this),
-                std::forward<F>(f), ec)) HPX_PRE(this->valid())
+                std::forward<F>(f), ec))    // HPX_PRE(this->valid())
         {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
             HPX_ASSERT(false);

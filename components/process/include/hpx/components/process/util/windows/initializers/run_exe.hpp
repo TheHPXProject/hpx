@@ -81,7 +81,7 @@ namespace hpx::components::process::windows::initializers {
 
     inline auto run_exe(filesystem::path const& p)
     {
-        return run_exe_<std::string>(filesystem::to_string(p));
+        return run_exe_<std::string>(hpx::filesystem::to_string(p));
     }
 }    // namespace hpx::components::process::windows::initializers
 

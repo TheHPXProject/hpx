@@ -11,6 +11,7 @@
 
 #include <hpx/contracts.hpp>
 #include <hpx/modules/testing.hpp>
+
 #include <iostream>
 
 int main() HPX_PRE(false)    // This precondition is ignored in fallback mode

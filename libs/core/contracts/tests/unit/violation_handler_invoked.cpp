@@ -4,13 +4,10 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-#include <hpx/contracts.hpp>
-#include <hpx/contracts/violation_handler.hpp>
-#include <hpx/modules/testing.hpp>
+#include <hpx/config.hpp>
 
-#if !defined(HPX_HAVE_CXX26_CONTRACTS) && HPX_CONTRACTS_MODE == 2
+#if defined(HPX_HAVE_CXX26_CONTRACTS)
 
-// IGNORE mode: contracts are no-ops, nothing to test here.
 int main()
 {
     return 0;
@@ -18,7 +15,11 @@ int main()
 
 #else
 
+#include <hpx/contracts.hpp>
+#include <hpx/modules/testing.hpp>
+
 namespace {
+
     int handler_call_count = 0;
     hpx::contracts::contract_kind last_kind =
         hpx::contracts::contract_kind::assertion;

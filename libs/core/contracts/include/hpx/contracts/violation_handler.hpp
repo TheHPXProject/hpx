@@ -20,6 +20,7 @@
 namespace hpx::contracts {
 
     HPX_CXX_CORE_EXPORT enum class contract_kind : std::uint8_t {
+        unknown,
         pre,
         post,
         assertion
@@ -27,10 +28,10 @@ namespace hpx::contracts {
 
     HPX_CXX_CORE_EXPORT struct contract_violation
     {
-        contract_kind kind;
-        char const* condition;
-        hpx::source_location location;
-        std::string message;
+        contract_kind kind = contract_kind::unknown;
+        char const* condition = nullptr;
+        hpx::source_location location = {};
+        std::string message = {};
     };
 
     HPX_CXX_CORE_EXPORT using violation_handler_t =

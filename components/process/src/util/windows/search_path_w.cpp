@@ -106,11 +106,11 @@ namespace hpx::components::process::windows {
                 std::error_code ec;
                 bool file = filesystem::is_regular_file(p2, ec);
                 if (!ec && file &&
-                    SHGetFileInfoA(filesystem::to_string(p2).c_str(), 0,
+                    SHGetFileInfoA(hpx::filesystem::to_string(p2).c_str(), 0,
                         nullptr,    //-V575
                         0, SHGFI_EXETYPE))
                 {
-                    return filesystem::to_string(p2);
+                    return hpx::filesystem::to_string(p2);
                 }
             }
         }

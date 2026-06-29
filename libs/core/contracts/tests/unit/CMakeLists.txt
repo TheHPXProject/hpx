@@ -21,6 +21,28 @@ set(contract_tests
     handler_receives_correct_info
 )
 
+if(HPX_HAVE_CXX26_CONTRACTS)
+  # Native C++26 contracts always fail when violated, regardless of build config
+  set(declaration_contracts_fail_pre_FLAGS FAILURE_EXPECTED)
+  set(declaration_contracts_fail_post_FLAGS FAILURE_EXPECTED)
+  set(declaration_contracts_fail_contract_assert_FLAGS
+      $<$<CONFIG:Debug>:FAILURE_EXPECTED>
+  )
+else()
+  # Fallback mode: HPX_PRE / HPX_POST are no-ops so fail_pre / fail_post
+  # succeed. HPX_CONTRACT_ASSERT routes through invoke_violation_handler, whose
+  # default handler aborts unless HPX_WITH_CONTRACTS_MODE=OBSERVE.
+  if(NOT HPX_WITH_CONTRACTS_MODE STREQUAL "OBSERVE"
+     AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE"
+  )
+    set(declaration_contracts_fail_contract_assert_FLAGS FAILURE_EXPECTED)
+    set(default_handler_aborts_assert_FLAGS FAILURE_EXPECTED)
+  endif()
+
+  # fallback_contracts_fail uses HPX_ASSERT directly, so it only fails in Debug
+  set(fallback_contracts_fail_PARAMETERS FAILURE_EXPECTED)
+endif()
+
 foreach(test ${contract_tests})
   add_hpx_executable(
     ${test}_test INTERNAL_FLAGS
@@ -30,45 +52,5 @@ foreach(test ${contract_tests})
     EXCLUDE_FROM_ALL
     FOLDER "Tests/Unit/Modules/Core/Contracts/"
   )
-  add_hpx_unit_test("modules.contracts" ${test})
+  add_hpx_unit_test("modules.contracts" ${test} ${${test}_PARAMETERS})
 endforeach()
-
-if(HPX_HAVE_CXX26_CONTRACTS)
-  # Native C++26 contracts always fail when violated, regardless of build config
-  set_tests_properties(
-    tests.unit.modules.contracts.declaration_contracts_fail_pre
-    PROPERTIES WILL_FAIL ON
-  )
-  set_tests_properties(
-    tests.unit.modules.contracts.declaration_contracts_fail_post
-    PROPERTIES WILL_FAIL ON
-  )
-  # HPX_CONTRACT_ASSERT still routes through HPX_ASSERT in native mode — Debug
-  # only
-  set_tests_properties(
-    tests.unit.modules.contracts.declaration_contracts_fail_contract_assert
-    PROPERTIES WILL_FAIL $<$<CONFIG:Debug>:ON>
-  )
-else()
-  # Fallback mode: HPX_PRE / HPX_POST are no-ops so fail_pre / fail_post
-  # succeed. HPX_CONTRACT_ASSERT routes through invoke_violation_handler, whose
-  # default handler aborts unless HPX_WITH_CONTRACTS_MODE=OBSERVE.
-  if(NOT HPX_WITH_CONTRACTS_MODE STREQUAL "OBSERVE"
-     AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE"
-  )
-    set_tests_properties(
-      tests.unit.modules.contracts.declaration_contracts_fail_contract_assert
-      PROPERTIES WILL_FAIL ON
-    )
-    set_tests_properties(
-      tests.unit.modules.contracts.default_handler_aborts PROPERTIES WILL_FAIL
-                                                                     ON
-    )
-  endif()
-
-  # fallback_contracts_fail uses HPX_ASSERT directly, so it only fails in Debug
-  set_tests_properties(
-    tests.unit.modules.contracts.fallback_contracts_fail
-    PROPERTIES WILL_FAIL $<$<CONFIG:Debug>:ON>
-  )
-endif()
