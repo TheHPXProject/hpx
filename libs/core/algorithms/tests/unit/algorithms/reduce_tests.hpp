@@ -370,7 +370,7 @@ void test_reduce_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         auto snd_result = tt::sync_wait(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)), val, op) |
             hpx::reduce(ex_policy.on(exec)));
-        int result = hpx::get<0>(snd_result.value());
+        int result = hpx::get<0>(*snd_result);
 
         // verify values
         int expected = std::accumulate(std::begin(c), std::end(c), val, op);
@@ -381,7 +381,7 @@ void test_reduce_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         auto snd_result = tt::sync_wait(ex::just(iterator(std::begin(c)),
                                             iterator(std::begin(c)), val, op) |
             hpx::reduce(ex_policy.on(exec)));
-        int result = hpx::get<0>(snd_result.value());
+        int result = hpx::get<0>(*snd_result);
 
         HPX_TEST_EQ(result, val);
     }

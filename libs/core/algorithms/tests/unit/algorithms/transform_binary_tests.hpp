@@ -369,7 +369,7 @@ void test_transform_binary_sender(
         tt::sync_wait(ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                           std::begin(c2), std::begin(d1), add()) |
             hpx::transform(ex_policy.on(exec)));
-    auto result = hpx::get<0>(snd_result.value());
+    auto result = hpx::get<0>(*snd_result);
 
     HPX_TEST(result == std::end(d1));
 

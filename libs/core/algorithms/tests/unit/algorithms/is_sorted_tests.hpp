@@ -448,7 +448,7 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(snd_result.value());
+        bool is_ordered = hpx::get<0>(*snd_result);
 
         HPX_TEST(is_ordered);
     }
@@ -459,7 +459,7 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(snd_result.value());
+        bool is_ordered = hpx::get<0>(*snd_result);
 
         HPX_TEST(is_ordered);
     }
@@ -470,7 +470,7 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(snd_result.value());
+        bool is_ordered = hpx::get<0>(*snd_result);
 
         HPX_TEST(is_ordered);
     }

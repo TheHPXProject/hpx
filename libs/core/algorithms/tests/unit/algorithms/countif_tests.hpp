@@ -108,7 +108,7 @@ void test_count_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                           smaller_than_50()) |
             hpx::count_if(ex_policy.on(exec)));
 
-    diff_type num_items = hpx::get<0>(snd_result.value());
+    diff_type num_items = hpx::get<0>(*snd_result);
 
     HPX_TEST_EQ(num_items, 50u);
 }

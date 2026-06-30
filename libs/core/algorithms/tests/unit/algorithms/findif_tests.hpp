@@ -96,7 +96,7 @@ void test_find_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                           [](auto v) { return v == int(1); }) |
             hpx::find_if(ex_policy.on(exec)));
 
-    iterator index = hpx::get<0>(snd_result.value());
+    iterator index = hpx::get<0>(*snd_result);
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);

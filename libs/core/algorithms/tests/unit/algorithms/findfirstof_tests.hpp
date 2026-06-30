@@ -106,7 +106,7 @@ void test_find_first_of_sender(
                           std::begin(h), std::end(h)) |
             hpx::find_first_of(ex_policy.on(exec)));
 
-    iterator index = hpx::get<0>(snd_result.value());
+    iterator index = hpx::get<0>(*snd_result);
 
     base_iterator test_index = std::begin(c) + find_first_of_pos;
 

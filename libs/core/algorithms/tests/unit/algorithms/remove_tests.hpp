@@ -731,7 +731,7 @@ void test_remove_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         ex::just(iterator(std::begin(c)), iterator(std::end(c)), value) |
         hpx::remove(ex_policy.on(exec)));
 
-    auto result = hpx::get<0>(snd_result.value());
+    auto result = hpx::get<0>(*snd_result);
 
     auto solution = std::remove(std::begin(d), std::end(d), value);
 
@@ -770,7 +770,7 @@ void test_remove_if_sender(
     auto snd_result = tt::sync_wait(
         ex::just(iterator(std::begin(c)), iterator(std::end(c)), pred) |
         hpx::remove_if(ex_policy.on(exec)));
-    auto result = hpx::get<0>(snd_result.value());
+    auto result = hpx::get<0>(*snd_result);
 
     auto solution = std::remove_if(std::begin(d), std::end(d), pred);
 

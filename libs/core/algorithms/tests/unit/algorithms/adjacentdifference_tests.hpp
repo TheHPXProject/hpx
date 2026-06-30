@@ -93,7 +93,7 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
             tt::sync_wait(ex::just(std::begin(c), std::end(c), std::begin(d)) |
                 hpx::adjacent_difference(policy.on(exec)));
         HPX_TEST(snd_result.has_value());
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         std::adjacent_difference(std::begin(c), std::end(c), std::begin(d_ans));
 
@@ -108,7 +108,7 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
             ex::just(std::begin(c), std::begin(c), std::begin(d)) |
             hpx::adjacent_difference(policy.on(exec)));
         HPX_TEST(snd_result.has_value());
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         std::adjacent_difference(
             std::begin(c), std::begin(c), std::begin(d_ans));
@@ -124,7 +124,7 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
             ex::just(std::begin(c), ++std::begin(c), std::begin(d)) |
             hpx::adjacent_difference(policy.on(exec)));
         HPX_TEST(snd_result.has_value());
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         std::adjacent_difference(
             std::begin(c), ++std::begin(c), std::begin(d_ans));

@@ -494,7 +494,7 @@ void test_equal_binary_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                 std::begin(c2), std::end(c2)) |
             hpx::equal(policy));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -511,7 +511,7 @@ void test_equal_binary_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                 std::begin(c2), std::end(c2)) |
             hpx::equal(policy));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -591,7 +591,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c2), std::begin(c2)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(result);
     }
@@ -603,7 +603,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::end(c1)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(!result);
     }
@@ -615,7 +615,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::begin(c1)) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(!result);
     }
@@ -627,7 +627,7 @@ void test_equal_binary_edge_cases_sender(
                 std::begin(c1), std::begin(c1) + 2) |
             hpx::equal(policy));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(!result);
     }

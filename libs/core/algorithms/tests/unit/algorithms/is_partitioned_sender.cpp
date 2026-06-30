@@ -55,7 +55,7 @@ void test_is_partitioned_sender(
                 [](std::size_t n) { return n % 2 == 0; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        bool parted = hpx::get<0>(snd_result.value());
+        bool parted = hpx::get<0>(*snd_result);
 
         HPX_TEST(parted);
     }
@@ -67,7 +67,7 @@ void test_is_partitioned_sender(
                 [](std::size_t) { return true; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        auto parted = hpx::get<0>(snd_result.value());
+        auto parted = hpx::get<0>(*snd_result);
 
         HPX_TEST(parted);
     }
@@ -79,7 +79,7 @@ void test_is_partitioned_sender(
                 [](std::size_t) { return true; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        auto parted = hpx::get<0>(snd_result.value());
+        auto parted = hpx::get<0>(*snd_result);
 
         HPX_TEST(parted);
     }

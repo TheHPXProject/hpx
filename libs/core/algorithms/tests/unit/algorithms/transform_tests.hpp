@@ -328,7 +328,7 @@ void test_transform_sender(
         tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                           std::begin(d), add_one()) |
             hpx::transform(ex_policy.on(exec)));
-    auto result = hpx::get<0>(snd_result.value());
+    auto result = hpx::get<0>(*snd_result);
 
     HPX_TEST(result == std::end(d));
 

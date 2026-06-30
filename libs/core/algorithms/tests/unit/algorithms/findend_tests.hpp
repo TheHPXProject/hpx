@@ -54,7 +54,7 @@ void find_end_sender_pipe_compare(std::vector<int> const& c, int const* hf,
         ex::just(iterator(std::begin(c)), iterator(std::end(c)), hf, hl) |
         hpx::find_end(HPX_FORWARD(ExPolicy, ex_policy).on(exec)));
 
-    iterator index = hpx::get<0>(snd_result.value());
+    iterator index = hpx::get<0>(*snd_result);
 
     iterator test_index =
         std::find_end(iterator(std::begin(c)), iterator(std::end(c)), hf, hl);
@@ -148,7 +148,7 @@ void test_find_end1_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(h), std::begin(h)) |
             hpx::find_end(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         HPX_TEST(iterator(std::end(c)) == result);
     }
@@ -160,7 +160,7 @@ void test_find_end1_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(h), std::end(h)) |
             hpx::find_end(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         HPX_TEST(iterator(std::begin(c)) == result);
     }

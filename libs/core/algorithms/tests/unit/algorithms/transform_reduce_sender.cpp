@@ -60,7 +60,7 @@ void test_transform_reduce_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)), init,
                 reduce_op, convert_op) |
             hpx::transform_reduce(ex_policy.on(exec)));
-        result_type result = hpx::get<0>(snd_result.value());
+        result_type result = hpx::get<0>(*snd_result);
 
         // verify values
         result_type expected = std::accumulate(std::begin(c), std::end(c), init,
@@ -79,7 +79,7 @@ void test_transform_reduce_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)), init,
                 reduce_op, convert_op) |
             hpx::transform_reduce(ex_policy.on(exec)));
-        result_type result = hpx::get<0>(snd_result.value());
+        result_type result = hpx::get<0>(*snd_result);
 
         // verify values
         result_type expected = std::accumulate(std::begin(c), std::begin(c),

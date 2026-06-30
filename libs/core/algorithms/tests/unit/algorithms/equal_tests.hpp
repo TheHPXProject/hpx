@@ -132,7 +132,7 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(std::begin(c1), std::end(c1), std::begin(c2)) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -150,7 +150,7 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                               iterator(std::end(c1)), std::begin(c2)) |
                 hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -167,7 +167,7 @@ void test_equal1_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                               iterator(std::begin(c1)), std::begin(c2)) |
                 hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(result);
     }
@@ -322,7 +322,7 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -340,7 +340,7 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::equal(std::begin(c1), std::end(c1), std::begin(c2));
@@ -357,7 +357,7 @@ void test_equal2_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                 std::begin(c2), std::equal_to<>()) |
             hpx::equal(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(result);
     }

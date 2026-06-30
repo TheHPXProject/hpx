@@ -94,7 +94,7 @@ void test_none_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 [](auto v) { return v != 0; }) |
             hpx::none_of(ex_policy.on(exec)));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         // verify values
         bool expected = std::none_of(
