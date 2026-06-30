@@ -87,7 +87,7 @@ void test_adjacent_find_sender(
             hpx::adjacent_find(ex_policy.on(exec)));
         HPX_TEST(snd_result.has_value());
 
-        iterator index = hpx::get<0>(snd_result.value());
+        iterator index = hpx::get<0>(*snd_result);
         base_iterator test_index =
             std::begin(c) + static_cast<std::ptrdiff_t>(random_pos);
 
@@ -101,7 +101,7 @@ void test_adjacent_find_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::adjacent_find(ex_policy.on(exec)));
         HPX_TEST(snd_result.has_value());
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         HPX_TEST(iterator(std::begin(c)) == result);
     }

@@ -53,7 +53,7 @@ void test_lexicographical_compare_sender(
                 std::begin(d), std::end(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
 
-        bool res = hpx::get<0>(snd_result.value());
+        bool res = hpx::get<0>(*snd_result);
 
         HPX_TEST(!res);
     }
@@ -65,7 +65,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(d), std::end(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(result);
     }
@@ -77,7 +77,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(d), std::begin(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(!result);
     }
@@ -89,7 +89,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(d), std::begin(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         HPX_TEST(!result);
     }

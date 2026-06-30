@@ -101,7 +101,7 @@ void test_count_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
         ex::just(iterator(std::begin(c)), iterator(std::end(c)), int(0)) |
         hpx::count(ex_policy.on(exec)));
 
-    std::int64_t num_items = hpx::get<0>(snd_result.value());
+    std::int64_t num_items = hpx::get<0>(*snd_result);
 
     HPX_TEST_EQ(num_items, static_cast<std::int64_t>(find_count));
 }

@@ -170,7 +170,7 @@ void test_is_heap_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_heap(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool solution = std::is_heap(std::begin(c), std::end(c));
 
@@ -184,7 +184,7 @@ void test_is_heap_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_heap(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool solution = std::is_heap(std::begin(c), std::begin(c));
 
@@ -199,7 +199,7 @@ void test_is_heap_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_heap(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool solution = std::is_heap(std::begin(c), ++std::begin(c));
 
@@ -235,7 +235,7 @@ void test_is_heap_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_heap_until(ex_policy.on(exec)));
 
-        iterator result = hpx::get<0>(snd_result.value());
+        iterator result = hpx::get<0>(*snd_result);
 
         auto solution = std::is_heap_until(std::begin(c), std::end(c));
 
@@ -249,7 +249,7 @@ void test_is_heap_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_heap_until(ex_policy.on(exec)));
 
-        iterator result = hpx::get<0>(snd_result.value());
+        iterator result = hpx::get<0>(*snd_result);
 
         auto solution = std::is_heap_until(std::begin(c), std::begin(c));
 
@@ -264,7 +264,7 @@ void test_is_heap_until_sender(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_heap_until(ex_policy.on(exec)));
 
-        iterator result = hpx::get<0>(snd_result.value());
+        iterator result = hpx::get<0>(*snd_result);
 
         auto solution = std::is_heap_until(std::begin(c), ++std::begin(c));
 

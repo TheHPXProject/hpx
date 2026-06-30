@@ -1052,7 +1052,7 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
@@ -1136,7 +1136,7 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
@@ -1220,7 +1220,7 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
@@ -1310,7 +1310,8 @@ namespace hpx::parallel {
                 {
                     if (first2 == last2)
                     {
-                        return result_type::get(HPX_MOVE(last1));
+                        return result_type::get(
+                            detail::advance_to_sentinel(first1, last1));
                     }
                 }
 
@@ -1323,7 +1324,8 @@ namespace hpx::parallel {
                 {
                     if (diff > count)
                     {
-                        return result_type::get(HPX_MOVE(last1));
+                        return result_type::get(
+                            detail::advance_to_sentinel(first1, last1));
                     }
                 }
 
@@ -1851,7 +1853,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
@@ -1939,7 +1941,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
@@ -2028,7 +2030,7 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 

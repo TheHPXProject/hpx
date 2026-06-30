@@ -73,6 +73,7 @@ void test_find(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == iterator(test_index));
 }
 
+#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy, typename IteratorTag>
 void test_find_explicit_sender_direct(Policy l, ExPolicy&& policy, IteratorTag)
 {
@@ -132,6 +133,7 @@ void test_find_explicit_sender(Policy l, ExPolicy&& policy, IteratorTag)
 
     HPX_TEST(hpx::get<0>(*result) == iterator(test_index));
 }
+#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_async(ExPolicy&& p, IteratorTag)
@@ -158,6 +160,7 @@ void test_find_async(ExPolicy&& p, IteratorTag)
     HPX_TEST(f.get() == iterator(test_index));
 }
 
+#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy, typename IteratorTag>
 void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 {
@@ -181,7 +184,7 @@ void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 
     auto snd_result = tt::sync_wait(hpx::find(
         p.on(exec), iterator(std::begin(c)), iterator(std::end(c)), int(1)));
-    auto result = hpx::get<0>(snd_result.value());
+    auto result = hpx::get<0>(*snd_result);
 
     // create iterator at position of value to be found
     base_iterator test_index =
@@ -189,6 +192,7 @@ void test_find_explicit_sender_direct_async(Policy l, ExPolicy&& p, IteratorTag)
 
     HPX_TEST(result == iterator(test_index));
 }
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>

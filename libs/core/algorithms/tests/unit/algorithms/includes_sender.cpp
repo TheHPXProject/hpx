@@ -64,7 +64,7 @@ void test_includes1_sender(
                               iterator(std::end(c1)), start_it, end_it) |
                 hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected =
             std::includes(std::begin(c1), std::end(c1), start_it, end_it);
@@ -95,7 +95,7 @@ void test_includes1_sender(
                     std::begin(c2), std::end(c2)) |
                 hpx::includes(ex_policy.on(exec)));
 
-            bool result = hpx::get<0>(snd_result.value());
+            bool result = hpx::get<0>(*snd_result);
 
             bool expected = std::includes(
                 std::begin(c1), std::end(c1), std::begin(c2), std::end(c2));
@@ -145,7 +145,7 @@ void test_includes2_sender(
                 end_it, std::less<std::size_t>()) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected = std::includes(std::begin(c1), std::end(c1), start_it,
             end_it, std::less<std::size_t>());
@@ -176,7 +176,7 @@ void test_includes2_sender(
                     std::begin(c2), std::end(c2), std::less<std::size_t>()) |
                 hpx::includes(ex_policy.on(exec)));
 
-            bool result = hpx::get<0>(snd_result.value());
+            bool result = hpx::get<0>(*snd_result);
 
             bool expected = std::includes(std::begin(c1), std::end(c1),
                 std::begin(c2), std::end(c2), std::less<std::size_t>());
@@ -214,7 +214,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::end(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected = std::includes(std::begin(c), std::begin(c),
             std::begin(c), std::end(c), std::less<std::size_t>{});
@@ -231,7 +231,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::begin(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected = std::includes(std::begin(c), std::end(c), std::begin(c),
             std::begin(c), std::less<std::size_t>{});
@@ -248,7 +248,7 @@ void test_includes_edge_cases_sender(
                 std::begin(c), std::begin(c), std::less<std::size_t>{}) |
             hpx::includes(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
 
         bool expected = std::includes(std::begin(c), std::begin(c),
             std::begin(c), std::begin(c), std::less<std::size_t>{});

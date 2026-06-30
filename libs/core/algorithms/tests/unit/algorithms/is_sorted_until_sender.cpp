@@ -49,7 +49,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(snd_result.value());
+        iterator until = hpx::get<0>(*snd_result);
 
         HPX_TEST(until == iterator(std::end(c)));
     }
@@ -60,7 +60,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(snd_result.value());
+        iterator until = hpx::get<0>(*snd_result);
 
         HPX_TEST(until == iterator(std::begin(c)));
     }
@@ -71,7 +71,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(snd_result.value());
+        iterator until = hpx::get<0>(*snd_result);
 
         HPX_TEST(until == iterator(++std::begin(c)));
     }

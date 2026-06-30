@@ -61,7 +61,7 @@ void test_ends_with_sender(
                               iterator(std::end(some_more_ints))) |
                 hpx::ends_with(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
         HPX_TEST(result);
     }
 
@@ -73,7 +73,7 @@ void test_ends_with_sender(
                               iterator(std::end(some_wrong_ints))) |
                 hpx::ends_with(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
         HPX_TEST(!result);
     }
 
@@ -87,7 +87,7 @@ void test_ends_with_sender(
                               iterator(std::end(some_ints))) |
                 hpx::ends_with(ex_policy.on(exec)));
 
-        bool result = hpx::get<0>(snd_result.value());
+        bool result = hpx::get<0>(*snd_result);
         HPX_TEST(!result);
     }
 }

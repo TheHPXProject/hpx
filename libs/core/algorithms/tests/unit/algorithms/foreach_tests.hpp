@@ -396,7 +396,7 @@ void test_for_each_n_sender(
         tt::sync_wait(ex::just(iterator(std::begin(c)), c.size(), set_42()) |
             hpx::for_each_n(ex_policy.on(exec)));
 
-    iterator result = hpx::get<0>(snd_result.value());
+    iterator result = hpx::get<0>(*snd_result);
 
     iterator end = iterator(std::end(c));
     HPX_TEST(result == end);

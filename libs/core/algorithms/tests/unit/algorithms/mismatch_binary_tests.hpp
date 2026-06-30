@@ -512,7 +512,7 @@ void test_mismatch_binary1_sender(
         auto snd_result =
             tt::sync_wait(ex::just(begin1, end1, std::begin(c2), std::end(c2)) |
                 hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         // verify values
         HPX_TEST_EQ(
@@ -528,7 +528,7 @@ void test_mismatch_binary1_sender(
         auto snd_result =
             tt::sync_wait(ex::just(begin1, end1, std::begin(c2), std::end(c2)) |
                 hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         // verify values
         HPX_TEST_EQ(
@@ -567,7 +567,7 @@ void test_mismatch_binary2_sender(
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2),
                                             std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         // verify values
         HPX_TEST_EQ(
@@ -583,7 +583,7 @@ void test_mismatch_binary2_sender(
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2),
                                             std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         // verify values
         HPX_TEST_EQ(
@@ -599,7 +599,7 @@ void test_mismatch_binary2_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::begin(c1)),
                 std::begin(c2), std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         // verify values
         HPX_TEST(result.first.base() == std::begin(c1));

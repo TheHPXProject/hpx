@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -330,6 +331,83 @@ void find_bad_alloc_test()
     test_find_bad_alloc<std::forward_iterator_tag>();
 }
 
+template <typename IteratorTag>
+void test_find_last_sentinel(IteratorTag)
+{
+    using namespace hpx::execution;
+    typedef std::vector<std::size_t>::iterator base_iterator;
+    typedef test::test_iterator<base_iterator, IteratorTag> iterator;
+    using test_vector =
+        test::test_sentinel_container<std::vector<std::size_t>, IteratorTag>;
+
+    test_vector c(1007);
+    std::fill(std::begin(c.base()), std::end(c.base()), dis(gen));
+    c.base().at(c.size() / 2) = 1;
+    c.base().at(c.size() - 50) = 1;
+
+    auto pred = [](std::size_t val) { return val == 1; };
+
+    // find_last
+    {
+        auto result = hpx::ranges::find_last(c, std::size_t(1));
+        base_iterator test_index =
+            std::begin(c.base()) + static_cast<std::ptrdiff_t>(c.size() - 50);
+        HPX_TEST(result.begin() == iterator(test_index));
+    }
+    {
+        auto result = hpx::ranges::find_last(seq, c, std::size_t(1));
+        base_iterator test_index =
+            std::begin(c.base()) + static_cast<std::ptrdiff_t>(c.size() - 50);
+        HPX_TEST(result.begin() == iterator(test_index));
+    }
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        auto result = hpx::ranges::find_last(par, c, std::size_t(1));
+        base_iterator test_index =
+            std::begin(c.base()) + static_cast<std::ptrdiff_t>(c.size() - 50);
+        HPX_TEST(result.begin() == iterator(test_index));
+    }
+
+    // find_last_if
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        auto result = hpx::ranges::find_last_if(par, c, pred);
+        base_iterator test_index =
+            std::begin(c.base()) + static_cast<std::ptrdiff_t>(c.size() - 50);
+        HPX_TEST(result.begin() == iterator(test_index));
+    }
+
+    // find_last_if_not
+    {
+        auto result = hpx::ranges::find_last_if_not(c, pred);
+        base_iterator test_index =
+            std::begin(c.base()) + static_cast<std::ptrdiff_t>(c.size() - 50);
+        c.base().back() = 5;
+        auto result2 = hpx::ranges::find_last_if_not(c, pred);
+        HPX_TEST(
+            result2.begin() == iterator(std::begin(c.base()) + c.size() - 1));
+    }
+    {
+        c.base().back() = 5;
+        auto result = hpx::ranges::find_last_if_not(seq, c, pred);
+        HPX_TEST(
+            result.begin() == iterator(std::begin(c.base()) + c.size() - 1));
+    }
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        c.base().back() = 5;
+        auto result = hpx::ranges::find_last_if_not(par, c, pred);
+        HPX_TEST(
+            result.begin() == iterator(std::begin(c.base()) + c.size() - 1));
+    }
+}
+
+void find_last_range_test()
+{
+    test_find_last_sentinel(std::random_access_iterator_tag());
+    test_find_last_sentinel(std::bidirectional_iterator_tag());
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -341,6 +419,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     find_test();
     find_exception_test();
     find_bad_alloc_test();
+    find_last_range_test();
     return hpx::local::finalize();
 }
 

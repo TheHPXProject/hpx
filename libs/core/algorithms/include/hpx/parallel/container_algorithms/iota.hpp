@@ -189,9 +189,8 @@ namespace hpx::ranges {
             )
         // clang-format on
         friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            iota_result<FwdIter, T>>
-        tag_fallback_invoke(
-            iota_t, ExPolicy&& policy, FwdIter first, Sent last, T value)
+            iota_result<FwdIter, T>> tag_fallback_invoke(iota_t,
+            ExPolicy&& policy, FwdIter first, Sent last, T value)
         {
             auto dist = hpx::parallel::detail::distance(first, last);
 

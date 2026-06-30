@@ -110,7 +110,7 @@ void test_transform_reduce_binary_sender(
             tt::sync_wait(ex::just(iterator(std::begin(c)),
                               iterator(std::end(c)), std::begin(d), init) |
                 hpx::transform_reduce(ex_policy.on(exec)));
-        int result = hpx::get<0>(snd_result.value());
+        int result = hpx::get<0>(*snd_result);
 
         HPX_TEST_EQ(result,
             std::inner_product(
@@ -124,7 +124,7 @@ void test_transform_reduce_binary_sender(
             tt::sync_wait(ex::just(iterator(std::begin(c)),
                               iterator(std::begin(c)), std::begin(d), init) |
                 hpx::transform_reduce(ex_policy.on(exec)));
-        int result = hpx::get<0>(snd_result.value());
+        int result = hpx::get<0>(*snd_result);
 
         HPX_TEST_EQ(init, result);
         HPX_TEST_EQ(result,

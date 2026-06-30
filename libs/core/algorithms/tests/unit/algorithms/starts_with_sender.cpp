@@ -59,7 +59,7 @@ void test_starts_with_sender(
                               iterator(std::begin(some_more_ints)),
                               iterator(std::end(some_more_ints))) |
                 hpx::starts_with(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         HPX_TEST_EQ(result, true);
     }
@@ -73,7 +73,7 @@ void test_starts_with_sender(
                               iterator(std::begin(some_wrong_ints)),
                               iterator(std::end(some_wrong_ints))) |
                 hpx::starts_with(ex_policy.on(exec)));
-        auto result = hpx::get<0>(snd_result.value());
+        auto result = hpx::get<0>(*snd_result);
 
         HPX_TEST_EQ(result, false);
     }
