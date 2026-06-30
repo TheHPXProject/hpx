@@ -14,6 +14,7 @@
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/collectives.hpp>
+#include <hpx/modules/filesystem.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
@@ -79,8 +80,8 @@ void create_parent_dir(std::filesystem::path const& file_path)
         }
         else
         {
-            throw std::runtime_error(
-                "Failed to create directory: " + dir_path.string());
+            throw std::runtime_error("Failed to create directory: " +
+                hpx::filesystem::to_string(dir_path));
         }
     }
 }

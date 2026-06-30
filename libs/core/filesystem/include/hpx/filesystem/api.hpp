@@ -36,9 +36,19 @@ namespace hpx::filesystem {
         return ip;
     }
 
+    HPX_CXX_CORE_EXPORT [[nodiscard]] inline std::string to_string(
+        path const& p)
+    {
+#if defined(__GLIBCXX__) && __cplusplus >= 202400L
+        return p.display_string();
+#else
+        return p.string();
+#endif
+    }
+
     HPX_CXX_CORE_EXPORT [[nodiscard]] inline std::string basename(path const& p)
     {
-        return p.stem().string();
+        return to_string(p.stem());
     }
 
     HPX_CXX_CORE_EXPORT [[nodiscard]] inline path canonical(
@@ -85,6 +95,12 @@ namespace hpx::filesystem {
     HPX_CXX_CORE_EXPORT using namespace boost::filesystem;
 
     HPX_CXX_CORE_EXPORT using boost::filesystem::canonical;
+
+    HPX_CXX_CORE_EXPORT [[nodiscard]] inline std::string to_string(
+        path const& p)
+    {
+        return p.string();
+    }
 
     HPX_CXX_CORE_EXPORT [[nodiscard]] inline path canonical(
         path const& p, path const& base, std::error_code& ec)

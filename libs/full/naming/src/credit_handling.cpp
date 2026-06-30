@@ -267,9 +267,10 @@ namespace hpx::naming {
                 // An early decref can't happen as the id_type with the new
                 // credit is guaranteed to arrive only after we incremented the
                 // credit successfully in agas.
-                HPX_ASSERT(get_log2credit_from_gid(gid) > 0);
+                HPX_ASSERT(has_credits(gid));
                 std::int16_t const src_log2credits =
                     get_log2credit_from_gid(gid);
+                HPX_ASSERT(src_log2credits > 0);
 
                 // Credit exhaustion - we need to get more.
                 if (src_log2credits == 1)
@@ -366,6 +367,7 @@ namespace hpx::naming {
         {
             HPX_ASSERT_OWNS_LOCK(l);
 
+            HPX_ASSERT(has_credits(id));
             std::int16_t const log2credits = get_log2credit_from_gid(id);
             HPX_ASSERT(log2credits > 0);
 

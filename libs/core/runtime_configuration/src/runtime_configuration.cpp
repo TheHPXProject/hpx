@@ -568,17 +568,17 @@ namespace hpx::util {
             if (fsec)
                 canonical_p = this_p;
 
-            if (auto const [it, ok] =
-                    component_paths.emplace(canonical_p.string());
+            if (auto const [it, ok] = component_paths.emplace(
+                    hpx::filesystem::to_string(canonical_p));
                 ok)
             {
                 // have all path elements, now find ini files in there...
                 fs::path const this_path(*it);
                 if (fs::exists(this_path, fsec) && !fsec)
                 {
-                    plugin_list_type tmp_regs =
-                        util::init_ini_data_default(this_path.string(), *this,
-                            basenames, modules_, component_registries);
+                    plugin_list_type tmp_regs = util::init_ini_data_default(
+                        hpx::filesystem::to_string(this_path), *this, basenames,
+                        modules_, component_registries);
 
                     std::copy(tmp_regs.begin(), tmp_regs.end(),
                         std::back_inserter(plugin_registries));

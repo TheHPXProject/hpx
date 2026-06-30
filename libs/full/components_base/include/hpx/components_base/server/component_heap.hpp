@@ -24,19 +24,22 @@ namespace hpx::components {
         struct HPX_ALWAYS_EXPORT component_heap_impl;
 
         HPX_CXX_EXPORT template <typename Component>
-        Component::heap_type& component_heap_helper(
-            typename detail::component_heap_impl<Component>::valid*)
-        {
-            return detail::component_heap_impl<Component>::call();
-        }
-
-        HPX_CXX_EXPORT template <typename Component>
-        HPX_ALWAYS_EXPORT Component::heap_type& component_heap_helper(...);
+        HPX_ALWAYS_EXPORT Component::heap_type& component_heap_helper();
     }    // namespace detail
 
     HPX_CXX_EXPORT template <typename Component>
     Component::heap_type& component_heap()
     {
-        return detail::component_heap_helper<Component>(nullptr);
+        if constexpr (requires {
+                          typename detail::component_heap_impl<
+                              Component>::valid;
+                      })
+        {
+            return detail::component_heap_impl<Component>::call();
+        }
+        else
+        {
+            return detail::component_heap_helper<Component>();
+        }
     }
 }    // namespace hpx::components
