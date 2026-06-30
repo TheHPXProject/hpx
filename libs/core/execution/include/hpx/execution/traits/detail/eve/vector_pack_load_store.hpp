@@ -17,6 +17,7 @@
 #include <eve/module/core.hpp>
 
 #include <memory>
+#include <type_traits>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::traits {
@@ -36,7 +37,14 @@ namespace hpx::parallel::traits {
         template <typename Iter>
         HPX_HOST_DEVICE HPX_FORCEINLINE static V unaligned(Iter& iter)
         {
-            return *iter;
+            if constexpr (std::is_same_v<V, ValueType>)
+            {
+                return *iter;
+            }
+            else
+            {
+                return V(std::addressof(*iter));
+            }
         }
     };
 
@@ -57,7 +65,14 @@ namespace hpx::parallel::traits {
         HPX_HOST_DEVICE HPX_FORCEINLINE static void unaligned(
             V& value, Iter& iter)
         {
-            *iter = value;
+            if constexpr (std::is_same_v<V, ValueType>)
+            {
+                *iter = value;
+            }
+            else
+            {
+                eve::store(value, std::addressof(*iter));
+            }
         }
     };
 }    // namespace hpx::parallel::traits
