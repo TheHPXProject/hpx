@@ -306,9 +306,8 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter>::type tag_fallback_invoke(shift_left_t, ExPolicy&& policy,
-            FwdIter first, FwdIter last, Size n)
+        friend decltype(auto) tag_fallback_invoke(shift_left_t,
+            ExPolicy&& policy, FwdIter first, FwdIter last, Size n)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
