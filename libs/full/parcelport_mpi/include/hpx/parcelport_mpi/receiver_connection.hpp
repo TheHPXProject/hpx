@@ -42,7 +42,7 @@ namespace hpx::parcelset::policies::mpi {
             acked_data = 6
         };
 
-        using buffer_type = parcel_buffer<>;
+        using buffer_type = parcel_buffer;
 
         constexpr int ack_tag() const noexcept
         {

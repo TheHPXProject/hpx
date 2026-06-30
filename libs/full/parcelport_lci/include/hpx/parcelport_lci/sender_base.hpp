@@ -63,7 +63,7 @@ namespace hpx::parcelset::policies::lci {
         bool background_work(size_t num_thread) noexcept;
 
         // connectionless interface
-        using parcel_buffer_type = parcel_buffer<>;
+        using parcel_buffer_type = parcel_buffer;
         using callback_fn_type =
             hpx::move_only_function<void(error_code const&)>;
 

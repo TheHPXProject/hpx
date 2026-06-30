@@ -1,5 +1,5 @@
 //  Copyright (c) 2016 Thomas Heller
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,14 +10,16 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/lcos_local.hpp>
-#include <hpx/modules/naming.hpp>
-#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/serialization.hpp>
 
 #include <hpx/modules/actions.hpp>
+#include <hpx/modules/naming.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
 #include <hpx/parcelset/detail/parcel_await.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -34,7 +36,7 @@ namespace hpx::parcelset::detail {
 
         // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
         parcel_await_base(Parcel&& parcel, Handler&& handler,
-            std::uint32_t archive_flags, put_parcel_type pp) noexcept
+            std::uint32_t const archive_flags, put_parcel_type pp) noexcept
           : put_parcel_(HPX_MOVE(pp))
           , parcel_(HPX_MOVE(parcel))
           , handler_(HPX_MOVE(handler))
@@ -101,7 +103,7 @@ namespace hpx::parcelset::detail {
             write_handler_type, parcel_await>;
 
         parcel_await(parcelset::parcel&& p, write_handler_type&& f,
-            std::uint32_t archive_flags, put_parcel_type pp) noexcept
+            std::uint32_t const archive_flags, put_parcel_type pp) noexcept
           : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp))
         {
         }
@@ -123,10 +125,9 @@ namespace hpx::parcelset::detail {
             std::vector<write_handler_type>, parcels_await>;
 
         parcels_await(std::vector<parcelset::parcel>&& p,
-            std::vector<write_handler_type>&& f, std::uint32_t archive_flags,
-            put_parcel_type pp) noexcept
+            std::vector<write_handler_type>&& f,
+            std::uint32_t const archive_flags, put_parcel_type pp) noexcept
           : base_type(HPX_MOVE(p), HPX_MOVE(f), archive_flags, HPX_MOVE(pp))
-          , idx_(0)
         {
         }
 
@@ -140,7 +141,7 @@ namespace hpx::parcelset::detail {
             done();
         }
 
-        std::size_t idx_;
+        std::size_t idx_ = 0;
     };
 
     ///////////////////////////////////////////////////////////////////////////

@@ -18,7 +18,9 @@
 #include <hpx/modules/threading_base.hpp>
 
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/parcelset_base/locality.hpp>
+#include <hpx/parcelset_base/parcel_buffer.hpp>
 #include <hpx/parcelset_base/policies/message_handler.hpp>
 
 #include <cstddef>
@@ -170,7 +172,7 @@ namespace hpx::parcelset {
 
         [[nodiscard]] bool does_termination_detection() const;
 
-        split_gids_type move_split_gids() const;
+        [[nodiscard]] split_gids_type move_split_gids() const;
         void set_split_gids(split_gids_type&& split_gids) const;
 
         [[nodiscard]] std::size_t num_chunks() const;

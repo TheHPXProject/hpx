@@ -269,9 +269,8 @@ namespace hpx::parcelset {
 
         //// the maximum size of zero-copy chunks per message received
         std::int64_t get_zchunks_recv_size_max(bool reset);
-#endif
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
         // same as above, just separated data for each action
         // number of parcels sent
         std::int64_t get_action_parcel_send_count(
@@ -297,23 +296,21 @@ namespace hpx::parcelset {
         // total data received (bytes)
         std::int64_t get_action_data_received(std::string const&, bool reset);
 #endif
-        std::int64_t get_pending_parcels_count(bool /*reset*/);
 
         ///////////////////////////////////////////////////////////////////////
         /// Update performance counter data
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
         void add_received_data(parcelset::data_point const& data);
 
         void add_sent_data(parcelset::data_point const& data);
-#endif
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+
         void add_received_data(
             char const* action, parcelset::data_point const& data);
 
         void add_sent_data(
             char const* action, parcelset::data_point const& data);
 #endif
+
+        std::int64_t get_pending_parcels_count(bool /*reset*/);
 
         /// Return the configured maximal allowed inbound message data
         /// size
@@ -364,12 +361,11 @@ namespace hpx::parcelset {
         // Overall parcel statistics
         parcelset::gatherer parcels_sent_;
         parcelset::gatherer parcels_received_;
-#endif
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
         // Per-action based parcel statistics
         detail::per_action_data_counter action_parcels_sent_;
         detail::per_action_data_counter action_parcels_received_;
+#endif
 #endif
 
         /// serialization is allowed to use array optimization

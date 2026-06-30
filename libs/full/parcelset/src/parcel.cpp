@@ -9,14 +9,9 @@
 
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/assert.hpp>
-#include <hpx/modules/actions_base.hpp>
-#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
-
-#include <hpx/modules/naming.hpp>
-#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -24,6 +19,10 @@
 #include <hpx/modules/tracing.hpp>
 
 #include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/naming.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcelset/parcel.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
 
@@ -45,7 +44,6 @@ namespace hpx::parcelset::detail {
       , creation_time_(chrono::high_resolution_timer::now())
 
 #endif
-      , has_continuation_(false)
     {
     }
 
@@ -180,11 +178,7 @@ namespace hpx::parcelset::detail {
     }
 #endif
 
-    parcel::parcel()
-      : size_(0)
-      , num_chunks_(0)
-    {
-    }
+    parcel::parcel() = default;
 
     parcel::~parcel() = default;
 
@@ -192,8 +186,6 @@ namespace hpx::parcelset::detail {
         std::unique_ptr<actions::base_action> act)
       : data_(HPX_MOVE(dest), HPX_MOVE(addr), act->has_continuation())
       , action_(HPX_MOVE(act))
-      , size_(0)
-      , num_chunks_(0)
     {
     }
 
@@ -201,6 +193,10 @@ namespace hpx::parcelset::detail {
     {
         data_ = detail::parcel_data();
         action_.reset();
+
+        split_gids_.clear();
+        size_ = 0;
+        num_chunks_ = 0;
     }
 
     char const* parcel::get_action_name() const

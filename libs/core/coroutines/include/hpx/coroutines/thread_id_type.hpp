@@ -1,5 +1,5 @@
 //  Copyright (c) 2018 Thomas Heller
-//  Copyright (c) 2019-2025 Hartmut Kaiser
+//  Copyright (c) 2019-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -248,8 +248,8 @@ namespace hpx::threads {
         {
         }
 
-        thread_id_ref(thread_id&& noref) noexcept
-          : thrd_(static_cast<thread_repr*>(noref.get()))
+        thread_id_ref(thread_id&& noref, bool const add_ref = true) noexcept
+          : thrd_(static_cast<thread_repr*>(noref.get()), add_ref)
         {
             noref.reset();
         }
@@ -384,6 +384,37 @@ namespace hpx::threads {
 #else
     HPX_CXX_CORE_EXPORT inline constexpr thread_id const invalid_thread_id;
 #endif
+
+    // This data type allows to optionally keep the provided thread_id alive
+    struct keep_alive_thread_id
+    {
+        explicit keep_alive_thread_id(
+            hpx::threads::thread_id id, bool const add_ref) noexcept
+          : add_ref(add_ref)
+          , id(HPX_MOVE(id), add_ref)
+        {
+        }
+
+        keep_alive_thread_id(keep_alive_thread_id const& other) = delete;
+        keep_alive_thread_id(keep_alive_thread_id&& other) = default;
+
+        keep_alive_thread_id& operator=(
+            keep_alive_thread_id const& other) = delete;
+        keep_alive_thread_id& operator=(keep_alive_thread_id&& other) = default;
+
+        ~keep_alive_thread_id()
+        {
+            // prevent for the reference count to be decremented if it was
+            // not incremented in the constructor
+            if (!add_ref)
+            {
+                [[maybe_unused]] auto* p = id.get().detach();
+            }
+        }
+
+        bool add_ref;
+        hpx::threads::thread_id_ref id;
+    };
 }    // namespace hpx::threads
 
 namespace std {

@@ -255,12 +255,12 @@ namespace hpx::agas {
     }    // }}}
 
     template <typename Action, typename... Args>
-    void big_boot_barrier::apply_late(std::uint32_t /* source_locality_id */
-        ,
-        std::uint32_t target_locality_id, parcelset::locality const& /* dest */
-        ,
-        Action act, Args&&... args)
-    {    // {{{
+    void big_boot_barrier::apply_late(
+        [[maybe_unused]] std::uint32_t source_locality_id,
+        std::uint32_t target_locality_id,
+        [[maybe_unused]] parcelset::locality const& dest, Action act,
+        Args&&... args)
+    {
         naming::address addr(
             naming::get_gid_from_locality_id(target_locality_id));
 
@@ -268,7 +268,7 @@ namespace hpx::agas {
             hpx::id_type(naming::get_gid_from_locality_id(target_locality_id),
                 hpx::id_type::management_type::unmanaged),
             HPX_MOVE(addr), act, HPX_FORWARD(Args, args)...);
-    }    // }}}
+    }
 
     //typedef components::detail::heap_factory<
     //    lcos::detail::promise<
