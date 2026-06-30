@@ -355,8 +355,8 @@ namespace hpx::execution::experimental::detail {
         // task yields cooperatively rather than the OS thread being blocked,
         // avoiding deadlock with --hpx:threads=1.
         template <typename Sender>
-            requires hpx::execution::experimental::sender_in<Sender,
-                sync_wait_rcv_env<Sender>>
+            requires(hpx::execution::experimental::sender_in<Sender,
+                sync_wait_rcv_env<Sender>>)
         auto apply_sender(hpx::execution::experimental::sync_wait_t,
             Sender&& sndr) const -> std::optional<value_tuple_for_t<Sender>>
         {
@@ -373,9 +373,9 @@ namespace hpx::execution::experimental::detail {
         }
 
         template <typename Sender>
-            requires hpx::execution::experimental::sender_in<
+            requires(hpx::execution::experimental::sender_in<
                 into_variant_sender_t<Sender>,
-                sync_wait_rcv_env<into_variant_sender_t<Sender>>>
+                sync_wait_rcv_env<into_variant_sender_t<Sender>>>)
         auto apply_sender(
             hpx::execution::experimental::sync_wait_with_variant_t,
             Sender&& sndr) const -> std::optional<value_variant_for_t<Sender>>

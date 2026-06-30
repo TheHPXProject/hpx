@@ -61,56 +61,56 @@ namespace hpx::traits {
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T, typename U>
-            requires requires(T t, U u) { t + u; }
+            requires(requires(T t, U u) { t + u; })
         using addition_result_t =
             decltype(std::declval<T>() + std::declval<U>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T>
-            requires requires(T t) { *t; }
+            requires(requires(T t) { *t; })
         using dereference_result_t = decltype(*(std::declval<T&>()));
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T, typename U>
-            requires requires(T t, U u) { t += u; }
+            requires(requires(T t, U u) { t += u; })
         using inplace_addition_result_t =
             decltype(std::declval<T>() += std::declval<U>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T, typename U>
-            requires requires(T t, U u) { t - u; }
+            requires(requires(T t, U u) { t - u; })
         using subtraction_result_t =
             decltype(std::declval<T>() - std::declval<U>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T, typename U>
-            requires requires(T t, U u) { t -= u; }
+            requires(requires(T t, U u) { t -= u; })
         using inplace_subtraction_result_t =
             decltype(std::declval<T>() -= std::declval<U>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T>
-            requires requires(T t) { --t; }
+            requires(requires(T t) { --t; })
         using predecrement_result_t = decltype(--std::declval<T&>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T>
-            requires requires(T t) { ++t; }
+            requires(requires(T t) { ++t; })
         using preincrement_result_t = decltype(++std::declval<T&>());
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T>
-            requires requires(T t) { t--; }
+            requires(requires(T t) { t--; })
         using postdecrement_result_t = decltype(std::declval<T&>()--);
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T>
-            requires requires(T t) { t++; }
+            requires(requires(T t) { t++; })
         using postincrement_result_t = decltype(std::declval<T&>()++);
 
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename T, typename U>
-            requires requires(T t, U u) { t[u]; }
+            requires(requires(T t, U u) { t[u]; })
         using subscript_result_t =
             decltype(std::declval<T&>()[std::declval<U>()]);
 

@@ -111,10 +111,10 @@ namespace hpx::execution::experimental {
     {
         // transform_sender for bulk operations (stdexec parallel_scheduler pattern)
         template <bulk_chunked_or_unchunked_sender Sender, typename Env>
-            requires std::same_as<
+            requires(std::same_as<
                 std::decay_t<decltype(hpx::execution::experimental::
                         get_scheduler(std::declval<Env const&>()))>,
-                thread_pool_policy_scheduler<Policy>>
+                thread_pool_policy_scheduler<Policy>>)
         constexpr auto transform_sender(
             hpx::execution::experimental::set_value_t, Sender&& sndr,
             Env const& env) const noexcept
@@ -493,8 +493,8 @@ namespace hpx::execution::experimental {
                 }
 
                 template <typename CPO>
-                    requires meta::value<
-                        meta::one_of<CPO, set_value_t, set_stopped_t>>
+                    requires(meta::value<
+                        meta::one_of<CPO, set_value_t, set_stopped_t>>)
                 auto query(
                     hpx::execution::experimental::get_completion_scheduler_t<
                         CPO>) const noexcept

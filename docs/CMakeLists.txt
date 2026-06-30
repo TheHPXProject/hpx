@@ -10,12 +10,15 @@ set(doxygen_definition_list
     "BOOST_SYSTEM_NOEXCEPT="
     "HPX_EXCEPTION_EXPORT="
     "HPX_CORE_EXPORT="
+    "HPX_CXX_CORE_EXPORT="
+    "HPX_CXX_EXPORT="
     "HPX_FULL_EXPORT="
     "HPX_EXPORT="
     "HPX_ALWAYS_EXPORT="
     "extern="
     "HPX_FORCEINLINE="
     "HPX_CONCEPT_REQUIRES_(...)="
+    "requires(...)="
     "HPX_HOST_DEVICE="
 )
 
