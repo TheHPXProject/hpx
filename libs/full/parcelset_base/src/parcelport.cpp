@@ -123,25 +123,35 @@ namespace hpx::parcelset {
     {
         parcels_sent_.add_data(data);
     }
-#endif
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+
     void parcelport::add_received_data(
-        char const* action, parcelset::data_point const& data)
+        [[maybe_unused]] char const* action, parcelset::data_point const& data)
     {
-        action_parcels_received_.add_data(action, data);
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+        if (action != nullptr)
+        {
+            action_parcels_received_.add_data(action, data);
+            return;
+        }
+#endif
+        add_received_data(data);
     }
 
     void parcelport::add_sent_data(
-        char const* action, parcelset::data_point const& data)
+        [[maybe_unused]] char const* action, parcelset::data_point const& data)
     {
-        action_parcels_sent_.add_data(action, data);
-    }
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+        if (action != nullptr)
+        {
+            action_parcels_sent_.add_data(action, data);
+            return;
+        }
 #endif
+        add_sent_data(data);
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // number of parcels sent
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
     std::int64_t parcelport::get_parcel_send_count(bool reset)
     {
         return parcels_sent_.num_parcels(reset);
@@ -274,10 +284,9 @@ namespace hpx::parcelset {
     {
         return parcels_received_.size_zchunks_max(reset);
     }
-#endif
+
     ///////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
     // same as above, just separated data for each action
     // number of parcels sent
     std::int64_t parcelport::get_action_parcel_send_count(
@@ -335,6 +344,8 @@ namespace hpx::parcelset {
         return action_parcels_received_.total_bytes(action, reset);
     }
 #endif
+#endif
+
     std::int64_t parcelport::get_pending_parcels_count(bool /*reset*/)
     {
         std::lock_guard<hpx::spinlock> l(mtx_);

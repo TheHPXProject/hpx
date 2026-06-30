@@ -46,12 +46,12 @@ namespace hpx::parcelset::policies::lci {
         device_p = &pp_->get_tls_device();
         tag = header_.get_tag();
         // decode data
-        buffer.data_.allocate(header_.numbytes_nonzero_copy());
+        buffer.data_.resize(header_.numbytes_nonzero_copy());
         char* piggy_back_data = header_.piggy_back_data();
         if (piggy_back_data)
         {
             need_recv_data = false;
-            memcpy(buffer.data_.ptr, piggy_back_data, buffer.data_.length);
+            memcpy(buffer.data_.data(), piggy_back_data, buffer.data_.size());
         }
         else
         {
@@ -355,7 +355,7 @@ namespace hpx::parcelset::policies::lci {
         util::lci_environment::pcounter_add(
             util::lci_environment::handle_parcels,
             util::lci_environment::pcounter_since(handle_parcels_start_time));
-        buffer.data_.free();
+        buffer.data_.clear();
         parcels_.clear();
         delete sharedPtr_p;
     }

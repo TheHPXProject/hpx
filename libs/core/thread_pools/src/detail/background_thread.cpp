@@ -65,17 +65,19 @@ namespace hpx::threads::detail {
             background_init, &background_thread, hpx::throws);
         HPX_ASSERT(background_thread);
 
+        auto* thread_ptr = get_thread_id_data(background_thread);
+        thread_ptr->set_is_background();
+
         scheduler_base.increment_background_thread_count();
 
         LTM_(debug).format("create_background_thread: pool({}), "
                            "scheduler({}), worker_thread({}), thread({})",
             scheduler_base.get_parent_pool(), scheduler_base, num_thread,
-            get_thread_id_data(background_thread));
+            thread_ptr);
 
         // We can now set the state to pending
         [[maybe_unused]] auto old_state =
-            get_thread_id_data(background_thread)
-                ->set_state(thread_schedule_state::pending);
+            thread_ptr->set_state(thread_schedule_state::pending);
         return background_thread;
     }
 

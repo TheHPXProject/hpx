@@ -22,7 +22,6 @@ set(parcelset_headers
     hpx/parcelset/parcelport_impl.hpp
     hpx/parcelset/parcelport_connection.hpp
     hpx/parcelset/parcelset_fwd.hpp
-    hpx/parcelset/parcel_buffer.hpp
 )
 
 set(parcelset_macro_headers hpx/parcelset/macros.hpp)
@@ -35,7 +34,6 @@ set(parcelset_compat_headers
     hpx/runtime/parcelset/decode_parcels.hpp => hpx/modules/parcelset.hpp
     hpx/runtime/parcelset/encode_parcels.hpp => hpx/modules/parcelset.hpp
     hpx/runtime/parcelset/parcel.hpp => hpx/modules/parcelset.hpp
-    hpx/runtime/parcelset/parcel_buffer.hpp => hpx/modules/parcelset.hpp
     hpx/runtime/parcelset/parcelport_connection.hpp => hpx/modules/parcelset.hpp
     hpx/runtime/parcelset/parcelhandler.hpp => hpx/modules/parcelset.hpp
     hpx/runtime/parcelset/parcelport_impl.hpp => hpx/modules/parcelset.hpp
@@ -44,8 +42,13 @@ set(parcelset_compat_headers
 # cmake-format: on
 
 set(parcelset_sources
-    detail/message_handler_interface_functions.cpp detail/parcel_await.cpp
-    message_handler.cpp parcel.cpp parcelhandler.cpp
+    decode_parcels.cpp
+    detail/message_handler_interface_functions.cpp
+    detail/parcel_await.cpp
+    encode_parcels.cpp
+    message_handler.cpp
+    parcel.cpp
+    parcelhandler.cpp
 )
 
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
@@ -63,7 +66,8 @@ add_hpx_module(
   SOURCES ${parcelset_sources}
   HEADERS ${parcelset_headers}
   ADD_TO_GLOBAL_HEADER
-    "hpx/parcelset/detail/message_handler_interface_functions.hpp" ""
+    "hpx/parcelset/detail/message_handler_interface_functions.hpp"
+    "hpx/parcelset/detail/parcel_await.hpp"
   MACRO_HEADERS ${parcelset_macro_headers}
   COMPAT_HEADERS ${parcelset_compat_headers}
   DEPENDENCIES hpx_core

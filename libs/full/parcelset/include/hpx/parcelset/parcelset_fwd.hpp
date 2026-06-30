@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -24,6 +24,7 @@ namespace hpx::parcelset {
     HPX_CXX_EXPORT template <typename ConnectionHandler>
     class parcelport_impl;
 
+    HPX_CXX_EXPORT class HPX_EXPORT parcel;
     HPX_CXX_EXPORT class HPX_EXPORT parcelhandler;
 
     namespace policies {

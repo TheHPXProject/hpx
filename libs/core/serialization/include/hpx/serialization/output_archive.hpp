@@ -162,6 +162,8 @@ namespace hpx::serialization {
                 *this << detail::raw_ptr(filter);
                 buffer_->set_filter(filter);
             }
+
+            overhead_ = base_type::current_pos();
         }
 
         template <typename Container>

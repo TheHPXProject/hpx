@@ -208,7 +208,6 @@ namespace hpx::serialization {
         // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
         explicit constexpr basic_archive(std::uint32_t const flags) noexcept
           : flags_(flags)
-          , size_(0)
         {
         }
 
@@ -317,7 +316,7 @@ namespace hpx::serialization {
 
         void reset()
         {
-            size_ = 0;
+            size_ = overhead_;
             extra_data_.reset();
         }
 
@@ -336,8 +335,9 @@ namespace hpx::serialization {
         }
 
     protected:
-        std::uint32_t flags_;
-        std::size_t size_;
+        std::uint32_t flags_ = 0;
+        std::size_t size_ = 0;
+        std::size_t overhead_ = 0;
         util::extra_data extra_data_;
     };
 

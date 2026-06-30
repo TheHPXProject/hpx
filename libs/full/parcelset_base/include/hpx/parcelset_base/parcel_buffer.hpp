@@ -12,7 +12,9 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/serialization.hpp>
 
-#include <hpx/modules/parcelset_base.hpp>
+#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
+#include <hpx/parcelset_base/detail/data_point.hpp>
+#endif
 
 #include <cstdint>
 #include <utility>
@@ -20,41 +22,33 @@
 
 namespace hpx::parcelset {
 
-    HPX_CXX_EXPORT template <typename BufferType = std::vector<char>,
-        typename ChunkType = serialization::serialization_chunk>
-    struct parcel_buffer
+    HPX_CXX_EXPORT struct parcel_buffer
     {
         using count_chunks_type = std::pair<std::uint32_t, std::uint32_t>;
         using transmission_chunk_type = std::pair<std::uint64_t, std::uint64_t>;
-        using allocator_type = typename BufferType::allocator_type;
+        using allocator_type = std::vector<char>::allocator_type;
 
         explicit parcel_buffer(
             allocator_type const& allocator = allocator_type())
           : data_(allocator)
-          , num_chunks_(count_chunks_type(0, 0))
-          , size_(0)
-          , data_size_(0)
-          , header_size_(0)
         {
         }
 
-        explicit parcel_buffer(BufferType const& data,
+        explicit parcel_buffer(std::vector<char> const& data,
             allocator_type const& allocator = allocator_type())
           : data_(data, allocator)
-          , num_chunks_(count_chunks_type(0, 0))
-          , size_(0)
-          , data_size_(0)
-          , header_size_(0)
         {
         }
 
-        explicit parcel_buffer(BufferType&& data,
-            allocator_type const& /*allocator*/ = allocator_type())
+        explicit parcel_buffer(std::vector<char>&& data) noexcept
           : data_(HPX_MOVE(data))
-          , num_chunks_(count_chunks_type(0, 0))
-          , size_(0)
-          , data_size_(0)
-          , header_size_(0)
+        {
+        }
+
+        explicit parcel_buffer(std::vector<char>&& data,
+            std::vector<serialization::serialization_chunk>&& chunks) noexcept
+          : data_(HPX_MOVE(data))
+          , chunks_(HPX_MOVE(chunks))
         {
         }
 
@@ -75,20 +69,19 @@ namespace hpx::parcelset {
 #endif
         }
 
-        BufferType data_;
-
-        std::vector<ChunkType> chunks_;
+        std::vector<char> data_;
+        std::vector<serialization::serialization_chunk> chunks_;
         std::vector<transmission_chunk_type> transmission_chunks_;
 
         // pair of (zero-copy, non-zero-copy) chunks
-        count_chunks_type num_chunks_;
+        count_chunks_type num_chunks_ = count_chunks_type(0, 0);
 
         // non-zero-copy chunk size (data_.size())
-        std::uint64_t size_;
+        std::uint64_t size_ = 0;
 
         // how many bytes in total (including zero-copy and non-zero-copy chunks)
-        std::uint64_t data_size_;
-        std::uint64_t header_size_;
+        std::uint64_t data_size_ = 0;
+        std::uint64_t header_size_ = 0;
 
         /// Counters and their data containers.
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)

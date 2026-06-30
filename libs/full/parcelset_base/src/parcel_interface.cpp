@@ -113,7 +113,7 @@ namespace hpx::parcelset {
         return data_->start_time();
     }
 
-    void parcel::set_start_time(double time) const
+    void parcel::set_start_time(double const time) const
     {
         data_->set_start_time(time);
     }
@@ -203,7 +203,7 @@ namespace hpx::parcelset {
 
     // returns true if parcel was migrated, false if scheduled locally
     bool parcel::load_schedule(serialization::input_archive& ar,
-        std::size_t num_thread, bool& deferred_schedule)
+        std::size_t const num_thread, bool& deferred_schedule)
     {
         *this = parcelset::create_parcel();
         return data_->load_schedule(ar, num_thread, deferred_schedule);

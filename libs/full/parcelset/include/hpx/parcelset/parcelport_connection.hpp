@@ -13,7 +13,8 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/serialization.hpp>
 
-#include <hpx/parcelset/parcel_buffer.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <memory>
@@ -26,7 +27,7 @@ namespace hpx::parcelset {
     struct parcelport_connection : std::enable_shared_from_this<Connection>
     {
         using buffer_type = std::vector<char>;
-        using parcel_buffer_type = parcel_buffer<>;
+        using parcel_buffer_type = parcel_buffer;
 
     protected:
         parcelport_connection& operator=(parcelport_connection const&) = delete;

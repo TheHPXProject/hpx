@@ -31,12 +31,12 @@ namespace hpx::parcelset::detail {
     HPX_CXX_EXPORT struct HPX_EXPORT parcel_data
     {
     public:
-        inline parcel_data();
-        inline parcel_data(naming::gid_type&& dest, naming::address&& addr,
+        parcel_data();
+        parcel_data(naming::gid_type&& dest, naming::address&& addr,
             bool has_continuation);
 
-        inline parcel_data(parcel_data&& rhs) noexcept;
-        inline parcel_data& operator=(parcel_data&& rhs) noexcept;
+        parcel_data(parcel_data&& rhs) noexcept;
+        parcel_data& operator=(parcel_data&& rhs) noexcept;
 
         void serialize(serialization::input_archive& ar, unsigned);
         void serialize(serialization::output_archive& ar, unsigned) const;
@@ -47,11 +47,11 @@ namespace hpx::parcelset::detail {
 
 #if defined(HPX_HAVE_PARCEL_PROFILING)
         naming::gid_type parcel_id_;
-        double start_time_;
-        double creation_time_;
+        double start_time_ = 0.0;
+        double creation_time_ = 0.0;
 #endif
 
-        bool has_continuation_;
+        bool has_continuation_ = false;
     };
 
     // actual parcel implementation
@@ -94,19 +94,23 @@ namespace hpx::parcelset::detail {
         naming::address const& addr() const override;
         naming::address& addr() override;
 
-        std::uint32_t destination_locality_id() const override;
-        naming::gid_type const& destination_locality() const override;
+        [[nodiscard]] std::uint32_t destination_locality_id() const override;
+        [[nodiscard]] naming::gid_type const& destination_locality()
+            const override;
 
-        double start_time() const override;
+        [[nodiscard]] double start_time() const override;
         void set_start_time(double time) override;
         double creation_time() const override;
 
-        threads::thread_priority get_thread_priority() const override;
-        threads::thread_stacksize get_thread_stacksize() const override;
+        [[nodiscard]] threads::thread_priority get_thread_priority()
+            const override;
+        [[nodiscard]] threads::thread_stacksize get_thread_stacksize()
+            const override;
 
-        std::uint32_t get_parent_locality_id() const override;
-        threads::thread_id_type get_parent_thread_id() const override;
-        std::uint64_t get_parent_thread_phase() const override;
+        [[nodiscard]] std::uint32_t get_parent_locality_id() const override;
+        [[nodiscard]] threads::thread_id_type get_parent_thread_id()
+            const override;
+        [[nodiscard]] std::uint64_t get_parent_thread_phase() const override;
 
 #if defined(HPX_HAVE_NETWORKING)
         serialization::binary_filter* get_serialization_filter() const override;
@@ -114,15 +118,15 @@ namespace hpx::parcelset::detail {
             locality const& loc) const override;
 #endif
 
-        bool does_termination_detection() const override;
+        [[nodiscard]] bool does_termination_detection() const override;
 
-        split_gids_type move_split_gids() const override;
+        [[nodiscard]] split_gids_type move_split_gids() const override;
         void set_split_gids(split_gids_type&& split_gids) override;
 
-        std::size_t num_chunks() const override;
+        [[nodiscard]] std::size_t num_chunks() const override;
         std::size_t& num_chunks() override;
 
-        std::size_t size() const override;
+        [[nodiscard]] std::size_t size() const override;
         std::size_t& size() override;
 
         bool schedule_action(std::size_t num_thread) override;
@@ -149,12 +153,14 @@ namespace hpx::parcelset::detail {
         std::pair<naming::address_type, naming::component_type> determine_lva()
             const;
 
+        // actual parcel data
         detail::parcel_data data_;
         std::unique_ptr<actions::base_action> action_;
 
+        // data needed for parcel encoding
         mutable split_gids_type split_gids_;
-        std::size_t size_;
-        std::size_t num_chunks_;
+        std::size_t size_ = 0;
+        std::size_t num_chunks_ = 0;
     };
 
     HPX_CXX_EXPORT HPX_EXPORT std::ostream& operator<<(

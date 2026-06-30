@@ -47,10 +47,8 @@ namespace hpx::parcelset::policies::mpi {
             bool piggy_back_flag_tchunk;
         };
 
-        template <typename buffer_type, typename ChunkType>
         static size_t get_header_size(
-            parcel_buffer<buffer_type, ChunkType> const& buffer,
-            size_t max_header_size) noexcept
+            parcel_buffer const& buffer, size_t max_header_size) noexcept
         {
             HPX_ASSERT(max_header_size >= sizeof(header_format_t));
 
@@ -68,8 +66,7 @@ namespace hpx::parcelset::policies::mpi {
                     static_cast<std::size_t>(
                         num_zero_copy_chunks + num_non_zero_copy_chunks));
                 std::size_t tchunk_size = buffer.transmission_chunks_.size() *
-                    sizeof(typename parcel_buffer<buffer_type,
-                        ChunkType>::transmission_chunk_type);
+                    sizeof(typename parcel_buffer::transmission_chunk_type);
                 if (tchunk_size <= max_header_size - current_header_size)
                 {
                     current_header_size += tchunk_size;
@@ -78,9 +75,8 @@ namespace hpx::parcelset::policies::mpi {
             return current_header_size;
         }
 
-        template <typename buffer_type, typename ChunkType>
-        header(parcel_buffer<buffer_type, ChunkType> const& buffer,
-            void* header_buffer, size_t max_header_size) noexcept
+        header(parcel_buffer const& buffer, void* header_buffer,
+            size_t max_header_size) noexcept
         {
             HPX_ASSERT(max_header_size >= sizeof(header_format_t));
             data_ = static_cast<char*>(header_buffer);
@@ -118,8 +114,7 @@ namespace hpx::parcelset::policies::mpi {
                         num_zero_copy_chunks + num_non_zero_copy_chunks));
                 std::size_t const tchunk_size =
                     buffer.transmission_chunks_.size() *
-                    sizeof(typename parcel_buffer<buffer_type,
-                        ChunkType>::transmission_chunk_type);
+                    sizeof(typename parcel_buffer::transmission_chunk_type);
                 HPX_ASSERT(tchunk_size <= (std::numeric_limits<int>::max)());
                 p_format_->numbytes_tchunk = tchunk_size;
                 if (tchunk_size <= max_header_size - current_header_size)
