@@ -85,7 +85,7 @@ namespace hpx::parcelset::policies::lci {
 
     struct receiver_base
     {
-        using buffer_type = parcel_buffer<buffer_wrapper>;
+        using buffer_type = parcel_buffer;
 
         explicit receiver_base(parcelport* pp) noexcept
           : pp_(pp)

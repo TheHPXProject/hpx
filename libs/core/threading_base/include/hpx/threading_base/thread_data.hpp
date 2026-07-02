@@ -142,7 +142,7 @@ namespace hpx::threads {
 
         bool set_state_tagged(thread_schedule_state const newstate,
             thread_state const& prev_state, thread_state& new_tagged_state,
-            std::memory_order exchange_order =
+            std::memory_order const exchange_order =
                 std::memory_order_acq_rel) const noexcept
         {
             new_tagged_state = thread_state(
@@ -198,7 +198,7 @@ namespace hpx::threads {
                 old_tmp, new_tmp, load_exchange);
         }
 
-        bool restore_state(thread_schedule_state new_state,
+        bool restore_state(thread_schedule_state const new_state,
             thread_restart_state const state_ex, thread_state old_state,
             std::memory_order const load_exchange =
                 std::memory_order_acq_rel) const noexcept
@@ -434,9 +434,18 @@ namespace hpx::threads {
         {
             return priority_;
         }
-        void set_priority(thread_priority priority) noexcept
+        void set_priority(thread_priority const priority) noexcept
         {
             priority_ = priority;
+        }
+
+        constexpr bool is_background() const noexcept
+        {
+            return is_background_;
+        }
+        void set_is_background() noexcept
+        {
+            is_background_ = true;
         }
 
         // handle thread interruption
@@ -480,8 +489,8 @@ namespace hpx::threads {
 
         // no need to protect the variables related to scoped children as those
         // are supposed to be accessed by ourselves only
-        bool runs_as_child(
-            std::memory_order mo = std::memory_order_acquire) const noexcept
+        bool runs_as_child(std::memory_order const mo =
+                               std::memory_order_acquire) const noexcept
         {
             return runs_as_child_.load(mo);
         }
@@ -504,7 +513,7 @@ namespace hpx::threads {
         }
 
         void set_last_worker_thread_num(
-            std::uint16_t last_worker_thread_num) noexcept
+            std::uint16_t const last_worker_thread_num) noexcept
         {
             last_worker_thread_num_ = last_worker_thread_num;
         }
@@ -602,6 +611,7 @@ namespace hpx::threads {
         bool enabled_interrupt_;
         bool ran_exit_funcs_;
         bool const is_stackless_;
+        bool is_background_;
 
         // support scoped child execution
         std::atomic<bool> runs_as_child_;
@@ -661,12 +671,14 @@ namespace hpx::threads {
     }
 
 #if defined(HPX_HAVE_TRACY)
+    // tracy implementation
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::region_init_data
     get_region_init_data(thread_data const* thrdptr);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::fiber_region_init_data
     get_fiber_region_init_data(thread_data const* thrdptr);
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
+    // ITTNotify implementation
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT tracing::region_init_data
     get_region_init_data(thread_data const* thrdptr);
 

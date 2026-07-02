@@ -35,6 +35,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin_factories.hpp>
+
 #include <hpx/parcelset/init_parcelports.hpp>
 #include <hpx/parcelset/message_handler_fwd.hpp>
 #include <hpx/parcelset/parcelhandler.hpp>
@@ -228,11 +229,10 @@ namespace hpx::parcelset {
             std::cerr << "the following parcelports will be disabled:\n";
             for (int pp : failed_pps)
             {
-                auto it = pports_.find(pp);
-                if (it != pports_.end())
+                if (auto it = pports_.find(pp); it != pports_.end())
                 {
-                    std::cerr << "  " << (*it).second->type() << "\n";
-                    (*it).second->stop();
+                    std::cerr << "  " << it->second->type() << "\n";
+                    it->second->stop();
                     pports_.erase(it);
                 }
             }
@@ -241,7 +241,8 @@ namespace hpx::parcelset {
     }
 
     void parcelhandler::list_parcelport(std::ostringstream& strm,
-        std::string const& ppname, int priority, bool bootstrap) const
+        std::string const& ppname, int const priority,
+        bool const bootstrap) const
     {
         hpx::util::format_to(strm, "parcel port: {}", ppname);
 
@@ -350,8 +351,8 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    bool parcelhandler::do_background_work(std::size_t num_thread,
-        bool stop_buffering, parcelport_background_mode mode)
+    bool parcelhandler::do_background_work(std::size_t const num_thread,
+        bool const stop_buffering, parcelport_background_mode const mode)
     {
         bool did_some_work = false;
         if (!is_networking_enabled_)
@@ -369,7 +370,7 @@ namespace hpx::parcelset {
         {
             std::unique_lock<mutex_type> l(handlers_mtx_, std::try_to_lock);
 
-            if (l.owns_lock())
+            if (l.owns_lock() && !handlers_.empty())
             {
                 using parcelset::policies::message_handler;
                 constexpr message_handler::flush_mode flush_mode =
@@ -378,10 +379,10 @@ namespace hpx::parcelset {
                 auto const end = handlers_.end();
                 for (auto it = handlers_.begin(); it != end; ++it)
                 {
-                    if ((*it).second)
+                    if (it->second)
                     {
                         std::shared_ptr<policies::message_handler> const p(
-                            (*it).second);
+                            it->second);
                         unlock_guard<std::unique_lock<mutex_type>> ul(l);
                         did_some_work = p->flush(flush_mode, stop_buffering) ||
                             did_some_work;
@@ -419,7 +420,7 @@ namespace hpx::parcelset {
         }
     }
 
-    void parcelhandler::stop(bool blocking)
+    void parcelhandler::stop(bool const blocking)
     {
         // now stop all parcel ports
         for (pports_type::value_type const& pp : pports_)
@@ -436,7 +437,7 @@ namespace hpx::parcelset {
 
     bool parcelhandler::get_raw_remote_localities(
         std::vector<naming::gid_type>& locality_ids,
-        components::component_type type, error_code& ec) const
+        components::component_type const type, error_code& ec) const
     {
         std::vector<naming::gid_type> allprefixes;
         bool const result = get_raw_localities(allprefixes, type, ec);
@@ -451,7 +452,7 @@ namespace hpx::parcelset {
 
     bool parcelhandler::get_raw_localities(
         std::vector<naming::gid_type>& locality_ids,
-        components::component_type type, error_code&) const
+        components::component_type const type, error_code&) const
     {
         std::vector<std::uint32_t> const ids = agas::get_all_locality_ids(type);
 
@@ -888,7 +889,8 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    std::int64_t parcelhandler::get_outgoing_queue_length(bool reset) const
+    std::int64_t parcelhandler::get_outgoing_queue_length(
+        bool const reset) const
     {
         std::int64_t parcel_count = 0;
         for (pports_type::value_type const& pp : pports_)
@@ -939,11 +941,13 @@ namespace hpx::parcelset {
     ///////////////////////////////////////////////////////////////////////////
     policies::message_handler* parcelhandler::get_message_handler(
         char const* action, char const* message_handler_type,
-        std::size_t num_messages, std::size_t interval, locality const& loc,
-        error_code& ec)
+        std::size_t const num_messages, std::size_t const interval,
+        locality const& loc, error_code& ec)
     {
         if (!is_networking_enabled_)
         {
+            if (&ec != &throws)
+                ec = make_success_code();
             return nullptr;
         }
 
@@ -973,13 +977,13 @@ namespace hpx::parcelset {
                 l.unlock();
                 if (&ec != &throws)
                 {
-                    if ((*it).second)
+                    if (it->second)
                         ec = make_success_code();
                     else
                         ec = make_error_code(
                             hpx::error::bad_parameter, throwmode::lightweight);
                 }
-                return (*it).second.get();
+                return it->second.get();
             }
 
             if (ec || !p)
@@ -1014,7 +1018,7 @@ namespace hpx::parcelset {
             }
             it = r.first;
         }
-        else if (!(*it).second)
+        else if (!it->second)
         {
             l.unlock();
             if (&ec != &throws)
@@ -1034,7 +1038,7 @@ namespace hpx::parcelset {
         if (&ec != &throws)
             ec = make_success_code();
 
-        return (*it).second.get();
+        return it->second.get();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1056,7 +1060,7 @@ namespace hpx::parcelset {
     // Performance counter data
 
     // number of parcels routed
-    std::int64_t parcelhandler::get_parcel_routed_count(bool reset)
+    std::int64_t parcelhandler::get_parcel_routed_count(bool const reset)
     {
         return util::get_and_reset_value(count_routed_, reset);
     }
@@ -1261,8 +1265,7 @@ namespace hpx::parcelset {
         return pp ? pp->get_zchunks_recv_size_max(reset) : 0;
     }
 
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
-    defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
+#if defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
     // same as above, just separated data for each action
     // number of parcels sent
     std::int64_t parcelhandler::get_action_parcel_send_count(
@@ -1326,8 +1329,8 @@ namespace hpx::parcelset {
     // connection stack statistics
     std::int64_t parcelhandler::get_connection_cache_statistics(
         std::string const& pp_type,
-        parcelport::connection_cache_statistics_type stat_type,
-        bool reset) const
+        parcelport::connection_cache_statistics_type const stat_type,
+        bool const reset) const
     {
         error_code ec(throwmode::lightweight);
         parcelport* pp = find_parcelport(pp_type, ec);

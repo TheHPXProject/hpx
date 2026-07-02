@@ -16,6 +16,7 @@ set(parcelset_base_headers
     hpx/parcelset_base/parcelset_base_fwd.hpp
     hpx/parcelset_base/locality_interface.hpp
     hpx/parcelset_base/parcelport.hpp
+    hpx/parcelset_base/parcel_buffer.hpp
     hpx/parcelset_base/parcel_interface.hpp
     hpx/parcelset_base/policies/message_handler.hpp
     hpx/parcelset_base/set_parcel_write_handler.hpp

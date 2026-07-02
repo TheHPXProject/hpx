@@ -27,6 +27,7 @@
 #include <hpx/modules/util.hpp>
 
 #include <hpx/modules/parcelset_base.hpp>
+
 #include <hpx/parcelset/connection_cache.hpp>
 #include <hpx/parcelset/detail/call_for_each.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
@@ -208,7 +209,7 @@ namespace hpx::parcelset {
                 ConnectionHandler>::send_early_parcel::value;
         }
 
-        bool run(bool blocking = true) override
+        bool run(bool const blocking = true) override
         {
             io_service_pool_.run(false);    // start pool
 
@@ -236,7 +237,7 @@ namespace hpx::parcelset {
                 "parcelport_impl::flush_parcels");
         }
 
-        void stop(bool blocking = true) override
+        void stop(bool const blocking = true) override
         {
             flush_parcels();
 
@@ -338,8 +339,8 @@ namespace hpx::parcelset {
             return nullptr;
         }
 
-        bool do_background_work(
-            std::size_t num_thread, parcelport_background_mode mode) override
+        bool do_background_work(std::size_t const num_thread,
+            parcelport_background_mode const mode) override
         {
             trigger_pending_work();
             return do_background_work_impl(num_thread, mode);
@@ -371,7 +372,7 @@ namespace hpx::parcelset {
                     static_cast<std::int16_t>(get_next_num_thread())),
                 threads::thread_stacksize::default_, state, true);
 
-            auto id = hpx::threads::register_thread(data, ec);
+            auto const id = hpx::threads::register_thread(data, ec);
             if (!ec)
                 return false;
 
@@ -426,7 +427,7 @@ namespace hpx::parcelset {
         ////////////////////////////////////////////////////////////////////////
         // Return the given connection cache statistic
         std::int64_t get_connection_cache_statistics(
-            connection_cache_statistics_type t, bool reset) override
+            connection_cache_statistics_type const t, bool reset) override
         {
             switch (t)
             {
@@ -481,10 +482,7 @@ namespace hpx::parcelset {
                               ConnectionHandler>::send_early_parcel::value)
             {
                 put_parcel(dest, HPX_MOVE(p),
-                    [](std::error_code const& ec,
-                        parcel const& parcel) -> void {
-                        return early_pending_parcel_handler(ec, parcel);
-                    });
+                    &parcelport::early_pending_parcel_handler);
             }
             else
             {
@@ -660,7 +658,7 @@ namespace hpx::parcelset {
         void send_immediate_impl([[maybe_unused]] locality const& dest_,
             [[maybe_unused]] write_handler_type* fs,
             [[maybe_unused]] parcel* ps,
-            [[maybe_unused]] std::size_t num_parcels)
+            [[maybe_unused]] std::size_t const num_parcels)
         {
             if constexpr (connection_handler_traits<
                               ConnectionHandler>::is_connectionless::value)
