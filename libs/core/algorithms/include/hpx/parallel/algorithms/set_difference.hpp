@@ -260,10 +260,9 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename Iter1, typename Sent1,
                 typename Iter2, typename Sent2, typename Iter3, typename F,
                 typename Proj1, typename Proj2>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<Iter1, Iter3>>
-            parallel(ExPolicy&& policy, Iter1 first1, Sent1 last1, Iter2 first2,
-                Sent2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
+            static decltype(auto) parallel(ExPolicy&& policy, Iter1 first1,
+                Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest, F&& f,
+                Proj1&& proj1, Proj2&& proj2)
             {
                 using difference_type1 =
                     typename std::iterator_traits<Iter1>::difference_type;
@@ -271,21 +270,11 @@ namespace hpx::parallel {
                     typename std::iterator_traits<Iter2>::difference_type;
 
                 using result_type = util::in_out_result<Iter1, Iter3>;
-                using result =
-                    util::detail::algorithm_result<ExPolicy, result_type>;
 
-                if (first1 == last1)
-                {
-                    return result::get(
-                        result_type{HPX_MOVE(first1), HPX_MOVE(dest)});
-                }
-
-                if (first2 == last2)
-                {
-                    return detail::copy<result_type>().call(
-                        HPX_FORWARD(ExPolicy, policy), first1, last1, dest);
-                }
-
+                // Edge cases (first1==last1, first2==last2) are handled inside
+                // set_operation: set_chunk_data initializes to sentinel values
+                // so empty range1 produces {first1,first2,dest} naturally, and
+                // sequential_set_difference with empty range2 copies range1.
                 using buffer_type = typename set_operations_buffer<Iter3>::type;
                 using func_type = std::decay_t<F>;
 
@@ -342,11 +331,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            FwdIter3>
-        tag_fallback_invoke(set_difference_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2,
-            FwdIter3 dest, Pred op = Pred())
+        friend decltype(auto) tag_fallback_invoke(set_difference_t,
+            ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2,
+            FwdIter2 last2, FwdIter3 dest, Pred op = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

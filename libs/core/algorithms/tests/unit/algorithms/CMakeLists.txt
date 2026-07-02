@@ -214,6 +214,7 @@ set(tests
     rotate_sender
     rotate_copy_sender
     search_sender
+    set_difference_sender
     shift_left_sender
     shift_right_sender
     starts_with_sender
