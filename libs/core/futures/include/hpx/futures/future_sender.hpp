@@ -84,7 +84,7 @@ namespace hpx::execution::experimental {
                     // Register a continuation that fires when the future
                     // becomes ready.  We capture this by reference because
                     // the operation state is pinned in memory and outlives the
-                    // continuation (P2300 §6.9.7 lifetime guarantee).
+                    // continuation (P2300 6.9.7 lifetime guarantee).
                     future_.then([this](hpx::future<T> f) {
                         hpx::detail::try_catch_exception_ptr(
                             [&]() {
@@ -179,9 +179,9 @@ namespace hpx::execution::experimental {
     // future_sender<T>: a P2300-compliant sender that wraps an hpx::future<T>.
     //
     // Completion signatures:
-    //   set_value(T)              — future produced a value
-    //   set_error(exception_ptr)  — future held an exception
-    //   set_stopped()             — not produced; included for concept conformance
+    //   set_value(T)              - future produced a value
+    //   set_error(exception_ptr)  - future held an exception
+    //   set_stopped()             - not produced; included for concept conformance
     //
     // Note: set_stopped() is advertised but never signalled; a cancelled future
     // delivers its cancellation as an exception (hpx::thread_interrupted) via
@@ -220,7 +220,7 @@ namespace hpx::execution::experimental {
             hpx::execution::experimental::get_completion_signatures_t,
             future_sender const&, Env&&) -> completion_signatures;
 
-        // connect tag_invoke — returns the operation state (STANDARD 2)
+        // connect tag_invoke - returns the operation state (STANDARD 2)
         template <typename Receiver>
         friend auto tag_invoke(hpx::execution::experimental::connect_t,
             future_sender&& self, Receiver&& r)

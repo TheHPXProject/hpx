@@ -6,10 +6,10 @@
 
 // Benchmark: continues_on (P2300) vs Native HPX Scheduling
 //
-// Part 1 — Microbenchmark: measures raw task dispatch overhead by launching
+// Part 1 - Microbenchmark: measures raw task dispatch overhead by launching
 //          N empty tasks via native hpx::async vs P2300 continues_on pipeline.
 //
-// Part 2 — Macrobenchmark: measures a real-world DAXPY computation
+// Part 2 - Macrobenchmark: measures a real-world DAXPY computation
 //          (y[i] = alpha * x[i] + y[i]) over a large vector using both
 //          native HPX async and P2300 sender pipelines.
 //
@@ -65,7 +65,7 @@ void print_result(
 }
 
 // ==========================================================================
-// Part 1: Microbenchmark — Raw task dispatch overhead
+// Part 1: Microbenchmark - Raw task dispatch overhead
 // ==========================================================================
 
 void run_microbenchmark()
@@ -103,7 +103,7 @@ void run_microbenchmark()
 
     // ------------------------------------------------------------------
     // 1b. P2300: sync_wait(just() | continues_on(sched) | then(noop))
-    //     Sequential dispatch — measures per-task overhead.
+    //     Sequential dispatch - measures per-task overhead.
     // ------------------------------------------------------------------
     ex::thread_pool_scheduler sched{};
 
@@ -178,7 +178,7 @@ void run_microbenchmark()
 }
 
 // ==========================================================================
-// Part 2: Macrobenchmark — DAXPY Pipeline
+// Part 2: Macrobenchmark - DAXPY Pipeline
 // ==========================================================================
 
 // y[i] = alpha * x[i] + y[i]
@@ -211,7 +211,7 @@ void run_macrobenchmark()
         static_cast<std::size_t>(hpx::get_num_worker_threads());
 
     // ------------------------------------------------------------------
-    // 2a. Native hpx::async — manually chunked DAXPY
+    // 2a. Native hpx::async - manually chunked DAXPY
     // ------------------------------------------------------------------
     auto native_daxpy = [&]() -> double {
         std::fill(y_native.begin(), y_native.end(), 0.5);

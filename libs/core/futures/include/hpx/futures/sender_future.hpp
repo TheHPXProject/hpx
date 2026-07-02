@@ -35,12 +35,12 @@ namespace hpx::execution::experimental {
     namespace detail {
 
         ///////////////////////////////////////////////////////////////////////
-        // Internal receiver that bridges a P2300 sender into an hpx::promise.
+        // internal receiver that bridges a P2300 sender into an hpx::promise.
         //
         // When the connected sender completes:
-        //  - set_value  → fulfils the promise with the value
-        //  - set_error  → stores the exception in the promise
-        //  - set_stopped → stores hpx::thread_interrupted in the promise
+        //  - set_value   -> fulfils the promise with the value
+        //  - set_error   -> stores the exception in the promise
+        //  - set_stopped -> stores hpx::thread_interrupted in the promise
         //
         // The promise is shared via shared_ptr so both the receiver and the
         // returned future can outlive each other safely.  No raw new/delete.
@@ -204,7 +204,7 @@ namespace hpx::execution::experimental {
     //   2. Connects the sender to a sender_future_receiver<T>.
     //   3. Heap-allocates the operation state inside a shared_ptr to keep it
     //      pinned in memory until the sender completes.
-    //   4. Calls start() on the operation state (noexcept per P2300 §6.9.7).
+    //   4. Calls start() on the operation state (noexcept per P2300 6.9.7).
     //   5. Attaches a continuation that releases the operation state after the
     //      future resolves.
     //
@@ -229,7 +229,7 @@ namespace hpx::execution::experimental {
         auto holder_ptr = std::make_shared<holder_type>(
             HPX_FORWARD(Sender, sender), receiver_type{promise_ptr});
 
-        // start() is noexcept per P2300 §6.9.7
+        // start() is noexcept per P2300 6.9.7
         holder_ptr->start();
 
         // Keep holder alive through the future's continuation; the holder

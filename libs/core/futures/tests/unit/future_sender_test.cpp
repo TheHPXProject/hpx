@@ -17,9 +17,8 @@
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
-#include <hpx/futures/future_sender.hpp>
-#include <hpx/futures/sender_future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <exception>
@@ -29,7 +28,7 @@
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 1: future<int> → future_sender → stdexec::then(x*2) → sync_wait
+// Test 1: future<int> -> future_sender -> stdexec::then(x*2) -> sync_wait
 void test_future_to_sender()
 {
     hpx::future<int> f = hpx::async([]() -> int { return 42; });
@@ -43,7 +42,7 @@ void test_future_to_sender()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 2: stdexec::just(42) | stdexec::then(x+1) → as_future<int>() → .get()
+// Test 2: stdexec::just(42) | stdexec::then(x+1) -> as_future<int>() -> .get()
 void test_sender_to_future()
 {
     auto snd = hpx::execution::experimental::just(42) |
@@ -112,7 +111,7 @@ void test_move_only_semantics()
     hpx::future<int> f = hpx::make_ready_future(10);
     sender_type s1 =
         hpx::execution::experimental::future_sender<int>{std::move(f)};
-    sender_type s2 = std::move(s1);    // move construct — must compile
+    sender_type s2 = std::move(s1);    // move construct - must compile
 
     auto result = hpx::execution::experimental::sync_wait(std::move(s2) |
         hpx::execution::experimental::then([](int x) { return x * 3; }));
