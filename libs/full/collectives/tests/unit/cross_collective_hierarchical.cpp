@@ -33,6 +33,15 @@ using namespace hpx::collectives;
 
 constexpr int ITERATIONS = 4;
 
+void wait_for_sites(std::vector<hpx::future<void>>& sites)
+{
+    hpx::wait_all(sites);
+    for (auto& site : sites)
+    {
+        site.get();
+    }
+}
+
 // Interleave all_reduce and all_gather on one hierarchical communicator
 // instance, advancing a single shared, strictly consecutive user-generation
 // counter. This is legal because both operations consume the identical
@@ -83,7 +92,7 @@ void test_same_instance_all_reduce_all_gather()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
 }
 
 // Interleave all_to_all and all_reduce, each on its own hierarchical
@@ -148,7 +157,7 @@ void test_separate_instances_all_to_all_all_reduce()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
 }
 
 // Interleave all_to_all and all_reduce on ONE hierarchical communicator
@@ -207,7 +216,7 @@ void test_same_instance_all_to_all_all_reduce()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
 }
 
 // Interleave broadcast and all_gather on ONE hierarchical communicator
@@ -264,7 +273,7 @@ void test_same_instance_broadcast_all_gather()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
 }
 
 // Interleave gather and all_reduce on ONE hierarchical communicator instance
@@ -326,7 +335,7 @@ void test_same_instance_gather_all_reduce()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
 }
 
 // Interleave scatter and all_reduce on ONE hierarchical communicator instance
@@ -389,7 +398,74 @@ void test_same_instance_scatter_all_reduce()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    wait_for_sites(sites);
+}
+
+// Interleave inclusive_scan, exclusive_scan and all_reduce on ONE
+// hierarchical communicator instance with a single shared, strictly
+// consecutive user-generation counter. The scan overloads are two-phase
+// collectives and must consume the same 2k-1/2k generation block as the
+// existing hierarchical collectives.
+void test_same_instance_scans_all_reduce()
+{
+    constexpr std::uint32_t num_sites = 8;
+
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async([=]() {
+            auto const comms = create_hierarchical_communicator(
+                "/test/cross_collective/same_instance_scans_reduce/",
+                num_sites_arg(num_sites), this_site_arg(site), arity_arg(2),
+                generation_arg(), root_site_arg(),
+                flat_fallback_threshold_arg(0));
+
+            std::size_t generation = 0;
+            for (int i = 0; i != ITERATIONS; ++i)
+            {
+                std::uint32_t const value = site + i;
+
+                std::uint32_t const inclusive =
+                    inclusive_scan(hpx::launch::sync, comms,
+                        std::uint32_t(value), std::plus<std::uint32_t>{},
+                        this_site_arg(site), generation_arg(++generation));
+
+                std::uint32_t expected_inclusive = 0;
+                for (std::uint32_t j = 0; j != site + 1; ++j)
+                {
+                    expected_inclusive += j + i;
+                }
+                HPX_TEST_EQ(inclusive, expected_inclusive);
+
+                std::uint32_t const exclusive = exclusive_scan(
+                    hpx::launch::sync, comms, std::uint32_t(value),
+                    std::uint32_t(100 + i), std::plus<std::uint32_t>{},
+                    this_site_arg(site), generation_arg(++generation));
+
+                std::uint32_t expected_exclusive = 100 + i;
+                for (std::uint32_t j = 0; j != site; ++j)
+                {
+                    expected_exclusive += j + i;
+                }
+                HPX_TEST_EQ(exclusive, expected_exclusive);
+
+                std::uint32_t const reduced = all_reduce(hpx::launch::sync,
+                    comms, std::uint32_t(value), std::plus<std::uint32_t>{},
+                    this_site_arg(site), generation_arg(++generation));
+
+                std::uint32_t expected_sum = 0;
+                for (std::uint32_t j = 0; j != num_sites; ++j)
+                {
+                    expected_sum += j + i;
+                }
+                HPX_TEST_EQ(reduced, expected_sum);
+            }
+        }));
+    }
+
+    wait_for_sites(sites);
 }
 
 int hpx_main()
@@ -402,6 +478,7 @@ int hpx_main()
         test_same_instance_broadcast_all_gather();
         test_same_instance_gather_all_reduce();
         test_same_instance_scatter_all_reduce();
+        test_same_instance_scans_all_reduce();
     }
 
     return hpx::finalize();

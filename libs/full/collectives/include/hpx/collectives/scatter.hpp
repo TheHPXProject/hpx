@@ -562,6 +562,47 @@ namespace hpx::collectives {
         hpx::future<T> scatter_to(communicator fid,
             std::vector<T>&& local_result, this_site_arg this_site,
             generation_arg const generation, generation_mode num_generations);
+
+        // scatter_from over a hierarchical_communicator: detail entry carrying
+        // the internal generation step. The public overload forwards with
+        // double_step; scan collectives reuse it as their scatter phase with
+        // single_step.
+        template <typename T>
+        hpx::future<T> scatter_from(
+            hierarchical_communicator const& communicators,
+            this_site_arg this_site, generation_arg const generation,
+            generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+
+            auto const [run_gen, run_step] =
+                hierarchical_run_params(generation, num_generations);
+
+            auto [current_communicator, current_site] = communicators[0];
+            if (communicators.size() == 1)
+            {
+                return scatter_from<T>(
+                    current_communicator, current_site, run_gen, run_step);
+            }
+
+            std::vector<T> data = scatter_from<std::vector<T>>(
+                current_communicator, current_site, run_gen, run_step)
+                                      .get();
+
+            for (std::size_t i = 1; i < communicators.size() - 1; ++i)
+            {
+                data = scatter_to(communicators.get(i),
+                    scatter_data(HPX_MOVE(data), communicators.get_arity()),
+                    this_site_arg(0), run_gen, run_step)
+                           .get();
+            }
+
+            return scatter_to(communicators.back(), HPX_MOVE(data),
+                this_site_arg(0), run_gen, run_step);
+        }
     }    // namespace detail
 
     HPX_CXX_EXPORT template <typename T>
@@ -569,39 +610,8 @@ namespace hpx::collectives {
         this_site_arg this_site = this_site_arg(),
         generation_arg const generation = generation_arg())
     {
-        if (this_site.is_default())
-        {
-            this_site = agas::get_locality_id();
-        }
-
-        // A hierarchical scatter advances each sub-communicator by two
-        // generations per call (double_step): the user generation k maps to
-        // 2k-1. scatter is not reused as a phase of another collective, so it
-        // always runs standalone.
-        auto const [run_gen, run_step] = detail::hierarchical_run_params(
-            generation, detail::generation_mode::double_step);
-
-        auto [current_communicator, current_site] = communicators[0];
-        if (communicators.size() == 1)
-        {
-            return detail::scatter_from<T>(
-                current_communicator, current_site, run_gen, run_step);
-        }
-
-        std::vector<T> data = detail::scatter_from<std::vector<T>>(
-            current_communicator, current_site, run_gen, run_step)
-                                  .get();
-
-        for (std::size_t i = 1; i < communicators.size() - 1; ++i)
-        {
-            data = detail::scatter_to(communicators.get(i),
-                detail::scatter_data(HPX_MOVE(data), communicators.get_arity()),
-                this_site_arg(0), run_gen, run_step)
-                       .get();
-        }
-
-        return detail::scatter_to(communicators.back(), HPX_MOVE(data),
-            this_site_arg(0), run_gen, run_step);
+        return detail::scatter_from<T>(communicators, this_site, generation,
+            detail::generation_mode::double_step);
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -757,65 +767,80 @@ namespace hpx::collectives {
             this_site, generation, detail::generation_mode::single_step);
     }
 
+    namespace detail {
+
+        // scatter_to over a hierarchical_communicator: detail entry carrying
+        // the internal generation step. The public overload forwards with
+        // double_step; scan collectives reuse it as their scatter phase with
+        // single_step.
+        template <typename T>
+        hpx::future<T> scatter_to(
+            hierarchical_communicator const& communicators,
+            std::vector<T>&& local_result, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+
+            std::size_t const num_sites_val =
+                hpx::get<0>(communicators.get_info());
+            if (this_site >= num_sites_val)
+            {
+                return hpx::make_exceptional_future<T>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::scatter_to (hierarchical)",
+                        "this_site must be smaller than the number of "
+                        "participating sites"));
+            }
+
+            if (local_result.size() != num_sites_val)
+            {
+                return hpx::make_exceptional_future<T>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::scatter_to (hierarchical)",
+                        "the number of values to scatter must be equal to the "
+                        "number of participating sites"));
+            }
+
+            auto const [run_gen, run_step] =
+                hierarchical_run_params(generation, num_generations);
+
+            auto [current_communicator, current_site] = communicators[0];
+            if (communicators.size() == 1)
+            {
+                return scatter_to(current_communicator, HPX_MOVE(local_result),
+                    current_site, run_gen, run_step);
+            }
+
+            arity_arg arity = communicators.get_arity();
+            std::vector<T> data = scatter_to(communicators.get(0),
+                scatter_data(HPX_MOVE(local_result), arity), this_site_arg(0),
+                run_gen, run_step)
+                                      .get();
+
+            for (std::size_t i = 1; i < communicators.size() - 1; ++i)
+            {
+                data = scatter_to(communicators.get(i),
+                    scatter_data(HPX_MOVE(data), arity),
+                    this_site_arg(this_site % arity), run_gen, run_step)
+                           .get();
+            }
+
+            return scatter_to(communicators.back(), HPX_MOVE(data),
+                this_site_arg(0), run_gen, run_step);
+        }
+    }    // namespace detail
+
     HPX_CXX_EXPORT template <typename T>
     hpx::future<T> scatter_to(hierarchical_communicator const& communicators,
         std::vector<T>&& local_result,
         this_site_arg this_site = this_site_arg(),
         generation_arg const generation = generation_arg())
     {
-        if (this_site.is_default())
-        {
-            this_site = agas::get_locality_id();
-        }
-
-        std::size_t const num_sites_val = hpx::get<0>(communicators.get_info());
-        if (this_site >= num_sites_val)
-        {
-            return hpx::make_exceptional_future<T>(
-                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
-                    "hpx::collectives::scatter_to (hierarchical)",
-                    "this_site must be smaller than the number of "
-                    "participating sites"));
-        }
-
-        if (local_result.size() != num_sites_val)
-        {
-            return hpx::make_exceptional_future<T>(
-                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
-                    "hpx::collectives::scatter_to (hierarchical)",
-                    "the number of values to scatter must be equal to the "
-                    "number of participating sites"));
-        }
-
-        // A hierarchical scatter advances each sub-communicator by two
-        // generations per call (double_step); scatter is not reused as a phase
-        // of another collective, so it always runs standalone.
-        auto const [run_gen, run_step] = detail::hierarchical_run_params(
-            generation, detail::generation_mode::double_step);
-
-        auto [current_communicator, current_site] = communicators[0];
-        if (communicators.size() == 1)
-        {
-            return detail::scatter_to(current_communicator,
-                HPX_MOVE(local_result), current_site, run_gen, run_step);
-        }
-
-        arity_arg arity = communicators.get_arity();
-        std::vector<T> data = detail::scatter_to(communicators.get(0),
-            detail::scatter_data(HPX_MOVE(local_result), arity),
-            this_site_arg(0), run_gen, run_step)
-                                  .get();
-
-        for (std::size_t i = 1; i < communicators.size() - 1; ++i)
-        {
-            data = detail::scatter_to(communicators.get(i),
-                detail::scatter_data(HPX_MOVE(data), arity),
-                this_site_arg(this_site % arity), run_gen, run_step)
-                       .get();
-        }
-
-        return detail::scatter_to(communicators.back(), HPX_MOVE(data),
-            this_site_arg(0), run_gen, run_step);
+        return detail::scatter_to(communicators, HPX_MOVE(local_result),
+            this_site, generation, detail::generation_mode::double_step);
     }
 
     ////////////////////////////////////////////////////////////////////////////

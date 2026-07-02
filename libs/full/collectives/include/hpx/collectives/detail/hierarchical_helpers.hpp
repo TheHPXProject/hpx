@@ -12,11 +12,14 @@
 
 #include <hpx/assert.hpp>
 #include <hpx/collectives/argument_types.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace hpx::collectives::detail {
@@ -44,6 +47,21 @@ namespace hpx::collectives::detail {
             (std::numeric_limits<std::size_t>::max)() / 2;
     }
 
+    [[nodiscard]] inline bool is_valid_hierarchical_run_generation(
+        generation_arg const generation,
+        generation_mode const num_generations) noexcept
+    {
+        if (generation.is_default() || generation == 0)
+        {
+            return true;
+        }
+
+        std::size_t const step = static_cast<std::size_t>(num_generations);
+        HPX_ASSERT(step != 0);
+        return static_cast<std::size_t>(generation) <=
+            (std::numeric_limits<std::size_t>::max)() / step;
+    }
+
     inline hierarchical_phase_generation_pair hierarchical_phase_generations(
         generation_arg const generation) noexcept
     {
@@ -65,6 +83,9 @@ namespace hpx::collectives::detail {
     inline hierarchical_run hierarchical_run_params(
         generation_arg const generation, generation_mode const num_generations)
     {
+        HPX_ASSERT(
+            is_valid_hierarchical_run_generation(generation, num_generations));
+
         if (generation.is_default() || generation == 0)
         {
             return {generation, generation_mode::single_step};
@@ -158,6 +179,111 @@ namespace hpx::collectives::detail {
         auto const groups = get_top_level_groups(num_sites, arity);
         auto const g = classify_site(this_site, groups);
         return g != -1 && this_site == groups[g].left;
+    }
+
+    template <typename T, typename F>
+    std::vector<T> make_inclusive_scan_results(std::vector<T>&& values, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        auto it = values.begin();
+        if (it == values.end())
+        {
+            return results;
+        }
+
+        if constexpr (std::is_same_v<T, bool>)
+        {
+            bool prefix = static_cast<bool>(*it);
+            results.emplace_back(prefix);
+
+            for (++it; it != values.end(); ++it)
+            {
+                prefix = HPX_INVOKE(op, prefix, static_cast<bool>(*it));
+                results.emplace_back(prefix);
+            }
+        }
+        else
+        {
+            T prefix = HPX_MOVE(*it);
+            results.emplace_back(prefix);
+
+            for (++it; it != values.end(); ++it)
+            {
+                prefix = HPX_INVOKE(op, HPX_MOVE(prefix), *it);
+                results.emplace_back(prefix);
+            }
+        }
+
+        return results;
+    }
+
+    template <typename T, typename F>
+    std::vector<T> make_exclusive_scan_results(std::vector<T>&& values, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        auto it = values.begin();
+        if (it == values.end())
+        {
+            return results;
+        }
+
+        if constexpr (std::is_same_v<T, bool>)
+        {
+            results.emplace_back(false);
+
+            bool prefix = static_cast<bool>(*it);
+            for (++it; it != values.end(); ++it)
+            {
+                results.emplace_back(prefix);
+                prefix = HPX_INVOKE(op, prefix, static_cast<bool>(*it));
+            }
+        }
+        else
+        {
+            results.emplace_back(T{});
+
+            T prefix = HPX_MOVE(*it);
+            for (++it; it != values.end(); ++it)
+            {
+                results.emplace_back(prefix);
+                prefix = HPX_INVOKE(op, HPX_MOVE(prefix), *it);
+            }
+        }
+
+        return results;
+    }
+
+    template <typename T, typename U, typename F>
+    std::vector<T> make_exclusive_scan_results(
+        std::vector<T>&& values, U&& init, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        if constexpr (std::is_same_v<T, bool>)
+        {
+            bool prefix = static_cast<bool>(init);
+            for (auto const value : values)
+            {
+                results.emplace_back(prefix);
+                prefix = HPX_INVOKE(op, prefix, static_cast<bool>(value));
+            }
+        }
+        else
+        {
+            T prefix = static_cast<T>(HPX_FORWARD(U, init));
+            for (auto& value : values)
+            {
+                results.emplace_back(prefix);
+                prefix = HPX_INVOKE(op, HPX_MOVE(prefix), value);
+            }
+        }
+
+        return results;
     }
 
 }    // namespace hpx::collectives::detail

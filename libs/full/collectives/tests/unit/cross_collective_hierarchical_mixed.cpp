@@ -35,6 +35,15 @@ using namespace hpx::collectives;
 
 constexpr std::uint32_t iterations = 4;
 
+void wait_for_sites(std::vector<hpx::future<void>>& sites)
+{
+    hpx::wait_all(sites);
+    for (auto& site : sites)
+    {
+        site.get();
+    }
+}
+
 std::vector<std::int32_t> make_scatter_values(
     std::uint32_t const num_sites, std::uint32_t const iteration)
 {
@@ -91,6 +100,27 @@ void run_explicit_mixed_sequence(std::string const& basename,
                 static_cast<std::int32_t>(100000 * i + 1000 * source + site));
         }
 
+        std::int32_t const inclusive = inclusive_scan(hpx::launch::sync, comms,
+            static_cast<std::int32_t>(site + i), std::plus<std::int32_t>{},
+            this_site_arg(site), generation_arg(++generation));
+        std::int32_t expected_inclusive = 0;
+        for (std::uint32_t source = 0; source != site + 1; ++source)
+        {
+            expected_inclusive += static_cast<std::int32_t>(source + i);
+        }
+        HPX_TEST_EQ(inclusive, expected_inclusive);
+
+        std::int32_t const exclusive = exclusive_scan(hpx::launch::sync, comms,
+            static_cast<std::int32_t>(site + i),
+            static_cast<std::int32_t>(90000 + i), std::plus<std::int32_t>{},
+            this_site_arg(site), generation_arg(++generation));
+        std::int32_t expected_exclusive = 90000 + static_cast<std::int32_t>(i);
+        for (std::uint32_t source = 0; source != site; ++source)
+        {
+            expected_exclusive += static_cast<std::int32_t>(source + i);
+        }
+        HPX_TEST_EQ(exclusive, expected_exclusive);
+
         barrier(hpx::launch::sync, comms, this_site_arg(site),
             generation_arg(++generation));
 
@@ -128,7 +158,7 @@ void test_local_explicit_mixed_sequence(
         }));
     }
 
-    hpx::wait_all(HPX_MOVE(sites));
+    wait_for_sites(sites);
 }
 
 void run_default_generation_sequence(std::string const& basename,
@@ -242,7 +272,7 @@ void test_local_default_generation(
         }));
     }
 
-    hpx::wait_all(HPX_MOVE(sites));
+    wait_for_sites(sites);
 }
 
 void test_distributed_explicit_mixed_sequence()
@@ -330,6 +360,31 @@ void test_local_flat_fallback_sharing(std::uint32_t const num_sites)
                 }
                 HPX_TEST_EQ(reduced, expected_sum);
 
+                // inclusive_scan and exclusive_scan (flat fast paths).
+                std::int32_t const inclusive = inclusive_scan(hpx::launch::sync,
+                    comms, static_cast<std::int32_t>(site + i),
+                    std::plus<std::int32_t>{}, this_site_arg(site),
+                    generation_arg(++generation));
+                std::int32_t expected_inclusive = 0;
+                for (std::uint32_t source = 0; source != site + 1; ++source)
+                {
+                    expected_inclusive += static_cast<std::int32_t>(source + i);
+                }
+                HPX_TEST_EQ(inclusive, expected_inclusive);
+
+                std::int32_t const exclusive = exclusive_scan(hpx::launch::sync,
+                    comms, static_cast<std::int32_t>(site + i),
+                    static_cast<std::int32_t>(60000 + i),
+                    std::plus<std::int32_t>{}, this_site_arg(site),
+                    generation_arg(++generation));
+                std::int32_t expected_exclusive =
+                    60000 + static_cast<std::int32_t>(i);
+                for (std::uint32_t source = 0; source != site; ++source)
+                {
+                    expected_exclusive += static_cast<std::int32_t>(source + i);
+                }
+                HPX_TEST_EQ(exclusive, expected_exclusive);
+
                 // all_to_all (flat fast path).
                 std::vector<std::int32_t> outgoing(num_sites);
                 for (std::uint32_t dest = 0; dest != num_sites; ++dest)
@@ -370,7 +425,7 @@ void test_local_flat_fallback_sharing(std::uint32_t const num_sites)
         }));
     }
 
-    hpx::wait_all(HPX_MOVE(sites));
+    wait_for_sites(sites);
 }
 
 // Generation 0 is invalid (generations must be positive). The hierarchical
@@ -408,6 +463,33 @@ void test_local_zero_generation_rejected(std::uint32_t const num_sites)
             }
             HPX_TEST(all_gather_rejected);
 
+            bool inclusive_scan_rejected = false;
+            try
+            {
+                inclusive_scan(hpx::launch::sync, comms,
+                    static_cast<std::int32_t>(site), std::plus<std::int32_t>{},
+                    this_site_arg(site), generation_arg(0));
+            }
+            catch (hpx::exception const&)
+            {
+                inclusive_scan_rejected = true;
+            }
+            HPX_TEST(inclusive_scan_rejected);
+
+            bool exclusive_scan_rejected = false;
+            try
+            {
+                exclusive_scan(hpx::launch::sync, comms,
+                    static_cast<std::int32_t>(site), std::int32_t(0),
+                    std::plus<std::int32_t>{}, this_site_arg(site),
+                    generation_arg(0));
+            }
+            catch (hpx::exception const&)
+            {
+                exclusive_scan_rejected = true;
+            }
+            HPX_TEST(exclusive_scan_rejected);
+
             bool broadcast_rejected = false;
             try
             {
@@ -430,7 +512,7 @@ void test_local_zero_generation_rejected(std::uint32_t const num_sites)
         }));
     }
 
-    hpx::wait_all(HPX_MOVE(sites));
+    wait_for_sites(sites);
 }
 
 int hpx_main()

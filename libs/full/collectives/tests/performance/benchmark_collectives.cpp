@@ -36,6 +36,10 @@ constexpr char const* gather_direct_basename = "/test/gather_direct/";
 constexpr char const* all_reduce_direct_basename = "/test/all_reduce_direct/";
 constexpr char const* all_gather_direct_basename = "/test/all_gather_direct/";
 constexpr char const* all_to_all_direct_basename = "/test/all_to_all_direct/";
+constexpr char const* inclusive_scan_direct_basename =
+    "/test/inclusive_scan_direct/";
+constexpr char const* exclusive_scan_direct_basename =
+    "/test/exclusive_scan_direct/";
 constexpr char const* barrier_bench_basename = "/test/barrier_bench/";
 constexpr char const* exclusive_scan_basename = "/test/exclusive_scan_direct/";
 constexpr char const* inclusive_scan_basename = "/test/inclusive_scan_direct/";
@@ -576,6 +580,152 @@ void test_all_reduce_hierarchical(int arity, int lpn, std::size_t iterations,
         // Check for correctness: every site should have the sum
         HPX_TEST_EQ(static_cast<int>(i) * static_cast<int>(num_localities),
             recv_data[0]);
+    }
+
+    if (this_locality == 0)
+    {
+        std::string const mod_name = fallback_threshold < 0 ?
+            std::string("hierarchical") :
+            "hierarchical_t" + std::to_string(fallback_threshold);
+        write_to_file(operation, mod_name, arity, num_localities, lpn,
+            test_size, warmup_iterations, iterations, std::move(result));
+    }
+}
+
+void test_inclusive_scan_hierarchical(int arity, int lpn,
+    std::size_t iterations, std::size_t warmup_iterations, int test_size,
+    std::string const& operation, int fallback_threshold)
+{
+    // Get parameters
+    std::size_t const num_localities =
+        hpx::get_num_localities(hpx::launch::sync);
+    std::size_t const this_locality = hpx::get_locality_id();
+    // Ensure at least two localities
+    HPX_TEST_LTE(static_cast<std::size_t>(2), num_localities);
+    // Create hierarchical communicators
+    auto communicators =
+        create_hierarchical_communicator(inclusive_scan_direct_basename,
+            num_sites_arg(num_localities), this_site_arg(this_locality),
+            arity_arg(arity), generation_arg(1), root_site_arg(0),
+            fallback_threshold < 0 ?
+                flat_fallback_threshold_arg() :
+                flat_fallback_threshold_arg(
+                    static_cast<std::size_t>(fallback_threshold)));
+    // Barrier for synchronization
+    char const* const barrier_test_name = "/test/barrier/hierarchical";
+    hpx::distributed::barrier barrier(barrier_test_name);
+    // Result vector
+    auto const timing_comm =
+        create_communicator("/test/timing_reduce/inclusive_scan/hierarchical/",
+            num_sites_arg(num_localities), this_site_arg(this_locality));
+    std::vector<double> result(iterations, 0.0);
+    // Data
+    std::vector<int> send_data;
+    std::vector<int> recv_data;
+
+    for (std::size_t i = 0; i != warmup_iterations + iterations; ++i)
+    {
+        send_data =
+            std::vector<int>(test_size, static_cast<int>(i + this_locality));
+
+        barrier.wait();
+        // Time collective
+        hpx::chrono::high_resolution_timer const timer;
+        hpx::future<std::vector<int>> ft_data =
+            // NOLINTNEXTLINE(bugprone-use-after-move)
+            inclusive_scan(communicators, std::move(send_data), vector_adder{},
+                this_site_arg(this_locality), generation_arg(i + 1));
+        recv_data = ft_data.get();
+
+        // Reduce max elapsed time to root
+        double max_elapsed = timer.elapsed();
+        reduce(timing_comm, max_elapsed, double_max{},
+            this_site_arg(this_locality), generation_arg(i + 1));
+        if (i >= warmup_iterations)
+            result[i - warmup_iterations] = max_elapsed;
+
+        // Check for correctness
+        int expected = 0;
+        for (std::size_t j = 0; j != this_locality + 1; ++j)
+        {
+            expected += static_cast<int>(i + j);
+        }
+        HPX_TEST_EQ(expected, recv_data[0]);
+    }
+
+    if (this_locality == 0)
+    {
+        std::string const mod_name = fallback_threshold < 0 ?
+            std::string("hierarchical") :
+            "hierarchical_t" + std::to_string(fallback_threshold);
+        write_to_file(operation, mod_name, arity, num_localities, lpn,
+            test_size, warmup_iterations, iterations, std::move(result));
+    }
+}
+
+void test_exclusive_scan_hierarchical(int arity, int lpn,
+    std::size_t iterations, std::size_t warmup_iterations, int test_size,
+    std::string const& operation, int fallback_threshold)
+{
+    // Get parameters
+    std::size_t const num_localities =
+        hpx::get_num_localities(hpx::launch::sync);
+    std::size_t const this_locality = hpx::get_locality_id();
+    // Ensure at least two localities
+    HPX_TEST_LTE(static_cast<std::size_t>(2), num_localities);
+    // Create hierarchical communicators
+    auto communicators =
+        create_hierarchical_communicator(exclusive_scan_direct_basename,
+            num_sites_arg(num_localities), this_site_arg(this_locality),
+            arity_arg(arity), generation_arg(1), root_site_arg(0),
+            fallback_threshold < 0 ?
+                flat_fallback_threshold_arg() :
+                flat_fallback_threshold_arg(
+                    static_cast<std::size_t>(fallback_threshold)));
+    // Barrier for synchronization
+    char const* const barrier_test_name = "/test/barrier/hierarchical";
+    hpx::distributed::barrier barrier(barrier_test_name);
+    // Result vector
+    auto const timing_comm =
+        create_communicator("/test/timing_reduce/exclusive_scan/hierarchical/",
+            num_sites_arg(num_localities), this_site_arg(this_locality));
+    std::vector<double> result(iterations, 0.0);
+    // Data
+    std::vector<int> send_data;
+    std::vector<int> init_data;
+    std::vector<int> recv_data;
+
+    for (std::size_t i = 0; i != warmup_iterations + iterations; ++i)
+    {
+        send_data =
+            std::vector<int>(test_size, static_cast<int>(i + this_locality));
+        init_data = std::vector<int>(test_size, static_cast<int>(i));
+
+        barrier.wait();
+        // Time collective
+        hpx::chrono::high_resolution_timer const timer;
+        hpx::future<std::vector<int>> ft_data =
+            // NOLINTNEXTLINE(bugprone-use-after-move)
+            exclusive_scan(communicators, std::move(send_data),
+                // NOLINTNEXTLINE(bugprone-use-after-move)
+                std::move(init_data), vector_adder{},
+                this_site_arg(this_locality), generation_arg(i + 1));
+        recv_data = ft_data.get();
+
+        // Reduce max elapsed time to root
+        double max_elapsed = timer.elapsed();
+        reduce(timing_comm, max_elapsed, double_max{},
+            this_site_arg(this_locality), generation_arg(i + 1));
+        if (i >= warmup_iterations)
+            result[i - warmup_iterations] = max_elapsed;
+
+        // Check for correctness
+        int expected = static_cast<int>(i);
+        for (std::size_t j = 0; j != this_locality; ++j)
+        {
+            expected += static_cast<int>(i + j);
+        }
+        HPX_TEST_EQ(expected, recv_data[0]);
     }
 
     if (this_locality == 0)
@@ -1846,16 +1996,6 @@ void test_multiple_use_with_generation_exclusive_scan(int lpn,
             test_size, warmup_iterations, iterations, std::move(result));
     }
 }
-////////////////////////////////////////////////////////////////////////////////////////
-void test_exclusive_scan_hierarchical(int /*arity*/, int /*lpn*/,
-    std::size_t /*iterations*/, std::size_t /*warmup_iterations*/,
-    int /*test_size*/, std::string const& /*operation*/,
-    int /*fallback_threshold*/)
-{
-    std::cout << "error: exclusive_scan does not support hierarchical "
-                 "communicators\n";
-}
-////////////////////////////////////////////////////////////////////////////////////////
 void test_one_shot_use_inclusive_scan(int lpn, std::size_t iterations,
     std::size_t warmup_iterations, int test_size, std::string const& operation)
 {
@@ -1956,15 +2096,6 @@ void test_multiple_use_with_generation_inclusive_scan(int lpn,
         write_to_file(operation, "multi_use", -1, num_localities, lpn,
             test_size, warmup_iterations, iterations, std::move(result));
     }
-}
-////////////////////////////////////////////////////////////////////////////////////////
-void test_inclusive_scan_hierarchical(int /*arity*/, int /*lpn*/,
-    std::size_t /*iterations*/, std::size_t /*warmup_iterations*/,
-    int /*test_size*/, std::string const& /*operation*/,
-    int /*fallback_threshold*/)
-{
-    std::cout << "error: inclusive_scan does not support hierarchical "
-                 "communicators\n";
 }
 struct benchmarking_functions
 {
