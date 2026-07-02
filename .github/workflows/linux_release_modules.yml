@@ -23,6 +23,13 @@ jobs:
     - name: Configure
       shell: bash
       run: |
+          clang_ver=$(clang++ --version 2>/dev/null || true)
+          echo "Compiler info: $clang_ver"
+          HPX_MODULES_FLAG="-DHPX_WITH_CXX_MODULES=ON"
+          if [[ "$clang_ver" =~ "clang version 22" ]]; then
+              echo "Detected clang-22: disabling C++ modules to avoid known frontend crash"
+              HPX_MODULES_FLAG="-DHPX_WITH_CXX_MODULES=OFF"
+          fi
           cmake \
               . \
               -Bbuild \
@@ -38,7 +45,7 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
-              -DHPX_WITH_CXX_MODULES=ON \
+              ${HPX_MODULES_FLAG} \
               -DHPX_WITH_DATAPAR=ON \
               -DHPX_WITH_DATAPAR_BACKEND=EMULATE
     - name: Build
