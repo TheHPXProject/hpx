@@ -40,7 +40,7 @@ namespace mylib {
     {
         // clang-format off
         template <typename Env>
-            requires requires(Env const& e, receiver_env_t q) { e.query(q); }
+            requires(requires(Env const& e, receiver_env_t q) { e.query(q); })
         decltype(auto) operator()(Env const& e) const noexcept
         {
             return e.query(*this);
@@ -84,7 +84,7 @@ namespace mylib {
     inline constexpr struct receiver_env1_t final : ex::forwarding_query_t
     {
         template <typename Env>
-            requires requires(Env const& e, receiver_env1_t q) { e.query(q); }
+            requires(requires(Env const& e, receiver_env1_t q) { e.query(q); })
         decltype(auto) operator()(Env const& e) const noexcept
         {
             return e.query(*this);

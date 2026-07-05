@@ -43,7 +43,8 @@ jobs:
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=3 \
               -DHPX_WITH_VERIFY_LOCKS=OFF \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=OFF \
-              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+              -DHPX_WITH_CONTRACTS_MODE=ENFORCE
     - name: Build
       shell: bash
       run: |

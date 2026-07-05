@@ -113,7 +113,13 @@ add_hpx_module(
   COMPAT_HEADERS ${iostream_compat_headers}
   DEPENDENCIES ${additional_dependencies}
   INCLUDE_DIRECTORIES ${additional_include_directories}
-  MODULE_DEPENDENCIES hpx_config hpx_assertion hpx_datastructures hpx_functional
-                      hpx_iterator_support hpx_type_support
+  MODULE_DEPENDENCIES
+    hpx_config
+    hpx_assertion
+    hpx_datastructures
+    hpx_filesystem
+    hpx_functional
+    hpx_iterator_support
+    hpx_type_support
   CMAKE_SUBDIRS tests
 )

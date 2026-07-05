@@ -23,6 +23,7 @@
 #include <iosfwd>
 #include <mutex>
 #include <string>
+#include <type_traits>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -609,10 +610,9 @@ namespace hpx::naming {
             return ret;
         }
 
-        HPX_CXX_EXPORT inline std::int64_t power2(
+        HPX_CXX_EXPORT constexpr std::int64_t power2(
             std::int16_t const log2credits) noexcept
         {
-            HPX_ASSERT(log2credits >= 0);
             return static_cast<std::int64_t>(1) << log2credits;
         }
 
@@ -654,7 +654,6 @@ namespace hpx::naming {
         HPX_CXX_EXPORT constexpr std::int16_t get_log2credit_from_gid(
             gid_type const& gid) noexcept
         {
-            HPX_ASSERT(has_credits(gid));
             return static_cast<std::int16_t>(
                 (gid.get_msb() >> gid_type::credit_shift) &
                 gid_type::credit_base_mask);
@@ -689,6 +688,7 @@ namespace hpx::naming {
             if (credits != 0)
             {
                 std::int16_t const log2credits = detail::log2(credits);
+                HPX_ASSERT(log2credits >= 0);
                 HPX_ASSERT(detail::power2(log2credits) == credits);
 
                 set_log2credit_for_gid(id, log2credits);

@@ -173,13 +173,13 @@ namespace hpx {
             // Allocator support
             // clang-format off
             void* operator new(std::size_t const size)
-                requires std::is_default_constructible_v<Allocator>
+                requires(std::is_default_constructible_v<Allocator>)
             {
                 return allocate(Allocator{}, size) + sizeof(std::size_t);
             }
 
             template <typename Allocator2, typename... Args>
-                requires std::is_convertible_v<Allocator2 const&, Allocator>
+                requires(std::is_convertible_v<Allocator2 const&, Allocator>)
             void* operator new(std::size_t const size, std::allocator_arg_t,
                 Allocator2 const& alloc, Args const&...)
             {
@@ -190,7 +190,7 @@ namespace hpx {
             }
 
             template <typename This, typename Alloc2, typename... Args>
-                requires std::is_convertible_v<Alloc2 const&, Allocator>
+                requires(std::is_convertible_v<Alloc2 const&, Allocator>)
             void* operator new(std::size_t const size, This const&,
                 std::allocator_arg_t, Alloc2 const& alloc, Args const&...)
             {

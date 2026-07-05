@@ -342,7 +342,7 @@ namespace hpx::util::plugin {
             result = directory;
             ::dlerror();    // Clear the error state.
 #else
-            result = path(dll_name).parent_path().string();
+            result = hpx::filesystem::to_string(path(dll_name).parent_path());
 #endif
 #elif defined(__APPLE__)
             // SO staticfloat's solution
@@ -362,7 +362,8 @@ namespace hpx::util::plugin {
                         if (((intptr_t) dll_handle & (-4)) ==
                             ((intptr_t) probe_handle & (-4)))
                         {
-                            result = path(image_name).parent_path().string();
+                            result = hpx::filesystem::to_string(
+                                path(image_name).parent_path());
                             break;
                         }
                     }

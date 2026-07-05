@@ -256,7 +256,7 @@
     namespace hpx::components::detail {                                        \
         template <>                                                            \
         HPX_ALWAYS_EXPORT Component::heap_type&                                \
-        component_heap_helper<Component>(...)                                  \
+        component_heap_helper<Component>()                                     \
         {                                                                      \
             util::reinitializable_static<Component::heap_type> heap;           \
             return heap.get();                                                 \

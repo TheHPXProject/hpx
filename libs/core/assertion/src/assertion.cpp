@@ -14,21 +14,20 @@
 
 namespace hpx::assertion {
 
-    namespace detail {
+    namespace {
 
         [[nodiscard]] assertion_handler& get_handler()
         {
             static assertion_handler handler = nullptr;
             return handler;
         }
-    }    // namespace detail
+    }    // namespace
 
-    void set_assertion_handler(assertion_handler handler)
+    assertion_handler set_assertion_handler(assertion_handler const handler)
     {
-        if (detail::get_handler() == nullptr)
-        {
-            detail::get_handler() = handler;
-        }
+        assertion_handler const old = get_handler();
+        get_handler() = handler;
+        return old;
     }
 
     namespace detail {

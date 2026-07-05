@@ -1,4 +1,4 @@
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -33,6 +33,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <algorithm>
@@ -938,12 +939,13 @@ namespace hpx::detail {
         }
 
         [[nodiscard]] auto operator[](std::size_t idx) const noexcept
-            -> T const&
+            -> T const& HPX_PRE(idx < this->size())
         {
             return *(data() + idx);
         }
 
-        [[nodiscard]] auto operator[](std::size_t idx) noexcept -> T&
+        [[nodiscard]] auto operator[](std::size_t idx) noexcept
+            -> T& HPX_PRE(idx < this->size())
         {
             return *(data() + idx);
         }
@@ -1034,17 +1036,21 @@ namespace hpx::detail {
             return const_reverse_iterator{begin()};
         }
 
-        [[nodiscard]] auto front() const noexcept -> T const&
+        [[nodiscard]] auto front() const noexcept
+            -> T const& HPX_PRE(!this->empty())
+
         {
             return *data();
         }
 
-        [[nodiscard]] auto front() noexcept -> T&
+        [[nodiscard]] auto front() noexcept -> T& HPX_PRE(!this->empty())
         {
             return *data();
         }
 
-        [[nodiscard]] auto back() const noexcept -> T const&
+        [[nodiscard]] auto back() const noexcept
+            -> T const& HPX_PRE(!this->empty())
+
         {
             if (is_direct())
             {
@@ -1055,7 +1061,7 @@ namespace hpx::detail {
                 data<direction::indirect>() + size<direction::indirect>() - 1);
         }
 
-        [[nodiscard]] auto back() noexcept -> T&
+        [[nodiscard]] auto back() noexcept -> T& HPX_PRE(!this->empty())
         {
             if (is_direct())
             {

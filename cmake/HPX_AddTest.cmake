@@ -22,6 +22,8 @@ function(add_hpx_test category name)
     ${name} "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN}
   )
 
+  hpx_debug("add_hpx_test.${category}.${name}" "args: ${ARGN}")
+
   if(NOT ${name}_LOCALITIES)
     set(${name}_LOCALITIES 1)
   endif()
@@ -126,6 +128,8 @@ function(add_hpx_test category name)
   else()
     set(${name}_LOCALITIES "1")
   endif()
+
+  hpx_debug("add_hpx_test.${category}.${name}" "cmd: ${cmd} ${args}")
 
   if(${name}_LOCALITIES STREQUAL "1")
     set(_full_name "${category}.${name}")

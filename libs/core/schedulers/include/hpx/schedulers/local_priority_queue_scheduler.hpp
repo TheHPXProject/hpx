@@ -734,6 +734,10 @@ namespace hpx::threads::policies {
             auto const steal = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
 
+                // suppress contracts warning about 'num_thread' not implicitly
+                // captured by a contract assertion
+                (void) num_thread;
+
                 if (thread_queue_type* q = queues_[idx].data_;
                     q->get_next_thread(thrd, true, true))
                 {
@@ -746,6 +750,10 @@ namespace hpx::threads::policies {
             std::size_t const num_high = num_high_priority_queues_;
             auto const steal_hp = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
+
+                // suppress contracts warning about 'num_thread' not implicitly
+                // captured by a contract assertion
+                (void) num_thread;
 
                 if (idx < num_high)
                 {
@@ -1441,6 +1449,10 @@ namespace hpx::threads::policies {
             auto const steal = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
 
+                // suppress contracts warning about 'num_thread' not implicitly
+                // captured by a contract assertion
+                (void) num_thread;
+
                 thread_queue_type* q = queues_[idx].data_;
                 result = this_queue->wait_or_add_new(true, added, q) && result;
 
@@ -1455,6 +1467,10 @@ namespace hpx::threads::policies {
             std::size_t const num_high = num_high_priority_queues_;
             auto const steal_hp = [&](std::size_t idx) -> bool {
                 HPX_ASSERT(idx != num_thread);
+
+                // suppress contracts warning about 'num_thread' not implicitly
+                // captured by a contract assertion
+                (void) num_thread;
 
                 // If the stealing thread has a high-priority queue, try
                 // high-priority victims first (and then their normal queues).

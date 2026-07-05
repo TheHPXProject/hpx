@@ -43,6 +43,7 @@ set(executors_headers
     hpx/executors/service_executors.hpp
     hpx/executors/std_execution_policy.hpp
     hpx/executors/sync.hpp
+    hpx/executors/thread_pool_continues_on_sender.hpp
     hpx/executors/thread_pool_executor.hpp
     hpx/executors/thread_pool_scheduler.hpp
     hpx/executors/thread_pool_scheduler_bulk.hpp

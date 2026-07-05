@@ -66,8 +66,8 @@ namespace hpx::util {
 
             using hpx::filesystem::path;
 
-            std::string prefix =
-                path(dll.get_directory(ec)).parent_path().string();
+            std::string prefix = hpx::filesystem::to_string(
+                path(dll.get_directory(ec)).parent_path());
 
             if (ec || prefix.empty())
                 return hpx_prefix();
@@ -124,7 +124,7 @@ namespace hpx::util {
         using hpx::filesystem::path;
         path const p(get_executable_filename(argv0));
 
-        return p.parent_path().parent_path().string();
+        return hpx::filesystem::to_string(p.parent_path().parent_path());
     }
 
     std::string get_executable_filename(char const* argv0)
