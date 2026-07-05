@@ -23,10 +23,11 @@ namespace {
     // tests to observe both the current reference count and whether
     // destroy_thread() was invoked, without requiring a full thread_data /
     // HPX runtime instance.
-    struct test_thread_data : hpx::threads::detail::thread_data_reference_counting
+    struct test_thread_data
+      : hpx::threads::detail::thread_data_reference_counting
     {
         explicit test_thread_data(hpx::threads::thread_id_addref const addref =
-                                       hpx::threads::thread_id_addref::yes)
+                                      hpx::threads::thread_id_addref::yes)
           : hpx::threads::detail::thread_data_reference_counting(addref)
         {
         }
@@ -184,11 +185,14 @@ void test_keep_alive_thread_id_move_assignment()
 ///////////////////////////////////////////////////////////////////////////
 void test_keep_alive_thread_id_is_move_only()
 {
-    static_assert(!std::is_copy_constructible_v<hpx::threads::keep_alive_thread_id>,
+    static_assert(
+        !std::is_copy_constructible_v<hpx::threads::keep_alive_thread_id>,
         "keep_alive_thread_id must not be copy constructible");
-    static_assert(!std::is_copy_assignable_v<hpx::threads::keep_alive_thread_id>,
+    static_assert(
+        !std::is_copy_assignable_v<hpx::threads::keep_alive_thread_id>,
         "keep_alive_thread_id must not be copy assignable");
-    static_assert(std::is_move_constructible_v<hpx::threads::keep_alive_thread_id>,
+    static_assert(
+        std::is_move_constructible_v<hpx::threads::keep_alive_thread_id>,
         "keep_alive_thread_id must be move constructible");
     static_assert(std::is_move_assignable_v<hpx::threads::keep_alive_thread_id>,
         "keep_alive_thread_id must be move assignable");

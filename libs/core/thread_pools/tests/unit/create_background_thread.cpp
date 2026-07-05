@@ -51,8 +51,7 @@ void test_create_background_thread_sets_is_background()
     HPX_TEST(thrd_data->is_background());
 
     // the scheduler's background thread count must have been incremented
-    HPX_TEST_EQ(
-        scheduler->get_background_thread_count(), initial_count + 1);
+    HPX_TEST_EQ(scheduler->get_background_thread_count(), initial_count + 1);
 
     // let the background work item terminate itself as quickly as possible
     // instead of looping indefinitely for the remainder of the test run
