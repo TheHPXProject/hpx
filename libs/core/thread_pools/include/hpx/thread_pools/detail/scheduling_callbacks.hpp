@@ -16,7 +16,7 @@
 
 namespace hpx::threads::detail {
 
-    struct scheduling_callbacks
+    HPX_CXX_CORE_EXPORT struct scheduling_callbacks
     {
         using outer_callback_type = hpx::move_only_function<bool()>;
         using callback_type = hpx::move_only_function<void()>;

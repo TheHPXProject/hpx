@@ -386,7 +386,7 @@ namespace hpx::threads {
 #endif
 
     // This data type allows to optionally keep the provided thread_id alive
-    struct keep_alive_thread_id
+    HPX_CXX_CORE_EXPORT struct keep_alive_thread_id
     {
         explicit keep_alive_thread_id(
             hpx::threads::thread_id id, bool const add_ref) noexcept
@@ -400,9 +400,24 @@ namespace hpx::threads {
 
         keep_alive_thread_id& operator=(
             keep_alive_thread_id const& other) = delete;
-        keep_alive_thread_id& operator=(keep_alive_thread_id&& other) = default;
+
+        keep_alive_thread_id& operator=(keep_alive_thread_id&& other) noexcept
+        {
+            if (this != &other)
+            {
+                detach_if_needed();
+                add_ref = other.add_ref;
+                id = HPX_MOVE(other.id);
+            }
+            return *this;
+        }
 
         ~keep_alive_thread_id()
+        {
+            detach_if_needed();
+        }
+
+        void detach_if_needed() noexcept
         {
             // prevent for the reference count to be decremented if it was
             // not incremented in the constructor

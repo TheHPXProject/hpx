@@ -10,59 +10,69 @@
 
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/thread_pools.hpp>
 #include <hpx/modules/threading_base.hpp>
-#include <hpx/thread_pools/detail/background_thread.hpp>
-#include <hpx/thread_pools/detail/scheduling_callbacks.hpp>
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 
-void test_create_background_thread_sets_is_background()
-{
-    using namespace hpx::threads;
+namespace {
 
-    auto* scheduler = hpx::threads::get_self_id_data()->get_scheduler_base();
-    HPX_TEST(scheduler != nullptr);
+    void test_create_background_thread_sets_is_background()
+    {
+        using namespace hpx::threads;
 
-    std::int64_t const initial_count = scheduler->get_background_thread_count();
+        auto* scheduler =
+            hpx::threads::get_self_id_data()->get_scheduler_base();
+        HPX_TEST(scheduler != nullptr);
 
-    hpx::threads::detail::scheduling_callbacks callbacks(
-        []() -> bool { return false; },    // outer
-        []() {},                           // inner
-        []() -> bool { return true; }      // background
-    );
+        std::int64_t const initial_count =
+            scheduler->get_background_thread_count();
 
-    std::shared_ptr<bool> running;
-    std::int64_t idle_loop_count = 0;
+        hpx::threads::detail::scheduling_callbacks callbacks(
+            []() -> bool { return false; },    // outer
+            []() {},                           // inner
+            []() -> bool { return true; }      // background
+        );
 
-    thread_id_ref_type const background_thread =
-        hpx::threads::detail::create_background_thread(
-            *scheduler, 0, callbacks, running, idle_loop_count);
+        std::shared_ptr<bool> running;
+        std::int64_t idle_loop_count = 0;
 
-    HPX_TEST(background_thread);
-    HPX_TEST(running);
-    HPX_TEST(*running);
+        thread_id_ref_type const background_thread =
+            hpx::threads::detail::create_background_thread(
+                *scheduler, 0, callbacks, running, idle_loop_count);
 
-    // the newly created thread must be flagged as a background thread
-    auto* thrd_data = get_thread_id_data(background_thread);
-    HPX_TEST(thrd_data != nullptr);
-    HPX_TEST(thrd_data->is_background());
+        HPX_TEST(background_thread);
+        HPX_TEST(running);
+        HPX_TEST(*running);
 
-    // the scheduler's background thread count must have been incremented
-    HPX_TEST_EQ(scheduler->get_background_thread_count(), initial_count + 1);
+        // the newly created thread must be flagged as a background thread
+        auto* thrd_data = get_thread_id_data(background_thread);
+        HPX_TEST(thrd_data != nullptr);
+        HPX_TEST(thrd_data->is_background());
 
-    // let the background work item terminate itself as quickly as possible
-    // instead of looping indefinitely for the remainder of the test run
-    *running = false;
+        // the scheduler's background thread count must have been incremented
+        HPX_TEST_EQ(
+            scheduler->get_background_thread_count(), initial_count + 1);
 
-    // restore the background thread count (normally done once the
-    // background thread notices it should terminate, via
-    // call_background_thread/call_and_create_background_thread)
-    scheduler->decrement_background_thread_count();
-    HPX_TEST_EQ(scheduler->get_background_thread_count(), initial_count);
-}
+        // let the background work item terminate itself as quickly as possible
+        // instead of looping indefinitely for the remainder of the test run
+        *running = false;
+
+        // restore the background thread count (normally done once the
+        // background thread notices it should terminate, via
+        // call_background_thread/ call_and_create_background_thread)
+        scheduler->decrement_background_thread_count();
+        HPX_TEST_EQ(scheduler->get_background_thread_count(), initial_count);
+
+        // forcefully reset the background thread
+        hpx::threads::thread_init_data data;
+        data.scheduler_base = thrd_data->get_scheduler_base();
+        thrd_data->rebind(data);
+    }
+}    // namespace
 
 int hpx_main()
 {
