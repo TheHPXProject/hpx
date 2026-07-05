@@ -18,6 +18,7 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <mutex>
 
@@ -48,21 +49,49 @@ void test_set_is_background()
 
 // A newly (re-)initialized thread must not carry over the is_background
 // flag from a previous use of the same thread_data instance (see
-// thread_data::rebind_base resetting is_background_ to false).
+// thread_data::rebind_base resetting is_background_ to false). Since
+// thread_data address reuse depends on allocator behavior and is not
+// guaranteed to happen on the very first allocation/deallocation cycle,
+// keep creating threads (alternating whether is_background is set) until
+// a reused address is actually observed, capped at max_iterations to avoid
+// looping forever if reuse never happens.
 void test_is_background_reset_on_rebind()
 {
-    for (int i = 0; i != 2; ++i)
+    constexpr int max_iterations = 10000;
+
+    std::atomic<hpx::threads::thread_data const*> previous_data{nullptr};
+    std::atomic<bool> observed_reuse{false};
+
+    for (int i = 0; i != max_iterations && !observed_reuse.load(); ++i)
     {
-        hpx::async([i]() {
+        bool const mark_background = (i % 2) == 0;
+
+        hpx::async([&previous_data, &observed_reuse, mark_background]() {
             auto* data = hpx::threads::get_self_id_data();
-            HPX_TEST(!data->is_background());
-            if (i == 0)
+            HPX_TEST(data != nullptr);
+
+            if (previous_data.load() == data)
+            {
+                // this thread_data instance's storage has been reused;
+                // its is_background flag must have been reset to its
+                // default value (false) by thread_data::rebind_base
+                HPX_TEST(!data->is_background());
+                observed_reuse = true;
+            }
+
+            if (mark_background)
             {
                 data->set_is_background();
                 HPX_TEST(data->is_background());
             }
+
+            previous_data = data;
         }).get();
     }
+
+    HPX_TEST_MSG(observed_reuse.load(),
+        "expected thread_data address reuse to be observed within "
+        "max_iterations");
 }
 
 ///////////////////////////////////////////////////////////////////////////
