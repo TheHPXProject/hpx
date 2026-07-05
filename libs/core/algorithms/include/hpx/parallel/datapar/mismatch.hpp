@@ -108,9 +108,7 @@ namespace hpx::parallel::detail {
         F&& f)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_mismatch<ExPolicy>::call(
                 first1, last1, first2, HPX_FORWARD(F, f));
@@ -220,9 +218,7 @@ namespace hpx::parallel::detail {
         Iter2 first2, Sent2 last2, F&& f, Proj1&& proj1, Proj2&& proj2)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_mismatch_binary<ExPolicy>::call2(first1, last1,
                 first2, last2, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),

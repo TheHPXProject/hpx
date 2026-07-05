@@ -17,10 +17,6 @@
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_description.hpp>
 #include <hpx/threading_base/thread_helpers.hpp>
-
-#if HPX_HAVE_ITTNOTIFY != 0
-#include <hpx/modules/itt_notify.hpp>
-#endif
 #endif
 
 #include <string>
@@ -54,7 +50,7 @@ namespace hpx {
         // add empty (but non-trivial) destructor to silence warnings
         HPX_HOST_DEVICE ~scoped_annotation() {}
     };
-#elif HPX_HAVE_ITTNOTIFY != 0
+#elif defined(HPX_HAVE_THREAD_DESCRIPTION)
     HPX_CXX_CORE_EXPORT struct [[nodiscard]] scoped_annotation
     {
         scoped_annotation(scoped_annotation const&) = delete;
@@ -63,20 +59,23 @@ namespace hpx {
         scoped_annotation& operator=(scoped_annotation&&) = delete;
 
         explicit scoped_annotation(char const* name)
-          : task_(thread_domain_, hpx::util::itt::string_handle(name))
         {
             auto const* self = hpx::threads::get_self_ptr();
             if (self != nullptr)
             {
                 desc_ = threads::get_thread_id_data(self->get_thread_id())
                             ->set_description(name);
+
+                if (auto timer_data = threads::get_self_timer_data();
+                    timer_data.valid())
+                {
+                    hpx::tracing::update_task_timer(timer_data, name);
+                    threads::set_self_timer_data(HPX_MOVE(timer_data));
+                }
             }
         }
 
         explicit scoped_annotation(std::string name)
-          : task_(thread_domain_,
-                hpx::util::itt::string_handle(
-                    detail::store_function_annotation(name)))
         {
             auto const* self = hpx::threads::get_self_ptr();
             if (self != nullptr)
@@ -85,6 +84,13 @@ namespace hpx {
                     detail::store_function_annotation(HPX_MOVE(name));
                 desc_ = threads::get_thread_id_data(self->get_thread_id())
                             ->set_description(name_c_str);
+
+                if (auto timer_data = threads::get_self_timer_data();
+                    timer_data.valid())
+                {
+                    hpx::tracing::update_task_timer(timer_data, name_c_str);
+                    threads::set_self_timer_data(HPX_MOVE(timer_data));
+                }
             }
         }
 
@@ -92,9 +98,6 @@ namespace hpx {
             typename =
                 std::enable_if_t<!std::is_same_v<std::decay_t<F>, std::string>>>
         explicit scoped_annotation(F&& f)
-          : task_(thread_domain_,
-                hpx::traits::get_function_annotation_itt<std::decay_t<F>>::call(
-                    f))
         {
             auto const* self = hpx::threads::get_self_ptr();
             if (self != nullptr)
@@ -102,6 +105,14 @@ namespace hpx {
                 desc_ =
                     threads::get_thread_id_data(self->get_thread_id())
                         ->set_description(hpx::threads::thread_description(f));
+
+                if (auto timer_data = threads::get_self_timer_data();
+                    timer_data.valid())
+                {
+                    hpx::tracing::update_task_timer(
+                        timer_data, desc_.get_description());
+                    threads::set_self_timer_data(HPX_MOVE(timer_data));
+                }
             }
         }
 
@@ -115,9 +126,6 @@ namespace hpx {
             }
         }
 
-    private:
-        hpx::util::itt::thread_domain thread_domain_;
-        hpx::util::itt::task task_;
         hpx::threads::thread_description desc_;
     };
 #else

@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -36,8 +36,8 @@ namespace hpx::traits {
         }
 
         static bool flush(serialization::binary_filter* /* filter */,
-            Container& /* cont */, std::size_t /* current */, std::size_t size,
-            std::size_t& written) noexcept
+            Container& /* cont */, std::size_t /* current */,
+            std::size_t const size, std::size_t& written) noexcept
         {
             written = size;
             return true;
@@ -52,7 +52,8 @@ namespace hpx::traits {
 
         static constexpr std::size_t init_data(Container const& /* cont */,
             serialization::binary_filter* /* filter */,
-            std::size_t /* current */, std::size_t decompressed_size) noexcept
+            std::size_t /* current */,
+            std::size_t const decompressed_size) noexcept
         {
             return decompressed_size;
         }
@@ -61,24 +62,11 @@ namespace hpx::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Container>
-    struct serialization_access_data
-      : default_serialization_access_data<Container>
-    {
-        [[nodiscard]] static std::size_t size(Container const& cont) noexcept
-        {
-            return cont.size();
-        }
+    namespace detail {
 
-        static void resize(Container& cont, std::size_t count)
+        constexpr void copy_serialized_data(
+            void* dest, void const* address, std::size_t const count) noexcept
         {
-            return cont.resize(cont.size() + count);
-        }
-
-        static void write(Container& cont, std::size_t count,
-            std::size_t current, void const* address) noexcept
-        {
-            void* dest = &cont[current];
             switch (count)
             {
             case 16:
@@ -107,50 +95,47 @@ namespace hpx::traits {
                 break;
             }
         }
+    }    // namespace detail
+
+    HPX_CXX_CORE_EXPORT template <typename Container>
+    struct serialization_access_data
+      : default_serialization_access_data<Container>
+    {
+        [[nodiscard]] static std::size_t size(Container const& cont) noexcept
+        {
+            return cont.size();
+        }
+
+        static void resize(Container& cont, std::size_t count)
+        {
+            return cont.resize(cont.size() + count);
+        }
+
+        HPX_FORCEINLINE static void write(Container& cont,
+            std::size_t const count, std::size_t const current,
+            void const* address) noexcept
+        {
+            detail::copy_serialized_data(&cont[current], address, count);
+        }
 
         static bool flush(serialization::binary_filter* filter, Container& cont,
-            std::size_t current, std::size_t size, std::size_t& written)
+            std::size_t const current, std::size_t const size,
+            std::size_t& written)
         {
             return filter->flush(&cont[current], size, written);
         }
 
         // functions related to input operations
-        static void read(Container const& cont, std::size_t count,
-            std::size_t current, void* address) noexcept
+        HPX_FORCEINLINE static void read(Container const& cont,
+            std::size_t const count, std::size_t const current,
+            void* address) noexcept
         {
-            void const* src = &cont[current];
-            switch (count)
-            {
-            case 16:
-                std::memcpy(address, src, 16);
-                break;
-
-            case 8:
-                std::memcpy(address, src, 8);
-                break;
-
-            case 4:
-                std::memcpy(address, src, 4);    // -V112
-                break;
-
-            case 2:
-                std::memcpy(address, src, 2);
-                break;
-
-            case 1:
-                *static_cast<std::uint8_t*>(address) =
-                    *static_cast<std::uint8_t const*>(src);
-                break;
-
-            default:
-                std::memcpy(address, src, count);
-                break;
-            }
+            detail::copy_serialized_data(address, &cont[current], count);
         }
 
         static std::size_t init_data(Container const& cont,
-            serialization::binary_filter* filter, std::size_t current,
-            std::size_t decompressed_size)
+            serialization::binary_filter* filter, std::size_t const current,
+            std::size_t const decompressed_size)
         {
             return filter->init_data(
                 &cont[current], cont.size() - current, decompressed_size);

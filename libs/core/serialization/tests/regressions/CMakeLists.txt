@@ -5,9 +5,14 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
-    buffer_overrun_2839 non_default_constructible_5886
-    not_bitwise_shared_ptr_serialization serialization_exception_ptr
+    buffer_overrun_2839
+    non_default_constructible_5886
+    not_bitwise_shared_ptr_serialization
+    serialization_exception_ptr
     serialization_unsigned_buffer
+    address_leak_vulnerability
+    memory_read_vulnerability
+    vtable_hijack_vulnerability
 )
 
 foreach(test ${tests})

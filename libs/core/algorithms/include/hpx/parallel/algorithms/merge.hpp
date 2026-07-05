@@ -287,7 +287,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/copy.hpp>
@@ -718,12 +718,7 @@ namespace hpx::parallel {
         {
             auto diagonal_index = [n = static_cast<std::size_t>(n)](
                                       auto&& shape, std::size_t cores) {
-
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                static hpx::util::itt::event notify_event("get diagonal index");
-                hpx::util::itt::mark_event e(notify_event);
-#endif
-                hpx::tracing::mark_event evt("get diagonal index");
+                HPX_TRACING_MARK_EVENT("get diagonal index");
                 auto const shape_size = std::size(shape);
 
                 static_assert(
@@ -758,13 +753,7 @@ namespace hpx::parallel {
             std::size_t len1, Iter2 first2, std::size_t len2, std::size_t k,
             Comp&& comp, Proj1 proj1, Proj2 proj2)
         {
-
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event(
-                "get diagonal intersection");
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-            hpx::tracing::mark_event evt("get diagonal intersection");
+            HPX_TRACING_MARK_EVENT("get diagonal intersection");
             if (len1 == 0)
                 return {0, (std::min) (k, len2)};
             if (len2 == 0)
@@ -814,13 +803,7 @@ namespace hpx::parallel {
             std::size_t len1, Iter2 first2, std::size_t len2, std::size_t k,
             Comp&& comp, hpx::identity, hpx::identity)
         {
-
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event(
-                "get diagonal intersection");
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-            hpx::tracing::mark_event evt("get diagonal intersection");
+            HPX_TRACING_MARK_EVENT("get diagonal intersection");
             if (len1 == 0)
                 return {0, (std::min) (k, len2)};
             if (len2 == 0)
@@ -895,15 +878,14 @@ namespace hpx::parallel {
                     auto [a1, b1] = diagonal_intersection(
                         first1, len1, first2, len2, k1, comp, proj1, proj2);
 
-                    auto tid = hpx::this_thread::get_id();
                     hpx::execution::experimental::mark_partition(
-                        params, exec, idx, partition_phase::start, a0, b0, tid);
+                        params, exec, idx, partition_phase::start, chunk);
                     sequential_merge(std::next(first1, a0),
                         std::next(first1, a1), std::next(first2, b0),
                         std::next(first2, b1), std::next(dest, k0), comp, proj1,
                         proj2);
                     hpx::execution::experimental::mark_partition(
-                        params, exec, idx, partition_phase::end, tid);
+                        params, exec, idx, partition_phase::end);
                 }
             };
 

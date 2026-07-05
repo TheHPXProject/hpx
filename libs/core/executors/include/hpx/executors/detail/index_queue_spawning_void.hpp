@@ -18,7 +18,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/threading.hpp>
@@ -71,11 +71,7 @@ namespace hpx::parallel::execution::detail {
             auto& local_queue = state->queues[worker_thread].data_;
             while ((index = local_queue.template pop<Which>()))
             {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                static hpx::util::itt::event notify_event("do_work_chunk");
-                hpx::util::itt::mark_event e(notify_event);
-#endif
-                hpx::tracing::mark_event evt("do_work_chunk");
+                HPX_TRACING_MARK_EVENT("do_work_chunk");
 
                 auto const i_begin = *index * chunk_size;
                 auto const i_end = (std::min) (i_begin + chunk_size,
@@ -106,13 +102,7 @@ namespace hpx::parallel::execution::detail {
                     while (
                         (index = neighbor_queue.template pop<opposite_end>()))
                     {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                        static hpx::util::itt::event notify_event(
-                            "do_work_chunk (stealing)");
-                        hpx::util::itt::mark_event e(notify_event);
-#endif
-                        hpx::tracing::mark_event evt(
-                            "do_work_chunk (stealing)");
+                        HPX_TRACING_MARK_EVENT("do_work_chunk (stealing)");
 
                         auto const i_begin = *index * chunk_size;
                         auto const i_end = (std::min) (i_begin + chunk_size,
@@ -148,11 +138,7 @@ namespace hpx::parallel::execution::detail {
         // Otherwise, it will call set_value on the shared state.
         void finish() const noexcept
         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event("finish");
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-            hpx::tracing::mark_event evt("finish");
+            HPX_TRACING_MARK_EVENT("finish");
 
             std::uint32_t const prev_value =
                 state->tasks_remaining.data_.fetch_sub(
@@ -429,12 +415,7 @@ namespace hpx::parallel::execution::detail {
         void execute(hpx::threads::thread_description const& desc,
             threads::thread_pool_base* pool)
         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event(
-                "index_queue_spawning::execute");
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-            hpx::tracing::mark_event evt("index_queue_spawning::execute");
+            HPX_TRACING_MARK_EVENT("index_queue_spawning::execute");
 
             auto const size =
                 static_cast<std::uint32_t>(hpx::util::size(shape));

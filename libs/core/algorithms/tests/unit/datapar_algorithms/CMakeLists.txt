@@ -11,6 +11,7 @@ if(HPX_WITH_DATAPAR)
       ${tests}
       adjacentfind_datapar
       adjacentdifference_datapar
+      datapar_zip_iterator_guard
       all_of_datapar
       any_of_datapar
       copy_datapar

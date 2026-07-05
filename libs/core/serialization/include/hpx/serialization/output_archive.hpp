@@ -1,6 +1,6 @@
 //  Copyright (c) 2014 Thomas Heller
 //  Copyright (c) 2015 Anton Bikineev
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -94,10 +94,11 @@ namespace hpx::serialization {
     HPX_CXX_CORE_EXPORT struct output_archive : basic_archive<output_archive>
     {
     private:
-        static constexpr std::uint32_t make_flags(std::uint32_t flags,
+        static constexpr std::uint32_t make_flags(std::uint32_t const flags,
             std::vector<serialization_chunk> const* chunks) noexcept
         {
             return flags | archive_flags::archive_is_saving |
+                archive_flags::enable_type_checking |
                 (chunks == nullptr ?
                         (archive_flags::disable_data_chunking |
                             archive_flags::disable_receive_data_chunking) :
@@ -108,7 +109,8 @@ namespace hpx::serialization {
         using base_type = basic_archive<output_archive>;
 
         template <typename Container>
-        explicit output_archive(Container& buffer, std::uint32_t flags = 0U,
+        explicit output_archive(Container& buffer,
+            std::uint32_t const flags = 0U,
             std::vector<serialization_chunk>* chunks = nullptr,
             binary_filter* filter = nullptr,
             std::size_t zero_copy_serialization_threshold = 0)
@@ -122,23 +124,35 @@ namespace hpx::serialization {
             // the buffer repeatedly
             if (buffer_->is_preprocessing())
             {
-                flags_ = static_cast<std::uint32_t>(
-                    flags_ | archive_flags::archive_is_preprocessing);
+                flags_ = flags_ | archive_flags::archive_is_preprocessing;
             }
 
             // endianness needs to be saved separately as it is needed to
             // properly interpret the flags
-            //
-            // FIXME: make bool once integer compression is implemented
-            std::uint64_t const endianness = endian_big() ? ~0ul : 0ul;
-            save(endianness);
+            bool const endianness = endian_big();
+            save_binary(
+                detail::fundamental_types::none, &endianness, sizeof(bool));
 
-            // send flags sent by the other end to make sure both ends have
-            // the same assumptions about the archive format
+            // type checking needs to be saved separately as it is needed to
+            // properly interpret the flags
+            bool const type_checking = enable_type_checking();
+            save_binary(
+                detail::fundamental_types::none, &type_checking, sizeof(bool));
+
+            // send flags to the other end to make sure both ends have the same
+            // assumptions about the archive format
             save(flags_);
 
             // send the zero-copy limit
-            save(static_cast<std::uint64_t>(zero_copy_serialization_threshold));
+            bool const has_zero_copy_serialization_threshold =
+                zero_copy_serialization_threshold != 0;
+            save(has_zero_copy_serialization_threshold);
+
+            if (has_zero_copy_serialization_threshold)
+            {
+                save(static_cast<std::uint64_t>(
+                    zero_copy_serialization_threshold));
+            }
 
             bool const has_filter = filter != nullptr;
             save(has_filter);
@@ -240,7 +254,8 @@ namespace hpx::serialization {
                     HPX_ASSERT(
                         !(disable_array_optimization() || endianess_differs()));
 #endif
-                    save_binary(&t, sizeof(t));
+                    save_binary(detail::array_of_fundamental_type_v<std::byte>,
+                        &t, sizeof(t));
                 }
                 else if constexpr (hpx::traits::is_serialization_supported<
                                        T>::has_refl_serialize ||
@@ -256,82 +271,84 @@ namespace hpx::serialization {
                         "true");
                 }
             }
+            else if constexpr (std::is_integral_v<T>)
+            {
+                static_assert((std::is_unsigned_v<T> &&
+                                  sizeof(T) <= sizeof(std::uint64_t)) ||
+                        sizeof(T) <= sizeof(std::int64_t),
+                    "integral type is larger than supported");
+
 #if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
-            else if constexpr (std::is_unsigned_v<T>)
-            {
-                static_assert(sizeof(T) <= sizeof(std::uint64_t),
-                    "integral type is larger than supported");
-
-                save_integral(static_cast<std::uint64_t>(t));
-            }
-            else
-            {
-                static_assert(sizeof(T) <= sizeof(std::int64_t),
-                    "integral type is larger than supported");
-
-                save_integral(static_cast<std::int64_t>(t));
-            }
+                if (HPX_UNLIKELY(endianess_differs()))
+                {
+                    T val = t;
+                    reverse_bytes(sizeof(T), reinterpret_cast<char*>(&val));
+                    save_binary(detail::fundamental_type_v<T>, &val, sizeof(T));
+                }
+                else
+                {
+                    save_binary(detail::fundamental_type_v<T>, &t, sizeof(T));
+                }
 #else
-            else if constexpr (std::is_unsigned_v<T>)
-            {
-                static_assert(sizeof(T) <= sizeof(std::uint64_t),
-                    "integral type is larger than supported");
-
-                auto const val = static_cast<std::uint64_t>(t);
-                save_binary(&val, sizeof(std::uint64_t));
+                save_binary(detail::fundamental_type_v<T>, &t, sizeof(T));
+#endif
             }
             else
             {
-                static_assert(sizeof(T) <= sizeof(std::int64_t),
-                    "integral type is larger than supported");
+                static_assert(std::is_enum_v<T>);
+                using underlying_type = std::underlying_type_t<T>;
 
-                auto const val = static_cast<std::int64_t>(t);
-                save_binary(&val, sizeof(std::int64_t));
+                auto const val = static_cast<underlying_type>(t);
+                save_binary(detail::fundamental_type_v<underlying_type>, &val,
+                    sizeof(underlying_type));
             }
-#endif
         }
 
-        void save(float f)
+        void save(float const f)
         {
-            save_binary(&f, sizeof(float));
+            save_binary(detail::fundamental_type_v<float>, &f, sizeof(float));
         }
 
-        void save(double d)
+        void save(double const d)
         {
-            save_binary(&d, sizeof(double));
+            save_binary(detail::fundamental_type_v<double>, &d, sizeof(double));
         }
 
-        void save(long double d)
+        void save(long double const d)
         {
-            save_binary(&d, sizeof(long double));
+            save_binary(detail::fundamental_type_v<long double>, &d,
+                sizeof(long double));
         }
 
-        void save(char c)
+        void save(char const c)
         {
-            save_binary(&c, sizeof(char));
+            save_binary(detail::fundamental_type_v<char>, &c, sizeof(char));
         }
 
-        void save(signed char c)
+        void save(signed char const c)
         {
-            save_binary(&c, sizeof(signed char));
+            save_binary(detail::fundamental_type_v<signed char>, &c,
+                sizeof(signed char));
         }
 
-        void save(unsigned char c)
+        void save(unsigned char const c)
         {
-            save_binary(&c, sizeof(unsigned char));
+            save_binary(detail::fundamental_type_v<unsigned char>, &c,
+                sizeof(unsigned char));
         }
 
-        void save(bool b)
+        void save(bool const b)
         {
             HPX_ASSERT(0 == static_cast<int>(b) || 1 == static_cast<int>(b));
-            save_binary(&b, sizeof(bool));
+            save_binary(detail::fundamental_type_v<bool>, &b, sizeof(bool));
         }
 
 #if defined(HPX_SERIALIZATION_HAVE_ALLOW_RAW_POINTER_SERIALIZATION)
         template <typename T>
         void save(T* p)
         {
-            save_binary(&p, sizeof(std::size_t));
+            save_binary(detail::fundamental_type_v<std::size_t>, &p,
+                sizeof(std::size_t));
         }
 #endif
         // NOLINTEND(bugprone-multi-level-implicit-pointer-conversion)
@@ -339,42 +356,40 @@ namespace hpx::serialization {
     private:
         friend struct basic_archive<output_archive>;
 
-#if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
-        template <typename Promoted>
-        void save_integral(Promoted l)
-        {
-            if (endianess_differs())
-            {
-                reverse_bytes(sizeof(Promoted), reinterpret_cast<char*>(&l));
-            }
-            save_binary(&l, sizeof(Promoted));
-        }
-#endif
-
     public:
-        void save_binary(void const* address, std::size_t count)
+        void save_binary(detail::fundamental_types t, void const* address,
+            std::size_t const count)
         {
-            if (count == 0)
+            if (HPX_UNLIKELY(count == 0))
                 return;
 
-            size_ += count;
-            buffer_->save_binary(address, count);
+            if (HPX_UNLIKELY(!enable_type_checking()))
+            {
+                t = detail::fundamental_types::none;
+            }
+
+            size_ += buffer_->save_binary(t, address, count);
         }
 
-        void save_binary_chunk(void const* address, std::size_t count)
+        void save_binary_chunk(detail::fundamental_types t, void const* address,
+            std::size_t const count)
         {
-            if (count == 0)
+            if (HPX_UNLIKELY(count == 0))
                 return;
 
-            if (disable_data_chunking())
+            if (HPX_UNLIKELY(!enable_type_checking()))
             {
-                size_ += count;
-                buffer_->save_binary(address, count);
+                t = detail::fundamental_types::none;
+            }
+
+            if (HPX_UNLIKELY(disable_data_chunking()))
+            {
+                size_ += buffer_->save_binary(t, address, count);
             }
             else
             {
                 // the size might grow if optimizations are not used
-                size_ += buffer_->save_binary_chunk(address, count);
+                size_ += buffer_->save_binary_chunk(t, address, count);
             }
         }
 

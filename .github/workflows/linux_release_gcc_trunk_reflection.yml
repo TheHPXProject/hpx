@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: stellargroup/gcc_trunk_build_env:1
+    container: stellargroup/gcc_trunk_build_env:2
 
     steps:
     - uses: actions/checkout@v7
@@ -31,7 +31,7 @@ jobs:
           -DHPX_WITH_CXX_STANDARD=26 \
           -DCMAKE_C_COMPILER=gcc \
           -DCMAKE_CXX_COMPILER=g++ \
-          -DCMAKE_CXX_FLAGS="-freflection -std=c++26 -latomic" \
+          -DCMAKE_CXX_FLAGS="-freflection -std=c++26 -latomic -fcontracts -fcontract-evaluation-semantic=enforce" \
           -DCMAKE_EXE_LINKER_FLAGS="-latomic" \
           -DCMAKE_SHARED_LINKER_FLAGS="-latomic" \
           -DCMAKE_REQUIRED_LIBRARIES="atomic" \
@@ -40,17 +40,16 @@ jobs:
           -DHPX_WITH_EXAMPLES=OFF \
           -DHPX_WITH_TESTS=ON \
           -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
-          -DHPX_SERIALIZATION_WITH_ALLOW_AUTO_GENERATE=ON \
           -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
     - name: Build
       shell: bash
       run: |
           cmake --build build --target all
           cmake --build build --target tests.unit.modules.serialization
+          cmake --build build --target tests.unit.modules.contracts
     - name: Test
       shell: bash
       run: |
           cd build
-          ctest \
-            --output-on-failure \
-            --tests-regex "tests.unit.modules.serialization"
+          ctest --output-on-failure --tests-regex "tests.unit.modules.serialization"
+          ctest --output-on-failure --tests-regex "tests.unit.modules.contracts"

@@ -583,7 +583,7 @@ namespace hpx::lockfree {
         template <typename F>
         bool consume_one(F&& f)
         {
-            tagged_node_handle old_tos = tos.load(std::memory_order_consume);
+            tagged_node_handle old_tos = tos.load(std::memory_order_acquire);
 
             for (;;)
             {
@@ -639,7 +639,7 @@ namespace hpx::lockfree {
         std::size_t consume_all_atomic(F&& f)
         {
             std::size_t element_count = 0;
-            tagged_node_handle old_tos = tos.load(std::memory_order_consume);
+            tagged_node_handle old_tos = tos.load(std::memory_order_acquire);
 
             for (;;)
             {
@@ -693,7 +693,7 @@ namespace hpx::lockfree {
         std::size_t consume_all_atomic_reversed(F&& f)
         {
             std::size_t element_count = 0;
-            tagged_node_handle old_tos = tos.load(std::memory_order_consume);
+            tagged_node_handle old_tos = tos.load(std::memory_order_acquire);
 
             for (;;)
             {

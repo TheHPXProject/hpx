@@ -218,7 +218,7 @@ namespace hpx {
         HPX_ALWAYS_EXPORT hpx::components::managed_component<
             lcos::detail::promise_lco<void, hpx::util::unused_type>>::heap_type&
         component_heap_helper<hpx::components::managed_component<
-            lcos::detail::promise_lco<void, hpx::util::unused_type>>>(...);
+            lcos::detail::promise_lco<void, hpx::util::unused_type>>>();
 
         template <typename Result, typename RemoteResult>
         struct HPX_ALWAYS_EXPORT

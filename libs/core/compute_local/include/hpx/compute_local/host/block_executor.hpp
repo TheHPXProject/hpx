@@ -1,4 +1,5 @@
 //  Copyright (c) 2016 Thomas Heller
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2024-2025 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -115,39 +116,25 @@ namespace hpx::compute::host {
         }
         /// \endcond
 
-    private:
-        // this function is conceptually const (current_ is mutable)
-        auto get_next_executor() const
+        template <typename F, typename... Ts>
+        decltype(auto) post(F&& f, Ts&&... ts) const
         {
-            return executors_[current_++ % executors_.size()];
+            hpx::parallel::execution::post(
+                get_next_executor(), HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            block_executor const& exec, F&& f, Ts&&... ts)
-        {
-            hpx::parallel::execution::post(exec.get_next_executor(),
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            block_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
             return hpx::parallel::execution::async_execute(
-                exec.get_next_executor(), HPX_FORWARD(F, f),
-                HPX_FORWARD(Ts, ts)...);
+                get_next_executor(), HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            block_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
             return hpx::parallel::execution::sync_execute(
-                exec.get_next_executor(), HPX_FORWARD(F, f),
-                HPX_FORWARD(Ts, ts)...);
+                get_next_executor(), HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Shape, typename... Ts>
@@ -163,9 +150,9 @@ namespace hpx::compute::host {
             std::size_t const num_executors = executors_.size();
 
             using bulk_async_result_type =
-                decltype(hpx::parallel::execution::bulk_async_execute(
-                    std::declval<Executor>(), std::declval<F>(),
-                    util::iterator_range(begin, begin), std::declval<Ts>()...));
+                decltype(std::declval<Executor&>().bulk_async_execute(
+                    std::declval<F>(), util::iterator_range(begin, begin),
+                    std::declval<Ts>()...));
 
             // clang-format off
 
@@ -228,11 +215,10 @@ namespace hpx::compute::host {
         }
 
         template <typename F, typename Shape, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            block_executor const& exec, F&& f, Shape const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, Shape const& shape, Ts&&... ts) const
         {
-            return exec.bulk_async_execute_impl(
+            return bulk_async_execute_impl(
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
@@ -304,21 +290,25 @@ namespace hpx::compute::host {
         }
 
         template <typename F, typename Shape, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            block_executor const& exec, F&& f, Shape const& shape, Ts&&... ts)
+        decltype(auto) bulk_sync_execute(
+            F&& f, Shape const& shape, Ts&&... ts) const
         {
-            return exec.bulk_sync_execute_impl(
+            return bulk_sync_execute_impl(
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
-    public:
         std::vector<host::target> const& targets() const noexcept
         {
             return targets_;
         }
 
     private:
+        // this function is conceptually const (current_ is mutable)
+        auto get_next_executor() const
+        {
+            return executors_[current_++ % executors_.size()];
+        }
+
         void init_executors()
         {
             executors_.reserve(targets_.size());

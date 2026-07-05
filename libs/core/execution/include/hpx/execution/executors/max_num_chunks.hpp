@@ -47,15 +47,13 @@ namespace hpx::execution::experimental {
 
         /// \cond NOINTERNAL
         template <typename Executor>
-        friend std::size_t tag_override_invoke(
-            hpx::execution::experimental::maximal_number_of_chunks_t,
-            max_num_chunks& this_, Executor&&, std::size_t const cores,
-            std::size_t)
+        std::size_t maximal_number_of_chunks(
+            Executor&&, std::size_t const cores, std::size_t) const
         {
             // use the given number of chunks if given
-            if (this_.num_chunks_ != 0)
+            if (num_chunks_ != 0)
             {
-                return this_.num_chunks_;
+                return num_chunks_;
             }
 
             if (cores == 1)

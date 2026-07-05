@@ -11,6 +11,9 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+#include <hpx/modules/filesystem.hpp>
+
 #include <cctype>
 #include <cstddef>
 #include <cstdio>
@@ -32,7 +35,7 @@ namespace hpx::iostream::test {
             auto temp_path = std::filesystem::temp_directory_path();
             std::string unique_filename =
                 "file_" + std::to_string(std::random_device{}()) + ".tmp";
-            return (temp_path / unique_filename).string();
+            return hpx::filesystem::to_string(temp_path / unique_filename);
         }
 
     public:

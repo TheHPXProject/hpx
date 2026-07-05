@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2026 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -45,12 +46,10 @@ struct test_replaced_get_chunk_size
     }
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::get_chunk_size_t,
-        test_replaced_get_chunk_size& self, Executor&&,
-        hpx::chrono::steady_duration const&, std::size_t, std::size_t) noexcept
+    std::size_t get_chunk_size(Executor&&, hpx::chrono::steady_duration const&,
+        std::size_t, std::size_t) const noexcept
     {
-        *self.invoked = true;
+        *invoked = true;
         return 0;
     }
 
@@ -66,17 +65,15 @@ struct test_wrapping_replaced_get_chunk_size
     }
 
     template <typename InnerParams, typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::get_chunk_size_t,
-        test_wrapping_replaced_get_chunk_size& self, InnerParams&& inner,
-        Executor&& exec, hpx::chrono::steady_duration const& duration,
-        std::size_t cores, std::size_t num_tasks) noexcept
+    std::size_t get_chunk_size(InnerParams&& inner, Executor&& exec,
+        hpx::chrono::steady_duration const& duration, std::size_t cores,
+        std::size_t num_tasks) const noexcept
     {
         std::size_t result = hpx::execution::experimental::get_chunk_size(
             HPX_FORWARD(InnerParams, inner), HPX_FORWARD(Executor, exec),
             duration, cores, num_tasks);
 
-        *self.invoked = true;
+        *invoked = true;
         return result;
     }
 
@@ -191,9 +188,8 @@ struct base_measure_iteration
     using invokes_testing_function = void;
 
     template <typename Executor, typename F>
-    friend hpx::chrono::steady_duration tag_override_invoke(
-        hpx::execution::experimental::measure_iteration_t,
-        base_measure_iteration, Executor&&, F&&, std::size_t) noexcept
+    hpx::chrono::steady_duration measure_iteration(
+        Executor&&, F&&, std::size_t) const noexcept
     {
         return hpx::chrono::null_duration;
     }
@@ -210,12 +206,10 @@ struct test_replaced_measure_iteration
     }
 
     template <typename Executor, typename F>
-    friend hpx::chrono::steady_duration tag_override_invoke(
-        hpx::execution::experimental::measure_iteration_t,
-        test_replaced_measure_iteration& self, Executor&&, F&&,
-        std::size_t) noexcept
+    hpx::chrono::steady_duration measure_iteration(
+        Executor&&, F&&, std::size_t) const noexcept
     {
-        *self.invoked = true;
+        *invoked = true;
         return hpx::chrono::null_duration;
     }
 
@@ -323,12 +317,10 @@ struct test_replaced_maximal_number_of_chunks
     }
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::maximal_number_of_chunks_t,
-        test_replaced_maximal_number_of_chunks& self, Executor&&, std::size_t,
-        std::size_t) noexcept
+    std::size_t maximal_number_of_chunks(
+        Executor&&, std::size_t, std::size_t) const noexcept
     {
-        *self.invoked = true;
+        *invoked = true;
         return 0;
     }
 
@@ -417,23 +409,17 @@ void replace_maximal_number_of_chunks()
 struct base_execution_markers
 {
     template <typename Executor>
-    friend constexpr void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        base_execution_markers, Executor&&) noexcept
+    constexpr void mark_begin_execution(Executor&&) const noexcept
     {
     }
 
     template <typename Executor>
-    friend constexpr void tag_override_invoke(
-        hpx::execution::experimental::mark_end_of_scheduling_t,
-        base_execution_markers, Executor&&) noexcept
+    constexpr void mark_end_of_scheduling(Executor&&) const noexcept
     {
     }
 
     template <typename Executor>
-    friend constexpr void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        base_execution_markers, Executor&&) noexcept
+    constexpr void mark_end_execution(Executor&&) const noexcept
     {
     }
 };
@@ -450,27 +436,21 @@ struct test_replaced_execution_markers
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        test_replaced_execution_markers self, Executor&&) noexcept
+    void mark_begin_execution(Executor&&) const noexcept
     {
-        *self.invoked_begin = true;
+        *invoked_begin = true;
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_of_scheduling_t,
-        test_replaced_execution_markers self, Executor&&) noexcept
+    void mark_end_of_scheduling(Executor&&) const noexcept
     {
-        *self.invoked_end = true;
+        *invoked_end = true;
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        test_replaced_execution_markers self, Executor&&) noexcept
+    void mark_end_execution(Executor&&) const noexcept
     {
-        *self.invoked_end_execution = true;
+        *invoked_end_execution = true;
     }
 
     std::atomic<bool>* invoked_begin;
@@ -583,10 +563,8 @@ void replace_execution_markers()
 struct base_processing_units_count
 {
     template <typename Executor>
-    friend constexpr std::size_t tag_override_invoke(
-        hpx::execution::experimental::processing_units_count_t,
-        base_processing_units_count const&, Executor&&,
-        hpx::chrono::steady_duration const&, std::size_t) noexcept
+    constexpr std::size_t processing_units_count(Executor&&,
+        hpx::chrono::steady_duration const&, std::size_t) const noexcept
     {
         return 1;
     }
@@ -601,12 +579,10 @@ struct test_replaced_processing_units_count
     }
 
     template <typename Executor>
-    friend std::size_t tag_override_invoke(
-        hpx::execution::experimental::maximal_number_of_chunks_t,
-        test_replaced_processing_units_count& self, Executor&&, std::size_t,
-        std::size_t) noexcept
+    std::size_t processing_units_count(Executor&&,
+        hpx::chrono::steady_duration const&, std::size_t) const noexcept
     {
-        *self.invoked = true;
+        *invoked = true;
         return 1;
     }
 
@@ -696,10 +672,8 @@ void replace_processing_units_count()
 struct base_collect_execution_parameters
 {
     template <typename Executor>
-    friend constexpr void tag_override_invoke(
-        hpx::execution::experimental::collect_execution_parameters_t,
-        base_collect_execution_parameters&, Executor&&, std::size_t,
-        std::size_t, std::size_t, std::size_t) noexcept
+    constexpr void collect_execution_parameters(Executor&&, std::size_t,
+        std::size_t, std::size_t, std::size_t) const noexcept
     {
     }
 };
@@ -713,12 +687,10 @@ struct test_replaced_collect_execution_parameters
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::collect_execution_parameters_t,
-        test_replaced_collect_execution_parameters& self, Executor&&,
-        std::size_t, std::size_t, std::size_t, std::size_t) noexcept
+    void collect_execution_parameters(Executor&&, std::size_t, std::size_t,
+        std::size_t, std::size_t) const noexcept
     {
-        *self.invoked = true;
+        *invoked = true;
     }
 
     std::atomic<bool>* invoked;

@@ -1,4 +1,4 @@
-//  Copyright (c) 2025 The STE||AR-Group
+//  Copyright (c) 2025-2026 The STE||AR-Group
 //  Copyright (c) 2025 Alexandros Papadakis
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -7,4 +7,5 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/contracts.hpp>

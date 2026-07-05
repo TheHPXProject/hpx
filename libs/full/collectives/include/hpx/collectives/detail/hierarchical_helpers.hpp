@@ -15,8 +15,8 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdlib>
 #include <iterator>
+#include <limits>
 #include <vector>
 
 namespace hpx::collectives::detail {
@@ -29,6 +29,29 @@ namespace hpx::collectives::detail {
         generation_arg generation;
         generation_mode num_generations;
     };
+
+    struct hierarchical_phase_generation_pair
+    {
+        generation_arg first;
+        generation_arg second;
+    };
+
+    [[nodiscard]] inline bool is_valid_hierarchical_phase_generation(
+        generation_arg const generation) noexcept
+    {
+        return !generation.is_default() && generation != 0 &&
+            static_cast<std::size_t>(generation) <=
+            (std::numeric_limits<std::size_t>::max)() / 2;
+    }
+
+    inline hierarchical_phase_generation_pair hierarchical_phase_generations(
+        generation_arg const generation) noexcept
+    {
+        HPX_ASSERT(is_valid_hierarchical_phase_generation(generation));
+
+        std::size_t const k = generation;
+        return {generation_arg(2 * k - 1), generation_arg(2 * k)};
+    }
 
     // Map a user generation k to those parameters when the communicator
     // advances num_generations per call: the run generation becomes
@@ -85,8 +108,8 @@ namespace hpx::collectives::detail {
             arity = num_sites;
         }
 
-        auto const dv = std::lldiv(
-            static_cast<long long>(num_sites), static_cast<long long>(arity));
+        std::size_t const division_steps = num_sites / arity;
+        std::size_t const remainder = num_sites % arity;
 
         std::vector<top_level_group> groups;
         groups.reserve(arity);
@@ -94,8 +117,8 @@ namespace hpx::collectives::detail {
         std::size_t offset = 0;
         for (std::size_t i = 0; i != arity; ++i)
         {
-            std::size_t const group_size = static_cast<std::size_t>(dv.quot) +
-                (i < static_cast<std::size_t>(dv.rem) ? 1 : 0);
+            std::size_t const group_size =
+                division_steps + (i < remainder ? 1 : 0);
 
             std::size_t const left = offset;
             std::size_t const right = left + group_size - 1;

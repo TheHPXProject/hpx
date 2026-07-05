@@ -22,7 +22,8 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/hardware.hpp>
-#include <hpx/modules/itt_notify.hpp>
+#include <hpx/modules/tracing.hpp>
+
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading.hpp>
@@ -280,12 +281,9 @@ namespace hpx::execution::experimental {
                     while (HPX_LIKELY(state != thread_state::stopping))
                     {
                         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-                            static hpx::util::itt::event notify_event(
+                            HPX_TRACING_MARK_EVENT(
                                 "fork_join_executor::invoke_work");
 
-                            hpx::util::itt::mark_event e(notify_event);
-#endif
                             data.thread_function_helper_(region_data_,
                                 thread_index_, num_threads_, queues_,
                                 exception_mutex_, exception_);
@@ -1353,11 +1351,25 @@ namespace hpx::execution::experimental {
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
-            Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const noexcept
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return shared_data_->num_threads_;
+            using exec_type = std::decay_t<decltype(*this)>;
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              exec_type const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return shared_data_->num_threads_;
+            }
         }
 
         /// \cond NOINTERNAL

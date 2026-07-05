@@ -66,28 +66,22 @@ struct timer_hooks_parameters
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        timer_hooks_parameters& this_, Executor&&)
+    void mark_begin_execution(Executor&&)
     {
-        ++this_.count_;
-        this_.time_ = hpx::chrono::high_resolution_clock::now();
+        ++count_;
+        time_ = hpx::chrono::high_resolution_clock::now();
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_of_scheduling_t,
-        timer_hooks_parameters const&, Executor&&)
+    void mark_end_of_scheduling(Executor&&) const
     {
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        timer_hooks_parameters& this_, Executor&&)
+    void mark_end_execution(Executor&&)
     {
-        this_.time_ = hpx::chrono::high_resolution_clock::now() - this_.time_;
-        ++this_.count_;
+        time_ = hpx::chrono::high_resolution_clock::now() - time_;
+        ++count_;
     }
 
     std::string name_;

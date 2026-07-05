@@ -19,9 +19,11 @@ namespace hpx::execution::experimental {
     decltype(auto) adapt_thread_priority(
         ExPolicy&& policy, hpx::threads::thread_priority new_priority)
     {
-        constexpr bool supports_priority = hpx::functional::is_tag_invocable_v<
-            hpx::execution::experimental::with_priority_t,
-            std::decay_t<ExPolicy>, hpx::threads::thread_priority>;
+        constexpr bool supports_priority =
+            hpx::execution::experimental::has_query_v<
+                std::decay_t<ExPolicy> const&,
+                hpx::execution::experimental::with_priority_t,
+                hpx::threads::thread_priority>;
         // clang-format on
 
         if constexpr (supports_priority)

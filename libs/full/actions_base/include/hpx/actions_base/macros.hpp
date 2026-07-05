@@ -87,10 +87,7 @@
 #if !defined(HPX_HAVE_NETWORKING)
 
 #define HPX_DEFINE_GET_ACTION_NAME(action) /**/
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname) /**/
-#endif
+
 #define HPX_REGISTER_ACTION_EXTERN_DECLARATION(action) /**/
 
 #define HPX_REGISTER_ACTION_2(action, actionname)                              \

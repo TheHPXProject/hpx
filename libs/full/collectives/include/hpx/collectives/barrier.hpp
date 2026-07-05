@@ -102,6 +102,7 @@ namespace hpx { namespace distributed {
 
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/hierarchical_helpers.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -155,7 +156,7 @@ namespace hpx::collectives {
         {
             this_site = agas::get_locality_id();
         }
-        if (generation.is_default())
+        if (generation == 0)
         {
             return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
                 hpx::error::bad_parameter, "hpx::collectives::barrier",
@@ -206,7 +207,7 @@ namespace hpx::collectives {
     {
         return barrier(create_communicator(basename, num_sites, this_site,
                            generation, root_site),
-            this_site);
+            this_site, generation);
     }
 
     HPX_CXX_EXPORT inline void barrier(hpx::launch::sync_policy,
@@ -231,7 +232,7 @@ namespace hpx::collectives {
     {
         barrier(create_communicator(
                     basename, num_sites, this_site, generation, root_site),
-            this_site)
+            this_site, generation)
             .get();
     }
 
@@ -256,6 +257,15 @@ namespace hpx::collectives {
                     "generation number for the 2k-1/2k internal mapping"));
         }
 
+        if (!detail::is_valid_hierarchical_phase_generation(generation))
+        {
+            return hpx::make_exceptional_future<void>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::barrier (hierarchical)",
+                    "the generation number is too large for the internal "
+                    "2k-1/2k generation mapping"));
+        }
+
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
@@ -266,8 +276,8 @@ namespace hpx::collectives {
             return hpx::make_ready_future();
         }
 
-        generation_arg const reduce_gen(2 * generation - 1);
-        generation_arg const broadcast_gen(2 * generation);
+        auto const [reduce_gen, broadcast_gen] =
+            detail::hierarchical_phase_generations(generation);
 
         // Reduce phase: walk sub-communicators from deepest (end of vector) to
         // shallowest (start). Each sub-barrier releases only after all sites

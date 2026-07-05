@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Sai Charan Arvapally
+// Copyright (c) 2026 Sai Charan Arvapally
 //
 // SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -788,6 +788,12 @@ namespace hpx::execution::experimental {
                 parallel_scheduler_domain query(get_domain_t) const noexcept
                 {
                     return {};
+                }
+
+                // P2300 get_allocator query
+                constexpr auto query(get_allocator_t) const noexcept
+                {
+                    return std::allocator<std::byte>{};
                 }
             };
 

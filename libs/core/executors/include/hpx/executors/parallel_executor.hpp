@@ -1,4 +1,5 @@
 //  Copyright (c) 2019-2020 ETH Zurich
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2019 Agustin Berge
 //
@@ -509,25 +510,38 @@ namespace hpx::execution {
         [[nodiscard]] auto query(experimental::with_processing_units_count_t,
             std::size_t num_cores) const
         {
-            using self_type = std::decay_t<decltype(*this)>;
-            return base_type::with_num_cores(self_type(*this), num_cores);
+            return base_type::with_num_cores(
+                parallel_policy_executor(*this), num_cores);
         }
 
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
-            Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return this->get_num_cores();
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              parallel_policy_executor const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return this->get_num_cores();
+            }
         }
 
         [[nodiscard]] auto query(experimental::with_first_core_t,
             std::size_t first_core) const noexcept
         {
-            using self_type = std::decay_t<decltype(*this)>;
-            return base_type::with_first_core(self_type(*this), first_core);
+            return base_type::with_first_core(
+                parallel_policy_executor(*this), first_core);
         }
 
         [[nodiscard]] constexpr std::size_t query(
@@ -823,25 +837,38 @@ namespace hpx::execution {
         [[nodiscard]] auto query(experimental::with_processing_units_count_t,
             std::size_t num_cores) const
         {
-            using self_type = std::decay_t<decltype(*this)>;
-            return base_type::with_num_cores(self_type(*this), num_cores);
+            return base_type::with_num_cores(
+                parallel_policy_executor(*this), num_cores);
         }
 
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
         [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
-            Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return this->get_num_cores();
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              parallel_policy_executor const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return this->get_num_cores();
+            }
         }
 
         [[nodiscard]] auto query(experimental::with_first_core_t,
             std::size_t first_core) const noexcept
         {
-            using self_type = std::decay_t<decltype(*this)>;
-            return base_type::with_first_core(self_type(*this), first_core);
+            return base_type::with_first_core(
+                parallel_policy_executor(*this), first_core);
         }
 
         [[nodiscard]] constexpr std::size_t query(

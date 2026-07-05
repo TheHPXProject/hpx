@@ -18,7 +18,7 @@ set(tests
     reflection_qualified_name_of
 )
 
-if(HPX_SERIALIZATION_WITH_ALLOW_AUTO_GENERATE)
+if(HPX_WITH_CXX26_REFLECTION)
   foreach(test ${tests})
     set(sources ${test}.cpp)
 

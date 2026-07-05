@@ -17,7 +17,6 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/io_service.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset.hpp>
@@ -528,9 +527,9 @@ namespace hpx {
         // prefix thread name with locality number, if needed
         std::string const locality = locality_prefix(get_config());
 
-        // register this thread with any possibly active Intel tool
+        // register this thread with any possibly active tracing tool
         std::string const thread_name(locality + "main-thread#wait_helper");
-        HPX_ITT_THREAD_SET_NAME(thread_name.c_str());
+        hpx::tracing::set_thread_name(thread_name.c_str());
 
         // set thread name as shown in Visual Studio
         util::set_thread_name(thread_name.c_str());
@@ -1356,7 +1355,7 @@ namespace hpx {
         thread_support_->register_thread(name, type);
 
         // register this thread with any possibly active Intel tool
-        HPX_ITT_THREAD_SET_NAME(name);
+        hpx::tracing::set_thread_name(name);
 
         // set thread name as shown in Visual Studio
         util::set_thread_name(name);

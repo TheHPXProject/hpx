@@ -1,4 +1,5 @@
 //  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -66,22 +67,18 @@ namespace hpx::resiliency::experimental {
             return *this;
         }
 
-    private:
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            replay_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return async_replay_validate(exec.exec_, exec.replay_count_,
-                exec.validator_, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async_replay_validate(exec_, replay_count_, validator_,
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            replay_executor const& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
             std::size_t size = hpx::util::size(shape);
 
@@ -96,7 +93,7 @@ namespace hpx::resiliency::experimental {
 
             hpx::latch l(static_cast<std::ptrdiff_t>(size + 1));
 
-            exec.spawn_hierarchical(results, l, 0, size, num_tasks, f,
+            spawn_hierarchical(results, l, 0, size, num_tasks, f,
                 hpx::util::begin(shape), ts...);
 
             l.arrive_and_wait();
@@ -116,9 +113,7 @@ namespace hpx::resiliency::experimental {
 
             for (std::size_t i = 0; i != size; (void) ++i, ++it)
             {
-                results[base + i] =
-                    tag_invoke(hpx::parallel::execution::async_execute_t{},
-                        *this, func, *it, ts...);
+                results[base + i] = async_execute(func, *it, ts...);
             }
 
             l.count_down(static_cast<std::ptrdiff_t>(size));
@@ -166,6 +161,21 @@ namespace hpx::resiliency::experimental {
         Validate const& get_validator() const
         {
             return validator_;
+        }
+
+        // support scheduling properties via query() for new CPO dispatch
+        template <typename Tag, typename... Args>
+            requires(
+                hpx::execution::experimental::is_scheduling_property_v<Tag>)
+        auto query(Tag tag, Args&&... args) const
+            -> decltype(replay_executor<BaseExecutor, Validate>(
+                std::declval<Tag>()(
+                    std::declval<BaseExecutor>(), HPX_FORWARD(Args, args)...),
+                std::declval<std::size_t>(), std::declval<Validate>()))
+        {
+            return replay_executor<BaseExecutor, Validate>(
+                tag(exec_, HPX_FORWARD(Args, args)...), replay_count_,
+                validator_);
         }
 
     private:

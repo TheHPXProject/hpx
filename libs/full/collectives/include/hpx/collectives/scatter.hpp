@@ -540,14 +540,15 @@ namespace hpx::collectives {
             {
                 std::size_t const current_group_size =
                     division_steps + (i < remainder ? 1 : 0);
+                grouped[i].reserve(current_group_size);
 
                 std::size_t const current_left = offset;
                 std::size_t const current_right =
-                    current_left + current_group_size - 1;
+                    current_left + current_group_size;
                 offset += current_group_size;
 
                 std::move(data.begin() + current_left,
-                    data.begin() + current_right + 1,
+                    data.begin() + current_right,
                     std::back_inserter(grouped[i]));
             }
 
@@ -765,6 +766,25 @@ namespace hpx::collectives {
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
+        }
+
+        std::size_t const num_sites_val = hpx::get<0>(communicators.get_info());
+        if (this_site >= num_sites_val)
+        {
+            return hpx::make_exceptional_future<T>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::scatter_to (hierarchical)",
+                    "this_site must be smaller than the number of "
+                    "participating sites"));
+        }
+
+        if (local_result.size() != num_sites_val)
+        {
+            return hpx::make_exceptional_future<T>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::scatter_to (hierarchical)",
+                    "the number of values to scatter must be equal to the "
+                    "number of participating sites"));
         }
 
         // A hierarchical scatter advances each sub-communicator by two

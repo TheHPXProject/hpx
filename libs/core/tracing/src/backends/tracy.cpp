@@ -83,12 +83,14 @@ namespace hpx::tracing {
     ////////////////////////////////////////////////////////////////////////////
     // lock_context
 
-    lock_context::lock_context(char const* name) noexcept
+    lock_context::lock_context(
+        char const* name, void const* /* addr */) noexcept
       : impl(hpx::tracy::create(name))
     {
     }
 
-    lock_context::lock_context(char const* prefix, char const* suffix) noexcept
+    lock_context::lock_context(
+        char const* prefix, char const* suffix, void const* /* addr */) noexcept
       : impl(hpx::tracy::create(std::string(prefix) + suffix))
     {
     }
@@ -112,6 +114,8 @@ namespace hpx::tracing {
     {
         hpx::tracy::lock_acquired(impl, acquired);
     }
+
+    void lock_context::before_unlock() const noexcept {}
 
     void lock_context::after_unlock() const noexcept
     {

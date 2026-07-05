@@ -24,8 +24,7 @@ struct additional_argument_executor
     template <typename F, typename... Ts,
         typename Enable =
             std::enable_if_t<!std::is_member_function_pointer_v<F>>>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::async_execute_t,
-        additional_argument_executor const&, F&& f, Ts&&... ts)
+    decltype(auto) async_execute(F&& f, Ts&&... ts) const
     {
         return hpx::async(
             std::forward<F>(f), additional_argument{}, std::forward<Ts>(ts)...);
@@ -34,8 +33,7 @@ struct additional_argument_executor
     template <typename F, typename T, typename... Ts,
         typename Enable =
             std::enable_if_t<std::is_member_function_pointer_v<F>>>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::async_execute_t,
-        additional_argument_executor const&, F&& f, T&& t, Ts&&... ts)
+    decltype(auto) async_execute(F&& f, T&& t, Ts&&... ts) const
     {
         return hpx::async(std::forward<F>(f), std::forward<T>(t),
             additional_argument{}, std::forward<Ts>(ts)...);

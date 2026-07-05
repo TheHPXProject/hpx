@@ -259,7 +259,10 @@ namespace hpx::collectives {
 
         [[nodiscard]] bool is_root() const
         {
-            return !base_type::registered_name().empty();
+            auto const* client_data =
+                this->try_get_extra_data<detail::communicator_data>();
+            return client_data != nullptr &&
+                client_data->this_site_ == client_data->root_site_;
         }
     };
 

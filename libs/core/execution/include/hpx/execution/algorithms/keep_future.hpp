@@ -62,6 +62,7 @@ namespace hpx::execution::experimental {
         struct keep_future_sender_base
         {
             std::decay_t<Future> future;
+            using env_type = hpx::execution::experimental::empty_env;
             using completion_signatures =
                 hpx::execution::experimental::completion_signatures<
                     hpx::execution::experimental::set_value_t(
@@ -69,6 +70,11 @@ namespace hpx::execution::experimental {
                     hpx::execution::experimental::set_error_t(
                         std::exception_ptr),
                     hpx::execution::experimental::set_stopped_t()>;
+
+            constexpr env_type get_env() const noexcept
+            {
+                return {};
+            }
         };
 
         HPX_CXX_CORE_EXPORT template <typename Future>

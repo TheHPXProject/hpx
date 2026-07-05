@@ -180,7 +180,7 @@ void test_normal_serialization(T& arg)
     // compose archive flags
     auto out_archive_flags = static_cast<std::uint32_t>(
         hpx::serialization::archive_flags::disable_data_chunking);
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);
@@ -214,7 +214,7 @@ void test_normal_serialization(T1& arg1, T2& arg2)
     // compose archive flags
     auto out_archive_flags = static_cast<std::uint32_t>(
         hpx::serialization::archive_flags::disable_data_chunking);
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);
@@ -249,7 +249,7 @@ void test_normal_serialization(
     // compose archive flags
     auto out_archive_flags = static_cast<std::uint32_t>(
         hpx::serialization::archive_flags::disable_data_chunking);
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);
@@ -283,7 +283,7 @@ void test_zero_copy_serialization(T& arg)
 
     // compose archive flags
     std::uint32_t out_archive_flags = 0U;
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);
@@ -316,7 +316,7 @@ void test_zero_copy_serialization(T1& arg1, T2& arg2)
 
     // compose archive flags
     std::uint32_t out_archive_flags = 0U;
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);
@@ -350,7 +350,7 @@ void test_zero_copy_serialization(
 
     // compose archive flags
     std::uint32_t out_archive_flags = 0U;
-    if (hpx::endian::native == hpx::endian::big)
+    if constexpr (hpx::endian::native == hpx::endian::big)
     {
         out_archive_flags = out_archive_flags |
             static_cast<int>(hpx::serialization::archive_flags::endian_big);

@@ -81,7 +81,7 @@ namespace hpx::components::process::windows::initializers {
 
     inline auto start_in_dir(filesystem::path const& p)
     {
-        return start_in_dir_<std::string>(p.string());
+        return start_in_dir_<std::string>(hpx::filesystem::to_string(p));
     }
 }    // namespace hpx::components::process::windows::initializers
 

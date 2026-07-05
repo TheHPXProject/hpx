@@ -1561,6 +1561,7 @@ namespace hpx::agas {
         naming::gid_type& mutable_gid = const_cast<hpx::id_type&>(id).get_gid();
         naming::gid_type const new_gid =
             naming::detail::split_gid_if_needed(hpx::launch::sync, mutable_gid);
+
         std::int64_t const new_credit =
             naming::detail::get_credit_from_gid(new_gid);
 
@@ -1586,6 +1587,7 @@ namespace hpx::agas {
         naming::gid_type& mutable_gid = const_cast<hpx::id_type&>(id).get_gid();
         naming::gid_type const new_gid =
             naming::detail::split_gid_if_needed(hpx::launch::sync, mutable_gid);
+
         std::int64_t new_credit = naming::detail::get_credit_from_gid(new_gid);
 
         future<bool> f = symbol_ns_.bind_async(name, new_gid);

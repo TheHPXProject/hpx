@@ -1,4 +1,5 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2017 Google
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -11,7 +12,6 @@
 #include <hpx/execution_base/detail/execution_member_detect.hpp>
 #include <hpx/execution_base/traits/is_executor.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <concepts>
 #include <type_traits>
@@ -103,28 +103,30 @@ namespace hpx::parallel::execution {
     ///
     /// \returns f(ts...)'s result
     ///
-    /// \note It will call tag_invoke(sync_execute_t, exec, f, ts...) if it
-    ///       exists. For two-way executors it will invoke async_execute_t
-    ///       and wait for the task's completion before returning.
+    /// \note It will call exec.sync_execute(f, ts...) if the executor exposes
+    ///       a corresponding member function. For two-way executors it will
+    ///       invoke async_execute and wait for the task's completion before
+    ///       returning.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct sync_execute_t final
-      : hpx::functional::detail::tag_fallback<sync_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename... Ts>
             requires(detail::has_sync_execute_member<Executor, F, Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            sync_execute_t, Executor&& exec, F&& f, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .sync_execute(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
-            requires(std::invocable<F &&, Ts && ...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            sync_execute_t, Executor&& exec, F&& f, Ts&&... ts)
+            requires(!detail::has_sync_execute_member<Executor, F, Ts...> &&
+                (std::invocable<F &&, Ts && ...> ||
+                    hpx::traits::is_action_v<std::decay_t<F>>) )
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return detail::sync_execute_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
@@ -161,23 +163,24 @@ namespace hpx::parallel::execution {
     /// \returns f(ts...)'s result through a future
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct async_execute_t final
-      : hpx::functional::detail::tag_fallback<async_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename... Ts>
             requires(detail::has_async_execute_member<Executor, F, Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            async_execute_t, Executor&& exec, F&& f, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .async_execute(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
-            requires(std::invocable<F &&, Ts && ...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            async_execute_t, Executor&& exec, F&& f, Ts&&... ts)
+            requires(!detail::has_async_execute_member<Executor, F, Ts...> &&
+                (std::invocable<F &&, Ts && ...> ||
+                    hpx::traits::is_action_v<std::decay_t<F>>) )
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return detail::async_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
@@ -206,28 +209,28 @@ namespace hpx::parallel::execution {
     ///       for one way executors (calls predecessor.then(bind(f, ts...))).
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct then_execute_t final
-      : hpx::functional::detail::tag_fallback<then_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename Future,
             typename... Ts>
             requires(
                 detail::has_then_execute_member<Executor, F, Future, Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(then_execute_t,
-            Executor&& exec, F&& f, Future&& predecessor, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Future&& predecessor, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .then_execute(HPX_FORWARD(F, f),
                     HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename Future,
             typename... Ts>
-            requires(std::invocable<F &&, Future &&, Ts && ...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            then_execute_t, Executor&& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+            requires(
+                !detail::has_then_execute_member<Executor, F, Future, Ts...> &&
+                std::invocable<F &&, Future &&, Ts && ...>)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Future&& predecessor, Ts&&... ts) const
         {
             return detail::then_execute_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
@@ -257,23 +260,22 @@ namespace hpx::parallel::execution {
     ///       (calls exec.post(f, ts...) if it exists).
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct post_t final
-      : hpx::functional::detail::tag_fallback<post_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename... Ts>
             requires(detail::has_post_member<Executor, F, Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            post_t, Executor&& exec, F&& f, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
-            requires(std::invocable<F &&, Ts && ...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            post_t, Executor&& exec, F&& f, Ts&&... ts)
+            requires(!detail::has_post_member<Executor, F, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Ts&&... ts) const
         {
             return detail::post_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
@@ -321,41 +323,41 @@ namespace hpx::parallel::execution {
     ///       as often as needed.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct bulk_sync_execute_t final
-      : hpx::functional::detail::tag_fallback<bulk_sync_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename Shape, typename... Ts>
             requires(!std::integral<Shape> &&
                 detail::has_bulk_sync_execute_member<Executor, F, Shape, Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(bulk_sync_execute_t,
-            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .bulk_sync_execute(
                     HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: non-integral shape
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
-            requires(!std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_sync_execute_t, Executor&& exec, F&& f, Shape const& shape,
-            Ts&&... ts)
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_sync_execute_member<Executor, F, Shape,
+                    Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
             return detail::bulk_sync_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Integral shape: convert to counting_shape and recurse
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
             requires(std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_sync_execute_t tag, Executor&& exec, F&& f, Shape const& shape,
-            Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
-            return tag(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+            return (*this)(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
                 hpx::util::counting_shape(shape), HPX_FORWARD(Ts, ts)...);
         }
     } bulk_sync_execute{};
@@ -394,42 +396,62 @@ namespace hpx::parallel::execution {
     ///       as often as needed.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct bulk_async_execute_t final
-      : hpx::functional::detail::tag_fallback<bulk_async_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename Shape, typename... Ts>
             requires(!std::integral<Shape> &&
                 detail::has_bulk_async_execute_member<Executor, F, Shape,
                     Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(bulk_async_execute_t,
-            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .bulk_async_execute(
                     HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Trait-based: executor is marked as bulk_two_way_executor but concept
+        // check fails (e.g. due to circular return type deduction)
+        template <typename Executor, typename F, typename Shape, typename... Ts>
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_async_execute_member<Executor, F, Shape,
+                    Ts...> &&
+                hpx::traits::is_bulk_two_way_executor_v<std::decay_t<Executor>>)
+        HPX_FORCEINLINE auto operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
+            -> decltype(HPX_FORWARD(Executor, exec)
+                    .bulk_async_execute(
+                        HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...))
+        {
+            return HPX_FORWARD(Executor, exec)
+                .bulk_async_execute(
+                    HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
+        }
+
+        // Fallback: non-integral shape, not bulk_two_way_executor
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
-            requires(!std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_async_execute_t, Executor&& exec, F&& f, Shape const& shape,
-            Ts&&... ts)
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_async_execute_member<Executor, F, Shape,
+                    Ts...> &&
+                !hpx::traits::is_bulk_two_way_executor_v<
+                    std::decay_t<Executor>>)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
             return detail::bulk_async_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Integral shape: convert to counting_shape and recurse
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
             requires(std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_async_execute_t tag, Executor&& exec, F&& f,
-            Shape const& shape, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
-            return tag(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+            return (*this)(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
                 hpx::util::counting_shape(shape), HPX_FORWARD(Ts, ts)...);
         }
     } bulk_async_execute{};
@@ -472,30 +494,29 @@ namespace hpx::parallel::execution {
     ///       is also a TwoWayExecutor) - as often as needed.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct bulk_then_execute_t final
-      : hpx::functional::detail::tag_fallback<bulk_then_execute_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename Shape,
             typename Future, typename... Ts>
             requires(!std::integral<Shape> &&
                 detail::has_bulk_then_execute_member<Executor, F, Shape, Future,
                     Ts...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(bulk_then_execute_t,
-            Executor&& exec, F&& f, Shape const& shape, Future&& predecessor,
-            Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec, F&& f,
+            Shape const& shape, Future&& predecessor, Ts&&... ts) const
         {
             return HPX_FORWARD(Executor, exec)
                 .bulk_then_execute(HPX_FORWARD(F, f), shape,
                     HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Fallback: non-integral shape
         template <executor_any Executor, typename F, typename Shape,
             typename Future, typename... Ts>
-            requires(!std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_then_execute_t, Executor&& exec, F&& f, Shape const& shape,
-            Future&& predecessor, Ts&&... ts)
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_then_execute_member<Executor, F, Shape,
+                    Future, Ts...>)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec, F&& f,
+            Shape const& shape, Future&& predecessor, Ts&&... ts) const
         {
             return detail::bulk_then_execute_fn_helper<
                 std::decay_t<Executor>>::call(HPX_FORWARD(Executor, exec),
@@ -503,14 +524,14 @@ namespace hpx::parallel::execution {
                 HPX_FORWARD(Ts, ts)...);
         }
 
+        // Integral shape: convert to counting_shape and recurse
         template <executor_any Executor, typename F, typename Shape,
             typename Future, typename... Ts>
             requires(std::integral<Shape>)
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            bulk_then_execute_t tag, Executor&& exec, F&& f, Shape const& shape,
-            Future&& predecessor, Ts&&... ts)
+        HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec, F&& f,
+            Shape const& shape, Future&& predecessor, Ts&&... ts) const
         {
-            return tag(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+            return (*this)(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
                 hpx::util::counting_shape(shape),
                 HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
@@ -539,23 +560,23 @@ namespace hpx::parallel::execution {
     ///       executes async_execute(fs) for each fs.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct async_invoke_t final
-      : hpx::functional::detail::tag_fallback<async_invoke_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename... Fs>
             requires(detail::has_async_invoke_member<Executor, F, Fs...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            async_invoke_t, Executor&& exec, F&& f, Fs&&... fs)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Fs&&... fs) const
         {
             return HPX_FORWARD(Executor, exec)
                 .async_invoke(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Fs>
-            requires(std::invocable<F> && (std::invocable<Fs> && ...))
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            async_invoke_t, Executor&& exec, F&& f, Fs&&... fs)
+            requires(!detail::has_async_invoke_member<Executor, F, Fs...> &&
+                std::invocable<F> && (std::invocable<Fs> && ...))
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Fs&&... fs) const
         {
             return detail::async_invoke_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
@@ -585,23 +606,23 @@ namespace hpx::parallel::execution {
     ///       executes sync_execute(fs) for each fs.
     ///
     HPX_CXX_CORE_EXPORT inline constexpr struct sync_invoke_t final
-      : hpx::functional::detail::tag_fallback<sync_invoke_t>
     {
-    private:
-        // Bridge: forward to member function if available
+        // Primary: forward to member function if available
         template <typename Executor, typename F, typename... Fs>
             requires(detail::has_sync_invoke_member<Executor, F, Fs...>)
-        friend HPX_FORCEINLINE decltype(auto) tag_invoke(
-            sync_invoke_t, Executor&& exec, F&& f, Fs&&... fs)
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Fs&&... fs) const
         {
             return HPX_FORWARD(Executor, exec)
                 .sync_invoke(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Fs>
-            requires(std::invocable<F> && (std::invocable<Fs> && ...))
-        friend HPX_FORCEINLINE decltype(auto) tag_fallback_invoke(
-            sync_invoke_t, Executor&& exec, F&& f, Fs&&... fs)
+            requires(!detail::has_sync_invoke_member<Executor, F, Fs...> &&
+                std::invocable<F> && (std::invocable<Fs> && ...))
+        HPX_FORCEINLINE decltype(auto) operator()(
+            Executor&& exec, F&& f, Fs&&... fs) const
         {
             return detail::sync_invoke_fn_helper<std::decay_t<Executor>>::call(
                 HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),

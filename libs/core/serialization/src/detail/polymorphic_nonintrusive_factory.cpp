@@ -74,7 +74,7 @@ namespace hpx::serialization::detail {
         {
             HPX_THROW_EXCEPTION(hpx::error::serialization_error,
                 "polymorphic_nonintrusive_factory::register_class",
-                "Unexpected (non-matching) type received (received: {}, "
+                "Unexpected (non-matching) type received (actual: {}, "
                 "expected: {})",
                 class_name, expected_class_name);
         }

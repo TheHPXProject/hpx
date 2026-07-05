@@ -38,9 +38,7 @@ namespace hpx::parallel::detail {
         std::size_t count, Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             std::size_t idx = 0;
             util::loop_idx_n<hpx::execution::parallel_policy>(base_idx, it,

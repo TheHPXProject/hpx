@@ -20,11 +20,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 struct shared_parallel_executor
 {
-private:
     template <typename F, typename... Ts>
-    friend hpx::shared_future<hpx::util::invoke_result_t<F, Ts...>> tag_invoke(
-        hpx::parallel::execution::async_execute_t,
-        shared_parallel_executor const&, F&& f, Ts&&... ts)
+    hpx::shared_future<hpx::util::invoke_result_t<F, Ts...>> async_execute(
+        F&& f, Ts&&... ts) const
     {
         auto policy = hpx::launch::async;
         auto hint = policy.hint();

@@ -1,6 +1,6 @@
 //  Copyright (c) 2014 Thomas Heller
 //  Copyright (c) 2015 Anton Bikineev
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -43,10 +43,9 @@ namespace hpx::serialization {
         {
             // endianness needs to be saved separately as it is needed to
             // properly interpret the flags
-
-            // FIXME: make bool once integer compression is implemented
-            std::uint64_t endianness = 0ul;
-            load(endianness);
+            bool endianness = false;
+            load_binary(
+                detail::fundamental_types::none, &endianness, sizeof(bool));
             if (endianness)
             {
                 flags_ = static_cast<std::uint32_t>(
@@ -64,6 +63,18 @@ namespace hpx::serialization {
                     "-DHPX_SERIALIZATION_WITH_SUPPORTS_ENDIANESS=On");
             }
 #endif
+
+            // type checking needs to be saved separately as it is needed to
+            // properly interpret the flags
+            bool type_checking = false;
+            load_binary(
+                detail::fundamental_types::none, &type_checking, sizeof(bool));
+            if (type_checking)
+            {
+                flags_ = flags_ |
+                    hpx::serialization::archive_flags::enable_type_checking;
+            }
+
             // Load flags sent by the other end to make sure both ends have
             // the same assumptions about the archive format. It is safe to
             // overwrite the flags_ now.
@@ -72,8 +83,15 @@ namespace hpx::serialization {
             flags_ = flags;
 
             // load the zero-copy limit used by the other end
-            std::uint64_t zero_copy_serialization_threshold;
-            load(zero_copy_serialization_threshold);
+            std::uint64_t zero_copy_serialization_threshold = 0;
+            bool has_zero_copy_serialization_threshold = false;
+            load(has_zero_copy_serialization_threshold);
+
+            if (has_zero_copy_serialization_threshold)
+            {
+                load(zero_copy_serialization_threshold);
+            }
+
             buffer_->set_zero_copy_serialization_threshold(
                 zero_copy_serialization_threshold);
 
@@ -141,7 +159,8 @@ namespace hpx::serialization {
                     HPX_ASSERT(
                         !(disable_array_optimization() || endianess_differs()));
 #endif
-                    load_binary(&t, sizeof(t));
+                    load_binary(detail::array_of_fundamental_type_v<std::byte>,
+                        &t, sizeof(t));
                 }
                 else if constexpr (hpx::traits::is_serialization_supported<
                                        T>::has_refl_serialize ||
@@ -157,80 +176,77 @@ namespace hpx::serialization {
                         "true");
                 }
             }
+            else if constexpr (std::is_integral_v<T>)
+            {
+                static_assert((std::is_unsigned_v<T> &&
+                                  sizeof(T) <= sizeof(std::uint64_t)) ||
+                        sizeof(T) <= sizeof(std::int64_t),
+                    "integral type is larger than supported");
+
 #if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
-            else if constexpr (std::is_unsigned_v<T>)
-            {
-                static_assert(sizeof(T) <= sizeof(std::uint64_t),
-                    "integral type is larger than supported");
-
-                std::uint64_t ul;
-                load_integral(ul);
-                t = static_cast<T>(ul);
-            }
-            else
-            {
-                static_assert(sizeof(T) <= sizeof(std::int64_t),
-                    "integral type is larger than supported");
-
-                std::int64_t l;
-                load_integral(l);
-                t = static_cast<T>(l);
-            }
+                if (HPX_UNLIKELY(endianess_differs()))
+                {
+                    T val;
+                    load_binary(detail::fundamental_type_v<T>, &val, sizeof(T));
+                    reverse_bytes(sizeof(T), reinterpret_cast<char*>(&val));
+                    t = val;
+                }
+                else
+                {
+                    load_binary(detail::fundamental_type_v<T>, &t, sizeof(T));
+                }
 #else
-            else if constexpr (std::is_unsigned_v<T>)
-            {
-                static_assert(sizeof(T) <= sizeof(std::uint64_t),
-                    "integral type is larger than supported");
-
-                std::uint64_t ul;
-                load_binary(&ul, sizeof(std::uint64_t));
-                t = static_cast<T>(ul);
+                load_binary(detail::fundamental_type_v<T>, &t, sizeof(T));
+#endif
             }
             else
             {
-                static_assert(sizeof(T) <= sizeof(std::int64_t),
-                    "integral type is larger than supported");
+                static_assert(std::is_enum_v<T>);
+                using underlying_type = std::underlying_type_t<T>;
 
-                std::int64_t ul;
-                load_binary(&ul, sizeof(std::int64_t));
-                t = static_cast<T>(ul);
+                underlying_type val;
+                load_binary(detail::fundamental_type_v<underlying_type>, &val,
+                    sizeof(underlying_type));
+                t = static_cast<T>(val);
             }
-#endif
         }
 
         void load(float& f)
         {
-            load_binary(&f, sizeof(float));
+            load_binary(detail::fundamental_type_v<float>, &f, sizeof(float));
         }
 
         void load(double& d)
         {
-            load_binary(&d, sizeof(double));
+            load_binary(detail::fundamental_type_v<double>, &d, sizeof(double));
         }
 
         void load(long double& d)
         {
-            load_binary(&d, sizeof(long double));
+            load_binary(detail::fundamental_type_v<long double>, &d,
+                sizeof(long double));
         }
 
         void load(char& c)
         {
-            load_binary(&c, sizeof(char));
+            load_binary(detail::fundamental_type_v<char>, &c, sizeof(char));
         }
 
         void load(signed char& c)
         {
-            load_binary(&c, sizeof(signed char));
+            load_binary(detail::fundamental_type_v<signed char>, &c,
+                sizeof(signed char));
         }
 
         void load(unsigned char& c)
         {
-            load_binary(&c, sizeof(unsigned char));
+            load_binary(detail::fundamental_type_v<unsigned char>, &c,
+                sizeof(unsigned char));
         }
 
         void load(bool& b)
         {
-            load_binary(&b, sizeof(bool));
+            load_binary(detail::fundamental_type_v<bool>, &b, sizeof(bool));
             HPX_ASSERT(0 == static_cast<int>(b) || 1 == static_cast<int>(b));
         }
 
@@ -238,7 +254,8 @@ namespace hpx::serialization {
         template <typename T>
         void load(T*& p)
         {
-            load_binary(&p, sizeof(std::size_t));
+            load_binary(detail::fundamental_type_v<std::size_t>, &p,
+                sizeof(std::size_t));
         }
 #endif
         // NOLINTEND(bugprone-multi-level-implicit-pointer-conversion)
@@ -257,47 +274,43 @@ namespace hpx::serialization {
     private:
         friend struct basic_archive<input_archive>;
 
-#if defined(HPX_SERIALIZATION_HAVE_SUPPORTS_ENDIANESS)
-        template <typename Promoted>
-        void load_integral(Promoted& l)
-        {
-            load_binary(&l, sizeof(Promoted));
-            if (endianess_differs())
-            {
-                reverse_bytes(sizeof(Promoted), reinterpret_cast<char*>(&l));
-            }
-        }
-#endif
-
     public:
-        void load_binary(void* address, std::size_t count)
+        void load_binary(detail::fundamental_types expected, void* address,
+            std::size_t const count)
         {
-            if (HPX_UNLIKELY(0 == count))
+            if (HPX_UNLIKELY(count == 0))
                 return;
 
-            buffer_->load_binary(address, count);
+            if (HPX_UNLIKELY(!enable_type_checking()))
+            {
+                expected = detail::fundamental_types::none;
+            }
 
-            size_ += count;
+            size_ += buffer_->load_binary(expected, address, count);
         }
 
-        void load_binary_chunk(
-            void* address, std::size_t count, bool allow_zero_copy_receive)
+        void load_binary_chunk(detail::fundamental_types expected,
+            void* address, std::size_t const count,
+            bool const allow_zero_copy_receive)
         {
-            if (HPX_UNLIKELY(0 == count))
+            if (HPX_UNLIKELY(count == 0))
                 return;
+
+            if (HPX_UNLIKELY(!enable_type_checking()))
+            {
+                expected = detail::fundamental_types::none;
+            }
 
             if (HPX_UNLIKELY(disable_data_chunking()))
             {
-                buffer_->load_binary(address, count);
+                size_ += buffer_->load_binary(expected, address, count);
             }
             else
             {
-                buffer_->load_binary_chunk(address, count,
+                size_ += buffer_->load_binary_chunk(expected, address, count,
                     allow_zero_copy_receive &&
                         !disable_receive_data_chunking());
             }
-
-            size_ += count;
         }
 
     private:

@@ -6,8 +6,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/config/thread_name.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/itt_notify/thread_name.hpp>
+
 #include <hpx/modules/command_line_handling_local.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/debugging.hpp>
@@ -1600,10 +1601,7 @@ namespace hpx {
             cond.notify_all();
         }
 
-        // register this thread with any possibly active Intel tool
         std::string const thread_name("main-thread#wait_helper");
-        HPX_ITT_THREAD_SET_NAME(thread_name.c_str());
-
         // set thread name as shown in Visual Studio
         util::set_thread_name(thread_name.c_str());
 
@@ -1951,9 +1949,6 @@ namespace hpx {
 
         // initialize thread mapping for external libraries (i.e. PAPI)
         thread_support_->register_thread(name, type);
-
-        // register this thread with any possibly active Intel tool
-        HPX_ITT_THREAD_SET_NAME(name);
 
         // set thread name as shown in Visual Studio
         util::set_thread_name(name);

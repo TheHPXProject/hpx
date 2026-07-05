@@ -4,16 +4,16 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#pragma once
+
 #include <hpx/config.hpp>
-#include <hpx/itt_notify/thread_name.hpp>
 
 #include <string>
 
 namespace hpx::detail {
 
-    std::string& thread_name()
-    {
-        thread_local std::string thread_name_;
-        return thread_name_;
-    }
+    /// Helper utility to set and store a name for the current operating system
+    /// thread. Returns a reference to the name for the current thread.
+    HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::string&
+    thread_name();
 }    // namespace hpx::detail

@@ -9,8 +9,8 @@
 
 #if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
 
+#include <hpx/config/thread_name.hpp>
 #include <hpx/itt_notify/detail/use_ittnotify_api.hpp>
-#include <hpx/itt_notify/thread_name.hpp>
 #include <hpx/modules/itt_notify.hpp>
 #include <hpx/tracing/tracing.hpp>
 
@@ -50,11 +50,9 @@ namespace hpx::tracing {
             return util::itt::task(ctx.thread_domain,
                 util::itt::string_handle("address"), data.address);
         }
-        if (data.itt_string_handle != nullptr)
+        if (data.handle)
         {
-            return util::itt::task(ctx.thread_domain,
-                util::itt::string_handle(static_cast<___itt_string_handle*>(
-                    data.itt_string_handle)));
+            return util::itt::task(ctx.thread_domain, data.handle);
         }
         return util::itt::task(
             ctx.thread_domain, util::itt::string_handle(data.name));

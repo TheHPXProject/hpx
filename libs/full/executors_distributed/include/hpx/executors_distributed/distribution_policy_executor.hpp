@@ -147,30 +147,24 @@ namespace hpx::execution::experimental {
         /// \cond NOINTERNAL
         using execution_category = hpx::execution::parallel_execution_tag;
 
-    private:
+        // Executor interface - member functions (not tag_invoke)
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            return exec.post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.async_execute_impl(
+            return async_execute_impl(
                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return exec
-                .async_execute_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)
+            return async_execute_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)
                 .get();
         }
         /// \endcond

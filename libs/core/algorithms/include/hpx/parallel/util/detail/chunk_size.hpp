@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -56,19 +57,41 @@ namespace hpx::parallel::util::detail {
                                    cores);
                            })
         {
-            policy = policy.query(
+            // For policies that support query(), check if the query returns
+            // a policy with the same executor type. If not (e.g., for
+            // resiliency executors), use the executor's query directly.
+            using queried_policy_type = decltype(policy.query(
                 hpx::execution::experimental::with_processing_units_count_t{},
-                cores);
+                cores));
+            using queried_exec_type =
+                typename std::decay_t<queried_policy_type>::executor_type;
+
+            if constexpr (std::is_same_v<queried_exec_type, exec_type>)
+            {
+                // Same executor type, direct assignment is safe
+                policy = policy.query(hpx::execution::experimental::
+                                          with_processing_units_count_t{},
+                    cores);
+            }
+            else
+            {
+                // Different executor type (e.g., resiliency executor),
+                // use the executor's query and rebind the policy
+                auto updated_exec = hpx::experimental::prefer(
+                    hpx::execution::experimental::with_processing_units_count,
+                    policy.executor(), cores);
+                policy = hpx::execution::experimental::create_rebound_policy(
+                    policy, HPX_MOVE(updated_exec));
+            }
         }
-        else if constexpr (hpx::functional::is_tag_invocable_v<
-                               hpx::execution::experimental::
-                                   with_processing_units_count_t,
-                               exec_type, std::size_t>)
+        else if constexpr (
+            hpx::execution::experimental::has_query_v<exec_type const&,
+                hpx::execution::experimental::with_processing_units_count_t,
+                std::size_t>)
         {
             policy = hpx::execution::experimental::create_rebound_policy(policy,
                 hpx::execution::experimental::with_processing_units_count(
-                    policy.executor(), cores),
-                policy.parameters());
+                    policy.executor(), cores));
         }
     }
 

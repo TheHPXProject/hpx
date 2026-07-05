@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <random>
 #include <string>
 #include <utility>
@@ -116,6 +117,14 @@ private:
     bool was_initialized = false;
     struct generation_data
     {
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            // Only serialize the generated sequence; current is a local
+            // cursor and is reset after deserialization.
+            ar & generations;
+        }
+
         std::size_t current = 0;
         std::vector<std::size_t> generations;
     };
@@ -487,19 +496,19 @@ double test_local_all_to_all(std::vector<communicator> const& comms)
             sites.push_back(hpx::async([&, site]() {
                 hpx::chrono::high_resolution_timer const t;
 
-                // test functionality based on immediate local result value
-                auto value = site;
+                std::vector<std::uint32_t> values(num_sites);
+                std::fill(values.begin(), values.end(), site + i);
 
                 hpx::future<std::vector<std::uint32_t>> overall_result =
-                    all_gather(comms[site], value, this_site_arg(value),
-                        generation_arg(gen));
+                    all_to_all(comms[site], std::move(values),
+                        this_site_arg(site), generation_arg(gen));
 
                 std::vector<std::uint32_t> const r = overall_result.get();
                 HPX_TEST_EQ(r.size(), num_sites);
 
                 for (std::size_t j = 0; j != r.size(); ++j)
                 {
-                    HPX_TEST_EQ(r[j], j);
+                    HPX_TEST_EQ(r[j], j + i);
                 }
 
                 if (site == 0)

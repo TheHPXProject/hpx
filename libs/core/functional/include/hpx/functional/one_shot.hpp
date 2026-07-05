@@ -13,6 +13,7 @@
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <type_traits>
@@ -104,18 +105,17 @@ namespace hpx::util {
 #endif
             }
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            [[nodiscard]] util::itt::string_handle get_function_annotation_itt()
-                const
+            [[nodiscard]] hpx::tracing::annotation_handle
+            get_function_annotation_tracing() const
             {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-                return traits::get_function_annotation_itt<F>::call(_f);
+                return traits::get_function_annotation_tracing<F>::call(_f);
 #else
-                static util::itt::string_handle sh("one_shot_wrapper");
+                static auto sh =
+                    hpx::tracing::create_annotation_handle("one_shot_wrapper");
                 return sh;
 #endif
             }
-#endif
 
         public:    // exposition-only
             F _f;
@@ -159,17 +159,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename F>
-    struct get_function_annotation_itt<util::detail::one_shot_wrapper<F>>
+    struct get_function_annotation_tracing<util::detail::one_shot_wrapper<F>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             util::detail::one_shot_wrapper<F> const& f) noexcept
         {
-            return f.get_function_annotation_itt();
+            return f.get_function_annotation_tracing();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 

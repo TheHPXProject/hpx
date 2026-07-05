@@ -9,7 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/tracing.hpp>
@@ -34,30 +34,23 @@ namespace hpx::util {
 
     public:
         spinlock() noexcept
-          : context_("hpx::spinlock")
+          : context_("hpx::spinlock", this)
         {
-            HPX_ITT_SYNC_CREATE(this, "util::spinlock", nullptr);
         }
 
         explicit spinlock(char const* desc) noexcept
-          : context_("util::spinlock#", desc)
+          : context_("util::spinlock#", desc, this)
         {
-            HPX_ITT_SYNC_CREATE(this, "util::spinlock", desc);
         }
 
-        ~spinlock()
-        {
-            HPX_ITT_SYNC_DESTROY(this);
-        }
+        ~spinlock() = default;
 
         void lock() noexcept(
             noexcept(util::register_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_PREPARE(this);
             bool const run_after = context_.before_lock();
             m.lock();
 
-            HPX_ITT_SYNC_ACQUIRED(this);
             if (run_after)
                 context_.after_lock();
             util::register_lock(this);
@@ -66,18 +59,15 @@ namespace hpx::util {
         bool try_lock() noexcept(
             noexcept(util::register_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_PREPARE(this);
             bool const run_after = context_.before_lock();
 
             if (m.try_lock())
             {
-                HPX_ITT_SYNC_ACQUIRED(this);
                 if (run_after)
                     context_.after_try_lock(true);
                 util::register_lock(this);
                 return true;
             }
-            HPX_ITT_SYNC_CANCEL(this);
             if (run_after)
                 context_.after_try_lock(false);
             return false;
@@ -86,11 +76,9 @@ namespace hpx::util {
         void unlock() noexcept(
             noexcept(util::unregister_lock(std::declval<spinlock*>())))
         {
-            HPX_ITT_SYNC_RELEASING(this);
-
+            context_.before_unlock();
             m.unlock();
 
-            HPX_ITT_SYNC_RELEASED(this);
             context_.after_unlock();
             util::unregister_lock(this);
         }

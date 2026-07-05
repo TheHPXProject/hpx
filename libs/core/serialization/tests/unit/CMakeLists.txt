@@ -35,7 +35,7 @@ if(HPX_SERIALIZATION_WITH_BOOST_TYPES)
   set(tests ${tests} serialization_boost_variant)
 endif()
 
-if(NOT HPX_SERIALIZATION_WITH_ALLOW_AUTO_GENERATE)
+if(NOT HPX_WITH_CXX26_REFLECTION)
   set(tests ${tests} serialization_brace_initializable)
 endif()
 

@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -82,12 +83,25 @@ namespace hpx::execution {
 
         template <typename Parameters>
             requires(hpx::executor_parameters<Parameters>)
-        [[nodiscard]] constexpr std::size_t query(
-            experimental::processing_units_count_t, Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+        [[nodiscard]] std::size_t query(experimental::processing_units_count_t,
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return 1;
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              sequenced_executor const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return 1;
+            }
         }
 
         [[nodiscard]] auto query(

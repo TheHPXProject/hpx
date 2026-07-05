@@ -54,7 +54,8 @@ namespace hpx::collectives::detail {
 
         // Wrap local value in a vector (same pattern as hierarchical
         // gather_here).
-        std::vector<value_type> result(1, HPX_FORWARD(T, local_result));
+        std::vector<value_type> result;
+        result.emplace_back(HPX_FORWARD(T, local_result));
 
         // Walk bottom-up from leaf (size()-1) to level 1, skipping level 0
         // (the inter-group communicator). At every subtree level this site
@@ -91,7 +92,8 @@ namespace hpx::collectives::detail {
 
         using value_type = std::decay_t<T>;
 
-        std::vector<value_type> data(1, HPX_FORWARD(T, local_result));
+        std::vector<value_type> data;
+        data.emplace_back(HPX_FORWARD(T, local_result));
 
         // Walk bottom-up from leaf to level 1, calling gather_here
         // (each intermediate rep gathers from its children).

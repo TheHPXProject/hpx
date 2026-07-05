@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2014 Thomas Heller
 //  Copyright (c)      2015 Anton Bikineev
 //
@@ -78,7 +78,7 @@ namespace hpx::serialization {
                 return chunks_->back().size_;
             }
 
-            void set_chunk_size(std::size_t size) const noexcept
+            void set_chunk_size(std::size_t const size) const noexcept
             {
                 chunks_->back().size_ = size;
             }
@@ -126,7 +126,7 @@ namespace hpx::serialization {
                 return chunk_.size_;
             }
 
-            void set_chunk_size(std::size_t size) noexcept
+            void set_chunk_size(std::size_t const size) noexcept
             {
                 chunk_.size_ = size;
             }
@@ -172,7 +172,7 @@ namespace hpx::serialization {
 
         explicit output_container(Container& cont,
             std::vector<serialization_chunk>* chunks = nullptr,
-            std::size_t zero_copy_serialization_threshold = 0) noexcept
+            std::size_t const zero_copy_serialization_threshold = 0) noexcept
           : cont_(cont)
           , current_(0)
           , chunker_(chunks)
@@ -221,9 +221,17 @@ namespace hpx::serialization {
             chunker_.reset();
         }
 
-        void save_binary(void const* address, std::size_t count) override
+        std::size_t save_binary(detail::fundamental_types t,
+            void const* address, std::size_t count) override
         {
-            HPX_ASSERT(count != 0);
+            HPX_ASSERT(address != nullptr || count == 0);
+
+            // store type information if needed
+            std::size_t type_info_size = 0;
+            if (t != detail::fundamental_types::none)
+            {
+                type_info_size = sizeof(t);
+            }
 
             // make sure there is a current serialization_chunk descriptor
             // available
@@ -232,53 +240,70 @@ namespace hpx::serialization {
                         chunk_type::chunk_type_const_pointer) ||
                 chunker_.get_chunk_size() != 0)
             {
-                // add a new serialization_chunk,
-                // the chunk size will be set at the end
+                // add a new serialization_chunk, the chunk size will be set at
+                // the end
                 chunker_.push_back(create_index_chunk(current_, 0));
             }
 
-            std::size_t new_current = current_ + count;
+            std::size_t new_current = current_ + count + type_info_size;
             if (access_traits::size(cont_) < new_current)
-                access_traits::resize(cont_, count);
+            {
+                access_traits::resize(cont_, count + type_info_size);
+            }
 
-            access_traits::write(cont_, count, current_, address);
+            if (t != detail::fundamental_types::none)
+            {
+                access_traits::write(cont_, sizeof(t), current_, &t);
+            }
+
+            if (address)
+            {
+                access_traits::write(
+                    cont_, count, current_ + type_info_size, address);
+            }
 
             current_ = new_current;
+
+            return count + type_info_size;
         }
 
-        std::size_t save_binary_chunk(
-            void const* address, std::size_t count) override
+        std::size_t save_binary_chunk(detail::fundamental_types const t,
+            void const* address, std::size_t const count) override
         {
             if (count < zero_copy_serialization_threshold_)
             {
-                // fall back to serialization_chunk-less archive
-                this->output_container::save_binary(address, count);
-
-                // the container has grown by count bytes
-                return count;
+                // fall back to serialization_chunk-less archive, return the
+                // number of bytes the container has grown
+                return this->output_container::save_binary(t, address, count);
             }
-            else
+
+            // store type information if needed
+            std::size_t type_info_size = 0;
+            if (t != detail::fundamental_types::none)
             {
-                HPX_ASSERT(
-                    chunker_.get_chunk_type() == chunk_type::chunk_type_index ||
-                    chunker_.get_chunk_size() != 0);
-
-                // complement current serialization_chunk by setting its length
-                if (chunker_.get_chunk_type() == chunk_type::chunk_type_index)
-                {
-                    HPX_ASSERT(chunker_.get_chunk_size() == 0);
-
-                    chunker_.set_chunk_size(
-                        current_ - chunker_.get_chunk_data_index());
-                }
-
-                // add a new serialization_chunk referring to the external
-                // buffer
-                chunker_.push_back(create_pointer_chunk(address, count));
-
-                // the container did not grow
-                return 0;
+                type_info_size =
+                    this->output_container::save_binary(t, nullptr, 0);
             }
+
+            HPX_ASSERT(
+                chunker_.get_chunk_type() == chunk_type::chunk_type_index ||
+                chunker_.get_chunk_size() != 0);
+
+            // complement current serialization_chunk by setting its length
+            if (chunker_.get_chunk_type() == chunk_type::chunk_type_index)
+            {
+                HPX_ASSERT(chunker_.get_chunk_size() == 0);
+
+                chunker_.set_chunk_size(
+                    current_ - chunker_.get_chunk_data_index());
+            }
+
+            // add a new serialization_chunk referring to the external buffer
+            chunker_.push_back(create_pointer_chunk(address, count));
+
+            // the container did grow only if the type information needed to
+            // be stored
+            return type_info_size;
         }
 
         [[nodiscard]] bool is_preprocessing() const noexcept override
@@ -295,7 +320,8 @@ namespace hpx::serialization {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename Container, typename Chunker>
-    struct filtered_output_container : output_container<Container, Chunker>
+    struct filtered_output_container final
+      : output_container<Container, Chunker>
     {
         using access_traits = traits::serialization_access_data<Container>;
         using base_type = output_container<Container, Chunker>;
@@ -347,31 +373,43 @@ namespace hpx::serialization {
             this->base_type::set_filter(nullptr);
         }
 
-        void save_binary(void const* address, std::size_t count) override
+        std::size_t save_binary(detail::fundamental_types t,
+            void const* address, std::size_t count) override
         {
             HPX_ASSERT(count != 0);
 
+            std::size_t type_info_size = 0;
+            if (t != detail::fundamental_types::none)
+            {
+                if (filter_ != nullptr)
+                {
+                    filter_->save(&t, sizeof(t));
+                }
+                type_info_size = sizeof(t);
+            }
+
             // during construction the filter may not have been set yet
             if (filter_ != nullptr)
+            {
                 filter_->save(address, count);
+            }
+
+            count += type_info_size;
             this->current_ += count;
+
+            return count;
         }
 
-        std::size_t save_binary_chunk(
+        std::size_t save_binary_chunk(detail::fundamental_types t,
             void const* address, std::size_t count) override
         {
             if (count < this->zero_copy_serialization_threshold_)
             {
                 // fall back to serialization_chunk-less archive
-                HPX_ASSERT(count != 0);
-                filter_->save(address, count);
-                this->current_ += count;
-                return count;
+                return this->filtered_output_container::save_binary(
+                    t, address, count);
             }
-            else
-            {
-                return this->base_type::save_binary_chunk(address, count);
-            }
+            return this->base_type::save_binary_chunk(t, address, count);
         }
 
     protected:

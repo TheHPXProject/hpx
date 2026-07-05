@@ -8,7 +8,7 @@
 set(tracing_headers
     hpx/tracing/backends/apex.hpp hpx/tracing/backends/empty.hpp
     hpx/tracing/backends/ittnotify.hpp hpx/tracing/backends/tracy.hpp
-    hpx/tracing/tracing.hpp
+    hpx/tracing/macros.hpp hpx/tracing/tracing.hpp
 )
 set(tracing_sources backends/ittnotify.cpp backends/tracy.cpp)
 
@@ -27,6 +27,7 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${tracing_sources}
   HEADERS ${tracing_headers}
+  MACRO_HEADERS hpx/tracing/macros.hpp
   EXCLUDE_FROM_GLOBAL_HEADER
     hpx/tracing/backends/apex.hpp hpx/tracing/backends/empty.hpp
     hpx/tracing/backends/ittnotify.hpp hpx/tracing/backends/tracy.hpp

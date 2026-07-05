@@ -16,7 +16,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/io_service.hpp>
-#include <hpx/modules/itt_notify.hpp>
+
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
@@ -540,10 +540,7 @@ namespace hpx::parcelset {
             // invoke the original handler
             f(ec, p);
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static util::itt::event parcel_send("send_parcel");
-            util::itt::event_tick(parcel_send);
-#endif
+            HPX_TRACING_MARK_EVENT("send_parcel");
 
 #if defined(HPX_HAVE_PARCEL_PROFILING)
             hpx::tracing::send_parcel(

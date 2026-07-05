@@ -12,6 +12,7 @@
 #include <hpx/config.hpp>    // BOOST_JOIN
 #include <hpx/iostream/detail/error.hpp>
 #include <hpx/iostream/device/file_descriptor.hpp>
+#include <hpx/modules/filesystem.hpp>
 
 #include <cassert>
 #include <cerrno>
@@ -242,8 +243,8 @@ namespace hpx::iostream {
                 dwDesiredAccess = GENERIC_WRITE;
             }
 
-            HANDLE handle = ::CreateFileA(p.string().c_str(), dwDesiredAccess,
-                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+            HANDLE handle = ::CreateFileA(hpx::filesystem::to_string(p).c_str(),
+                dwDesiredAccess, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                 dwCreationDisposition, FILE_ATTRIBUTE_NORMAL, nullptr);
             if (handle != INVALID_HANDLE_VALUE)
             {

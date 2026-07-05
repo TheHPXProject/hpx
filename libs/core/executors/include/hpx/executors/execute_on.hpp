@@ -178,14 +178,12 @@ namespace hpx::execution::experimental {
         // It's up to scheduler customization to check if it can work with the
         // passed execution policy.
         HPX_CXX_CORE_EXPORT inline constexpr struct execute_on_t final
-          : hpx::functional::detail::tag_fallback<execute_on_t>
         {
-        private:
             template <typename Scheduler, execution_policy ExPolicy>
                 requires(hpx::execution::experimental::is_scheduler_v<
                     std::decay_t<Scheduler>>)
-            friend constexpr HPX_FORCEINLINE auto tag_fallback_invoke(
-                execute_on_t, Scheduler&& scheduler, ExPolicy&& policy)
+            constexpr HPX_FORCEINLINE auto operator()(
+                Scheduler&& scheduler, ExPolicy&& policy) const
             {
                 return scheduler_and_policy(HPX_FORWARD(Scheduler, scheduler),
                     HPX_FORWARD(ExPolicy, policy));

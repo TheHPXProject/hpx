@@ -395,9 +395,7 @@ namespace hpx::parallel::detail {
         Iter2 first2, Sent2 last2, Pred&& op, Proj1&& proj1, Proj2&& proj2)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_find_end_t<ExPolicy>::call(first1, last1, first2,
                 last2, HPX_FORWARD(Pred, op), HPX_FORWARD(Proj1, proj1),
@@ -424,9 +422,7 @@ namespace hpx::parallel::detail {
         Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
     {
         if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter1>::value &&
-            hpx::parallel::util::detail::iterator_datapar_compatible<
-                Iter2>::value)
+                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
         {
             return datapar_find_end_t<ExPolicy>::call(it, first2, base_idx,
                 part_size, diff, tok, HPX_FORWARD(Pred, op),

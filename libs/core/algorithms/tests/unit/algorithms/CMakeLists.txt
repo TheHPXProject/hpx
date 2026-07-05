@@ -214,6 +214,8 @@ set(tests
     rotate_sender
     rotate_copy_sender
     search_sender
+    shift_left_sender
+    shift_right_sender
     starts_with_sender
     swapranges_sender
     transform_sender
@@ -274,7 +276,10 @@ if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     generate_sender
     is_sorted_sender
     min_element_sender
+    move_sender
     none_of_sender
+    reverse_copy_sender
+    transform_sender
   )
     target_compile_definitions(
       ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES

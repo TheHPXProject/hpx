@@ -18,10 +18,6 @@
 #include <hpx/threading_base/scoped_annotation.hpp>
 #include <hpx/threading_base/thread_description.hpp>
 #include <hpx/threading_base/thread_helpers.hpp>
-
-#if HPX_HAVE_ITTNOTIFY != 0
-#include <hpx/modules/itt_notify.hpp>
-#endif
 #endif
 
 #include <cstddef>

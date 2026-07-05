@@ -23,7 +23,7 @@
     /**/
 
 #define HPX_DEFINE_GET_ACTION_NAME_(action, actionname)                        \
-    HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)                         \
+    HPX_DEFINE_GET_ACTION_NAME_TRACING(action, actionname)                     \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
         HPX_ALWAYS_EXPORT char const* get_action_name</**/ action>() noexcept  \
@@ -33,35 +33,30 @@
     }                                                                          \
     /**/
 
-///////////////////////////////////////////////////////////////////////////////
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)                     \
+#define HPX_DEFINE_GET_ACTION_NAME_TRACING(action, actionname)                 \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
-        HPX_ALWAYS_EXPORT util::itt::string_handle const&                      \
-        get_action_name_itt</**/ action>() noexcept                            \
+        HPX_ALWAYS_EXPORT hpx::tracing::annotation_handle const&               \
+        get_action_name_tracing</**/ action>() noexcept                        \
         {                                                                      \
-            static util::itt::string_handle sh(HPX_PP_STRINGIZE(actionname));  \
+            static hpx::tracing::annotation_handle sh =                        \
+                hpx::tracing::create_annotation_handle(                        \
+                    HPX_PP_STRINGIZE(actionname));                             \
             return sh;                                                         \
         }                                                                      \
     }                                                                          \
     /**/
 
-#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action)            \
+#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_TRACING(action)        \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
-        HPX_ALWAYS_EXPORT util::itt::string_handle const&                      \
-        get_action_name_itt</**/ action>() noexcept;                           \
+        HPX_ALWAYS_EXPORT hpx::tracing::annotation_handle const&               \
+        get_action_name_tracing</**/ action>() noexcept;                       \
     }                                                                          \
-/**/
-#else    // HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-#define HPX_DEFINE_GET_ACTION_NAME_ITT(action, actionname)          /**/
-#define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action) /**/
-#endif    // HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
+    /**/
 
 #define HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID(action)                \
-    HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_ITT(action)                \
+    HPX_REGISTER_ACTION_DECLARATION_NO_DEFAULT_GUID_TRACING(action)            \
     namespace hpx::actions::detail {                                           \
         template <>                                                            \
         HPX_ALWAYS_EXPORT char const* get_action_name<action>() noexcept;      \

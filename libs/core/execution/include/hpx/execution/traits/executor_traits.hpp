@@ -1,4 +1,5 @@
 //  Copyright (c) 2017-2024 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -199,15 +200,19 @@ namespace hpx::execution::experimental {
                 std::declval<T (*)(Ts...)>(), std::declval<Ts>()...));
         };
 
+        // Fallback for two-way executors that don't have an async_execute
+        // member and don't expose future_type. With tag_invoke removed,
+        // executors should provide async_execute as a public member function
+        // (the specialization above will deduce the return type). This
+        // fallback assumes hpx::future<T> for executors that haven't been
+        // migrated yet.
         template <typename Executor, typename T, typename... Ts>
         struct executor_future<Executor, T, hpx::util::pack<Ts...>,
             std::enable_if_t<hpx::traits::is_two_way_executor_v<Executor> &&
                 !has_async_execute_member<Executor>::value &&
                 !exposes_future_type<Executor, T>::value>>
         {
-            using type = hpx::functional::tag_invoke_result_t<
-                hpx::parallel::execution::async_execute_t, Executor,
-                T (*)(Ts...), Ts...>;
+            using type = hpx::future<T>;
         };
 
         template <typename Executor, typename T, typename Ts>

@@ -11,6 +11,7 @@
 
 #include <hpx/contracts.hpp>
 #include <hpx/modules/testing.hpp>
+
 #include <iostream>
 
 // This test runs when __cpp_contracts is available

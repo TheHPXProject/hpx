@@ -15,7 +15,7 @@ namespace hpx::parallel::execution::detail {
 
     // Detection concepts for executor member functions.
     // These enable the CPO bridges in execution.hpp to forward
-    // to member functions instead of requiring friend tag_invoke.
+    // to member functions instead of requiring custom tag_invoke hooks.
 
     template <typename Executor, typename F, typename... Ts>
     concept has_sync_execute_member =

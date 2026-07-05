@@ -171,7 +171,9 @@ namespace hpx {
 
             threads::thread_init_data data;
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-            data.description = actions::detail::get_action_name<Action>();
+            data.description = threads::thread_description(
+                actions::detail::get_action_name<Action>(),
+                actions::detail::get_action_name_tracing<Action>());
 #endif
 #if defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
             data.parent_id = threads::get_self_id();
@@ -198,7 +200,9 @@ namespace hpx {
 
             threads::thread_init_data data;
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-            data.description = actions::detail::get_action_name<Action>();
+            data.description = threads::thread_description(
+                actions::detail::get_action_name<Action>(),
+                actions::detail::get_action_name_tracing<Action>());
 #endif
 #if defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
             data.parent_id = threads::get_self_id();
@@ -424,7 +428,9 @@ namespace hpx {
 
             threads::thread_init_data data;
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
-            data.description = actions::detail::get_action_name<Action>();
+            data.description = threads::thread_description(
+                actions::detail::get_action_name<Action>(),
+                actions::detail::get_action_name_tracing<Action>());
 #endif
 #if defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
             data.parent_id = threads::get_self_id();

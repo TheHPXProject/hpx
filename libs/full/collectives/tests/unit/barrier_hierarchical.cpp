@@ -124,6 +124,29 @@ void test_non_power_of_arity()
     }
 }
 
+void test_invalid_arity_rejected()
+{
+    for (std::uint32_t arity : {0u, 1u})
+    {
+        bool caught_exception = false;
+        try
+        {
+            [[maybe_unused]] auto const barrier_clients =
+                create_hierarchical_communicator(
+                    "/test/barrier_hierarchical/invalid_arity/",
+                    num_sites_arg(1), this_site_arg(0), arity_arg(arity),
+                    generation_arg(), root_site_arg(),
+                    flat_fallback_threshold_arg(0));
+        }
+        catch (hpx::exception const& e)
+        {
+            caught_exception = true;
+            HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+        }
+        HPX_TEST(caught_exception);
+    }
+}
+
 int hpx_main()
 {
 #if defined(HPX_HAVE_NETWORKING)
@@ -153,6 +176,7 @@ int hpx_main()
         }
 
         test_non_power_of_arity();
+        test_invalid_arity_rejected();
     }
 
     return hpx::finalize();

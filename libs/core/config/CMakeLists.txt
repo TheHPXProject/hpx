@@ -27,6 +27,7 @@ set(config_macro_headers
     hpx/config/forward.hpp
     hpx/config/manual_profiling.hpp
     hpx/config/move.hpp
+    hpx/config/thread_name.hpp
     hpx/config/threads_stack.hpp
     hpx/config/warnings_prefix.hpp
     hpx/config/warnings_suffix.hpp
@@ -36,7 +37,7 @@ set(config_macro_headers
 set(config_headers ${config_macro_headers})
 
 # Default location is $HPX_ROOT/libs/config/src
-set(config_sources version.cpp)
+set(config_sources thread_name.cpp version.cpp)
 
 include(HPX_AddModule)
 add_hpx_module(

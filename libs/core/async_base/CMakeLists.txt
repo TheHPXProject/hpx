@@ -43,6 +43,7 @@ add_hpx_module(
     hpx_config
     hpx_concurrency
     hpx_coroutines
+    hpx_execution_base
     hpx_serialization
     hpx_tag_invoke
   CMAKE_SUBDIRS examples tests

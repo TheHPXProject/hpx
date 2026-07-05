@@ -1,5 +1,6 @@
 //  Copyright (c) 2020 ETH Zurich
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,10 +12,12 @@
 #include <hpx/async_base/detail/query_first_fallback.hpp>
 #include <hpx/async_base/query_dispatch.hpp>
 #include <hpx/modules/coroutines.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/execution_base.hpp>
 
 #include <cstddef>
+#include <string>
 #include <type_traits>
+#include <utility>
 
 namespace hpx::execution::experimental {
 
@@ -34,31 +37,34 @@ namespace hpx::execution::experimental {
         // The given property (Tag) is not supported on the given type (first
         // type in Args). Ensure that you are including the correct headers if
         // the property is supported. Alternatively, implement support for the
-        // property by overloading tag_invoke for the given property and type.
-        // If the property is not required, you can use prefer to fall back to
-        // the identity transformation when a property is not supported.
+        // property through a query() member on the target type.
         template <typename Tag, typename... Ts>
         struct property_not_supported;
 
+        template <executor_any Executor>
+        auto wrap_with_annotation(Executor&& exec, char const* annotation);
+
+        template <executor_any Executor>
+        auto wrap_with_annotation(Executor&& exec, std::string annotation);
+
         // NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
         template <typename Tag>
-        struct property_base : hpx::functional::detail::tag_fallback<Tag>
+        struct property_base
         {
-        private:
             template <typename Target, typename... Args>
-            friend constexpr auto tag_invoke(
-                Tag tag, Target&& target, Args&&... args)
                 requires(has_query_v<Target, Tag, Args...>)
+            constexpr auto operator()(Target&& target, Args&&... args) const
             {
                 return HPX_FORWARD(Target, target)
-                    .query(tag, HPX_FORWARD(Args, args)...);
+                    .query(Tag{}, HPX_FORWARD(Args, args)...);
             }
 
-            // attempt to improve error messages if property is not supported
-            template <typename... Ts>
-            friend constexpr auto tag_fallback_invoke(Tag, Ts&&...) noexcept
-                -> decltype(property_not_supported<Tag, Ts...>());
+            template <typename Target, typename... Args>
+                requires(!has_query_v<Target, Tag, Args...>)
+            constexpr auto operator()(Target&&, Args&&...) const noexcept
+                -> decltype(property_not_supported<Tag, Target, Args...>());
         };
+
         struct get_priority_fallback
         {
             template <typename Target, typename... Args>
@@ -191,8 +197,30 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct with_annotation_t final
-      : detail::property_base<with_annotation_t>
     {
+        template <typename Target, typename... Args>
+            requires(has_query_v<Target, with_annotation_t, Args...>)
+        constexpr auto operator()(Target&& target, Args&&... args) const
+        {
+            return HPX_FORWARD(Target, target)
+                .query(*this, HPX_FORWARD(Args, args)...);
+        }
+
+        template <executor_any Executor>
+            requires(!has_query_v<Executor, with_annotation_t, char const*>)
+        constexpr auto operator()(Executor&& exec, char const* annotation) const
+        {
+            return detail::wrap_with_annotation(
+                HPX_FORWARD(Executor, exec), annotation);
+        }
+
+        template <executor_any Executor>
+            requires(!has_query_v<Executor, with_annotation_t, std::string>)
+        auto operator()(Executor&& exec, std::string annotation) const
+        {
+            return detail::wrap_with_annotation(
+                HPX_FORWARD(Executor, exec), HPX_MOVE(annotation));
+        }
     } with_annotation{};
 
     template <>

@@ -13,7 +13,6 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/properties.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <concepts>
 #include <string>

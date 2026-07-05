@@ -150,8 +150,7 @@ struct test_async_executor1
     using execution_category = hpx::execution::parallel_execution_tag;
 
     template <typename F, typename... Ts>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::async_execute_t,
-        test_async_executor1 const&, F&& f, Ts&&... ts)
+    decltype(auto) async_execute(F&& f, Ts&&... ts) const
     {
         ++count_async;
 
@@ -175,8 +174,7 @@ struct test_async_executor2 : test_async_executor1
     using execution_category = hpx::execution::parallel_execution_tag;
 
     template <typename F, typename... Ts>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::sync_execute_t,
-        test_async_executor2 const&, F&& f, Ts&&... ts)
+    decltype(auto) sync_execute(F&& f, Ts&&... ts) const
     {
         ++count_sync;
 
@@ -201,9 +199,7 @@ struct test_async_executor3 : test_async_executor1
     using execution_category = hpx::execution::parallel_execution_tag;
 
     template <typename F, typename Shape, typename... Ts>
-    friend decltype(auto) tag_invoke(
-        hpx::parallel::execution::bulk_sync_execute_t,
-        test_async_executor3 const&, F f, Shape const& shape, Ts&&... ts)
+    decltype(auto) bulk_sync_execute(F f, Shape const& shape, Ts&&... ts) const
     {
         ++count_bulk_sync;
 
@@ -232,9 +228,7 @@ struct test_async_executor4 : test_async_executor1
     using execution_category = hpx::execution::parallel_execution_tag;
 
     template <typename F, typename Shape, typename... Ts>
-    friend decltype(auto) tag_invoke(
-        hpx::parallel::execution::bulk_async_execute_t,
-        test_async_executor4 const&, F f, Shape const& shape, Ts&&... ts)
+    decltype(auto) bulk_async_execute(F f, Shape const& shape, Ts&&... ts) const
     {
         ++count_bulk_async;
 
@@ -270,8 +264,7 @@ struct test_async_executor5 : test_async_executor1
     using execution_category = hpx::execution::parallel_execution_tag;
 
     template <typename F, typename... Ts>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-        test_async_executor5 const&, F&& f, Ts&&... ts)
+    decltype(auto) post(F&& f, Ts&&... ts) const
     {
         ++count_apply;
         hpx::post(std::forward<F>(f), std::forward<Ts>(ts)...);

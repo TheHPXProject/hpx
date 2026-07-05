@@ -222,21 +222,22 @@ namespace hpx::execution::experimental {
     // annotations. Those are wrapped into an annotating_executor if passed
     // to `with_annotation`.
     //
-    HPX_CXX_CORE_EXPORT template <executor_any Executor>
-    constexpr auto tag_fallback_invoke(
-        with_annotation_t, Executor&& exec, char const* annotation)
-    {
-        return annotating_executor<std::decay_t<Executor>>(
-            HPX_FORWARD(Executor, exec), annotation);
-    }
+    namespace detail {
 
-    HPX_CXX_CORE_EXPORT template <executor_any Executor>
-    auto tag_fallback_invoke(
-        with_annotation_t, Executor&& exec, std::string annotation)
-    {
-        return annotating_executor<std::decay_t<Executor>>(
-            HPX_FORWARD(Executor, exec), HPX_MOVE(annotation));
-    }
+        template <executor_any Executor>
+        auto wrap_with_annotation(Executor&& exec, char const* annotation)
+        {
+            return annotating_executor<std::decay_t<Executor>>(
+                HPX_FORWARD(Executor, exec), annotation);
+        }
+
+        template <executor_any Executor>
+        auto wrap_with_annotation(Executor&& exec, std::string annotation)
+        {
+            return annotating_executor<std::decay_t<Executor>>(
+                HPX_FORWARD(Executor, exec), HPX_MOVE(annotation));
+        }
+    }    // namespace detail
 }    // namespace hpx::execution::experimental
 
 namespace hpx::execution::experimental {

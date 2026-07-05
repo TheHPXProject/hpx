@@ -316,6 +316,15 @@ namespace hpx::collectives {
             // Handle operation right away if there is only one value.
             if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
             {
+                if (local_result.size() != 1)
+                {
+                    return hpx::make_exceptional_future<std::vector<T>>(
+                        HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                            "hpx::collectives::all_to_all",
+                            "each participating site must contribute exactly "
+                            "num_sites elements"));
+                }
+
                 if (this_site != comm_site)
                 {
                     return hpx::make_exceptional_future<std::vector<T>>(
@@ -476,6 +485,15 @@ namespace hpx::collectives {
                     "mapping"));
         }
 
+        if (!detail::is_valid_hierarchical_phase_generation(generation))
+        {
+            return hpx::make_exceptional_future<std::vector<T>>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_to_all (hierarchical)",
+                    "the generation number is too large for the internal "
+                    "generation mapping"));
+        }
+
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
@@ -518,8 +536,8 @@ namespace hpx::collectives {
         // lock-step with the subtrees and the instance can be shared across
         // collectives. Gather, exchange and the collapsed flat fast path
         // therefore share first_gen; only the subtree scatter uses second_gen.
-        generation_arg const first_gen(2 * generation - 1);
-        generation_arg const second_gen(2 * generation);
+        auto const [first_gen, second_gen] =
+            detail::hierarchical_phase_generations(generation);
 
         // Flat fast path: when arity >= num_sites (either because the user
         // chose a large arity or because the factory overrode arity to

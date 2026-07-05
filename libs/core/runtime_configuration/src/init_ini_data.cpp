@@ -62,10 +62,10 @@ namespace hpx::util {
             if (nullptr != file_suffix)
                 inipath /= fs::path(file_suffix);
 
-            if (handle_ini_file(ini, inipath.string()))
+            if (handle_ini_file(ini, hpx::filesystem::to_string(inipath)))
             {
                 LBT_(info).format("loaded configuration (${{{}}}): {}", env_var,
-                    inipath.string());
+                    hpx::filesystem::to_string(inipath));
                 return true;
             }
         }
@@ -111,7 +111,8 @@ namespace hpx::util {
 
         // look in the current directory first
         {
-            std::string cwd = fs::current_path().string() + "/.hpx.ini";
+            std::string cwd =
+                hpx::filesystem::to_string(fs::current_path()) + "/.hpx.ini";
             bool result2 = handle_ini_file(ini, cwd);
             if (result2)
             {
@@ -202,9 +203,9 @@ namespace hpx::util {
                     // read and merge the ini file into the main ini hierarchy
                     try
                     {
-                        ini.merge(p.string());
-                        LBT_(info).format(
-                            "loaded configuration: {}", p.string());
+                        ini.merge(hpx::filesystem::to_string(p));
+                        LBT_(info).format("loaded configuration: {}",
+                            hpx::filesystem::to_string(p));
                     }
                     // NOLINTNEXTLINE(bugprone-empty-catch)
                     catch (hpx::exception const& /*e*/)
@@ -515,7 +516,8 @@ namespace hpx::util {
 
                 // make sure every module name is loaded exactly once, the
                 // first occurrence of a module name is used
-                std::string basename = canonical_curr.filename().string();
+                std::string basename =
+                    hpx::filesystem::to_string(canonical_curr.filename());
                 std::pair<std::map<std::string, fs::path>::iterator, bool> p =
                     basenames.emplace(basename, canonical_curr);
 
@@ -527,8 +529,8 @@ namespace hpx::util {
                 {
                     LRT_(warning).format(
                         "skipping module {} ({}): ignored because of: {}",
-                        basename, canonical_curr.string(),
-                        p.first->second.string());
+                        basename, hpx::filesystem::to_string(canonical_curr),
+                        hpx::filesystem::to_string(p.first->second));
                 }
             }
         }
@@ -548,36 +550,39 @@ namespace hpx::util {
 
         for (auto const& p : libdata)
         {
-            LRT_(info).format("attempting to load: {}", p.first.string());
+            LRT_(info).format(
+                "attempting to load: {}", hpx::filesystem::to_string(p.first));
 
             // get the handle of the library
             error_code ec(throwmode::lightweight);
-            hpx::util::plugin::dll d(p.first.string(), p.second);
+            hpx::util::plugin::dll d(
+                hpx::filesystem::to_string(p.first), p.second);
             d.load_library(ec);
             if (ec)
             {
                 LRT_(info).format("skipping (load_library failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
                 continue;
             }
 
             bool must_keep_loaded = false;
 
             // get the component factory
-            std::string curr_fullname(p.first.parent_path().string());
+            std::string curr_fullname(
+                hpx::filesystem::to_string(p.first.parent_path()));
             load_component_factory(
                 d, ini, curr_fullname, component_registries, p.second, ec);
             if (ec)
             {
                 LRT_(info).format(
                     "skipping (load_component_factory failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
                 ec = error_code(throwmode::lightweight);    // reinit ec
             }
             else
             {
-                LRT_(debug).format(
-                    "load_component_factory succeeded: {}", p.first.string());
+                LRT_(debug).format("load_component_factory succeeded: {}",
+                    hpx::filesystem::to_string(p.first));
                 must_keep_loaded = true;
             }
 
@@ -589,12 +594,12 @@ namespace hpx::util {
             {
                 LRT_(info).format(
                     "skipping (load_plugin_factory failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
             }
             else
             {
-                LRT_(debug).format(
-                    "load_plugin_factory succeeded: {}", p.first.string());
+                LRT_(debug).format("load_plugin_factory succeeded: {}",
+                    hpx::filesystem::to_string(p.first));
 
                 std::copy(tmp_regs.begin(), tmp_regs.end(),
                     std::back_inserter(plugin_registries));

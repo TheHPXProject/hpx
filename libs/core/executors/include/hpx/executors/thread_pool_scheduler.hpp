@@ -1,4 +1,5 @@
 //  Copyright (c) 2020 ETH Zurich
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2022-2025 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -21,6 +22,7 @@
 #include <concepts>
 #include <cstddef>
 #include <exception>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -29,8 +31,9 @@
 #include <utility>
 #include <variant>
 
-#include <hpx/execution/algorithms/bulk.hpp>
-#include <hpx/execution_base/stdexec_forward.hpp>
+#include <hpx/executors/thread_pool_continues_on_sender.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 
 #include <ranges>
 
@@ -144,6 +147,49 @@ namespace hpx::execution::experimental {
                     HPX_FORWARD(decltype(child), child), HPX_MOVE(iota_shape),
                     HPX_FORWARD(decltype(f), f), HPX_MOVE(pu_mask)};
         }
+
+        // transform_sender for continues_on operations.
+        //
+        // When stdexec's domain resolution encounters
+        //   continues_on(sender, hpx_thread_pool_scheduler)
+        // it calls this transform_sender to replace the generic double-state
+        // continues_on with our optimized single-state implementation.
+        //
+        // The continues_on expression tree is:
+        //   continues_on_t [ scheduler, schedule_from_t [ {}, original_sender ] ]
+        //
+        // We extract the original sender and scheduler, then return our
+        // thread_pool_continues_on_sender which uses a single operation
+        // state and inline forwarding when already on an HPX thread.
+        //
+        // Note: We constrain on the sender being a continues_on expression
+        // only. The scheduler type check is done inside the body since the
+        // domain dispatch already ensures we are in thread_pool_domain.
+        template <typename Sender, typename Env>
+            requires sender_invokes_algorithm_v<Sender,
+                hpx::execution::experimental::continues_on_t>
+        constexpr auto transform_sender(
+            hpx::execution::experimental::set_value_t, Sender&& sndr,
+            Env const& /*env*/) const noexcept
+        {
+            // Destructure the continues_on expression:
+            //   [continues_on_tag, scheduler, schedule_from_child]
+            auto&& [tag, sched, schedule_from_child] =
+                HPX_FORWARD(Sender, sndr);
+
+            // Destructure the schedule_from wrapper to get the original
+            // predecessor sender:
+            //   [schedule_from_tag, empty_data, original_sender]
+            auto&& [sf_tag, sf_data, original_sender] =
+                HPX_FORWARD(decltype(schedule_from_child), schedule_from_child);
+
+            return hpx::execution::experimental::detail::
+                thread_pool_continues_on_sender<
+                    std::decay_t<decltype(original_sender)>,
+                    std::decay_t<decltype(sched)>>{
+                    HPX_FORWARD(decltype(original_sender), original_sender),
+                    HPX_FORWARD(decltype(sched), sched)};
+        }
     };
 
     HPX_CXX_CORE_EXPORT template <typename Policy>
@@ -211,11 +257,26 @@ namespace hpx::execution::experimental {
         }
 
         template <executor_parameters Parameters>
-        [[nodiscard]] std::size_t query(processing_units_count_t, Parameters&&,
-            hpx::chrono::steady_duration const& = hpx::chrono::null_duration,
-            std::size_t = 0) const
+        [[nodiscard]] std::size_t query(processing_units_count_t,
+            Parameters&& params,
+            hpx::chrono::steady_duration const& iter_dur =
+                hpx::chrono::null_duration,
+            std::size_t num_tasks = 0) const
         {
-            return get_num_cores();
+            using exec_type = std::decay_t<decltype(*this)>;
+            if constexpr (requires(std::decay_t<Parameters> const& p,
+                              exec_type const& e,
+                              hpx::chrono::steady_duration const& d) {
+                              p.processing_units_count(e, d, std::size_t{});
+                          })
+            {
+                return HPX_FORWARD(Parameters, params)
+                    .processing_units_count(*this, iter_dur, num_tasks);
+            }
+            else
+            {
+                return get_num_cores();
+            }
         }
 
         [[nodiscard]] auto query(
@@ -274,7 +335,8 @@ namespace hpx::execution::experimental {
         template <typename Tag, typename Property>
             requires(
                 hpx::execution::experimental::is_scheduling_property_v<Tag> &&
-                hpx::functional::is_tag_invocable_v<Tag, Policy, Property>)
+                hpx::execution::experimental::has_query_v<Policy const&, Tag,
+                    Property>)
         [[nodiscard]] auto query(Tag tag, Property&& prop) const
         {
             auto scheduler_with_prop = *this;
@@ -286,7 +348,7 @@ namespace hpx::execution::experimental {
         template <typename Tag>
             requires(
                 hpx::execution::experimental::is_scheduling_property_v<Tag> &&
-                hpx::functional::is_tag_invocable_v<Tag, Policy>)
+                hpx::execution::experimental::has_query_v<Policy const&, Tag>)
         [[nodiscard]] auto query(Tag tag) const
         {
             return tag(policy());
@@ -497,6 +559,14 @@ namespace hpx::execution::experimental {
                     return sched.query(
                         hpx::execution::experimental::get_completion_domain_t<
                             CPO>{});
+                }
+
+                // P2300 get_allocator query
+                constexpr auto query(
+                    hpx::execution::experimental::get_allocator_t)
+                    const noexcept
+                {
+                    return std::allocator<std::byte>{};
                 }
             };
 

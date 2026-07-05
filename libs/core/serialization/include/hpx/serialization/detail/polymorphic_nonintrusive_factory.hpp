@@ -37,7 +37,7 @@
 namespace hpx::serialization::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T>
     struct get_serialization_name
 #ifdef HPX_DISABLE_AUTOMATIC_SERIALIZATION_REGISTRATION
         ;
@@ -86,7 +86,7 @@ namespace hpx::serialization::detail {
         [[nodiscard]] static T* create(input_archive& ar);
     };
 
-    class polymorphic_nonintrusive_factory
+    HPX_CXX_CORE_EXPORT class polymorphic_nonintrusive_factory
     {
     public:
         polymorphic_nonintrusive_factory(
@@ -148,7 +148,7 @@ namespace hpx::serialization::detail {
         serializer_typeinfo_map_type typeinfo_map_;
     };
 
-    template <typename Derived>
+    HPX_CXX_CORE_EXPORT template <typename Derived>
     struct register_class
     {
         static void save(output_archive& ar, void const* base);

@@ -515,7 +515,8 @@ namespace hpx::collectives {
                             "involved"));
                 }
 
-                std::vector<arg_type> result(1, HPX_FORWARD(T, local_result));
+                std::vector<arg_type> result;
+                result.emplace_back(HPX_FORWARD(T, local_result));
                 return hpx::make_ready_future(HPX_MOVE(result));
             }
 
@@ -565,6 +566,11 @@ namespace hpx::collectives {
         template <typename T>
         std::vector<T> gather_data(std::vector<std::vector<T>>&& data)
         {
+            if (data.size() == 1)
+            {
+                return HPX_MOVE(data.front());
+            }
+
             std::size_t total_size = 0;
             for (auto const& row : data)
             {
@@ -613,8 +619,8 @@ namespace hpx::collectives {
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
-            std::vector<std::decay_t<T>> result(
-                1, HPX_FORWARD(T, local_result));
+            std::vector<std::decay_t<T>> result;
+            result.emplace_back(HPX_FORWARD(T, local_result));
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 result = gather_data(gather_here(communicators.get(i),
@@ -777,7 +783,8 @@ namespace hpx::collectives {
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
-            std::vector<std::decay_t<T>> data(1, HPX_FORWARD(T, local_result));
+            std::vector<std::decay_t<T>> data;
+            data.emplace_back(HPX_FORWARD(T, local_result));
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 data = gather_data(gather_here(communicators.get(i),

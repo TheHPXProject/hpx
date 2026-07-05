@@ -18,6 +18,7 @@
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <type_traits>
@@ -129,17 +130,15 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename Sig, bool Serializable>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         hpx::move_only_function<Sig, Serializable>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             hpx::move_only_function<Sig, Serializable> const& f) noexcept
         {
-            return f.get_function_annotation_itt();
+            return f.get_function_annotation_tracing();
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif

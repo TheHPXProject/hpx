@@ -18,6 +18,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <mpi.h>
@@ -34,6 +36,12 @@ using hpx::program_options::value;
 using hpx::program_options::variables_map;
 
 static bool output = true;
+
+static_assert(std::is_same_v<
+    decltype(std::declval<hpx::mpi::experimental::executor const&>()
+            .async_execute(
+                MPI_Isend, static_cast<int const*>(nullptr), 1, MPI_INT, 0, 0)),
+    hpx::future<int>>);
 
 void msg_recv(int rank, int size, int /*to*/, int from, int token, unsigned tag)
 {

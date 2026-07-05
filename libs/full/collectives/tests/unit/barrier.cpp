@@ -10,6 +10,7 @@
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/lcos.hpp>
+#include <hpx/modules/collectives.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/testing.hpp>
 
@@ -141,11 +142,51 @@ void test_release_from_non_hpx_thread(hpx::program_options::variables_map& vm)
     }
 }
 
+void collectives_barrier_generation_tests()
+{
+    using namespace hpx::collectives;
+
+    auto const default_generation_client = create_local_communicator(
+        "/test/barrier/collectives/default_generation/", num_sites_arg(1),
+        this_site_arg(0));
+    hpx::collectives::barrier(
+        default_generation_client, this_site_arg(0), generation_arg())
+        .get();
+
+    auto const zero_generation_client =
+        create_local_communicator("/test/barrier/collectives/zero_generation/",
+            num_sites_arg(1), this_site_arg(0));
+
+    bool caught_exception = false;
+    try
+    {
+        hpx::collectives::barrier(
+            zero_generation_client, this_site_arg(0), generation_arg(0))
+            .get();
+    }
+    catch (hpx::exception const& e)
+    {
+        caught_exception = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(caught_exception);
+
+    hpx::collectives::barrier("/test/barrier/collectives/basename_async/",
+        num_sites_arg(1), this_site_arg(0), generation_arg(1))
+        .get();
+
+    hpx::collectives::barrier(hpx::launch::sync,
+        "/test/barrier/collectives/basename_sync/", num_sites_arg(1),
+        this_site_arg(0), generation_arg(1));
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     // Regression test for release() from non-HPX threads.
     test_release_from_non_hpx_thread(vm);
+
+    collectives_barrier_generation_tests();
 
     local_tests(vm);
 

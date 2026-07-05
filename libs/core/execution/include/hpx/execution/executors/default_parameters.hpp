@@ -41,7 +41,7 @@ namespace hpx::execution::experimental {
         template <typename Executor>
         std::size_t get_chunk_size(Executor&& exec,
             hpx::chrono::steady_duration const&, std::size_t const cores,
-            std::size_t const num_iterations)
+            std::size_t const num_iterations) const
         {
             // Make sure the internal round-robin counter of the executor is
             // reset

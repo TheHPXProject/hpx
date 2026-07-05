@@ -481,6 +481,15 @@ namespace hpx::collectives {
                     "generation number for the 2k-1/2k internal mapping"));
         }
 
+        if (!detail::is_valid_hierarchical_phase_generation(generation))
+        {
+            return hpx::make_exceptional_future<arg_type>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::all_reduce (hierarchical)",
+                    "the generation number is too large for the internal "
+                    "2k-1/2k generation mapping"));
+        }
+
         if (this_site.is_default())
         {
             this_site = agas::get_locality_id();
@@ -509,8 +518,8 @@ namespace hpx::collectives {
                     "participating sites"));
         }
 
-        generation_arg const reduce_gen(2 * generation - 1);
-        generation_arg const broadcast_gen(2 * generation);
+        auto const [reduce_gen, broadcast_gen] =
+            detail::hierarchical_phase_generations(generation);
 
         // Flat fast path: when arity >= num_sites, the tree builder's leaf
         // condition (right - left < arity) fired at the root call and

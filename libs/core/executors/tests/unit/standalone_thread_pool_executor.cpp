@@ -19,6 +19,7 @@
 #include <hpx/thread.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -82,9 +83,14 @@ decltype(auto) disable_run_as_child(Executor&& exec)
         HPX_FORWARD(Executor, exec), hint);
 }
 
+std::atomic<int> count_inline(0);
+
 void bulk_test(int, hpx::thread::id const& tid, int passed_through)    //-V813
 {
-    HPX_TEST_NEQ(tid, hpx::this_thread::get_id());
+    if (tid == hpx::this_thread::get_id())
+    {
+        ++count_inline;
+    }
     HPX_TEST_EQ(passed_through, 42);
 }
 
@@ -105,10 +111,15 @@ void test_bulk_sync(Executor& exec)
     auto no_sharing_exec = hpx::execution::to_hierarchical_spawning(
         hpx::execution::experimental::with_hint(exec, hint));
 
+    count_inline.store(0);
     hpx::parallel::execution::bulk_sync_execute(
         no_sharing_exec, hpx::bind(&bulk_test, _1, tid, _2), v, 42);
+    HPX_TEST_LTE(count_inline.load(), 1);
+
+    count_inline.store(0);
     hpx::parallel::execution::bulk_sync_execute(
         no_sharing_exec, &bulk_test, v, tid, 42);
+    HPX_TEST_LTE(count_inline.load(), 1);
 }
 
 template <typename Executor>
@@ -122,13 +133,18 @@ void test_bulk_async(Executor& exec)
     using hpx::placeholders::_1;
     using hpx::placeholders::_2;
 
+    count_inline.store(0);
     hpx::when_all(
         hpx::parallel::execution::bulk_async_execute(disable_run_as_child(exec),
             hpx::bind(&bulk_test, _1, tid, _2), v, 42))
         .get();
+    HPX_TEST_LTE(count_inline.load(), 1);
+
+    count_inline.store(0);
     hpx::when_all(hpx::parallel::execution::bulk_async_execute(
                       disable_run_as_child(exec), &bulk_test, v, tid, 42))
         .get();
+    HPX_TEST_LTE(count_inline.load(), 1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
