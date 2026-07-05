@@ -59,6 +59,7 @@ void test_thread_id_ref_move_from_thread_id_default_add_ref()
 
         // default add_ref == true increments the reference count
         hpx::threads::thread_id_ref const ref(HPX_MOVE(tid));
+        // NOLINTNEXTLINE(bugprone-use-after-move)
         HPX_TEST(!tid);    // moved-from thread_id was reset
         HPX_TEST(ref);
         HPX_TEST_EQ(data.use_count(), 2L);
