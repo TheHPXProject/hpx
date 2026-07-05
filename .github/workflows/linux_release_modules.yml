@@ -23,6 +23,12 @@ jobs:
     - name: Configure
       shell: bash
       run: |
+          if clang --version | grep -q 'clang version 22'; then
+            MODULES_OPT="-DHPX_WITH_CXX_MODULES=OFF"
+          else
+            MODULES_OPT="-DHPX_WITH_CXX_MODULES=ON"
+          fi
+
           cmake \
               . \
               -Bbuild \
@@ -38,7 +44,7 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
-              -DHPX_WITH_CXX_MODULES=ON \
+              ${MODULES_OPT} \
               -DHPX_WITH_DATAPAR=ON \
               -DHPX_WITH_DATAPAR_BACKEND=EMULATE
     - name: Build

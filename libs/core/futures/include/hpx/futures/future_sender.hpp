@@ -11,7 +11,7 @@
 /// Usage:
 /// \code
 ///   hpx::future<int> f = hpx::async([]{ return 42; });
-///   auto result = hpx::execution::experimental::as_sender(std::move(f))
+///   auto result = hpx::execution::experimental::future_sender<int>{std::move(f)}
 ///       | stdexec::then([](int x){ return x * 2; })
 ///       | stdexec::sync_wait();
 /// \endcode
@@ -20,6 +20,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/futures/future.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 
 #include <exception>
