@@ -20,8 +20,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/futures/future.hpp>
+// clang-format off
 #include <hpx/futures/promise.hpp>
+#include <hpx/futures/future.hpp>
+// clang-format on
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 
