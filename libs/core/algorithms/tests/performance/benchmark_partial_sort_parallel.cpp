@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
     desc_commandline.add_options()
         ("seed,s", value<unsigned int>(),
             "the random number generator seed to use for this run")
-        ("test_count", value<int>()->default_value(25),
+        ("test_count", value<unsigned int>()->default_value(25),
             "number of tests to be averaged (default: 25)")
     ;
     // clang-format on

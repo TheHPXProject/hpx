@@ -18,8 +18,9 @@ status_computation_and_artifacts_storage() {
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
 
     # Copy the testing directory for saving as an artifact
-    cp -r ${build_dir}/Testing ${src_dir}/${configuration_name}-Testing
-    cp -r ${build_dir}/*.json ${src_dir}/${configuration_name}-reports
+    cp -r "${build_dir}/Testing" "${src_dir}/${configuration_name}-Testing"
+    mkdir -p "${src_dir}/${configuration_name}-reports"
+    cp -r "${build_dir}/*.json" "${src_dir}/${configuration_name}-reports"
 
     if [[ -s $build_dir/index.html ]]; then
         cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh

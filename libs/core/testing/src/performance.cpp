@@ -22,6 +22,10 @@
 
 namespace hpx::util {
 
+    bool detailed_ = false;
+    bool print_cdash_img = false;
+    std::string test_name_;
+
     void perftests_cfg(hpx::program_options::options_description& cmdline)
     {
         // clang-format off
@@ -123,36 +127,42 @@ average: {{average(elapsed)}}
                 long double time);
         };
 
-        static json_perf_times& times()
-        {
-            static json_perf_times res;
-            return res;
-        }
+        namespace {
 
-        static void add_time(std::string const& test_name,
-            std::string const& executor, long double const time)
-        {
-            times().add(test_name, executor, time);
-        }
-
-        static std::pair<long double, int> generate_average_result(
-            std::ostream& strm, std::string const& name,
-            std::string const& executor, std::vector<long double> const& values)
-        {
-            long double average = static_cast<long double>(0.0);
-            int series = 0;
-            strm << "name: " << name << "\n";
-            strm << "executor: " << executor << "\n";
-            for (long double const val : values)
+            json_perf_times& times()
             {
-                ++series;
-                average += val;
+                static json_perf_times res;
+                return res;
             }
-            strm.precision(std::numeric_limits<long double>::max_digits10 - 1);
-            strm << std::scientific << "average: " << average / series << "\n";
 
-            return {average, series};
-        }
+            void add_time(std::string const& test_name,
+                std::string const& executor, long double const time)
+            {
+                times().add(test_name, executor, time);
+            }
+
+            std::pair<long double, int> generate_average_result(
+                std::ostream& strm, std::string const& name,
+                std::string const& executor,
+                std::vector<long double> const& values)
+            {
+                long double average = static_cast<long double>(0.0);
+                int series = 0;
+                strm << "name: " << name << "\n";
+                strm << "executor: " << executor << "\n";
+                for (long double const val : values)
+                {
+                    ++series;
+                    average += val;
+                }
+                strm.precision(
+                    std::numeric_limits<long double>::max_digits10 - 1);
+                strm << std::scientific << "average: " << average / series
+                     << "\n";
+
+                return {average, series};
+            }
+        }    // namespace
 
         std::ostream& operator<<(std::ostream& strm, json_perf_times const& obj)
         {
@@ -221,7 +231,7 @@ average: {{average(elapsed)}}
                 strm << "Results:\n\n";
                 for (auto const& [fst, snd] : obj.m_map)
                 {
-                    auto [average, series] = generate_average_result(
+                    generate_average_result(
                         strm, std::get<0>(fst), std::get<1>(fst), snd);
 
                     strm << "\n";
@@ -261,10 +271,9 @@ average: {{average(elapsed)}}
                 .name(name)
                 .context("executor", exec)
                 .epochs(steps)
-                .run([&](ankerl::nanobench::State& state) {
-                    state.pauseTiming();
+                .run([&]() {
+                    // nanobench doesn't allow separating pretest from test
                     pretest();
-                    state.resumeTiming();
                     test();
                 });
         }

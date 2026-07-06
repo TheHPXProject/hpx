@@ -49,7 +49,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(1),
-        "seq", test_count * NELEM,
+        "seq", test_count,
         [&] {
             hpx::nth_element(B.begin(), std::next(B.begin(), i_dist(my_rand)),
                 B.end(), compare_t());
@@ -68,12 +68,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::shuffle(A.begin(), A.end(), my_rand);
     uint32_t const STEP = NELEM / 20;
 
+    std::uniform_int_distribution<std::uint64_t> i_dist2(0, NELEM - 1);
+
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(STEP),
-        "seq", test_count * NELEM,
+        "seq", test_count,
         [&] {
-            hpx::nth_element(B.begin(), std::next(B.begin(), i_dist(my_rand)),
+            hpx::nth_element(B.begin(), std::next(B.begin(), i_dist2(my_rand)),
                 B.end(), compare_t());
         },
         [&] { B = A; });

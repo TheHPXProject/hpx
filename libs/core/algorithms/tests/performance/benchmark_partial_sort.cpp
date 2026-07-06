@@ -201,10 +201,14 @@ int main(int argc, char* argv[])
     options_description desc_commandline(
         "Usage: " HPX_APPLICATION_STRING " [options]");
 
-    desc_commandline.add_options()("seed,s", value<unsigned int>(),
-        "the random number generator seed to use for this run")("test_count",
-        value<int>()->default_value(100),
-        "number of tests to be averaged (default: 100)");
+    // clang-format off
+    desc_commandline.add_options()
+        ("seed,s", value<unsigned int>(),
+            "the random number generator seed to use for this run")
+        ("test_count", value<unsigned int>()->default_value(100),
+            "number of tests to be averaged (default: 100)")
+        ;
+    // clang-format on
 
     // By default this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};

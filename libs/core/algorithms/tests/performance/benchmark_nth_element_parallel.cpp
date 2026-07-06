@@ -30,7 +30,7 @@ std::mt19937 my_rand(0);
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    int test_count = vm["test_count"].as<int>();
+    unsigned int test_count = vm["test_count"].as<unsigned int>();
 
     hpx::util::perftests_init(vm, "benchmark_nth_element_parallel");
 
@@ -70,13 +70,15 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::uint32_t const STEP = NELEM / 20;
 
+    std::uniform_int_distribution<std::uint64_t> i_dist2(0, NELEM - 1);
+
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(STEP),
-        "par", test_count * NELEM / STEP,
+        "par", test_count,
         [&] {
             hpx::nth_element(::hpx::execution::par, B.begin(),
-                std::next(B.begin(), i_dist(my_rand)), B.end(), compare_t());
+                std::next(B.begin(), i_dist2(my_rand)), B.end(), compare_t());
         },
         [&] { B = A; });
 
@@ -94,7 +96,7 @@ int main(int argc, char* argv[])
     // clang-format off
     desc_commandline.add_options()
         ("test_count",
-            hpx::program_options::value<int>()->default_value(25),
+            hpx::program_options::value<unsigned int>()->default_value(25),
             "number of tests to be averaged (default: 25)")
     ;
     // clang-format on

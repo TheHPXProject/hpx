@@ -13,12 +13,21 @@ commit_repo=${2}
 commit_sha=${3}
 commit_status=${4}
 configuration_name=${5}
-build_id=${6}
-context=${7}
+context=${6}
+build_id=${7}
 
-curl --verbose \
-    --request POST \
-    --url "https://api.github.com/repos/${commit_repo}/statuses/${commit_sha}" \
-    --header 'Content-Type: application/json' \
-    --header "authorization: Bearer ${github_token}" \
-    --data "{ \"state\": \"${commit_status}\", \"target_url\": \"https://cdash.rostam.cct.lsu.edu/build/${build_id}\", \"description\": \"Jenkins\", \"context\": \"${context}/${configuration_name}\" }"
+if [ -n "$build_id" ]; then
+    curl --verbose \
+        --request POST \
+        --url "https://api.github.com/repos/${commit_repo}/statuses/${commit_sha}" \
+        --header 'Content-Type: application/json' \
+        --header "authorization: Bearer ${github_token}" \
+        --data "{ \"state\": \"${commit_status}\", \"target_url\": \"https://cdash.rostam.cct.lsu.edu/build/${build_id}\", \"description\": \"Jenkins\", \"context\": \"${context}/${configuration_name}\" }"
+else
+    curl --verbose \
+        --request POST \
+        --url "https://api.github.com/repos/${commit_repo}/statuses/${commit_sha}" \
+        --header 'Content-Type: application/json' \
+        --header "authorization: Bearer ${github_token}" \
+        --data "{ \"state\": \"${commit_status}\", \"description\": \"Jenkins\", \"context\": \"${context}/${configuration_name}\" }"
+fi

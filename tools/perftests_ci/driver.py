@@ -69,7 +69,7 @@ def build(build_type, environment, target, source_dir, build_dir, install_dir,
 
 
 try:
-    from pyutils import buildinfo
+    import buildinfo
 except ImportError:
     buildinfo = None
 
