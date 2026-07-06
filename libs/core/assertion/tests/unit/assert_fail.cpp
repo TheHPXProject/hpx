@@ -5,8 +5,12 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/assert.hpp>
+#include <hpx/hpx_main.hpp>
 
 int main()
 {
+#if defined(HPX_DEBUG)
     HPX_ASSERT(false);
+#endif
+    return 0;
 }

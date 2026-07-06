@@ -347,10 +347,14 @@ function(add_hpx_performance_report_test subcategory name)
                    ${command_args}
   )
   set(n_executions 50)
-  set(binary_pyutils_dir ${CMAKE_BINARY_DIR})
+  set(binary_pyutils_dir ${CMAKE_BINARY_DIR}/tools/perftests_ci)
 
   # Generate pytools/buildinfo.py, if not available
-  set(PYUTILS_BUILD_TYPE "$<$<CONFIG:Release>:Release>$<$<CONFIG:Debug>:Debug>")
+  if(CMAKE_BUILD_TYPE)
+    set(PYUTILS_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+  else()
+    set(PYUTILS_BUILD_TYPE $<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>)
+  endif()
   set(PYUTILS_COMPILER ${CMAKE_CXX_COMPILER})
   set(PYUTILS_ENVFILE)
   hpx_configure_if_changed(
@@ -361,23 +365,23 @@ function(add_hpx_performance_report_test subcategory name)
 
   # cmake-format: off
   add_custom_target(
-    ${name}_cdash_results
+    ${name}_perftest
     COMMAND
       ${CMAKE_COMMAND}
           -E env --modify PYTHONPATH=path_list_prepend:${binary_pyutils_dir}/ --
           ${Python_EXECUTABLE} ${perftests_dir}/driver.py -v
-            -l ${CMAKE_BINARY_DIR}/log_perftests_${name}.tmp perftest run
+            -l ${binary_pyutils_dir}/log_perftests_${name}.tmp perftest run
             --local True
-            --run_output ${CMAKE_BINARY_DIR}/${name}.json
+            --run_output ${binary_pyutils_dir}/results/${name}.json
             --n_executions ${n_executions}
             --targets-and-opts ${target_file} ${command_args}
     COMMAND
       ${CMAKE_COMMAND}
           -E env --modify PYTHONPATH=path_list_prepend:${binary_pyutils_dir}/ --
           ${Python_EXECUTABLE} ${perftests_dir}/perftests_plot.py
-          ${CMAKE_BINARY_DIR}/${name}.json
+          ${binary_pyutils_dir}/results/${name}.json
           ${perftests_dir}/perftest/references/lsu_default/${name}.json
-          ${CMAKE_BINARY_DIR}/${name}
+          ${binary_pyutils_dir}/${name}
     VERBATIM
     COMMAND_EXPAND_LISTS
   )
@@ -385,12 +389,12 @@ function(add_hpx_performance_report_test subcategory name)
 
   # Create performance-related pseudo targets and dependencies
   if("${subcategory}" STREQUAL "")
-    add_hpx_pseudo_target("tests.performance.${name}_cdash_results")
+    add_hpx_pseudo_target("tests.performance.${name}_perftest")
     add_hpx_pseudo_dependencies(
-      "tests.performance" "tests.performance.${name}_cdash_results"
+      "tests.performance" "tests.performance.${name}_perftest"
     )
     add_hpx_pseudo_dependencies(
-      "tests.performance.${name}_cdash_results" "${name}_cdash_results"
+      "tests.performance.${name}_perftest" "${name}_perftest"
     )
   else()
     add_hpx_pseudo_target("tests.performance.${subcategory}")
@@ -398,21 +402,18 @@ function(add_hpx_performance_report_test subcategory name)
       "tests.performance" "tests.performance.${subcategory}"
     )
 
-    add_hpx_pseudo_target(
-      "tests.performance.${subcategory}.${name}_cdash_results"
-    )
+    add_hpx_pseudo_target("tests.performance.${subcategory}.${name}_perftest")
     add_hpx_pseudo_dependencies(
       "tests.performance.${subcategory}"
-      "tests.performance.${subcategory}.${name}_cdash_results"
+      "tests.performance.${subcategory}.${name}_perftest"
     )
 
     add_hpx_pseudo_dependencies(
-      "tests.performance.${subcategory}.${name}_cdash_results"
-      "${name}_cdash_results"
+      "tests.performance.${subcategory}.${name}_perftest" "${name}_perftest"
     )
   endif()
 
-  add_dependencies(${name}_cdash_results ${name}_test)
+  add_dependencies(${name}_perftest ${name}_test)
 endfunction(add_hpx_performance_report_test)
 
 function(add_hpx_example_test subcategory name)

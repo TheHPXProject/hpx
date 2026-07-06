@@ -1,4 +1,4 @@
-//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com )
+//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com)
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <random>
 #include <string>
 #include <vector>
@@ -35,7 +36,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // Test 1
     std::uint32_t NELEM = 1000;
 
-    typedef std::less<std::uint64_t> compare_t;
+    using compare_t = std::less<std::uint64_t>;
 
     std::vector<std::uint64_t> A, B;
     A.reserve(NELEM);
@@ -48,15 +49,15 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::shuffle(A.begin(), A.end(), gen);
 
-    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+    std::uniform_int_distribution<std::int64_t> i_dist(0, NELEM - 1);
 
     hpx::util::perftests_report(
         "hpx::partial_sort, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(1),
-        "par", test_count * NELEM,
+        "par", test_count,
         [&] {
             hpx::partial_sort(::hpx::execution::par, B.begin(),
-                B.begin() + i_dist(gen), B.end(), compare_t());
+                std::next(B.begin(), i_dist(gen)), B.end(), compare_t());
         },
         [&] { B = A; });
 
@@ -73,25 +74,27 @@ int hpx_main(hpx::program_options::variables_map& vm)
         A.emplace_back(i);
     }
 
+    std::uniform_int_distribution<std::int64_t> i_dist2(0, NELEM - 1);
+
     std::shuffle(A.begin(), A.end(), gen);
     hpx::util::perftests_report(
         "hpx::partial_sort, size: " + std::to_string(NELEM), "par", test_count,
         [&] {
-            hpx::partial_sort(::hpx::execution::par, B.begin(), B.end(),
-                B.end(), compare_t());
+            hpx::partial_sort(::hpx::execution::par, B.begin(),
+                std::next(B.begin(), i_dist2(gen)), B.end(), compare_t());
         },
         [&] { B = A; });
 
     // Test 3
     std::shuffle(A.begin(), A.end(), gen);
-    uint32_t STEP = NELEM / 100;
+    std::uint32_t STEP = NELEM / 100;
     hpx::util::perftests_report(
         "hpx::partial_sort, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(STEP),
-        "par", test_count * NELEM / STEP,
+        "par", (std::max) (test_count / STEP, 1u),
         [&] {
             hpx::partial_sort(::hpx::execution::par, B.begin(),
-                B.begin() + i_dist(gen), B.end(), compare_t());
+                std::next(B.begin(), i_dist2(gen)), B.end(), compare_t());
         },
         [&] { B = A; });
 

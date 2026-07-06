@@ -272,6 +272,7 @@ if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     all_of_sender
     any_of_sender
     copyn_sender
+    findif_sender
     findifnot_sender
     generate_sender
     is_sorted_sender

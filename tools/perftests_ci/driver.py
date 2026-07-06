@@ -70,7 +70,8 @@ def build(build_type, environment, target, source_dir, build_dir, install_dir,
 
 try:
     import buildinfo
-except ImportError:
+except ImportError as e:
+    print(e)
     buildinfo = None
 
 if buildinfo:

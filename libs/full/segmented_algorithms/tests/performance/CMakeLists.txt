@@ -33,7 +33,7 @@ foreach(benchmark ${benchmarks})
       ${${benchmark}_perftest_PARAMETERS}
     )
     set_target_properties(
-      ${benchmark}_cdash_results
+      ${benchmark}_perftest
       PROPERTIES FOLDER
                  "Benchmarks/Modules/Full/SegmentedAlgorithms/CDashResults"
     )

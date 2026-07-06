@@ -193,8 +193,7 @@ foreach(benchmark ${benchmarks})
         "local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS}
       )
       set_target_properties(
-        ${benchmark}_cdash_results PROPERTIES FOLDER
-                                              "Benchmarks/Local/CDashResults"
+        ${benchmark}_perftest PROPERTIES FOLDER "Benchmarks/Local/CDashResults"
       )
     endif()
   endif()

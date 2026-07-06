@@ -8,6 +8,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //-----------------------------------------------------------------------------
+
 #include <hpx/algorithm.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/init.hpp>
@@ -45,7 +46,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
 
-    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+    std::uniform_int_distribution<std::int64_t> i_dist(0, NELEM - 1);
 
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
@@ -70,12 +71,12 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::uint32_t const STEP = NELEM / 20;
 
-    std::uniform_int_distribution<std::uint64_t> i_dist2(0, NELEM - 1);
+    std::uniform_int_distribution<std::int64_t> i_dist2(0, NELEM - 1);
 
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(STEP),
-        "par", test_count,
+        "par", (std::max) (test_count / STEP, 1u),
         [&] {
             hpx::nth_element(::hpx::execution::par, B.begin(),
                 std::next(B.begin(), i_dist2(my_rand)), B.end(), compare_t());

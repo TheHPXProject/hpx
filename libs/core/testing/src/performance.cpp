@@ -13,6 +13,7 @@
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #if defined(HPX_HAVE_NANOBENCH)
@@ -140,29 +141,26 @@ average: {{average(elapsed)}}
             {
                 times().add(test_name, executor, time);
             }
-
-            std::pair<long double, int> generate_average_result(
-                std::ostream& strm, std::string const& name,
-                std::string const& executor,
-                std::vector<long double> const& values)
-            {
-                long double average = static_cast<long double>(0.0);
-                int series = 0;
-                strm << "name: " << name << "\n";
-                strm << "executor: " << executor << "\n";
-                for (long double const val : values)
-                {
-                    ++series;
-                    average += val;
-                }
-                strm.precision(
-                    std::numeric_limits<long double>::max_digits10 - 1);
-                strm << std::scientific << "average: " << average / series
-                     << "\n";
-
-                return {average, series};
-            }
         }    // namespace
+
+        std::pair<long double, int> generate_average_result(std::ostream& strm,
+            std::string const& name, std::string const& executor,
+            std::vector<long double> const& values)
+        {
+            long double average = static_cast<long double>(0.0);
+            int series = 0;
+            strm << "name: " << name << "\n";
+            strm << "executor: " << executor << "\n";
+            for (long double const val : values)
+            {
+                ++series;
+                average += val;
+            }
+            strm.precision(std::numeric_limits<long double>::max_digits10 - 1);
+            strm << std::scientific << "average: " << average / series << "\n";
+
+            return {average, series};
+        }
 
         std::ostream& operator<<(std::ostream& strm, json_perf_times const& obj)
         {
@@ -221,10 +219,12 @@ average: {{average(elapsed)}}
                          << "</CTestMeasurement>\n\n";
                 }
                 for (std::size_t i = 0; i < obj.m_map.size(); i++)
+                {
                     strm
                         << R"(<CTestMeasurementFile type="image/png" name="perftest" >)"
                         << "./" << test_name_ << "_" << i << ".png"
                         << "</CTestMeasurementFile>\n";
+                }
             }
             else
             {
@@ -325,6 +325,11 @@ average: {{average(elapsed)}}
             return;
 
         // First iteration to cache the data
+        if (!pretest.empty())
+        {
+            pretest();
+        }
+
         test();
         using timer = std::chrono::high_resolution_clock;
         for (std::size_t i = 0; i != steps; ++i)

@@ -34,7 +34,7 @@ foreach(test ${tests})
       "modules.datastructures" ${test}_perftest ${${test}_perftest_PARAMETERS}
     )
     set_target_properties(
-      ${test}_cdash_results PROPERTIES FOLDER ${folder_name}/CDashResults
+      ${test}_perftest PROPERTIES FOLDER ${folder_name}/CDashResults
     )
   endif()
 endforeach()

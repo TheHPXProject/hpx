@@ -87,7 +87,7 @@ set(benchmarks
 
 foreach(benchmark ${benchmarks})
   ctest_build(
-    TARGET ${benchmark}_cdash_results FLAGS "-k0 -j ${CTEST_BUILD_PARALLELISM}"
+    TARGET ${benchmark}_perftest FLAGS "-k0 -j ${CTEST_BUILD_PARALLELISM}"
   )
 endforeach()
 

@@ -20,7 +20,7 @@ status_computation_and_artifacts_storage() {
     # Copy the testing directory for saving as an artifact
     cp -r "${build_dir}/Testing" "${src_dir}/${configuration_name}-Testing"
     mkdir -p "${src_dir}/${configuration_name}-reports"
-    cp -r "${build_dir}/*.json" "${src_dir}/${configuration_name}-reports"
+    cp -r "${build_dir}/tools/perftests_ci/results/*.json" "${src_dir}/${configuration_name}-reports"
 
     if [[ -s $build_dir/index.html ]]; then
         cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh

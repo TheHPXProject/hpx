@@ -2,12 +2,13 @@
 /// \file benchmark_nth_element.cpp
 /// \brief Benchmark program of the nth_element function
 ///
-//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com )
+//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com)
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 //-----------------------------------------------------------------------------
+
 #include <hpx/algorithm.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/init.hpp>
@@ -30,11 +31,12 @@ std::mt19937 my_rand(0);
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    int test_count = vm["test_count"].as<int>();
+    unsigned int test_count = vm["test_count"].as<unsigned int>();
 
     hpx::util::perftests_init(vm, "benchmark_nth_element");
 
-    typedef std::less<std::uint64_t> compare_t;
+    using compare_t = std::less<std::uint64_t>;
+
     std::vector<std::uint64_t> A, B;
     std::uint32_t NELEM = 1000;
     A.reserve(NELEM);
@@ -44,7 +46,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
 
-    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+    std::uniform_int_distribution<std::int64_t> i_dist(0, NELEM - 1);
 
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
@@ -66,14 +68,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
     for (std::uint64_t i = 0; i < NELEM; ++i)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
-    uint32_t const STEP = NELEM / 20;
+    std::uint32_t const STEP = NELEM / 20;
 
-    std::uniform_int_distribution<std::uint64_t> i_dist2(0, NELEM - 1);
+    std::uniform_int_distribution<std::int64_t> i_dist2(0, NELEM - 1);
 
     hpx::util::perftests_report(
         "hpx::nth_element, size: " + std::to_string(NELEM) +
             ", step: " + std::to_string(STEP),
-        "seq", test_count,
+        "seq", (std::max) (test_count / STEP, 1u),
         [&] {
             hpx::nth_element(B.begin(), std::next(B.begin(), i_dist2(my_rand)),
                 B.end(), compare_t());
@@ -92,7 +94,7 @@ int main(int argc, char* argv[])
         "Usage: " HPX_APPLICATION_STRING " [options]");
 
     desc_commandline.add_options()("test_count",
-        hpx::program_options::value<int>()->default_value(100),
+        hpx::program_options::value<unsigned int>()->default_value(100),
         "number of tests to be averaged (default: 100)");
 
     hpx::util::perftests_cfg(desc_commandline);

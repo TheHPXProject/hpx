@@ -64,7 +64,7 @@ else
     github_commit_status="success"
 fi
 
-# Set GitHub status only if build id is available
+# Set GitHub status with CDash url
 cdash_build_id="$(cat jenkins-hpx-${configuration_name}-cdash-build-id.txt)"
 if [[ -z "${ghprbPullId:-}" ]]; then
     .jenkins/common/set_github_status.sh \
@@ -79,7 +79,6 @@ else
     # Extract just the organization and repo names "org/repo" from the full URL
     github_commit_repo="$(echo $ghprbPullLink | sed -n 's/https:\/\/github.com\/\(.*\)\/pull\/[0-9]*/\1/p')"
 
-    # Set GitHub status with CDash url
     .jenkins/common/set_github_status.sh \
         "${GITHUB_TOKEN}" \
         "${github_commit_repo}" \
