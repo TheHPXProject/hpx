@@ -34,7 +34,7 @@ def generate_matrix(ctest_output, num_buckets):
         match = pattern.match(line)
         if match:
             test_name = match.group(1).strip()
-            if test_name not in excluded and '_perftest' not in test_name:
+            if test_name not in excluded and not test_name.endswith('_perftest'):
                 tests.append(test_name)
 
     tests.sort()

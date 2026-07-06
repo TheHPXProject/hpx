@@ -105,17 +105,16 @@ void run_benchmark(std::size_t vector_size, int test_count,
     auto value = DataType(static_cast<int>(random_range / 2));
     auto pred = [value](DataType const& a) -> bool { return a == value; };
 
-    // auto dest_dist = std::distance(first, std::remove_if(first, last, pred));
-
     auto org_first = std::begin(org_v);
     auto org_last = std::end(org_v);
 
-    hpx::util::perftests_report("hpx::remove_if", "seq", test_count, [&] {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        hpx::remove_if(seq, first, last, pred);
-    });
+    hpx::util::perftests_report(
+        "hpx::remove_if", "seq", test_count,
+        [&] { hpx::remove_if(seq, first, last, pred); },
+        [&]() {
+            // Restore [first, last) with original data.
+            hpx::copy(hpx::execution::par, org_first, org_last, first);
+        });
 
     hpx::util::perftests_report("hpx::remove_if", "par", test_count, [&] {
         // Restore [first, last) with original data.
@@ -124,12 +123,13 @@ void run_benchmark(std::size_t vector_size, int test_count,
         hpx::remove_if(par, first, last, pred);
     });
 
-    hpx::util::perftests_report("hpx::remove_if", "par_unseq", test_count, [&] {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        hpx::remove_if(par_unseq, first, last, pred);
-    });
+    hpx::util::perftests_report(
+        "hpx::remove_if", "par_unseq", test_count,
+        [&] { hpx::remove_if(par_unseq, first, last, pred); },
+        [&]() {
+            // Restore [first, last) with original data.
+            hpx::copy(hpx::execution::par, org_first, org_last, first);
+        });
 
     hpx::util::perftests_print_times();
 }

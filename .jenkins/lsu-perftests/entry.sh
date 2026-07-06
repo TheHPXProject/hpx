@@ -64,30 +64,32 @@ else
     github_commit_status="success"
 fi
 
+# Set GitHub status only if build id is available
 cdash_build_id="$(cat jenkins-hpx-${configuration_name}-cdash-build-id.txt)"
+if [ -n "$cdash_build_id" ]; then
+    if [[ -z "${ghprbPullId:-}" ]]; then
+        .jenkins/common/set_github_status.sh \
+            "${GITHUB_TOKEN}" \
+            "STEllAR-GROUP/hpx" \
+            "${GIT_COMMIT}" \
+            "${github_commit_status}" \
+            "${configuration_name}" \
+            "${cdash_build_id}" \
+            "jenkins/lsu-perftests"
+    else
+        # Extract just the organization and repo names "org/repo" from the full URL
+        github_commit_repo="$(echo $ghprbPullLink | sed -n 's/https:\/\/github.com\/\(.*\)\/pull\/[0-9]*/\1/p')"
 
-if [[ -z "${ghprbPullId:-}" ]]; then
-    .jenkins/common/set_github_status.sh \
-        "${GITHUB_TOKEN}" \
-        "STEllAR-GROUP/hpx" \
-        "${GIT_COMMIT}" \
-        "${github_commit_status}" \
-        "${configuration_name}" \
-        "${cdash_build_id}" \
-        "jenkins/lsu-perftests"
-else
-    # Extract just the organization and repo names "org/repo" from the full URL
-    github_commit_repo="$(echo $ghprbPullLink | sed -n 's/https:\/\/github.com\/\(.*\)\/pull\/[0-9]*/\1/p')"
-
-    # Set GitHub status with CDash url
-    .jenkins/common/set_github_status.sh \
-        "${GITHUB_TOKEN}" \
-        "${github_commit_repo}" \
-        "${ghprbActualCommit}" \
-        "${github_commit_status}" \
-        "${configuration_name}" \
-        "${cdash_build_id}" \
-        "jenkins/lsu-perftests"
+        # Set GitHub status with CDash url
+        .jenkins/common/set_github_status.sh \
+            "${GITHUB_TOKEN}" \
+            "${github_commit_repo}" \
+            "${ghprbActualCommit}" \
+            "${github_commit_status}" \
+            "${configuration_name}" \
+            "${cdash_build_id}" \
+            "jenkins/lsu-perftests"
+    fi
 fi
 
 set -e

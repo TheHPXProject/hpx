@@ -15,18 +15,21 @@
 
 namespace hpx::util {
 
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline bool detailed_;
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline bool print_cdash_img;
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT inline std::string test_name_;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern bool detailed_;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern bool print_cdash_img;
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern std::string test_name_;
+
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_cfg(
         hpx::program_options::options_description& cmdline);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_init(
         hpx::program_options::variables_map const& vm,
         std::string const test_name);
+
 #if defined(HPX_HAVE_NANOBENCH)
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_report(
         std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test);
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest = nullptr);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_print_times(
         std::ostream& strm, char const* templ);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_print_times(
@@ -35,7 +38,8 @@ namespace hpx::util {
 #else
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_report(
         std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test);
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest = nullptr);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void perftests_print_times();
 #endif

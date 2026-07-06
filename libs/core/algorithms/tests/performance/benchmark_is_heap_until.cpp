@@ -123,11 +123,12 @@ int main(int argc, char* argv[])
     // initialize program
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
 
+    hpx::util::perftests_cfg(desc_commandline);
+
     // Initialize and run HPX
     hpx::local::init_params init_args;
     init_args.desc_cmdline = desc_commandline;
     init_args.cfg = cfg;
-    hpx::util::perftests_cfg(desc_commandline);
 
     HPX_TEST_EQ_MSG(hpx::local::init(hpx_main, argc, argv, init_args), 0,
         "HPX main exited with non-zero status");

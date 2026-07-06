@@ -46,47 +46,6 @@ struct random_fill
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-template <typename OrgIter, typename BidirIter>
-double run_inplace_merge_benchmark_std(int test_count, OrgIter org_first,
-    OrgIter org_last, BidirIter first, BidirIter middle, BidirIter last)
-{
-    std::uint64_t time = static_cast<std::uint64_t>(0);
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
-        std::inplace_merge(first, middle, last);
-        time += hpx::chrono::high_resolution_clock::now() - elapsed;
-    }
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-template <typename ExPolicy, typename OrgIter, typename BidirIter>
-double run_inplace_merge_benchmark_hpx(int test_count, ExPolicy policy,
-    OrgIter org_first, OrgIter org_last, BidirIter first, BidirIter middle,
-    BidirIter last)
-{
-    std::uint64_t time = static_cast<std::uint64_t>(0);
-
-    for (int i = 0; i < test_count; ++i)
-    {
-        // Restore [first, last) with original data.
-        hpx::copy(hpx::execution::par, org_first, org_last, first);
-
-        std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
-        hpx::inplace_merge(policy, first, middle, last);
-        time += hpx::chrono::high_resolution_clock::now() - elapsed;
-    }
-
-    return (static_cast<double>(time) * 1e-9) / test_count;
-}
-
-///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
 void run_benchmark(std::size_t vector_left_size, std::size_t vector_right_size,
     int test_count, std::size_t random_range, IteratorTag)

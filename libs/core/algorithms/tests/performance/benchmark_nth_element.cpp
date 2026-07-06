@@ -44,17 +44,17 @@ int hpx_main(hpx::program_options::variables_map& vm)
         A.emplace_back(i);
     std::shuffle(A.begin(), A.end(), my_rand);
 
-    hpx::util::perftests_report("hpx::nth_element, size: " +
-            std::to_string(NELEM) + ", step: " + std::to_string(1),
-        "seq", test_count, [&] {
-            for (std::uint64_t i = 0; i < NELEM; i++)
-            {
-                B = A;
-                hpx::nth_element(B.begin(),
-                    std::next(B.begin(), static_cast<std::int64_t>(i)), B.end(),
-                    compare_t());
-            }
-        });
+    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+
+    hpx::util::perftests_report(
+        "hpx::nth_element, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(1),
+        "seq", test_count * NELEM,
+        [&] {
+            hpx::nth_element(B.begin(), std::next(B.begin(), i_dist(my_rand)),
+                B.end(), compare_t());
+        },
+        [&] { B = A; });
 
     NELEM = 100000;
 
@@ -68,17 +68,15 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::shuffle(A.begin(), A.end(), my_rand);
     uint32_t const STEP = NELEM / 20;
 
-    hpx::util::perftests_report("hpx::nth_element, size: " +
-            std::to_string(NELEM) + ", step: " + std::to_string(STEP),
-        "seq", test_count, [&] {
-            for (std::uint64_t i = 0; i < NELEM; i += STEP)
-            {
-                B = A;
-                hpx::nth_element(B.begin(),
-                    std::next(B.begin(), static_cast<std::int64_t>(i)), B.end(),
-                    compare_t());
-            }
-        });
+    hpx::util::perftests_report(
+        "hpx::nth_element, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(STEP),
+        "seq", test_count * NELEM,
+        [&] {
+            hpx::nth_element(B.begin(), std::next(B.begin(), i_dist(my_rand)),
+                B.end(), compare_t());
+        },
+        [&] { B = A; });
 
     hpx::util::perftests_print_times();
 

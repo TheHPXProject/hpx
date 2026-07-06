@@ -18,13 +18,13 @@ from pyutils import default_vars as var, env, log, runtools
 
 
 def _git_commit():
-    import buildinfo
+    from pyutils import buildinfo
     return runtools.run(['git', 'rev-parse', 'HEAD'],
                         cwd=buildinfo.source_dir).strip()
 
 
 def _git_datetime():
-    import buildinfo
+    from pyutils import buildinfo
     posixtime = runtools.run(
         ['git', 'show', '-s', '--format=%ct',
          _git_commit()],
@@ -37,7 +37,7 @@ def _now():
 
 
 def run(local, targets_and_opts, n_executions):
-    import buildinfo
+    from pyutils import buildinfo
 
     def join_results(result_list):
         # This should work, as long as the format of the result files stays consistent

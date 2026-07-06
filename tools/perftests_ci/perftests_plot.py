@@ -17,12 +17,17 @@ import seaborn as sns
 sns.set_style("ticks",{'axes.grid' : True})
 
 def classify(lower, upper):
+
+    if upper < lower:
+        return classify(upper, lower)
+
+    # large uncertainty
     if upper - lower > 0.1:
         return '??'
         
     if -0.01 <= lower <= 0 <= upper <= 0.01:
         return '='
-    if -0.02 <= lower <= upper <= 0.02:
+    if -0.02 <= lower <= 0 <= upper <= 0.02:
         return '(=)'
 
     # probably no change, but quite large uncertainty
@@ -76,7 +81,7 @@ else:
     header_flag = True
     
     i = 0
-    for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"]):
+    for test1, test2 in zip(json_obj1["outputs"], json_obj2["outputs"], strict=True):
         if test1["name"] == test2["name"]:
             flag = True
             category.append("baseline")

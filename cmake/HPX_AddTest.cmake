@@ -330,8 +330,6 @@ function(add_hpx_performance_report_test subcategory name)
     ${name} "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN}
   )
 
-  string(REPLACE "_perftest" "" name ${name})
-
   find_package(Python REQUIRED)
 
   if(${name}_THREADS_PER_LOCALITY)
@@ -341,16 +339,18 @@ function(add_hpx_performance_report_test subcategory name)
     set(command_args ${command_args} --hpx:localities=${${name}_LOCALITIES})
   endif()
 
+  string(REPLACE "_perftest" "" name ${name})
+
   set(perftests_dir ${CMAKE_SOURCE_DIR}/tools/perftests_ci)
   set(target_file $<TARGET_FILE:${name}_test>)
   set(command_args --hpx:detailed_bench --hpx:print_cdash_img_path
                    ${command_args}
   )
   set(n_executions 50)
-  set(binary_pyutils_dir ${CMAKE_BINARY_DIR}/pyutils)
+  set(binary_pyutils_dir ${CMAKE_BINARY_DIR})
 
   # Generate pytools/buildinfo.py, if not available
-  set(PYUTILS_BUILD_TYPE "Release")
+  set(PYUTILS_BUILD_TYPE "$<$<CONFIG:Release>:Release>$<$<CONFIG:Debug>:Debug>")
   set(PYUTILS_COMPILER ${CMAKE_CXX_COMPILER})
   set(PYUTILS_ENVFILE)
   hpx_configure_if_changed(

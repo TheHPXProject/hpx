@@ -24,10 +24,16 @@ namespace hpx::util {
 
     void perftests_cfg(hpx::program_options::options_description& cmdline)
     {
-        cmdline.add_options()("hpx:detailed_bench",
-            "Use if detailed benchmarks are required, showing the execution "
-            "time taken for each epoch")("hpx:print_cdash_img_path",
-            "Print the path to the images to be uploaded, in CDash XML format");
+        // clang-format off
+        cmdline.add_options()
+            ("hpx:detailed_bench",
+                "Use if detailed benchmarks are required, showing "
+                    "the execution time taken for each epoch")
+            ("hpx:print_cdash_img_path",
+                "Print the path to the images to be uploaded, "
+                    "in CDash XML format")
+        ;
+        // clang-format on
     }
 
     void perftests_init(
@@ -109,24 +115,43 @@ average: {{average(elapsed)}}
 
             map_t m_map;
 
-            HPX_CORE_EXPORT friend std::ostream& operator<<(
+            friend std::ostream& operator<<(
                 std::ostream& strm, json_perf_times const& obj);
 
         public:
-            HPX_CORE_EXPORT void add(std::string const& name,
-                std::string const& executor, long double time);
+            void add(std::string const& name, std::string const& executor,
+                long double time);
         };
 
-        json_perf_times& times()
+        static json_perf_times& times()
         {
             static json_perf_times res;
             return res;
         }
 
-        void add_time(std::string const& test_name, std::string const& executor,
-            long double time)
+        static void add_time(std::string const& test_name,
+            std::string const& executor, long double const time)
         {
             times().add(test_name, executor, time);
+        }
+
+        static std::pair<long double, int> generate_average_result(
+            std::ostream& strm, std::string const& name,
+            std::string const& executor, std::vector<long double> const& values)
+        {
+            long double average = static_cast<long double>(0.0);
+            int series = 0;
+            strm << "name: " << name << "\n";
+            strm << "executor: " << executor << "\n";
+            for (long double const val : values)
+            {
+                ++series;
+                average += val;
+            }
+            strm.precision(std::numeric_limits<long double>::max_digits10 - 1);
+            strm << std::scientific << "average: " << average / series << "\n";
+
+            return {average, series};
         }
 
         std::ostream& operator<<(std::ostream& strm, json_perf_times const& obj)
@@ -175,57 +200,38 @@ average: {{average(elapsed)}}
             else if (print_cdash_img)
             {
                 strm << "Results:\n\n";
-                for (auto&& item : obj.m_map)
+                for (auto const& [fst, snd] : obj.m_map)
                 {
-                    long double average = static_cast<long double>(0.0);
-                    int series = 0;
-                    strm << "name: " << std::get<0>(item.first) << "\n";
-                    strm << "executor: " << std::get<1>(item.first) << "\n";
-                    for (long double const val : item.second)
-                    {
-                        ++series;
-                        average += val;
-                    }
-                    strm.precision(
-                        std::numeric_limits<long double>::max_digits10 - 1);
-                    strm << std::scientific << "average: " << average / series
-                         << "\n";
-                    strm << "<CTestMeasurement type=\"numeric/double\" name=\""
-                         << std::get<0>(item.first) << "_"
-                         << std::get<1>(item.first) << "\">" << std::scientific
-                         << average / series << "</CTestMeasurement>\n\n";
+                    auto [average, series] = generate_average_result(
+                        strm, std::get<0>(fst), std::get<1>(fst), snd);
+
+                    strm << R"(<CTestMeasurement type="numeric/double" name=")"
+                         << std::get<0>(fst) << "_" << std::get<1>(fst) << "\">"
+                         << std::scientific << average / series
+                         << "</CTestMeasurement>\n\n";
                 }
                 for (std::size_t i = 0; i < obj.m_map.size(); i++)
-                    strm << "<CTestMeasurementFile type=\"image/png\" "
-                            "name=\"perftest\" >"
-                         << "./" << test_name_ << "_" << i
-                         << ".png</CTestMeasurementFile>\n";
+                    strm
+                        << R"(<CTestMeasurementFile type="image/png" name="perftest" >)"
+                        << "./" << test_name_ << "_" << i << ".png"
+                        << "</CTestMeasurementFile>\n";
             }
             else
             {
                 strm << "Results:\n\n";
-                for (auto&& item : obj.m_map)
+                for (auto const& [fst, snd] : obj.m_map)
                 {
-                    long double average = static_cast<long double>(0.0);
-                    int series = 0;
-                    strm << "name: " << std::get<0>(item.first) << "\n";
-                    strm << "executor: " << std::get<1>(item.first) << "\n";
-                    for (long double const val : item.second)
-                    {
-                        ++series;
-                        average += val;
-                    }
-                    strm.precision(
-                        std::numeric_limits<long double>::max_digits10 - 1);
-                    strm << std::scientific << "average: " << average / series
-                         << "\n\n";
+                    auto [average, series] = generate_average_result(
+                        strm, std::get<0>(fst), std::get<1>(fst), snd);
+
+                    strm << "\n";
                 }
             }
             return strm;
         }
 
         void json_perf_times::add(std::string const& name,
-            std::string const& executor, long double time)
+            std::string const& executor, long double const time)
         {
             m_map[key_t(name, executor)].push_back(time);
         }
@@ -235,16 +241,33 @@ average: {{average(elapsed)}}
 
 #if defined(HPX_HAVE_NANOBENCH)
     void perftests_report(std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test)
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest)
     {
         if (steps == 0)
             return;
 
-        detail::bench()
-            .name(name)
-            .context("executor", exec)
-            .epochs(steps)
-            .run(test);
+        if (pretest.empty())
+        {
+            detail::bench()
+                .name(name)
+                .context("executor", exec)
+                .epochs(steps)
+                .run(test);
+        }
+        else
+        {
+            detail::bench()
+                .name(name)
+                .context("executor", exec)
+                .epochs(steps)
+                .run([&](ankerl::nanobench::State& state) {
+                    state.pauseTiming();
+                    pretest();
+                    state.resumeTiming();
+                    test();
+                });
+        }
     }
 
     // Print all collected results to the provided stream,
@@ -286,7 +309,8 @@ average: {{average(elapsed)}}
     }
 #else
     void perftests_report(std::string const& name, std::string const& exec,
-        std::size_t const steps, hpx::function<void()>&& test)
+        std::size_t const steps, hpx::function<void()>&& test,
+        hpx::function<void()> pretest)
     {
         if (steps == 0)
             return;
@@ -296,6 +320,11 @@ average: {{average(elapsed)}}
         using timer = std::chrono::high_resolution_clock;
         for (std::size_t i = 0; i != steps; ++i)
         {
+            if (!pretest.empty())
+            {
+                pretest();
+            }
+
             // For now, we don't flush the cache
             //flush_cache();
             timer::time_point start = timer::now();

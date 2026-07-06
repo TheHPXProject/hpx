@@ -25,6 +25,7 @@ mkdir -p ${build_dir}/reports
 logfile=log_perftest_plot.tmp
 
 configure_build_errors=0
+configuration_name="local"
 test_errors=0
 plot_errors=0
 

@@ -42,30 +42,39 @@ void function01(void)
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    auto start = std::chrono::high_resolution_clock::now();
+    double elapsed = 0.0;
     for (std::uint64_t i = 0; i <= NELEM; ++i)
     {
         B = A;
+
+        auto start = std::chrono::high_resolution_clock::now();
         hpx::partial_sort(B.begin(), B.begin() + static_cast<std::ptrdiff_t>(i),
             B.end(), compare_t());
+        auto end = std::chrono::high_resolution_clock::now();
+
+        std::chrono::duration<long unsigned, std::nano> nanotime1 = end - start;
+        elapsed += (nanotime1.count() / 1000000);
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime1 = end - start;
-    std::cout << "hpx::partial_sort :" << (nanotime1.count() / 1000000)
-              << std::endl;
+    std::cout << "hpx::partial_sort :" << elapsed / static_cast<double>(NELEM)
+              << "[us]" << std::endl;
 
-    start = std::chrono::high_resolution_clock::now();
+    elapsed = 0.0;
     for (std::uint64_t i = 0; i <= NELEM; ++i)
     {
         B = A;
+
+        auto start = std::chrono::high_resolution_clock::now();
         std::partial_sort(B.begin(), B.begin() + static_cast<std::ptrdiff_t>(i),
             B.end(), compare_t());
+        auto end = std::chrono::high_resolution_clock::now();
+
+        std::chrono::duration<long unsigned, std::nano> nanotime1 = end - start;
+        elapsed += (nanotime1.count() / 1000000);
     }
-    end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime2 = end - start;
+
     std::cout << "std::partial_sort           :"
-              << (nanotime2.count() / 1000000) << std::endl;
+              << elapsed / static_cast<double>(NELEM) << "[us]" << std::endl;
 }
 
 void function02(void)
@@ -132,7 +141,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
-    int test_count = vm["test_count"].as<int>();
+    unsigned int test_count = vm["test_count"].as<unsigned int>();
 
     hpx::util::perftests_init(vm, "benchmark_partial_sort");
 
@@ -150,16 +159,17 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    hpx::util::perftests_report("hpx::partial_sort, size: " +
-            std::to_string(NELEM) + ", step: " + std::to_string(1),
-        "seq", test_count, [&] {
-            for (uint32_t i = 0; i < NELEM; i++)
-            {
-                B = A;
-                hpx::partial_sort(
-                    B.begin(), B.begin() + i, B.end(), compare_t());
-            }
-        });
+    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+
+    hpx::util::perftests_report(
+        "hpx::partial_sort, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(1),
+        "seq", test_count * NELEM,
+        [&] {
+            hpx::partial_sort(
+                B.begin(), B.begin() + i_dist(gen), B.end(), compare_t());
+        },
+        [&] { B = A; });
 
     NELEM = 100000;
 
@@ -176,10 +186,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     hpx::util::perftests_report(
         "hpx::partial_sort, size: " + std::to_string(NELEM), "seq", test_count,
-        [&] {
-            B = A;
-            hpx::partial_sort(B.begin(), B.end(), B.end(), compare_t());
-        });
+        [&] { hpx::partial_sort(B.begin(), B.end(), B.end(), compare_t()); },
+        [&] { B = A; });
 
     hpx::util::perftests_print_times();
 

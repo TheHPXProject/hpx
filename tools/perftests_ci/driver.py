@@ -69,7 +69,7 @@ def build(build_type, environment, target, source_dir, build_dir, install_dir,
 
 
 try:
-    import buildinfo
+    from pyutils import buildinfo
 except ImportError:
     buildinfo = None
 
@@ -126,17 +126,17 @@ if buildinfo:
                 '-o',
                 required=True,
                 help='output file path, extension .json is added if not given')
-    @args.arg('--targets-and-opts',
-                nargs=argparse.REMAINDER,
-                type=str,
-                help='extra arguments to pass to the test\nWarning prefer = to \
-                space to assign values to hpx options')
     @args.arg('--n_executions',
                 default=1,
                 type=int,
                 help='number of executions of the benchmark executable, whose \
                 results are then merged together')
     @args.arg('--environment', '-e', nargs='?', help='path to environment file')
+    @args.arg('--targets-and-opts',
+                nargs=argparse.REMAINDER,
+                type=str,
+                help='extra arguments to pass to the test\nWarning prefer = to \
+                space to assign values to hpx options')
     def run(local, run_output, targets_and_opts, n_executions, environment):
 
         if environment:

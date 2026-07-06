@@ -27,7 +27,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
-    int test_count = vm["test_count"].as<int>();
+    unsigned int test_count = vm["test_count"].as<unsigned int>();
 
     hpx::util::perftests_init(vm, "benchmark_partial_sort_parallel");
 
@@ -47,16 +47,18 @@ int hpx_main(hpx::program_options::variables_map& vm)
     }
 
     std::shuffle(A.begin(), A.end(), gen);
-    hpx::util::perftests_report("hpx::partial_sort, size: " +
-            std::to_string(NELEM) + ", step: " + std::to_string(1),
-        "par", test_count, [&] {
-            for (uint32_t i = 0; i < NELEM; ++i)
-            {
-                B = A;
-                hpx::partial_sort(::hpx::execution::par, B.begin(),
-                    B.begin() + i, B.end(), compare_t());
-            }
-        });
+
+    std::uniform_int_distribution<std::uint64_t> i_dist(0, NELEM - 1);
+
+    hpx::util::perftests_report(
+        "hpx::partial_sort, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(1),
+        "par", test_count * NELEM,
+        [&] {
+            hpx::partial_sort(::hpx::execution::par, B.begin(),
+                B.begin() + i_dist(gen), B.end(), compare_t());
+        },
+        [&] { B = A; });
 
     // Test 2
     NELEM = 100000;
@@ -75,24 +77,23 @@ int hpx_main(hpx::program_options::variables_map& vm)
     hpx::util::perftests_report(
         "hpx::partial_sort, size: " + std::to_string(NELEM), "par", test_count,
         [&] {
-            B = A;
             hpx::partial_sort(::hpx::execution::par, B.begin(), B.end(),
                 B.end(), compare_t());
-        });
+        },
+        [&] { B = A; });
 
     // Test 3
     std::shuffle(A.begin(), A.end(), gen);
     uint32_t STEP = NELEM / 100;
-    hpx::util::perftests_report("hpx::partial_sort, size: " +
-            std::to_string(NELEM) + ", step: " + std::to_string(STEP),
-        "par", test_count, [&] {
-            for (uint32_t i = 0; i < NELEM; i += STEP)
-            {
-                B = A;
-                hpx::partial_sort(::hpx::execution::par, B.begin(),
-                    B.begin() + i, B.end(), compare_t());
-            }
-        });
+    hpx::util::perftests_report(
+        "hpx::partial_sort, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(STEP),
+        "par", test_count * NELEM / STEP,
+        [&] {
+            hpx::partial_sort(::hpx::execution::par, B.begin(),
+                B.begin() + i_dist(gen), B.end(), compare_t());
+        },
+        [&] { B = A; });
 
     hpx::util::perftests_print_times();
 
