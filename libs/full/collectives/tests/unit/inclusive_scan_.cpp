@@ -152,7 +152,11 @@ void test_local_use(std::uint32_t num_sites)
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    hpx::wait_all(sites);
+    for (auto& site : sites)
+    {
+        site.get();
+    }
 }
 
 int hpx_main()

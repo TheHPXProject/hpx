@@ -40,6 +40,7 @@ else()
   if(NOT (_is_enforce EQUAL -1))
     set(default_handler_aborts_PARAMETERS FAILURE_EXPECTED)
     set(fallback_contracts_fail_PARAMETERS FAILURE_EXPECTED)
+    set(declaration_contracts_fail_contract_assert_PARAMETERS FAILURE_EXPECTED)
   endif()
 
   # violation handlers will not be called
@@ -48,8 +49,6 @@ else()
     set(violation_handler_invoked_PARAMETERS FAILURE_EXPECTED)
   endif()
 
-  # This test should always fail (albeight for different reasons)
-  set(declaration_contracts_fail_contract_assert_PARAMETERS FAILURE_EXPECTED)
 endif()
 
 foreach(test ${contract_tests})

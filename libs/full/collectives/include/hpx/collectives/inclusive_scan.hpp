@@ -219,6 +219,7 @@ namespace hpx { namespace collectives {
 #include <hpx/config.hpp>
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+#include <hpx/assert.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -229,31 +230,15 @@ namespace hpx { namespace collectives {
 
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/hierarchical_helpers.hpp>
+#include <hpx/collectives/detail/hierarchical_scan_helpers.hpp>
+#include <hpx/collectives/gather.hpp>
+#include <hpx/collectives/scatter.hpp>
 
 #include <cstddef>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-namespace hpx::collectives::detail {
-
-    template <typename T, typename InIter, typename Sent, typename OutIter,
-        typename Op>
-    constexpr void inclusive_scan(
-        InIter first, Sent last, OutIter dest, Op&& op)
-    {
-        if (first != last)
-        {
-            T init = *first++;
-            *dest++ = init;
-            for (/* */; first != last; (void) ++first, ++dest)
-            {
-                init = HPX_INVOKE(op, HPX_MOVE(init), *first);
-                *dest = init;
-            }
-        }
-    }
-}    // namespace hpx::collectives::detail
 
 namespace hpx::traits {
 
@@ -276,7 +261,9 @@ namespace hpx::traits {
     {
         template <typename Result, typename T, typename F>
         static Result get(Communicator& communicator, std::size_t which,
-            std::size_t generation, T&& t, F&& op)
+            std::size_t generation,
+            hpx::collectives::detail::generation_mode num_generations, T&& t,
+            F&& op)
         {
             return communicator.template handle_data<std::decay_t<T>>(
                 communication::communicator_data<
@@ -293,32 +280,14 @@ namespace hpx::traits {
                     {
                         using T_ = std::decay_t<T>;
 
-                        std::vector<T_> dest;
-                        dest.resize(data.size());
-
-                        if constexpr (!std::is_same_v<T_, bool>)
-                        {
-                            collectives::detail::inclusive_scan<T_>(
-                                data.begin(), data.end(), dest.begin(),
-                                HPX_FORWARD(F, op));
-                        }
-                        else
-                        {
-                            collectives::detail::inclusive_scan<T_>(
-                                data.begin(), data.end(), dest.begin(),
-                                [&](auto lhs, auto rhs) {
-                                    return HPX_FORWARD(F, op)(
-                                        static_cast<bool>(lhs),
-                                        static_cast<bool>(rhs));
-                                });
-                        }
-
-                        std::swap(data, dest);
+                        data = collectives::detail::make_inclusive_scan_results<
+                            T_>(HPX_MOVE(data), op);
                         data_available = true;
                     }
-                    return Communicator::template handle_bool<std::decay_t<T>>(
-                        HPX_MOVE(data[which]));
-                });
+                    return hpx::collectives::detail::handle_bool<
+                        std::decay_t<T>>(HPX_MOVE(data[which]));
+                },
+                num_generations);
         }
     };
 }    // namespace hpx::traits
@@ -327,64 +296,81 @@ namespace hpx::collectives {
 
     ////////////////////////////////////////////////////////////////////////////
     // inclusive_scan plain values
+    namespace detail {
+
+        template <typename T, typename F>
+        hpx::future<std::decay_t<T>> inclusive_scan(communicator fid,
+            T&& local_result, F&& op, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations)
+        {
+            using arg_type = std::decay_t<T>;
+
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<arg_type>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::inclusive_scan",
+                        "the generation number shouldn't be zero"));
+            }
+
+            // Handle operation right away if there is only one value.
+            if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
+            {
+                if (this_site != comm_site)
+                {
+                    return hpx::make_exceptional_future<arg_type>(
+                        HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                            "hpx::collectives::inclusive_scan",
+                            "the local site should be zero if only one site is "
+                            "involved"));
+                }
+
+                return hpx::make_ready_future(HPX_FORWARD(T, local_result));
+            }
+
+            auto inclusive_scan_data =
+                [local_result = HPX_FORWARD(T, local_result),
+                    op = HPX_FORWARD(F, op), this_site, generation,
+                    num_generations](
+                    communicator&& c) mutable -> hpx::future<arg_type> {
+                using func_type = std::decay_t<F>;
+                using action_type =
+                    communicator_server::communication_get_direct_action<
+                        traits::communication::inclusive_scan_tag,
+                        hpx::future<arg_type>, generation_mode, arg_type,
+                        func_type>;
+
+                // explicitly unwrap returned future
+                hpx::future<arg_type> result =
+                    hpx::async(action_type(), c, this_site, generation,
+                        num_generations, HPX_MOVE(local_result), HPX_MOVE(op));
+
+                if (!result.is_ready())
+                {
+                    // make sure id is kept alive as long as the returned future
+                    traits::detail::get_shared_state(result)->set_on_completed(
+                        [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
+                }
+
+                return result;
+            };
+
+            return fid.then(hpx::launch::sync, HPX_MOVE(inclusive_scan_data));
+        }
+    }    // namespace detail
+
     HPX_CXX_EXPORT template <typename T, typename F>
     hpx::future<std::decay_t<T>> inclusive_scan(communicator fid,
         T&& local_result, F&& op, this_site_arg this_site = this_site_arg(),
         generation_arg const generation = generation_arg())
     {
-        using arg_type = std::decay_t<T>;
-
-        if (this_site.is_default())
-        {
-            this_site = agas::get_locality_id();
-        }
-        if (generation == 0)
-        {
-            return hpx::make_exceptional_future<arg_type>(HPX_GET_EXCEPTION(
-                hpx::error::bad_parameter, "hpx::collectives::inclusive_scan",
-                "the generation number shouldn't be zero"));
-        }
-
-        // Handle operation right away if there is only one value.
-        if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
-        {
-            if (this_site != comm_site)
-            {
-                return hpx::make_exceptional_future<arg_type>(
-                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
-                        "hpx::collectives::inclusive_scan",
-                        "the local site should be zero if only one site is "
-                        "involved"));
-            }
-
-            return hpx::make_ready_future(HPX_FORWARD(T, local_result));
-        }
-
-        auto inclusive_scan_data =
-            [local_result = HPX_FORWARD(T, local_result),
-                op = HPX_FORWARD(F, op), this_site,
-                generation](communicator&& c) mutable -> hpx::future<arg_type> {
-            using func_type = std::decay_t<F>;
-            using action_type =
-                detail::communicator_server::communication_get_direct_action<
-                    traits::communication::inclusive_scan_tag,
-                    hpx::future<arg_type>, arg_type, func_type>;
-
-            // explicitly unwrap returned future
-            hpx::future<arg_type> result = hpx::async(action_type(), c,
-                this_site, generation, HPX_MOVE(local_result), HPX_MOVE(op));
-
-            if (!result.is_ready())
-            {
-                // make sure id is kept alive as long as the returned future
-                traits::detail::get_shared_state(result)->set_on_completed(
-                    [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
-            }
-
-            return result;
-        };
-
-        return fid.then(hpx::launch::sync, HPX_MOVE(inclusive_scan_data));
+        return detail::inclusive_scan(HPX_MOVE(fid),
+            HPX_FORWARD(T, local_result), HPX_FORWARD(F, op), this_site,
+            generation, detail::generation_mode::single_step);
     }
 
     HPX_CXX_EXPORT template <typename T, typename F>
@@ -407,6 +393,35 @@ namespace hpx::collectives {
         return inclusive_scan(create_communicator(basename, num_sites,
                                   this_site, generation, root_site),
             HPX_FORWARD(T, local_result), HPX_FORWARD(F, op), this_site);
+    }
+
+    // Every hierarchical collective advances each communicator by two
+    // generations per call, so an instance may be shared freely across
+    // collectives; see the note on create_hierarchical_communicator.
+    HPX_CXX_EXPORT template <typename T, typename F>
+    hpx::future<std::decay_t<T>> inclusive_scan(
+        hierarchical_communicator const& communicators, T&& local_result,
+        F&& op, this_site_arg this_site = this_site_arg(),
+        generation_arg const generation = generation_arg(),
+        root_site_arg root_site = root_site_arg())
+    {
+        using arg_type = std::decay_t<T>;
+        char const* const operation =
+            "hpx::collectives::inclusive_scan (hierarchical)";
+
+        return detail::hierarchical_scan<arg_type>(
+            operation, communicators, HPX_FORWARD(T, local_result), this_site,
+            generation, root_site,
+            [&op](std::vector<arg_type>&& gathered) {
+                return detail::make_inclusive_scan_results(
+                    HPX_MOVE(gathered), HPX_FORWARD(F, op));
+            },
+            [&op](communicator const& comm, T&& result,
+                this_site_arg const flat_site, generation_arg const flat_gen) {
+                return detail::inclusive_scan(comm, HPX_FORWARD(T, result),
+                    HPX_FORWARD(F, op), flat_site, flat_gen,
+                    detail::generation_mode::double_step);
+            });
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -442,6 +457,18 @@ namespace hpx::collectives {
         return inclusive_scan(create_communicator(basename, num_sites,
                                   this_site, generation, root_site),
             HPX_FORWARD(T, local_result), HPX_FORWARD(F, op), this_site)
+            .get();
+    }
+
+    HPX_CXX_EXPORT template <typename T, typename F>
+    decltype(auto) inclusive_scan(hpx::launch::sync_policy,
+        hierarchical_communicator const& communicators, T&& local_result,
+        F&& op, this_site_arg const this_site = this_site_arg(),
+        generation_arg const generation = generation_arg(),
+        root_site_arg root_site = root_site_arg())
+    {
+        return inclusive_scan(communicators, HPX_FORWARD(T, local_result),
+            HPX_FORWARD(F, op), this_site, generation, root_site)
             .get();
     }
 }    // namespace hpx::collectives

@@ -26,6 +26,16 @@
 /// - \b scoped_task_timer: RAII object for timing execution tasks. Provides
 ///   `yield()`, `stop()`, and `handle_post_execution()`.
 ///
+/// \b Task \b Lifecycle \b Hooks:
+/// - \b task_staged: Task description is registered.
+/// - \b task_created: Thread object is fully constructed.
+/// - \b task_executing: Task begins execution on a worker thread.
+/// - \b task_yielded: Task voluntarily yields to the scheduler.
+/// - \b task_suspended: Task is blocked on an external resource.
+/// - \b task_resumed: Task is unblocked and returns to a pending state.
+/// - \b task_completed: Task finishes its execution loop.
+/// - \b task_deleted: Task identity is removed from scheduler maps.
+///
 /// \b Regions \b & \b Events:
 /// - \b region: General scope annotation.
 /// - \b fiber_region: Scope annotation specifically tracking HPX user-level

@@ -112,7 +112,7 @@ namespace hpx::threads {
 #endif
         set_timer_data(init_data.timer_data);
 #if defined(HPX_HAVE_TRACY)
-        tracy_fiber_name_[0] = '\0';
+        fiber_name_[0] = '\0';
 #endif
     }
 
@@ -256,7 +256,7 @@ namespace hpx::threads {
 #endif
 
 #if defined(HPX_HAVE_TRACY)
-        tracy_fiber_name_[0] = '\0';
+        fiber_name_[0] = '\0';
 #endif
 
         LTM_(debug).format("thread::thread({}), description({}), rebind", this,
@@ -318,8 +318,7 @@ namespace hpx::threads {
     }
 #endif
 
-#if defined(HPX_HAVE_TRACY)
-    char const* thread_data::get_tracy_description_name(
+    char const* thread_data::get_safe_description(
         threads::thread_description const& description,
         char const* fallback) noexcept
     {
@@ -343,20 +342,22 @@ namespace hpx::threads {
         return fallback;
     }
 
-    char const* thread_data::get_tracy_fiber_name() const noexcept
+    char const* thread_data::get_fiber_name() const noexcept
     {
-        if (tracy_fiber_name_[0] == '\0')
+#if defined(HPX_HAVE_TRACY)
+        if (fiber_name_[0] == '\0')
         {
-            char const* name =
-                get_tracy_description_name(get_description(), "fiber");
+            char const* name = get_safe_description(get_description(), "fiber");
             // Use the HPX thread_id pointer as the unique numeric suffix
             // so each HPX task gets its own fiber track in Tracy.
-            std::snprintf(tracy_fiber_name_, sizeof(tracy_fiber_name_), "%s_%p",
-                name, get_thread_id().get());
+            std::snprintf(fiber_name_, sizeof(fiber_name_), "%s_%p", name,
+                static_cast<void*>(get_thread_id().get()));
         }
-        return tracy_fiber_name_;
-    }
+        return fiber_name_;
+#else
+        return get_safe_description(get_description(), "fiber");
 #endif
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     thread_self& get_self()
@@ -539,7 +540,7 @@ namespace hpx::threads {
         thread_data const* thrdptr)
     {
         return {thrdptr->get_description().get_description(),
-            thrdptr->get_tracy_fiber_name(), thrdptr->is_stackless()};
+            thrdptr->get_fiber_name(), thrdptr->is_stackless()};
     }
 #elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
     tracing::region_init_data get_region_init_data(thread_data const* thrdptr)

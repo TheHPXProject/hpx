@@ -433,23 +433,12 @@ namespace hpx::threads {
 namespace hpx::this_thread {
 
     namespace {
-#ifdef HPX_HAVE_TRACY
-        // Extract the suspend reason from the thread description so the fiber
-        // track in Tracy shows a meaningful label (e.g. the LCO being waited
-        // on) instead of a generic "this_thread::suspend" string.
-        char const* get_tracy_suspend_reason(
+        char const* get_suspend_reason(
             threads::thread_description const& description) noexcept
         {
-            return threads::thread_data::get_tracy_description_name(
+            return threads::thread_data::get_safe_description(
                 description, "this_thread::suspend");
         }
-#else
-        constexpr char const* get_tracy_suspend_reason(
-            threads::thread_description const& /*description*/) noexcept
-        {
-            return "this_thread::suspend";
-        }
-#endif
     }    // namespace
 
     // The function 'suspend' will return control to the thread manager
@@ -497,7 +486,7 @@ namespace hpx::this_thread {
             hpx::likwid::suspend_region region;
 #endif
             hpx::tracing::fiber_suspend_region tracy_suspend(
-                get_tracy_suspend_reason(description));
+                get_suspend_reason(description));
             // We might need to dispatch 'nextid' to it's correct scheduler only
             // if our current scheduler is the same, we should yield to the id
             if (nextid &&
@@ -579,7 +568,7 @@ namespace hpx::this_thread {
             hpx::likwid::suspend_region region;
 #endif
             hpx::tracing::fiber_suspend_region tracy_suspend(
-                get_tracy_suspend_reason(description));
+                get_suspend_reason(description));
             std::atomic<bool> timer_started(false);
             threads::thread_id_ref_type const timer_id =
                 threads::set_thread_state(id.noref(), abs_time, &timer_started,

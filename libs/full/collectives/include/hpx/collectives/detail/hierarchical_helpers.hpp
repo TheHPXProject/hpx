@@ -12,11 +12,14 @@
 
 #include <hpx/assert.hpp>
 #include <hpx/collectives/argument_types.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <limits>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace hpx::collectives::detail {
@@ -36,7 +39,20 @@ namespace hpx::collectives::detail {
         generation_arg second;
     };
 
-    [[nodiscard]] inline bool is_valid_hierarchical_phase_generation(
+    template <typename ValueType, typename Data>
+    constexpr decltype(auto) handle_bool(Data&& data) noexcept
+    {
+        if constexpr (std::is_same_v<ValueType, bool>)
+        {
+            return static_cast<bool>(data);
+        }
+        else
+        {
+            return HPX_FORWARD(Data, data);
+        }
+    }
+
+    [[nodiscard]] constexpr bool is_valid_hierarchical_phase_generation(
         generation_arg const generation) noexcept
     {
         return !generation.is_default() && generation != 0 &&
@@ -44,7 +60,22 @@ namespace hpx::collectives::detail {
             (std::numeric_limits<std::size_t>::max)() / 2;
     }
 
-    inline hierarchical_phase_generation_pair hierarchical_phase_generations(
+    [[nodiscard]] constexpr bool is_valid_hierarchical_run_generation(
+        generation_arg const generation,
+        generation_mode const num_generations) noexcept
+    {
+        if (generation.is_default() || generation == 0)
+        {
+            return true;
+        }
+
+        std::size_t const step = static_cast<std::size_t>(num_generations);
+        HPX_ASSERT(step != 0);
+        return static_cast<std::size_t>(generation) <=
+            (std::numeric_limits<std::size_t>::max)() / step;
+    }
+
+    constexpr hierarchical_phase_generation_pair hierarchical_phase_generations(
         generation_arg const generation) noexcept
     {
         HPX_ASSERT(is_valid_hierarchical_phase_generation(generation));
@@ -62,9 +93,12 @@ namespace hpx::collectives::detail {
     // requires explicit, consecutive generations). Generation 0 is also passed
     // through so the downstream flat operation rejects it with bad_parameter
     // rather than the mapping silently wrapping it onto the default sentinel.
-    inline hierarchical_run hierarchical_run_params(
+    constexpr hierarchical_run hierarchical_run_params(
         generation_arg const generation, generation_mode const num_generations)
     {
+        HPX_ASSERT(
+            is_valid_hierarchical_run_generation(generation, num_generations));
+
         if (generation.is_default() || generation == 0)
         {
             return {generation, generation_mode::single_step};
@@ -158,6 +192,74 @@ namespace hpx::collectives::detail {
         auto const groups = get_top_level_groups(num_sites, arity);
         auto const g = classify_site(this_site, groups);
         return g != -1 && this_site == groups[g].left;
+    }
+
+    template <typename T, typename F>
+    std::vector<T> make_inclusive_scan_results(std::vector<T>&& values, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        auto it = values.begin();
+        if (it == values.end())
+        {
+            return results;
+        }
+
+        T prefix = handle_bool<T>(HPX_MOVE(*it));
+        results.emplace_back(prefix);
+
+        for (++it; it != values.end(); ++it)
+        {
+            prefix = HPX_INVOKE(
+                op, handle_bool<T>(HPX_MOVE(prefix)), handle_bool<T>(*it));
+            results.emplace_back(prefix);
+        }
+
+        return results;
+    }
+
+    template <typename T, typename F>
+    std::vector<T> make_exclusive_scan_results(std::vector<T>&& values, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        auto it = values.begin();
+        if (it == values.end())
+        {
+            return results;
+        }
+
+        results.emplace_back(T{});
+
+        T prefix = handle_bool<T>(HPX_MOVE(*it));
+        for (++it; it != values.end(); ++it)
+        {
+            results.emplace_back(prefix);
+            prefix = HPX_INVOKE(
+                op, handle_bool<T>(HPX_MOVE(prefix)), handle_bool<T>(*it));
+        }
+
+        return results;
+    }
+
+    template <typename T, typename U, typename F>
+    std::vector<T> make_exclusive_scan_results(
+        std::vector<T>&& values, U&& init, F&& op)
+    {
+        std::vector<T> results;
+        results.reserve(values.size());
+
+        T prefix = handle_bool<T>(static_cast<T>(HPX_FORWARD(U, init)));
+        for (auto&& value : values)
+        {
+            results.emplace_back(prefix);
+            prefix = HPX_INVOKE(
+                op, handle_bool<T>(HPX_MOVE(prefix)), handle_bool<T>(value));
+        }
+
+        return results;
     }
 
 }    // namespace hpx::collectives::detail

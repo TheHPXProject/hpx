@@ -36,12 +36,14 @@ if(HPX_WITH_NETWORKING)
       broadcast_direct
       concurrent_collectives
       exclusive_scan_
+      exclusive_scan_hierarchical
       exclusive_scan_sync
       gather
       gather_hierarchical
       gather_sync
       hierarchical_flat_fallback
       inclusive_scan_
+      inclusive_scan_hierarchical
       inclusive_scan_sync
       reduce
       reduce_hierarchical

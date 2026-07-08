@@ -23,7 +23,7 @@ int process_data(int const x) HPX_PRE(x >= 0)
 
 int main()
 {
-    // This should trigger CONTRACT_ASSERT failure or return 1 to make the test
-    // fail.
-    return process_data(5);
+    // This should trigger CONTRACT_ASSERT failure.
+    [[maybe_unused]] int result = process_data(5);
+    return 0;
 }

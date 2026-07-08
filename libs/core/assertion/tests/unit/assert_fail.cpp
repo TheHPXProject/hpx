@@ -9,8 +9,6 @@
 
 int main()
 {
-#if defined(HPX_DEBUG)
     HPX_ASSERT(false);
-#endif
     return 0;
 }

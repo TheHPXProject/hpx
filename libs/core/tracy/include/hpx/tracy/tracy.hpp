@@ -12,6 +12,7 @@
 #if defined(HPX_HAVE_TRACY)
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace hpx::tracy {
@@ -57,6 +58,9 @@ namespace hpx::tracy {
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void sample_value(
         std::string const& name, double value) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void message(
+        char const* text, std::size_t size, std::uint32_t color) noexcept;
 
 }    // namespace hpx::tracy
 

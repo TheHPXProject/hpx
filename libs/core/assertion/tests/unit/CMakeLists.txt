@@ -6,7 +6,7 @@
 
 set(tests assert_fail assert_succeed)
 
-set(assert_fail_PARAMETERS FAILURE_EXPECTED)
+set(assert_fail_PARAMETERS FAILURE_EXPECTED_DEBUG)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

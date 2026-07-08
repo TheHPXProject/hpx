@@ -277,8 +277,9 @@ namespace hpx::traits {
                                 "exactly num_sites elements");
                         }
 
-                        result.push_back(Communicator::template handle_bool<T>(
-                            HPX_MOVE(v[which])));
+                        result.push_back(
+                            hpx::collectives::detail::handle_bool<T>(
+                                HPX_MOVE(v[which])));
                     }
                     return result;
                 },

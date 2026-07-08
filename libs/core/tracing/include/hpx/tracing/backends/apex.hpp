@@ -204,6 +204,43 @@ namespace hpx::tracing {
         task_timer_data data_;
     };
 
+    HPX_CXX_CORE_EXPORT constexpr void task_staged(
+        char const*, void const* = nullptr) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_created(
+        char const*, void const*, void const* = nullptr) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_executing(
+        void const*, char const*, std::size_t) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_yielded(
+        void const*, char const*) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_suspended(
+        void const*, char const*, char const* = nullptr) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_resumed(
+        void const*, char const*, char const* = nullptr) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_completed(
+        void const*, char const*) noexcept
+    {
+    }
+
+    HPX_CXX_CORE_EXPORT constexpr void task_deleted(void const*) noexcept {}
+
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const* name,
         int argc, char** argv, std::uint32_t rank = 0, std::uint32_t size = 1);
 

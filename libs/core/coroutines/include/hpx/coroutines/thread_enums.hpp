@@ -24,6 +24,34 @@ namespace hpx::threads {
     ///
     /// The \a thread_schedule_state enumerator encodes the current state of a
     /// \a thread instance
+    ///
+    /// \b Task \b Lifecycle \b State \b Transitions:
+    /// \code
+    /// stateDiagram-v2
+    ///     %% Creation Phase
+    ///     [*] --> Staged : task_staged
+    ///     [*] --> Pending : task_created
+    ///     [*] --> Suspended : task_created
+    ///     Staged --> Pending : task_created
+    ///
+    ///     %% Execution Loop
+    ///     Pending --> Active : task_executing
+    ///     Active --> Pending : task_yielded
+    ///
+    ///     %% Sleep / Wake Cycle
+    ///     Active --> Suspended : task_suspended
+    ///     Suspended --> Pending : task_resumed
+    ///
+    ///     %% Termination Paths
+    ///     Active --> Terminated : task_completed
+    ///     Active --> Deleted : task_completed (Inline fast-path)
+    ///     Pending --> Terminated : task_completed (Aborted)
+    ///     Suspended --> Terminated : task_completed (Aborted)
+    ///
+    ///     %% Cleanup (Destruction / Recycling)
+    ///     Terminated --> Deleted : task_deleted
+    ///     Deleted --> [*]
+    /// \endcode
     HPX_CXX_CORE_EXPORT enum class thread_schedule_state : std::int8_t
     {
         unknown = 0,

@@ -616,6 +616,17 @@ namespace hpx::collectives {
                 this_site = agas::get_locality_id();
             }
 
+            if (!is_valid_hierarchical_run_generation(
+                    generation, num_generations))
+            {
+                return hpx::make_exceptional_future<
+                    std::vector<std::decay_t<T>>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::gather_here (hierarchical)",
+                        "the generation number is too large for the internal "
+                        "generation mapping"));
+            }
+
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
@@ -780,6 +791,16 @@ namespace hpx::collectives {
             }
 
             // See gather_here above for the internal generation mapping.
+            if (!is_valid_hierarchical_run_generation(
+                    generation, num_generations))
+            {
+                return hpx::make_exceptional_future<void>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::gather_there (hierarchical)",
+                        "the generation number is too large for the internal "
+                        "generation mapping"));
+            }
+
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 

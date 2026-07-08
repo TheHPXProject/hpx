@@ -19,6 +19,14 @@
 #include <tracy/Tracy.hpp>
 #include <tracy/TracyC.h>
 
+namespace tracy_helpers {
+    static inline void call_tracy_message_c(
+        char const* text, std::size_t size, std::uint32_t color) noexcept
+    {
+        TracyMessageC(text, size, color);
+    }
+}    // namespace tracy_helpers
+
 namespace hpx::tracy {
 
     void set_thread_name(char const* name) noexcept
@@ -68,6 +76,12 @@ namespace hpx::tracy {
     void sample_value(std::string const& name, double const value) noexcept
     {
         ::TracyPlot(name.c_str(), value);
+    }
+
+    void message(
+        char const* text, std::size_t size, std::uint32_t color) noexcept
+    {
+        tracy_helpers::call_tracy_message_c(text, size, color);
     }
 }    // namespace hpx::tracy
 

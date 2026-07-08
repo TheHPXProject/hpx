@@ -12,6 +12,9 @@
 #include <hpx/tracing/tracing.hpp>
 
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <string>
 
 namespace hpx::tracing {
@@ -136,6 +139,144 @@ namespace hpx::tracing {
     char const* rename_region(char const* name) noexcept
     {
         return hpx::tracy::detail::rename_region(name);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // task lifecycle tracking
+
+    namespace detail {
+        enum class color : std::uint32_t
+        {
+            staged = 0x808080,
+            created = 0x00FF00,
+            executing = 0xFF00FF,
+            yielded = 0xFFA500,
+            suspended = 0xFF0000,
+            resumed = 0x00FFFF,
+            completed = 0x008000,
+            deleted = 0x800080
+        };
+
+        constexpr char const* safe_str(char const* str) noexcept
+        {
+            return str ? str : "<unknown>";
+        }
+    }    // namespace detail
+
+    void task_staged(
+        char const* description, void const* parent_task_id) noexcept
+    {
+        char buffer[256];
+        if (parent_task_id)
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Task Staged: %s (Parent: %p)", detail::safe_str(description),
+                const_cast<void*>(parent_task_id));
+        }
+        else
+        {
+            std::snprintf(buffer, sizeof(buffer), "Task Staged: %s",
+                detail::safe_str(description));
+        }
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::staged));
+    }
+
+    void task_created(char const* description, void const* task_id,
+        void const* parent_task_id) noexcept
+    {
+        char buffer[256];
+        if (parent_task_id)
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Task Created: %p - %s (Parent: %p)",
+                const_cast<void*>(task_id), detail::safe_str(description),
+                const_cast<void*>(parent_task_id));
+        }
+        else
+        {
+            std::snprintf(buffer, sizeof(buffer), "Task Created: %p - %s",
+                const_cast<void*>(task_id), detail::safe_str(description));
+        }
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::created));
+    }
+
+    void task_executing(void const* task_id, char const* description,
+        std::size_t worker_thread) noexcept
+    {
+        char buffer[256];
+        std::snprintf(buffer, sizeof(buffer), "Task Executing (W%zu): %p - %s",
+            worker_thread, const_cast<void*>(task_id),
+            detail::safe_str(description));
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::executing));
+    }
+
+    void task_yielded(void const* task_id, char const* description) noexcept
+    {
+        char buffer[256];
+        std::snprintf(buffer, sizeof(buffer), "Task Yielded: %p - %s",
+            const_cast<void*>(task_id), detail::safe_str(description));
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::yielded));
+    }
+
+    void task_suspended(void const* task_id, char const* description,
+        char const* reason) noexcept
+    {
+        char buffer[256];
+        if (reason)
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Task Suspended: %p - %s (Reason: %s)",
+                const_cast<void*>(task_id), detail::safe_str(description),
+                reason);
+        }
+        else
+        {
+            std::snprintf(buffer, sizeof(buffer), "Task Suspended: %p - %s",
+                const_cast<void*>(task_id), detail::safe_str(description));
+        }
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::suspended));
+    }
+
+    void task_resumed(void const* task_id, char const* description,
+        char const* wake_reason) noexcept
+    {
+        char buffer[256];
+        if (wake_reason)
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Task Resumed: %p - %s (Wake: %s)", const_cast<void*>(task_id),
+                detail::safe_str(description), wake_reason);
+        }
+        else
+        {
+            std::snprintf(buffer, sizeof(buffer), "Task Resumed: %p - %s",
+                const_cast<void*>(task_id), detail::safe_str(description));
+        }
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::resumed));
+    }
+
+    void task_completed(void const* task_id, char const* description) noexcept
+    {
+        char buffer[256];
+        std::snprintf(buffer, sizeof(buffer), "Task Completed: %p - %s",
+            const_cast<void*>(task_id), detail::safe_str(description));
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::completed));
+    }
+
+    void task_deleted(void const* task_id) noexcept
+    {
+        char buffer[256];
+        std::snprintf(buffer, sizeof(buffer), "Task Deleted: %p",
+            const_cast<void*>(task_id));
+        hpx::tracy::message(buffer, std::strlen(buffer),
+            static_cast<std::uint32_t>(detail::color::deleted));
     }
 
     ////////////////////////////////////////////////////////////////////////////

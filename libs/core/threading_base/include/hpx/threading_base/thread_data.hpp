@@ -285,21 +285,17 @@ namespace hpx::threads {
             threads::thread_description value);
 #endif
 
+        static char const* get_safe_description(
+            threads::thread_description const& description,
+            char const* fallback = "<unknown>") noexcept;
+
 #if defined(HPX_HAVE_TRACY)
     private:
-        mutable char tracy_fiber_name_[64];
+        mutable char fiber_name_[64];
+#endif
 
     public:
-        static char const* get_tracy_description_name(
-            threads::thread_description const& description,
-            char const* fallback) noexcept;
-
-        // Returns a unique, stable string identifying this HPX task as a Tracy
-        // fiber. Built lazily on first call and cached in tracy_fiber_name_.
-        // Format: "<description>_<thread_id_ptr>" so each HPX task gets its
-        // own fiber track in the Tracy profiler.
-        char const* get_tracy_fiber_name() const noexcept;
-#endif
+        char const* get_fiber_name() const noexcept;
 
 #if !defined(HPX_HAVE_THREAD_PARENT_REFERENCE)
         /// Return the locality of the parent thread

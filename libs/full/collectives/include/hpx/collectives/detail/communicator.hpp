@@ -474,20 +474,6 @@ namespace hpx::collectives::detail {
             return f;
         }
 
-        // Protect against vector<bool> idiosyncrasies.
-        template <typename ValueType, typename Data>
-        static constexpr decltype(auto) handle_bool(Data&& data) noexcept
-        {
-            if constexpr (std::is_same_v<ValueType, bool>)
-            {
-                return static_cast<bool>(data);
-            }
-            else
-            {
-                return HPX_FORWARD(Data, data);
-            }
-        }
-
         template <typename Communicator, typename Operation>
         friend struct hpx::traits::communication_operation;
 

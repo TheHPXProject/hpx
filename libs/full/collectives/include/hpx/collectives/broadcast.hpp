@@ -435,7 +435,7 @@ namespace hpx::traits {
                 nullptr,
                 // finalizer (invoked after all sites have checked in)
                 [](auto& data, auto&, std::size_t) {
-                    return Communicator::template handle_bool<data_type>(
+                    return hpx::collectives::detail::handle_bool<data_type>(
                         data[0]);
                 },
                 num_generations, /*num_values=*/1);
@@ -454,8 +454,8 @@ namespace hpx::traits {
                 [&t](auto& data, std::size_t) { data[0] = HPX_FORWARD(T, t); },
                 // finalizer (invoked after all sites have checked in)
                 [](auto& data, auto&, std::size_t) {
-                    return Communicator::template handle_bool<std::decay_t<T>>(
-                        data[0]);
+                    return hpx::collectives::detail::handle_bool<
+                        std::decay_t<T>>(data[0]);
                 },
                 num_generations, /*num_values=*/1);
         }
@@ -564,6 +564,16 @@ namespace hpx::collectives {
             // of its two internal generations (2k-1); used as the broadcast
             // phase of all_gather/all_reduce (single_step) the caller already
             // passes the doubled generation, so the mapping is the identity.
+            if (!is_valid_hierarchical_run_generation(
+                    generation, num_generations))
+            {
+                return hpx::make_exceptional_future<std::decay_t<T>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::broadcast_to (hierarchical)",
+                        "the generation number is too large for the internal "
+                        "generation mapping"));
+            }
+
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
@@ -722,6 +732,16 @@ namespace hpx::collectives {
             }
 
             // See broadcast_to above for the internal generation mapping.
+            if (!is_valid_hierarchical_run_generation(
+                    generation, num_generations))
+            {
+                return hpx::make_exceptional_future<T>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::broadcast_from (hierarchical)",
+                        "the generation number is too large for the internal "
+                        "generation mapping"));
+            }
+
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 

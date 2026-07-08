@@ -192,6 +192,31 @@ namespace hpx::tracing {
         }
     };
 
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_staged(
+        char const* description, void const* parent_task_id = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_created(
+        char const* description, void const* task_id,
+        void const* parent_task_id = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_executing(void const* task_id,
+        char const* description, std::size_t worker_thread) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_yielded(
+        void const* task_id, char const* description) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_suspended(void const* task_id,
+        char const* description, char const* reason = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_resumed(void const* task_id,
+        char const* description, char const* wake_reason = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_completed(
+        void const* task_id, char const* description) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_deleted(
+        void const* task_id) noexcept;
+
     HPX_CXX_CORE_EXPORT constexpr void tracing_init(
         char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
     {

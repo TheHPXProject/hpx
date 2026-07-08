@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstddef>
 #include <iostream>
+#include <type_traits>
 #include <utility>
 
 __global__ void dummy_kernel() {}
@@ -114,6 +115,21 @@ int hpx_main()
     namespace cu = ::hpx::cuda::experimental;
     namespace ex = ::hpx::execution::experimental;
     namespace tt = hpx::this_thread::experimental;
+
+    {
+        auto s = ex::schedule(ex::thread_pool_scheduler{});
+        using sender_type = decltype(s);
+        using original_scheduler_type =
+            std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+                ex::get_env(std::declval<sender_type&>())))>;
+
+        auto transformed = cu::transform_stream(std::move(s), dummy{});
+        using scheduler_type =
+            std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+                ex::get_env(transformed)))>;
+
+        static_assert(std::is_same_v<scheduler_type, original_scheduler_type>);
+    }
 
     cu::enable_user_polling p;
 

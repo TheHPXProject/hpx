@@ -149,7 +149,7 @@ namespace hpx::contracts {
 
             strm << location() << ": Contract " << kind_str << " '"
                  << condition_ << "' violated, semantic: " << semantic_str
-                 << "detection mode: " << detection_mode_str << ".\n";
+                 << ", detection mode: " << detection_mode_str << ".\n";
 
             comment = strm.str();
         }
