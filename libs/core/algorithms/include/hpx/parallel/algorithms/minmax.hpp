@@ -911,7 +911,7 @@ namespace hpx::parallel {
                 {
                     remaining -= 2;
                     element_type next_value = HPX_INVOKE(proj, *++it);
-                    if (HPX_INVOKE(f, curr_value, next_value))
+                    if (!HPX_INVOKE(f, next_value, curr_value))
                     {
                         if (HPX_INVOKE(f, curr_value, min_value))
                         {
@@ -995,7 +995,7 @@ namespace hpx::parallel {
                 {
                     remaining -= 2;
                     element_type next_value = *++it;
-                    if (HPX_INVOKE(f, curr_value, next_value))
+                    if (!HPX_INVOKE(f, next_value, curr_value))
                     {
                         if (HPX_INVOKE(f, curr_value, min_value))
                         {
@@ -1171,7 +1171,7 @@ namespace hpx::parallel {
                     if (++first != last)
                     {
                         element_type next_value = HPX_INVOKE(proj, *first);
-                        if (HPX_INVOKE(f, curr_value, next_value))
+                        if (!HPX_INVOKE(f, next_value, curr_value))
                         {
                             if (HPX_INVOKE(f, curr_value, min_value))
                             {
@@ -1255,7 +1255,7 @@ namespace hpx::parallel {
                     if (++first != last)
                     {
                         element_type next_value = *first;
-                        if (HPX_INVOKE(f, curr_value, next_value))
+                        if (!HPX_INVOKE(f, next_value, curr_value))
                         {
                             if (HPX_INVOKE(f, curr_value, min_value))
                             {
