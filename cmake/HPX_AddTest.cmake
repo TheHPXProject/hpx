@@ -359,6 +359,99 @@ function(add_hpx_performance_test subcategory name)
   )
 endfunction(add_hpx_performance_test)
 
+include(HPX_ConfigureIfChanged)
+function(add_hpx_performance_report_test subcategory name)
+  set(one_value_args THREADS_PER_LOCALITY LOCALITIES)
+  cmake_parse_arguments(
+    ${name} "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN}
+  )
+
+  find_package(Python REQUIRED)
+
+  if(${name}_THREADS_PER_LOCALITY)
+    set(command_args --hpx:threads=${${name}_THREADS_PER_LOCALITY})
+  endif()
+  if(${name}_LOCALITIES)
+    set(command_args ${command_args} --hpx:localities=${${name}_LOCALITIES})
+  endif()
+
+  string(REPLACE "_perftest" "" name ${name})
+
+  set(perftests_dir ${CMAKE_SOURCE_DIR}/tools/perftests_ci)
+  set(target_file $<TARGET_FILE:${name}_test>)
+  set(command_args --hpx:detailed_bench --hpx:print_cdash_img_path
+                   ${command_args}
+  )
+  set(n_executions 50)
+  set(binary_pyutils_dir ${CMAKE_BINARY_DIR}/tools/perftests_ci)
+
+  # Generate pytools/buildinfo.py, if not available
+  if(CMAKE_BUILD_TYPE)
+    set(PYUTILS_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+  else()
+    set(PYUTILS_BUILD_TYPE $<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>)
+  endif()
+  set(PYUTILS_COMPILER ${CMAKE_CXX_COMPILER})
+  set(PYUTILS_ENVFILE)
+  hpx_configure_if_changed(
+    INPUT ${perftests_dir}/pyutils/buildinfo.py.in
+    OUTPUT ${binary_pyutils_dir}/buildinfo.py
+    CONFIGURE_ARGS @ONLY
+  )
+
+  # cmake-format: off
+  add_custom_target(
+    ${name}_perftest
+    COMMAND
+      ${CMAKE_COMMAND}
+          -E env --modify PYTHONPATH=path_list_prepend:${binary_pyutils_dir}/ --
+          ${Python_EXECUTABLE} ${perftests_dir}/driver.py -v
+            -l ${binary_pyutils_dir}/log_perftests_${name}.tmp perftest run
+            --local True
+            --run_output ${binary_pyutils_dir}/results/${name}.json
+            --n_executions ${n_executions}
+            --targets-and-opts ${target_file} ${command_args}
+    COMMAND
+      ${CMAKE_COMMAND}
+          -E env --modify PYTHONPATH=path_list_prepend:${binary_pyutils_dir}/ --
+          ${Python_EXECUTABLE} ${perftests_dir}/perftests_plot.py
+          ${binary_pyutils_dir}/results/${name}.json
+          ${perftests_dir}/perftest/references/lsu_default/${name}.json
+          ${binary_pyutils_dir}/${name}
+    VERBATIM
+    COMMAND_EXPAND_LISTS
+  )
+  # cmake-format: on
+
+  # Create performance-related pseudo targets and dependencies
+  if("${subcategory}" STREQUAL "")
+    add_hpx_pseudo_target("tests.performance.${name}_perftest")
+    add_hpx_pseudo_dependencies(
+      "tests.performance" "tests.performance.${name}_perftest"
+    )
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${name}_perftest" "${name}_perftest"
+    )
+  else()
+    add_hpx_pseudo_target("tests.performance.${subcategory}")
+    add_hpx_pseudo_dependencies(
+      "tests.performance" "tests.performance.${subcategory}"
+    )
+
+    add_hpx_pseudo_target("tests.performance.${subcategory}.${name}_perftest")
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${subcategory}"
+      "tests.performance.${subcategory}.${name}_perftest"
+    )
+
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${subcategory}.${name}_perftest" "${name}_perftest"
+    )
+  endif()
+
+  add_dependencies(${name}_perftest ${name}_test)
+endfunction(add_hpx_performance_report_test)
+
 function(add_hpx_example_test subcategory name)
   add_test_and_deps_test("examples" "${subcategory}" ${name} ${ARGN})
 endfunction(add_hpx_example_test)

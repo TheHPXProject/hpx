@@ -59,9 +59,35 @@ status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
 
 # Comment on the PR if any failures
 if [[ $(cat ${status_file}) != 0 ]]; then
-    ./.jenkins/lsu-perftests/comment_github.sh
+    github_commit_status="failure"
+else
+    github_commit_status="success"
 fi
 
+# Set GitHub status with CDash url
+cdash_build_id="$(cat jenkins-hpx-${configuration_name}-cdash-build-id.txt)"
+if [[ -z "${ghprbPullId:-}" ]]; then
+    .jenkins/common/set_github_status.sh \
+        "${GITHUB_TOKEN}" \
+        "TheHPXProject/hpx" \
+        "${GIT_COMMIT}" \
+        "${github_commit_status}" \
+        "${configuration_name}" \
+        "jenkins/lsu-perftests" \
+        "${cdash_build_id}"
+else
+    # Extract just the organization and repo names "org/repo" from the full URL
+    github_commit_repo="$(echo $ghprbPullLink | sed -n 's/https:\/\/github.com\/\(.*\)\/pull\/[0-9]*/\1/p')"
+
+    .jenkins/common/set_github_status.sh \
+        "${GITHUB_TOKEN}" \
+        "${github_commit_repo}" \
+        "${ghprbActualCommit}" \
+        "${github_commit_status}" \
+        "${configuration_name}" \
+        "jenkins/lsu-perftests" \
+        "${cdash_build_id}"
+fi
 
 set -e
 exit $(cat ${status_file})

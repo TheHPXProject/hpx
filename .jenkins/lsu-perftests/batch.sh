@@ -14,11 +14,18 @@ status_computation_and_artifacts_storage() {
     ctest_exit_code=$?
     ctest_status=$(( ctest_exit_code + configure_build_errors + test_errors + plot_errors ))
 
-    # Copy the testing directory for saving as an artifact
-    cp -r ${build_dir}/Testing ${src_dir}/${configuration_name}-Testing
-    cp -r ${build_dir}/reports ${src_dir}/${configuration_name}-reports
-
+    # Write status file first
     echo "${ctest_status}" > "jenkins-hpx-${configuration_name}-ctest-status.txt"
+
+    # Copy the testing directory for saving as an artifact
+    cp -r "${build_dir}/Testing" "${src_dir}/${configuration_name}-Testing"
+    mkdir -p "${src_dir}/${configuration_name}-reports"
+    cp -r "${build_dir}/tools/perftests_ci/results/*.json" "${src_dir}/${configuration_name}-reports"
+
+    if [[ -s $build_dir/index.html ]]; then
+        cd $build_dir && sh $src_dir/.jenkins/lsu-perftests/comment_github.sh
+    fi
+
     exit $ctest_status
 }
 
@@ -33,7 +40,7 @@ cp -r "${src_dir}/tools/perftests_ci" "${build_dir}/tools"
 # Variables
 perftests_dir=${build_dir}/tools/perftests_ci
 envfile=${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh
-mkdir -p ${build_dir}/reports
+mkdir -p ${src_dir}/${configuration_name}-reports
 logfile=${build_dir}/reports/jenkins-hpx-${configuration_name}.log
 
 # Load python packages
@@ -48,14 +55,13 @@ plot_errors=0
 wait
 
 # Build and Run the perftests
-source "${src_dir}/.jenkins/lsu-perftests/launch_perftests.sh"
+source "${src_dir}/.jenkins/lsu-perftests/env-${configuration_name}.sh"
 
-# Dummy ctest to upload the html report of the perftest
-set +e
+# CTest to upload the results to CDash
 ctest \
-    --verbose \
+    --verbose --output-on-failure \
     -S "${src_dir}/.jenkins/lsu-perftests/ctest.cmake" \
     -DCTEST_BUILD_CONFIGURATION_NAME="${configuration_name}" \
+    -DCTEST_CONFIGURE_EXTRA_OPTIONS="${configure_extra_options}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"
-set -e

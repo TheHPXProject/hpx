@@ -70,7 +70,7 @@ struct scratcher
 };
 
 void measure_function_futures_create_thread_hierarchical_placement(
-    std::uint64_t count, int const repetitions)
+    std::uint64_t count, unsigned int const repetitions)
 {
     auto sched = hpx::threads::get_self_id_data()->get_scheduler_base();
 
@@ -97,54 +97,54 @@ void measure_function_futures_create_thread_hierarchical_placement(
     auto num_threads = hpx::get_num_worker_threads();
     hpx::error_code ec;
 
+    auto test_func = [&]() -> void {
+        hpx::latch l(static_cast<std::int64_t>(count));
+
+        auto const func = [&l]() {
+            null_function();
+            l.count_down(1);
+        };
+
+        auto const thread_func =
+            hpx::threads::detail::thread_function_nullary<decltype(func)>{func};
+
+        for (std::size_t t = 0; t < num_threads; ++t)
+        {
+            auto const hint = hpx::threads::thread_schedule_hint(
+                static_cast<std::int16_t>(t));
+            auto spawn_func = [&thread_func, sched, hint, t, count, num_threads,
+                                  desc, prio, stack_size]() {
+                std::uint64_t const count_start = t * count / num_threads;
+                std::uint64_t const count_end = (t + 1) * count / num_threads;
+                hpx::error_code ec;
+                for (std::uint64_t i = count_start; i < count_end; ++i)
+                {
+                    hpx::threads::thread_init_data init(
+                        hpx::threads::thread_function_type(thread_func), desc,
+                        prio, hint, stack_size,
+                        hpx::threads::thread_schedule_state::pending, false,
+                        sched);
+                    sched->create_thread(init, nullptr, ec);
+                }
+            };
+
+            auto const thread_spawn_func =
+                hpx::threads::detail::thread_function_nullary<
+                    decltype(spawn_func)>{spawn_func};
+
+            hpx::threads::thread_init_data init(
+                hpx::threads::thread_function_type(thread_spawn_func), desc,
+                prio, hint, stack_size,
+                hpx::threads::thread_schedule_state::pending, false, sched);
+            sched->create_thread(init, nullptr, ec);
+        }
+        l.wait();
+    };
+
     hpx::util::perftests_report(
         "future overhead - create_thread_hierarchical - latch", "no-executor",
-        repetitions, [&]() -> void {
-            hpx::latch l(static_cast<std::int64_t>(count));
+        repetitions, test_func);
 
-            auto const func = [&l]() {
-                null_function();
-                l.count_down(1);
-            };
-            auto const thread_func =
-                hpx::threads::detail::thread_function_nullary<decltype(func)>{
-                    func};
-            for (std::size_t t = 0; t < num_threads; ++t)
-            {
-                auto const hint = hpx::threads::thread_schedule_hint(
-                    static_cast<std::int16_t>(t));
-                auto spawn_func = [&thread_func, sched, hint, t, count,
-                                      num_threads, desc, prio, stack_size]() {
-                    std::uint64_t const count_start = t * count / num_threads;
-                    std::uint64_t const count_end =
-                        (t + 1) * count / num_threads;
-                    hpx::error_code ec;
-                    for (std::uint64_t i = count_start; i < count_end; ++i)
-                    {
-                        hpx::threads::thread_init_data init(
-                            hpx::threads::thread_function_type(thread_func),
-                            desc, prio, hint, stack_size,
-                            hpx::threads::thread_schedule_state::pending, false,
-                            sched);
-                        sched->create_thread(init, nullptr, ec);
-                    }
-                };
-
-                // different versions of clang-format disagree
-                // clang-format off
-                auto const thread_spawn_func =
-                    hpx::threads::detail::thread_function_nullary<
-                        decltype(spawn_func)>{spawn_func};
-                // clang-format on
-
-                hpx::threads::thread_init_data init(
-                    hpx::threads::thread_function_type(thread_spawn_func), desc,
-                    prio, hint, stack_size,
-                    hpx::threads::thread_schedule_state::pending, false, sched);
-                sched->create_thread(init, nullptr, ec);
-            }
-            l.wait();
-        });
     hpx::util::perftests_print_times();
 }
 
@@ -160,8 +160,7 @@ int hpx_main(variables_map& vm)
         else
             numa_sensitive = 0;
 
-        bool test_all = (vm.count("test-all") > 0);
-        int const repetitions = vm["repetitions"].as<int>();
+        unsigned int const repetitions = vm["test_count"].as<unsigned int>();
 
         if (vm.count("info"))
             info_string = vm["info"].as<std::string>();
@@ -172,16 +171,13 @@ int hpx_main(variables_map& vm)
 
         std::uint64_t const count = vm["futures"].as<std::uint64_t>();
 
-        hpx::util::perftests_init(vm);
+        hpx::util::perftests_init(vm, "future_overhead_report");
 
         if (HPX_UNLIKELY(0 == count))
             throw std::logic_error("error: count of 0 futures specified\n");
 
-        if (test_all)
-        {
-            measure_function_futures_create_thread_hierarchical_placement(
-                count, repetitions);
-        }
+        measure_function_futures_create_thread_hierarchical_placement(
+            count, repetitions);
     }
 
     return hpx::local::finalize();
@@ -201,9 +197,8 @@ int main(int argc, char* argv[])
         ("delay-iterations", value<std::uint64_t>()->default_value(0),
          "number of iterations in the delay loop")
 
-        ("test-all", "run all benchmarks")
-        ("repetitions", value<int>()->default_value(1),
-         "number of repetitions of the full benchmark")
+        ("test_count", value<unsigned int>()->default_value(100),
+         "number of repetitions of the full benchmark (default: 100)")
 
         ("info", value<std::string>()->default_value("no-info"),
          "extra info for plot output (e.g. branch name)");

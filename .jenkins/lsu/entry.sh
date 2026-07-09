@@ -84,12 +84,12 @@ cdash_build_id="$(cat jenkins-hpx-${configuration_name_with_build_type}-cdash-bu
 if [[ -z "${ghprbPullId:-}" ]]; then
     .jenkins/common/set_github_status.sh \
         "${GITHUB_TOKEN}" \
-        "STEllAR-GROUP/hpx" \
+        "TheHPXProject/hpx" \
         "${GIT_COMMIT}" \
         "${github_commit_status}" \
         "${configuration_name_with_build_type}" \
-        "${cdash_build_id}" \
-        "jenkins/lsu"
+        "jenkins/lsu" \
+        "${cdash_build_id}"
 else
     # Extract just the organization and repo names "org/repo" from the full URL
     github_commit_repo="$(echo $ghprbPullLink | sed -n 's/https:\/\/github.com\/\(.*\)\/pull\/[0-9]*/\1/p')"
@@ -101,8 +101,8 @@ else
         "${ghprbActualCommit}" \
         "${github_commit_status}" \
         "${configuration_name_with_build_type}" \
-        "${cdash_build_id}" \
-        "jenkins/lsu"
+        "jenkins/lsu" \
+        "${cdash_build_id}"
 fi
 
 set -e

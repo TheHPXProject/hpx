@@ -445,6 +445,13 @@ hpx_option(
   HPX_WITH_TESTS_BENCHMARKS BOOL "Build HPX benchmark tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
 )
+if(HPX_WITH_TESTS_BENCHMARKS)
+  hpx_option(
+    HPX_WITH_TESTS_RUN_BENCHMARKS BOOL
+    "Run the built HPX benchmark tests (default: OFF)" OFF ADVANCED
+    CATEGORY "Build Targets"
+  )
+endif()
 hpx_option(
   HPX_WITH_TESTS_REGRESSIONS BOOL "Build HPX regression tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
