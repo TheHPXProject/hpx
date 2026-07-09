@@ -336,7 +336,7 @@ namespace hpx::when_all_vector_detail {
 
             struct op_states_deleter
             {
-                alloc_type alloc{};
+                alloc_type alloc;
                 std::size_t count = 0;
 
                 void operator()(element_type* ptr) noexcept
@@ -354,12 +354,17 @@ namespace hpx::when_all_vector_detail {
 
             using operation_states_storage_type =
                 std::unique_ptr<element_type[], op_states_deleter>;
-            operation_states_storage_type op_states = nullptr;
+            operation_states_storage_type op_states;
 
             template <typename Receiver_>
             operation_state(Receiver_&& receiver, std::vector<Sender>&& senders)
               : num_predecessors(senders.size())
               , receiver(HPX_FORWARD(Receiver_, receiver))
+              , op_states(nullptr,
+                    op_states_deleter{alloc_type(env_allocator<env_type>::get(
+                                          hpx::execution::experimental::get_env(
+                                              this->receiver))),
+                        0})
             {
                 {
                     alloc_type alloc(env_allocator<env_type>::get(
@@ -386,8 +391,9 @@ namespace hpx::when_all_vector_detail {
                             alloc, ptr, num_predecessors);
                         throw;
                     }
-                    op_states = operation_states_storage_type(
+                    operation_states_storage_type temp(
                         ptr, op_states_deleter{alloc, num_predecessors});
+                    op_states = std::move(temp);
                 }
                 std::size_t i = 0;
                 for (auto&& sender : senders)

@@ -156,7 +156,7 @@ int main()
     }
 
     // Test 2: when_all_vector with 0 senders (empty vector).
-    // No allocation should happen for op states.
+    // An allocation of size 0 happens for op states.
     {
         tracking_allocator_counts::reset();
 
@@ -167,11 +167,17 @@ int main()
             HPX_TEST_EQ(v.size(), std::size_t(0));
         };
 
-        allocator_receiver<decltype(f)> r{f, set_value_called};
-        auto os = ex::connect(std::move(s), std::move(r));
-        ex::start(os);
+        {
+            allocator_receiver<decltype(f)> r{f, set_value_called};
+            auto os = ex::connect(std::move(s), std::move(r));
+            ex::start(os);
+        }
 
         HPX_TEST(set_value_called);
+        HPX_TEST_EQ(
+            tracking_allocator_counts::allocate_count.load(), std::size_t(1));
+        HPX_TEST_EQ(
+            tracking_allocator_counts::deallocate_count.load(), std::size_t(1));
     }
 
     // Test 3: when_all_vector with void senders and custom allocator.
@@ -193,6 +199,10 @@ int main()
         HPX_TEST(set_value_called);
         HPX_TEST_LT(
             std::size_t(0), tracking_allocator_counts::allocate_count.load());
+        HPX_TEST_LT(
+            std::size_t(0), tracking_allocator_counts::deallocate_count.load());
+        HPX_TEST_EQ(tracking_allocator_counts::allocate_count.load(),
+            tracking_allocator_counts::deallocate_count.load());
     }
 
     // Test 4: Verify allocate/deallocate counts are balanced.
