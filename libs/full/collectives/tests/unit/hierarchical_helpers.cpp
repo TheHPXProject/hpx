@@ -11,15 +11,22 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <hpx/collectives/detail/flattened_data.hpp>
 #include <hpx/modules/collectives.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <numeric>
+#include <string>
 #include <vector>
 
 using hpx::collectives::detail::classify_site;
+using hpx::collectives::detail::flattened_data;
 using hpx::collectives::detail::get_top_level_groups;
 using hpx::collectives::detail::is_top_level_rep;
+using hpx::collectives::detail::merge_flattened_data;
+using hpx::collectives::detail::select_flattened_column;
+using hpx::collectives::detail::slice_flattened_data;
 using hpx::collectives::detail::top_level_group;
 
 void test_balanced_arity2()
@@ -261,6 +268,132 @@ void test_is_top_level_rep_exhaustive()
     }
 }
 
+void test_flattened_data_slicing()
+{
+    flattened_data<int> first{{10, 11, 20, 30, 31, 32}, {0, 2, 3, 6}};
+    auto left = slice_flattened_data(first, 0, 2);
+    HPX_TEST_EQ(left.data.size(), static_cast<std::size_t>(3));
+    HPX_TEST_EQ(left.offsets.size(), static_cast<std::size_t>(3));
+    HPX_TEST_EQ(left.data[0], 10);
+    HPX_TEST_EQ(left.data[1], 11);
+    HPX_TEST_EQ(left.data[2], 20);
+    HPX_TEST_EQ(left.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(left.offsets[1], std::uint32_t(2));
+    HPX_TEST_EQ(left.offsets[2], std::uint32_t(3));
+
+    flattened_data<int> second{{10, 11, 20, 30, 31, 32}, {0, 2, 3, 6}};
+    auto right = slice_flattened_data(second, 1, 2);
+    HPX_TEST_EQ(right.data.size(), static_cast<std::size_t>(3));
+    HPX_TEST_EQ(right.offsets.size(), static_cast<std::size_t>(2));
+    HPX_TEST_EQ(right.data[0], 30);
+    HPX_TEST_EQ(right.data[1], 31);
+    HPX_TEST_EQ(right.data[2], 32);
+    HPX_TEST_EQ(right.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(right.offsets[1], std::uint32_t(3));
+
+    flattened_data<int> empty_row{{1, 2, 3, 4, 5}, {0, 2, 2, 5}};
+    auto empty = slice_flattened_data(empty_row, 1, 3);
+    HPX_TEST(empty.data.empty());
+    HPX_TEST_EQ(empty.offsets.size(), static_cast<std::size_t>(2));
+    HPX_TEST_EQ(empty.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(empty.offsets[1], std::uint32_t(0));
+}
+
+void test_flattened_data_merge()
+{
+    std::vector<flattened_data<std::string>> values;
+    values.push_back({{"a", "b", "c", "d"}, {0, 3, 4}});
+    values.push_back({{"e", "f"}, {0, 2}});
+
+    auto result = merge_flattened_data(values);
+    HPX_TEST_EQ(result.data.size(), static_cast<std::size_t>(6));
+    HPX_TEST_EQ(result.offsets.size(), static_cast<std::size_t>(4));
+    for (std::size_t i = 0; i != result.data.size(); ++i)
+    {
+        HPX_TEST_EQ(result.data[i], std::string(1, static_cast<char>('a' + i)));
+    }
+    HPX_TEST_EQ(result.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(result.offsets[1], std::uint32_t(3));
+    HPX_TEST_EQ(result.offsets[2], std::uint32_t(4));
+    HPX_TEST_EQ(result.offsets[3], std::uint32_t(6));
+}
+
+void test_flattened_exchange_diagonal()
+{
+    std::vector<flattened_data<int>> values;
+    values.push_back({{3, 4, 103, 104, 203, 204}, {0, 0, 2, 2, 4, 4, 6}});
+    values.push_back({{300, 301, 302, 400, 401, 402}, {0, 3, 3, 6, 6}});
+
+    auto for_group_zero = select_flattened_column(values, 0);
+    HPX_TEST_EQ(for_group_zero.data.size(), static_cast<std::size_t>(6));
+    HPX_TEST_EQ(for_group_zero.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(for_group_zero.offsets[1], std::uint32_t(0));
+    HPX_TEST_EQ(for_group_zero.offsets[2], std::uint32_t(6));
+    for (std::size_t i = 0; i != for_group_zero.data.size(); ++i)
+    {
+        HPX_TEST_EQ(for_group_zero.data[i],
+            static_cast<int>(300 + (i / 3) * 100 + i % 3));
+    }
+
+    std::vector<flattened_data<int>> second_values;
+    second_values.push_back(
+        {{3, 4, 103, 104, 203, 204}, {0, 0, 2, 2, 4, 4, 6}});
+    second_values.push_back({{300, 301, 302, 400, 401, 402}, {0, 3, 3, 6, 6}});
+    auto for_group_one = select_flattened_column(second_values, 1);
+    HPX_TEST_EQ(for_group_one.data.size(), static_cast<std::size_t>(6));
+    HPX_TEST_EQ(for_group_one.offsets[0], std::uint32_t(0));
+    HPX_TEST_EQ(for_group_one.offsets[1], std::uint32_t(6));
+    HPX_TEST_EQ(for_group_one.offsets[2], std::uint32_t(6));
+    for (std::size_t i = 0; i != for_group_one.data.size(); ++i)
+    {
+        HPX_TEST_EQ(
+            for_group_one.data[i], static_cast<int>((i / 2) * 100 + 3 + i % 2));
+    }
+}
+
+void test_flattened_vector_bool()
+{
+    std::vector<flattened_data<bool>> values;
+    values.push_back({{true, false, true}, {0, 2, 3}});
+    values.push_back({{false, false}, {0, 2}});
+
+    auto merged = merge_flattened_data(values);
+    HPX_TEST_EQ(merged.data.size(), static_cast<std::size_t>(5));
+    HPX_TEST(merged.data[0]);
+    HPX_TEST(!merged.data[1]);
+    HPX_TEST(merged.data[2]);
+    HPX_TEST(!merged.data[3]);
+    HPX_TEST(!merged.data[4]);
+
+    auto slice = slice_flattened_data(merged, 1, 3);
+    HPX_TEST_EQ(slice.data.size(), static_cast<std::size_t>(1));
+    HPX_TEST(slice.data[0]);
+}
+
+void test_flattened_data_serialization()
+{
+    flattened_data<std::string> original{{"zero", "one", "two"}, {0, 2, 3}};
+
+    std::vector<char> buffer;
+    hpx::serialization::output_archive output(buffer);
+    output << original;
+
+    flattened_data<std::string> restored;
+    hpx::serialization::input_archive input(buffer);
+    input >> restored;
+
+    HPX_TEST_EQ(restored.data.size(), original.data.size());
+    HPX_TEST_EQ(restored.offsets.size(), original.offsets.size());
+    for (std::size_t i = 0; i != original.data.size(); ++i)
+    {
+        HPX_TEST_EQ(restored.data[i], original.data[i]);
+    }
+    for (std::size_t i = 0; i != original.offsets.size(); ++i)
+    {
+        HPX_TEST_EQ(restored.offsets[i], original.offsets[i]);
+    }
+}
+
 int hpx_main()
 {
     test_balanced_arity2();
@@ -275,6 +408,11 @@ int hpx_main()
     test_matches_recursive_fill();
     test_is_top_level_rep_basic();
     test_is_top_level_rep_exhaustive();
+    test_flattened_data_slicing();
+    test_flattened_data_merge();
+    test_flattened_exchange_diagonal();
+    test_flattened_vector_bool();
+    test_flattened_data_serialization();
 
     return hpx::finalize();
 }

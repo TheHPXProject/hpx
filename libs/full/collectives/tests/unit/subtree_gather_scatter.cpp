@@ -61,40 +61,51 @@ void test_round_trip(std::uint32_t num_sites, int arity)
                 if (is_rep)
                 {
                     // Gather: collect subtree data.
-                    auto gathered = detail::subtree_gather_at_top_rep(
-                        comms, std::uint32_t(site), generation_arg(gather_gen));
+                    auto gathered = detail::subtree_gather_at_top_rep(comms,
+                        std::vector<std::uint32_t>{site},
+                        generation_arg(gather_gen));
 
                     // Verify: gathered should contain contiguous site ids.
                     auto groups =
                         detail::get_top_level_groups(ns, comms.get_arity());
                     auto gidx = detail::classify_site(ts, groups);
+                    HPX_TEST_NEQ(gidx, static_cast<std::ptrdiff_t>(-1));
 
-                    HPX_TEST_EQ(gathered.size(),
-                        static_cast<std::size_t>(groups[gidx].size));
-                    for (std::size_t j = 0; j != gathered.size(); ++j)
+                    std::size_t const group = static_cast<std::size_t>(gidx);
+                    std::size_t const group_left = groups[group].left;
+                    std::size_t const group_size = groups[group].size;
+
+                    HPX_TEST_EQ(gathered.offsets.size(), group_size + 1);
+                    HPX_TEST_EQ(gathered.data.size(), group_size);
+                    for (std::size_t j = 0; j != group_size; ++j)
                     {
-                        HPX_TEST_EQ(gathered[j],
-                            static_cast<std::uint32_t>(groups[gidx].left + j));
+                        HPX_TEST_EQ(gathered.offsets[j], j);
+                        HPX_TEST_EQ(gathered.data[j],
+                            static_cast<std::uint32_t>(group_left + j));
                     }
+                    HPX_TEST_EQ(gathered.offsets.back(), group_size);
 
                     // Scatter: send each site its value back.
                     auto my_val = detail::subtree_scatter_at_top_rep(
                         comms, HPX_MOVE(gathered), generation_arg(scatter_gen))
                                       .get();
-                    HPX_TEST_EQ(my_val, site);
+                    HPX_TEST_EQ(my_val.size(), static_cast<std::size_t>(1));
+                    HPX_TEST_EQ(my_val[0], site);
                 }
                 else
                 {
                     // Send our value to the rep.
-                    detail::subtree_send_to_top_rep(
-                        comms, std::uint32_t(site), generation_arg(gather_gen));
+                    detail::subtree_send_to_top_rep(comms,
+                        std::vector<std::uint32_t>{site},
+                        generation_arg(gather_gen));
 
                     // Receive our value back.
                     auto my_val =
                         detail::subtree_receive_from_top_rep<std::uint32_t>(
                             comms, generation_arg(scatter_gen))
                             .get();
-                    HPX_TEST_EQ(my_val, site);
+                    HPX_TEST_EQ(my_val.size(), static_cast<std::size_t>(1));
+                    HPX_TEST_EQ(my_val[0], site);
                 }
             }
         }));
@@ -134,37 +145,36 @@ void test_vector_payload(std::uint32_t num_sites, int arity)
 
             if (is_rep)
             {
-                // Gather: each site contributes a vector<uint32_t>.
-                // gather_data flattens one nesting level per gather step,
-                // so the result is vector<vector<uint32_t>>.
+                // Gather: each site contributes one logical row.
                 auto gathered = detail::subtree_gather_at_top_rep(
                     comms, HPX_MOVE(my_data), generation_arg(1));
 
                 auto groups =
                     detail::get_top_level_groups(ns, comms.get_arity());
                 auto gidx = detail::classify_site(ts, groups);
+                HPX_TEST_NEQ(gidx, static_cast<std::ptrdiff_t>(-1));
 
-                // gathered is vector<vector<uint32_t>> with one entry
-                // per subtree site (gather_data flattens one level per
-                // gather step, preserving inner vectors).
-                HPX_TEST_EQ(gathered.size(),
-                    static_cast<std::size_t>(groups[gidx].size));
+                std::size_t const group = static_cast<std::size_t>(gidx);
+                std::size_t const group_left = groups[group].left;
+                std::size_t const group_size = groups[group].size;
+
+                HPX_TEST_EQ(gathered.offsets.size(), group_size + 1);
+                HPX_TEST_EQ(gathered.data.size(), group_size * 3);
 
                 // Verify values.
-                for (std::size_t j = 0; j != groups[gidx].size; ++j)
+                for (std::size_t j = 0; j != group_size; ++j)
                 {
                     std::uint32_t expected_site =
-                        static_cast<std::uint32_t>(groups[gidx].left + j);
-                    HPX_TEST_EQ(
-                        gathered[j].size(), static_cast<std::size_t>(3));
-                    HPX_TEST_EQ(gathered[j][0], expected_site * 10);
-                    HPX_TEST_EQ(gathered[j][1], expected_site * 10 + 1);
-                    HPX_TEST_EQ(gathered[j][2], expected_site * 10 + 2);
+                        static_cast<std::uint32_t>(group_left + j);
+                    std::size_t const row = gathered.offsets[j];
+                    HPX_TEST_EQ(gathered.offsets[j + 1] - row,
+                        static_cast<std::size_t>(3));
+                    HPX_TEST_EQ(gathered.data[row], expected_site * 10);
+                    HPX_TEST_EQ(gathered.data[row + 1], expected_site * 10 + 1);
+                    HPX_TEST_EQ(gathered.data[row + 2], expected_site * 10 + 2);
                 }
 
-                // Scatter: gathered is already vector<vector<uint32_t>>,
-                // which is the right shape for scatter (one entry per
-                // subtree site). Pass directly.
+                // Scatter the same flat rows directly back down the subtree.
                 auto my_result = detail::subtree_scatter_at_top_rep(
                     comms, HPX_MOVE(gathered), generation_arg(2))
                                      .get();
@@ -179,9 +189,10 @@ void test_vector_payload(std::uint32_t num_sites, int arity)
                 detail::subtree_send_to_top_rep(
                     comms, HPX_MOVE(my_data), generation_arg(1));
 
-                auto my_result = detail::subtree_receive_from_top_rep<
-                    std::vector<std::uint32_t>>(comms, generation_arg(2))
-                                     .get();
+                auto my_result =
+                    detail::subtree_receive_from_top_rep<std::uint32_t>(
+                        comms, generation_arg(2))
+                        .get();
 
                 HPX_TEST_EQ(my_result.size(), static_cast<std::size_t>(3));
                 HPX_TEST_EQ(my_result[0], site * 10);

@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,6 +28,70 @@ constexpr int ITERATIONS = 50;
 #else
 constexpr int ITERATIONS = 500;
 #endif
+
+struct non_default_payload
+{
+    non_default_payload() = delete;
+
+    explicit non_default_payload(std::uint32_t const value)
+      : value(value)
+    {
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned int const)
+    {
+    }
+
+    template <typename Archive>
+    friend void save_construct_data(Archive& ar,
+        non_default_payload const* const payload, unsigned int const)
+    {
+        ar & payload->value;
+    }
+
+    template <typename Archive>
+    friend void load_construct_data(
+        Archive& ar, non_default_payload* const payload, unsigned int const)
+    {
+        std::uint32_t value = 0;
+        ar & value;
+        ::new (payload) non_default_payload(value);
+    }
+
+    std::uint32_t value;
+};
+
+void test_non_default_payload()
+{
+    std::uint32_t const this_locality = hpx::get_locality_id();
+    std::uint32_t const num_localities =
+        hpx::get_num_localities(hpx::launch::sync);
+
+    auto const gather_clients = create_hierarchical_communicator(
+        "/test/gather_hierarchical_non_default/", num_sites_arg(num_localities),
+        this_site_arg(this_locality), arity_arg(2), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
+
+    non_default_payload value(this_locality + 42);
+    if (this_locality == 0)
+    {
+        auto const result = gather_here(gather_clients, HPX_MOVE(value),
+            this_site_arg(this_locality), generation_arg(1))
+                                .get();
+        HPX_TEST_EQ(result.size(), static_cast<std::size_t>(num_localities));
+        for (std::uint32_t site = 0; site != num_localities; ++site)
+        {
+            HPX_TEST_EQ(result[site].value, site + 42);
+        }
+    }
+    else
+    {
+        gather_there(gather_clients, HPX_MOVE(value),
+            this_site_arg(this_locality), generation_arg(1))
+            .get();
+    }
+}
 
 void test_multiple_use(int arity = 2)
 {
@@ -199,6 +264,7 @@ int hpx_main()
     {
         test_multiple_use();
         test_multiple_use_with_generation();
+        test_non_default_payload();
     }
 #endif
 

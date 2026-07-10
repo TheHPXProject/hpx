@@ -412,6 +412,7 @@ namespace hpx { namespace collectives {
 
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/flattened_data.hpp>
 #include <hpx/collectives/detail/hierarchical_helpers.hpp>
 
 #include <cstddef>
@@ -456,6 +457,30 @@ namespace hpx::traits {
         }
 
         template <typename Result, typename T>
+        static Result get(Communicator& communicator, std::size_t which,
+            std::size_t generation,
+            hpx::collectives::detail::generation_mode num_generations,
+            hpx::collectives::detail::flattened_data<T>&& t,
+            hpx::collectives::detail::flattened_payload_mode)
+        {
+            using data_type = hpx::collectives::detail::flattened_data<T>;
+            hpx::collectives::detail::validate_flattened_data(
+                t, "hpx::collectives::gather_here");
+
+            return communicator.template handle_data<data_type>(
+                communication::communicator_data<
+                    communication::gather_tag>::name(),
+                which, generation,
+                [&t](auto& data, std::size_t which) {
+                    data[which] = HPX_MOVE(t);
+                },
+                [](auto& data, bool&, std::size_t) {
+                    return hpx::collectives::detail::merge_flattened_data(data);
+                },
+                num_generations);
+        }
+
+        template <typename Result, typename T>
         static Result set(Communicator& communicator, std::size_t which,
             std::size_t generation,
             hpx::collectives::detail::generation_mode num_generations, T&& t)
@@ -469,6 +494,27 @@ namespace hpx::traits {
                     data[which] = HPX_FORWARD(T, t);
                 },
                 // no finalizer
+                nullptr, num_generations);
+        }
+
+        template <typename Result, typename T>
+        static Result set(Communicator& communicator, std::size_t which,
+            std::size_t generation,
+            hpx::collectives::detail::generation_mode num_generations,
+            hpx::collectives::detail::flattened_data<T>&& t,
+            hpx::collectives::detail::flattened_payload_mode)
+        {
+            using data_type = hpx::collectives::detail::flattened_data<T>;
+            hpx::collectives::detail::validate_flattened_data(
+                t, "hpx::collectives::gather_there");
+
+            return communicator.template handle_data<data_type>(
+                communication::communicator_data<
+                    communication::gather_tag>::name(),
+                which, generation,
+                [&t](auto& data, std::size_t which) {
+                    data[which] = HPX_MOVE(t);
+                },
                 nullptr, num_generations);
         }
     };
@@ -538,6 +584,64 @@ namespace hpx::collectives {
                 if (!result.is_ready())
                 {
                     // make sure id is kept alive as long as the returned future
+                    traits::detail::get_shared_state(result)->set_on_completed(
+                        [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
+                }
+
+                return result;
+            };
+
+            return fid.then(hpx::launch::sync, HPX_MOVE(gather_here_data));
+        }
+
+        template <typename T>
+        hpx::future<flattened_data<T>> gather_flattened_here(communicator fid,
+            flattened_data<T>&& local_result, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<flattened_data<T>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::gather_here",
+                        "the generation number shouldn't be zero"));
+            }
+
+            if (auto [num_sites, comm_site] = fid.get_info(); num_sites == 1)
+            {
+                if (this_site != comm_site)
+                {
+                    return hpx::make_exceptional_future<flattened_data<T>>(
+                        HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                            "hpx::collectives::gather_here",
+                            "the local site should be zero if only one site "
+                            "is involved"));
+                }
+
+                return hpx::make_ready_future(HPX_MOVE(local_result));
+            }
+
+            auto gather_here_data = [local_result = HPX_MOVE(local_result),
+                                        this_site, generation, num_generations](
+                                        communicator&& c) mutable
+                -> hpx::future<flattened_data<T>> {
+                using data_type = flattened_data<T>;
+                using action_type =
+                    communicator_server::communication_get_direct_action<
+                        traits::communication::gather_tag,
+                        hpx::future<data_type>, generation_mode, data_type,
+                        flattened_payload_mode>;
+
+                hpx::future<data_type> result = hpx::async(action_type(), c,
+                    this_site, generation, num_generations,
+                    HPX_MOVE(local_result), flattened_payload_mode::enabled);
+
+                if (!result.is_ready())
+                {
                     traits::detail::get_shared_state(result)->set_on_completed(
                         [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
                 }
@@ -630,17 +734,22 @@ namespace hpx::collectives {
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
-            std::vector<std::decay_t<T>> result;
-            result.emplace_back(HPX_FORWARD(T, local_result));
+            using value_type = std::decay_t<T>;
+            flattened_data<value_type> result =
+                make_flattened_value(HPX_FORWARD(T, local_result));
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
-                result = gather_data(gather_here(communicators.get(i),
+                result = gather_flattened_here(communicators.get(i),
                     HPX_MOVE(result), this_site_arg(0), run_gen, run_step)
-                        .get());
+                             .get();
             }
 
-            return gather_data(gather_here(communicators.get(0),
-                HPX_MOVE(result), this_site_arg(0), run_gen, run_step));
+            return hpx::make_future<std::vector<value_type>>(
+                gather_flattened_here(communicators.get(0), HPX_MOVE(result),
+                    this_site_arg(0), run_gen, run_step),
+                [](flattened_data<value_type>&& data) {
+                    return HPX_MOVE(data.data);
+                });
         }
     }    // namespace detail
 
@@ -759,6 +868,48 @@ namespace hpx::collectives {
 
             return fid.then(hpx::launch::sync, HPX_MOVE(gather_there_data));
         }
+
+        template <typename T>
+        hpx::future<void> gather_flattened_there(communicator fid,
+            flattened_data<T>&& local_result, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
+                    hpx::error::bad_parameter, "hpx::collectives::gather_there",
+                    "the generation number shouldn't be zero"));
+            }
+
+            auto gather_there_data =
+                [local_result = HPX_MOVE(local_result), this_site, generation,
+                    num_generations](
+                    communicator&& c) mutable -> hpx::future<void> {
+                using data_type = flattened_data<T>;
+                using action_type =
+                    communicator_server::communication_set_direct_action<
+                        traits::communication::gather_tag, hpx::future<void>,
+                        generation_mode, data_type, flattened_payload_mode>;
+
+                hpx::future<void> result = hpx::async(action_type(), c,
+                    this_site, generation, num_generations,
+                    HPX_MOVE(local_result), flattened_payload_mode::enabled);
+
+                if (!result.is_ready())
+                {
+                    traits::detail::get_shared_state(result)->set_on_completed(
+                        [client = HPX_MOVE(c)]() { HPX_UNUSED(client); });
+                }
+
+                return result;
+            };
+
+            return fid.then(hpx::launch::sync, HPX_MOVE(gather_there_data));
+        }
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -804,16 +955,17 @@ namespace hpx::collectives {
             auto const [run_gen, run_step] =
                 hierarchical_run_params(generation, num_generations);
 
-            std::vector<std::decay_t<T>> data;
-            data.emplace_back(HPX_FORWARD(T, local_result));
+            using value_type = std::decay_t<T>;
+            flattened_data<value_type> data =
+                make_flattened_value(HPX_FORWARD(T, local_result));
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
-                data = gather_data(gather_here(communicators.get(i),
+                data = gather_flattened_here(communicators.get(i),
                     HPX_MOVE(data), this_site_arg(0), run_gen, run_step)
-                        .get());
+                           .get();
             }
 
-            return gather_there(communicators.get(0), HPX_MOVE(data),
+            return gather_flattened_there(communicators.get(0), HPX_MOVE(data),
                 communicators.site(0), run_gen, run_step);
         }
     }    // namespace detail

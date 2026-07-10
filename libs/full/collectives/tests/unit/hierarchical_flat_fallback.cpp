@@ -117,6 +117,48 @@ void test_distributed_fallback_all_to_all()
         HPX_TEST_EQ(fb_result[i], expected[i]);
     }
 
+    std::vector<std::string> string_send_data;
+    std::vector<std::string> string_expected;
+    string_send_data.reserve(num_localities);
+    string_expected.reserve(num_localities);
+    for (std::uint32_t site = 0; site != num_localities; ++site)
+    {
+        string_send_data.push_back(
+            std::to_string(this_locality) + "->" + std::to_string(site));
+        string_expected.push_back(
+            std::to_string(site) + "->" + std::to_string(this_locality));
+    }
+
+    auto const string_fb_result =
+        all_to_all(fb_clients, std::vector<std::string>(string_send_data),
+            this_site_arg(this_locality), generation_arg(2))
+            .get();
+    HPX_TEST_EQ(string_fb_result.size(), string_expected.size());
+    for (std::size_t i = 0; i != string_expected.size(); ++i)
+    {
+        HPX_TEST_EQ(string_fb_result[i], string_expected[i]);
+    }
+
+    std::vector<bool> bool_send_data;
+    std::vector<bool> bool_expected;
+    bool_send_data.reserve(num_localities);
+    bool_expected.reserve(num_localities);
+    for (std::uint32_t site = 0; site != num_localities; ++site)
+    {
+        bool_send_data.push_back(this_locality < site);
+        bool_expected.push_back(site < this_locality);
+    }
+
+    auto const bool_fb_result =
+        all_to_all(fb_clients, std::vector<bool>(bool_send_data),
+            this_site_arg(this_locality), generation_arg(3))
+            .get();
+    HPX_TEST_EQ(bool_fb_result.size(), bool_expected.size());
+    for (std::size_t i = 0; i != bool_expected.size(); ++i)
+    {
+        HPX_TEST_EQ(bool_fb_result[i], bool_expected[i]);
+    }
+
     // Force tree path; results must match. With 2 localities and arity 2 a
     // tree is structurally impossible (arity >= num_sites dispatches flat),
     // so this leg needs at least 3.
@@ -142,7 +184,152 @@ void test_distributed_fallback_all_to_all()
         {
             HPX_TEST_EQ(tree_result[i], expected[i]);
         }
+
+        auto const string_tree_result =
+            all_to_all(tree_clients, std::vector<std::string>(string_send_data),
+                this_site_arg(this_locality), generation_arg(2))
+                .get();
+        HPX_TEST_EQ(string_tree_result.size(), string_expected.size());
+        for (std::size_t i = 0; i != string_expected.size(); ++i)
+        {
+            HPX_TEST_EQ(string_tree_result[i], string_expected[i]);
+        }
+
+        auto const bool_tree_result =
+            all_to_all(tree_clients, std::vector<bool>(bool_send_data),
+                this_site_arg(this_locality), generation_arg(3))
+                .get();
+        HPX_TEST_EQ(bool_tree_result.size(), bool_expected.size());
+        for (std::size_t i = 0; i != bool_expected.size(); ++i)
+        {
+            HPX_TEST_EQ(bool_tree_result[i], bool_expected[i]);
+        }
     }
+}
+
+void test_distributed_flattened_bool_payloads()
+{
+    std::uint32_t const this_locality = hpx::get_locality_id();
+    std::uint32_t const num_localities =
+        hpx::get_num_localities(hpx::launch::sync);
+
+    if (num_localities < 3)
+    {
+        return;
+    }
+
+    auto const gather_clients = create_hierarchical_communicator(
+        "/test/hflback_dist_bool_gather/", num_sites_arg(num_localities),
+        this_site_arg(this_locality), arity_arg(2), generation_arg(),
+        root_site_arg(0), flat_fallback_threshold_arg(0));
+
+    bool const local_value = this_locality % 2 != 0;
+    if (this_locality == 0)
+    {
+        auto const gathered = gather_here(gather_clients, bool(local_value),
+            this_site_arg(this_locality), generation_arg(1))
+                                  .get();
+        HPX_TEST_EQ(gathered.size(), static_cast<std::size_t>(num_localities));
+        for (std::uint32_t site = 0; site != num_localities; ++site)
+        {
+            HPX_TEST_EQ(gathered[site], site % 2 != 0);
+        }
+    }
+    else
+    {
+        gather_there(gather_clients, bool(local_value),
+            this_site_arg(this_locality), generation_arg(1))
+            .get();
+    }
+
+    auto const scatter_clients = create_hierarchical_communicator(
+        "/test/hflback_dist_bool_scatter/", num_sites_arg(num_localities),
+        this_site_arg(this_locality), arity_arg(2), generation_arg(),
+        root_site_arg(0), flat_fallback_threshold_arg(0));
+
+    bool result = false;
+    if (this_locality == 0)
+    {
+        std::vector<bool> values;
+        values.reserve(num_localities);
+        for (std::uint32_t site = 0; site != num_localities; ++site)
+        {
+            values.push_back(site % 2 == 0);
+        }
+        result = scatter_to(scatter_clients, HPX_MOVE(values),
+            this_site_arg(this_locality), generation_arg(1))
+                     .get();
+    }
+    else
+    {
+        result = scatter_from<bool>(
+            scatter_clients, this_site_arg(this_locality), generation_arg(1))
+                     .get();
+    }
+    HPX_TEST_EQ(result, this_locality % 2 == 0);
+}
+
+void test_local_flattened_gather_scatter()
+{
+    constexpr std::uint32_t num_sites = 5;
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async([site]() {
+            auto const clients = create_hierarchical_communicator(
+                "/test/hflback_local_flattened_gs/", num_sites_arg(num_sites),
+                this_site_arg(site), arity_arg(2), generation_arg(),
+                root_site_arg(0), flat_fallback_threshold_arg(0));
+
+            std::string const value = "site-" + std::to_string(site);
+            if (site == 0)
+            {
+                auto const gathered = gather_here(clients, std::string(value),
+                    this_site_arg(site), generation_arg(1))
+                                          .get();
+                HPX_TEST_EQ(
+                    gathered.size(), static_cast<std::size_t>(num_sites));
+                for (std::uint32_t source = 0; source != num_sites; ++source)
+                {
+                    HPX_TEST_EQ(
+                        gathered[source], "site-" + std::to_string(source));
+                }
+            }
+            else
+            {
+                gather_there(clients, std::string(value), this_site_arg(site),
+                    generation_arg(1))
+                    .get();
+            }
+
+            std::string result;
+            if (site == 0)
+            {
+                std::vector<std::string> values;
+                values.reserve(num_sites);
+                for (std::uint32_t destination = 0; destination != num_sites;
+                    ++destination)
+                {
+                    values.push_back(
+                        "destination-" + std::to_string(destination));
+                }
+                result = scatter_to(clients, HPX_MOVE(values),
+                    this_site_arg(site), generation_arg(2))
+                             .get();
+            }
+            else
+            {
+                result = scatter_from<std::string>(
+                    clients, this_site_arg(site), generation_arg(2))
+                             .get();
+            }
+            HPX_TEST_EQ(result, "destination-" + std::to_string(site));
+        }));
+    }
+
+    hpx::wait_all(HPX_MOVE(sites));
 }
 
 // Local test (single-process, multi-thread sites), exercised from locality 0
@@ -254,11 +441,14 @@ int hpx_main()
     {
         test_distributed_fallback();
         test_distributed_fallback_all_to_all();
+        test_distributed_flattened_bool_payloads();
     }
 #endif
 
     if (hpx::get_locality_id() == 0)
     {
+        test_local_flattened_gather_scatter();
+
         // Flat legs: threshold above all site counts forces the fallback.
         for (std::uint32_t n : {2u, 4u, 8u})
         {

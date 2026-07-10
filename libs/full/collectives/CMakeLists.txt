@@ -23,6 +23,7 @@ set(collectives_headers
     hpx/collectives/create_communicator.hpp
     hpx/collectives/detail/channel_communicator.hpp
     hpx/collectives/detail/communicator.hpp
+    hpx/collectives/detail/flattened_data.hpp
     hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp
     hpx/collectives/detail/hierarchical_helpers.hpp
     hpx/collectives/detail/hierarchical_scan_helpers.hpp

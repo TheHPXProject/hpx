@@ -397,6 +397,7 @@ namespace hpx { namespace collectives {
 
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
+#include <hpx/collectives/detail/flattened_data.hpp>
 #include <hpx/collectives/detail/hierarchical_helpers.hpp>
 
 #include <cstddef>
@@ -443,6 +444,26 @@ namespace hpx::traits {
                 num_generations);
         }
 
+        template <typename Result>
+        static Result get(Communicator& communicator, std::size_t which,
+            std::size_t generation,
+            hpx::collectives::detail::generation_mode num_generations,
+            hpx::collectives::detail::flattened_payload_mode)
+        {
+            using data_type = typename Result::result_type;
+            std::size_t const num_sites = communicator.num_sites_;
+
+            return communicator.template handle_data<data_type>(
+                communication::communicator_data<
+                    communication::scatter_tag>::name(),
+                which, generation, nullptr,
+                [num_sites](auto& data, bool&, std::size_t which) {
+                    return hpx::collectives::detail::slice_flattened_data(
+                        data[0], which, num_sites);
+                },
+                num_generations, 1);
+        }
+
         template <typename Result, typename T>
         static Result set(Communicator& communicator, std::size_t which,
             std::size_t generation,
@@ -461,6 +482,37 @@ namespace hpx::traits {
                         HPX_MOVE(data[which]));
                 },
                 num_generations);
+        }
+
+        template <typename Result, typename T>
+        static Result set(Communicator& communicator, std::size_t which,
+            std::size_t generation,
+            hpx::collectives::detail::generation_mode num_generations,
+            hpx::collectives::detail::flattened_data<T>&& t,
+            hpx::collectives::detail::flattened_payload_mode)
+        {
+            using data_type = hpx::collectives::detail::flattened_data<T>;
+            std::size_t const num_sites = communicator.num_sites_;
+            hpx::collectives::detail::validate_flattened_data(
+                t, "hpx::collectives::scatter_to");
+            if (t.offsets.size() - 1 < num_sites)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::collectives::scatter_to",
+                    "the flattened payload must contain at least one row per "
+                    "participating site");
+            }
+
+            return communicator.template handle_data<data_type>(
+                communication::communicator_data<
+                    communication::scatter_tag>::name(),
+                which, generation,
+                [&t](auto& data, std::size_t) { data[0] = HPX_MOVE(t); },
+                [num_sites](auto& data, bool&, std::size_t which) {
+                    return hpx::collectives::detail::slice_flattened_data(
+                        data[0], which, num_sites);
+                },
+                num_generations, 1);
         }
     };
 }    // namespace hpx::traits
@@ -504,6 +556,49 @@ namespace hpx::collectives {
                 if (!result.is_ready())
                 {
                     // make sure id is kept alive as long as the returned future
+                    traits::detail::get_shared_state(result)->set_on_completed(
+                        [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
+                }
+
+                return result;
+            };
+
+            return fid.then(hpx::launch::sync, HPX_MOVE(scatter_from_data));
+        }
+
+        template <typename T>
+        hpx::future<flattened_data<T>> scatter_flattened_from(communicator fid,
+            this_site_arg this_site, generation_arg const generation,
+            generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<flattened_data<T>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::scatter_from",
+                        "the generation number shouldn't be zero"));
+            }
+
+            auto scatter_from_data =
+                [this_site, generation, num_generations](
+                    communicator&& c) -> hpx::future<flattened_data<T>> {
+                using data_type = flattened_data<T>;
+                using action_type =
+                    communicator_server::communication_get_direct_action<
+                        traits::communication::scatter_tag,
+                        hpx::future<data_type>, generation_mode,
+                        flattened_payload_mode>;
+
+                hpx::future<data_type> result =
+                    hpx::async(action_type(), c, this_site, generation,
+                        num_generations, flattened_payload_mode::enabled);
+
+                if (!result.is_ready())
+                {
                     traits::detail::get_shared_state(result)->set_on_completed(
                         [client = HPX_MOVE(c)] { HPX_UNUSED(client); });
                 }
@@ -563,6 +658,11 @@ namespace hpx::collectives {
             std::vector<T>&& local_result, this_site_arg this_site,
             generation_arg const generation, generation_mode num_generations);
 
+        template <typename T>
+        hpx::future<flattened_data<T>> scatter_flattened_to(communicator fid,
+            flattened_data<T>&& local_result, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations);
+
         // scatter_from over a hierarchical_communicator: detail entry carrying
         // the internal generation step. The public overload forwards with
         // double_step; scan collectives reuse it as their scatter phase with
@@ -594,24 +694,31 @@ namespace hpx::collectives {
             auto [current_communicator, current_site] = communicators[0];
             if (communicators.size() == 1)
             {
-                return scatter_from<T>(
-                    current_communicator, current_site, run_gen, run_step);
+                return hpx::make_future<T>(
+                    scatter_flattened_from<T>(
+                        current_communicator, current_site, run_gen, run_step),
+                    [](flattened_data<T>&& result) {
+                        return unwrap_flattened_value(HPX_MOVE(result));
+                    });
             }
 
-            std::vector<T> data = scatter_from<std::vector<T>>(
+            flattened_data<T> data = scatter_flattened_from<T>(
                 current_communicator, current_site, run_gen, run_step)
-                                      .get();
+                                         .get();
 
             for (std::size_t i = 1; i < communicators.size() - 1; ++i)
             {
-                data = scatter_to(communicators.get(i),
-                    scatter_data(HPX_MOVE(data), communicators.get_arity()),
-                    this_site_arg(0), run_gen, run_step)
+                data = scatter_flattened_to(communicators.get(i),
+                    HPX_MOVE(data), this_site_arg(0), run_gen, run_step)
                            .get();
             }
 
-            return scatter_to(communicators.back(), HPX_MOVE(data),
-                this_site_arg(0), run_gen, run_step);
+            return hpx::make_future<T>(
+                scatter_flattened_to(communicators.back(), HPX_MOVE(data),
+                    this_site_arg(0), run_gen, run_step),
+                [](flattened_data<T>&& result) {
+                    return unwrap_flattened_value(HPX_MOVE(result));
+                });
         }
     }    // namespace detail
 
@@ -764,6 +871,68 @@ namespace hpx::collectives {
 
             return fid.then(hpx::launch::sync, HPX_MOVE(scatter_to_data));
         }
+
+        template <typename T>
+        hpx::future<flattened_data<T>> scatter_flattened_to(communicator fid,
+            flattened_data<T>&& local_result, this_site_arg this_site,
+            generation_arg const generation, generation_mode num_generations)
+        {
+            if (this_site.is_default())
+            {
+                this_site = agas::get_locality_id();
+            }
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<flattened_data<T>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::scatter_to",
+                        "the generation number shouldn't be zero"));
+            }
+
+            auto [num_sites, comm_site] = fid.get_info();
+            HPX_ASSERT(is_valid_flattened_data(local_result));
+            HPX_ASSERT(local_result.offsets.size() - 1 >= num_sites);
+
+            if (num_sites == 1)
+            {
+                if (this_site != comm_site)
+                {
+                    return hpx::make_exceptional_future<flattened_data<T>>(
+                        HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                            "hpx::collectives::scatter_to",
+                            "the local site should be zero if only one site "
+                            "is involved"));
+                }
+
+                return hpx::make_ready_future(HPX_MOVE(local_result));
+            }
+
+            auto scatter_to_data = [local_result = HPX_MOVE(local_result),
+                                       this_site, generation, num_generations](
+                                       communicator&& c) mutable
+                -> hpx::future<flattened_data<T>> {
+                using data_type = flattened_data<T>;
+                using action_type =
+                    communicator_server::communication_set_direct_action<
+                        traits::communication::scatter_tag,
+                        hpx::future<data_type>, generation_mode, data_type,
+                        flattened_payload_mode>;
+
+                hpx::future<data_type> result = hpx::async(action_type(), c,
+                    this_site, generation, num_generations,
+                    HPX_MOVE(local_result), flattened_payload_mode::enabled);
+
+                if (!result.is_ready())
+                {
+                    traits::detail::get_shared_state(result)->set_on_completed(
+                        [client = HPX_MOVE(c)]() { HPX_UNUSED(client); });
+                }
+
+                return result;
+            };
+
+            return fid.then(hpx::launch::sync, HPX_MOVE(scatter_to_data));
+        }
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -830,26 +999,35 @@ namespace hpx::collectives {
             auto [current_communicator, current_site] = communicators[0];
             if (communicators.size() == 1)
             {
-                return scatter_to(current_communicator, HPX_MOVE(local_result),
-                    current_site, run_gen, run_step);
+                flattened_data<T> data =
+                    make_flattened_rows(HPX_MOVE(local_result));
+                return hpx::make_future<T>(
+                    scatter_flattened_to(current_communicator, HPX_MOVE(data),
+                        current_site, run_gen, run_step),
+                    [](flattened_data<T>&& result) {
+                        return unwrap_flattened_value(HPX_MOVE(result));
+                    });
             }
 
-            arity_arg arity = communicators.get_arity();
-            std::vector<T> data = scatter_to(communicators.get(0),
-                scatter_data(HPX_MOVE(local_result), arity), this_site_arg(0),
-                run_gen, run_step)
-                                      .get();
+            flattened_data<T> data =
+                make_flattened_rows(HPX_MOVE(local_result));
+            data = scatter_flattened_to(communicators.get(0), HPX_MOVE(data),
+                this_site_arg(0), run_gen, run_step)
+                       .get();
 
             for (std::size_t i = 1; i < communicators.size() - 1; ++i)
             {
-                data = scatter_to(communicators.get(i),
-                    scatter_data(HPX_MOVE(data), arity),
-                    this_site_arg(this_site % arity), run_gen, run_step)
+                data = scatter_flattened_to(communicators.get(i),
+                    HPX_MOVE(data), this_site_arg(0), run_gen, run_step)
                            .get();
             }
 
-            return scatter_to(communicators.back(), HPX_MOVE(data),
-                this_site_arg(0), run_gen, run_step);
+            return hpx::make_future<T>(
+                scatter_flattened_to(communicators.back(), HPX_MOVE(data),
+                    this_site_arg(0), run_gen, run_step),
+                [](flattened_data<T>&& result) {
+                    return unwrap_flattened_value(HPX_MOVE(result));
+                });
         }
     }    // namespace detail
 

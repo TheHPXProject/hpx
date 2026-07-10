@@ -56,8 +56,14 @@ if(HPX_WITH_NETWORKING)
     set(${test}_PARAMETERS LOCALITIES 2)
   endforeach()
 
-  # The flat-vs-tree comparison needs a real tree: num_sites > arity (= 2).
-  set(hierarchical_flat_fallback_PARAMETERS LOCALITIES 3)
+  # Exercise the serialized intermediate gather/scatter payload through a real
+  # arity-two tree instead of collapsing to a single communicator.
+  set(gather_hierarchical_PARAMETERS LOCALITIES 3)
+  set(scatter_hierarchical_PARAMETERS LOCALITIES 3)
+
+  # The flat-vs-tree comparison needs a real tree. Five localities with arity
+  # two also exercises an uneven subtree with an intermediate payload hop.
+  set(hierarchical_flat_fallback_PARAMETERS LOCALITIES 5)
 endif()
 foreach(test ${tests})
   set(sources ${test}.cpp)
