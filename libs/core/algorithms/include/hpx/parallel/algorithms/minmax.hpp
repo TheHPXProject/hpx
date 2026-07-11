@@ -1137,7 +1137,7 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename FwdIter, typename Sent,
                 typename F, typename Proj>
             static constexpr minmax_element_result<FwdIter> sequential(
-                ExPolicy&& policy, FwdIter first, Sent last, F&& f, Proj&& proj)
+                ExPolicy&&, FwdIter first, Sent last, F&& f, Proj&& proj)
             {
                 auto min = first, max = first;
 
@@ -1221,8 +1221,7 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename FwdIter, typename Sent,
                 typename F>
             static constexpr minmax_element_result<FwdIter> sequential(
-                ExPolicy&& policy, FwdIter first, Sent last, F&& f,
-                hpx::identity)
+                ExPolicy&&, FwdIter first, Sent last, F&& f, hpx::identity)
             {
                 auto min = first, max = first;
 
