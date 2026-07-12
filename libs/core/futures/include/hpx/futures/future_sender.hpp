@@ -23,7 +23,9 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 
-#include <hpx/execution/algorithms/as_sender.hpp>
+namespace hpx::execution::experimental {
+    struct as_sender_t;
+}
 
 #include <exception>
 #include <type_traits>
@@ -297,14 +299,14 @@ namespace hpx::execution::experimental {
 
     template <typename T>
     future_sender<T> tag_invoke(
-        hpx::execution::experimental::as_sender_t, hpx::future<T>&& f)
+        hpx::execution::experimental::as_sender_t const&, hpx::future<T>&& f)
     {
         return future_sender<T>{HPX_MOVE(f)};
     }
 
     template <typename T>
     shared_future_sender<T> tag_invoke(
-        hpx::execution::experimental::as_sender_t, hpx::shared_future<T> f)
+        hpx::execution::experimental::as_sender_t const&, hpx::shared_future<T> f)
     {
         return shared_future_sender<T>{HPX_MOVE(f)};
     }
