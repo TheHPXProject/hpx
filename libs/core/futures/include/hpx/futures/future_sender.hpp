@@ -19,6 +19,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/execution/algorithms/as_sender.hpp>
 #include <hpx/futures/future.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -294,13 +295,15 @@ namespace hpx::execution::experimental {
     };
 
     template <typename T>
-    future_sender<T> as_sender(hpx::future<T>&& f)
+    future_sender<T> tag_invoke(
+        hpx::execution::experimental::as_sender_t, hpx::future<T>&& f)
     {
         return future_sender<T>{HPX_MOVE(f)};
     }
 
     template <typename T>
-    shared_future_sender<T> as_sender(hpx::shared_future<T> f)
+    shared_future_sender<T> tag_invoke(
+        hpx::execution::experimental::as_sender_t, hpx::shared_future<T> f)
     {
         return shared_future_sender<T>{HPX_MOVE(f)};
     }
