@@ -9,12 +9,14 @@
 
 #include <hpx/config.hpp>
 
+#include <hpx/functional/invoke.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
 #include <cstddef>
 #include <memory>
+#include <utility>
 #include <vector>
 
 namespace ex = hpx::execution::experimental;
