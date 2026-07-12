@@ -9,9 +9,6 @@
 
 #include <hpx/config.hpp>
 
-// Clang up to V22 fails compiling when_all_vector tests
-#if !defined(HPX_CLANG_VERSION) || ((HPX_CLANG_VERSION / 10000) > 22)
-
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
@@ -230,10 +227,3 @@ int main()
 
     return hpx::util::report_errors();
 }
-
-#else
-int main()
-{
-    return 0;
-}
-#endif

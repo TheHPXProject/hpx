@@ -9,8 +9,6 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
-#if !defined(HPX_CLANG_VERSION) || ((HPX_CLANG_VERSION / 10000) > 22)
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -119,10 +117,3 @@ int main(int argc, char* argv[])
 
     return hpx::util::report_errors();
 }
-
-#else
-int main()
-{
-    return 0;
-}
-#endif
