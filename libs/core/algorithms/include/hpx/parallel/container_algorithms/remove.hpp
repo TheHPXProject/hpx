@@ -557,9 +557,14 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<FwdIter> &&
                 std::sentinel_for<Sent, FwdIter> &&
                 hpx::parallel::traits::is_projected_v<Proj, FwdIter> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy,
-                    Pred, hpx::parallel::traits::projected<Proj, FwdIter>
-                >
+                (
+                    hpx::parallel::traits::is_indirect_callable_v<ExPolicy,
+                        Pred, hpx::parallel::traits::projected<Proj, FwdIter>
+                    > ||
+                    hpx::is_invocable_v<Pred,
+                        typename std::iterator_traits<FwdIter>::value_type
+                    >
+                )
             )
         // clang-format on
         friend typename parallel::util::detail::algorithm_result<ExPolicy,
@@ -584,9 +589,16 @@ namespace hpx::ranges {
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::range<Rng> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy,
-                    Pred, hpx::parallel::traits::projected_range<Proj, Rng>
-                >
+                (
+                    hpx::parallel::traits::is_indirect_callable_v<ExPolicy,
+                        Pred, hpx::parallel::traits::projected_range<Proj, Rng>
+                    > ||
+                    hpx::is_invocable_v<Pred,
+                        typename std::iterator_traits<
+                            std::ranges::iterator_t<Rng>
+                        >::value_type
+                    >
+                )
             )
         // clang-format on
         friend parallel::util::detail::algorithm_result_t<ExPolicy,

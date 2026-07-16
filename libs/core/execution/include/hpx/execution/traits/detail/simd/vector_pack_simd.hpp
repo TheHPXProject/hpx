@@ -44,6 +44,7 @@ namespace hpx::datapar::experimental {
 
     HPX_CXX_CORE_EXPORT using std::experimental::memory_alignment_v;
     HPX_CXX_CORE_EXPORT using std::experimental::vector_aligned;
+    HPX_CXX_CORE_EXPORT using std::experimental::element_aligned;
 
     HPX_CXX_CORE_EXPORT using std::experimental::all_of;
     HPX_CXX_CORE_EXPORT using std::experimental::any_of;
