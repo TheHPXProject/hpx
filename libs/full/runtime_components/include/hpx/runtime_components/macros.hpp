@@ -309,3 +309,7 @@
         HPX_PP_CAT(__distributed_metadata_, name);                             \
     HPX_REGISTER_COMPONENT(HPX_PP_CAT(__distributed_metadata_, name))          \
     /**/
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/runtime_components/reflect_client_macros.hpp>
+#endif
