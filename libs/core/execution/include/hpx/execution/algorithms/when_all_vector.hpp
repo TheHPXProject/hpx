@@ -198,44 +198,41 @@ namespace hpx::when_all_vector_detail {
                 operation_state& op_state;
                 std::size_t const i;
 
-                template <typename Error, typename OpState = operation_state>
+                template <typename Error>
                 void set_error(Error&& error) && noexcept
                 {
-                    auto& op = static_cast<OpState&>(op_state);
-                    if (!op.set_stopped_error_called.exchange(true))
+                    if (!op_state.set_stopped_error_called.exchange(true))
                     {
-                        op.stop_source_.request_stop();
+                        op_state.stop_source_.request_stop();
                         try
                         {
-                            op.error = HPX_FORWARD(Error, error);
+                            op_state.error = HPX_FORWARD(Error, error);
                         }
                         catch (...)
                         {
                             // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                            op.error = std::current_exception();
+                            op_state.error = std::current_exception();
                         }
                     }
 
-                    op.finish();
+                    op_state.finish();
                 }
 
-                template <typename OpState = operation_state>
+                template <typename Dummy = void>
                 void set_stopped() && noexcept
                 {
-                    auto& op = static_cast<OpState&>(op_state);
                     // request stop only if we're not in error state
-                    if (!op.set_stopped_error_called.exchange(true))
+                    if (!op_state.set_stopped_error_called.exchange(true))
                     {
-                        op.stop_source_.request_stop();
+                        op_state.stop_source_.request_stop();
                     }
-                    op.finish();
+                    op_state.finish();
                 }
 
-                template <typename... Ts, typename OpState = operation_state>
+                template <typename... Ts>
                 void set_value(Ts&&... ts) && noexcept
                 {
-                    auto& op = static_cast<OpState&>(op_state);
-                    if (!op.set_stopped_error_called)
+                    if (!op_state.set_stopped_error_called)
                     {
                         try
                         {
@@ -245,27 +242,27 @@ namespace hpx::when_all_vector_detail {
                             // senders that send nothing.
                             if constexpr (sizeof...(Ts) == 1)
                             {
-                                op.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
+                                op_state.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
                             }
                         }
                         catch (...)
                         {
-                            if (!op.set_stopped_error_called.exchange(true))
+                            if (!op_state.set_stopped_error_called.exchange(
+                                    true))
                             {
                                 // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                                op.error = std::current_exception();
+                                op_state.error = std::current_exception();
                             }
                         }
                     }
 
-                    op.finish();
+                    op_state.finish();
                 }
 
                 // clang-format off
-                template <typename OpState = operation_state>
+                template <typename Dummy = void>
                 auto get_env() const noexcept
                 {
-                    auto const& op = static_cast<OpState const&>(op_state);
                     /* The new calling convention is:
                      * make_env(old_env, prop(tag, val))*/
 
@@ -275,10 +272,10 @@ namespace hpx::when_all_vector_detail {
                     // temporaries returned by the functions causes wrong
                     // behaviour.
                     auto e = hpx::execution::experimental::get_env(
-                        op.receiver);
+                        op_state.receiver);
                     auto p = hpx::execution::experimental::prop(
                         hpx::execution::experimental::get_stop_token,
-                        op.stop_source_.get_token());
+                        op_state.stop_source_.get_token());
                     return hpx::execution::experimental::make_env(
                         std::move(e), std::move(p));
                 }
