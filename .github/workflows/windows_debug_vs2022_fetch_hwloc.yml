@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.3.4
+    - uses: lukka/get-cmake@v4.4.0
 
     - name: Install dependencies
       run: |

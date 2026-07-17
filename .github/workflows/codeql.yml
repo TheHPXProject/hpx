@@ -54,7 +54,7 @@ jobs:
         queries: security-and-quality
 
     - name: Install CMake
-      uses: lukka/get-cmake@v4.3.4
+      uses: lukka/get-cmake@v4.4.0
 
     - name: Install Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
