@@ -31,8 +31,8 @@ void test_sen(ExPolicy policy)
     std::vector<std::size_t> d(10007);
     std::vector<std::size_t> d_ans(10007);
 
-    auto it = hpx::ranges::adjacent_difference(
-        policy, std::begin(c), sentinel<std::size_t>{10007}, std::begin(d));
+    auto it = hpx::ranges::adjacent_difference(policy, std::begin(c),
+        test::sentinel_from_iterator(std::end(c) - 1), std::begin(d));
     std::adjacent_difference(std::begin(c), std::end(c), std::begin(d_ans));
 
     HPX_TEST(std::equal(std::begin(d), std::end(d) - 1, std::begin(d_ans),

@@ -62,6 +62,18 @@ namespace test {
             return i != s.get();
         }
 
+        friend auto operator-(sentinel_from_iterator<IterType> s, IterType i)
+            requires std::random_access_iterator<IterType>
+        {
+            return s.get() - i;
+        }
+
+        friend auto operator-(IterType i, sentinel_from_iterator<IterType> s)
+            requires std::random_access_iterator<IterType>
+        {
+            return i - s.get();
+        }
+
     private:
         IterType end;
     };
