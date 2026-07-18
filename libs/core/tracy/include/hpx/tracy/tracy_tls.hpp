@@ -30,6 +30,8 @@ namespace hpx::tracy {
         HPX_CORE_EXPORT region_data start_region(
             char const*, std::size_t = 0, std::size_t = 0) noexcept;
         HPX_CORE_EXPORT char const* rename_region(char const*) noexcept;
+        HPX_CORE_EXPORT std::uint64_t push_zone(char const*) noexcept;
+        HPX_CORE_EXPORT void pop_zone(std::uint64_t) noexcept;
         HPX_CORE_EXPORT region_data stop_region(
             region_data const& prev_region) noexcept;
         // Set/clear the per-OS-thread "inside fiber" flag used to guard
@@ -112,17 +114,17 @@ namespace hpx::tracy {
     HPX_CXX_CORE_EXPORT struct mark_event
     {
         explicit mark_event(char const* name) noexcept
-          : previous_name(detail::rename_region(name))
+          : ctx_value(detail::push_zone(name))
         {
         }
 
         ~mark_event()
         {
-            detail::rename_region(previous_name);
+            detail::pop_zone(ctx_value);
         }
 
     private:
-        char const* previous_name;
+        std::uint64_t ctx_value;
     };
 
     // RAII guard that closes the running fiber zone before self_.yield() and
