@@ -695,6 +695,8 @@ namespace hpx::execution::experimental {
                             set_state(data.state_, thread_state::active);
 
                             // Process local items.
+                            HPX_TRACING_MARK_EVENT(
+                                "fork_join_executor::call_static");
                             for (; part_begin != part_end; ++part_begin)
                             {
                                 auto it = std::next(
@@ -759,6 +761,8 @@ namespace hpx::execution::experimental {
                             set_state(data.state_, thread_state::active);
 
                             // Process local items first.
+                            HPX_TRACING_MARK_EVENT(
+                                "fork_join_executor::call_dynamic");
                             hpx::optional<std::uint32_t> index;
                             while ((index = local_queue.pop_left()))
                             {
@@ -987,6 +991,8 @@ namespace hpx::execution::experimental {
             template <typename F, typename S, typename... Ts>
             decltype(auto) bulk_sync_execute(F&& f, S const& shape, Ts&&... ts)
             {
+                HPX_TRACING_MARK_EVENT("fork_join_executor::bulk_sync_execute");
+
                 // protect against nested use of this executor instance
                 if (region_data_[main_thread_].data_.state_.load(
                         std::memory_order_relaxed) != thread_state::idle)
@@ -1071,6 +1077,9 @@ namespace hpx::execution::experimental {
             template <typename F, typename S, typename... Ts>
             decltype(auto) bulk_async_execute(F&& f, S const& shape, Ts&&... ts)
             {
+                HPX_TRACING_MARK_EVENT(
+                    "fork_join_executor::bulk_async_execute");
+
                 using result_type =
                     hpx::parallel::execution::detail::bulk_execute_result_t<F,
                         S, Ts...>;
