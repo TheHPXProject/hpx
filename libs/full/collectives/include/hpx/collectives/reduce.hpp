@@ -214,7 +214,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  basename    The base name identifying the reduce operation
     /// \param  result      A value to reduce on the central reduction point
     ///                     from this call site.
@@ -247,7 +246,6 @@ namespace hpx { namespace collectives {
     /// a given operator on values supplied from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      A value to reduce on the root_site from this call site.
     /// \param  op          Reduction operation to apply to all values supplied
@@ -279,7 +277,6 @@ namespace hpx { namespace collectives {
     /// a given operator on values supplied from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      A value to reduce on the root_site from this call site.
     /// \param  op          Reduction operation to apply to all values supplied
@@ -310,7 +307,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central reduce
     /// site (where the corresponding \a reduce_here is executed)
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  basename    The base name identifying the reduction operation
     /// \param  result      A future referring to the value to transmit to the
     ///                     central reduction point from this call site.
@@ -339,7 +335,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central reduce
     /// site (where the corresponding \a reduce_here is executed)
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      A value to reduce on the central reduction point
     ///                     from this call site.
@@ -367,7 +362,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central reduce
     /// site (where the corresponding \a reduce_here is executed)
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      A value to reduce on the central reduction point
     ///                     from this call site.

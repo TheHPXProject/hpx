@@ -208,7 +208,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  basename    The base name identifying the gather operation
     /// \param  result      The value to transmit to the central gather point
     ///                     from this call site.
@@ -240,7 +239,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      The value to transmit to the central gather point
     ///                     from this call site.
@@ -272,7 +270,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      The value to transmit to the central gather point
     ///                     from this call site.
@@ -304,7 +301,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central gather
     /// site (where the corresponding \a gather_here is executed)
     ///
-    /// \param policy       The execution policy specifying synchronous execution.
     /// \param basename     The base name identifying the gather operation
     /// \param result       The value to transmit to the central gather point
     ///                     from this call site.
@@ -337,7 +333,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central gather
     /// site (where the corresponding \a gather_here is executed)
     ///
-    /// \param policy       The execution policy specifying synchronous execution.
     /// \param comm         A communicator object returned from \a create_communicator
     /// \param result       The value to transmit to the central gather point
     ///                     from this call site.
@@ -369,7 +364,6 @@ namespace hpx { namespace collectives {
     /// This function transmits the value given by \a result to a central gather
     /// site (where the corresponding \a gather_here is executed)
     ///
-    /// \param policy       The execution policy specifying synchronous execution.
     /// \param comm         A communicator object returned from \a create_communicator
     /// \param result       The value to transmit to the central gather point
     ///                     from this call site.

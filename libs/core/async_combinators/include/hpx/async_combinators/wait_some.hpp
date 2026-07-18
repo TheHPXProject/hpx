@@ -98,9 +98,6 @@ namespace hpx {
     /// \param futures  [in] An arbitrary number of \a future or \a shared_future
     ///                 objects, possibly holding different types for which
     ///                 \a wait_some should wait.
-    /// \param ec       [in,out] this represents the error status on exit, if
-    ///                 this is pre-initialized to \a hpx#throws the function
-    ///                 will throw on error instead.
     ///
     /// \note The function \a wait_all returns after \a n futures have become
     ///       ready. All input futures are still valid after \a wait_some

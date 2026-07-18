@@ -112,7 +112,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param sync_policy  The execution policy specifying synchronous execution.
     /// \param basename     The base name identifying the all_gather operation
     /// \param result       The value to transmit to all
     ///                     participating sites from this call site.
@@ -149,7 +148,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param sync_policy  The execution policy specifying synchronous execution.
     /// \param comm         A communicator object returned from \a create_communicator
     /// \param result       The value to transmit to all
     ///                     participating sites from this call site.
@@ -179,7 +177,6 @@ namespace hpx { namespace collectives {
     /// This function receives a set of values from all call sites operating on
     /// the given base name.
     ///
-    /// \param sync_policy  The execution policy specifying synchronous execution.
     /// \param comm         A communicator object returned from \a create_communicator
     /// \param result       The value to transmit to all
     ///                     participating sites from this call site.

@@ -116,7 +116,6 @@ namespace hpx { namespace collectives {
     /// This function performs an inclusive scan operation on a set of values
     /// received from all call sites operating on the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  basename    The base name identifying the inclusive_scan operation
     /// \param  result      The value to transmit to all
     ///                     participating sites from this call site.
@@ -155,7 +154,6 @@ namespace hpx { namespace collectives {
     /// This function performs an inclusive scan operation on a set of values
     /// received from all call sites operating on the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      The value to transmit to all
     ///                     participating sites from this call site.
@@ -186,7 +184,6 @@ namespace hpx { namespace collectives {
     /// This function performs an inclusive scan operation on a set of values
     /// received from all call sites operating on the given base name.
     ///
-    /// \param  policy      The execution policy specifying synchronous execution.
     /// \param  comm        A communicator object returned from \a create_communicator
     /// \param  result      The value to transmit to all
     ///                     participating sites from this call site.
