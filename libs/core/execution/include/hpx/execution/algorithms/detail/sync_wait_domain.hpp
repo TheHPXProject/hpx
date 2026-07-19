@@ -246,8 +246,7 @@ namespace hpx::execution::experimental::detail {
             using err_t = std::decay_t<E>;
             if constexpr (std::is_same_v<err_t, std::exception_ptr>)
             {
-                result.template emplace<std::exception_ptr>(
-                    HPX_FORWARD(E, e));
+                result.template emplace<std::exception_ptr>(HPX_FORWARD(E, e));
             }
             else if constexpr (std::is_same_v<err_t, std::error_code>)
             {
