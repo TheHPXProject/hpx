@@ -224,21 +224,17 @@ namespace hpx::execution::experimental::detail {
         {
             try
             {
-                {
-                    std::unique_lock<hpx::spinlock> l(mtx);
-                    result.template emplace<ValueTuple>(HPX_FORWARD(Vs, vs)...);
-                    done = true;
-                }
+                std::unique_lock<hpx::spinlock> l(mtx);
+                result.template emplace<ValueTuple>(HPX_FORWARD(Vs, vs)...);
+                done = true;
                 cv.notify_all();
             }
             catch (...)
             {
-                {
-                    std::unique_lock<hpx::spinlock> l(mtx);
-                    result.template emplace<std::exception_ptr>(
-                        std::current_exception());
-                    done = true;
-                }
+                std::unique_lock<hpx::spinlock> l(mtx);
+                result.template emplace<std::exception_ptr>(
+                    std::current_exception());
+                done = true;
                 cv.notify_all();
             }
         }
@@ -246,43 +242,39 @@ namespace hpx::execution::experimental::detail {
         template <typename E>
         void notify_error(E&& e) noexcept
         {
+            std::unique_lock<hpx::spinlock> l(mtx);
+            using err_t = std::decay_t<E>;
+            if constexpr (std::is_same_v<err_t, std::exception_ptr>)
             {
-                std::unique_lock<hpx::spinlock> l(mtx);
-                using err_t = std::decay_t<E>;
-                if constexpr (std::is_same_v<err_t, std::exception_ptr>)
-                {
-                    result.template emplace<std::exception_ptr>(
-                        HPX_FORWARD(E, e));
-                }
-                else if constexpr (std::is_same_v<err_t, std::error_code>)
-                {
-                    result.template emplace<std::exception_ptr>(
-                        std::make_exception_ptr(std::system_error(e)));
-                }
-                else
-                {
-                    try
-                    {
-                        throw HPX_FORWARD(E, e);
-                    }
-                    catch (...)
-                    {
-                        result.template emplace<std::exception_ptr>(
-                            std::current_exception());
-                    }
-                }
-                done = true;
+                result.template emplace<std::exception_ptr>(
+                    HPX_FORWARD(E, e));
             }
+            else if constexpr (std::is_same_v<err_t, std::error_code>)
+            {
+                result.template emplace<std::exception_ptr>(
+                    std::make_exception_ptr(std::system_error(e)));
+            }
+            else
+            {
+                try
+                {
+                    throw HPX_FORWARD(E, e);
+                }
+                catch (...)
+                {
+                    result.template emplace<std::exception_ptr>(
+                        std::current_exception());
+                }
+            }
+            done = true;
             cv.notify_all();
         }
 
         void notify_stopped() noexcept
         {
-            {
-                std::unique_lock<hpx::spinlock> l(mtx);
-                result.template emplace<stopped_t<ValueTuple>>();
-                done = true;
-            }
+            std::unique_lock<hpx::spinlock> l(mtx);
+            result.template emplace<stopped_t<ValueTuple>>();
+            done = true;
             cv.notify_all();
         }
 
