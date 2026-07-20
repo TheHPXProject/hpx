@@ -143,8 +143,8 @@ void test_shared_future_copyable_semantics()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 6: as_sender(future<T>, scheduler) uses the optimized
-// bridge and preserves scheduler/domain information in the sender environment.
+// Test 6: as_sender(future<T>, scheduler) preserves scheduler/domain
+// information in the sender environment.
 void test_as_sender_with_scheduler_ready_future()
 {
     ex::thread_pool_scheduler sched{};
@@ -165,7 +165,8 @@ void test_as_sender_with_scheduler_ready_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 7: void future values are forwarded correctly through the fused path.
+// Test 7: void future values are forwarded correctly through the
+// scheduler-aware path.
 void test_as_sender_with_scheduler_void_future()
 {
     ex::thread_pool_scheduler sched{};
@@ -181,7 +182,8 @@ void test_as_sender_with_scheduler_void_future()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Test 8: shared_future remains copyable and works through the fused path.
+// Test 8: shared_future remains copyable and works through the
+// scheduler-aware path.
 void test_as_sender_with_scheduler_shared_future()
 {
     ex::thread_pool_scheduler sched{};
@@ -220,7 +222,7 @@ void test_as_sender_with_scheduler_error()
 
 ///////////////////////////////////////////////////////////////////////////////
 // Test 10: as_sender(future) | continues_on(thread_pool_scheduler) is lowered
-// to the same fused future/scheduler bridge as as_sender(future, scheduler).
+// to HPX's optimized thread-pool continues_on sender.
 void test_as_sender_pipe_continues_on_uses_fused_bridge()
 {
     ex::thread_pool_scheduler sched{};
@@ -233,7 +235,8 @@ void test_as_sender_pipe_continues_on_uses_fused_bridge()
         std::declval<sender_type>(), std::declval<ex::empty_env const&>()))>;
 
     static_assert(std::is_same_v<transformed_sender_type,
-        ex::detail::future_sender_continues_on_sender<hpx::future<int>,
+        ex::detail::thread_pool_continues_on_sender<
+            ex::detail::future_sender<hpx::future<int>>,
             ex::thread_pool_scheduler>>);
 
     auto result =
