@@ -118,6 +118,11 @@ namespace hpx::tracy {
         {
         }
 
+        mark_event(mark_event const&) = delete;
+        mark_event(mark_event&&) = delete;
+        mark_event& operator=(mark_event const&) = delete;
+        mark_event& operator=(mark_event&&) = delete;
+
         ~mark_event()
         {
             detail::pop_zone(ctx_value);

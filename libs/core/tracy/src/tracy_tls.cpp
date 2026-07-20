@@ -261,8 +261,9 @@ namespace hpx::tracy {
 
         HPX_CORE_EXPORT std::uint64_t push_zone(char const* name) noexcept
         {
+            char const* safe_name = intern_zone_label(name, "event");
             TracyCZoneC(ctx, 0x0078D7, 1);
-            TracyCZoneName(ctx, name, std::strlen(name));
+            TracyCZoneName(ctx, safe_name, std::strlen(safe_name));
             tracy_context data;
             data.context = ctx;
             return data.value;
