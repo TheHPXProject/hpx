@@ -18,6 +18,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <exception>
@@ -27,6 +28,7 @@
 #include <utility>
 
 namespace tt = hpx::this_thread::experimental;
+namespace ex = hpx::execution::experimental;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Test 1: future<int> -> as_sender -> stdexec::then(x*2) -> sync_wait
@@ -141,6 +143,107 @@ void test_shared_future_copyable_semantics()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Test 6: as_sender(future<T>, scheduler) uses the optimized
+// bridge and preserves scheduler/domain information in the sender environment.
+void test_as_sender_with_scheduler_ready_future()
+{
+    ex::thread_pool_scheduler sched{};
+
+    auto snd = ex::as_sender(hpx::make_ready_future(21), sched);
+
+    static_assert(ex::is_sender_v<decltype(snd)>);
+
+    auto sched_from_env =
+        ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(snd));
+    HPX_TEST(sched == sched_from_env);
+
+    auto result =
+        tt::sync_wait(std::move(snd) | ex::then([](int x) { return x * 2; }));
+
+    HPX_TEST(result.has_value());
+    HPX_TEST_EQ(std::get<0>(*result), 42);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test 7: void future values are forwarded correctly through the fused path.
+void test_as_sender_with_scheduler_void_future()
+{
+    ex::thread_pool_scheduler sched{};
+    bool continued = false;
+
+    auto snd = ex::as_sender(hpx::make_ready_future(), sched);
+
+    auto result =
+        tt::sync_wait(std::move(snd) | ex::then([&]() { continued = true; }));
+
+    HPX_TEST(result.has_value());
+    HPX_TEST(continued);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test 8: shared_future remains copyable and works through the fused path.
+void test_as_sender_with_scheduler_shared_future()
+{
+    ex::thread_pool_scheduler sched{};
+    hpx::shared_future<int> f = hpx::make_ready_future(13);
+
+    auto snd = ex::as_sender(f, sched);
+    auto result =
+        tt::sync_wait(std::move(snd) | ex::then([](int x) { return x + 1; }));
+
+    HPX_TEST(result.has_value());
+    HPX_TEST_EQ(std::get<0>(*result), 14);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test 9: exceptional futures still use the receiver error channel.
+void test_as_sender_with_scheduler_error()
+{
+    ex::thread_pool_scheduler sched{};
+    auto f = hpx::make_exceptional_future<int>(
+        std::make_exception_ptr(std::runtime_error("test error")));
+
+    bool caught = false;
+    try
+    {
+        tt::sync_wait(ex::as_sender(std::move(f), sched));
+        HPX_TEST(false);
+    }
+    catch (std::runtime_error const& e)
+    {
+        caught = true;
+        HPX_TEST_EQ(std::string(e.what()), std::string("test error"));
+    }
+
+    HPX_TEST(caught);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Test 10: as_sender(future) | continues_on(thread_pool_scheduler) is lowered
+// to the same fused future/scheduler bridge as as_sender(future, scheduler).
+void test_as_sender_pipe_continues_on_uses_fused_bridge()
+{
+    ex::thread_pool_scheduler sched{};
+
+    auto snd =
+        ex::as_sender(hpx::make_ready_future(21)) | ex::continues_on(sched);
+
+    using sender_type = decltype(snd);
+    using transformed_sender_type = std::decay_t<decltype(ex::transform_sender(
+        std::declval<sender_type>(), std::declval<ex::empty_env const&>()))>;
+
+    static_assert(std::is_same_v<transformed_sender_type,
+        ex::detail::future_sender_continues_on_sender<hpx::future<int>,
+            ex::thread_pool_scheduler>>);
+
+    auto result =
+        tt::sync_wait(std::move(snd) | ex::then([](int x) { return x * 2; }));
+
+    HPX_TEST(result.has_value());
+    HPX_TEST_EQ(std::get<0>(*result), 42);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_future_to_sender();
@@ -148,6 +251,11 @@ int hpx_main()
     test_error_propagation();
     test_move_only_semantics();
     test_shared_future_copyable_semantics();
+    test_as_sender_with_scheduler_ready_future();
+    test_as_sender_with_scheduler_void_future();
+    test_as_sender_with_scheduler_shared_future();
+    test_as_sender_with_scheduler_error();
+    test_as_sender_pipe_continues_on_uses_fused_bridge();
 
     return hpx::local::finalize();
 }

@@ -270,9 +270,9 @@ namespace hpx::execution::experimental {
         constexpr HPX_FORCEINLINE auto operator()(
             Future&& future, Scheduler&& scheduler) const
         {
-            return detail::as_sender_sender_with_scheduler<std::decay_t<Future>,
-                std::decay_t<Scheduler>>(
-                HPX_FORWARD(Future, future), HPX_FORWARD(Scheduler, scheduler));
+            return detail::future_sender_continues_on_sender<
+                std::decay_t<Future>, std::decay_t<Scheduler>>{
+                HPX_FORWARD(Future, future), HPX_FORWARD(Scheduler, scheduler)};
         }
 
         constexpr HPX_FORCEINLINE auto operator()() const

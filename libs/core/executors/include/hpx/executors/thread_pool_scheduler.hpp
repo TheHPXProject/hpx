@@ -9,6 +9,7 @@
 #pragma once
 
 #include <hpx/assert.hpp>
+#include <hpx/execution/algorithms/future_sender.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
@@ -183,12 +184,28 @@ namespace hpx::execution::experimental {
             auto&& [sf_tag, sf_data, original_sender] =
                 HPX_FORWARD(decltype(schedule_from_child), schedule_from_child);
 
-            return hpx::execution::experimental::detail::
-                thread_pool_continues_on_sender<
-                    std::decay_t<decltype(original_sender)>,
-                    std::decay_t<decltype(sched)>>{
-                    HPX_FORWARD(decltype(original_sender), original_sender),
-                    HPX_FORWARD(decltype(sched), sched)};
+            if constexpr (hpx::execution::experimental::detail::
+                              is_future_sender_v<
+                                  std::decay_t<decltype(original_sender)>>)
+            {
+                return hpx::execution::experimental::detail::
+                    future_sender_continues_on_sender<
+                        typename std::decay_t<
+                            decltype(original_sender)>::future_type,
+                        std::decay_t<decltype(sched)>>{
+                        HPX_FORWARD(decltype(original_sender), original_sender)
+                            .get_future(),
+                        HPX_FORWARD(decltype(sched), sched)};
+            }
+            else
+            {
+                return hpx::execution::experimental::detail::
+                    thread_pool_continues_on_sender<
+                        std::decay_t<decltype(original_sender)>,
+                        std::decay_t<decltype(sched)>>{
+                        HPX_FORWARD(decltype(original_sender), original_sender),
+                        HPX_FORWARD(decltype(sched), sched)};
+            }
         }
     };
 
