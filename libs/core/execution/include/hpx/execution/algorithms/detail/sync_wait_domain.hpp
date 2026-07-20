@@ -29,9 +29,9 @@
 // --hpx:threads=1.
 //
 // sync_wait_domain customizes apply_sender(sync_wait_t, sndr) to use HPX-aware
-// waiting with hpx::spinlock + hpx::condition_variable_any. This suspends the
-// HPX task cooperatively instead of OS-blocking the worker thread, allowing
-// queued HPX work to continue running.
+// waiting with hpx::spinlock + hpx::lcos::local::detail::condition_variable.
+// This suspends the HPX task cooperatively instead of OS-blocking the worker
+// thread, allowing queued HPX work to continue running.
 //
 // Senders executing through HPX should expose this domain through
 // get_completion_domain<set_value_t> so sync_wait routes here.
@@ -212,12 +212,18 @@ namespace hpx::execution::experimental::detail {
     struct shared_state
     {
         hpx::spinlock mtx;
-        hpx::condition_variable_any cv;
+        hpx::lcos::local::detail::condition_variable cv;
         hpx::execution::experimental::run_loop loop;
         bool done = false;
         std::variant<std::monostate, ValueTuple, std::exception_ptr,
             stopped_t<ValueTuple>>
             result;
+
+        void notify_all(std::unique_lock<hpx::spinlock> l) noexcept
+        {
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            cv.notify_all(HPX_MOVE(l), ec);
+        }
 
         template <typename... Vs>
         void notify_value(Vs&&... vs) noexcept
@@ -227,7 +233,7 @@ namespace hpx::execution::experimental::detail {
                 std::unique_lock<hpx::spinlock> l(mtx);
                 result.template emplace<ValueTuple>(HPX_FORWARD(Vs, vs)...);
                 done = true;
-                cv.notify_all();
+                notify_all(HPX_MOVE(l));
             }
             catch (...)
             {
@@ -235,7 +241,7 @@ namespace hpx::execution::experimental::detail {
                 result.template emplace<std::exception_ptr>(
                     std::current_exception());
                 done = true;
-                cv.notify_all();
+                notify_all(HPX_MOVE(l));
             }
         }
 
@@ -266,7 +272,7 @@ namespace hpx::execution::experimental::detail {
                 }
             }
             done = true;
-            cv.notify_all();
+            notify_all(HPX_MOVE(l));
         }
 
         void notify_stopped() noexcept
@@ -274,7 +280,7 @@ namespace hpx::execution::experimental::detail {
             std::unique_lock<hpx::spinlock> l(mtx);
             result.template emplace<stopped_t<ValueTuple>>();
             done = true;
-            cv.notify_all();
+            notify_all(HPX_MOVE(l));
         }
 
         // Wait HPX-aware: yields the calling HPX task while waiting, does not
@@ -283,7 +289,10 @@ namespace hpx::execution::experimental::detail {
         {
             {
                 std::unique_lock<hpx::spinlock> l(mtx);
-                cv.wait(l, [this] { return done; });
+                while (!done)
+                {
+                    cv.wait(l, "sync_wait_domain::wait_get_value");
+                }
             }
 
             loop.finish();
