@@ -7,6 +7,7 @@ set(tests
     all_gather
     all_gather_sync
     all_reduce
+    all_reduce_move_seed
     all_reduce_sync
     all_to_all
     all_to_all_sync
