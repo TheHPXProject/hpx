@@ -199,86 +199,17 @@ namespace hpx::when_all_vector_detail {
                 std::size_t const i;
 
                 template <typename Error>
-                void set_error(Error&& error) && noexcept
-                {
-                    if (!op_state.set_stopped_error_called.exchange(true))
-                    {
-                        op_state.stop_source_.request_stop();
-                        try
-                        {
-                            op_state.error = HPX_FORWARD(Error, error);
-                        }
-                        catch (...)
-                        {
-                            // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                            op_state.error = std::current_exception();
-                        }
-                    }
-
-                    op_state.finish();
-                }
+                void set_error(Error&& error) && noexcept;
 
                 template <typename Dummy = void>
-                void set_stopped() && noexcept
-                {
-                    // request stop only if we're not in error state
-                    if (!op_state.set_stopped_error_called.exchange(true))
-                    {
-                        op_state.stop_source_.request_stop();
-                    }
-                    op_state.finish();
-                }
+                void set_stopped() && noexcept;
 
                 template <typename... Ts>
-                void set_value(Ts&&... ts) && noexcept
-                {
-                    if (!op_state.set_stopped_error_called)
-                    {
-                        try
-                        {
-                            // We only have something to store if the
-                            // predecessor sends the single value that it should
-                            // send. We have nothing to store for predecessor
-                            // senders that send nothing.
-                            if constexpr (sizeof...(Ts) == 1)
-                            {
-                                op_state.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
-                            }
-                        }
-                        catch (...)
-                        {
-                            if (!op_state.set_stopped_error_called.exchange(
-                                    true))
-                            {
-                                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                                op_state.error = std::current_exception();
-                            }
-                        }
-                    }
-
-                    op_state.finish();
-                }
+                void set_value(Ts&&... ts) && noexcept;
 
                 // clang-format off
                 template <typename Dummy = void>
-                auto get_env() const noexcept
-                {
-                    /* The new calling convention is:
-                     * make_env(old_env, prop(tag, val))*/
-
-
-                    // Due to the bug described in the get_env.cpp tests,
-                    // returning an env constructed directly with the
-                    // temporaries returned by the functions causes wrong
-                    // behaviour.
-                    auto e = hpx::execution::experimental::get_env(
-                        op_state.receiver);
-                    auto p = hpx::execution::experimental::prop(
-                        hpx::execution::experimental::get_stop_token,
-                        op_state.stop_source_.get_token());
-                    return hpx::execution::experimental::make_env(
-                        std::move(e), std::move(p));
-                }
+                auto get_env() const noexcept;
                 // clang-format on
             };
 
@@ -561,6 +492,100 @@ namespace hpx::when_all_vector_detail {
             return operation_state<Receiver>(receiver, senders);
         }
     };    // namespace hpx::when_all_vector_detail
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Error>
+    void when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::set_error(
+            Error&& error) && noexcept
+    {
+        if (!op_state.set_stopped_error_called.exchange(true))
+        {
+            op_state.stop_source_.request_stop();
+            try
+            {
+                op_state.error = HPX_FORWARD(Error, error);
+            }
+            catch (...)
+            {
+                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                op_state.error = std::current_exception();
+            }
+        }
+
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Dummy>
+    void when_all_vector_sender_impl<
+        Sender>::when_all_vector_sender_type::operation_state<Receiver>::
+        when_all_vector_receiver::set_stopped() && noexcept
+    {
+        // request stop only if we're not in error state
+        if (!op_state.set_stopped_error_called.exchange(true))
+        {
+            op_state.stop_source_.request_stop();
+        }
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename... Ts>
+    void when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::set_value(
+            Ts&&... ts) && noexcept
+    {
+        if (!op_state.set_stopped_error_called)
+        {
+            try
+            {
+                // We only have something to store if the
+                // predecessor sends the single value that it should
+                // send. We have nothing to store for predecessor
+                // senders that send nothing.
+                if constexpr (sizeof...(Ts) == 1)
+                {
+                    op_state.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
+                }
+            }
+            catch (...)
+            {
+                if (!op_state.set_stopped_error_called.exchange(true))
+                {
+                    // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                    op_state.error = std::current_exception();
+                }
+            }
+        }
+
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Dummy>
+    auto when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::get_env()
+            const noexcept
+    {
+        /* The new calling convention is:
+         * make_env(old_env, prop(tag, val))*/
+
+        // Due to the bug described in the get_env.cpp tests,
+        // returning an env constructed directly with the
+        // temporaries returned by the functions causes wrong
+        // behaviour.
+        auto e = hpx::execution::experimental::get_env(op_state.receiver);
+        auto p = hpx::execution::experimental::prop(
+            hpx::execution::experimental::get_stop_token,
+            op_state.stop_source_.get_token());
+        return hpx::execution::experimental::make_env(
+            std::move(e), std::move(p));
+    }
 }    // namespace hpx::when_all_vector_detail
 
 namespace hpx::execution::experimental {
