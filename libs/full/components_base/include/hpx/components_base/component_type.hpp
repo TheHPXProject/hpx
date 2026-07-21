@@ -65,6 +65,9 @@ namespace hpx::components {
         // AGAS symbolic naming services.
         agas_symbol_namespace = 11,
 
+        // Supervision manager
+        supervision_manager = 12,
+
         last,
         first_dynamic = last,
     };

@@ -2019,6 +2019,43 @@ namespace hpx::agas {
         symbol_ns_.register_server_instance(locality_id);
     }
 
+    void addressing_service::unregister_server_instances(hpx::error_code& ec)
+    {
+        // unregister root server
+        hpx::error_code first_ec;
+
+        hpx::error_code local_ec;
+        symbol_ns_.unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        component_ns_->unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        primary_ns_.unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        locality_ns_->unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        if (first_ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::internal_server_error,
+                "addressing_service::unregister_server_instances",
+                first_ec.message());
+        }
+        else if (&ec != &hpx::throws)
+        {
+            ec = hpx::make_success_code();
+        }
+    }
+
     void addressing_service::garbage_collect_non_blocking(error_code& ec)
     {
         std::unique_lock<mutex_type> l(refcnt_requests_mtx_, std::try_to_lock);

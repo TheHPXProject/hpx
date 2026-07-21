@@ -269,8 +269,11 @@ namespace hpx {
         hpx::error_code const& e)
     {
         // if this is a lightweight error_code, return canned response
-        if (e.category() == hpx::get_lightweight_hpx_category())
+        if (e.category() == hpx::get_lightweight_hpx_category() ||
+            e.category() == hpx::get_lightweight_hpx_rethrow_category())
+        {
             return e.message();
+        }
 
         return get_error_what<hpx::error_code>(e);
     }

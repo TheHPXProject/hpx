@@ -25,6 +25,7 @@
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/static_reinit.hpp>
+#include <hpx/modules/supervision.hpp>
 #include <hpx/modules/thread_pools.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -178,6 +179,7 @@ namespace hpx {
       , parcel_handler_(rtcfg_)
 #endif
       , agas_client_(rtcfg_)
+      , supervision_manager_(rtcfg)
       , pre_main_(pre_main)
       , post_main_(post_main)
     {
@@ -861,6 +863,12 @@ namespace hpx {
     agas::addressing_service& runtime_distributed::get_agas_client()
     {
         return agas_client_;
+    }
+
+    supervision::supervision_manager&
+    runtime_distributed::get_supervision_manager()
+    {
+        return supervision_manager_;
     }
 
 #if defined(HPX_HAVE_NETWORKING)
@@ -1832,6 +1840,13 @@ namespace hpx::naming {
     }
 }    // namespace hpx::naming
 
+namespace hpx::supervision {
+
+    supervision::supervision_manager& get_supervision_manager()
+    {
+        return get_runtime_distributed().get_supervision_manager();
+    }
+}    // namespace hpx::supervision
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_NETWORKING)
 namespace hpx::parcelset {

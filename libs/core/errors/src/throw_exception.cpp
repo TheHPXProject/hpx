@@ -58,14 +58,13 @@ namespace hpx::detail {
         {
             hpx::detail::throw_exception(errcode, msg, func, file, line);
         }
-        else
-        {
-            ec = make_error_code(static_cast<hpx::error>(errcode), msg,
-                func.c_str(), file.c_str(), line,
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight :
-                    hpx::throwmode::plain);
-        }
+
+        ec = make_error_code(static_cast<hpx::error>(errcode), msg,
+            func.c_str(), file.c_str(), line,
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight :
+                hpx::throwmode::plain);
     }
 
     void throws_bad_alloc_if(
@@ -75,14 +74,13 @@ namespace hpx::detail {
         {
             throw hpx::bad_alloc_exception();
         }
-        else
-        {
-            ec = make_error_code(hpx::error::out_of_memory, "out of memory",
-                func, file, line,
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight :
-                    hpx::throwmode::plain);
-        }
+
+        ec = make_error_code(hpx::error::out_of_memory, "out of memory", func,
+            file, line,
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight :
+                hpx::throwmode::plain);
     }
 
     void rethrows_if(
@@ -92,15 +90,13 @@ namespace hpx::detail {
         {
             hpx::detail::rethrow_exception(e, func);
         }
-        else
-        {
-            ec = make_error_code(e.get_error(), e.what(), func.c_str(),
-                hpx::get_error_file_name(e).c_str(),
-                hpx::get_error_line_number(e),
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight_rethrow :
-                    hpx::throwmode::rethrow);
-        }
+
+        ec = make_error_code(e.get_error(), e.what(), func.c_str(),
+            hpx::get_error_file_name(e).c_str(), hpx::get_error_line_number(e),
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight_rethrow :
+                hpx::throwmode::rethrow);
     }
 
     [[noreturn]] void throw_thread_interrupted_exception()

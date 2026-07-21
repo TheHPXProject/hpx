@@ -1,0 +1,352 @@
+//  Copyright (c) 2026 Hartmut Kaiser
+//
+//  SPDX-License-Identifier: BSL-1.0
+//  Distributed under the Boost Software License, Version 1.0. (See accompanying
+//  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+#include <hpx/config.hpp>
+#include <hpx/assert.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/futures.hpp>
+#include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/type_support.hpp>
+
+#include <hpx/supervision/server/agent.hpp>
+#include <hpx/supervision/server/supervision_manager.hpp>
+
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <exception>
+#include <map>
+#include <mutex>
+#include <utility>
+#include <vector>
+
+namespace hpx::supervision::server {
+
+    void supervision_manager::finalize() const
+    {
+        if (!instance_name_.empty())
+        {
+            error_code ec(throwmode::lightweight);
+            agas::unregister_name(launch::sync, instance_name_, ec);
+        }
+    }
+
+    void supervision_manager::record_error(
+        hpx::id_type const& target, hpx::error_code const& ec)
+    {
+        std::unique_lock<hpx::spinlock> l(mtx_);
+
+        if (auto const it = states_.find(target); it != states_.end())
+        {
+            it->second.last_event = supervision::event::failed;
+            it->second.timestamp = std::chrono::steady_clock::now();
+            it->second.event_sequence_number =
+                it->second.event_sequence_number + 1;
+            it->second.ec = ec;
+        }
+    }
+
+    void supervision_manager::publish_event(
+        hpx::id_type const& target, event const ev)
+    {
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            lifecycle_state state = {.actor = target,
+                .last_event = ev,
+                .timestamp = std::chrono::steady_clock::now(),
+                .event_sequence_number = 1};
+
+            if (auto const it = states_.find(target); it != states_.end())
+            {
+                state.event_sequence_number =
+                    it->second.event_sequence_number + 1;
+                it->second = HPX_MOVE(state);
+            }
+            else
+            {
+                auto const [_, inserted] =
+                    states_.insert(std::make_pair(target, HPX_MOVE(state)));
+                if (!inserted)
+                {
+                    l.unlock();
+
+                    HPX_THROW_EXCEPTION(hpx::error::no_success,
+                        "supervision_manager::publish_event",
+                        "failed to insert event");
+                }
+            }
+        }
+
+        // now fire event for all observers of this target
+        auto f = fire_events(target);
+        try
+        {
+            f.get();
+        }
+        catch (std::exception_ptr const& ep)
+        {
+            record_error(target, hpx::make_error_code(ep));
+        }
+        catch (...)
+        {
+            record_error(
+                target, hpx::make_error_code(std::current_exception()));
+        }
+    }
+
+    hpx::future<void> supervision_manager::fire_events(
+        hpx::id_type const& target)
+    {
+        std::map<hpx::id_type, std::vector<hpx::id_type>> observers;
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+            observers = observers_;
+        }
+
+        hpx::future<void> f;
+        if (auto const it = observers.find(target); it != observers.end())
+        {
+            for (hpx::id_type const& agent : it->second)
+            {
+                if (f.valid())
+                {
+                    f = f.then([&, this, target, agent](
+                                   hpx::future<void>&& prev_f) {
+                        try
+                        {
+                            prev_f.get();
+                        }
+                        catch (std::exception_ptr const& ep)
+                        {
+                            record_error(target, hpx::make_error_code(ep));
+                        }
+                        catch (...)
+                        {
+                            record_error(target,
+                                hpx::make_error_code(std::current_exception()));
+                        }
+                        return fire_event(target, agent);
+                    });
+                }
+                else
+                {
+                    f = fire_event(target, agent);
+                }
+            }
+        }
+
+        if (!f.valid())
+        {
+            f = hpx::make_ready_future();
+        }
+        return f;
+    }
+
+    hpx::future<void> supervision_manager::fire_event(
+        hpx::id_type const& target, hpx::id_type const& agent) const
+    {
+        lifecycle_state state;
+
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            auto const it = states_.find(target);
+            if (it == states_.end())
+            {
+                return hpx::make_ready_future();
+            }
+
+            // check again if the agent is still registered as an observer for
+            // the given target
+            auto const it2 = observers_.find(target);
+            if (it2 == observers_.end())
+            {
+                return hpx::make_ready_future();
+            }
+
+            if (std::ranges::find(it2->second, agent) == it2->second.end())
+            {
+                return hpx::make_ready_future();
+            }
+
+            // use latest registered state for the target
+            state = it->second;
+        }
+
+        lifecycle_event_notification notification = {.actor = target,
+            .event = state.last_event,
+            .event_time = state.timestamp,
+            .event_sequence_number = state.event_sequence_number,
+            .ec = state.ec};
+
+        return hpx::async(
+            agent_component::invoke_action(), agent, HPX_MOVE(notification));
+    }
+
+    hpx::id_type supervision_manager::register_observer(
+        hpx::id_type const& target, hpx::id_type const& agent)
+    {
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            // insert observer into table of registered observers
+            auto it = observers_.find(target);
+            if (it == observers_.end())
+            {
+                auto [it2, inserted] = observers_.insert(
+                    std::make_pair(target, std::vector<hpx::id_type>()));
+                if (!inserted)
+                {
+                    l.unlock();
+
+                    HPX_THROW_EXCEPTION(hpx::error::no_success,
+                        "supervision_manager::register_observer",
+                        "failed to register observer");
+                }
+                it = it2;
+            }
+            else if (std::ranges::find(it->second, agent) != it->second.end())
+            {
+                l.unlock();
+
+                HPX_THROW_EXCEPTION(hpx::error::no_success,
+                    "supervision_manager::register_observer",
+                    "observer already registered for target");
+            }
+
+            it->second.push_back(agent);
+
+            // insert into inverse lookup table as well
+            auto it2 = agents_.find(agent);
+            if (it2 == agents_.end())
+            {
+                auto const [it3, inserted] = agents_.insert(
+                    std::make_pair(agent, std::vector<hpx::id_type>()));
+                if (!inserted)
+                {
+                    l.unlock();
+
+                    HPX_THROW_EXCEPTION(hpx::error::no_success,
+                        "supervision_manager::register_observer",
+                        "failed to register observer");
+                }
+                it2 = it3;
+            }
+
+            // Sanity check: the observers_/agents_ invariant should already
+            // guarantee this can't happen given the check above; catches future
+            // code paths that mutate one map without the other.
+            HPX_ASSERT(
+                std::ranges::find(it2->second, target) == it2->second.end());
+
+            it2->second.push_back(target);
+        }
+
+        // now fire event for new observer; dispatched asynchronously, see
+        // fire_event
+        auto f = fire_event(target, agent);
+        try
+        {
+            f.get();
+        }
+        catch (std::exception_ptr const& ep)
+        {
+            record_error(target, hpx::make_error_code(ep));
+        }
+        catch (...)
+        {
+            record_error(
+                target, hpx::make_error_code(std::current_exception()));
+        }
+
+        return agent;
+    }
+
+    void supervision_manager::unregister_observer(
+        hpx::id_type const& observer_handle)
+    {
+        // remove observer from all targets
+        std::unique_lock<hpx::spinlock> l(mtx_);
+
+        // locate targets the given observer was registered to
+        if (auto const it = agents_.find(observer_handle); it != agents_.end())
+        {
+            // remove observer from all targets
+            for (hpx::id_type const& target : it->second)
+            {
+                if (auto it2 = observers_.find(target); it2 != observers_.end())
+                {
+                    // it3 refers to observer in list
+
+                    // delete observer from list
+                    if (auto const it3 =
+                            std::ranges::find(it2->second, observer_handle);
+                        it3 != it2->second.end())
+                    {
+                        it2->second.erase(it3);
+                    }
+
+                    // delete list of observers from given target
+                    if (it2->second.empty())
+                    {
+                        observers_.erase(it2);
+                    }
+                }
+            }
+            agents_.erase(it);
+        }
+    }
+
+    lifecycle_state supervision_manager::query_state(hpx::id_type const& target)
+    {
+        std::scoped_lock<hpx::spinlock> l(mtx_);
+        if (auto const it = states_.find(target); it != states_.end())
+        {
+            return it->second;
+        }
+        return {};
+    }
+
+    void supervision_manager::register_server_instance(
+        char const* service_name, std::uint32_t locality_id, error_code& ec)
+    {
+        // set locality_id for this component
+        if (locality_id == naming::invalid_locality_id)
+            locality_id = 0;    // if not given, we're on the root
+
+        this->base_type::set_locality_id(locality_id);
+
+        // now register this supervision instance with AGAS
+        instance_name_ = supervision::service_name;
+        instance_name_ += service_name;
+        instance_name_ += supervision::server::supervision_manager_name;
+
+        auto const gid = get_unmanaged_id().get_gid();
+        //naming::gid_type const manager_gid(
+        //    gid.get_msb(), reinterpret_cast<std::uint64_t>(this));
+        naming::address const manager_address(agas::get_locality(),
+            components::get_component_type<
+                supervision::server::supervision_manager>(),
+            this);
+        agas::bind_gid_local(gid, manager_address, ec);
+        if (ec)
+            return;
+
+        // register a gid (not the id) to avoid AGAS holding a reference to this
+        // component
+        agas::register_name(launch::sync, instance_name_, gid, ec);
+    }
+
+    void supervision_manager::unregister_server_instance(error_code& ec) const
+    {
+        agas::unregister_name(launch::sync, instance_name_, ec);
+        this->base_type::finalize();
+    }
+
+}    // namespace hpx::supervision::server

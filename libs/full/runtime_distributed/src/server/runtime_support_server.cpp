@@ -654,6 +654,12 @@ namespace hpx { namespace components { namespace server {
                 naming::gid_type const here = agas_client.get_local_locality();
 
                 // unregister fixed components
+                auto const& supervision_manager =
+                    supervision::get_supervision_manager();
+                supervision_manager.unregister_server_instance(ec);
+
+                agas_client.unregister_server_instances(ec);
+
                 agas_client.unbind_local(
                     appl.get_runtime_support_raw_gid(), ec);
 
@@ -958,7 +964,8 @@ namespace hpx { namespace components { namespace server {
         if (it == plugins_.end() || !(*it).second.first)
         {
             l.unlock();
-            if (ec.category() != hpx::get_lightweight_hpx_category())
+            if (ec.category() != hpx::get_lightweight_hpx_category() &&
+                ec.category() != hpx::get_lightweight_hpx_rethrow_category())
             {
                 // we don't know anything about this component
                 HPX_THROWS_IF(ec, hpx::error::bad_plugin_type,
@@ -1020,7 +1027,8 @@ namespace hpx { namespace components { namespace server {
         if (it == plugins_.end() || !(*it).second.first)
         {
             l.unlock();
-            if (ec.category() != hpx::get_lightweight_hpx_category())
+            if (ec.category() != hpx::get_lightweight_hpx_category() &&
+                ec.category() != hpx::get_lightweight_hpx_rethrow_category())
             {
                 // we don't know anything about this component
                 HPX_THROWS_IF(ec, hpx::error::bad_plugin_type,
