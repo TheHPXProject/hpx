@@ -10,8 +10,7 @@
 // including the optimized scheduler-aware and pipe-form continues_on paths.
 //
 // Usage:
-//   ./future_sender_bridge_test --iterations=10000 --repetitions=5 \
-//       --hpx:threads=4
+//   ./future_sender_bridge_test --iterations=10000 --repetitions=5 --hpx:threads=4
 
 #include <hpx/assert.hpp>
 #include <hpx/chrono.hpp>
