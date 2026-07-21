@@ -134,8 +134,6 @@ void test_unique(ExPolicy policy, DataType)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    using hpx::get;
-
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
     std::generate(std::begin(c), std::end(c), random_fill(0, 6));
@@ -155,8 +153,6 @@ void test_unique_async(ExPolicy policy, DataType)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
-
-    using hpx::get;
 
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
@@ -199,8 +195,6 @@ void test_unique_proj(ExPolicy policy, DataType, Pred pred, Proj proj)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    using hpx::get;
-
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
     std::generate(std::begin(c), std::end(c), random_fill(0, 6));
@@ -223,8 +217,6 @@ void test_unique_proj_async(ExPolicy policy, DataType, Pred pred, Proj proj)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
-
-    using hpx::get;
 
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
@@ -314,28 +306,28 @@ void test_unique()
 
     test_unique_proj(
         DataType(), [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
     test_unique_proj(
         seq, DataType(),
         [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
     test_unique_proj(
         par, DataType(),
         [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
     test_unique_proj(
         par_unseq, DataType(),
         [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
 
     test_unique_proj_async(
         seq(task), DataType(),
         [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
     test_unique_proj_async(
         par(task), DataType(),
         [](auto const& a, auto const& b) -> bool { return a == b; },
-        [](auto const&) { return 0; });
+        [](auto const& val) { return val; });
 }
 
 void test_unique()
