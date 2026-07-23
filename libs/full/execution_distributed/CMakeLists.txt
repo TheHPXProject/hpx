@@ -13,6 +13,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(execution_distributed_headers
     hpx/execution_distributed/detail/distributed_receiver_component.hpp
     hpx/execution_distributed/detail/transfer_action.hpp
+    hpx/execution_distributed/distributed_bulk_sender.hpp
     hpx/execution_distributed/distributed_continues_on_sender.hpp
     hpx/execution_distributed/distributed_scheduler.hpp
     hpx/execution_distributed/distributed_then_sender.hpp
