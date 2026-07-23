@@ -86,10 +86,10 @@ void expect_marker_failure(hpx::future<int>&& failure)
     }
 }
 
-template <typename Collective>
+template <typename Collective, typename Op>
 std::vector<hpx::future<int>> run_generation(
     std::vector<communicator> const& comms, std::uint32_t const generation,
-    Collective&& collective)
+    Collective&& collective, Op&& op)
 {
     std::uint32_t const num_sites = static_cast<std::uint32_t>(comms.size());
 
@@ -97,7 +97,7 @@ std::vector<hpx::future<int>> run_generation(
     results.reserve(num_sites);
     for (std::uint32_t site = 0; site != num_sites; ++site)
     {
-        results.push_back(collective(comms[site], site, generation));
+        results.push_back(collective(comms[site], site, generation, op));
     }
     return results;
 }
@@ -105,22 +105,22 @@ std::vector<hpx::future<int>> run_generation(
 // generation 1: the operator throws once; every site must observe that one
 // cached failure and the operator must not be re-invoked. generation 2: the
 // same communicator produces correct results again.
-template <typename Throwing, typename Recovering, typename Expected>
+template <typename Collective, typename Expected>
 void test_collective(char const* phase, std::uint32_t const num_sites,
-    Throwing&& throwing, Recovering&& recovering, Expected&& expected)
+    Collective&& collective, Expected&& expected)
 {
     auto const comms = create_communicators(phase, num_sites);
 
     op_calls = 0;
 
-    auto failures = run_generation(comms, 1, throwing);
+    auto failures = run_generation(comms, 1, collective, throw_once_plus{});
     for (auto& failure : failures)
     {
         expect_marker_failure(HPX_MOVE(failure));
     }
     HPX_TEST_EQ(op_calls.load(), 1);
 
-    auto results = run_generation(comms, 2, recovering);
+    auto results = run_generation(comms, 2, collective, std::plus<int>{});
     for (std::uint32_t site = 0; site != num_sites; ++site)
     {
         HPX_TEST_EQ(results[site].get(), expected(site));
@@ -138,16 +138,9 @@ void test_all_reduce(std::uint32_t const num_sites)
     test_collective(
         "all_reduce", num_sites,
         [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
-            return all_reduce(comm, static_cast<int>(site) + 1,
-                throw_once_plus{}, this_site_arg(site),
-                generation_arg(generation));
-        },
-        [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
-            return all_reduce(comm, static_cast<int>(site) + 1,
-                std::plus<int>{}, this_site_arg(site),
-                generation_arg(generation));
+            std::uint32_t const generation, auto op) {
+            return all_reduce(comm, static_cast<int>(site) + 1, HPX_MOVE(op),
+                this_site_arg(site), generation_arg(generation));
         },
         [expected](std::uint32_t) { return expected; });
 }
@@ -157,16 +150,9 @@ void test_inclusive_scan(std::uint32_t const num_sites)
     test_collective(
         "inclusive_scan", num_sites,
         [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
+            std::uint32_t const generation, auto op) {
             return inclusive_scan(comm, static_cast<int>(site) + 1,
-                throw_once_plus{}, this_site_arg(site),
-                generation_arg(generation));
-        },
-        [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
-            return inclusive_scan(comm, static_cast<int>(site) + 1,
-                std::plus<int>{}, this_site_arg(site),
-                generation_arg(generation));
+                HPX_MOVE(op), this_site_arg(site), generation_arg(generation));
         },
         [](std::uint32_t const site) {
             int const rank = static_cast<int>(site);
@@ -179,16 +165,9 @@ void test_exclusive_scan(std::uint32_t const num_sites)
     test_collective(
         "exclusive_scan", num_sites,
         [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
+            std::uint32_t const generation, auto op) {
             return exclusive_scan(comm, static_cast<int>(site) + 1,
-                throw_once_plus{}, this_site_arg(site),
-                generation_arg(generation));
-        },
-        [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
-            return exclusive_scan(comm, static_cast<int>(site) + 1,
-                std::plus<int>{}, this_site_arg(site),
-                generation_arg(generation));
+                HPX_MOVE(op), this_site_arg(site), generation_arg(generation));
         },
         [](std::uint32_t const site) {
             int const rank = static_cast<int>(site);
@@ -201,16 +180,9 @@ void test_exclusive_scan_init(std::uint32_t const num_sites)
     test_collective(
         "exclusive_scan_init", num_sites,
         [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
+            std::uint32_t const generation, auto op) {
             return exclusive_scan(comm, static_cast<int>(site) + 1, 10,
-                throw_once_plus{}, this_site_arg(site),
-                generation_arg(generation));
-        },
-        [](communicator const& comm, std::uint32_t const site,
-            std::uint32_t const generation) {
-            return exclusive_scan(comm, static_cast<int>(site) + 1, 10,
-                std::plus<int>{}, this_site_arg(site),
-                generation_arg(generation));
+                HPX_MOVE(op), this_site_arg(site), generation_arg(generation));
         },
         [](std::uint32_t const site) {
             int const rank = static_cast<int>(site);
