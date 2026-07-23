@@ -25,6 +25,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -200,6 +201,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = false;
                 data_available_ = false;
+                finalizer_error_ = nullptr;
 
                 if constexpr (!std::is_void_v<T>)
                 {
@@ -229,6 +231,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = true;
                 data_available_ = false;
+                finalizer_error_ = nullptr;
                 on_ready_count_ = 0;
                 current_operation_ = nullptr;
             }
@@ -366,16 +369,36 @@ namespace hpx::collectives::detail {
                 if constexpr (!std::is_same_v<std::nullptr_t,
                                   std::decay_t<Finalizer>>)
                 {
-                    if constexpr (std::is_void_v<Data>)
+                    // A finalizer that threw for an earlier site has
+                    // typically consumed (moved from) the shared data before
+                    // data_available_ could be set. Re-invoking it here would
+                    // operate on moved-from state, letting different sites
+                    // observe different outcomes for the same collective.
+                    // Instead, cache the first failure and rethrow it for
+                    // every subsequent site of this operation.
+                    if (finalizer_error_)
                     {
-                        return HPX_FORWARD(Finalizer, finalizer)(
-                            data_available_, which);
+                        std::rethrow_exception(finalizer_error_);
                     }
-                    else
+
+                    try
                     {
-                        return HPX_FORWARD(Finalizer, finalizer)(
-                            access_data<Data>(num_values), data_available_,
-                            which);
+                        if constexpr (std::is_void_v<Data>)
+                        {
+                            return HPX_FORWARD(Finalizer, finalizer)(
+                                data_available_, which);
+                        }
+                        else
+                        {
+                            return HPX_FORWARD(Finalizer, finalizer)(
+                                access_data<Data>(num_values), data_available_,
+                                which);
+                        }
+                    }
+                    catch (...)
+                    {
+                        finalizer_error_ = std::current_exception();
+                        throw;
                     }
                 }
                 else
@@ -522,6 +545,10 @@ namespace hpx::collectives::detail {
         // name by value and moves it into place.
         std::string basename_;
         mutex_type mtx_;
+        // First exception thrown by a finalizer of the current operation;
+        // rethrown for all later sites instead of re-invoking the finalizer
+        // on moved-from data. Reset together with data_available_.
+        std::exception_ptr finalizer_error_;
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;

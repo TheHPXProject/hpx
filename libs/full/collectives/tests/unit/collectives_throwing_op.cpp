@@ -1,0 +1,246 @@
+//  Copyright (c) 2026 Anshuman Agrawal
+//
+//  SPDX-License-Identifier: BSL-1.0
+//  Distributed under the Boost Software License, Version 1.0. (See accompanying
+//  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+// A collective finalizer that throws for one site must not be re-entered for
+// the remaining sites: the shared payload and the captured operator have
+// already been consumed by the failed fold. The communicator caches the
+// first failure and rethrows it for every site, so all sites observe the
+// same outcome, and the communicator stays usable for the next generation.
+//
+// The reduction operator below throws on exactly one invocation and then
+// behaves like plus. Without the failure caching, the sites whose callbacks
+// run after the failed one would re-enter the fold, succeed on moved-from
+// state, and produce results that differ from the exception observed by the
+// first site.
+
+#include <hpx/config.hpp>
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+#include <hpx/hpx.hpp>
+#include <hpx/hpx_init.hpp>
+#include <hpx/modules/collectives.hpp>
+#include <hpx/modules/testing.hpp>
+
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+using namespace hpx::collectives;
+
+constexpr char const* error_marker = "collectives_throwing_op";
+
+std::atomic<int> op_calls{0};
+
+struct throw_once_plus
+{
+    int operator()(int const lhs, int const rhs) const
+    {
+        if (op_calls++ == 0)
+        {
+            throw std::runtime_error(error_marker);
+        }
+        return lhs + rhs;
+    }
+};
+
+std::vector<communicator> create_communicators(
+    char const* phase, std::uint32_t num_sites)
+{
+    std::string const basename = std::string("/test/collectives_throwing_op/") +
+        phase + "/" + std::to_string(num_sites) + "/";
+
+    std::vector<communicator> comms;
+    comms.reserve(num_sites);
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        comms.push_back(create_local_communicator(
+            basename.c_str(), num_sites_arg(num_sites), this_site_arg(site)));
+    }
+    return comms;
+}
+
+void expect_marker_failure(hpx::future<int>&& failure)
+{
+    try
+    {
+        failure.get();
+        HPX_TEST(false);
+    }
+    catch (std::runtime_error const& e)
+    {
+        // the transported message keeps the original text, possibly
+        // followed by HPX diagnostic annotations
+        HPX_TEST_NEQ(
+            std::string(e.what()).find(error_marker), std::string::npos);
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+}
+
+template <typename Collective>
+std::vector<hpx::future<int>> run_generation(
+    std::vector<communicator> const& comms, std::uint32_t const generation,
+    Collective&& collective)
+{
+    std::uint32_t const num_sites = static_cast<std::uint32_t>(comms.size());
+
+    std::vector<hpx::future<int>> results;
+    results.reserve(num_sites);
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        results.push_back(collective(comms[site], site, generation));
+    }
+    return results;
+}
+
+// generation 1: the operator throws once; every site must observe that one
+// cached failure and the operator must not be re-invoked. generation 2: the
+// same communicator produces correct results again.
+template <typename Throwing, typename Recovering, typename Expected>
+void test_collective(char const* phase, std::uint32_t const num_sites,
+    Throwing&& throwing, Recovering&& recovering, Expected&& expected)
+{
+    auto const comms = create_communicators(phase, num_sites);
+
+    op_calls = 0;
+
+    auto failures = run_generation(comms, 1, throwing);
+    for (auto& failure : failures)
+    {
+        expect_marker_failure(HPX_MOVE(failure));
+    }
+    HPX_TEST_EQ(op_calls.load(), 1);
+
+    auto results = run_generation(comms, 2, recovering);
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        HPX_TEST_EQ(results[site].get(), expected(site));
+    }
+}
+
+void test_all_reduce(std::uint32_t const num_sites)
+{
+    int expected = 0;
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        expected += static_cast<int>(site) + 1;
+    }
+
+    test_collective(
+        "all_reduce", num_sites,
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return all_reduce(comm, static_cast<int>(site) + 1,
+                throw_once_plus{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return all_reduce(comm, static_cast<int>(site) + 1,
+                std::plus<int>{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [expected](std::uint32_t) { return expected; });
+}
+
+void test_inclusive_scan(std::uint32_t const num_sites)
+{
+    test_collective(
+        "inclusive_scan", num_sites,
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return inclusive_scan(comm, static_cast<int>(site) + 1,
+                throw_once_plus{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return inclusive_scan(comm, static_cast<int>(site) + 1,
+                std::plus<int>{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](std::uint32_t const site) {
+            int const rank = static_cast<int>(site);
+            return (rank + 1) * (rank + 2) / 2;
+        });
+}
+
+void test_exclusive_scan(std::uint32_t const num_sites)
+{
+    test_collective(
+        "exclusive_scan", num_sites,
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return exclusive_scan(comm, static_cast<int>(site) + 1,
+                throw_once_plus{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return exclusive_scan(comm, static_cast<int>(site) + 1,
+                std::plus<int>{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](std::uint32_t const site) {
+            int const rank = static_cast<int>(site);
+            return rank * (rank + 1) / 2;
+        });
+}
+
+void test_exclusive_scan_init(std::uint32_t const num_sites)
+{
+    test_collective(
+        "exclusive_scan_init", num_sites,
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return exclusive_scan(comm, static_cast<int>(site) + 1, 10,
+                throw_once_plus{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](communicator const& comm, std::uint32_t const site,
+            std::uint32_t const generation) {
+            return exclusive_scan(comm, static_cast<int>(site) + 1, 10,
+                std::plus<int>{}, this_site_arg(site),
+                generation_arg(generation));
+        },
+        [](std::uint32_t const site) {
+            int const rank = static_cast<int>(site);
+            return 10 + rank * (rank + 1) / 2;
+        });
+}
+
+int hpx_main()
+{
+    if (hpx::get_locality_id() == 0)
+    {
+        test_all_reduce(3);
+        test_all_reduce(5);
+        test_inclusive_scan(3);
+        test_exclusive_scan(3);
+        test_exclusive_scan_init(3);
+    }
+
+    return hpx::finalize();
+}
+
+int main(int argc, char* argv[])
+{
+    std::vector<std::string> const cfg = {"hpx.run_hpx_main!=1"};
+
+    hpx::init_params init_args;
+    init_args.cfg = cfg;
+
+    HPX_TEST_EQ(hpx::init(argc, argv, init_args), 0);
+    return hpx::util::report_errors();
+}
+
+#endif
