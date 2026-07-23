@@ -14,13 +14,13 @@
 //                    marshalling is implemented).
 
 #include <hpx/config.hpp>
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE) && defined(HPX_WITH_NETWORKING)
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_distributed.hpp>
 #include <hpx/modules/testing.hpp>
-
-#include <hpx/modules/async_distributed.hpp>
 
 #include <exception>
 #include <string>
@@ -43,7 +43,7 @@ void test_scheduler_concept()
 // Test 2: schedule() returns a valid P2300 sender.
 void test_schedule_returns_sender()
 {
-    auto sched =
+    auto const sched =
         hpx::distributed::experimental::distributed_scheduler{hpx::find_here()};
     auto s = sched.schedule();
 
@@ -54,9 +54,9 @@ void test_schedule_returns_sender()
 // Test 3: scheduler equality - same target compares equal.
 void test_scheduler_equality()
 {
-    auto here = hpx::find_here();
-    auto s1 = hpx::distributed::experimental::distributed_scheduler{here};
-    auto s2 = hpx::distributed::experimental::distributed_scheduler{here};
+    auto const here = hpx::find_here();
+    auto const s1 = hpx::distributed::experimental::distributed_scheduler{here};
+    auto const s2 = hpx::distributed::experimental::distributed_scheduler{here};
     HPX_TEST(s1 == s2);
     HPX_TEST(!(s1 != s2));
 }
@@ -64,12 +64,14 @@ void test_scheduler_equality()
 // Test 4: scheduler inequality - different targets compare unequal.
 void test_scheduler_inequality()
 {
-    auto locs = hpx::find_all_localities();
-    if (locs.size() < 2)
+    auto const localities = hpx::find_all_localities();
+    if (localities.size() < 2)
         return;    // skip when running single-locality
 
-    auto s1 = hpx::distributed::experimental::distributed_scheduler{locs[0]};
-    auto s2 = hpx::distributed::experimental::distributed_scheduler{locs[1]};
+    auto const s1 =
+        hpx::distributed::experimental::distributed_scheduler{localities[0]};
+    auto const s2 =
+        hpx::distributed::experimental::distributed_scheduler{localities[1]};
     HPX_TEST(s1 != s2);
     HPX_TEST(!(s1 == s2));
 }
@@ -89,8 +91,8 @@ void test_void_execution_local()
 // Test 6: void execution on a remote locality (or local if single-node).
 void test_void_execution_remote()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched = hpx::distributed::experimental::distributed_scheduler{target};
 
     auto result = tt::sync_wait(ex::schedule(sched));
@@ -138,8 +140,8 @@ void test_continues_on_void()
 // Test 10: schedule | then with remote locality - verify execution locality.
 void test_schedule_then_remote_locality()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched = hpx::distributed::experimental::distributed_scheduler{target};
 
     auto result = tt::sync_wait(
@@ -165,8 +167,8 @@ void test_schedule_then_remote_locality()
 // The remote node computes a value and returns it to the local node.
 void test_single_value_transfer()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched =
         hpx::distributed::experimental::distributed_scheduler{target};
 
@@ -183,8 +185,8 @@ void test_single_value_transfer()
 // Test G2: multi-value transfer - remote node returns multiple values.
 void test_multi_value_transfer()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched =
         hpx::distributed::experimental::distributed_scheduler{target};
 
@@ -204,8 +206,8 @@ void test_multi_value_transfer()
 // Test G3: exception propagation - remote node throws, local catches.
 void test_exception_propagation()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched =
         hpx::distributed::experimental::distributed_scheduler{target};
 
@@ -232,8 +234,8 @@ void test_exception_propagation()
 // Test G4: cancellation - stop token propagates to remote execution.
 void test_cancellation()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched =
         hpx::distributed::experimental::distributed_scheduler{target};
 
@@ -260,14 +262,14 @@ void test_cancellation()
 //          localities.
 void test_chained_remote_hops()
 {
-    auto locs = hpx::find_all_localities();
-    if (locs.size() < 2)
+    auto localities = hpx::find_all_localities();
+    if (localities.size() < 2)
         return;    // need at least 2 localities
 
     auto sched0 =
-        hpx::distributed::experimental::distributed_scheduler{locs[0]};
+        hpx::distributed::experimental::distributed_scheduler{localities[0]};
     auto sched1 =
-        hpx::distributed::experimental::distributed_scheduler{locs[1]};
+        hpx::distributed::experimental::distributed_scheduler{localities[1]};
 
     auto result = tt::sync_wait(
         ex::just(1) |
@@ -283,8 +285,8 @@ void test_chained_remote_hops()
 // Test G6: let_value with remote scheduling.
 void test_let_value_remote()
 {
-    auto locs = hpx::find_all_localities();
-    auto target = locs.back();
+    auto localities = hpx::find_all_localities();
+    auto target = localities.back();
     auto sched =
         hpx::distributed::experimental::distributed_scheduler{target};
 
@@ -331,4 +333,12 @@ int main(int argc, char* argv[])
     HPX_TEST_EQ(hpx::init(argc, argv), 0);
     return hpx::util::report_errors();
 }
+
+#else
+
+int main(int, char*[])
+{
+    return 0;
+}
+
 #endif

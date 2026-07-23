@@ -40,7 +40,7 @@
 /// locality) through a well-defined, serializable interface.
 ///
 /// Serialization Boundary:
-///   - set_value_action: The value type T is expected to be an
+///   - set_value_action: The value type T is expected to be a
 ///     hpx::tuple<Ts...> packing the multi-value result (following the
 ///     standard sender/receiver contract). T must be serializable via
 ///     HPX's serialization framework.
@@ -71,7 +71,7 @@ namespace hpx::distributed::experimental::detail {
     /// Type-erased receiver wrapper.
     ///
     /// The downstream receiver is type-erased behind this virtual interface,
-    /// parameterized on the value type T. T is expected to be an
+    /// parameterized on the value type T. T is expected to be a
     /// hpx::tuple<Ts...> representing the packed multi-value result.
     /// For void execution (no values), T is hpx::tuple<> (empty tuple).
     ///
@@ -139,7 +139,7 @@ namespace hpx::distributed::experimental::detail {
     /// receiver bridge and exposes three component actions that the REMOTE
     /// locality can invoke to signal completion.
     ///
-    /// Template parameter T is the packed value type (typically an
+    /// Template parameter T is the packed value type (typically a
     /// hpx::tuple<Ts...>). For void execution, use T = hpx::tuple<>.
     ///
     /// Lifecycle:

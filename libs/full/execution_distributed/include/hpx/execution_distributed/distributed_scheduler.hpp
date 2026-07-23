@@ -1,5 +1,3 @@
-#pragma once
-
 //  Copyright (c) 2025 Shivansh Singh
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -22,6 +20,8 @@
 ///       | ex::then([](int x){ return x * 2; })
 ///       | tt::sync_wait();
 /// \endcode
+
+#pragma once
 
 #include <hpx/config.hpp>
 
@@ -62,6 +62,7 @@ namespace hpx::distributed::experimental {
     // dispatch will be added once component-based receiver marshalling
     // is implemented (nvexec-style).
     namespace detail {
+
         struct distributed_domain
           : hpx::execution::experimental::detail::sync_wait_domain
         {
@@ -77,6 +78,7 @@ namespace hpx::distributed::experimental {
     }    // namespace detail
 
     namespace detail {
+
         ///////////////////////////////////////////////////////////////////////////
         // Operation state: bridges the schedule action into the P2300
         // receiver protocol.
@@ -209,6 +211,7 @@ namespace hpx::distributed::experimental {
             friend struct env;
         };
     }    // namespace detail
+
     ///////////////////////////////////////////////////////////////////////////
     // P2300-compliant scheduler that dispatches work to a remote HPX
     // locality via the parcelport.
