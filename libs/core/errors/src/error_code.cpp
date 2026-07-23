@@ -75,6 +75,7 @@ namespace hpx {
         /* 54 */ "out_of_range",
         /* 55 */ "length_error",
         /* 56 */ "migration_needs_retry",
+        /* 57 */ "stale_state",
 
         /*    */ ""};
     /// \endcond

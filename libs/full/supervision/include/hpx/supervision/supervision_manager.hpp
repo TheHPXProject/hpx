@@ -24,7 +24,7 @@ namespace hpx::supervision {
         explicit supervision_manager(util::runtime_configuration const& ini);
 
         // supervision API
-        void publish_event(hpx::id_type const& target, event ev,
+        publish_result publish_event(hpx::id_type const& target, event ev,
             hpx::error_code& ec = throws) const;
 
         lifecycle_state query_state(

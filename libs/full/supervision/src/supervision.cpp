@@ -46,8 +46,43 @@ HPX_REGISTER_ACTION_ID(
 namespace hpx::supervision {
 
     ///////////////////////////////////////////////////////////////////////////
+    bool is_valid_transition(event const from, event const to) noexcept
+    {
+        switch (from)
+        {
+        case event::unknown:
+            // the first event recorded for a target must be `started`
+            return to == event::started;
+
+        case event::started:
+            return to == event::started || to == event::running ||
+                to == event::failed || to == event::losing_locality;
+
+        case event::running:
+            return to == event::running || to == event::suspending ||
+                to == event::completed || to == event::failed ||
+                to == event::losing_locality;
+
+        case event::suspending:
+            return to == event::suspending || to == event::running ||
+                to == event::completed || to == event::failed ||
+                to == event::losing_locality;
+
+        case event::losing_locality:
+            // a locality that is going away can only end in failure
+            return to == event::failed;
+
+        case event::completed:
+        case event::failed:
+            // terminal states, no outgoing transitions
+            return false;
+        }
+        return false;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     // Publish a lifecycle event from within an actor or action
-    hpx::future<void> publish_event(hpx::id_type const& locality,
+    hpx::future<publish_result> publish_event(hpx::id_type const& locality,
         hpx::id_type const& target, hpx::supervision::event const ev)
     {
         if (!hpx::naming::is_locality(locality))
@@ -70,31 +105,31 @@ namespace hpx::supervision {
         {
             return hpx::detail::try_catch_exception_ptr(
                 [&]() {
-                    get_supervision_manager().publish_event(target, ev);
-                    return hpx::make_ready_future();
+                    auto result =
+                        get_supervision_manager().publish_event(target, ev);
+                    return hpx::make_ready_future(result);
                 },
                 [&](std::exception_ptr const& ep) {
-                    return hpx::make_exceptional_future<void>(ep);
+                    return hpx::make_exceptional_future<publish_result>(ep);
                 });
         }
 
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        using action_type =
-            typename server::supervision_manager::publish_event_action;
+        using action_type = server::supervision_manager::publish_event_action;
         return hpx::async(action_type(), dest, target, ev);
     }
 
-    void publish_event(hpx::launch::sync_policy, hpx::id_type const& locality,
-        hpx::id_type const& target, hpx::supervision::event const ev,
-        hpx::error_code& ec)
+    publish_result publish_event(hpx::launch::sync_policy,
+        hpx::id_type const& locality, hpx::id_type const& target,
+        hpx::supervision::event const ev, hpx::error_code& ec)
     {
         return publish_event(locality, target, ev).get(ec);
     }
 
     // purely local request
-    void publish_event(hpx::id_type const& target,
+    publish_result publish_event(hpx::id_type const& target,
         hpx::supervision::event const ev, hpx::error_code& ec)
     {
         if (!target)
@@ -103,9 +138,9 @@ namespace hpx::supervision {
                 "hpx::supervision::publish_event",
                 "The id passed as the first argument is not representing "
                 "a valid target");
-            return;
+            return publish_result::already_terminal;
         }
-        get_supervision_manager().publish_event(target, ev, ec);
+        return get_supervision_manager().publish_event(target, ev, ec);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -158,8 +193,7 @@ namespace hpx::supervision {
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        using action_type =
-            typename server::supervision_manager::query_state_action;
+        using action_type = server::supervision_manager::query_state_action;
         return hpx::async(action_type(), dest, target);
     }
 
@@ -239,7 +273,7 @@ namespace hpx::supervision {
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
         using action_type =
-            typename server::supervision_manager::register_observer_action;
+            server::supervision_manager::register_observer_action;
         return hpx::async(action_type(), dest, target, agent);
     }
 
@@ -303,7 +337,7 @@ namespace hpx::supervision {
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
         using action_type =
-            typename server::supervision_manager::unregister_observer_action;
+            server::supervision_manager::unregister_observer_action;
         return hpx::async(action_type(), dest, observer_handle);
     }
 

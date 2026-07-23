@@ -45,6 +45,22 @@ namespace hpx::supervision {
         losing_locality,
     };
 
+    /// \brief Outcome of a call to \a publish_event().
+    ///
+    /// \c event::completed and \c event::failed are terminal: once either
+    /// has been recorded for a target, later terminal publications for the same
+    /// target become no-ops, reported via \c already_terminal. Non-terminal
+    /// transitions remain invalid.
+    enum class publish_result : std::uint8_t
+    {
+        /// The event was recorded and observers (if any) were notified.
+        applied,
+        /// The target had already reached the same terminal event
+        /// (\c completed or \c failed); the call was a no-op and no
+        /// observers were notified.
+        already_terminal,
+    };
+
     /// \brief Publish a lifecycle event for a target actor on a possibly
     ///        remote locality.
     ///
@@ -60,8 +76,11 @@ namespace hpx::supervision {
     /// \param ev       [in] The lifecycle event to publish for \a target.
     ///
     /// \returns        A future that becomes ready once the event has been
-    ///                 recorded by the supervision manager on \a locality.
-    ///
+    ///                 recorded by the supervision manager on \a locality,
+    ///                 holding \c publish_result::applied, or
+    ///                 \c publish_result::already_terminal if \a target had
+    ///                 already reached a terminal event (\c completed or
+    ///                 \c failed).    ///
     /// \throws         hpx::exception if \a locality does not represent a
     ///                 locality, or if \a target does not represent a
     ///                 valid target. The returned future becomes
@@ -75,7 +94,7 @@ namespace hpx::supervision {
     ///                 aware of the event within about 1-2 parcel
     ///                 round-trips to the AGAS authority managing the
     ///                 actor's registration.
-    HPX_CXX_EXPORT HPX_EXPORT hpx::future<void> publish_event(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future<publish_result> publish_event(
         hpx::id_type const& locality, hpx::id_type const& target,
         hpx::supervision::event ev);
 
@@ -102,12 +121,22 @@ namespace hpx::supervision {
     ///                 doesn't throw but returns the result code using
     ///                 the parameter \a ec.
     ///
-    /// \note           Publishing is not idempotent: publishing the same
-    ///                 event twice creates two distinct records with
-    ///                 different timestamps.
-    HPX_CXX_EXPORT HPX_EXPORT void publish_event(hpx::launch::sync_policy,
-        hpx::id_type const& locality, hpx::id_type const& target,
-        hpx::supervision::event ev, hpx::error_code& ec = hpx::throws);
+    /// \returns        \c publish_result::applied, or
+    ///                 \c publish_result::already_terminal if \a target had
+    ///                 already reached a terminal event (\c completed or
+    ///                 \c failed).
+    ///
+    /// \note           Publishing non-terminal events is not idempotent:
+    ///                 publishing the same event twice creates two distinct
+    ///                 records with different timestamps. \c event::completed
+    ///                 and \c event::failed are latched: the first terminal
+    ///                 publication for a target wins, and every later
+    ///                 terminal publication for that target is a no-op that
+    ///                 returns \c publish_result::already_terminal.
+    HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event(
+        hpx::launch::sync_policy, hpx::id_type const& locality,
+        hpx::id_type const& target, hpx::supervision::event ev,
+        hpx::error_code& ec = hpx::throws);
 
     /// \brief Publish a lifecycle event for a target actor on the local
     ///        locality.
@@ -128,13 +157,23 @@ namespace hpx::supervision {
     ///               valid target, unless \a ec was not pre-initialized to
     ///               \a hpx::throws.
     ///
-    /// \note         Publishing is not idempotent: publishing the same
-    ///               event twice creates two distinct records with
-    ///               different timestamps.
+    /// \returns      \c publish_result::applied, or
+    ///               \c publish_result::already_terminal if \a target had
+    ///               already reached a terminal event (\c completed or
+    ///               \c failed).
+    ///
+    /// \note         Publishing non-terminal events is not idempotent:
+    ///               publishing the same event twice creates two distinct
+    ///               records with different timestamps. \c event::completed
+    ///               and \c event::failed are latched: the first terminal
+    ///               publication for a target wins, and every later
+    ///               terminal publication for that target is a no-op that
+    ///               returns \c publish_result::already_terminal.
     /// \note         Local observers of \a target are notified
     ///               synchronously as part of this call.
-    HPX_CXX_EXPORT HPX_EXPORT void publish_event(hpx::id_type const& target,
-        hpx::supervision::event ev, hpx::error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event(
+        hpx::id_type const& target, hpx::supervision::event ev,
+        hpx::error_code& ec = throws);
 
     /// \brief Snapshot of the most recently observed lifecycle event for a
     ///        supervised actor.
@@ -182,6 +221,18 @@ namespace hpx::supervision {
         /// cache. A successful query yields \c hpx::make_success_code().
         hpx::error_code ec = hpx::make_success_code();
     };
+
+    /// \brief Determine whether transitioning from lifecycle event \a from
+    ///        to lifecycle event \a to is permitted by the supervision
+    ///        lifecycle state machine.
+    ///
+    /// \a completed and \a failed are terminal states and have no outgoing
+    /// transitions. \a losing_locality is only reachable from \a started,
+    /// \a running, or \a suspending, and may only transition to \a failed.
+    /// A missing prior event is represented as \a event::unknown, from
+    /// which the only valid transition is to \a started.
+    HPX_CXX_EXPORT HPX_EXPORT bool is_valid_transition(
+        event from, event to) noexcept;
 
     /// \brief Query the last known lifecycle state of a target actor on a
     ///        possibly remote locality.

@@ -60,6 +60,14 @@ namespace hpx::supervision::server {
         }
     }
 
+    // event::completed and event::failed are terminal: once recorded,
+    // a target's state is latched and further publications for that
+    // target are no-ops (see supervision_manager::publish_event).
+    constexpr bool is_terminal(event const ev) noexcept
+    {
+        return ev == event::completed || ev == event::failed;
+    }
+
     void supervision_manager::record_error(
         hpx::id_type const& target, hpx::error_code const& ec)
     {
@@ -75,19 +83,41 @@ namespace hpx::supervision::server {
         }
     }
 
-    void supervision_manager::publish_event(
+    publish_result supervision_manager::publish_event(
         hpx::id_type const& target, event const ev)
     {
         lifecycle_event_notification notification;
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
+            auto const it = states_.find(target);
+            event const prev_event =
+                it != states_.end() ? it->second.last_event : event::unknown;
+
+            // A terminal event (completed/failed) was reached, absorb any
+            // further event without mutating state or notifying observers again.
+            if (is_terminal(prev_event) && is_terminal(ev))
+            {
+                // exactly-once completion: the target already reached
+                // a terminal event, ignore this (duplicate) publication
+                return publish_result::already_terminal;
+            }
+
+            if (!is_valid_transition(prev_event, ev))
+            {
+                l.unlock();
+
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "supervision_manager::publish_event",
+                    "invalid lifecycle event transition");
+            }
+
             lifecycle_state state = {.actor = target,
                 .last_event = ev,
                 .timestamp = std::chrono::steady_clock::now(),
                 .event_sequence_number = 1};
 
-            if (auto const it = states_.find(target); it != states_.end())
+            if (it != states_.end())
             {
                 state.event_sequence_number =
                     it->second.event_sequence_number + 1;
@@ -125,6 +155,8 @@ namespace hpx::supervision::server {
             record_error(
                 target, hpx::make_error_code(std::current_exception()));
         }
+
+        return publish_result::applied;
     }
 
     hpx::future<void> supervision_manager::fire_events(
@@ -193,7 +225,7 @@ namespace hpx::supervision::server {
             }
         }
 
-        using action_type = typename agent_component::invoke_if_active_action;
+        using action_type = agent_component::invoke_if_active_action;
         return hpx::async(action_type(), agent, HPX_MOVE(notification));
     }
 
@@ -334,8 +366,7 @@ namespace hpx::supervision::server {
         // A delivery action that was already queued may still reach the agent.
         // deactivate_and_wait fences such actions and drains any callback that
         // had already begun before this call returns.
-        using action_type =
-            typename agent_component::deactivate_and_wait_action;
+        using action_type = agent_component::deactivate_and_wait_action;
         hpx::async(action_type(), observer_handle).get();
     }
 
@@ -346,7 +377,14 @@ namespace hpx::supervision::server {
         {
             return it->second;
         }
-        return {};
+
+        // No event has ever been recorded for this target: the returned
+        // (default) state may be stale, e.g. because the corresponding
+        // publication has not yet been observed on this locality.
+        return {.actor = target,
+            .ec = hpx::error_code(hpx::error::stale_state,
+                "no locally recorded lifecycle state is available for the "
+                "requested target, the returned state may be stale")};
     }
 
     void supervision_manager::register_server_instance(

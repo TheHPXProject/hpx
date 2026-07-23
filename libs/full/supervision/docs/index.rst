@@ -25,14 +25,18 @@ call:
 Publishing events
 ------------------
 
-.. cpp:function:: hpx::future<void> hpx::supervision::publish_event(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev)
-.. cpp:function:: void hpx::supervision::publish_event(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
-.. cpp:function:: void hpx::supervision::publish_event(hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::future<hpx::supervision::publish_result> hpx::supervision::publish_event(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev)
+.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
 
     Publish a lifecycle event for ``target``. Events are visible immediately
     to local observers; remote observers are notified within roughly one to
-    two parcel round-trips. Not idempotent - each call creates a distinct,
-    timestamped record.
+    two parcel round-trips. Publishing non-terminal events is not idempotent
+    - each call creates a distinct, timestamped record. ``event::completed``
+    and ``event::failed`` are latched: the first terminal publication for a
+    target returns ``publish_result::applied``; every later terminal
+    publication for that target is a no-op that returns
+    ``publish_result::already_terminal``.
 
 Querying lifecycle state
 -------------------------

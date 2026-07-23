@@ -55,7 +55,7 @@ namespace hpx::supervision::server {
         void unregister_server_instance(error_code& ec = throws) const;
 
         // Supervision API implementation
-        void publish_event(hpx::id_type const& target, event ev);
+        publish_result publish_event(hpx::id_type const& target, event ev);
 
         lifecycle_state query_state(hpx::id_type const& target);
 

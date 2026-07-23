@@ -5,6 +5,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/hpx.hpp>
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/testing.hpp>
@@ -14,6 +17,26 @@
 #include <iostream>
 #include <mutex>
 #include <vector>
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+// publish_event() now validates lifecycle event transitions and rejects
+// invalid ones (see hpx::supervision::is_valid_transition()). Each test
+// therefore needs its own private target: reusing hpx::find_here() as a
+// shared key across independent tests would let one test's published
+// history make a later test's (otherwise legal) first event look like an
+// illegal transition. make_test_target() hands out a fresh id that is only
+// ever used as a lookup key by the supervision manager, so it does not need
+// to name a real, live component.
+hpx::id_type make_test_target()
+{
+    static std::atomic<std::uint64_t> counter{1};
+    hpx::naming::gid_type const gid(
+        0x1ull, counter.fetch_add(1, std::memory_order_relaxed));
+    return hpx::id_type(gid, hpx::id_type::management_type::unmanaged);
+}
 
 // ============================================================================
 // Test Infrastructure
@@ -73,17 +96,28 @@ struct test_context
     }
 };
 
+// Reach `completed` via a legal path: started -> running -> completed.
+void reach_completed(hpx::id_type const& locality, hpx::id_type const& target)
+{
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+}
+
 // Global test context
 test_context g_test_context;
 
 // ============================================================================
 // Test Cases: 2B.1 - Connector Publishes Explicit Completion
 // ============================================================================
-void test_publish_completion_local(hpx::id_type const& locality)
+void test_publish_completion()
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const locality = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
-    // Publish a completed event
+    reach_completed(locality, target);
+
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed);
 
@@ -107,9 +141,10 @@ void test_publish_completion_local(hpx::id_type const& locality)
 
 void test_publish_completion_async(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
-    // Publish asynchronously
+    reach_completed(locality, target);
+
     auto const future = hpx::supervision::publish_event(
         locality, target, hpx::supervision::event::completed);
     future.wait();
@@ -122,7 +157,11 @@ void test_publish_completion_async(hpx::id_type const& locality)
 
 void test_publish_failed_state(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
+
+    // `failed` is reachable from `started` directly.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     hpx::supervision::publish_event(
         hpx::launch::sync, locality, target, hpx::supervision::event::failed);
@@ -137,7 +176,7 @@ void test_publish_failed_state(hpx::id_type const& locality)
 // ============================================================================
 void test_register_observer_local_completion(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -148,6 +187,11 @@ void test_register_observer_local_completion(hpx::id_type const& locality)
         });
 
     HPX_TEST_NEQ(observer_handle, hpx::invalid_id);
+
+    // Reach `completed` via a legal path; do this before resetting the test
+    // context so these preliminary events don't count towards the
+    // callback_count assertion below.
+    reach_completed(locality, target);
 
     g_test_context.reset();
 
@@ -172,7 +216,7 @@ void test_register_observer_local_completion(hpx::id_type const& locality)
 
 void test_register_observer_multiple_events(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -185,15 +229,13 @@ void test_register_observer_multiple_events(hpx::id_type const& locality)
     g_test_context.reset();
 
     // Publish multiple events
-    hpx::supervision::publish_event(
-        hpx::launch::sync, locality, target, hpx::supervision::event::started);
-    hpx::supervision::publish_event(
-        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+    reach_completed(locality, target);
+
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed);
 
     // Wait for all callbacks
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     HPX_TEST_EQ(g_test_context.get_callback_count(), 3);
 
@@ -213,7 +255,7 @@ void test_register_observer_multiple_events(hpx::id_type const& locality)
 
 void test_register_observer(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto observer_future = hpx::supervision::register_observer(locality, target,
         [](hpx::supervision::lifecycle_event_notification const& notification,
@@ -224,6 +266,8 @@ void test_register_observer(hpx::id_type const& locality)
 
     auto const observer_handle = observer_future.get();
     HPX_TEST_NEQ(observer_handle, hpx::invalid_id);
+
+    reach_completed(locality, target);
 
     g_test_context.reset();
 
@@ -243,7 +287,7 @@ void test_register_observer(hpx::id_type const& locality)
 void test_register_observer_receives_existing_state(
     hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     // Establish state before any observer exists.
     hpx::supervision::publish_event(
@@ -267,13 +311,13 @@ void test_register_observer_receives_existing_state(
         std::scoped_lock<hpx::spinlock> l(mtx);
         HPX_TEST_EQ(received.size(), static_cast<std::size_t>(1));
 
-        auto const& notification = received.front();
-        HPX_TEST_EQ(notification.actor, target);
-        HPX_TEST(notification.event == hpx::supervision::event::started);
-        HPX_TEST_EQ(
-            notification.event_sequence_number, expected.event_sequence_number);
-        HPX_TEST(notification.event_time == expected.timestamp);
-        HPX_TEST(notification.ec == expected.ec);
+        auto const& [actor, event, event_time, event_sequence_number, ec] =
+            received.front();
+        HPX_TEST_EQ(actor, target);
+        HPX_TEST(event == hpx::supervision::event::started);
+        HPX_TEST_EQ(event_sequence_number, expected.event_sequence_number);
+        HPX_TEST(event_time == expected.timestamp);
+        HPX_TEST(ec == expected.ec);
     }
 
     hpx::supervision::unregister_observer(
@@ -282,7 +326,7 @@ void test_register_observer_receives_existing_state(
 
 void test_register_observer_keeps_initial_state_snapshot()
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     hpx::supervision::publish_event(target, hpx::supervision::event::started);
 
@@ -362,7 +406,7 @@ void test_register_observer_keeps_initial_state_snapshot()
 // ============================================================================
 void test_observe_failure_detection(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -371,6 +415,10 @@ void test_observe_failure_detection(hpx::id_type const& locality)
             g_test_context.record_event(
                 notification.actor, notification.event, notification.ec);
         });
+
+    // `failed` is reachable directly from `started`.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     g_test_context.reset();
 
@@ -395,7 +443,7 @@ void test_observe_failure_detection(hpx::id_type const& locality)
 // ============================================================================
 void test_sequence_numbers_monotonic(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const state1 =
         hpx::supervision::query_state(hpx::launch::sync, locality, target);
@@ -416,17 +464,23 @@ void test_sequence_numbers_monotonic(hpx::id_type const& locality)
 
 void test_sequence_numbers_no_gaps(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
+
+    // Establish the required first event before running the repeated
+    // `running` publications below (running -> running is a legal self
+    // transition, used here purely to exercise sequence numbers).
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     std::vector<uint64_t> sequence_numbers;
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
-        [&sequence_numbers, target](
+        [&sequence_numbers, locality](
             hpx::supervision::lifecycle_event_notification const& notification,
             hpx::error_code&) {
             // query state during callback
             auto const state = hpx::supervision::query_state(
-                hpx::launch::sync, target, notification.actor);
+                hpx::launch::sync, locality, notification.actor);
             sequence_numbers.push_back(state.event_sequence_number);
 
             // sequence numbers must match
@@ -446,7 +500,7 @@ void test_sequence_numbers_no_gaps(hpx::id_type const& locality)
             hpx::supervision::event::running);
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // Verify sequence numbers are consecutive or increasing
     for (size_t i = 1; i < sequence_numbers.size(); ++i)
@@ -460,7 +514,9 @@ void test_sequence_numbers_no_gaps(hpx::id_type const& locality)
 
 void test_detect_connector_terminal(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
+
+    reach_completed(locality, target);
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -478,9 +534,7 @@ void test_detect_connector_terminal(hpx::id_type const& locality)
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed);
 
-    bool const received =
-        g_test_context.wait_for_callback(std::chrono::milliseconds(10));
-    HPX_TEST(received);
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
 
     // Query to confirm failed state
     auto const state =
@@ -496,7 +550,7 @@ void test_detect_connector_terminal(hpx::id_type const& locality)
 
 void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -516,11 +570,11 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
                 notification.actor, notification.event, notification.ec);
         });
 
-    g_test_context.reset();
-
-    // Simulate connector reaching terminal state
-    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
-        hpx::supervision::event::completed);
+    // Attempt to reach `completed` via a legal path before resetting counters.
+    // However, `started` raises an exception in one of the observers, causing
+    // the state to shift to `failure`.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     bool const received =
         g_test_context.wait_for_callback(std::chrono::milliseconds(10));
@@ -529,12 +583,23 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
     HPX_TEST_EQ(g_test_context.get_callback_count(), 2);
 
     auto const& events = g_test_context.get_events();
-    HPX_TEST(events[0] == hpx::supervision::event::completed);
-    HPX_TEST(events[1] == hpx::supervision::event::completed);
+    HPX_TEST(events[0] == hpx::supervision::event::started);
+    HPX_TEST(events[1] == hpx::supervision::event::started);
 
     auto const& errors = g_test_context.get_errors();
     HPX_TEST(errors[0] == hpx::make_success_code());
     HPX_TEST(errors[1] == hpx::make_success_code());
+
+    g_test_context.reset();
+
+    // publish another event, will fail and not invoke callbacks
+    auto const result = hpx::supervision::publish_event(hpx::launch::sync,
+        locality, target, hpx::supervision::event::completed);
+    HPX_TEST(result == hpx::supervision::publish_result::already_terminal);
+
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    HPX_TEST_EQ(g_test_context.get_callback_count(), 0);
 
     // Query to confirm failed state
     auto const state =
@@ -551,11 +616,68 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
 }
 
 // ============================================================================
+// Test Cases: Exactly-Once Completion Semantics
+// ============================================================================
+void test_duplicate_completion_is_latched(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    auto const observer_handle = hpx::supervision::register_observer(
+        hpx::launch::sync, locality, target,
+        [](hpx::supervision::lifecycle_event_notification const& notification,
+            hpx::error_code&) {
+            g_test_context.record_event(
+                notification.actor, notification.event, notification.ec);
+        });
+
+    reach_completed(locality, target);
+
+    g_test_context.reset();
+
+    // First completion publication wins.
+    auto const first_result = hpx::supervision::publish_event(hpx::launch::sync,
+        locality, target, hpx::supervision::event::completed);
+    HPX_TEST(first_result == hpx::supervision::publish_result::applied);
+
+    auto const state_after_first =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(
+        state_after_first.last_event == hpx::supervision::event::completed);
+
+    // A duplicate completion publication is a latched no-op.
+    auto const second_result =
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::completed);
+    HPX_TEST(
+        second_result == hpx::supervision::publish_result::already_terminal);
+
+    auto const state_after_second =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+
+    // query_state must still reflect the original record, unchanged.
+    HPX_TEST(
+        state_after_second.last_event == hpx::supervision::event::completed);
+    HPX_TEST_EQ(state_after_second.event_sequence_number,
+        state_after_first.event_sequence_number);
+    HPX_TEST(state_after_second.timestamp == state_after_first.timestamp);
+
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    // Observers must be notified exactly once, not twice.
+    HPX_TEST_EQ(g_test_context.get_callback_count(), 1);
+    HPX_TEST(
+        g_test_context.get_events()[0] == hpx::supervision::event::completed);
+
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, observer_handle);
+}
+
+// ============================================================================
 // Test Cases: Unregister Observer
 // ============================================================================
 void test_unregister_waits_for_in_flight_callback(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     std::atomic<bool> callback_entered{false};
     std::atomic<bool> release_callback{false};
@@ -613,7 +735,7 @@ void test_unregister_waits_for_in_flight_callback(hpx::id_type const& locality)
 
 void test_unregister_observer_stops_callbacks(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -646,7 +768,7 @@ void test_unregister_observer_stops_callbacks(hpx::id_type const& locality)
         hpx::launch::sync, locality, target, hpx::supervision::event::running);
 
     // Wait but should NOT receive callback
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     int const count_after = g_test_context.get_callback_count();
     HPX_TEST_EQ(count_after, 0);
@@ -654,7 +776,7 @@ void test_unregister_observer_stops_callbacks(hpx::id_type const& locality)
 
 void test_multiple_observers_same_target(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     test_context ctx1, ctx2;
 
@@ -679,6 +801,8 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
     ctx1.reset();
     ctx2.reset();
 
+    reach_completed(locality, target);
+
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed);
 
@@ -690,8 +814,8 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
     HPX_TEST(received1);
     HPX_TEST(received2);
 
-    HPX_TEST_EQ(ctx1.get_callback_count(), 1);
-    HPX_TEST_EQ(ctx2.get_callback_count(), 1);
+    HPX_TEST_EQ(ctx1.get_callback_count(), 3);
+    HPX_TEST_EQ(ctx2.get_callback_count(), 3);
 
     hpx::supervision::unregister_observer(
         hpx::launch::sync, locality, observer_handle1);
@@ -702,10 +826,9 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
 // ============================================================================
 // Test Cases: Event Snapshot Delivery
 // ============================================================================
-
 void test_publish_delivers_its_own_event_snapshot(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     std::atomic<bool> first_callback_entered{false};
     std::atomic<bool> release_first_callback{false};
@@ -818,7 +941,9 @@ void test_query_nonexistent_actor()
 
 void test_publish_no_observers(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
+
+    reach_completed(locality, target);
 
     // Publishing with no observers should not fail
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
@@ -832,7 +957,7 @@ void test_publish_no_observers(hpx::id_type const& locality)
 
 void test_rapid_event_sequence(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
@@ -844,22 +969,31 @@ void test_rapid_event_sequence(hpx::id_type const& locality)
 
     g_test_context.reset();
 
-    // Publish events rapidly
+    // Publish events rapidly; this is a legal walk of the lifecycle diagram
+    // that also exercises the suspending <-> running resume edge.
     std::vector<hpx::supervision::event> const events = {
         hpx::supervision::event::started, hpx::supervision::event::running,
-        hpx::supervision::event::suspending, hpx::supervision::event::completed,
-        hpx::supervision::event::failed};
+        hpx::supervision::event::suspending, hpx::supervision::event::running,
+        hpx::supervision::event::completed};
 
     for (auto const event : events)
     {
-        hpx::supervision::publish_event(
+        auto const result = hpx::supervision::publish_event(
             hpx::launch::sync, locality, target, event);
+        HPX_TEST(result == hpx::supervision::publish_result::applied);
     }
+
+    // Once completed, the target's terminal state is latched: a further
+    // terminal publication is a no-op and delivers no notification.
+    auto const result = hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::failed);
+    HPX_TEST(result == hpx::supervision::publish_result::already_terminal);
 
     hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-    // All events should be recorded
-    HPX_TEST_EQ(g_test_context.get_callback_count(), 5);
+    // Only the non-latched events should be recorded
+    HPX_TEST_EQ(
+        g_test_context.get_callback_count(), static_cast<int>(events.size()));
 
     auto const observed = g_test_context.get_events();
     for (size_t i = 0; i < observed.size(); ++i)
@@ -873,7 +1007,7 @@ void test_rapid_event_sequence(hpx::id_type const& locality)
 
 void test_query_after_publication(hpx::id_type const& locality)
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     hpx::supervision::publish_event(
         hpx::launch::sync, locality, target, hpx::supervision::event::started);
@@ -885,12 +1019,225 @@ void test_query_after_publication(hpx::id_type const& locality)
     HPX_TEST(std::chrono::steady_clock::now() > state.timestamp);
 }
 
+// Miss case: querying a target for which no event has ever been recorded
+// must report a staleness error code through lifecycle_state::ec, without
+// the query call itself throwing or reporting failure through its own `ec`
+// out-parameter.
+void test_query_state_miss_returns_stale_state(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::error_code ec;
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target, ec);
+    HPX_TEST(!ec);
+    HPX_TEST(state.last_event == hpx::supervision::event::unknown);
+    HPX_TEST(state.ec);
+    HPX_TEST(state.ec.value() == hpx::error::stale_state);
+}
+
+// Hit case (regression guard): once a target has a recorded event, querying
+// it must still report success through lifecycle_state::ec.
+void test_query_state_hit_returns_success(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+
+    hpx::error_code ec;
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target, ec);
+    HPX_TEST(!ec);
+    HPX_TEST(state.last_event == hpx::supervision::event::started);
+    HPX_TEST(!state.ec);
+    HPX_TEST(state.ec.value() == hpx::error::success);
+}
+
+// Sanity check: query_state() must remain safe to call concurrently with
+// publish_event() mutating the same target's recorded state.
+void test_query_state_concurrent_access(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+
+    std::atomic<bool> stop{false};
+    auto writer = hpx::async([&] {
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+                hpx::supervision::event::running);
+        }
+    });
+
+    std::vector<hpx::future<void>> readers;
+    for (int i = 0; i != 4; ++i)
+    {
+        readers.push_back(hpx::async([&] {
+            for (int j = 0; j != 200; ++j)
+            {
+                auto const state = hpx::supervision::query_state(
+                    hpx::launch::sync, locality, target);
+                HPX_TEST(state.last_event == hpx::supervision::event::started ||
+                    state.last_event == hpx::supervision::event::running);
+            }
+        }));
+    }
+
+    hpx::wait_all(readers);
+
+    stop.store(true, std::memory_order_relaxed);
+    writer.get();
+}
+
+// ============================================================================
+// Test Cases: Lifecycle Event Transition Validation
+// ============================================================================
+void test_illegal_transition_out_of_completed(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::completed);
+
+    // `completed` is terminal; no further transitions are legal.
+    hpx::error_code ec;
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::running, ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+
+    // The rejected transition must not have modified the recorded state.
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::completed);
+}
+
+void test_illegal_transition_unknown_to_completed(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    // The very first event recorded for a target must be `started`;
+    // jumping straight to `completed` is illegal.
+    hpx::error_code ec;
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::completed, ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::unknown);
+}
+
+void test_illegal_transitions_out_of_failed(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::failed);
+
+    // `failed` is terminal; every possible outgoing event is illegal.
+    for (auto const ev :
+        {hpx::supervision::event::started, hpx::supervision::event::running,
+            hpx::supervision::event::suspending,
+            hpx::supervision::event::losing_locality})
+    {
+        hpx::error_code ec;
+        hpx::supervision::publish_event(
+            hpx::launch::sync, locality, target, ev, ec);
+        HPX_TEST(ec);
+        HPX_TEST(ec.value() == hpx::error::bad_parameter);
+    }
+
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::failed);
+}
+
+void test_legal_transitions_suspending_running_resume(
+    hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::suspending);
+
+    // Resume: suspending -> running is legal.
+    hpx::error_code ec;
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::running, ec);
+    HPX_TEST(!ec);
+
+    // running -> suspending is legal as well.
+    hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+        hpx::supervision::event::suspending, ec);
+    HPX_TEST(!ec);
+
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::suspending);
+}
+
+void test_legal_transition_losing_locality_to_failed(
+    hpx::id_type const& locality)
+{
+    // losing_locality is reachable from started, running, and suspending,
+    // and may only transition to failed.
+    std::vector<hpx::supervision::event> const precursors = {
+        hpx::supervision::event::started, hpx::supervision::event::running,
+        hpx::supervision::event::suspending};
+
+    for (auto const precursor : precursors)
+    {
+        hpx::id_type const target = make_test_target();
+
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::started);
+        if (precursor != hpx::supervision::event::started)
+        {
+            hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+                hpx::supervision::event::running);
+        }
+        if (precursor == hpx::supervision::event::suspending)
+        {
+            hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+                hpx::supervision::event::suspending);
+        }
+
+        hpx::error_code ec;
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::losing_locality, ec);
+        HPX_TEST(!ec);
+
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::failed, ec);
+        HPX_TEST(!ec);
+
+        auto const state =
+            hpx::supervision::query_state(hpx::launch::sync, locality, target);
+        HPX_TEST(state.last_event == hpx::supervision::event::failed);
+    }
+}
+
 // ============================================================================
 // Performance Tests
 // ============================================================================
 void test_observer_latency_local()
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     std::atomic<std::chrono::high_resolution_clock::time_point> callback_time;
 
@@ -900,9 +1247,11 @@ void test_observer_latency_local()
             callback_time.store(std::chrono::high_resolution_clock::now());
         });
 
+    hpx::supervision::publish_event(target, hpx::supervision::event::started);
+
     auto const publish_time = std::chrono::high_resolution_clock::now();
 
-    hpx::supervision::publish_event(target, hpx::supervision::event::completed);
+    hpx::supervision::publish_event(target, hpx::supervision::event::running);
 
     // Latency should be < 1ms for local observation
     auto const duration = callback_time.load() - publish_time;
@@ -913,12 +1262,14 @@ void test_observer_latency_local()
 
 void test_publication_throughput()
 {
-    hpx::id_type const target = hpx::find_here();
+    hpx::id_type const target = make_test_target();
 
     std::atomic<int> event_count{0};
     auto const observer_handle = hpx::supervision::register_observer(target,
         [&event_count](hpx::supervision::lifecycle_event_notification const&,
             hpx::error_code&) { event_count.fetch_add(1); });
+
+    hpx::supervision::publish_event(target, hpx::supervision::event::started);
 
     event_count.store(0);
 
@@ -966,10 +1317,8 @@ void print(T first, Args&&... rest)
 
 int hpx_main()
 {
-    // 2B.1 Tests
     for (auto const& locality : hpx::find_all_localities())
     {
-        HPX_TEST_RUN(test_publish_completion_local, locality);
         HPX_TEST_RUN(test_publish_completion_async, locality);
         HPX_TEST_RUN(test_publish_failed_state, locality);
 
@@ -984,6 +1333,7 @@ int hpx_main()
         HPX_TEST_RUN(test_sequence_numbers_no_gaps, locality);
         HPX_TEST_RUN(test_detect_connector_terminal, locality);
         HPX_TEST_RUN(test_error_does_not_stop_callbacks, locality);
+        HPX_TEST_RUN(test_duplicate_completion_is_latched, locality);
 
         HPX_TEST_RUN(test_unregister_waits_for_in_flight_callback, locality);
         HPX_TEST_RUN(test_unregister_observer_stops_callbacks, locality);
@@ -995,8 +1345,20 @@ int hpx_main()
         HPX_TEST_RUN(test_rapid_event_sequence, locality);
 
         HPX_TEST_RUN(test_query_after_publication, locality);
+
+        HPX_TEST_RUN(test_query_state_miss_returns_stale_state, locality);
+        HPX_TEST_RUN(test_query_state_hit_returns_success, locality);
+        HPX_TEST_RUN(test_query_state_concurrent_access, locality);
+
+        HPX_TEST_RUN(test_illegal_transition_out_of_completed, locality);
+        HPX_TEST_RUN(test_illegal_transition_unknown_to_completed, locality);
+        HPX_TEST_RUN(test_illegal_transitions_out_of_failed, locality);
+        HPX_TEST_RUN(
+            test_legal_transitions_suspending_running_resume, locality);
+        HPX_TEST_RUN(test_legal_transition_losing_locality_to_failed, locality);
     }
 
+    HPX_TEST_RUN(test_publish_completion);
     HPX_TEST_RUN(test_register_observer_keeps_initial_state_snapshot);
     HPX_TEST_RUN(test_query_nonexistent_actor);
     HPX_TEST_RUN(test_observer_latency_local);
@@ -1010,3 +1372,12 @@ int main(int argc, char* argv[])
     HPX_TEST_EQ(hpx::init(argc, argv), 0);
     return hpx::util::report_errors();
 }
+
+#else
+
+int main(int, char*[])
+{
+    return 0;
+}
+
+#endif

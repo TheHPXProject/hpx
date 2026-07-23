@@ -55,7 +55,7 @@ namespace hpx::supervision {
         server_->unregister_server_instance(ec);
     }
 
-    void supervision_manager::publish_event(
+    publish_result supervision_manager::publish_event(
         hpx::id_type const& target, event const ev, hpx::error_code& ec) const
     {
         if (!server_)
@@ -63,12 +63,13 @@ namespace hpx::supervision {
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
                 "hpx::supervision::supervision_manager::publish_event",
                 "server is not registered");
-            return;
+            return publish_result::already_terminal;
         }
 
-        server_->publish_event(target, ev);
+        auto const result = server_->publish_event(target, ev);
         if (&ec != &throws)
             ec = make_success_code();
+        return result;
     }
 
     lifecycle_state supervision_manager::query_state(

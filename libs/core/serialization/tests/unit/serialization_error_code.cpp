@@ -29,6 +29,24 @@ void test_hpx_category()
     HPX_TEST_EQ(ec.get_message(), ec2.get_message());
 }
 
+void test_hpx_category_stale_state()
+{
+    hpx::error_code const ec(
+        hpx::error::stale_state, "some message", hpx::throwmode::plain);
+
+    std::vector<char> buffer;
+    hpx::serialization::output_archive oarchive(buffer);
+    oarchive << ec;
+
+    hpx::serialization::input_archive iarchive(buffer);
+    hpx::error_code ec2;
+    iarchive >> ec2;
+
+    HPX_TEST_EQ(ec.value(), ec2.value());
+    HPX_TEST(ec.category() == ec2.category());
+    HPX_TEST_EQ(ec.get_message(), ec2.get_message());
+}
+
 void test_generic_category_large_value()
 {
     hpx::error_code ec;
@@ -72,6 +90,7 @@ void test_system_category_large_value()
 int main()
 {
     test_hpx_category();
+    test_hpx_category_stale_state();
     test_generic_category_large_value();
     test_system_category_large_value();
 
