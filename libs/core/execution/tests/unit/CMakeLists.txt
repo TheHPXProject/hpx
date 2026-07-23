@@ -41,6 +41,7 @@ set(tests
     persistent_executor_parameters
     query_get_allocator
     rebind_executor_parameters
+    vector_pack_load_store
 )
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
