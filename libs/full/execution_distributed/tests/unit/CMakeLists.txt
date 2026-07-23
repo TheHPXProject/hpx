@@ -4,8 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests distributed_scheduler)
+set(tests distributed_bulk_test distributed_scheduler)
 
+set(distributed_bulk_test_PARAMETERS LOCALITIES 2)
 set(distributed_scheduler_PARAMETERS LOCALITIES 2)
 
 foreach(test ${tests})
