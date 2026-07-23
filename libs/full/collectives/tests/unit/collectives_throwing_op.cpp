@@ -15,6 +15,11 @@
 // run after the failed one would re-enter the fold, succeed on moved-from
 // state, and produce results that differ from the exception observed by the
 // first site.
+//
+// A throwing step function (assigning the contributed value into the
+// collected data) is covered as well: the failure is cached the same way so
+// the gate still completes, and every site - with or without a finalizer -
+// observes the cached exception instead of waiting forever.
 
 #include <hpx/config.hpp>
 
@@ -50,6 +55,57 @@ struct throw_once_plus
     }
 };
 
+// Payload whose assignment throws while armed. The step function assigns the
+// contributed value into the collected data, so an armed payload makes the
+// step of exactly one site fail.
+struct throwing_payload
+{
+    throwing_payload() = default;
+
+    explicit throwing_payload(int const value, bool const armed = false)
+      : value(value)
+      , armed(armed)
+    {
+    }
+
+    throwing_payload(throwing_payload const&) = default;
+    throwing_payload(throwing_payload&&) = default;
+
+    throwing_payload& operator=(throwing_payload const& rhs)
+    {
+        throw_if_armed(rhs);
+        value = rhs.value;
+        armed = rhs.armed;
+        return *this;
+    }
+
+    throwing_payload& operator=(throwing_payload&& rhs)
+    {
+        throw_if_armed(rhs);
+        value = rhs.value;
+        armed = rhs.armed;
+        return *this;
+    }
+
+    static void throw_if_armed(throwing_payload const& rhs)
+    {
+        if (rhs.armed)
+        {
+            throw std::runtime_error(error_marker);
+        }
+    }
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & value;
+        ar & armed;
+    }
+
+    int value = 0;
+    bool armed = false;
+};
+
 std::vector<communicator> create_communicators(
     char const* phase, std::uint32_t num_sites)
 {
@@ -66,7 +122,8 @@ std::vector<communicator> create_communicators(
     return comms;
 }
 
-void expect_marker_failure(hpx::future<int>&& failure)
+template <typename T>
+void expect_marker_failure(hpx::future<T>&& failure)
 {
     try
     {
@@ -190,6 +247,102 @@ void test_exclusive_scan_init(std::uint32_t const num_sites)
         });
 }
 
+// generation 1: the step of the armed site fails while assigning its
+// contribution; every site, including the one that threw, must observe the
+// cached failure instead of waiting on a gate segment that is never set.
+// generation 2: the same communicator produces correct results again.
+void test_step_throw(std::uint32_t const num_sites)
+{
+    auto const comms = create_communicators("step_throw", num_sites);
+
+    auto const all_reduce_payloads = [&](std::uint32_t const generation,
+                                         bool const armed) {
+        std::vector<hpx::future<throwing_payload>> results;
+        results.reserve(num_sites);
+        for (std::uint32_t site = 0; site != num_sites; ++site)
+        {
+            results.push_back(all_reduce(
+                comms[site],
+                throwing_payload(
+                    static_cast<int>(site) + 1, armed && site == 1),
+                [](throwing_payload const& lhs, throwing_payload const& rhs) {
+                    return throwing_payload(lhs.value + rhs.value);
+                },
+                this_site_arg(site), generation_arg(generation)));
+        }
+        return results;
+    };
+
+    for (auto& failure : all_reduce_payloads(1, true))
+    {
+        expect_marker_failure(HPX_MOVE(failure));
+    }
+
+    int expected = 0;
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        expected += static_cast<int>(site) + 1;
+    }
+
+    for (auto& result : all_reduce_payloads(2, false))
+    {
+        HPX_TEST_EQ(result.get().value, expected);
+    }
+}
+
+// A failing step must also fail the sites that pass no finalizer: reduce
+// collects the contributions of the reduce_there sites, whose futures carry
+// no value at all.
+void test_step_throw_reduce(std::uint32_t const num_sites)
+{
+    auto const comms = create_communicators("step_throw_reduce", num_sites);
+
+    auto const run_reduce = [&](std::uint32_t const generation,
+                                bool const armed) {
+        auto root = reduce_here(
+            comms[0], throwing_payload(1),
+            [](throwing_payload const& lhs, throwing_payload const& rhs) {
+                return throwing_payload(lhs.value + rhs.value);
+            },
+            this_site_arg(0), generation_arg(generation));
+
+        std::vector<hpx::future<void>> there;
+        there.reserve(num_sites - 1);
+        for (std::uint32_t site = 1; site != num_sites; ++site)
+        {
+            there.push_back(reduce_there(comms[site],
+                throwing_payload(
+                    static_cast<int>(site) + 1, armed && site == 1),
+                this_site_arg(site), generation_arg(generation)));
+        }
+        return std::make_pair(HPX_MOVE(root), HPX_MOVE(there));
+    };
+
+    {
+        auto [root, there] = run_reduce(1, true);
+        expect_marker_failure(HPX_MOVE(root));
+        for (auto& failure : there)
+        {
+            expect_marker_failure(HPX_MOVE(failure));
+        }
+    }
+
+    {
+        auto [root, there] = run_reduce(2, false);
+
+        int expected = 0;
+        for (std::uint32_t site = 0; site != num_sites; ++site)
+        {
+            expected += static_cast<int>(site) + 1;
+        }
+        HPX_TEST_EQ(root.get().value, expected);
+        for (auto& done : there)
+        {
+            done.get();    // must not throw
+        }
+    }
+}
+
 int hpx_main()
 {
     if (hpx::get_locality_id() == 0)
@@ -199,6 +352,8 @@ int hpx_main()
         test_inclusive_scan(3);
         test_exclusive_scan(3);
         test_exclusive_scan_init(3);
+        test_step_throw(3);
+        test_step_throw_reduce(3);
     }
 
     return hpx::finalize();
