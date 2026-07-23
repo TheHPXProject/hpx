@@ -201,7 +201,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = false;
                 data_available_ = false;
-                finalizer_error_ = nullptr;
+                operation_error_ = nullptr;
 
                 if constexpr (!std::is_void_v<T>)
                 {
@@ -231,7 +231,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = true;
                 data_available_ = false;
-                finalizer_error_ = nullptr;
+                operation_error_ = nullptr;
                 on_ready_count_ = 0;
                 current_operation_ = nullptr;
             }
@@ -376,9 +376,9 @@ namespace hpx::collectives::detail {
                     // observe different outcomes for the same collective.
                     // Instead, cache the first failure and rethrow it for
                     // every subsequent site of this operation.
-                    if (finalizer_error_)
+                    if (operation_error_)
                     {
-                        std::rethrow_exception(finalizer_error_);
+                        std::rethrow_exception(operation_error_);
                     }
 
                     try
@@ -397,7 +397,7 @@ namespace hpx::collectives::detail {
                     }
                     catch (...)
                     {
-                        finalizer_error_ = std::current_exception();
+                        operation_error_ = std::current_exception();
                         throw;
                     }
                 }
@@ -548,7 +548,7 @@ namespace hpx::collectives::detail {
         // First exception thrown by a finalizer of the current operation;
         // rethrown for all later sites instead of re-invoking the finalizer
         // on moved-from data. Reset together with data_available_.
-        std::exception_ptr finalizer_error_;
+        std::exception_ptr operation_error_;
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;
