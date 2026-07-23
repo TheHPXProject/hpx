@@ -11,8 +11,11 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(supervision_headers
-    hpx/supervision.hpp hpx/supervision/supervision_manager.hpp
-    hpx/supervision/supervision_fwd.hpp hpx/supervision/server/agent.hpp
+    hpx/supervision.hpp
+    hpx/supervision/supervision_manager.hpp
+    hpx/supervision/supervision_api.hpp
+    hpx/supervision/supervision_fwd.hpp
+    hpx/supervision/server/agent.hpp
     hpx/supervision/server/supervision_manager.hpp
 )
 
@@ -27,6 +30,7 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${supervision_sources}
   HEADERS ${supervision_headers}
+  EXCLUDE_FROM_GLOBAL_HEADER "hpx/supervision.hpp"
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES
     hpx_actions

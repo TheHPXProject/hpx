@@ -15,7 +15,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/synchronization.hpp>
 
-#include <hpx/supervision/supervision_fwd.hpp>
+#include <hpx/supervision/supervision_api.hpp>
 
 #include <cstdint>
 #include <map>
@@ -24,6 +24,13 @@
 #include <vector>
 
 namespace hpx::supervision::server {
+
+    namespace detail {
+
+        // Testing infrastructure support
+        HPX_CXX_EXPORT HPX_EXPORT void set_register_observer_snapshot_hook(
+            std::function<void()> hook);
+    }    // namespace detail
 
     ////////////////////////////////////////////////////////////////////////////
     // Base name used to register the component
@@ -36,8 +43,8 @@ namespace hpx::supervision::server {
         using base_type = components::fixed_component_base<supervision_manager>;
 
         supervision_manager()
-          : base_type(supervision::supervision_manager_msb,
-                supervision::supervision_manager_lsb)
+          : base_type(supervision::detail::supervision_manager_msb,
+                supervision::detail::supervision_manager_lsb)
         {
         }
 
@@ -63,9 +70,11 @@ namespace hpx::supervision::server {
         HPX_DEFINE_COMPONENT_ACTION(supervision_manager, query_state)
 
     protected:
-        hpx::future<void> fire_event(
-            hpx::id_type const& target, hpx::id_type const& agent) const;
-        hpx::future<void> fire_events(hpx::id_type const& target);
+        hpx::future<void> fire_events(hpx::id_type const& target,
+            lifecycle_event_notification const& notification);
+        hpx::future<void> fire_event(hpx::id_type const& target,
+            hpx::id_type const& agent,
+            lifecycle_event_notification notification) const;
 
         void record_error(
             hpx::id_type const& target, hpx::error_code const& ec);

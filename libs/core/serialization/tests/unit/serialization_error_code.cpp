@@ -24,8 +24,6 @@ void test_hpx_category()
     hpx::error_code ec2;
     iarchive >> ec2;
 
-    auto msg1 = ec.get_message();
-    auto msg2 = ec2.get_message();
     HPX_TEST_EQ(ec.value(), ec2.value());
     HPX_TEST(ec.category() == ec2.category());
     HPX_TEST_EQ(ec.get_message(), ec2.get_message());

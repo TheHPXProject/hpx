@@ -13,6 +13,7 @@
 
 #include <hpx/supervision/server/agent.hpp>
 #include <hpx/supervision/server/supervision_manager.hpp>
+#include <hpx/supervision/supervision_api.hpp>
 #include <hpx/supervision/supervision_manager.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -80,8 +81,9 @@ namespace hpx::supervision {
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        return hpx::async(server::supervision_manager::publish_event_action(),
-            dest, target, ev);
+        using action_type =
+            typename server::supervision_manager::publish_event_action;
+        return hpx::async(action_type(), dest, target, ev);
     }
 
     void publish_event(hpx::launch::sync_policy, hpx::id_type const& locality,
@@ -156,8 +158,9 @@ namespace hpx::supervision {
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        return hpx::async(
-            server::supervision_manager::query_state_action(), dest, target);
+        using action_type =
+            typename server::supervision_manager::query_state_action;
+        return hpx::async(action_type(), dest, target);
     }
 
     lifecycle_state query_state(hpx::launch::sync_policy,
@@ -235,9 +238,9 @@ namespace hpx::supervision {
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        return hpx::async(
-            server::supervision_manager::register_observer_action(), dest,
-            target, agent);
+        using action_type =
+            typename server::supervision_manager::register_observer_action;
+        return hpx::async(action_type(), dest, target, agent);
     }
 
     hpx::id_type register_observer(hpx::launch::sync_policy,
@@ -299,9 +302,9 @@ namespace hpx::supervision {
         auto dest =
             hpx::id_type(supervision_manager::get_service_instance(locality),
                 hpx::id_type::management_type::unmanaged);
-        return hpx::async(
-            server::supervision_manager::unregister_observer_action(), dest,
-            observer_handle);
+        using action_type =
+            typename server::supervision_manager::unregister_observer_action;
+        return hpx::async(action_type(), dest, observer_handle);
     }
 
     void unregister_observer(hpx::launch::sync_policy,

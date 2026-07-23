@@ -10,6 +10,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 
+#include <hpx/supervision/supervision_api.hpp>
 #include <hpx/supervision/supervision_manager.hpp>
 
 #include <cstdint>
@@ -125,8 +126,9 @@ namespace hpx::supervision {
     naming::gid_type supervision_manager::get_service_instance(
         std::uint32_t const service_locality_id)
     {
-        naming::gid_type const service(supervision::supervision_manager_msb,
-            supervision::supervision_manager_lsb);
+        naming::gid_type const service(
+            supervision::detail::supervision_manager_msb,
+            supervision::detail::supervision_manager_lsb);
         return naming::replace_locality_id(service, service_locality_id);
     }
 

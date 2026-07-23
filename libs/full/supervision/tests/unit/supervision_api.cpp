@@ -11,7 +11,6 @@
 #include <hpx/supervision.hpp>
 
 #include <atomic>
-#include <condition_variable>
 #include <iostream>
 #include <mutex>
 #include <vector>
@@ -76,46 +75,6 @@ struct test_context
 
 // Global test context
 test_context g_test_context;
-
-// ============================================================================
-// Test Actions
-// ============================================================================
-
-//void publish_completed_action()
-//{
-//    hpx::supervision::publish_event(hpx::launch::sync, hpx::find_here(),
-//        hpx::supervision::event::completed);
-//}
-//HPX_PLAIN_ACTION(publish_completed_action);
-//
-//void publish_failed_action()
-//{
-//    hpx::supervision::publish_event(
-//        hpx::launch::sync, hpx::find_here(), hpx::supervision::event::failed);
-//}
-//HPX_PLAIN_ACTION(publish_failed_action);
-//
-//void publish_async_completed_action()
-//{
-//    hpx::supervision::publish_event(
-//        hpx::find_here(), hpx::supervision::event::completed)
-//        .wait();
-//}
-//HPX_PLAIN_ACTION(publish_async_completed_action);
-//
-//void publish_started_action()
-//{
-//    hpx::supervision::publish_event(
-//        hpx::launch::sync, hpx::find_here(), hpx::supervision::event::started);
-//}
-//HPX_PLAIN_ACTION(publish_started_action);
-//
-//void publish_running_action()
-//{
-//    hpx::supervision::publish_event(
-//        hpx::launch::sync, hpx::find_here(), hpx::supervision::event::running);
-//}
-//HPX_PLAIN_ACTION(publish_running_action);
 
 // ============================================================================
 // Test Cases: 2B.1 - Connector Publishes Explicit Completion
@@ -281,6 +240,123 @@ void test_register_observer(hpx::id_type const& locality)
         hpx::launch::sync, locality, observer_handle);
 }
 
+void test_register_observer_receives_existing_state(
+    hpx::id_type const& locality)
+{
+    hpx::id_type const target = hpx::find_here();
+
+    // Establish state before any observer exists.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::started);
+    auto const expected =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+
+    hpx::spinlock mtx;
+    std::vector<hpx::supervision::lifecycle_event_notification> received;
+
+    auto const observer_handle = hpx::supervision::register_observer(
+        hpx::launch::sync, locality, target,
+        [&](hpx::supervision::lifecycle_event_notification const& notification,
+            hpx::error_code&) {
+            std::scoped_lock<hpx::spinlock> l(mtx);
+            received.push_back(notification);
+        });
+
+    // register_observer synchronously waits for its initial delivery.
+    {
+        std::scoped_lock<hpx::spinlock> l(mtx);
+        HPX_TEST_EQ(received.size(), static_cast<std::size_t>(1));
+
+        auto const& notification = received.front();
+        HPX_TEST_EQ(notification.actor, target);
+        HPX_TEST(notification.event == hpx::supervision::event::started);
+        HPX_TEST_EQ(
+            notification.event_sequence_number, expected.event_sequence_number);
+        HPX_TEST(notification.event_time == expected.timestamp);
+        HPX_TEST(notification.ec == expected.ec);
+    }
+
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, observer_handle);
+}
+
+void test_register_observer_keeps_initial_state_snapshot()
+{
+    hpx::id_type const target = hpx::find_here();
+
+    hpx::supervision::publish_event(target, hpx::supervision::event::started);
+
+    auto const initial_state = hpx::supervision::query_state(target);
+
+    std::atomic<bool> snapshot_taken{false};
+    std::atomic<bool> continue_registration{false};
+    hpx::spinlock received_mtx;
+    std::vector<hpx::supervision::lifecycle_event_notification> received;
+
+    hpx::supervision::server::detail::set_register_observer_snapshot_hook([&] {
+        snapshot_taken.store(true);
+        while (!continue_registration.load())
+        {
+            hpx::this_thread::yield();
+        }
+    });
+
+    auto clear_hook = hpx::experimental::scope_exit([] {
+        hpx::supervision::server::detail::set_register_observer_snapshot_hook(
+            {});
+    });
+
+    auto registration = hpx::async([&] {
+        return hpx::supervision::register_observer(target,
+            [&](hpx::supervision::lifecycle_event_notification const& n,
+                hpx::error_code&) {
+                std::scoped_lock<hpx::spinlock> l(received_mtx);
+                received.push_back(n);
+            });
+    });
+
+    while (!snapshot_taken.load())
+    {
+        hpx::this_thread::yield();
+    }
+
+    // This replaces the manager's current state while registration is paused.
+    hpx::supervision::publish_event(target, hpx::supervision::event::running);
+
+    continue_registration.store(true);
+    auto const observer_handle = registration.get();
+
+    {
+        std::scoped_lock<hpx::spinlock> l(received_mtx);
+        HPX_TEST_EQ(received.size(), static_cast<std::size_t>(2));
+
+        bool saw_initial_snapshot = false;
+        bool saw_running_publication = false;
+
+        for (auto const& notification : received)
+        {
+            if (notification.event == hpx::supervision::event::started &&
+                notification.event_sequence_number ==
+                    initial_state.event_sequence_number)
+            {
+                saw_initial_snapshot = true;
+            }
+
+            if (notification.event == hpx::supervision::event::running &&
+                notification.event_sequence_number ==
+                    initial_state.event_sequence_number + 1)
+            {
+                saw_running_publication = true;
+            }
+        }
+
+        HPX_TEST(saw_initial_snapshot);
+        HPX_TEST(saw_running_publication);
+    }
+
+    hpx::supervision::unregister_observer(observer_handle);
+}
+
 // ============================================================================
 // Test Cases: 2B.3 - Root Observes Failure Without External Witness
 // ============================================================================
@@ -435,7 +511,7 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
     auto const observer_handle2 = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
         [](hpx::supervision::lifecycle_event_notification const& notification,
-            hpx::error_code& ec) {
+            hpx::error_code&) {
             g_test_context.record_event(
                 notification.actor, notification.event, notification.ec);
         });
@@ -454,11 +530,11 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
 
     auto const& events = g_test_context.get_events();
     HPX_TEST(events[0] == hpx::supervision::event::completed);
-    HPX_TEST(events[1] == hpx::supervision::event::failed);
+    HPX_TEST(events[1] == hpx::supervision::event::completed);
 
     auto const& errors = g_test_context.get_errors();
     HPX_TEST(errors[0] == hpx::make_success_code());
-    HPX_TEST(errors[1].value() == hpx::error::no_success);
+    HPX_TEST(errors[1] == hpx::make_success_code());
 
     // Query to confirm failed state
     auto const state =
@@ -477,6 +553,64 @@ void test_error_does_not_stop_callbacks(hpx::id_type const& locality)
 // ============================================================================
 // Test Cases: Unregister Observer
 // ============================================================================
+void test_unregister_waits_for_in_flight_callback(hpx::id_type const& locality)
+{
+    hpx::id_type const target = hpx::find_here();
+
+    std::atomic<bool> callback_entered{false};
+    std::atomic<bool> release_callback{false};
+    std::atomic<int> callback_count{0};
+    std::atomic<bool> block_callbacks{false};
+
+    auto const observer_handle =
+        hpx::supervision::register_observer(hpx::launch::sync, locality, target,
+            [&](hpx::supervision::lifecycle_event_notification const&,
+                hpx::error_code&) {
+                ++callback_count;
+                if (block_callbacks.load())
+                {
+                    callback_entered.store(true);
+                    while (!release_callback.load())
+                    {
+                        hpx::this_thread::yield();
+                    }
+                }
+            });
+
+    // Registration may synchronously deliver the state left by an earlier test.
+    // Do not let that initial delivery participate in this test.
+    callback_count.store(0);
+    callback_entered.store(false);
+    block_callbacks.store(true);
+
+    auto publication = hpx::async([&] {
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::started);
+    });
+
+    while (!callback_entered.load())
+    {
+        hpx::this_thread::yield();
+    }
+
+    auto unregistration = hpx::async([&] {
+        hpx::supervision::unregister_observer(
+            hpx::launch::sync, locality, observer_handle);
+    });
+
+    // unregister must wait until the callback already in progress completes.
+    HPX_TEST(!unregistration.is_ready());
+
+    release_callback.store(true);
+    unregistration.get();
+    publication.get();
+
+    // After unregister returns, no later publication may invoke the callback.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+    HPX_TEST_EQ(callback_count.load(), 1);
+}
+
 void test_unregister_observer_stops_callbacks(hpx::id_type const& locality)
 {
     hpx::id_type const target = hpx::find_here();
@@ -484,7 +618,7 @@ void test_unregister_observer_stops_callbacks(hpx::id_type const& locality)
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
         [](hpx::supervision::lifecycle_event_notification const& notification,
-            hpx::error_code& ec) {
+            hpx::error_code&) {
             g_test_context.record_event(
                 notification.actor, notification.event, notification.ec);
         });
@@ -528,7 +662,7 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
         hpx::launch::sync, locality, target,
         [&ctx1](
             hpx::supervision::lifecycle_event_notification const& notification,
-            hpx::error_code& ec) {
+            hpx::error_code&) {
             ctx1.record_event(
                 notification.actor, notification.event, notification.ec);
         });
@@ -537,7 +671,7 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
         hpx::launch::sync, locality, target,
         [&ctx2](
             hpx::supervision::lifecycle_event_notification const& notification,
-            hpx::error_code& ec) {
+            hpx::error_code&) {
             ctx2.record_event(
                 notification.actor, notification.event, notification.ec);
         });
@@ -563,6 +697,111 @@ void test_multiple_observers_same_target(hpx::id_type const& locality)
         hpx::launch::sync, locality, observer_handle1);
     hpx::supervision::unregister_observer(
         hpx::launch::sync, locality, observer_handle2);
+}
+
+// ============================================================================
+// Test Cases: Event Snapshot Delivery
+// ============================================================================
+
+void test_publish_delivers_its_own_event_snapshot(hpx::id_type const& locality)
+{
+    hpx::id_type const target = hpx::find_here();
+
+    std::atomic<bool> first_callback_entered{false};
+    std::atomic<bool> release_first_callback{false};
+    std::atomic<int> blocker_invocations{0};
+    std::atomic<bool> block_first_delivery{false};
+
+    // The first observer blocks only the first publication. This lets the
+    // second publication update states_[target] before the first publication
+    // reaches the recorder below.
+    auto const blocker =
+        hpx::supervision::register_observer(hpx::launch::sync, locality, target,
+            [&](hpx::supervision::lifecycle_event_notification const&,
+                hpx::error_code&) {
+                if (block_first_delivery.load() &&
+                    blocker_invocations.fetch_add(1) == 0)
+                {
+                    first_callback_entered.store(true);
+                    while (!release_first_callback.load())
+                    {
+                        hpx::this_thread::yield();
+                    }
+                }
+            });
+
+    hpx::spinlock received_mtx;
+    std::vector<hpx::supervision::lifecycle_event_notification> received;
+
+    auto const recorder = hpx::supervision::register_observer(hpx::launch::sync,
+        locality, target,
+        [&](hpx::supervision::lifecycle_event_notification const& notification,
+            hpx::error_code&) {
+            std::scoped_lock<hpx::spinlock> l(received_mtx);
+            received.push_back(notification);
+        });
+
+    // Both registrations may have synchronously delivered the state retained
+    // from earlier tests. Start the controlled race from a clean baseline.
+    {
+        std::scoped_lock<hpx::spinlock> l(received_mtx);
+        received.clear();
+    }
+
+    blocker_invocations.store(0);
+    first_callback_entered.store(false);
+    block_first_delivery.store(true);
+
+    auto first_publication = hpx::async([&] {
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::started);
+    });
+
+    while (!first_callback_entered.load())
+    {
+        hpx::this_thread::yield();
+    }
+
+    // This updates the manager state while the first delivery is paused.
+    hpx::supervision::publish_event(
+        hpx::launch::sync, locality, target, hpx::supervision::event::running);
+
+    release_first_callback.store(true);
+    first_publication.get();
+
+    {
+        std::scoped_lock<hpx::spinlock> l(received_mtx);
+        HPX_TEST_EQ(received.size(), static_cast<std::size_t>(2));
+
+        // Delivery order is intentionally not asserted. What matters is that
+        // both distinct publications retain their own event snapshots.
+        bool saw_started = false;
+        bool saw_running = false;
+        std::uint64_t started_sequence = 0;
+        std::uint64_t running_sequence = 0;
+
+        for (auto const& notification : received)
+        {
+            if (notification.event == hpx::supervision::event::started)
+            {
+                saw_started = true;
+                started_sequence = notification.event_sequence_number;
+            }
+            else if (notification.event == hpx::supervision::event::running)
+            {
+                saw_running = true;
+                running_sequence = notification.event_sequence_number;
+            }
+        }
+
+        HPX_TEST(saw_started);
+        HPX_TEST(saw_running);
+        HPX_TEST_LT(started_sequence, running_sequence);
+    }
+
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, recorder);
+    hpx::supervision::unregister_observer(hpx::launch::sync, locality, blocker);
 }
 
 // ============================================================================
@@ -598,7 +837,7 @@ void test_rapid_event_sequence(hpx::id_type const& locality)
     auto const observer_handle = hpx::supervision::register_observer(
         hpx::launch::sync, locality, target,
         [](hpx::supervision::lifecycle_event_notification const& notification,
-            hpx::error_code& ec) {
+            hpx::error_code&) {
             g_test_context.record_event(
                 notification.actor, notification.event, notification.ec);
         });
@@ -702,124 +941,6 @@ void test_publication_throughput()
     hpx::supervision::unregister_observer(observer_handle);
 }
 
-#if 0
-// ============================================================================
-// Test Cases: Observer Staleness Detection
-// ============================================================================
-void test_observer_staleness_detection()
-{
-    std::vector<hpx::id_type> const localities = hpx::find_all_localities();
-
-    if (localities.size() < 2)
-    {
-        HPX_TEST_MSG(false, "Test requires at least 2 localities");
-        return;
-    }
-
-    hpx::id_type remote_locality = localities[1];
-
-    // Register observer from non-owner locality
-    std::atomic<bool> observer_registered{false};
-    auto const observer_handle =
-        hpx::supervision::register_observer(hpx::launch::sync, remote_locality,
-            [&observer_registered](hpx::id_type actor,
-                hpx::supervision::event event, hpx::error_code& ec) {
-                if (!ec)
-                {
-                    observer_registered.store(true);
-                }
-            });
-
-    // Query state - may indicate staleness if observer hasn't synced
-    auto const state =
-        hpx::supervision::query_state(hpx::launch::sync, remote_locality);
-
-    // If observer_staleness is set, it indicates the remote observer
-    // may not have latest state
-    if (state.observer_staleness)
-    {
-        HPX_TEST_MSG(
-            true, "Observer staleness detected and reported correctly");
-    }
-
-    hpx::supervision::unregister_observer(hpx::launch::sync, observer_handle);
-}
-
-// ============================================================================
-// Test Cases: Bulk Observation (Locality-Level)
-// ============================================================================
-void test_bulk_observe_locality_completions()
-{
-    hpx::id_type const locality = hpx::find_here();
-
-    std::atomic<int> summary_count{0};
-    std::atomic<uint64_t> last_version{0};
-
-    auto const observer_handle =
-        hpx::supervision::observe_locality_completions(locality,
-            [&summary_count, &last_version](
-                hpx::supervision::locality_completion_summary const& summary,
-                hpx::error_code& ec) {
-                if (!ec)
-                {
-                    summary_count.fetch_add(1);
-                    last_version.store(summary.summary_version);
-                }
-            });
-
-    HPX_TEST_NEQ(observer_handle, hpx::invalid_id);
-
-    // Publish multiple events
-    hpx::supervision::publish_event(
-        hpx::launch::sync, locality, hpx::supervision::event::started);
-    hpx::supervision::publish_event(
-        hpx::launch::sync, locality, hpx::supervision::event::running);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-    // Should receive updates for each event
-    HPX_TEST_GT(summary_count.load(), 0);
-    HPX_TEST_GT(last_version.load(), 0u);
-
-    hpx::supervision::unregister_observer(hpx::launch::sync, observer_handle);
-}
-
-void test_bulk_observe_version_increments()
-{
-    hpx::id_type const locality = hpx::find_here();
-
-    std::vector<uint64_t> versions;
-
-    auto const observer_handle =
-        hpx::supervision::observe_locality_completions(locality,
-            [&versions](
-                hpx::supervision::locality_completion_summary const& summary,
-                hpx::error_code& ec) {
-                if (!ec)
-                {
-                    versions.push_back(summary.summary_version);
-                }
-            });
-
-    // Publish multiple events
-    for (int i = 0; i < 3; ++i)
-    {
-        hpx::supervision::publish_event(
-            hpx::launch::sync, locality, hpx::supervision::event::running);
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-    // Versions should increment
-    for (size_t i = 1; i < versions.size(); ++i)
-    {
-        HPX_TEST_GT(versions[i], versions[i - 1]);
-    }
-
-    hpx::supervision::unregister_observer(hpx::launch::sync, observer_handle);
-}
-#endif
-
 // ============================================================================
 // Main Test Entry Point
 // ============================================================================
@@ -855,6 +976,7 @@ int hpx_main()
         HPX_TEST_RUN(test_register_observer_local_completion, locality);
         HPX_TEST_RUN(test_register_observer_multiple_events, locality);
         HPX_TEST_RUN(test_register_observer, locality);
+        HPX_TEST_RUN(test_register_observer_receives_existing_state, locality);
 
         HPX_TEST_RUN(test_observe_failure_detection, locality);
 
@@ -863,8 +985,10 @@ int hpx_main()
         HPX_TEST_RUN(test_detect_connector_terminal, locality);
         HPX_TEST_RUN(test_error_does_not_stop_callbacks, locality);
 
+        HPX_TEST_RUN(test_unregister_waits_for_in_flight_callback, locality);
         HPX_TEST_RUN(test_unregister_observer_stops_callbacks, locality);
         HPX_TEST_RUN(test_multiple_observers_same_target, locality);
+        HPX_TEST_RUN(test_publish_delivers_its_own_event_snapshot, locality);
 
         HPX_TEST_RUN(test_publish_no_observers, locality);
 
@@ -873,16 +997,10 @@ int hpx_main()
         HPX_TEST_RUN(test_query_after_publication, locality);
     }
 
+    HPX_TEST_RUN(test_register_observer_keeps_initial_state_snapshot);
     HPX_TEST_RUN(test_query_nonexistent_actor);
     HPX_TEST_RUN(test_observer_latency_local);
     HPX_TEST_RUN(test_publication_throughput);
-
-#if 0
-    HPX_TEST_RUN(test_observer_staleness_detection);
-
-    HPX_TEST_RUN(test_bulk_observe_locality_completions);
-    HPX_TEST_RUN(test_bulk_observe_version_increments);
-#endif
 
     return hpx::finalize();
 }

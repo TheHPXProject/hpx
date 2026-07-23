@@ -15,6 +15,7 @@
 
 #include <hpx/supervision/server/agent.hpp>
 #include <hpx/supervision/server/supervision_manager.hpp>
+#include <hpx/supervision/supervision_api.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -22,10 +23,33 @@
 #include <exception>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <vector>
 
 namespace hpx::supervision::server {
+
+    namespace {
+
+        // Testing infrastructure support
+        hpx::spinlock register_observer_hook_mtx;
+        std::function<void()> register_observer_snapshot_hook;
+
+        std::function<void()> get_register_observer_snapshot_hook()
+        {
+            std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
+            return register_observer_snapshot_hook;
+        }
+    }    // namespace
+
+    namespace detail {
+
+        void set_register_observer_snapshot_hook(std::function<void()> hook)
+        {
+            std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
+            register_observer_snapshot_hook = HPX_MOVE(hook);
+        }
+    }    // namespace detail
 
     void supervision_manager::finalize() const
     {
@@ -54,6 +78,7 @@ namespace hpx::supervision::server {
     void supervision_manager::publish_event(
         hpx::id_type const& target, event const ev)
     {
+        lifecycle_event_notification notification;
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
@@ -66,12 +91,12 @@ namespace hpx::supervision::server {
             {
                 state.event_sequence_number =
                     it->second.event_sequence_number + 1;
-                it->second = HPX_MOVE(state);
+                it->second = state;
             }
             else
             {
                 auto const [_, inserted] =
-                    states_.insert(std::make_pair(target, HPX_MOVE(state)));
+                    states_.insert(std::make_pair(target, state));
                 if (!inserted)
                 {
                     l.unlock();
@@ -81,17 +106,19 @@ namespace hpx::supervision::server {
                         "failed to insert event");
                 }
             }
+
+            notification = {.actor = target,
+                .event = state.last_event,
+                .event_time = state.timestamp,
+                .event_sequence_number = state.event_sequence_number,
+                .ec = state.ec};
         }
 
         // now fire event for all observers of this target
-        auto f = fire_events(target);
+        auto f = fire_events(target, notification);
         try
         {
             f.get();
-        }
-        catch (std::exception_ptr const& ep)
-        {
-            record_error(target, hpx::make_error_code(ep));
         }
         catch (...)
         {
@@ -101,43 +128,40 @@ namespace hpx::supervision::server {
     }
 
     hpx::future<void> supervision_manager::fire_events(
-        hpx::id_type const& target)
+        hpx::id_type const& target,
+        lifecycle_event_notification const& notification)
     {
-        std::map<hpx::id_type, std::vector<hpx::id_type>> observers;
+        std::vector<hpx::id_type> observers;
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
-            observers = observers_;
+            if (auto const it = observers_.find(target); it != observers_.end())
+            {
+                observers = it->second;
+            }
         }
 
         hpx::future<void> f;
-        if (auto const it = observers.find(target); it != observers.end())
+        for (hpx::id_type const& agent : observers)
         {
-            for (hpx::id_type const& agent : it->second)
+            if (f.valid())
             {
-                if (f.valid())
-                {
-                    f = f.then([&, this, target, agent](
-                                   hpx::future<void>&& prev_f) {
-                        try
-                        {
-                            prev_f.get();
-                        }
-                        catch (std::exception_ptr const& ep)
-                        {
-                            record_error(target, hpx::make_error_code(ep));
-                        }
-                        catch (...)
-                        {
-                            record_error(target,
-                                hpx::make_error_code(std::current_exception()));
-                        }
-                        return fire_event(target, agent);
-                    });
-                }
-                else
-                {
-                    f = fire_event(target, agent);
-                }
+                f = f.then([&, this, target, agent, notification](
+                               hpx::future<void>&& prev_f) {
+                    try
+                    {
+                        prev_f.get();
+                    }
+                    catch (...)
+                    {
+                        record_error(target,
+                            hpx::make_error_code(std::current_exception()));
+                    }
+                    return fire_event(target, agent, notification);
+                });
+            }
+            else
+            {
+                f = fire_event(target, agent, notification);
             }
         }
 
@@ -149,18 +173,11 @@ namespace hpx::supervision::server {
     }
 
     hpx::future<void> supervision_manager::fire_event(
-        hpx::id_type const& target, hpx::id_type const& agent) const
+        hpx::id_type const& target, hpx::id_type const& agent,
+        lifecycle_event_notification notification) const
     {
-        lifecycle_state state;
-
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
-
-            auto const it = states_.find(target);
-            if (it == states_.end())
-            {
-                return hpx::make_ready_future();
-            }
 
             // check again if the agent is still registered as an observer for
             // the given target
@@ -174,24 +191,17 @@ namespace hpx::supervision::server {
             {
                 return hpx::make_ready_future();
             }
-
-            // use latest registered state for the target
-            state = it->second;
         }
 
-        lifecycle_event_notification notification = {.actor = target,
-            .event = state.last_event,
-            .event_time = state.timestamp,
-            .event_sequence_number = state.event_sequence_number,
-            .ec = state.ec};
-
-        return hpx::async(
-            agent_component::invoke_action(), agent, HPX_MOVE(notification));
+        using action_type = typename agent_component::invoke_if_active_action;
+        return hpx::async(action_type(), agent, HPX_MOVE(notification));
     }
 
     hpx::id_type supervision_manager::register_observer(
         hpx::id_type const& target, hpx::id_type const& agent)
     {
+        std::optional<lifecycle_event_notification> initial_notification;
+
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
@@ -246,25 +256,42 @@ namespace hpx::supervision::server {
                 std::ranges::find(it2->second, target) == it2->second.end());
 
             it2->second.push_back(target);
+
+            // An existing target gets an initial notification. Keep a value
+            // snapshot: do not let a subsequent publish replace its contents.
+            if (auto const it3 = states_.find(target); it3 != states_.end())
+            {
+                lifecycle_state const& state = it3->second;
+                initial_notification =
+                    lifecycle_event_notification{.actor = target,
+                        .event = state.last_event,
+                        .event_time = state.timestamp,
+                        .event_sequence_number = state.event_sequence_number,
+                        .ec = state.ec};
+            }
+        }
+
+        // Testing infrastructure support
+        if (auto const hook = get_register_observer_snapshot_hook())
+        {
+            hook();
         }
 
         // now fire event for new observer; dispatched asynchronously, see
         // fire_event
-        auto f = fire_event(target, agent);
-        try
+        if (initial_notification)
         {
-            f.get();
+            auto f = fire_event(target, agent, HPX_MOVE(*initial_notification));
+            try
+            {
+                f.get();
+            }
+            catch (...)
+            {
+                record_error(
+                    target, hpx::make_error_code(std::current_exception()));
+            }
         }
-        catch (std::exception_ptr const& ep)
-        {
-            record_error(target, hpx::make_error_code(ep));
-        }
-        catch (...)
-        {
-            record_error(
-                target, hpx::make_error_code(std::current_exception()));
-        }
-
         return agent;
     }
 
@@ -301,6 +328,15 @@ namespace hpx::supervision::server {
             }
             agents_.erase(it);
         }
+
+        l.unlock();
+
+        // A delivery action that was already queued may still reach the agent.
+        // deactivate_and_wait fences such actions and drains any callback that
+        // had already begun before this call returns.
+        using action_type =
+            typename agent_component::deactivate_and_wait_action;
+        hpx::async(action_type(), observer_handle).get();
     }
 
     lifecycle_state supervision_manager::query_state(hpx::id_type const& target)
