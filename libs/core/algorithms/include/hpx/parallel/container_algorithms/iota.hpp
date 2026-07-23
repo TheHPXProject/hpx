@@ -163,6 +163,7 @@ namespace hpx::ranges {
 #include <hpx/concepts/concepts.hpp>
 #include <hpx/iterator_support/traits/is_range.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/iota.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -177,9 +178,9 @@ namespace hpx::ranges {
     using iota_result = out_value_result<I, O>;
 
     HPX_CXX_CORE_EXPORT inline constexpr struct iota_t final
-      : hpx::detail::tag_parallel_algorithm<iota_t>
+      : hpx::detail::tag_dispatch<iota_t,
+            hpx::detail::tag_parallel_algorithm<iota_t>>
     {
-    private:
         template <typename ExPolicy, std::forward_iterator FwdIter,
             std::sentinel_for<FwdIter> Sent, std::weakly_incrementable T>
         // clang-format off
@@ -188,10 +189,9 @@ namespace hpx::ranges {
                 std::indirectly_writable<FwdIter, T const&>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             iota_result<FwdIter, T>>
-        tag_fallback_invoke(
-            iota_t, ExPolicy&& policy, FwdIter first, Sent last, T value)
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, T value)
         {
             auto dist = hpx::parallel::detail::distance(first, last);
 
@@ -212,33 +212,32 @@ namespace hpx::ranges {
         template <typename ExPolicy, std::weakly_incrementable T,
             std::ranges::output_range<T const&> Range>
             requires(hpx::is_execution_policy_v<std::decay_t<ExPolicy>>)
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             iota_result<
                 typename hpx::traits::range_traits<Range>::iterator_type, T>>
-        tag_fallback_invoke(iota_t, ExPolicy&& policy, Range&& r, T value)
+        invoke_default(ExPolicy&& policy, Range&& r, T value)
         {
-            return tag_fallback_invoke(iota_t{}, HPX_FORWARD(ExPolicy, policy),
+            return invoke_default(HPX_FORWARD(ExPolicy, policy),
                 hpx::util::begin(r), hpx::util::end(r), value);
         }
 
         template <std::input_or_output_iterator FwdIter,
             std::sentinel_for<FwdIter> Sent, std::weakly_incrementable T>
             requires(std::indirectly_writable<FwdIter, T const&>)
-        friend iota_result<FwdIter, T> tag_fallback_invoke(
-            iota_t, FwdIter first, Sent last, T value)
+        static iota_result<FwdIter, T> invoke_default(
+            FwdIter first, Sent last, T value)
         {
-            return tag_fallback_invoke(
-                iota_t{}, hpx::execution::seq, first, last, value);
+            return invoke_default(hpx::execution::seq, first, last, value);
         }
 
         template <std::weakly_incrementable T,
             std::ranges::output_range<T const&> Range>
-        friend iota_result<
+        static iota_result<
             typename hpx::traits::range_traits<Range>::iterator_type, T>
-        tag_fallback_invoke(iota_t, Range&& r, T value)
+        invoke_default(Range&& r, T value)
         {
-            return tag_fallback_invoke(iota_t{}, hpx::execution::seq,
-                hpx::util::begin(r), hpx::util::end(r), value);
+            return invoke_default(hpx::execution::seq, hpx::util::begin(r),
+                hpx::util::end(r), value);
         }
     } iota{};
 }    // namespace hpx::ranges

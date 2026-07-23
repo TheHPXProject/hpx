@@ -313,6 +313,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/uninitialized_copy.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -327,9 +328,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_copy_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_copy_t>
+      : hpx::detail::tag_dispatch<uninitialized_copy_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_copy_t>>
     {
-    private:
         template <typename InIter, typename Sent1, typename FwdIter,
             typename Sent2>
         // clang-format off
@@ -340,9 +341,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent2, FwdIter>
             )
         // clang-format on
-        friend hpx::parallel::util::in_out_result<InIter, FwdIter>
-        tag_fallback_invoke(hpx::ranges::uninitialized_copy_t, InIter first1,
-            Sent1 last1, FwdIter first2, Sent2 last2)
+        static hpx::parallel::util::in_out_result<InIter, FwdIter>
+        invoke_default(InIter first1, Sent1 last1, FwdIter first2, Sent2 last2)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -365,11 +365,10 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent2, FwdIter2>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             parallel::util::in_out_result<FwdIter1, FwdIter2>>
-        tag_fallback_invoke(hpx::ranges::uninitialized_copy_t,
-            ExPolicy&& policy, FwdIter1 first1, Sent1 last1, FwdIter2 first2,
-            Sent2 last2)
+        invoke_default(ExPolicy&& policy, FwdIter1 first1, Sent1 last1,
+            FwdIter2 first2, Sent2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -389,11 +388,10 @@ namespace hpx::ranges {
                 std::ranges::range<Rng2>
             )
         // clang-format on
-        friend hpx::parallel::util::in_out_result<
+        static hpx::parallel::util::in_out_result<
             typename hpx::traits::range_traits<Rng1>::iterator_type,
             typename hpx::traits::range_traits<Rng2>::iterator_type>
-        tag_fallback_invoke(
-            hpx::ranges::uninitialized_copy_t, Rng1&& rng1, Rng2&& rng2)
+        invoke_default(Rng1&& rng1, Rng2&& rng2)
         {
             using iterator_type1 =
                 typename hpx::traits::range_traits<Rng1>::iterator_type;
@@ -420,12 +418,11 @@ namespace hpx::ranges {
                 std::ranges::range<Rng2>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             hpx::parallel::util::in_out_result<
                 typename hpx::traits::range_traits<Rng1>::iterator_type,
                 typename hpx::traits::range_traits<Rng2>::iterator_type>>
-        tag_fallback_invoke(hpx::ranges::uninitialized_copy_t,
-            ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2)
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2)
         {
             using iterator_type1 =
                 typename hpx::traits::range_traits<Rng1>::iterator_type;
@@ -446,9 +443,9 @@ namespace hpx::ranges {
     } uninitialized_copy{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_copy_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_copy_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_copy_n_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_copy_n_t>>
     {
-    private:
         template <typename InIter, typename Size, typename FwdIter,
             typename Sent2>
         // clang-format off
@@ -459,9 +456,8 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend hpx::parallel::util::in_out_result<InIter, FwdIter>
-        tag_fallback_invoke(hpx::ranges::uninitialized_copy_n_t, InIter first1,
-            Size count, FwdIter first2, Sent2 last2)
+        static hpx::parallel::util::in_out_result<InIter, FwdIter>
+        invoke_default(InIter first1, Size count, FwdIter first2, Sent2 last2)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -486,11 +482,10 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>
-        tag_fallback_invoke(hpx::ranges::uninitialized_copy_n_t,
-            ExPolicy&& policy, FwdIter1 first1, Size count, FwdIter2 first2,
-            Sent2 last2)
+        invoke_default(ExPolicy&& policy, FwdIter1 first1, Size count,
+            FwdIter2 first2, Sent2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

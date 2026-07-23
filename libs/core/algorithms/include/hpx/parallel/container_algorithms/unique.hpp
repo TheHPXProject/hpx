@@ -602,6 +602,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/unique.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -620,9 +621,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::unique
     HPX_CXX_CORE_EXPORT inline constexpr struct unique_t final
-      : hpx::detail::tag_parallel_algorithm<unique_t>
+      : hpx::detail::tag_dispatch<unique_t,
+            hpx::detail::tag_parallel_algorithm<unique_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename Pred = ranges::equal_to, typename Proj = hpx::identity>
         // clang-format off
@@ -637,9 +638,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend subrange_t<FwdIter, Sent> tag_fallback_invoke(
-            hpx::ranges::unique_t, FwdIter first, Sent last, Pred pred = Pred(),
-            Proj proj = Proj())
+        static subrange_t<FwdIter, Sent> invoke_default(
+            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -666,10 +666,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
+        static typename parallel::util::detail::algorithm_result<ExPolicy,
             subrange_t<FwdIter, Sent>>::type
-        tag_fallback_invoke(hpx::ranges::unique_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -694,10 +694,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend subrange_t<std::ranges::iterator_t<Rng>,
+        static subrange_t<std::ranges::iterator_t<Rng>,
             std::ranges::sentinel_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::unique_t, Rng&& rng,
-            Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -726,11 +725,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             subrange_t<std::ranges::iterator_t<Rng>,
                 std::ranges::sentinel_t<Rng>>>
-        tag_fallback_invoke(hpx::ranges::unique_t, ExPolicy&& policy, Rng&& rng,
-            Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng, Pred pred = Pred(),
+            Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -752,9 +751,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::unique_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct unique_copy_t final
-      : hpx::detail::tag_parallel_algorithm<unique_copy_t>
+      : hpx::detail::tag_dispatch<unique_copy_t,
+            hpx::detail::tag_parallel_algorithm<unique_copy_t>>
     {
-    private:
         template <typename InIter, typename Sent, typename O,
             typename Pred = ranges::equal_to, typename Proj = hpx::identity>
         // clang-format off
@@ -769,9 +768,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend unique_copy_result<InIter, O> tag_fallback_invoke(
-            hpx::ranges::unique_copy_t, InIter first, Sent last, O dest,
-            Pred pred = Pred(), Proj proj = Proj())
+        static unique_copy_result<InIter, O> invoke_default(InIter first,
+            Sent last, O dest, Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -799,11 +797,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             unique_copy_result<FwdIter, O>>
-        tag_fallback_invoke(hpx::ranges::unique_copy_t, ExPolicy&& policy,
-            FwdIter first, Sent last, O dest, Pred pred = Pred(),
-            Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, O dest,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -828,9 +825,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend unique_copy_result<std::ranges::iterator_t<Rng>, O>
-        tag_fallback_invoke(hpx::ranges::unique_copy_t, Rng&& rng, O dest,
-            Pred pred = Pred(), Proj proj = Proj())
+        static unique_copy_result<std::ranges::iterator_t<Rng>, O>
+        invoke_default(
+            Rng&& rng, O dest, Pred pred = Pred(), Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -858,10 +855,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             unique_copy_result<std::ranges::iterator_t<Rng>, O>>
-        tag_fallback_invoke(hpx::ranges::unique_copy_t, ExPolicy&& policy,
-            Rng&& rng, O dest, Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, Pred pred = Pred(),
+            Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 

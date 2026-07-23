@@ -440,6 +440,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/set_symmetric_difference.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -459,9 +460,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::set_symmetric_difference
     HPX_CXX_CORE_EXPORT inline constexpr struct set_symmetric_difference_t final
-      : hpx::detail::tag_parallel_algorithm<set_symmetric_difference_t>
+      : hpx::detail::tag_dispatch<set_symmetric_difference_t,
+            hpx::detail::tag_parallel_algorithm<set_symmetric_difference_t>>
     {
-    private:
         template <typename ExPolicy, typename Iter1, typename Sent1,
             typename Iter2, typename Sent2, typename Iter3,
             typename Pred = hpx::parallel::detail::less,
@@ -481,11 +482,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             set_symmetric_difference_result<Iter1, Iter2, Iter3>>
-        tag_fallback_invoke(set_symmetric_difference_t, ExPolicy&& policy,
-            Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Iter1 first1, Sent1 last1,
+            Iter2 first2, Sent2 last2, Iter3 dest, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<Iter1>,
                 "Requires at least forward iterator.");
@@ -530,12 +531,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             set_symmetric_difference_result<std::ranges::iterator_t<Rng1>,
                 std::ranges::iterator_t<Rng2>, Iter3>>
-        tag_fallback_invoke(set_symmetric_difference_t, ExPolicy&& policy,
-            Rng1&& rng1, Rng2&& rng2, Iter3 dest, Pred op = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2, Iter3 dest,
+            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -584,10 +584,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend set_symmetric_difference_result<Iter1, Iter2, Iter3>
-        tag_fallback_invoke(set_symmetric_difference_t, Iter1 first1,
-            Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static set_symmetric_difference_result<Iter1, Iter2, Iter3>
+        invoke_default(Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2,
+            Iter3 dest, Pred op = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             static_assert(std::input_iterator<Iter1>,
                 "Requires at least input iterator.");
@@ -623,11 +623,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend set_symmetric_difference_result<std::ranges::iterator_t<Rng1>,
+        static set_symmetric_difference_result<std::ranges::iterator_t<Rng1>,
             std::ranges::iterator_t<Rng2>, Iter3>
-        tag_fallback_invoke(set_symmetric_difference_t, Rng1&& rng1,
-            Rng2&& rng2, Iter3 dest, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        invoke_default(Rng1&& rng1, Rng2&& rng2, Iter3 dest, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;

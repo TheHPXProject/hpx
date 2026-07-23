@@ -330,6 +330,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/exclusive_scan.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -348,9 +349,9 @@ namespace hpx::ranges {
     using exclusive_scan_result = parallel::util::in_out_result<I, O>;
 
     HPX_CXX_CORE_EXPORT inline constexpr struct exclusive_scan_t final
-      : hpx::detail::tag_parallel_algorithm<exclusive_scan_t>
+      : hpx::detail::tag_dispatch<exclusive_scan_t,
+            hpx::detail::tag_parallel_algorithm<exclusive_scan_t>>
     {
-    private:
         template <typename InIter, typename Sent, typename OutIter,
             typename T = typename std::iterator_traits<InIter>::value_type,
             typename Op = std::plus<>>
@@ -364,9 +365,8 @@ namespace hpx::ranges {
                     typename std::iterator_traits<InIter>::value_type>
             )
         // clang-format on
-        friend exclusive_scan_result<InIter, OutIter> tag_fallback_invoke(
-            hpx::ranges::exclusive_scan_t, InIter first, Sent last,
-            OutIter dest, T init, Op op = Op())
+        static exclusive_scan_result<InIter, OutIter> invoke_default(
+            InIter first, Sent last, OutIter dest, T init, Op op = Op())
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -397,10 +397,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             exclusive_scan_result<FwdIter1, FwdIter2>>
-        tag_fallback_invoke(hpx::ranges::exclusive_scan_t, ExPolicy&& policy,
-            FwdIter1 first, Sent last, FwdIter2 dest, T init, Op op = Op())
+        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
+            FwdIter2 dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -427,9 +427,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend exclusive_scan_result<std::ranges::iterator_t<Rng>, O>
-        tag_fallback_invoke(hpx::ranges::exclusive_scan_t, Rng&& rng, O dest,
-            T init, Op op = Op())
+        static exclusive_scan_result<std::ranges::iterator_t<Rng>, O>
+        invoke_default(Rng&& rng, O dest, T init, Op op = Op())
         {
             static_assert(std::input_iterator<std::ranges::iterator_t<Rng>>,
                 "Requires at least input iterator.");
@@ -456,10 +455,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             exclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        tag_fallback_invoke(hpx::ranges::exclusive_scan_t, ExPolicy&& policy,
-            Rng&& rng, O dest, T init, Op op = Op())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, O dest, T init, Op op = Op())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Requires at least forward iterator.");

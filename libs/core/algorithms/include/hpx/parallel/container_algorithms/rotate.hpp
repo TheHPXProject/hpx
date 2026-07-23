@@ -401,6 +401,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/rotate.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -415,9 +416,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::rotate
     HPX_CXX_CORE_EXPORT inline constexpr struct rotate_t final
-      : hpx::detail::tag_parallel_algorithm<rotate_t>
+      : hpx::detail::tag_dispatch<rotate_t,
+            hpx::detail::tag_parallel_algorithm<rotate_t>>
     {
-    private:
         template <typename FwdIter, typename Sent>
         // clang-format off
             requires(
@@ -425,8 +426,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend subrange_t<FwdIter, Sent> tag_fallback_invoke(
-            hpx::ranges::rotate_t, FwdIter first, FwdIter middle, Sent last)
+        static subrange_t<FwdIter, Sent> invoke_default(
+            FwdIter first, FwdIter middle, Sent last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -445,10 +446,10 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
+        static typename parallel::util::detail::algorithm_result<ExPolicy,
             subrange_t<FwdIter, Sent>>::type
-        tag_fallback_invoke(hpx::ranges::rotate_t, ExPolicy&& policy,
-            FwdIter first, FwdIter middle, Sent last)
+        invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter middle, Sent last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -466,10 +467,9 @@ namespace hpx::ranges {
 
         template <typename Rng>
             requires(std::ranges::range<Rng>)
-        friend subrange_t<std::ranges::iterator_t<Rng>,
+        static subrange_t<std::ranges::iterator_t<Rng>,
             std::ranges::sentinel_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::rotate_t, Rng&& rng,
-            std::ranges::iterator_t<Rng> middle)
+        invoke_default(Rng&& rng, std::ranges::iterator_t<Rng> middle)
         {
             return hpx::parallel::util::get_subrange<
                 std::ranges::iterator_t<Rng>, std::ranges::sentinel_t<Rng>>(
@@ -487,11 +487,11 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             subrange_t<std::ranges::iterator_t<Rng>,
                 std::ranges::sentinel_t<Rng>>>
-        tag_fallback_invoke(hpx::ranges::rotate_t, ExPolicy&& policy, Rng&& rng,
-            std::ranges::iterator_t<Rng> middle)
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, std::ranges::iterator_t<Rng> middle)
         {
             using is_seq = std::integral_constant<bool,
                 hpx::is_sequenced_execution_policy_v<ExPolicy> ||
@@ -513,9 +513,9 @@ namespace hpx::ranges {
     using rotate_copy_result = hpx::parallel::util::in_out_result<I, O>;
 
     HPX_CXX_CORE_EXPORT inline constexpr struct rotate_copy_t final
-      : hpx::detail::tag_parallel_algorithm<rotate_copy_t>
+      : hpx::detail::tag_dispatch<rotate_copy_t,
+            hpx::detail::tag_parallel_algorithm<rotate_copy_t>>
     {
-    private:
         template <typename FwdIter, typename Sent, typename OutIter>
         // clang-format off
             requires(
@@ -524,9 +524,8 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<OutIter>
             )
         // clang-format on
-        friend rotate_copy_result<FwdIter, OutIter> tag_fallback_invoke(
-            hpx::ranges::rotate_copy_t, FwdIter first, FwdIter middle,
-            Sent last, OutIter dest_first)
+        static rotate_copy_result<FwdIter, OutIter> invoke_default(
+            FwdIter first, FwdIter middle, Sent last, OutIter dest_first)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -549,10 +548,10 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             rotate_copy_result<FwdIter1, FwdIter2>>
-        tag_fallback_invoke(hpx::ranges::rotate_copy_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 middle, Sent last, FwdIter2 dest_first)
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 middle,
+            Sent last, FwdIter2 dest_first)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -576,9 +575,9 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<OutIter>
             )
         // clang-format on
-        friend rotate_copy_result<std::ranges::iterator_t<Rng>, OutIter>
-        tag_fallback_invoke(hpx::ranges::rotate_copy_t, Rng&& rng,
-            std::ranges::iterator_t<Rng> middle, OutIter dest_first)
+        static rotate_copy_result<std::ranges::iterator_t<Rng>, OutIter>
+        invoke_default(
+            Rng&& rng, std::ranges::iterator_t<Rng> middle, OutIter dest_first)
         {
             return hpx::parallel::detail::rotate_copy<
                 rotate_copy_result<std::ranges::iterator_t<Rng>, OutIter>>()
@@ -594,10 +593,10 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<OutIter>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             rotate_copy_result<std::ranges::iterator_t<Rng>, OutIter>>
-        tag_fallback_invoke(hpx::ranges::rotate_copy_t, ExPolicy&& policy,
-            Rng&& rng, std::ranges::iterator_t<Rng> middle, OutIter dest_first)
+        invoke_default(ExPolicy&& policy, Rng&& rng,
+            std::ranges::iterator_t<Rng> middle, OutIter dest_first)
         {
             using is_seq = std::integral_constant<bool,
                 hpx::is_sequenced_execution_policy_v<ExPolicy> ||

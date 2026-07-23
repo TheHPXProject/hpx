@@ -417,6 +417,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -437,7 +438,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::for_each
     HPX_CXX_CORE_EXPORT inline constexpr struct for_each_t final
-      : hpx::detail::tag_parallel_algorithm<for_each_t>
+      : hpx::detail::tag_dispatch<for_each_t,
+            hpx::detail::tag_parallel_algorithm<for_each_t>>
     {
         template <typename InIter, typename Sent, typename F,
             typename Proj = hpx::identity>
@@ -452,9 +454,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend for_each_result<InIter, F> tag_fallback_invoke(
-            hpx::ranges::for_each_t, InIter first, Sent last, F f,
-            Proj proj = Proj())
+        static for_each_result<InIter, F> invoke_default(
+            InIter first, Sent last, F f, Proj proj = Proj())
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -475,9 +476,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend for_each_result<std::ranges::iterator_t<Rng>, F>
-        tag_fallback_invoke(
-            hpx::ranges::for_each_t, Rng&& rng, F f, Proj proj = Proj())
+        static for_each_result<std::ranges::iterator_t<Rng>, F> invoke_default(
+            Rng&& rng, F f, Proj proj = Proj())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -505,9 +505,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::ranges::for_each_t,
-            ExPolicy&& policy, FwdIter first, Sent last, F f,
-            Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            Sent last, F f, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -530,7 +529,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::ranges::for_each_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Rng&& rng, F f, Proj proj = Proj())
         {
             using iterator_type =
@@ -548,7 +547,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::for_each_n
     HPX_CXX_CORE_EXPORT inline constexpr struct for_each_n_t final
-      : hpx::detail::tag_parallel_algorithm<for_each_n_t>
+      : hpx::detail::tag_dispatch<for_each_n_t,
+            hpx::detail::tag_parallel_algorithm<for_each_n_t>>
     {
         template <typename InIter, typename Size, typename F,
             typename Proj = hpx::identity>
@@ -563,9 +563,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend for_each_n_result<InIter, F> tag_fallback_invoke(
-            hpx::ranges::for_each_n_t, InIter first, Size count, F f,
-            Proj proj = Proj())
+        static for_each_n_result<InIter, F> invoke_default(
+            InIter first, Size count, F f, Proj proj = Proj())
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -595,10 +594,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::for_each_n_t, ExPolicy&& policy,
-            FwdIter first, Size count, F f, Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Size count, F f,
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

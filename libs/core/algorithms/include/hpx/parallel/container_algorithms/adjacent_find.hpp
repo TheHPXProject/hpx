@@ -265,6 +265,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/adjacent_find.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 
 #include <algorithm>
@@ -277,9 +278,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct adjacent_find_t final
-      : hpx::detail::tag_parallel_algorithm<adjacent_find_t>
+      : hpx::detail::tag_dispatch<adjacent_find_t,
+            hpx::detail::tag_parallel_algorithm<adjacent_find_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename Proj = hpx::identity,
             typename Pred = hpx::parallel::detail::equal_to>
@@ -295,7 +296,7 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::adjacent_find_t,
+        static FwdIter invoke_default(
             FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::adjacent_find<FwdIter, FwdIter>()
@@ -319,9 +320,9 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
-        tag_fallback_invoke(hpx::ranges::adjacent_find_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::adjacent_find<FwdIter, FwdIter>()
                 .call(HPX_FORWARD(ExPolicy, policy), first, last,
@@ -341,9 +342,8 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend typename hpx::traits::range_traits<Rng>::iterator_type
-        tag_fallback_invoke(hpx::ranges::adjacent_find_t, Rng&& rng,
-            Pred pred = Pred(), Proj proj = Proj())
+        static typename hpx::traits::range_traits<Rng>::iterator_type
+        invoke_default(Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -372,10 +372,10 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             typename hpx::traits::range_traits<Rng>::iterator_type>
-        tag_fallback_invoke(hpx::ranges::adjacent_find_t, ExPolicy&& policy,
-            Rng&& rng, Pred&& pred = Pred(), Proj&& proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng, Pred&& pred = Pred(),
+            Proj&& proj = Proj())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;

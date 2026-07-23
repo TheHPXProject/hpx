@@ -584,6 +584,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/remove_copy.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -604,7 +605,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::remove_copy_if
     HPX_CXX_CORE_EXPORT inline constexpr struct remove_copy_if_t final
-      : hpx::detail::tag_parallel_algorithm<remove_copy_if_t>
+      : hpx::detail::tag_dispatch<remove_copy_if_t,
+            hpx::detail::tag_parallel_algorithm<remove_copy_if_t>>
     {
         template <typename I, typename Sent, typename O, typename Pred,
             typename Proj = hpx::identity>
@@ -620,9 +622,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend remove_copy_if_result<I, O> tag_fallback_invoke(
-            hpx::ranges::remove_copy_if_t, I first, Sent last, O dest,
-            Pred pred, Proj proj = Proj())
+        static remove_copy_if_result<I, O> invoke_default(
+            I first, Sent last, O dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::input_iterator<I>, "Required input iterator.");
 
@@ -647,9 +648,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend remove_copy_if_result<std::ranges::iterator_t<Rng>, O>
-        tag_fallback_invoke(hpx::ranges::remove_copy_if_t, Rng&& rng, O dest,
-            Pred pred, Proj proj = Proj())
+        static remove_copy_if_result<std::ranges::iterator_t<Rng>, O>
+        invoke_default(Rng&& rng, O dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::input_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least input iterator.");
@@ -675,10 +675,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             remove_copy_if_result<I, O>>
-        tag_fallback_invoke(hpx::ranges::remove_copy_if_t, ExPolicy&& policy,
-            I first, Sent last, O dest, Pred pred, Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, I first, Sent last, O dest, Pred pred,
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<I>,
                 "Required at least forward iterator.");
@@ -705,10 +705,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             remove_copy_if_result<std::ranges::iterator_t<Rng>, O>>
-        tag_fallback_invoke(hpx::ranges::remove_copy_if_t, ExPolicy&& policy,
-            Rng&& rng, O dest, Pred pred, Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, O dest, Pred pred, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -723,9 +723,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::remove_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct remove_copy_t final
-      : hpx::detail::tag_parallel_algorithm<remove_copy_t>
+      : hpx::detail::tag_dispatch<remove_copy_t,
+            hpx::detail::tag_parallel_algorithm<remove_copy_t>>
     {
-    private:
         template <typename I, typename Sent, typename O,
             typename Proj = hpx::identity,
             typename T =
@@ -738,9 +738,8 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_v<Proj, I>
             )
         // clang-format on
-        friend remove_copy_result<I, O> tag_fallback_invoke(
-            hpx::ranges::remove_copy_t, I first, Sent last, O dest,
-            T const& value, Proj proj = Proj())
+        static remove_copy_result<I, O> invoke_default(
+            I first, Sent last, O dest, T const& value, Proj proj = Proj())
         {
             static_assert(
                 std::input_iterator<I>, "Required at least input iterator.");
@@ -760,9 +759,8 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
         // clang-format on
-        friend remove_copy_result<std::ranges::iterator_t<Rng>, O>
-        tag_fallback_invoke(hpx::ranges::remove_copy_t, Rng&& rng, O dest,
-            T const& value, Proj proj = Proj())
+        static remove_copy_result<std::ranges::iterator_t<Rng>, O>
+        invoke_default(Rng&& rng, O dest, T const& value, Proj proj = Proj())
         {
             static_assert(std::input_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at input forward iterator.");
@@ -786,10 +784,10 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_v<Proj, I>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             remove_copy_result<I, O>>
-        tag_fallback_invoke(hpx::ranges::remove_copy_t, ExPolicy&& policy,
-            I first, Sent last, O dest, T const& value, Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, I first, Sent last, O dest,
+            T const& value, Proj proj = Proj())
         {
             static_assert(std::forward_iterator<I>,
                 "Required at least forward iterator.");
@@ -811,10 +809,10 @@ namespace hpx::ranges {
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             remove_copy_result<std::ranges::iterator_t<Rng>, O>>
-        tag_fallback_invoke(hpx::ranges::remove_copy_t, ExPolicy&& policy,
-            Rng&& rng, O dest, T const& value, Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, T const& value,
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");

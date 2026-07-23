@@ -889,6 +889,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/transform_reduce.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -906,9 +907,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::transform_reduce
     HPX_CXX_CORE_EXPORT inline constexpr struct transform_reduce_t final
-      : hpx::detail::tag_parallel_algorithm<transform_reduce_t>
+      : hpx::detail::tag_dispatch<transform_reduce_t,
+            hpx::detail::tag_parallel_algorithm<transform_reduce_t>>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename Sent, typename T,
             typename Reduce, typename Convert>
         // clang-format off
@@ -928,9 +929,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Iter first,
-            Sent last, T init, Reduce red_op, Convert conv_op)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last, T init,
+            Reduce red_op, Convert conv_op)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Requires at least forward iterator.");
@@ -958,8 +959,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, Iter first, Sent last,
-            T init, Reduce red_op, Convert conv_op)
+        static T invoke_default(
+            Iter first, Sent last, T init, Reduce red_op, Convert conv_op)
         {
             static_assert(
                 std::input_iterator<Iter>, "Requires at least input iterator.");
@@ -978,9 +979,9 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<Iter2>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Iter first,
-            Sent last, Iter2 first2, T init)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(
+            ExPolicy&& policy, Iter first, Sent last, Iter2 first2, T init)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Requires at least forward iterator.");
@@ -1000,8 +1001,7 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<Iter2>
             )
         // clang-format on
-        friend T tag_fallback_invoke(
-            transform_reduce_t, Iter first, Sent last, Iter2 first2, T init)
+        static T invoke_default(Iter first, Sent last, Iter2 first2, T init)
         {
             static_assert(
                 std::input_iterator<Iter>, "Requires at least input iterator.");
@@ -1037,9 +1037,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Iter first,
-            Sent last, Iter2 first2, T init, Reduce red_op, Convert conv_op)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last, Iter2 first2,
+            T init, Reduce red_op, Convert conv_op)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Requires at least forward iterator.");
@@ -1073,8 +1073,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, Iter first, Sent last,
-            Iter2 first2, T init, Reduce red_op, Convert conv_op)
+        static T invoke_default(Iter first, Sent last, Iter2 first2, T init,
+            Reduce red_op, Convert conv_op)
         {
             static_assert(
                 std::input_iterator<Iter>, "Requires at least input iterator.");
@@ -1107,9 +1107,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Rng&& rng,
-            T init, Reduce red_op, Convert conv_op)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(ExPolicy&& policy, Rng&& rng, T init, Reduce red_op,
+            Convert conv_op)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -1139,8 +1139,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, Rng&& rng, T init,
-            Reduce red_op, Convert conv_op)
+        static T invoke_default(
+            Rng&& rng, T init, Reduce red_op, Convert conv_op)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -1160,9 +1160,8 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<Iter2>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Rng&& rng,
-            Iter2 first2, T init)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(ExPolicy&& policy, Rng&& rng, Iter2 first2, T init)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -1185,8 +1184,7 @@ namespace hpx::ranges {
                 hpx::traits::is_iterator_v<Iter2>
             )
         // clang-format on
-        friend T tag_fallback_invoke(
-            transform_reduce_t, Rng&& rng, Iter2 first2, T init)
+        static T invoke_default(Rng&& rng, Iter2 first2, T init)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -1224,9 +1222,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
-        tag_fallback_invoke(transform_reduce_t, ExPolicy&& policy, Rng&& rng,
-            Iter2 first2, T init, Reduce red_op, Convert conv_op)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, T>
+        invoke_default(ExPolicy&& policy, Rng&& rng, Iter2 first2, T init,
+            Reduce red_op, Convert conv_op)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -1257,14 +1255,14 @@ namespace hpx::ranges {
                         typename std::iterator_traits<Iter2>::value_type
                     >::type,
                     typename hpx::util::invoke_result<Convert,
-                        typename hpx::traits::range_traits<Rng>::value_typee,
+                        typename hpx::traits::range_traits<Rng>::value_type,
                         typename std::iterator_traits<Iter2>::value_type
                     >::type
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, Rng&& rng,
-            Iter2 first2, T init, Reduce red_op, Convert conv_op)
+        static T invoke_default(
+            Rng&& rng, Iter2 first2, T init, Reduce red_op, Convert conv_op)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 

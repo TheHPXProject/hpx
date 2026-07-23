@@ -216,6 +216,7 @@ namespace hpx { namespace ranges {
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/swap_ranges.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -234,9 +235,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::swap_ranges
     HPX_CXX_CORE_EXPORT inline constexpr struct swap_ranges_t final
-      : hpx::detail::tag_parallel_algorithm<swap_ranges_t>
+      : hpx::detail::tag_dispatch<swap_ranges_t,
+            hpx::detail::tag_parallel_algorithm<swap_ranges_t>>
     {
-    private:
         template <typename InIter1, typename Sent1, typename InIter2,
             typename Sent2>
         // clang-format off
@@ -247,9 +248,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent2, InIter2>
             )
         // clang-format on
-        friend swap_ranges_result<InIter1, InIter2> tag_fallback_invoke(
-            hpx::ranges::swap_ranges_t, InIter1 first1, Sent1 last1,
-            InIter2 first2, Sent2 last2)
+        static swap_ranges_result<InIter1, InIter2> invoke_default(
+            InIter1 first1, Sent1 last1, InIter2 first2, Sent2 last2)
         {
             static_assert(std::input_iterator<InIter1>,
                 "Requires at least input iterator.");
@@ -272,10 +272,10 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent2, FwdIter2>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             swap_ranges_result<FwdIter1, FwdIter2>>
-        tag_fallback_invoke(hpx::ranges::swap_ranges_t, ExPolicy&& policy,
-            FwdIter1 first1, Sent1 last1, FwdIter2 first2, Sent2 last2)
+        invoke_default(ExPolicy&& policy, FwdIter1 first1, Sent1 last1,
+            FwdIter2 first2, Sent2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -295,10 +295,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng2>
             )
         // clang-format on
-        friend swap_ranges_result<std::ranges::iterator_t<Rng1>,
+        static swap_ranges_result<std::ranges::iterator_t<Rng1>,
             std::ranges::iterator_t<Rng2>>
-        tag_fallback_invoke(
-            hpx::ranges::swap_ranges_t, Rng1&& rng1, Rng2&& rng2)
+        invoke_default(Rng1&& rng1, Rng2&& rng2)
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -322,11 +321,10 @@ namespace hpx::ranges {
                 std::ranges::range<Rng2>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             swap_ranges_result<std::ranges::iterator_t<Rng1>,
                 std::ranges::iterator_t<Rng2>>>
-        tag_fallback_invoke(hpx::ranges::swap_ranges_t, ExPolicy&& policy,
-            Rng1&& rng1, Rng2&& rng2)
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2)
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;

@@ -291,6 +291,7 @@ namespace hpx { namespace ranges {
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/generate.hpp>
 
 #include <cstddef>
@@ -304,9 +305,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::generate
     HPX_CXX_CORE_EXPORT inline constexpr struct generate_t final
-      : hpx::detail::tag_parallel_algorithm<generate_t>
+      : hpx::detail::tag_dispatch<generate_t,
+            hpx::detail::tag_parallel_algorithm<generate_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng, typename F>
         // clang-format off
             requires(
@@ -314,9 +315,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(generate_t, ExPolicy&& policy, Rng&& rng, F f)
+        invoke_default(ExPolicy&& policy, Rng&& rng, F f)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -335,9 +336,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, Iter>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(
-            generate_t, ExPolicy&& policy, Iter first, Sent last, F f)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last, F f)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Required at least forward iterator.");
@@ -348,8 +348,7 @@ namespace hpx::ranges {
 
         template <typename Rng, typename F>
             requires(std::ranges::range<Rng>)
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            generate_t, Rng&& rng, F f)
+        static std::ranges::iterator_t<Rng> invoke_default(Rng&& rng, F f)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -363,7 +362,7 @@ namespace hpx::ranges {
 
         template <typename Iter, typename Sent, typename F>
             requires(std::sentinel_for<Sent, Iter>)
-        friend Iter tag_fallback_invoke(generate_t, Iter first, Sent last, F f)
+        static Iter invoke_default(Iter first, Sent last, F f)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Required at least forward iterator.");
@@ -376,9 +375,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::generate_n
     HPX_CXX_CORE_EXPORT inline constexpr struct generate_n_t final
-      : hpx::detail::tag_parallel_algorithm<generate_n_t>
+      : hpx::detail::tag_dispatch<generate_n_t,
+            hpx::detail::tag_parallel_algorithm<generate_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Size,
             typename F>
         // clang-format off
@@ -388,10 +387,9 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(
-            generate_n_t, ExPolicy&& policy, FwdIter first, Size count, F f)
+        invoke_default(ExPolicy&& policy, FwdIter first, Size count, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -414,8 +412,7 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            generate_n_t, FwdIter first, Size count, F f)
+        static FwdIter invoke_default(FwdIter first, Size count, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");

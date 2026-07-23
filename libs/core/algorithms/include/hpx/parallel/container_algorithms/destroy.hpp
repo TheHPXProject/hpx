@@ -212,6 +212,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/destroy.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -227,9 +228,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::destroy
     HPX_CXX_CORE_EXPORT inline constexpr struct destroy_t final
-      : hpx::detail::tag_parallel_algorithm<destroy_t>
+      : hpx::detail::tag_dispatch<destroy_t,
+            hpx::detail::tag_parallel_algorithm<destroy_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng>
         // clang-format off
             requires(
@@ -237,9 +238,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(destroy_t, ExPolicy&& policy, Rng&& rng)
+        invoke_default(ExPolicy&& policy, Rng&& rng)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -258,8 +259,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, Iter>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(destroy_t, ExPolicy&& policy, Iter first, Sent last)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Required at least forward iterator.");
@@ -270,8 +271,7 @@ namespace hpx::ranges {
 
         template <typename Rng>
             requires(std::ranges::range<Rng>)
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            destroy_t, Rng&& rng)
+        static std::ranges::iterator_t<Rng> invoke_default(Rng&& rng)
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -285,7 +285,7 @@ namespace hpx::ranges {
 
         template <typename Iter, typename Sent>
             requires(hpx::traits::is_iterator_v<Iter>)
-        friend Iter tag_fallback_invoke(destroy_t, Iter first, Sent last)
+        static Iter invoke_default(Iter first, Sent last)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Required at least forward iterator.");
@@ -298,9 +298,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::destroy_n
     HPX_CXX_CORE_EXPORT inline constexpr struct destroy_n_t final
-      : hpx::detail::tag_parallel_algorithm<destroy_n_t>
+      : hpx::detail::tag_dispatch<destroy_n_t,
+            hpx::detail::tag_parallel_algorithm<destroy_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Size>
         // clang-format off
             requires(
@@ -309,10 +309,9 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(
-            destroy_n_t, ExPolicy&& policy, FwdIter first, Size count)
+        invoke_default(ExPolicy&& policy, FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -336,8 +335,7 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            destroy_n_t, FwdIter first, Size count)
+        static FwdIter invoke_default(FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

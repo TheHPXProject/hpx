@@ -365,6 +365,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/lexicographical_compare.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -379,9 +380,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct lexicographical_compare_t final
-      : hpx::detail::tag_parallel_algorithm<lexicographical_compare_t>
+      : hpx::detail::tag_dispatch<lexicographical_compare_t,
+            hpx::detail::tag_parallel_algorithm<lexicographical_compare_t>>
     {
-    private:
         template <typename InIter1, typename Sent1, typename InIter2,
             typename Sent2, typename Proj1 = hpx::identity,
             typename Proj2 = hpx::identity,
@@ -401,9 +402,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::lexicographical_compare_t,
-            InIter1 first1, Sent1 last1, InIter2 first2, Sent2 last2,
-            Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static bool invoke_default(InIter1 first1, Sent1 last1, InIter2 first2,
+            Sent2 last2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             static_assert(std::input_iterator<InIter1>,
                 "Requires at least input iterator.");
@@ -435,11 +436,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::lexicographical_compare_t,
-            ExPolicy&& policy, FwdIter1 first1, Sent1 last1, FwdIter2 first2,
-            Sent2 last2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, FwdIter1 first1, Sent1 last1,
+            FwdIter2 first2, Sent2 last2, Pred pred = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -467,9 +467,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::lexicographical_compare_t,
-            Rng1&& rng1, Rng2&& rng2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static bool invoke_default(Rng1&& rng1, Rng2&& rng2, Pred pred = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 =
                 typename hpx::traits::range_traits<Rng1>::iterator_type;
@@ -505,10 +504,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::lexicographical_compare_t,
-            ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2, Pred pred = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 =
                 typename hpx::traits::range_traits<Rng1>::iterator_type;

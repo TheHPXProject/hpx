@@ -287,6 +287,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/ends_with.hpp>
 
 #include <iterator>
@@ -299,9 +300,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::copy
     HPX_CXX_CORE_EXPORT inline constexpr struct ends_with_t final
-      : hpx::functional::detail::tag_fallback<ends_with_t>
+      : hpx::detail::tag_dispatch<ends_with_t,
+            hpx::functional::detail::tag_fallback<ends_with_t>>
     {
-    private:
         template <typename Iter1, typename Sent1, typename Iter2,
             typename Sent2, typename Pred = ranges::equal_to,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -315,9 +316,9 @@ namespace hpx::ranges {
                     hpx::parallel::traits::projected<Proj1, Iter1>,
                     hpx::parallel::traits::projected<Proj2, Iter2>>)
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::ends_with_t, Iter1 first1,
-            Sent1 last1, Iter2 first2, Sent2 last2, Pred pred = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static bool invoke_default(Iter1 first1, Sent1 last1, Iter2 first2,
+            Sent2 last2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             static_assert(std::input_iterator<Iter1>,
                 "Required at least input iterator.");
@@ -347,10 +348,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::ends_with_t, ExPolicy&& policy,
-            FwdIter1 first1, Sent1 last1, FwdIter2 first2, Sent2 last2,
-            Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, FwdIter1 first1, Sent1 last1,
+            FwdIter2 first2, Sent2 last2, Pred pred = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -381,9 +382,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::ends_with_t, Rng1&& rng1,
-            Rng2&& rng2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static bool invoke_default(Rng1&& rng1, Rng2&& rng2, Pred pred = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
 
@@ -419,10 +419,9 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::ends_with_t, ExPolicy&& policy,
-            Rng1&& rng1, Rng2&& rng2, Pred pred = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Pred pred = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
 
