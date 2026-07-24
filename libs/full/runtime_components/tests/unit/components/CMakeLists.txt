@@ -25,6 +25,11 @@ set(tests
     new_
 )
 
+if(HPX_WITH_CXX26_REFLECTION)
+  set(tests ${tests} reflect_client_test)
+  set(reflect_client_test_PARAMETERS LOCALITIES 2)
+endif()
+
 set(action_invoke_no_more_than_PARAMETERS THREADS_PER_LOCALITY 4)
 set(action_invoke_no_more_than_FLAGS DEPENDENCIES iostreams_component)
 

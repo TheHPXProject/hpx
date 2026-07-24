@@ -49,6 +49,13 @@ set(runtime_components_compat_headers
 )
 # cmake-format: on
 
+if(HPX_WITH_CXX26_REFLECTION)
+  list(APPEND runtime_components_headers
+       hpx/runtime_components/reflect_client.hpp
+       hpx/runtime_components/reflect_client_macros.hpp
+  )
+endif()
+
 set(runtime_components_sources
     component_registry.cpp console_error_sink.cpp console_logging.cpp
     server/console_error_sink_server.cpp
