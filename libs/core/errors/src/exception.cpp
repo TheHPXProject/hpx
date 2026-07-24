@@ -249,7 +249,10 @@ namespace hpx::detail {
 
     inline bool is_of_lightweight_hpx_category(hpx::exception const& e) noexcept
     {
-        return e.get_error_code().category() == get_lightweight_hpx_category();
+        hpx::error_code const& code = e.get_error_code();
+        std::error_category const& category = code.category();
+        return category == get_lightweight_hpx_category() ||
+            category == get_lightweight_hpx_rethrow_category();
     }
 
     ///////////////////////////////////////////////////////////////////////////

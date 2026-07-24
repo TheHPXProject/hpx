@@ -47,3 +47,4 @@ Main |hpx| modules
    /libs/full/runtime_distributed/docs/index.rst
    /libs/full/segmented_algorithms/docs/index.rst
    /libs/full/statistics/docs/index.rst
+   /libs/full/supervision/docs/index.rst

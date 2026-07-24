@@ -43,6 +43,7 @@ if(HPX_WITH_DISTRIBUTED_RUNTIME)
       hpx_performance_counters
       hpx_runtime_components
       hpx_runtime_distributed
+      hpx_supervision
   )
 endif()
 

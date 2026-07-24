@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -21,6 +21,7 @@
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/supervision.hpp>
 
 #include <hpx/init_runtime/pre_main.hpp>
 
@@ -50,6 +51,11 @@ namespace hpx::detail {
         agas_client.register_server_instances();
         lbt_ << "(2nd stage) pre_main: registered AGAS client-side "
                 "performance counter types";
+
+        auto const& supervision_manager =
+            supervision::get_supervision_manager();
+        supervision_manager.register_server_instance();
+        lbt_ << "(2nd stage) pre_main: registered supervision infrastructure";
 
         get_runtime_distributed().register_counter_types();
         lbt_ << "(2nd stage) pre_main: registered runtime performance "

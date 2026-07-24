@@ -170,6 +170,7 @@ namespace hpx::agas {
             naming::gid_type const& id, naming::address& addr) const;
 
         void register_server_instances();
+        void unregister_server_instances(hpx::error_code& ec = hpx::throws);
 
         // FIXME: document (add comments)
         void garbage_collect_non_blocking(error_code& ec = throws);

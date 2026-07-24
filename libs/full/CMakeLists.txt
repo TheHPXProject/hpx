@@ -46,6 +46,7 @@ set(_hpx_full_modules
     runtime_distributed
     segmented_algorithms
     statistics
+    supervision
 )
 # cmake-format: on
 

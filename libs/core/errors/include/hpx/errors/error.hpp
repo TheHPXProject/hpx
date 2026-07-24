@@ -140,8 +140,13 @@ namespace hpx {
         migration_needs_retry = 56,    ///< migration failed because of global
                                        ///< race, retry
 
+        stale_state = 57,    ///< The queried state may be stale, e.g. because
+                             ///< no state has been recorded yet or a
+                             ///< preceding notification has not yet been
+                             ///< delivered
+
         /// \cond NOINTERNAL
-        last_error = 57,
+        last_error = 58,
 
         system_error_flag = 0x4000L,
 
