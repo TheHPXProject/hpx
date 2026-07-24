@@ -321,6 +321,29 @@ namespace hpx::util {
             MPI_Finalized(&is_finalized);
             if (!is_finalized)
             {
+                if (communicator_ != MPI_COMM_NULL)
+                {
+                    // Synchronize entry into MPI_Finalize across all ranks.
+                    // The runtime shuts down independently on every
+                    // locality, so ranks reach this point at noticeably
+                    // different times. Entering MPI_Finalize while peers
+                    // are still communicating exposes teardown races in
+                    // the underlying MPI implementation (observed with
+                    // Open MPI's btl/uct: fatal UD endpoint timeouts while
+                    // a rank that is already inside MPI_Finalize processes
+                    // a peer's late connection request). A barrier
+                    // immediately before MPI_Finalize lets every rank
+                    // finish its outstanding traffic while all peers still
+                    // progress normally. Any error is ignored: proceeding
+                    // to MPI_Finalize is the best remaining option either
+                    // way.
+                    [[maybe_unused]] int const ret = MPI_Barrier(communicator_);
+
+                    // Release the duplicated communicator before
+                    // MPI_Finalize reclaims the remaining MPI state.
+                    MPI_Comm_free(&communicator_);
+                }
+
                 MPI_Finalize();
             }
         }
