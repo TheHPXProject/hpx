@@ -890,21 +890,71 @@ namespace hpx::parallel {
 
             element_type min_value = HPX_INVOKE(proj, *it);
             element_type max_value = min_value;
-            util::const_loop_n<std::decay_t<ExPolicy>>(
-                ++it, count - 1, [&](FwdIter const& curr) -> void {
-                    element_type curr_value = HPX_INVOKE(proj, *curr);
+            element_type next_value = HPX_INVOKE(proj, *++it);
+
+            if (HPX_INVOKE(f, next_value, min_value))
+            {
+                result.min = it;
+                min_value = HPX_MOVE(next_value);
+            }
+            else
+            {
+                result.max = it;
+                max_value = HPX_MOVE(next_value);
+            }
+
+            std::size_t remaining = count - 2;
+            while (remaining != 0)
+            {
+                FwdIter curr = ++it;
+                element_type curr_value = HPX_INVOKE(proj, *curr);
+                if (remaining != 1)
+                {
+                    remaining -= 2;
+                    element_type next_value = HPX_INVOKE(proj, *++it);
+                    if (!HPX_INVOKE(f, next_value, curr_value))
+                    {
+                        if (HPX_INVOKE(f, curr_value, min_value))
+                        {
+                            result.min = curr;
+                            min_value = HPX_MOVE(curr_value);
+                        }
+                        if (!HPX_INVOKE(f, next_value, max_value))
+                        {
+                            result.max = it;
+                            max_value = HPX_MOVE(next_value);
+                        }
+                    }
+                    else
+                    {
+                        if (HPX_INVOKE(f, next_value, min_value))
+                        {
+                            result.min = it;
+                            min_value = HPX_MOVE(next_value);
+                        }
+                        if (!HPX_INVOKE(f, curr_value, max_value))
+                        {
+                            result.max = curr;
+                            max_value = HPX_MOVE(curr_value);
+                        }
+                    }
+                }
+                else
+                {
                     if (HPX_INVOKE(f, curr_value, min_value))
                     {
                         result.min = curr;
                         min_value = curr_value;
                     }
-
                     if (!HPX_INVOKE(f, curr_value, max_value))
                     {
                         result.max = curr;
                         max_value = HPX_MOVE(curr_value);
                     }
-                });
+
+                    break;
+                }
+            }
 
             return result;
         }
@@ -924,21 +974,71 @@ namespace hpx::parallel {
 
             element_type min_value = *it;
             element_type max_value = min_value;
-            util::const_loop_n<std::decay_t<ExPolicy>>(
-                ++it, count - 1, [&](FwdIter const& curr) -> void {
-                    element_type curr_value = *curr;
+            element_type next_value = *++it;
+
+            if (HPX_INVOKE(f, next_value, min_value))
+            {
+                result.min = it;
+                min_value = HPX_MOVE(next_value);
+            }
+            else
+            {
+                result.max = it;
+                max_value = HPX_MOVE(next_value);
+            }
+
+            std::size_t remaining = count - 2;
+            while (remaining != 0)
+            {
+                FwdIter curr = ++it;
+                element_type curr_value = *curr;
+                if (remaining != 1)
+                {
+                    remaining -= 2;
+                    element_type next_value = *++it;
+                    if (!HPX_INVOKE(f, next_value, curr_value))
+                    {
+                        if (HPX_INVOKE(f, curr_value, min_value))
+                        {
+                            result.min = curr;
+                            min_value = HPX_MOVE(curr_value);
+                        }
+                        if (!HPX_INVOKE(f, next_value, max_value))
+                        {
+                            result.max = it;
+                            max_value = HPX_MOVE(next_value);
+                        }
+                    }
+                    else
+                    {
+                        if (HPX_INVOKE(f, next_value, min_value))
+                        {
+                            result.min = it;
+                            min_value = HPX_MOVE(next_value);
+                        }
+                        if (!HPX_INVOKE(f, curr_value, max_value))
+                        {
+                            result.max = curr;
+                            max_value = HPX_MOVE(curr_value);
+                        }
+                    }
+                }
+                else
+                {
                     if (HPX_INVOKE(f, curr_value, min_value))
                     {
                         result.min = curr;
                         min_value = curr_value;
                     }
-
                     if (!HPX_INVOKE(f, curr_value, max_value))
                     {
                         result.max = curr;
                         max_value = HPX_MOVE(curr_value);
                     }
-                });
+
+                    break;
+                }
+            }
 
             return result;
         }
@@ -1038,37 +1138,83 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename FwdIter, typename Sent,
                 typename F, typename Proj>
             static constexpr minmax_element_result<FwdIter> sequential(
-                ExPolicy&& policy, FwdIter first, Sent last, F&& f, Proj&& proj)
+                ExPolicy&&, FwdIter first, Sent last, F&& f, Proj&& proj)
             {
                 auto min = first, max = first;
 
                 // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions)
                 if (first == last || ++first == last)
-                {
                     return minmax_element_result<FwdIter>{min, max};
-                }
 
                 using element_type = hpx::traits::proxy_value_t<
                     std::decay_t<std::invoke_result_t<Proj,
                         hpx::traits::iter_reference_t<FwdIter>>>>;
 
                 element_type min_value = HPX_INVOKE(proj, *min);
-                element_type max_value = HPX_INVOKE(proj, *max);
-                util::const_loop(HPX_FORWARD(ExPolicy, policy), first, last,
-                    [&](FwdIter const& curr) -> void {
-                        element_type curr_value = HPX_INVOKE(proj, *curr);
+                element_type max_value = min_value;
+                element_type next_value = HPX_INVOKE(proj, *first);
+
+                if (HPX_INVOKE(f, next_value, min_value))
+                {
+                    min = first;
+                    min_value = HPX_MOVE(next_value);
+                }
+                else
+                {
+                    max = first;
+                    max_value = HPX_MOVE(next_value);
+                }
+
+                while (++first != last)
+                {
+                    FwdIter curr = first;
+                    element_type curr_value = HPX_INVOKE(proj, *curr);
+                    if (++first != last)
+                    {
+                        element_type next_value = HPX_INVOKE(proj, *first);
+                        if (!HPX_INVOKE(f, next_value, curr_value))
+                        {
+                            if (HPX_INVOKE(f, curr_value, min_value))
+                            {
+                                min = curr;
+                                min_value = HPX_MOVE(curr_value);
+                            }
+                            if (!HPX_INVOKE(f, next_value, max_value))
+                            {
+                                max = first;
+                                max_value = HPX_MOVE(next_value);
+                            }
+                        }
+                        else
+                        {
+                            if (HPX_INVOKE(f, next_value, min_value))
+                            {
+                                min = first;
+                                min_value = HPX_MOVE(next_value);
+                            }
+                            if (!HPX_INVOKE(f, curr_value, max_value))
+                            {
+                                max = curr;
+                                max_value = HPX_MOVE(curr_value);
+                            }
+                        }
+                    }
+                    else
+                    {
                         if (HPX_INVOKE(f, curr_value, min_value))
                         {
                             min = curr;
                             min_value = curr_value;
                         }
-
                         if (!HPX_INVOKE(f, curr_value, max_value))
                         {
                             max = curr;
                             max_value = HPX_MOVE(curr_value);
                         }
-                    });
+
+                        break;
+                    }
+                }
 
                 return minmax_element_result<FwdIter>{min, max};
             }
@@ -1076,37 +1222,82 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename FwdIter, typename Sent,
                 typename F>
             static constexpr minmax_element_result<FwdIter> sequential(
-                ExPolicy&& policy, FwdIter first, Sent last, F&& f,
-                hpx::identity)
+                ExPolicy&&, FwdIter first, Sent last, F&& f, hpx::identity)
             {
                 auto min = first, max = first;
 
                 // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions)
                 if (first == last || ++first == last)
-                {
                     return minmax_element_result<FwdIter>{min, max};
-                }
 
                 using element_type = hpx::traits::proxy_value_t<
                     hpx::traits::iter_value_t<FwdIter>>;
 
                 element_type min_value = *min;
-                element_type max_value = *max;
-                util::const_loop(HPX_FORWARD(ExPolicy, policy), first, last,
-                    [&](FwdIter const& curr) -> void {
-                        element_type curr_value = *curr;
+                element_type max_value = min_value;
+                element_type next_value = *first;
+
+                if (HPX_INVOKE(f, next_value, min_value))
+                {
+                    min = first;
+                    min_value = HPX_MOVE(next_value);
+                }
+                else
+                {
+                    max = first;
+                    max_value = HPX_MOVE(next_value);
+                }
+
+                while (++first != last)
+                {
+                    FwdIter curr = first;
+                    element_type curr_value = *curr;
+                    if (++first != last)
+                    {
+                        element_type next_value = *first;
+                        if (!HPX_INVOKE(f, next_value, curr_value))
+                        {
+                            if (HPX_INVOKE(f, curr_value, min_value))
+                            {
+                                min = curr;
+                                min_value = HPX_MOVE(curr_value);
+                            }
+                            if (!HPX_INVOKE(f, next_value, max_value))
+                            {
+                                max = first;
+                                max_value = HPX_MOVE(next_value);
+                            }
+                        }
+                        else
+                        {
+                            if (HPX_INVOKE(f, next_value, min_value))
+                            {
+                                min = first;
+                                min_value = HPX_MOVE(next_value);
+                            }
+                            if (!HPX_INVOKE(f, curr_value, max_value))
+                            {
+                                max = curr;
+                                max_value = HPX_MOVE(curr_value);
+                            }
+                        }
+                    }
+                    else
+                    {
                         if (HPX_INVOKE(f, curr_value, min_value))
                         {
                             min = curr;
                             min_value = curr_value;
                         }
-
                         if (!HPX_INVOKE(f, curr_value, max_value))
                         {
                             max = curr;
                             max_value = HPX_MOVE(curr_value);
                         }
-                    });
+
+                        break;
+                    }
+                }
 
                 return minmax_element_result<FwdIter>{min, max};
             }
