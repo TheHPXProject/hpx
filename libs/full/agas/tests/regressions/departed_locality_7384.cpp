@@ -20,10 +20,12 @@
 #include <hpx/modules/testing.hpp>
 
 #include <hpx/agas/addressing_service.hpp>
+#include <hpx/asio/asio_util.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <string>
 #include <system_error>
@@ -58,6 +60,54 @@ std::vector<std::string> get_environment()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Return a TCP port on the given address that is unused right now.
+//
+// The launched locality needs a parcelport port of its own. Deriving that port
+// from a fixed constant collides with whatever else happens to hold it: a
+// concurrent test run, an unrelated HPX application, or a socket still
+// lingering in TIME_WAIT. Worse, the collision is never diagnosed: the launched
+// locality simply cannot bind, so this test hangs until it is killed rather
+// than failing. Let the operating system name a free port instead.
+//
+// The port is claimed the same way the TCP parcelport claims its own acceptor,
+// so the probe rejects anything the launched locality could not bind either.
+// The probe cannot reserve it, though: the port is released before the child
+// starts, so a small window remains in which another process could take it.
+// Closing that window would require the parcelport to bind port 0 and report
+// the port it actually got, which it does not do.
+std::uint16_t get_unused_port(std::string const& address)
+{
+    ::asio::io_context io_service;
+
+    for (auto it = hpx::util::accept_begin(address, 0, io_service);
+        it != hpx::util::accept_end(); ++it)
+    {
+        std::error_code ec;
+        ::asio::ip::tcp::endpoint const ep = *it;
+        ::asio::ip::tcp::acceptor acceptor(io_service);
+
+        acceptor.open(ep.protocol(), ec);
+        if (ec)
+            continue;
+
+        acceptor.set_option(::asio::ip::tcp::acceptor::reuse_address(true), ec);
+        if (ec)
+            continue;
+
+        acceptor.bind(ep, ec);
+        if (ec)
+            continue;
+
+        // the acceptor is closed again on the way out, releasing the port for
+        // the launched locality to pick up
+        return acceptor.local_endpoint().port();
+    }
+
+    HPX_THROW_EXCEPTION(hpx::error::network_error, "get_unused_port",
+        "failed to find an unused port on {}", address);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 void ping() {}
 HPX_PLAIN_ACTION(ping, departed_locality_ping_action)
 
@@ -89,22 +139,22 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // set up environment for the launched executable
     std::vector<std::string> env = get_environment();    // current environment
 
+    // the launched locality talks to this locality's AGAS server and runs its
+    // own parcelport on the same host
+    std::string const address =
+        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS);
+
     // pass along the console parcelport address
-    env.push_back("HPX_AGAS_SERVER_ADDRESS=" +
-        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS));
+    env.push_back("HPX_AGAS_SERVER_ADDRESS=" + address);
     env.push_back("HPX_AGAS_SERVER_PORT=" +
         hpx::get_config_entry(
             "hpx.agas.port", std::to_string(HPX_INITIAL_IP_PORT)));
 
-    // The launched executable will run on the same host as this test. Each
-    // launched HPX locality needs to be assigned a unique port (the
-    // launch_process test uses 42).
-    int const port = 43;
-
-    env.push_back("HPX_PARCEL_SERVER_ADDRESS=" +
-        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS));
-    env.push_back("HPX_PARCEL_SERVER_PORT=" +
-        std::to_string(HPX_CONNECTING_IP_PORT - port));
+    // the launched executable runs on the same host as this test, so give it a
+    // parcelport port that is known to be free at this moment
+    env.push_back("HPX_PARCEL_SERVER_ADDRESS=" + address);
+    env.push_back(
+        "HPX_PARCEL_SERVER_PORT=" + std::to_string(get_unused_port(address)));
 
     // instruct new locality to connect back on startup using the given name
     env.push_back("HPX_ON_STARTUP_WAIT_ON_LATCH=departed_locality_7384");
