@@ -70,8 +70,11 @@ std::vector<std::string> get_environment()
 // than failing. Let the operating system name a free port instead.
 //
 // The port is claimed the same way the TCP parcelport claims its own acceptor,
-// so whatever is returned here is a port the launched locality can bind in
-// turn.
+// so the probe rejects anything the launched locality could not bind either.
+// The probe cannot reserve it, though: the port is released before the child
+// starts, so a small window remains in which another process could take it.
+// Closing that window would require the parcelport to bind port 0 and report
+// the port it actually got, which it does not do.
 std::uint16_t get_unused_port(std::string const& address)
 {
     ::asio::io_context io_service;
