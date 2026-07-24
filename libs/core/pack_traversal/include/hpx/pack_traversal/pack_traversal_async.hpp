@@ -35,28 +35,34 @@ namespace hpx::util {
     /// require a visitor callable object which provides three `operator()`
     /// overloads as depicted by the code sample below:
     ///
-    ///    ```cpp struct my_async_visitor {
-    ///        // The synchronous overload is called for each object, // it may
-    ///        return false to suspend the current control. // In that case the
-    ///        overload below is called. template <typename T> bool
-    ///        operator()(async_traverse_visit_tag, T&& element) {
+    ///    ```cpp
+    ///    struct my_async_visitor {
+    ///        // The synchronous overload is called for each object. It may
+    ///        // return false to suspend the current control. In that case the
+    ///        // overload below is called.
+    ///        template <typename T>
+    ///        bool operator()(async_traverse_visit_tag, T&& element)
+    ///        {
     ///            return true;
     ///        }
     ///
-    ///        // The asynchronous overload this is called when the //
-    ///        synchronous overload returned false. // In addition to the
-    ///        current visited element the overload is // called with a
-    ///        continuation callable object which resumes the // traversal when
-    ///        it's called later. // The continuation next may be stored and
-    ///        called later or // dropped completely to abort the traversal
-    ///        early. template <typename T, typename N> void
-    ///        operator()(async_traverse_detach_tag, T&& element, N&& next) { }
+    ///        // The asynchronous overload is called when the synchronous
+    ///        // overload returned false. In addition to the current visited
+    ///        // element, the overload is called with a continuation callable
+    ///        // object which resumes the traversal when called later.
+    ///        template <typename T, typename N>
+    ///        void operator()(async_traverse_detach_tag, T&& element, N&& next)
+    ///        {
+    ///        }
     ///
-    ///        // The overload is called when the traversal was finished. // As
-    ///        argument the whole pack is passed over which we // traversed
-    ///        asynchronously. template <typename T> void
-    ///        operator()(async_traverse_complete_tag, T&& pack) { }
-    ///    }; ```
+    ///        // The overload is called when the traversal was finished. The
+    ///        // whole pack which was traversed asynchronously is passed.
+    ///        template <typename T>
+    ///        void operator()(async_traverse_complete_tag, T&& pack)
+    ///        {
+    ///        }
+    ///    };
+    ///    ```
     ///
     /// \param   visitor A visitor object which provides the three `operator()`
     ///                  overloads that were described above. Additionally, the
@@ -91,28 +97,35 @@ namespace hpx::util {
     /// overloads as depicted by the code sample below:
     ///
     /// ```cpp
-    ///    struct my_async_visitor {
-    ///        // The synchronous overload is called for each object, // it may
-    ///        return false to suspend the current control. // In that case the
-    ///        overload below is called. template <typename T> bool
-    ///        operator()(async_traverse_visit_tag, T&& element) {
-    ///            return true;
-    ///        }
+    /// struct my_async_visitor {
+    ///     // The synchronous overload is called for each object. It may
+    ///     // return false to suspend the current control. In that case the
+    ///     // overload below is called.
+    ///     template <typename T>
+    ///     bool operator()(async_traverse_visit_tag, T&& element)
+    ///     {
+    ///         return true;
+    ///     }
     ///
-    ///        // The asynchronous overload this is called when the //
-    ///        synchronous overload returned false. // In addition to the
-    ///        current visited element the overload is // called with a
-    ///        continuation callable object which resumes the // traversal when
-    ///        it's called later. // The continuation next may be stored and
-    ///        called later or // dropped completely to abort the traversal
-    ///        early. template <typename T, typename N> void
-    ///        operator()(async_traverse_detach_tag, T&& element, N&& next) { }
+    ///     // The asynchronous overload is called when the synchronous
+    ///     // overload returned false. In addition to the current visited
+    ///     // element, this overload receives a continuation callable object
+    ///     // which resumes the traversal when called later. The continuation
+    ///     // may be stored and called later or dropped completely to abort
+    ///     // the traversal early.
+    ///     template <typename T, typename N>
+    ///     void operator()(async_traverse_detach_tag, T&& element, N&& next)
+    ///     {
+    ///     }
     ///
-    ///        // The overload is called when the traversal was finished. // As
-    ///        argument the whole pack is passed over which we // traversed
-    ///        asynchronously. template <typename T> void
-    ///        operator()(async_traverse_complete_tag, T&& pack) { }
-    ///    }; ```
+    ///     // This overload is called when the traversal is finished. The
+    ///     // complete pack that was traversed asynchronously is passed.
+    ///     template <typename T>
+    ///     void operator()(async_traverse_complete_tag, T&& pack)
+    ///     {
+    ///     }
+    /// };
+    /// ```
     ///
     /// \param   visitor A visitor object which provides the three `operator()`
     ///                  overloads that were described above. Additionally, the

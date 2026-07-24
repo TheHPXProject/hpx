@@ -290,10 +290,6 @@ namespace hpx::agas {
         /// \param locality   [out] The locality_id value uniquely identifying the
         ///                   console locality. This is valid only, if the
         ///                   return value of this function is true.
-        /// \param try_cache  [in] If this is set to true the console is first
-        ///                   tried to be found in the local cache. Otherwise
-        ///                   this function will always query AGAS, even if the
-        ///                   console locality_id is already known locally.
         /// \param ec         [in,out] this represents the error status on exit,
         ///                   if this is pre-initialized to \a hpx#throws
         ///                   the function will throw on error instead.
@@ -355,6 +351,24 @@ namespace hpx::agas {
         ///                   for this component. The default value for this
         ///                   parameter is \a components#component_type#invalid,
         ///                   which will return prefixes of all localities.
+        ///
+        /// \returns A future that becomes ready with the number of matching
+        ///          localities.
+        hpx::future<std::uint32_t> get_num_localities_async(
+            components::component_type type = to_int(
+                hpx::components::component_enum_type::invalid)) const;
+
+        /// \brief Query for the number of all known localities.
+        ///
+        /// This function returns the number of localities known to the AGAS server
+        /// or the number of localities having a registered factory for a given
+        /// component type.
+        ///
+        /// \param type       [in] The component type will be used to determine
+        ///                   the set of prefixes having a registered factory
+        ///                   for this component. The default value for this
+        ///                   parameter is \a components#component_type#invalid,
+        ///                   which will return prefixes of all localities.
         /// \param ec         [in,out] this represents the error status on exit,
         ///                   if this is pre-initialized to \a hpx#throws
         ///                   the function will throw on error instead.
@@ -364,13 +378,24 @@ namespace hpx::agas {
         ///                   throw but returns the result code using the
         ///                   parameter \a ec. Otherwise, it throws an instance
         ///                   of hpx#exception.
-        hpx::future<std::uint32_t> get_num_localities_async(
-            components::component_type type = to_int(
-                hpx::components::component_enum_type::invalid)) const;
-
         std::uint32_t get_num_localities(
             components::component_type type, error_code& ec = throws) const;
 
+        /// \brief Query for the number of all known localities.
+        ///
+        /// This function returns the number of localities known to the AGAS server
+        /// or the number of localities having a registered factory for a given
+        /// component type.
+        ///
+        /// \param ec         [in,out] this represents the error status on exit,
+        ///                   if this is pre-initialized to \a hpx#throws
+        ///                   the function will throw on error instead.
+        ///
+        /// \note             As long as \a ec is not pre-initialized to
+        ///                   \a hpx#throws this function doesn't
+        ///                   throw but returns the result code using the
+        ///                   parameter \a ec. Otherwise, it throws an instance
+        ///                   of hpx#exception.
         std::uint32_t get_num_localities(error_code& ec = throws) const
         {
             return get_num_localities(
@@ -460,9 +485,6 @@ namespace hpx::agas {
         /// to generate. This function can be called to preallocate a range of
         /// ids usable for this purpose.
         ///
-        /// \param l          [in] The locality the locality id needs to be
-        ///                   generated for. Repeating calls using the same
-        ///                   locality results in identical locality_id values.
         /// \param count      [in] The number of global ids to be generated.
         /// \param lower_bound
         ///                   [out] The lower bound of the assigned id range.
@@ -972,9 +994,6 @@ namespace hpx::agas {
         /// \param credits    [in] The number of reference counts to add for
         ///                   the given id.
         /// \param keep_alive [in] Id to keep alive (if valid)
-        /// \param ec         [in,out] this represents the error status on exit,
-        ///                   if this is pre-initialized to \a hpx#throws
-        ///                   the function will throw on error instead.
         ///
         /// \returns          Whether the operation was successful.
         ///
@@ -1008,11 +1027,6 @@ namespace hpx::agas {
         ///
         /// \param id         [in] The global address (id) for which the
         ///                   global reference count has to be decremented.
-        /// \param t          [out] If this was the last outstanding global
-        ///                   reference for the given gid (the return value of
-        ///                   this function is zero), t will be set to the
-        ///                   component type of the corresponding element.
-        ///                   Otherwise t will not be modified.
         /// \param credits    [in] The number of reference counts to add for
         ///                   the given id.
         /// \param ec         [in,out] this represents the error status on exit,
@@ -1075,6 +1089,19 @@ namespace hpx::agas {
         bool register_name(std::string const& name, hpx::id_type const& id,
             error_code& ec = throws) const;
 
+        /// \brief Unregister a global name (release any existing association).
+        ///
+        /// This function releases any existing association of the given global
+        /// name with a global address (id).
+        ///
+        /// \param name [in] The global name (string) for which any association
+        ///        with a global address (id) has to be released.
+        ///
+        /// \returns A future that becomes ready with the global id that was
+        ///          associated with the given name.
+        hpx::future<hpx::id_type> unregister_name_async(
+            std::string const& name) const;
+
         /// \brief Unregister a global name (release any existing association)
         ///
         /// This function releases any existing association of the given global
@@ -1087,19 +1114,14 @@ namespace hpx::agas {
         ///                   if this is pre-initialized to \a hpx#throws
         ///                   the function will throw on error instead.
         ///
-        /// \returns          The function returns \a true if an association of
-        ///                   this global name has been released, and it returns
-        ///                   \a false, if no association existed. Any error
-        ///                   results in an exception thrown from this function.
+        /// \returns          The global id that was associated with the given name.
+        ///                   Any error results in an exception thrown from this function.
         ///
         /// \note             As long as \a ec is not pre-initialized to
         ///                   \a hpx#throws this function doesn't
         ///                   throw but returns the result code using the
         ///                   parameter \a ec. Otherwise it throws an instance
         ///                   of hpx#exception.
-        hpx::future<hpx::id_type> unregister_name_async(
-            std::string const& name) const;
-
         hpx::id_type unregister_name(
             std::string const& name, error_code& ec = throws) const;
 
@@ -1108,29 +1130,32 @@ namespace hpx::agas {
         /// This function returns the global address associated with the given
         /// global name.
         ///
-        /// \param name       [in] The global name (string) for which the
-        ///                   currently associated global address has to be
-        ///                   retrieved.
-        /// \param ec         [in,out] this represents the error status on exit,
-        ///                   if this is pre-initialized to \a hpx#throws
-        ///                   the function will throw on error instead.
-        /// \returns          [out] The id currently associated with the given
-        ///                   global name (valid only if the return value is
-        ///                   true).
+        /// \param name [in] The global name (string) for which the currently
+        ///        associated global address has to be retrieved.
         ///
-        /// This function returns true if it returned global address (id),
-        /// which is currently associated with the given global name, and it
-        /// returns false, if currently there is no association for this global
-        /// name. Any error results in an exception thrown from this function.
-        ///
-        /// \note             As long as \a ec is not pre-initialized to
-        ///                   \a hpx#throws this function doesn't
-        ///                   throw but returns the result code using the
-        ///                   parameter \a ec. Otherwise it throws an instance
-        ///                   of hpx#exception.
+        /// \returns A future holding the global id currently associated with the
+        ///          given global name.
         hpx::future<hpx::id_type> resolve_name_async(
             std::string const& name) const;
 
+        /// \brief Query for the global address associated with a given global name.
+        ///
+        /// This function returns the global address associated with the given
+        /// global name.
+        ///
+        /// \param name [in] The global name (string) for which the currently
+        ///                  associated global address has to be retrieved.
+        /// \param ec [in,out] This represents the error status on exit. If this
+        ///                    is pre-initialized to \a hpx#throws the function
+        ///                    will throw on error instead.
+        ///
+        /// \returns The global id currently associated with the given global
+        ///          name.
+        ///
+        /// \note As long as \a ec is not pre-initialized to \a hpx#throws this
+        ///       function doesn't throw but returns the result code using the
+        ///       parameter \a ec. Otherwise it throws an instance of
+        ///       hpx#exception.
         hpx::id_type resolve_name(
             std::string const& name, error_code& ec = throws) const;
 
@@ -1142,8 +1167,6 @@ namespace hpx::agas {
         ///
         /// \param name       [in] The global name (string) for which the given
         ///                   event should be triggered.
-        /// \param evt        [in] The event for which a listener should be
-        ///                   installed.
         /// \param call_for_past_events   [in, optional] Trigger the listener even
         ///                   if the given event has already happened in the past.
         ///                   The default for this parameter is \a false.

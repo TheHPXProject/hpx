@@ -33,7 +33,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>(locality#<locality_id>/total)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality_counter_discoverer(
         counter_info const&, discover_counter_func const&,
@@ -43,7 +45,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>(locality#<locality_id>/pool#<pool_name>/total)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality_pool_counter_discoverer(
         counter_info const&, discover_counter_func const&,
@@ -53,7 +57,9 @@ namespace hpx::performance_counters {
     /// registered with the counter types. It is suitable to be used for all
     /// counters following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>{locality#0/total}/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality0_counter_discoverer(
         counter_info const&, discover_counter_func const&,
@@ -63,7 +69,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>(locality#<locality_id>/worker-thread#<threadnum>)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality_thread_counter_discoverer(
         counter_info const&, discover_counter_func const&,
@@ -73,7 +81,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>{locality#<locality_id>/pool#<poolname>/thread#<threadnum>}/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality_pool_thread_counter_discoverer(
         counter_info const& info, discover_counter_func const& f,
@@ -83,7 +93,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>{locality#<locality_id>/pool#<poolname>/thread#<threadnum>}/<instancename>
+    ///   \endcode
     ///
     /// This is essentially the same as above just that locality#*/total is not
     /// supported.
@@ -96,7 +108,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /<objectname>(locality#<locality_id>/numa-node#<threadnum>)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool locality_numa_counter_discoverer(
         counter_info const&, discover_counter_func const&,
@@ -107,7 +121,9 @@ namespace hpx::performance_counters {
     /// the actual value to monitor. This function checks the validity of the
     /// supplied counter name, it has to follow the scheme:
     ///
+    ///   \code
     ///   /<objectname>(locality#<locality_id>/total)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT naming::gid_type locality_raw_counter_creator(
         counter_info const&, hpx::function<std::int64_t(bool)> const&,
@@ -122,7 +138,9 @@ namespace hpx::performance_counters {
     /// the actual value to monitor. This function checks the validity of the
     /// supplied counter name, it has to follow the scheme:
     ///
+    ///   \code
     ///   /agas(<objectinstance>/total)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT naming::gid_type agas_raw_counter_creator(
         counter_info const&, error_code&, char const* const);
@@ -131,7 +149,9 @@ namespace hpx::performance_counters {
     /// with the counter types. It is suitable to be used for all counters
     /// following the naming scheme:
     ///
+    ///   \code
     ///   /agas(<objectinstance>/total)/<instancename>
+    ///   \endcode
     ///
     HPX_CXX_EXPORT HPX_EXPORT bool agas_counter_discoverer(counter_info const&,
         discover_counter_func const&, discover_counters_mode, error_code&);
