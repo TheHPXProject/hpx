@@ -42,6 +42,35 @@ namespace hpx::when_all_vector_detail {
         }
     };
 
+    // P2300 allocator support: extract allocator from an environment
+    // via get_allocator, falling back to std::allocator<void> when the
+    // query is not supported.
+    template <typename Env, typename = void>
+    struct env_allocator
+    {
+        using type = std::allocator<void>;
+
+        static type get(Env const&) noexcept
+        {
+            return {};
+        }
+    };
+
+    template <typename Env>
+    struct env_allocator<Env,
+        std::void_t<decltype(hpx::execution::experimental::get_allocator(
+            std::declval<Env const&>()))>>
+    {
+        using type =
+            std::decay_t<decltype(hpx::execution::experimental::get_allocator(
+                std::declval<Env const&>()))>;
+
+        static type get(Env const& env)
+        {
+            return hpx::execution::experimental::get_allocator(env);
+        }
+    };
+
     HPX_CXX_CORE_EXPORT template <typename Sender>
     struct when_all_vector_sender_impl
     {
@@ -169,84 +198,17 @@ namespace hpx::when_all_vector_detail {
                 std::size_t const i;
 
                 template <typename Error>
-                void set_error(Error&& error) && noexcept
-                {
-                    if (!op_state.set_stopped_error_called.exchange(true))
-                    {
-                        op_state.stop_source_.request_stop();
-                        try
-                        {
-                            op_state.error = HPX_FORWARD(Error, error);
-                        }
-                        catch (...)
-                        {
-                            // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                            op_state.error = std::current_exception();
-                        }
-                    }
+                void set_error(Error&& error) && noexcept;
 
-                    op_state.finish();
-                }
-
-                void set_stopped() && noexcept
-                {
-                    // request stop only if we're not in error state
-                    if (!op_state.set_stopped_error_called.exchange(true))
-                    {
-                        op_state.stop_source_.request_stop();
-                    }
-                    op_state.finish();
-                }
+                template <typename Dummy = void>
+                void set_stopped() && noexcept;
 
                 template <typename... Ts>
-                void set_value(Ts&&... ts) && noexcept
-                {
-                    if (!op_state.set_stopped_error_called)
-                    {
-                        try
-                        {
-                            // We only have something to store if the
-                            // predecessor sends the single value that it should
-                            // send. We have nothing to store for predecessor
-                            // senders that send nothing.
-                            if constexpr (sizeof...(Ts) == 1)
-                            {
-                                op_state.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
-                            }
-                        }
-                        catch (...)
-                        {
-                            if (!op_state.set_stopped_error_called.exchange(
-                                    true))
-                            {
-                                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-                                op_state.error = std::current_exception();
-                            }
-                        }
-                    }
-
-                    op_state.finish();
-                }
+                void set_value(Ts&&... ts) && noexcept;
 
                 // clang-format off
-                auto get_env() const noexcept
-                {
-                    /* The new calling convention is:
-                     * make_env(old_env, prop(tag, val))*/
-
-
-                    // Due to the bug described in the get_env.cpp tests,
-                    // returning an env constructed directly with the
-                    // temporaries returned by the functions causes wrong
-                    // behaviour.
-                    auto e = hpx::execution::experimental::get_env(
-                        op_state.receiver);
-                    auto p = hpx::execution::experimental::prop(
-                        hpx::execution::experimental::get_stop_token,
-                        op_state.stop_source_.get_token());
-                    return hpx::execution::experimental::make_env(
-                        std::move(e), std::move(p));
-                }
+                template <typename Dummy = void>
+                auto get_env() const noexcept;
                 // clang-format on
             };
 
@@ -291,18 +253,80 @@ namespace hpx::when_all_vector_detail {
             using operation_state_type =
                 hpx::execution::experimental::connect_result_t<Sender,
                     when_all_vector_receiver>;
+
+            // P2300 allocator support: extract allocator from the
+            // receiver's environment, rebind to the element type, and
+            // use a custom deleter so the unique_ptr deallocates
+            // through the allocator.
+            using env_type = decltype(hpx::execution::experimental::get_env(
+                std::declval<receiver_type const&>()));
+            using raw_alloc_type = typename env_allocator<env_type>::type;
+            using element_type = std::optional<operation_state_type>;
+            using alloc_type = typename std::allocator_traits<
+                raw_alloc_type>::template rebind_alloc<element_type>;
+            using alloc_traits_type = std::allocator_traits<alloc_type>;
+
+            struct op_states_deleter
+            {
+                alloc_type alloc;
+                std::size_t count = 0;
+
+                void operator()(element_type* ptr) noexcept
+                {
+                    if (ptr != nullptr)
+                    {
+                        for (std::size_t i = 0; i < count; ++i)
+                        {
+                            alloc_traits_type::destroy(alloc, ptr + i);
+                        }
+                        alloc_traits_type::deallocate(alloc, ptr, count);
+                    }
+                }
+            };
+
             using operation_states_storage_type =
-                std::unique_ptr<std::optional<operation_state_type>[]>;
-            operation_states_storage_type op_states = nullptr;
+                std::unique_ptr<element_type[], op_states_deleter>;
+            operation_states_storage_type op_states;
 
             template <typename Receiver_>
             operation_state(Receiver_&& receiver, std::vector<Sender>&& senders)
               : num_predecessors(senders.size())
               , receiver(HPX_FORWARD(Receiver_, receiver))
+              , op_states(nullptr,
+                    op_states_deleter{alloc_type(env_allocator<env_type>::get(
+                                          hpx::execution::experimental::get_env(
+                                              this->receiver))),
+                        0})
             {
-                op_states =
-                    std::make_unique<std::optional<operation_state_type>[]>(
-                        num_predecessors);
+                {
+                    alloc_type alloc(env_allocator<env_type>::get(
+                        hpx::execution::experimental::get_env(this->receiver)));
+                    element_type* ptr =
+                        alloc_traits_type::allocate(alloc, num_predecessors);
+
+                    std::size_t constructed = 0;
+                    try
+                    {
+                        for (std::size_t j = 0; j < num_predecessors; ++j)
+                        {
+                            alloc_traits_type::construct(alloc, ptr + j);
+                            ++constructed;
+                        }
+                    }
+                    catch (...)
+                    {
+                        for (std::size_t j = 0; j < constructed; ++j)
+                        {
+                            alloc_traits_type::destroy(alloc, ptr + j);
+                        }
+                        alloc_traits_type::deallocate(
+                            alloc, ptr, num_predecessors);
+                        throw;
+                    }
+                    operation_states_storage_type temp(
+                        ptr, op_states_deleter{alloc, num_predecessors});
+                    op_states = std::move(temp);
+                }
                 std::size_t i = 0;
                 for (auto&& sender : senders)
                 {
@@ -445,7 +469,7 @@ namespace hpx::when_all_vector_detail {
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
                         hpx::execution::experimental::start(
-                            op_states.get()[i].value());
+                            op_states[i].value());
 #if defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic pop
 #endif
@@ -467,6 +491,100 @@ namespace hpx::when_all_vector_detail {
             return operation_state<Receiver>(receiver, senders);
         }
     };    // namespace hpx::when_all_vector_detail
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Error>
+    void when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::set_error(
+            Error&& error) && noexcept
+    {
+        if (!op_state.set_stopped_error_called.exchange(true))
+        {
+            op_state.stop_source_.request_stop();
+            try
+            {
+                op_state.error = HPX_FORWARD(Error, error);
+            }
+            catch (...)
+            {
+                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                op_state.error = std::current_exception();
+            }
+        }
+
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Dummy>
+    void when_all_vector_sender_impl<
+        Sender>::when_all_vector_sender_type::operation_state<Receiver>::
+        when_all_vector_receiver::set_stopped() && noexcept
+    {
+        // request stop only if we're not in error state
+        if (!op_state.set_stopped_error_called.exchange(true))
+        {
+            op_state.stop_source_.request_stop();
+        }
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename... Ts>
+    void when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::set_value(
+            Ts&&... ts) && noexcept
+    {
+        if (!op_state.set_stopped_error_called)
+        {
+            try
+            {
+                // We only have something to store if the
+                // predecessor sends the single value that it should
+                // send. We have nothing to store for predecessor
+                // senders that send nothing.
+                if constexpr (sizeof...(Ts) == 1)
+                {
+                    op_state.ts[i].emplace(HPX_FORWARD(Ts, ts)...);
+                }
+            }
+            catch (...)
+            {
+                if (!op_state.set_stopped_error_called.exchange(true))
+                {
+                    // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                    op_state.error = std::current_exception();
+                }
+            }
+        }
+
+        op_state.finish();
+    }
+
+    template <typename Sender>
+    template <typename Receiver>
+    template <typename Dummy>
+    auto when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
+        operation_state<Receiver>::when_all_vector_receiver::get_env()
+            const noexcept
+    {
+        /* The new calling convention is:
+         * make_env(old_env, prop(tag, val))*/
+
+        // Due to the bug described in the get_env.cpp tests,
+        // returning an env constructed directly with the
+        // temporaries returned by the functions causes wrong
+        // behaviour.
+        auto e = hpx::execution::experimental::get_env(op_state.receiver);
+        auto p = hpx::execution::experimental::prop(
+            hpx::execution::experimental::get_stop_token,
+            op_state.stop_source_.get_token());
+        return hpx::execution::experimental::make_env(
+            std::move(e), std::move(p));
+    }
 }    // namespace hpx::when_all_vector_detail
 
 namespace hpx::execution::experimental {
