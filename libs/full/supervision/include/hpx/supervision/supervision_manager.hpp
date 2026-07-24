@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace hpx::supervision {
 
@@ -25,13 +26,15 @@ namespace hpx::supervision {
 
         // supervision API
         publish_result publish_event(hpx::id_type const& target, event ev,
-            hpx::error_code& ec = throws) const;
+            std::uint64_t epoch = 0, hpx::error_code& ec = throws) const;
 
         lifecycle_state query_state(
             hpx::id_type const& target, hpx::error_code& ec = throws) const;
 
         hpx::id_type register_observer(hpx::id_type const& target,
-            hpx::id_type const& agent, hpx::error_code& ec = throws) const;
+            hpx::id_type const& agent,
+            std::optional<std::uint64_t> epoch_filter = std::nullopt,
+            hpx::error_code& ec = throws) const;
 
         void unregister_observer(hpx::id_type const& observer_handle,
             hpx::error_code& ec = throws) const;

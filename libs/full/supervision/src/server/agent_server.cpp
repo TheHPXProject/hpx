@@ -11,11 +11,14 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/supervision/server/agent.hpp>
 #include <hpx/supervision/supervision_api.hpp>
+
+#include <cstddef>
 
 using agent_component = hpx::supervision::server::agent_component;
 using agent_component_type = hpx::components::component<agent_component>;
@@ -36,32 +39,35 @@ namespace hpx::supervision::server {
         return hpx::local_new<agent_component>(hpx::launch::sync, HPX_MOVE(f));
     }
 
-    void agent_component::invoke_if_active(
+    bool agent_component::invoke_if_active(
         lifecycle_event_notification const& notify)
     {
         {
             std::lock_guard<hpx::spinlock> l(mtx_);
             if (!active_)
             {
-                return;
+                return false;
             }
             ++in_flight_;
         }
 
+        bool result = true;
         try
         {
             if (f_)
             {
-                f_(notify, hpx::throws);
+                result = f_(notify);
             }
         }
         catch (...)
         {
             finish_delivery();
-            throw;
+            std::rethrow_exception(std::current_exception());
         }
 
         finish_delivery();
+
+        return result;
     }
 
     void agent_component::finish_delivery()
@@ -79,7 +85,8 @@ namespace hpx::supervision::server {
     {
         std::unique_lock<hpx::spinlock> l(mtx_);
         active_ = false;
-        while (in_flight_ != 0)
+
+        while (in_flight_ > 0)
         {
             cv_.wait(l);
         }

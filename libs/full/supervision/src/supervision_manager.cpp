@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace hpx::supervision {
@@ -56,7 +57,8 @@ namespace hpx::supervision {
     }
 
     publish_result supervision_manager::publish_event(
-        hpx::id_type const& target, event const ev, hpx::error_code& ec) const
+        hpx::id_type const& target, event const ev, std::uint64_t const epoch,
+        hpx::error_code& ec) const
     {
         if (!server_)
         {
@@ -66,7 +68,7 @@ namespace hpx::supervision {
             return publish_result::already_terminal;
         }
 
-        auto const result = server_->publish_event(target, ev);
+        auto const result = server_->publish_event(target, ev, epoch);
         if (&ec != &throws)
             ec = make_success_code();
         return result;
@@ -91,7 +93,7 @@ namespace hpx::supervision {
 
     hpx::id_type supervision_manager::register_observer(
         hpx::id_type const& target, hpx::id_type const& agent,
-        hpx::error_code& ec) const
+        std::optional<std::uint64_t> epoch_filter, hpx::error_code& ec) const
     {
         if (!server_)
         {
@@ -101,7 +103,8 @@ namespace hpx::supervision {
             return {};
         }
 
-        auto result = server_->register_observer(target, agent);
+        auto result =
+            server_->register_observer(target, agent, HPX_MOVE(epoch_filter));
         if (&ec != &throws)
             ec = make_success_code();
         return result;

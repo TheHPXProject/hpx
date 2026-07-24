@@ -21,6 +21,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 namespace hpx::supervision {
 
@@ -45,20 +46,30 @@ namespace hpx::supervision {
         losing_locality,
     };
 
+    // is_terminal() is declared in supervision_fwd.hpp; its definition is
+    // deferred to here since it needs the full definition of `event`.
+    HPX_CXX_EXPORT constexpr bool is_terminal(event const ev) noexcept
+    {
+        return ev == event::completed || ev == event::failed;
+    }
+
     /// \brief Outcome of a call to \a publish_event().
     ///
     /// \c event::completed and \c event::failed are terminal: once either
-    /// has been recorded for a target, later terminal publications for the same
-    /// target become no-ops, reported via \c already_terminal. Non-terminal
-    /// transitions remain invalid.
-    enum class publish_result : std::uint8_t
-    {
+    /// has been recorded for a target within a given epoch, later terminal
+    /// publications for the same target/epoch become no-ops, reported via
+    /// \c already_terminal. Non-terminal transitions remain invalid.
+    HPX_CXX_EXPORT enum class publish_result : std::uint8_t {
         /// The event was recorded and observers (if any) were notified.
         applied,
-        /// The target had already reached the same terminal event
-        /// (\c completed or \c failed); the call was a no-op and no
-        /// observers were notified.
+        /// The target had already reached a terminal event (\c completed
+        /// or \c failed) within the current epoch; the call was a no-op
+        /// and no observers were notified.
         already_terminal,
+        /// \a epoch was lower than the target's current epoch; the call was
+        /// a stale/out-of-order publication, rejected as a no-op without
+        /// mutating state or notifying observers.
+        stale_epoch,
     };
 
     /// \brief Publish a lifecycle event for a target actor on a possibly
@@ -75,12 +86,23 @@ namespace hpx::supervision {
     ///                 is published.
     /// \param ev       [in] The lifecycle event to publish for \a target.
     ///
+    /// \param epoch    [in] The epoch this publication belongs to. Publications
+    ///                 are compared against the target's current epoch:
+    ///                 publications for a lower epoch are rejected as stale
+    ///                 no-ops, publications for a higher epoch reset the
+    ///                 target's sequence number and become the new current
+    ///                 epoch, and publications for the current epoch are
+    ///                 applied normally (subject to terminal-state latching).
+    ///
     /// \returns        A future that becomes ready once the event has been
     ///                 recorded by the supervision manager on \a locality,
-    ///                 holding \c publish_result::applied, or
+    ///                 holding \c publish_result::applied,
     ///                 \c publish_result::already_terminal if \a target had
     ///                 already reached a terminal event (\c completed or
-    ///                 \c failed).    ///
+    ///                 \c failed) within \a epoch, or
+    ///                 \c publish_result::stale_epoch if \a epoch is lower
+    ///                 than the target's current epoch.
+    ///
     /// \throws         hpx::exception if \a locality does not represent a
     ///                 locality, or if \a target does not represent a
     ///                 valid target. The returned future becomes
@@ -96,10 +118,10 @@ namespace hpx::supervision {
     ///                 actor's registration.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<publish_result> publish_event(
         hpx::id_type const& locality, hpx::id_type const& target,
-        hpx::supervision::event ev);
+        hpx::supervision::event ev, std::uint64_t epoch = 0);
 
-    /// \brief Publish a lifecycle event for a target actor on a possibly
-    ///        remote locality, blocking until the operation has completed.
+    /// \brief Publish a lifecycle event for a target actor on a possibly remote
+    ///        locality, blocking until the operation has completed.
     ///
     /// This is the synchronous equivalent of
     /// \a publish_event(hpx::id_type const&, hpx::id_type const&, event).
@@ -109,34 +131,39 @@ namespace hpx::supervision {
     /// \param target   [in] The actor (or component) for which the event
     ///                 is published.
     /// \param ev       [in] The lifecycle event to publish for \a target.
+    /// \param epoch    [in] The epoch this publication belongs to. See the
+    ///                 asynchronous remote overload for the epoch-scoped
+    ///                 semantics.
     /// \param ec       [in,out] this represents the error status on exit,
     ///                 if this is pre-initialized to \a hpx::throws the
     ///                 function will throw on error instead.
     ///
     /// \throws         hpx::exception if \a locality does not represent a
-    ///                 locality, or if \a target does not represent a
-    ///                 valid target, unless \a ec was initialized to
+    ///                 locality, or if \a target does not represent a valid
+    ///                 target, unless \a ec was not pre-initialized to
     ///                 \a hpx::throws. As long as \a ec is not
-    ///                 pre-initialized to \a hpx::throws this function
-    ///                 doesn't throw but returns the result code using
-    ///                 the parameter \a ec.
+    ///                 pre-initialized to \a hpx::throws this function doesn't
+    ///                 throw but returns the result code using the parameter \a
+    ///                 ec.
     ///
-    /// \returns        \c publish_result::applied, or
+    /// \returns        \c publish_result::applied,
     ///                 \c publish_result::already_terminal if \a target had
     ///                 already reached a terminal event (\c completed or
-    ///                 \c failed).
+    ///                 \c failed) within \a epoch, or
+    ///                 \c publish_result::stale_epoch if \a epoch is lower
+    ///                 than the target's current epoch.
     ///
     /// \note           Publishing non-terminal events is not idempotent:
     ///                 publishing the same event twice creates two distinct
     ///                 records with different timestamps. \c event::completed
     ///                 and \c event::failed are latched: the first terminal
-    ///                 publication for a target wins, and every later
-    ///                 terminal publication for that target is a no-op that
-    ///                 returns \c publish_result::already_terminal.
+    ///                 publication for a target wins, and every later terminal
+    ///                 publication for that target is a no-op that returns \c
+    ///                 publish_result::already_terminal.
     HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event(
         hpx::launch::sync_policy, hpx::id_type const& locality,
         hpx::id_type const& target, hpx::supervision::event ev,
-        hpx::error_code& ec = hpx::throws);
+        std::uint64_t epoch = 0, hpx::error_code& ec = hpx::throws);
 
     /// \brief Publish a lifecycle event for a target actor on the local
     ///        locality.
@@ -149,6 +176,9 @@ namespace hpx::supervision {
     /// \param target [in] The actor (or component) for which the event is
     ///               published. Must be local to the calling locality.
     /// \param ev     [in] The lifecycle event to publish for \a target.
+    /// \param epoch  [in] The epoch this publication belongs to. See the
+    ///               asynchronous remote overload for the epoch-scoped
+    ///               semantics.
     /// \param ec     [in,out] this represents the error status on exit, if
     ///               this is pre-initialized to \a hpx::throws the
     ///               function will throw on error instead.
@@ -157,10 +187,12 @@ namespace hpx::supervision {
     ///               valid target, unless \a ec was not pre-initialized to
     ///               \a hpx::throws.
     ///
-    /// \returns      \c publish_result::applied, or
+    /// \returns      \c publish_result::applied,
     ///               \c publish_result::already_terminal if \a target had
     ///               already reached a terminal event (\c completed or
-    ///               \c failed).
+    ///               \c failed) within \a epoch, or
+    ///               \c publish_result::stale_epoch if \a epoch is lower
+    ///               than the target's current epoch.
     ///
     /// \note         Publishing non-terminal events is not idempotent:
     ///               publishing the same event twice creates two distinct
@@ -173,7 +205,7 @@ namespace hpx::supervision {
     ///               synchronously as part of this call.
     HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event(
         hpx::id_type const& target, hpx::supervision::event ev,
-        hpx::error_code& ec = throws);
+        std::uint64_t epoch = 0, hpx::error_code& ec = throws);
 
     /// \brief Snapshot of the most recently observed lifecycle event for a
     ///        supervised actor.
@@ -215,6 +247,12 @@ namespace hpx::supervision {
         /// \ref last_event. Enables callers to detect gaps caused by dropped or
         /// undelivered notifications.
         std::uint64_t event_sequence_number = 0;
+
+        /// The epoch \ref last_event was published under. A publication for a
+        /// higher epoch than previously seen resets \ref event_sequence_number
+        /// and becomes the target's new current epoch; a publication for a
+        /// lower epoch is rejected as stale.
+        std::uint64_t epoch = 0;
 
         /// Error code describing the outcome of the query, or a staleness
         /// indicator when the query was served from a remote/observer-side
@@ -352,6 +390,9 @@ namespace hpx::supervision {
         /// notifications (e.g., due to network failure).
         std::uint64_t event_sequence_number = 0;
 
+        /// The epoch \ref event was published under.
+        std::uint64_t epoch = 0;
+
         /// Error code describing the outcome of delivering this notification.
         /// A successful delivery yields \c hpx::make_success_code(); a non-success
         /// code may indicate staleness or a delivery failure that the observer
@@ -364,27 +405,37 @@ namespace hpx::supervision {
     ///        actor.
     ///
     /// The callback is invoked with the \ref lifecycle_event_notification
-    /// describing the event that occurred, and a \c hpx::error_code that
-    /// reports the outcome of delivering the notification (e.g. staleness or
-    /// delivery failures for remote observers).
+    /// describing the event that occurred. Delivery status (e.g. staleness
+    /// or delivery failures for remote observers) is reported via
+    /// \c notification.ec.
     ///
-    /// \note The callback must not throw. Any exception thrown from the
-    ///       callback is logged and does not affect observer registration.
+    /// \returns `true` if the observer should stay registered, `false`
+    ///          otherwise (i.e., `false` will unregister the observer and no
+    ///          further callbacks will be invoked for the given observer).
+    ///
+    /// \note Any exception thrown from the callback is logged and does not
+    ///       affect observer registration.
     /// \note The callback must not block indefinitely; local observers are
     ///       invoked synchronously from within the call that publishes the
     ///       event.
-    HPX_CXX_EXPORT using lifecycle_callback = std::function<void(
-        lifecycle_event_notification const&, hpx::error_code&)>;
+    HPX_CXX_EXPORT using lifecycle_callback =
+        std::function<bool(lifecycle_event_notification const&)>;
 #endif
 
     /// \brief Register a callback to observe lifecycle events published by
     ///        a target actor running on a possibly remote locality.
     ///
-    /// \param locality [in] The locality on which the callback should be
-    ///                 registered.
-    /// \param target   [in] The actor (or component) to observe.
-    /// \param callback [in] The callback invoked whenever \a target
-    ///                 publishes a lifecycle event.
+    /// \param locality     [in] The locality on which the callback should
+    ///                     be registered.
+    /// \param target       [in] The actor (or component) to observe.
+    /// \param callback     [in] The callback invoked whenever \a target
+    ///                     publishes a lifecycle event.
+    /// \param epoch_filter [in] If set, restricts notifications to events
+    ///                     published under this epoch; events published
+    ///                     under any other epoch are silently skipped for
+    ///                     this observer. If \c std::nullopt (the
+    ///                     default), the observer is notified regardless
+    ///                     of epoch.
     ///
     /// \returns        A future holding the global id of the observer
     ///                 handle. This handle must be passed to
@@ -410,7 +461,8 @@ namespace hpx::supervision {
     ///                 registration.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<hpx::id_type> register_observer(
         hpx::id_type const& locality, hpx::id_type const& target,
-        lifecycle_callback const& callback);
+        lifecycle_callback const& callback,
+        std::optional<std::uint64_t> epoch_filter = std::nullopt);
 
     /// \brief Register a callback to observe lifecycle events published by
     ///        a target actor running on a possibly remote locality, blocking
@@ -420,14 +472,18 @@ namespace hpx::supervision {
     /// \a register_observer(hpx::id_type const&, hpx::id_type const&,
     /// lifecycle_callback const&).
     ///
-    /// \param locality [in] The locality on which the callback should be
-    ///                 registered.
-    /// \param target   [in] The actor (or component) to observe.
-    /// \param callback [in] The callback invoked whenever \a target
-    ///                 publishes a lifecycle event.
-    /// \param ec       [in,out] this represents the error status on exit,
-    ///                 if this is pre-initialized to \a hpx::throws the
-    ///                 function will throw on error instead.
+    /// \param locality     [in] The locality on which the callback should
+    ///                     be registered.
+    /// \param target       [in] The actor (or component) to observe.
+    /// \param callback     [in] The callback invoked whenever \a target
+    ///                     publishes a lifecycle event.
+    /// \param epoch_filter [in] If set, restricts notifications to events
+    ///                     published under this epoch; see the
+    ///                     asynchronous overload for details.
+    /// \param ec           [in,out] this represents the error status on
+    ///                     exit, if this is pre-initialized to
+    ///                     \a hpx::throws the function will throw on error
+    ///                     instead.
     ///
     /// \returns        The global id of the observer handle. This handle
     ///                 must be passed to \a unregister_observer() in order
@@ -440,18 +496,26 @@ namespace hpx::supervision {
     HPX_CXX_EXPORT HPX_EXPORT hpx::id_type register_observer(
         hpx::launch::sync_policy, hpx::id_type const& locality,
         hpx::id_type const& target, lifecycle_callback const& callback,
+        std::optional<std::uint64_t> epoch_filter = std::nullopt,
         hpx::error_code& ec = hpx::throws);
 
     /// \brief Register a callback to observe lifecycle events published by
     ///        a target actor on the local locality.
     ///
-    /// \param target   [in] The actor (or component) to observe. Must be
-    ///                 local to the calling locality.
-    /// \param callback [in] The callback invoked whenever \a target
-    ///                 publishes a lifecycle event.
-    /// \param ec       [in,out] this represents the error status on exit,
-    ///                 if this is pre-initialized to \a hpx::throws the
-    ///                 function will throw on error instead.
+    /// \param target       [in] The actor (or component) to observe. Must
+    ///                     be local to the calling locality.
+    /// \param callback     [in] The callback invoked whenever \a target
+    ///                     publishes a lifecycle event.
+    /// \param epoch_filter [in] If set, restricts notifications to events
+    ///                     published under this epoch; events published
+    ///                     under any other epoch are silently skipped for
+    ///                     this observer. If \c std::nullopt (the
+    ///                     default), the observer is notified regardless
+    ///                     of epoch.
+    /// \param ec           [in,out] this represents the error status on
+    ///                     exit, if this is pre-initialized to
+    ///                     \a hpx::throws the function will throw on error
+    ///                     instead.
     ///
     /// \returns        The global id of the observer handle. This handle
     ///                 must be passed to \a unregister_observer() in order
@@ -468,6 +532,7 @@ namespace hpx::supervision {
     ///                 affect the observer registration.
     HPX_CXX_EXPORT HPX_EXPORT hpx::id_type register_observer(
         hpx::id_type const& target, lifecycle_callback const& callback,
+        std::optional<std::uint64_t> epoch_filter = std::nullopt,
         hpx::error_code& ec = hpx::throws);
 
     /// \brief Unregister a previously registered observer on a possibly

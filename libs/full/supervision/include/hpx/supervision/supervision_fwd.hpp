@@ -47,6 +47,7 @@ namespace hpx::supervision {
     HPX_CXX_EXPORT HPX_EXPORT void serialize(
         hpx::serialization::input_archive& ar, lifecycle_state&, unsigned int);
 
+    HPX_CXX_EXPORT enum class publish_result : std::uint8_t;
     HPX_CXX_EXPORT struct lifecycle_event_notification;
 
     HPX_CXX_EXPORT HPX_EXPORT void serialize(
@@ -56,7 +57,7 @@ namespace hpx::supervision {
         hpx::serialization::input_archive& ar, lifecycle_event_notification&,
         unsigned int);
 
-    HPX_CXX_EXPORT using lifecycle_callback = std::function<void(
-        lifecycle_event_notification const&, hpx::error_code&)>;
+    HPX_CXX_EXPORT using lifecycle_callback =
+        std::function<bool(lifecycle_event_notification const&)>;
 
 }    // namespace hpx::supervision

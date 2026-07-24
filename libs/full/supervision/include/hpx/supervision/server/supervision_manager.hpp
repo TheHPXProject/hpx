@@ -11,6 +11,7 @@
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
+#include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/synchronization.hpp>
@@ -20,6 +21,7 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,6 +38,16 @@ namespace hpx::supervision::server {
     // Base name used to register the component
     HPX_CXX_EXPORT inline constexpr char const* const supervision_manager_name =
         "supervision_manager/";
+
+    // An observer registered for a target, optionally scoped to a single
+    // epoch: if epoch_filter is engaged, only notifications whose epoch
+    // matches are delivered to agent, notifications for any other epoch are
+    // skipped for this observer.
+    struct observer_entry
+    {
+        hpx::id_type agent;
+        std::optional<std::uint64_t> epoch_filter;
+    };
 
     struct supervision_manager
       : hpx::components::fixed_component_base<supervision_manager>
@@ -55,29 +67,59 @@ namespace hpx::supervision::server {
         void unregister_server_instance(error_code& ec = throws) const;
 
         // Supervision API implementation
-        publish_result publish_event(hpx::id_type const& target, event ev);
+        publish_result publish_event(
+            hpx::id_type const& target, event ev, std::uint64_t epoch);
+
+        struct publish_event_action
+          : hpx::actions::make_action_t<
+                decltype(&supervision_manager::publish_event),
+                &supervision_manager::publish_event, publish_event_action>
+        {
+        };
 
         lifecycle_state query_state(hpx::id_type const& target);
 
-        hpx::id_type register_observer(
-            hpx::id_type const& target, hpx::id_type const& agent);
+        struct query_state_action
+          : hpx::actions::make_action_t<
+                decltype(&supervision_manager::query_state),
+                &supervision_manager::query_state, query_state_action>
+        {
+        };
+
+        hpx::id_type register_observer(hpx::id_type const& target,
+            hpx::id_type const& agent,
+            std::optional<std::uint64_t> epoch_filter = std::nullopt);
+
+        struct register_observer_action
+          : hpx::actions::make_action_t<
+                decltype(&supervision_manager::register_observer),
+                &supervision_manager::register_observer,
+                register_observer_action>
+        {
+        };
 
         void unregister_observer(hpx::id_type const& observer_handle);
 
-        HPX_DEFINE_COMPONENT_ACTION(supervision_manager, publish_event)
-        HPX_DEFINE_COMPONENT_ACTION(supervision_manager, register_observer)
-        HPX_DEFINE_COMPONENT_ACTION(supervision_manager, unregister_observer)
-        HPX_DEFINE_COMPONENT_ACTION(supervision_manager, query_state)
+        struct unregister_observer_action
+          : hpx::actions::make_action_t<
+                decltype(&supervision_manager::unregister_observer),
+                &supervision_manager::unregister_observer,
+                unregister_observer_action>
+        {
+        };
 
     protected:
         hpx::future<void> fire_events(hpx::id_type const& target,
             lifecycle_event_notification const& notification);
         hpx::future<void> fire_event(hpx::id_type const& target,
             hpx::id_type const& agent,
-            lifecycle_event_notification notification) const;
+            lifecycle_event_notification notification);
 
-        void record_error(
-            hpx::id_type const& target, hpx::error_code const& ec);
+        void record_error(hpx::id_type const& target,
+            std::uint64_t expected_sequence_number, hpx::error_code const& ec);
+
+        void unregister_observer_target(
+            hpx::id_type const& target, hpx::id_type const& observer_handle);
 
     private:
         mutable hpx::spinlock mtx_;
@@ -85,8 +127,11 @@ namespace hpx::supervision::server {
 
         // registered events: targets -> states
         std::map<hpx::id_type, lifecycle_state> states_;
-        // registered observers: targets -> agents
-        std::map<hpx::id_type, std::vector<hpx::id_type>> observers_;
+        // current epoch per target: targets -> epoch
+        std::map<hpx::id_type, std::uint64_t> current_epoch_;
+        // registered observers: targets -> observer entries (agent +
+        // optional epoch filter)
+        std::map<hpx::id_type, std::vector<observer_entry>> observers_;
         // inverse lookup for agents: agents -> targets
         std::map<hpx::id_type, std::vector<hpx::id_type>> agents_;
     };

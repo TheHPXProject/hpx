@@ -6,7 +6,7 @@
 
 set(tests supervision_api)
 
-set(supervision_api_PARAMETERS LOCALITIES 2)
+set(supervision_api_PARAMETERS LOCALITIES 2 THREADS_PER_LOCALITY 4)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

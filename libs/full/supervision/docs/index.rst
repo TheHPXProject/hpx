@@ -25,9 +25,9 @@ call:
 Publishing events
 ------------------
 
-.. cpp:function:: hpx::future<hpx::supervision::publish_result> hpx::supervision::publish_event(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev)
-.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
-.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::id_type const& target, hpx::supervision::event ev, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::future<hpx::supervision::publish_result> hpx::supervision::publish_event(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev, std::uint64_t epoch = 0)
+.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::event ev, std::uint64_t epoch = 0, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::id_type const& target, hpx::supervision::event ev, std::uint64_t epoch = 0, hpx::error_code& ec = hpx::throws)
 
     Publish a lifecycle event for ``target``. Events are visible immediately
     to local observers; remote observers are notified within roughly one to
@@ -52,14 +52,17 @@ Querying lifecycle state
 Registering observers
 ----------------------
 
-.. cpp:function:: hpx::future<hpx::id_type> hpx::supervision::register_observer(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback)
-.. cpp:function:: hpx::id_type hpx::supervision::register_observer(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback, hpx::error_code& ec = hpx::throws)
-.. cpp:function:: hpx::id_type hpx::supervision::register_observer(hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::future<hpx::id_type> hpx::supervision::register_observer(hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback, std::optional<std::uint64_t> epoch_filter = std::nullopt)
+.. cpp:function:: hpx::id_type hpx::supervision::register_observer(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback, std::optional<std::uint64_t> epoch_filter = std::nullopt, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::id_type hpx::supervision::register_observer(hpx::id_type const& target, hpx::supervision::lifecycle_callback const& callback, std::optional<std::uint64_t> epoch_filter = std::nullopt, hpx::error_code& ec = hpx::throws)
 
     Register ``callback`` to be invoked on lifecycle events of ``target``,
     returning an observer handle usable with ``unregister_observer``. Local
     callbacks fire synchronously within the publish call; remote callbacks
-    fire via a retried parcel.
+    fire via a retried parcel. If ``epoch_filter`` is set, the observer only
+    receives notifications (including the initial state snapshot delivered
+    at registration time) whose epoch matches; by default the observer
+    receives notifications for every epoch.
 
 Unregistering observers
 ------------------------

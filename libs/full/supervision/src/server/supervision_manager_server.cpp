@@ -60,20 +60,18 @@ namespace hpx::supervision::server {
         }
     }
 
-    // event::completed and event::failed are terminal: once recorded,
-    // a target's state is latched and further publications for that
-    // target are no-ops (see supervision_manager::publish_event).
-    constexpr bool is_terminal(event const ev) noexcept
-    {
-        return ev == event::completed || ev == event::failed;
-    }
-
-    void supervision_manager::record_error(
-        hpx::id_type const& target, hpx::error_code const& ec)
+    void supervision_manager::record_error(hpx::id_type const& target,
+        std::uint64_t const expected_sequence_number, hpx::error_code const& ec)
     {
         std::unique_lock<hpx::spinlock> l(mtx_);
 
-        if (auto const it = states_.find(target); it != states_.end())
+        // Only apply the failure if the state that was being delivered when the
+        // failure occurred is still the current state for this target.
+        // Otherwise, a newer publish_event may have already superseded it, and
+        // recording the (now stale) failure would incorrectly stomp that newer
+        // state.
+        if (auto const it = states_.find(target); it != states_.end() &&
+            it->second.event_sequence_number == expected_sequence_number)
         {
             it->second.last_event = supervision::event::failed;
             it->second.timestamp = std::chrono::steady_clock::now();
@@ -84,64 +82,109 @@ namespace hpx::supervision::server {
     }
 
     publish_result supervision_manager::publish_event(
-        hpx::id_type const& target, event const ev)
+        hpx::id_type const& target, event const ev, std::uint64_t epoch)
     {
         lifecycle_event_notification notification;
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
+            auto const epoch_it = current_epoch_.find(target);
+            std::uint64_t const current_ep =
+                epoch_it != current_epoch_.end() ? epoch_it->second : 0;
+
+            if (epoch < current_ep)
+            {
+                // stale/out-of-order publication for an epoch that has
+                // already been superseded: reject without mutating state or
+                // notifying observers
+                return publish_result::stale_epoch;
+            }
+
             auto const it = states_.find(target);
-            event const prev_event =
-                it != states_.end() ? it->second.last_event : event::unknown;
 
-            // A terminal event (completed/failed) was reached, absorb any
-            // further event without mutating state or notifying observers again.
-            if (is_terminal(prev_event) && is_terminal(ev))
+            if (epoch > current_ep)
             {
-                // exactly-once completion: the target already reached
-                // a terminal event, ignore this (duplicate) publication
-                return publish_result::already_terminal;
-            }
+                // Entering a new epoch resets the target's sequence number
+                // and unconditionally records the event: a higher epoch
+                // starts a fresh lifecycle for the target, regardless of
+                // what was last recorded for the previous epoch.
+                current_epoch_[target] = epoch;
 
-            if (!is_valid_transition(prev_event, ev))
-            {
-                l.unlock();
+                lifecycle_state const state = {.actor = target,
+                    .last_event = ev,
+                    .timestamp = std::chrono::steady_clock::now(),
+                    .event_sequence_number = 1,
+                    .epoch = epoch};
+                states_[target] = state;
 
-                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "supervision_manager::publish_event",
-                    "invalid lifecycle event transition");
-            }
-
-            lifecycle_state state = {.actor = target,
-                .last_event = ev,
-                .timestamp = std::chrono::steady_clock::now(),
-                .event_sequence_number = 1};
-
-            if (it != states_.end())
-            {
-                state.event_sequence_number =
-                    it->second.event_sequence_number + 1;
-                it->second = state;
+                notification = {.actor = target,
+                    .event = state.last_event,
+                    .event_time = state.timestamp,
+                    .event_sequence_number = state.event_sequence_number,
+                    .epoch = state.epoch,
+                    .ec = state.ec};
             }
             else
             {
-                auto const [_, inserted] =
-                    states_.insert(std::make_pair(target, state));
-                if (!inserted)
+                // epoch == current_ep: apply within the target's current epoch,
+                // subject to the terminal-state latch and lifecycle transition
+                // validation.
+                event const prev_event = it != states_.end() ?
+                    it->second.last_event :
+                    event::unknown;
+
+                // A terminal event (completed/failed) was reached, absorb any
+                // further event without mutating state or notifying observers
+                // again.
+                if (is_terminal(prev_event) && is_terminal(ev))
+                {
+                    // exactly-once completion: the target already reached a
+                    // terminal event, ignore this (duplicate) publication
+                    return publish_result::already_terminal;
+                }
+
+                if (!is_valid_transition(prev_event, ev))
                 {
                     l.unlock();
 
-                    HPX_THROW_EXCEPTION(hpx::error::no_success,
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                         "supervision_manager::publish_event",
-                        "failed to insert event");
+                        "invalid lifecycle event transition");
                 }
-            }
 
-            notification = {.actor = target,
-                .event = state.last_event,
-                .event_time = state.timestamp,
-                .event_sequence_number = state.event_sequence_number,
-                .ec = state.ec};
+                lifecycle_state state = {.actor = target,
+                    .last_event = ev,
+                    .timestamp = std::chrono::steady_clock::now(),
+                    .event_sequence_number = 1,
+                    .epoch = epoch};
+
+                if (it != states_.end())
+                {
+                    state.event_sequence_number =
+                        it->second.event_sequence_number + 1;
+                    it->second = state;
+                }
+                else
+                {
+                    auto const [_, inserted] =
+                        states_.insert(std::make_pair(target, state));
+                    if (!inserted)
+                    {
+                        l.unlock();
+
+                        HPX_THROW_EXCEPTION(hpx::error::no_success,
+                            "supervision_manager::publish_event",
+                            "failed to insert event");
+                    }
+                }
+
+                notification = {.actor = target,
+                    .event = state.last_event,
+                    .event_time = state.timestamp,
+                    .event_sequence_number = state.event_sequence_number,
+                    .epoch = state.epoch,
+                    .ec = state.ec};
+            }
         }
 
         // now fire event for all observers of this target
@@ -152,8 +195,8 @@ namespace hpx::supervision::server {
         }
         catch (...)
         {
-            record_error(
-                target, hpx::make_error_code(std::current_exception()));
+            record_error(target, notification.event_sequence_number,
+                hpx::make_error_code(std::current_exception()));
         }
 
         return publish_result::applied;
@@ -163,7 +206,7 @@ namespace hpx::supervision::server {
         hpx::id_type const& target,
         lifecycle_event_notification const& notification)
     {
-        std::vector<hpx::id_type> observers;
+        std::vector<observer_entry> observers;
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
             if (auto const it = observers_.find(target); it != observers_.end())
@@ -173,11 +216,21 @@ namespace hpx::supervision::server {
         }
 
         hpx::future<void> f;
-        for (hpx::id_type const& agent : observers)
+        for (auto const& observer : observers)
         {
+            // An observer scoped to a specific epoch does not get notified of
+            // events published under any other epoch.
+            if (auto epoch_filter = observer.epoch_filter;
+                epoch_filter.has_value() && *epoch_filter != notification.epoch)
+            {
+                continue;
+            }
+
+            auto agent = observer.agent;
+
             if (f.valid())
             {
-                f = f.then([&, this, target, agent, notification](
+                f = f.then([this, target, agent, notification](
                                hpx::future<void>&& prev_f) {
                     try
                     {
@@ -185,7 +238,7 @@ namespace hpx::supervision::server {
                     }
                     catch (...)
                     {
-                        record_error(target,
+                        record_error(target, notification.event_sequence_number,
                             hpx::make_error_code(std::current_exception()));
                     }
                     return fire_event(target, agent, notification);
@@ -206,7 +259,7 @@ namespace hpx::supervision::server {
 
     hpx::future<void> supervision_manager::fire_event(
         hpx::id_type const& target, hpx::id_type const& agent,
-        lifecycle_event_notification notification) const
+        lifecycle_event_notification notification)
     {
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
@@ -216,21 +269,56 @@ namespace hpx::supervision::server {
             auto const it2 = observers_.find(target);
             if (it2 == observers_.end())
             {
-                return hpx::make_ready_future();
+                return hpx::make_ready_future(true);
             }
 
-            if (std::ranges::find(it2->second, agent) == it2->second.end())
+            if (std::ranges::find(it2->second, agent, &observer_entry::agent) ==
+                it2->second.end())
             {
-                return hpx::make_ready_future();
+                return hpx::make_ready_future(true);
             }
         }
 
+        // prevent the agent callback from being run inline as it may block
         using action_type = agent_component::invoke_if_active_action;
-        return hpx::async(action_type(), agent, HPX_MOVE(notification));
+        auto fut = hpx::async(
+            hpx::launch::task, action_type(), agent, HPX_MOVE(notification));
+
+        return fut.then([this, target, agent](hpx::future<bool>&& f) mutable {
+            bool keep_registered = true;
+            std::exception_ptr ep;
+            try
+            {
+                keep_registered = f.get();
+            }
+            catch (...)
+            {
+                ep = std::current_exception();
+            }
+
+            if (!keep_registered)
+            {
+                // remove observer from the given target
+                std::unique_lock<hpx::spinlock> l(mtx_);
+
+                unregister_observer_target(target, agent);
+                if (auto const it = agents_.find(agent); it != agents_.end())
+                {
+                    agents_.erase(it);
+                }
+            }
+
+            // rethrow exception, if any
+            if (ep)
+            {
+                std::rethrow_exception(ep);
+            }
+        });
     }
 
     hpx::id_type supervision_manager::register_observer(
-        hpx::id_type const& target, hpx::id_type const& agent)
+        hpx::id_type const& target, hpx::id_type const& agent,
+        std::optional<std::uint64_t> epoch_filter)
     {
         std::optional<lifecycle_event_notification> initial_notification;
 
@@ -242,7 +330,7 @@ namespace hpx::supervision::server {
             if (it == observers_.end())
             {
                 auto [it2, inserted] = observers_.insert(
-                    std::make_pair(target, std::vector<hpx::id_type>()));
+                    std::make_pair(target, std::vector<observer_entry>()));
                 if (!inserted)
                 {
                     l.unlock();
@@ -253,7 +341,8 @@ namespace hpx::supervision::server {
                 }
                 it = it2;
             }
-            else if (std::ranges::find(it->second, agent) != it->second.end())
+            else if (std::ranges::find(it->second, agent,
+                         &observer_entry::agent) != it->second.end())
             {
                 l.unlock();
 
@@ -262,7 +351,7 @@ namespace hpx::supervision::server {
                     "observer already registered for target");
             }
 
-            it->second.push_back(agent);
+            it->second.push_back(observer_entry{agent, epoch_filter});
 
             // insert into inverse lookup table as well
             auto it2 = agents_.find(agent);
@@ -291,15 +380,23 @@ namespace hpx::supervision::server {
 
             // An existing target gets an initial notification. Keep a value
             // snapshot: do not let a subsequent publish replace its contents.
+            // A freshly-registered observer scoped to a specific epoch
+            // (epoch_filter engaged) does not receive this synchronous
+            // snapshot if it belongs to a different epoch, for consistency
+            // with the filtering applied in fire_events.
             if (auto const it3 = states_.find(target); it3 != states_.end())
             {
-                lifecycle_state const& state = it3->second;
-                initial_notification =
-                    lifecycle_event_notification{.actor = target,
+                if (lifecycle_state const& state = it3->second;
+                    !epoch_filter.has_value() || *epoch_filter == state.epoch)
+                {
+                    initial_notification = lifecycle_event_notification{
+                        .actor = target,
                         .event = state.last_event,
                         .event_time = state.timestamp,
                         .event_sequence_number = state.event_sequence_number,
+                        .epoch = state.epoch,
                         .ec = state.ec};
+                }
             }
         }
 
@@ -313,6 +410,12 @@ namespace hpx::supervision::server {
         // fire_event
         if (initial_notification)
         {
+            // Capture the sequence number before the notification is moved out
+            // below, so record_error() can still compare it against the
+            // (possibly since-updated) state for target.
+            auto const initial_sequence =
+                initial_notification->event_sequence_number;
+
             auto f = fire_event(target, agent, HPX_MOVE(*initial_notification));
             try
             {
@@ -320,71 +423,84 @@ namespace hpx::supervision::server {
             }
             catch (...)
             {
-                record_error(
-                    target, hpx::make_error_code(std::current_exception()));
+                record_error(target, initial_sequence,
+                    hpx::make_error_code(std::current_exception()));
             }
         }
         return agent;
     }
 
+    void supervision_manager::unregister_observer_target(
+        hpx::id_type const& target, hpx::id_type const& observer_handle)
+    {
+        if (auto const it = observers_.find(target); it != observers_.end())
+        {
+            // it2 refers to observer in observer target list
+
+            // delete observer from list
+            if (auto const it2 = std::ranges::find(
+                    it->second, observer_handle, &observer_entry::agent);
+                it2 != it->second.end())
+            {
+                it->second.erase(it2);
+            }
+
+            // delete list of targets from given observer
+            if (it->second.empty())
+            {
+                observers_.erase(it);
+            }
+        }
+    }
+
     void supervision_manager::unregister_observer(
         hpx::id_type const& observer_handle)
     {
-        // remove observer from all targets
-        std::unique_lock<hpx::spinlock> l(mtx_);
-
-        // locate targets the given observer was registered to
-        if (auto const it = agents_.find(observer_handle); it != agents_.end())
         {
             // remove observer from all targets
-            for (hpx::id_type const& target : it->second)
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            // locate targets the given observer was registered to
+            if (auto const it = agents_.find(observer_handle);
+                it != agents_.end())
             {
-                if (auto it2 = observers_.find(target); it2 != observers_.end())
+                // remove observer from all targets
+                for (hpx::id_type const& target : it->second)
                 {
-                    // it3 refers to observer in list
-
-                    // delete observer from list
-                    if (auto const it3 =
-                            std::ranges::find(it2->second, observer_handle);
-                        it3 != it2->second.end())
-                    {
-                        it2->second.erase(it3);
-                    }
-
-                    // delete list of observers from given target
-                    if (it2->second.empty())
-                    {
-                        observers_.erase(it2);
-                    }
+                    unregister_observer_target(target, observer_handle);
                 }
+                agents_.erase(it);
             }
-            agents_.erase(it);
         }
-
-        l.unlock();
 
         // A delivery action that was already queued may still reach the agent.
         // deactivate_and_wait fences such actions and drains any callback that
         // had already begun before this call returns.
+
+        // prevent the agent callback from being run inline as it may block
         using action_type = agent_component::deactivate_and_wait_action;
-        hpx::async(action_type(), observer_handle).get();
+        hpx::async(hpx::launch::task, action_type(), observer_handle).get();
     }
 
     lifecycle_state supervision_manager::query_state(hpx::id_type const& target)
     {
-        std::scoped_lock<hpx::spinlock> l(mtx_);
-        if (auto const it = states_.find(target); it != states_.end())
         {
-            return it->second;
+            std::scoped_lock<hpx::spinlock> l(mtx_);
+            if (auto const it = states_.find(target); it != states_.end())
+            {
+                return it->second;
+            }
         }
 
         // No event has ever been recorded for this target: the returned
         // (default) state may be stale, e.g. because the corresponding
         // publication has not yet been observed on this locality.
         return {.actor = target,
+            .timestamp = std::chrono::steady_clock::now(),
             .ec = hpx::error_code(hpx::error::stale_state,
                 "no locally recorded lifecycle state is available for the "
-                "requested target, the returned state may be stale")};
+                "requested target, the returned state may be stale",
+                hpx::throwmode::lightweight)};
     }
 
     void supervision_manager::register_server_instance(
@@ -402,8 +518,6 @@ namespace hpx::supervision::server {
         instance_name_ += supervision::server::supervision_manager_name;
 
         auto const gid = get_unmanaged_id().get_gid();
-        //naming::gid_type const manager_gid(
-        //    gid.get_msb(), reinterpret_cast<std::uint64_t>(this));
         naming::address const manager_address(agas::get_locality(),
             components::get_component_type<
                 supervision::server::supervision_manager>(),
@@ -422,5 +536,4 @@ namespace hpx::supervision::server {
         agas::unregister_name(launch::sync, instance_name_, ec);
         this->base_type::finalize();
     }
-
 }    // namespace hpx::supervision::server

@@ -31,13 +31,24 @@ namespace hpx::supervision::server {
         {
         }
 
-        void invoke_if_active(lifecycle_event_notification const& notify);
-        HPX_DEFINE_COMPONENT_ACTION(
-            agent_component, invoke_if_active, invoke_if_active_action)
+        bool invoke_if_active(lifecycle_event_notification const& notify);
+
+        struct invoke_if_active_action
+          : hpx::actions::make_action_t<
+                decltype(&agent_component::invoke_if_active),
+                &agent_component::invoke_if_active, invoke_if_active_action>
+        {
+        };
 
         void deactivate_and_wait();
-        HPX_DEFINE_COMPONENT_ACTION(
-            agent_component, deactivate_and_wait, deactivate_and_wait_action)
+
+        struct deactivate_and_wait_action
+          : hpx::actions::make_action_t<
+                decltype(&agent_component::deactivate_and_wait),
+                &agent_component::deactivate_and_wait,
+                deactivate_and_wait_action>
+        {
+        };
 
     private:
         void finish_delivery();
