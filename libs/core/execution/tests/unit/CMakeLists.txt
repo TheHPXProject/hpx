@@ -35,6 +35,7 @@ set(tests
     forwarding_scheduler_query
     forwarding_sender_query
     forward_progress_guarantee
+    future_sender_test
     future_then_executor
     minimal_async_executor
     minimal_sync_executor
@@ -85,6 +86,7 @@ if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
       algorithm_split
       algorithm_when_all
       algorithm_transfer_when_all
+      future_sender_test
   )
   foreach(test ${failing_clang_tests})
     target_compile_definitions(
