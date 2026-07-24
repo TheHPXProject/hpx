@@ -62,6 +62,15 @@ namespace hpx::parcelset::policies::mpi {
                 return;
             }
 
+            // Serialize against any late header polling. accept_locked()
+            // and its re-post of the header receive run under headers_mtx_,
+            // so holding it here gives stop() exclusive ownership of
+            // hdr_request_ and hdr_posted_ in all MPI threading modes (the
+            // mpi_environment lock alone is a no-op for multithreaded MPI).
+            // Lock order matches accept(): headers_mtx_ first, then the
+            // MPI serialization lock.
+            std::unique_lock const header_lock(headers_mtx_);
+
             util::mpi_environment::scoped_lock l;
             if (hdr_posted_)
             {
