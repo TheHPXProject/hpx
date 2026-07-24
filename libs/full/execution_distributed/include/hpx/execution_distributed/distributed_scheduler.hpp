@@ -30,6 +30,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 
@@ -48,6 +49,9 @@ namespace hpx::distributed::experimental {
         struct distributed_operation_state;
 
         struct distributed_domain;
+
+        template <typename Sender, typename Shape, typename F>
+        struct distributed_bulk_sender;
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -278,6 +282,12 @@ namespace hpx::distributed::experimental {
             return {};
         }
 
+        /// Intercept ex::bulk() when the completion scheduler is this
+        /// distributed_scheduler. Returns a distributed_bulk_sender.
+        template <typename Sender, typename Shape, typename F>
+        auto query(hpx::execution::experimental::bulk_t, Sender&& sender,
+            Shape const& shape, F&& f) const;
+
     private:
         hpx::id_type target_;
         friend struct detail::distributed_domain;
@@ -300,6 +310,15 @@ namespace hpx::distributed::experimental {
     inline auto detail::distributed_schedule_sender::get_env() const noexcept
     {
         return env{target_};
+    }
+
+    template <typename Sender, typename Shape, typename F>
+    auto distributed_scheduler::query(hpx::execution::experimental::bulk_t,
+        Sender&& sender, Shape const& shape, F&& f) const
+    {
+        return detail::distributed_bulk_sender<std::decay_t<Sender>,
+            std::decay_t<Shape>, std::decay_t<F>>{
+            HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f), *this};
     }
 
 }    // namespace hpx::distributed::experimental
