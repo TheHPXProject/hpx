@@ -25,6 +25,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <mutex>
 #include <string>
 #include <type_traits>
@@ -200,6 +201,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = false;
                 data_available_ = false;
+                operation_error_ = nullptr;
 
                 if constexpr (!std::is_void_v<T>)
                 {
@@ -229,6 +231,7 @@ namespace hpx::collectives::detail {
             {
                 needs_initialization_ = true;
                 data_available_ = false;
+                operation_error_ = nullptr;
                 on_ready_count_ = 0;
                 current_operation_ = nullptr;
             }
@@ -363,19 +366,40 @@ namespace hpx::collectives::detail {
                         on_ready_count_);
                 }
 
+                // A step or finalizer that threw for an earlier site has
+                // typically consumed (moved from) state the reduction relies
+                // on, or has left the collected data incomplete. Re-invoking
+                // the finalizer here would operate on that state, letting
+                // different sites observe different outcomes for the same
+                // collective. Instead, rethrow the cached first failure for
+                // every site of this operation, including sites that pass no
+                // finalizer.
+                if (operation_error_)
+                {
+                    std::rethrow_exception(operation_error_);
+                }
+
                 if constexpr (!std::is_same_v<std::nullptr_t,
                                   std::decay_t<Finalizer>>)
                 {
-                    if constexpr (std::is_void_v<Data>)
+                    try
                     {
-                        return HPX_FORWARD(Finalizer, finalizer)(
-                            data_available_, which);
+                        if constexpr (std::is_void_v<Data>)
+                        {
+                            return HPX_FORWARD(Finalizer, finalizer)(
+                                data_available_, which);
+                        }
+                        else
+                        {
+                            return HPX_FORWARD(Finalizer, finalizer)(
+                                access_data<Data>(num_values), data_available_,
+                                which);
+                        }
                     }
-                    else
+                    catch (...)
                     {
-                        return HPX_FORWARD(Finalizer, finalizer)(
-                            access_data<Data>(num_values), data_available_,
-                            which);
+                        operation_error_ = std::current_exception();
+                        throw;
                     }
                 }
                 else
@@ -442,14 +466,30 @@ namespace hpx::collectives::detail {
 
             if constexpr (!std::is_same_v<std::nullptr_t, std::decay_t<Step>>)
             {
-                if constexpr (std::is_void_v<Data>)
+                // A throwing step (a throwing move assignment of the payload,
+                // bad_alloc while allocating the data vector) must not leave
+                // the gate waiting for a segment that would never be set.
+                // Cache the first failure and let the collective complete;
+                // every site then observes the cached exception from its
+                // on_ready callback.
+                try
                 {
-                    HPX_FORWARD(Step, step)(which);
+                    if constexpr (std::is_void_v<Data>)
+                    {
+                        HPX_FORWARD(Step, step)(which);
+                    }
+                    else
+                    {
+                        HPX_FORWARD(Step, step)(
+                            access_data<Data>(num_values), which);
+                    }
                 }
-                else
+                catch (...)
                 {
-                    HPX_FORWARD(Step, step)(
-                        access_data<Data>(num_values), which);
+                    if (!operation_error_)
+                    {
+                        operation_error_ = std::current_exception();
+                    }
                 }
             }
 
@@ -522,6 +562,11 @@ namespace hpx::collectives::detail {
         // name by value and moves it into place.
         std::string basename_;
         mutex_type mtx_;
+        // First exception thrown by a step or finalizer of the current
+        // operation; rethrown for every site instead of (re-)invoking the
+        // finalizer on moved-from or incomplete data. Reset together with
+        // data_available_.
+        std::exception_ptr operation_error_;
         bool needs_initialization_ = true;
         bool data_available_ = false;
         bool auto_generation_used_ = false;
