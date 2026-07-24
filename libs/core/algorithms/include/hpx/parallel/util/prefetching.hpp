@@ -340,7 +340,7 @@ namespace hpx::parallel::util {
             typename... Ts, typename F>
         HPX_HOST_DEVICE
             HPX_FORCEINLINE constexpr prefetching_iterator<Itr, Ts...>
-            tag_invoke(hpx::parallel::util::loop_n_t<ExPolicy>,
+            hpx_invoke(hpx::parallel::util::loop_n_t<ExPolicy>,
                 prefetching_iterator<Itr, Ts...> it, std::size_t count, F&& f)
         {
             return loop_n_helper::call(
@@ -351,7 +351,7 @@ namespace hpx::parallel::util {
             typename... Ts, typename F>
         HPX_HOST_DEVICE
             HPX_FORCEINLINE constexpr prefetching_iterator<Itr, Ts...>
-            tag_invoke(hpx::parallel::util::const_loop_n_t<ExPolicy>,
+            hpx_invoke(hpx::parallel::util::const_loop_n_t<ExPolicy>,
                 prefetching_iterator<Itr, Ts...> it, std::size_t count, F&& f)
         {
             return loop_n_helper::call(
@@ -435,7 +435,7 @@ namespace hpx::parallel::util {
             typename... Ts, typename F>
         HPX_HOST_DEVICE
             HPX_FORCEINLINE constexpr prefetching_iterator<Itr, Ts...>
-            tag_invoke(hpx::parallel::util::loop_n_ind_t<ExPolicy>,
+            hpx_invoke(hpx::parallel::util::loop_n_ind_t<ExPolicy>,
                 prefetching_iterator<Itr, Ts...> it, std::size_t count, F&& f)
         {
             return loop_n_ind_helper::call(

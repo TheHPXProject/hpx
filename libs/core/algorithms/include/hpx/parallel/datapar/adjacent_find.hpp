@@ -84,7 +84,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename Sent_, typename PredProj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    constexpr InIter tag_invoke(sequential_adjacent_find_t<ExPolicy>,
+    constexpr InIter hpx_invoke(sequential_adjacent_find_t<ExPolicy>,
         InIter first, Sent_ last, PredProj&& pred_projected)
     {
         constexpr bool datapar_compatible =
@@ -108,7 +108,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename ZipIter,
         typename Token, typename PredProj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    constexpr void tag_invoke(sequential_adjacent_find_t<ExPolicy>,
+    constexpr void hpx_invoke(sequential_adjacent_find_t<ExPolicy>,
         std::size_t base_idx, ZipIter part_begin, std::size_t part_count,
         Token& tok, PredProj&& pred_projected)
     {

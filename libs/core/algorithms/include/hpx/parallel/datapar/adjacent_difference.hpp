@@ -69,7 +69,7 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::detail::iterator_datapar_compatible_v<InIter>
         )
     // clang-format on
-    constexpr OutIter tag_invoke(sequential_adjacent_difference_t<ExPolicy>,
+    constexpr OutIter hpx_invoke(sequential_adjacent_difference_t<ExPolicy>,
         InIter first, InIter last, OutIter dest, Op&& op)
     {
         return datapar_adjacent_difference<ExPolicy>::call(

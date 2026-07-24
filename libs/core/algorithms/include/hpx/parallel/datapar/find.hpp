@@ -11,7 +11,6 @@
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/datapar/handle_local_exceptions.hpp>
@@ -73,7 +72,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iterator,
         typename Sentinel, typename T, typename Proj = hpx::identity>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator hpx_invoke(
         sequential_find_t<ExPolicy>, Iterator first, Sentinel last,
         T const& val, Proj proj = Proj())
     {
@@ -94,7 +93,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
         typename Token, typename T, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(sequential_find_t<ExPolicy>,
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(sequential_find_t<ExPolicy>,
         std::size_t base_idx, FwdIter part_begin, std::size_t part_count,
         Token& tok, T const& val, Proj&& proj)
     {
@@ -168,7 +167,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iterator,
         typename Sentinel, typename Pred, typename Proj = hpx::identity>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator hpx_invoke(
         sequential_find_if_t<ExPolicy>, Iterator first, Sentinel last,
         Pred pred, Proj proj = Proj())
     {
@@ -190,7 +189,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
         typename Token, typename F, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_if_t<ExPolicy>, FwdIter part_begin,
         std::size_t part_count, Token& tok, F&& op, Proj&& proj)
     {
@@ -201,7 +200,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
         typename Token, typename F, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_if_t<ExPolicy>, std::size_t base_idx,
         FwdIter part_begin, std::size_t part_count, Token& tok, F&& op,
         Proj&& proj)
@@ -276,7 +275,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iterator,
         typename Sentinel, typename Pred, typename Proj = hpx::identity>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iterator hpx_invoke(
         sequential_find_if_not_t<ExPolicy>, Iterator first, Sentinel last,
         Pred pred, Proj proj = Proj())
     {
@@ -298,7 +297,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
         typename Token, typename F, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_if_not_t<ExPolicy>, FwdIter part_begin,
         std::size_t part_count, Token& tok, F&& op, Proj&& proj)
     {
@@ -309,7 +308,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
         typename Token, typename F, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_if_not_t<ExPolicy>, std::size_t base_idx,
         FwdIter part_begin, std::size_t part_count, Token& tok, F&& op,
         Proj&& proj)
@@ -390,7 +389,7 @@ namespace hpx::parallel::detail {
         typename Sent1, typename Iter2, typename Sent2, typename Pred,
         typename Proj1, typename Proj2>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iter1 tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iter1 hpx_invoke(
         sequential_find_end_t<ExPolicy>, Iter1 first1, Sent1 last1,
         Iter2 first2, Sent2 last2, Pred&& op, Proj1&& proj1, Proj2&& proj2)
     {
@@ -416,7 +415,7 @@ namespace hpx::parallel::detail {
         typename Iter2, typename Token, typename Pred, typename Proj1,
         typename Proj2>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_end_t<ExPolicy>, Iter1 it, Iter2 first2,
         std::size_t base_idx, std::size_t part_size, std::size_t diff,
         Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
@@ -507,7 +506,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter1,
         typename InIter2, typename Pred, typename Proj1, typename Proj2>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE InIter1 tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE InIter1 hpx_invoke(
         sequential_find_first_of_t<ExPolicy>, InIter1 first, InIter1 last,
         InIter2 s_first, InIter2 s_last, Pred&& op, Proj1&& proj1,
         Proj2&& proj2)
@@ -536,7 +535,7 @@ namespace hpx::parallel::detail {
         typename FwdIter2, typename Token, typename Pred, typename Proj1,
         typename Proj2>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_find_first_of_t<ExPolicy>, FwdIter it, FwdIter2 s_first,
         FwdIter2 s_last, std::size_t base_idx, std::size_t part_size,
         Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)

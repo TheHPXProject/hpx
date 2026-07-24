@@ -12,7 +12,6 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
@@ -32,7 +31,7 @@ namespace hpx::parallel::detail {
         typename Iter2, typename Token, typename Pred, typename Proj1,
         typename Proj2>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_search_t<ExPolicy>, Iter1 it, Iter2 s_first,
         std::size_t base_idx, std::size_t part_size, std::size_t diff,
         std::size_t count, Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
@@ -86,7 +85,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
         typename Size, typename V, typename Token, typename Pred, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE void tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE void hpx_invoke(
         sequential_search_n_t<ExPolicy>, Iter it, std::size_t base_idx,
         std::size_t part_size, std::ptrdiff_t max_start, Size count,
         V const& value_proj, Token& tok, Pred&& pred, Proj&& proj)

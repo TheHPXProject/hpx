@@ -10,9 +10,9 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
@@ -26,13 +26,12 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_replace_t final
-      : hpx::functional::detail::tag_fallback<sequential_replace_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_replace_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename T1, typename T2, typename Proj>
-        friend constexpr auto tag_fallback_invoke(sequential_replace_t,
-            ExPolicy&& policy, InIter first, InIter last, T1 const& old_value,
-            T2 const& new_value, Proj&& proj)
+        static constexpr auto invoke_default(ExPolicy&& policy, InIter first,
+            InIter last, T1 const& old_value, T2 const& new_value, Proj&& proj)
         {
             if constexpr (hpx::is_sequenced_execution_policy_v<ExPolicy>)
             {
@@ -78,14 +77,13 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_replace_if_t final
-      : hpx::functional::detail::tag_fallback<sequential_replace_if_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_replace_if_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename Sent, typename F, typename T,
             typename Proj>
-        friend constexpr auto tag_fallback_invoke(sequential_replace_if_t,
-            ExPolicy&& policy, InIter first, Sent last, F&& f,
-            T const& new_value, Proj&& proj)
+        static constexpr auto invoke_default(ExPolicy&& policy, InIter first,
+            Sent last, F&& f, T const& new_value, Proj&& proj)
         {
             if constexpr (hpx::is_sequenced_execution_policy_v<ExPolicy>)
             {
@@ -132,15 +130,14 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_replace_copy_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_replace_copy_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_replace_copy_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename Sent, typename OutIter, typename T,
             typename Proj>
-        friend constexpr auto tag_fallback_invoke(sequential_replace_copy_t,
-            ExPolicy&& policy, InIter first, Sent sent, OutIter dest,
-            T const& old_value, T const& new_value, Proj&& proj)
+        static constexpr auto invoke_default(ExPolicy&& policy, InIter first,
+            Sent sent, OutIter dest, T const& old_value, T const& new_value,
+            Proj&& proj)
         {
             if constexpr (hpx::is_sequenced_execution_policy_v<ExPolicy>)
             {
@@ -192,15 +189,13 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_replace_copy_if_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_replace_copy_if_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_replace_copy_if_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename Sent, typename OutIter, typename F,
             typename T, typename Proj>
-        friend constexpr auto tag_fallback_invoke(sequential_replace_copy_if_t,
-            ExPolicy&& policy, InIter first, Sent sent, OutIter dest, F&& f,
-            T const& new_value, Proj&& proj)
+        static constexpr auto invoke_default(ExPolicy&& policy, InIter first,
+            Sent sent, OutIter dest, F&& f, T const& new_value, Proj&& proj)
         {
             if constexpr (hpx::is_sequenced_execution_policy_v<ExPolicy>)
             {

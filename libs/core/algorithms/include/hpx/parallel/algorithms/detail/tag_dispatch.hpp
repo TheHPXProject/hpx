@@ -34,6 +34,13 @@ namespace hpx::detail {
     concept has_invoke_default = requires(
         Args&&... args) { Tag::invoke_default(HPX_FORWARD(Args, args)...); };
 
+    // Empty CRTP base for CPOs that have no additional "Base" behavior (i.e.
+    // no sender/policy support like tag_parallel_algorithm), used together
+    // with tag_dispatch below.
+    struct no_base
+    {
+    };
+
     namespace tag_dispatch_detail {
 
         template <typename Tag, typename Base, typename... Args>

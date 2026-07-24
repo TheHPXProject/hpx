@@ -10,7 +10,6 @@
 
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/fill.hpp>
 #include <hpx/parallel/datapar/handle_local_exceptions.hpp>
 #include <hpx/parallel/datapar/loop.hpp>
@@ -44,7 +43,7 @@ namespace hpx::parallel::detail {
             hpx::parallel::util::detail::iterator_datapar_compatible<Iter>::value
         )
     // clang-format on
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iter tag_invoke(sequential_fill_t,
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iter hpx_invoke(sequential_fill_t,
         ExPolicy&& policy, Iter first, Sent last, T const& value)
     {
         return datapar_fill::call(
@@ -72,7 +71,7 @@ namespace hpx::parallel::detail {
             parallel::util::detail::iterator_datapar_compatible<Iter>::value
         )
     // clang-format on
-    HPX_HOST_DEVICE HPX_FORCEINLINE Iter tag_invoke(sequential_fill_n_t,
+    HPX_HOST_DEVICE HPX_FORCEINLINE Iter hpx_invoke(sequential_fill_n_t,
         ExPolicy&& policy, Iter first, std::size_t count, T const& value)
     {
         return datapar_fill_n::call(

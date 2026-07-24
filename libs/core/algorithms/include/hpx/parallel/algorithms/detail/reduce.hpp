@@ -8,7 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
 #include <cstddef>
@@ -19,13 +19,13 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_reduce_t final
-      : hpx::functional::detail::tag_fallback<sequential_reduce_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_reduce_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIterB, typename InIterE, typename T,
             typename Reduce>
-        friend constexpr T tag_fallback_invoke(sequential_reduce_t, ExPolicy&&,
-            InIterB first, InIterE last, T init, Reduce&& r)
+        static constexpr T invoke_default(
+            ExPolicy&&, InIterB first, InIterE last, T init, Reduce&& r)
         {
             util::loop_ind<ExPolicy>(
                 first, last, [&init, &r](auto const& v) mutable {
@@ -35,7 +35,7 @@ namespace hpx::parallel::detail {
         }
 
         template <typename T, typename FwdIterB, typename Reduce>
-        friend constexpr T tag_fallback_invoke(sequential_reduce_t,
+        static constexpr T invoke_default(
             FwdIterB part_begin, std::size_t part_size, T init, Reduce r)
         {
             util::loop_n_ind<ExPolicy>(
@@ -47,9 +47,8 @@ namespace hpx::parallel::detail {
 
         template <typename Iter, typename Sent, typename T, typename Reduce,
             typename Convert>
-        friend constexpr auto tag_fallback_invoke(sequential_reduce_t,
-            ExPolicy&&, Iter first, Sent last, T init, Reduce&& r,
-            Convert&& conv)
+        static constexpr auto invoke_default(ExPolicy&&, Iter first, Sent last,
+            T init, Reduce&& r, Convert&& conv)
         {
             util::loop_ind<std::decay_t<ExPolicy>>(
                 first, last, [&init, &r, &conv](auto const& v) mutable {
@@ -59,9 +58,8 @@ namespace hpx::parallel::detail {
         }
 
         template <typename T, typename Iter, typename Reduce, typename Convert>
-        friend constexpr auto tag_fallback_invoke(sequential_reduce_t,
-            Iter part_begin, std::size_t part_size, T init, Reduce r,
-            Convert conv)
+        static constexpr auto invoke_default(Iter part_begin,
+            std::size_t part_size, T init, Reduce r, Convert conv)
         {
             util::loop_n_ind<ExPolicy>(part_begin, part_size,
                 [&init, &r, &conv](auto const& v) mutable {
@@ -72,9 +70,8 @@ namespace hpx::parallel::detail {
 
         template <typename Iter1, typename Sent, typename Iter2, typename T,
             typename Reduce, typename Convert>
-        friend constexpr T tag_fallback_invoke(sequential_reduce_t,
-            Iter1 first1, Sent last1, Iter2 first2, T init, Reduce&& r,
-            Convert&& conv)
+        static constexpr T invoke_default(Iter1 first1, Sent last1,
+            Iter2 first2, T init, Reduce&& r, Convert&& conv)
         {
             util::loop2<ExPolicy>(first1, last1, first2,
                 [&init, &r, &conv](Iter1 it1, Iter2 it2) mutable {

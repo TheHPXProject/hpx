@@ -8,7 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -27,12 +27,11 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT struct sequential_fill_t
-      : hpx::functional::detail::tag_fallback<sequential_fill_t>
+      : hpx::detail::tag_dispatch<sequential_fill_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename Sent, typename T>
-        friend constexpr Iter tag_fallback_invoke(sequential_fill_t, ExPolicy&&,
-            Iter first, Sent last, T const& value)
+        static constexpr Iter invoke_default(
+            ExPolicy&&, Iter first, Sent last, T const& value)
         {
             return sequential_fill_helper(first, last, value);
         }
@@ -61,11 +60,10 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT struct sequential_fill_n_t
-      : hpx::functional::detail::tag_fallback<sequential_fill_n_t>
+      : hpx::detail::tag_dispatch<sequential_fill_n_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename T>
-        friend constexpr Iter tag_fallback_invoke(sequential_fill_n_t,
+        static constexpr Iter invoke_default(
             ExPolicy&&, Iter first, std::size_t count, T const& value)
         {
             return sequential_fill_n_helper(first, count, value);

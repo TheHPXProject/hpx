@@ -91,7 +91,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         std::pair<Iter, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_loop_n_t<ExPolicy>, Iter it,
+    hpx_invoke(hpx::parallel::util::transform_loop_n_t<ExPolicy>, Iter it,
         std::size_t count, OutIter dest, F&& f)
     {
         return detail::datapar_transform_loop_n<Iter>::call(
@@ -163,7 +163,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         std::pair<Iter, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_loop_n_ind_t<ExPolicy>, Iter it,
+    hpx_invoke(hpx::parallel::util::transform_loop_n_ind_t<ExPolicy>, Iter it,
         std::size_t count, OutIter dest, F&& f)
     {
         return detail::datapar_transform_loop_n_ind<Iter>::call(
@@ -212,7 +212,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_t,
             hpx::execution::simd_policy, IterB it, IterE end, OutIter dest,
             F&& f)
     {
@@ -227,7 +227,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_t,
             hpx::execution::simd_task_policy, IterB it, IterE end, OutIter dest,
             F&& f)
     {
@@ -283,7 +283,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_ind_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_ind_t,
             hpx::execution::simd_policy, IterB it, IterE end, OutIter dest,
             F&& f)
     {
@@ -298,7 +298,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_ind_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_ind_t,
             hpx::execution::simd_task_policy, IterB it, IterE end, OutIter dest,
             F&& f)
     {
@@ -383,7 +383,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         hpx::tuple<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_n_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_n_t<ExPolicy>,
         InIter1 first1, std::size_t count, InIter2 first2, OutIter dest, F&& f)
     {
         return detail::datapar_transform_binary_loop_n<InIter1, InIter2>::call(
@@ -489,7 +489,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
         InIter1 first1, InIter1 last1, InIter2 first2, OutIter dest, F&& f)
     {
         return detail::datapar_transform_binary_loop<InIter1, InIter2>::call(
@@ -501,7 +501,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
         InIter1 first1, InIter1 last1, InIter2 first2, InIter2 last2,
         OutIter dest, F&& f)
     {
@@ -583,7 +583,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         hpx::tuple<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_n_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_n_t<ExPolicy>,
         InIter1 first1, std::size_t count, InIter2 first2, OutIter dest, F&& f)
     {
         return detail::datapar_transform_binary_loop_ind_n<InIter1,
@@ -696,7 +696,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
         InIter1 first1, InIter1 last1, InIter2 first2, OutIter dest, F&& f)
     {
         return detail::datapar_transform_binary_loop_ind<InIter1,
@@ -708,7 +708,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_vectorpack_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
         InIter1 first1, InIter1 last1, InIter2 first2, InIter2 last2,
         OutIter dest, F&& f)
     {

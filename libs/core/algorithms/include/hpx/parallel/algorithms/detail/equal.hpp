@@ -8,7 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
 #include <algorithm>
@@ -20,18 +20,18 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_equal_t final
-      : hpx::functional::detail::tag_fallback<sequential_equal_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_equal_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter1, typename InIter2, typename F>
-        friend constexpr bool tag_fallback_invoke(sequential_equal_t,
+        static constexpr bool invoke_default(
             InIter1 first1, InIter1 last1, InIter2 first2, F&& f)
         {
             return std::equal(first1, last1, first2, HPX_FORWARD(F, f));
         }
 
         template <typename ZipIterator, typename Token, typename F>
-        friend constexpr void tag_fallback_invoke(sequential_equal_t,
+        static constexpr void invoke_default(
             ZipIterator it, std::size_t part_count, Token& tok, F&& f)
         {
             util::const_loop_n<ExPolicy>(it, part_count, tok,
@@ -71,16 +71,14 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_equal_binary_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_equal_binary_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_equal_binary_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         // Our own version of the C++14 equal (_binary).
         template <typename InIter1, typename Sent1, typename InIter2,
             typename Sent2, typename F, typename Proj1, typename Proj2>
-        friend constexpr bool tag_fallback_invoke(sequential_equal_binary_t,
-            InIter1 first1, Sent1 last1, InIter2 first2, Sent2 last2, F&& f,
-            Proj1&& proj1, Proj2&& proj2)
+        static constexpr bool invoke_default(InIter1 first1, Sent1 last1,
+            InIter2 first2, Sent2 last2, F&& f, Proj1&& proj1, Proj2&& proj2)
         {
             for (/* */; first1 != last1 && first2 != last2;
                 (void) ++first1, ++first2)
@@ -94,9 +92,9 @@ namespace hpx::parallel::detail {
 
         template <typename ZipIterator, typename Token, typename F,
             typename Proj1, typename Proj2>
-        friend constexpr void tag_fallback_invoke(sequential_equal_binary_t,
-            ZipIterator it, std::size_t part_count, Token& tok, F&& f,
-            Proj1&& proj1, Proj2&& proj2)
+        static constexpr void invoke_default(ZipIterator it,
+            std::size_t part_count, Token& tok, F&& f, Proj1&& proj1,
+            Proj2&& proj2)
         {
             util::const_loop_n<ExPolicy>(it, part_count, tok,
                 [&f, &proj1, &proj2, &tok](auto const& curr) mutable -> void {

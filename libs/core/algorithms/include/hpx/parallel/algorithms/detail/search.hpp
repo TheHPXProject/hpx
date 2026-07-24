@@ -13,10 +13,10 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
@@ -37,16 +37,15 @@ namespace hpx::parallel::detail {
     // sequential_search dispatch tag
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_search_t final
-      : hpx::functional::detail::tag_fallback<sequential_search_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_search_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         // Partitioned path: called from search::parallel() f1 for each chunk.
         // Checks each starting position in [base_idx, base_idx+part_size) for a
         // needle match; cancels tok at the first match position found.
         template <typename Iter1, typename Iter2, typename Token, typename Pred,
             typename Proj1, typename Proj2>
-        friend inline constexpr void tag_fallback_invoke(
-            sequential_search_t<ExPolicy>, Iter1 it, Iter2 s_first,
+        static inline constexpr void invoke_default(Iter1 it, Iter2 s_first,
             std::size_t base_idx, std::size_t part_size, std::size_t diff,
             std::size_t count, Token& tok, Pred&& op, Proj1&& proj1,
             Proj2&& proj2)
@@ -86,18 +85,18 @@ namespace hpx::parallel::detail {
     // sequential_search_n dispatch tag
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_search_n_t final
-      : hpx::functional::detail::tag_fallback<sequential_search_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_search_n_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         // Partitioned path: called from search_n::parallel() f1 for each chunk.
         // Checks each starting position in [base_idx, base_idx+part_size) for
         // count consecutive elements equal to value_proj.
         template <typename Iter, typename Size, typename V, typename Token,
             typename Pred, typename Proj>
-        friend inline constexpr void tag_fallback_invoke(
-            sequential_search_n_t<ExPolicy>, Iter it, std::size_t base_idx,
-            std::size_t part_size, std::ptrdiff_t max_start, Size count,
-            V const& value_proj, Token& tok, Pred&& pred, Proj&& proj)
+        static inline constexpr void invoke_default(Iter it,
+            std::size_t base_idx, std::size_t part_size,
+            std::ptrdiff_t max_start, Size count, V const& value_proj,
+            Token& tok, Pred&& pred, Proj&& proj)
         {
             using difference_type =
                 typename std::iterator_traits<Iter>::difference_type;

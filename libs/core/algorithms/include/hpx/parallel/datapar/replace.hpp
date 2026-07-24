@@ -11,7 +11,6 @@
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/replace.hpp>
 #include <hpx/parallel/datapar/handle_local_exceptions.hpp>
@@ -64,7 +63,7 @@ namespace hpx { namespace parallel { namespace detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename T1, typename T2, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE auto tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE auto hpx_invoke(
         sequential_replace_t<ExPolicy>, ExPolicy&& policy, InIter first,
         InIter last, T1 const& old_value, T2 const& new_value, Proj&& proj)
     {
@@ -126,7 +125,7 @@ namespace hpx { namespace parallel { namespace detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename Sent, typename F, typename T, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE auto tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE auto hpx_invoke(
         sequential_replace_if_t<ExPolicy>, ExPolicy&& policy, InIter first,
         Sent last, F&& f, T const& new_value, Proj&& proj)
     {
@@ -199,7 +198,7 @@ namespace hpx { namespace parallel { namespace detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename Sent, typename OutIter, typename T, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE auto tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE auto hpx_invoke(
         sequential_replace_copy_t<ExPolicy>, ExPolicy&& policy, InIter first,
         Sent sent, OutIter dest, T const& old_value, T const& new_value,
         Proj&& proj)
@@ -274,7 +273,7 @@ namespace hpx { namespace parallel { namespace detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
         typename Sent, typename OutIter, typename F, typename T, typename Proj>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE auto tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE auto hpx_invoke(
         sequential_replace_copy_if_t<ExPolicy>, ExPolicy&& policy, InIter first,
         Sent last, OutIter dest, F&& f, T const& new_value, Proj&& proj)
     {

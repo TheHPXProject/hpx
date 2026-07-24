@@ -62,7 +62,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         std::pair<Iter, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_loop_n_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_loop_n_t<ExPolicy>,
         Iter HPX_RESTRICT it, std::size_t count, OutIter HPX_RESTRICT dest,
         F&& f)
     {
@@ -112,7 +112,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         std::pair<Iter, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_loop_n_ind_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_loop_n_ind_t<ExPolicy>,
         Iter HPX_RESTRICT it, std::size_t count, OutIter HPX_RESTRICT dest,
         F&& f)
     {
@@ -160,7 +160,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_t,
             hpx::execution::unsequenced_policy, IterB HPX_RESTRICT it,
             IterE HPX_RESTRICT end, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -172,7 +172,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_t,
             hpx::execution::unsequenced_task_policy, IterB HPX_RESTRICT it,
             IterE HPX_RESTRICT end, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -220,7 +220,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_ind_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_ind_t,
             hpx::execution::unsequenced_policy, IterB HPX_RESTRICT it,
             IterE HPX_RESTRICT end, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -232,7 +232,7 @@ namespace hpx::parallel::util {
         typename OutIter, typename F>
     HPX_HOST_DEVICE
         HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-        tag_invoke(hpx::parallel::util::transform_loop_ind_t,
+        hpx_invoke(hpx::parallel::util::transform_loop_ind_t,
             hpx::execution::unsequenced_task_policy, IterB HPX_RESTRICT it,
             IterE HPX_RESTRICT end, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -287,7 +287,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE
         std::enable_if_t<hpx::is_unsequenced_execution_policy_v<ExPolicy>,
             hpx::tuple<InIter1, InIter2, OutIter>>
-        tag_invoke(hpx::parallel::util::transform_binary_loop_n_t<ExPolicy>,
+        hpx_invoke(hpx::parallel::util::transform_binary_loop_n_t<ExPolicy>,
             InIter1 HPX_RESTRICT first1, std::size_t count,
             InIter2 HPX_RESTRICT first2, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -380,7 +380,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
         InIter1 HPX_RESTRICT first1, InIter1 HPX_RESTRICT last1,
         InIter2 HPX_RESTRICT first2, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -393,7 +393,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
         InIter1 HPX_RESTRICT first1, InIter1 HPX_RESTRICT last1,
         InIter2 HPX_RESTRICT first2, InIter2 HPX_RESTRICT last2, OutIter dest,
         F&& f)
@@ -449,7 +449,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         hpx::tuple<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_n_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_n_t<ExPolicy>,
         InIter1 HPX_RESTRICT first1, std::size_t count,
         InIter2 HPX_RESTRICT first2, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -542,7 +542,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
         InIter1 HPX_RESTRICT first1, InIter1 HPX_RESTRICT last1,
         InIter2 HPX_RESTRICT first2, OutIter HPX_RESTRICT dest, F&& f)
     {
@@ -555,7 +555,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr std::enable_if_t<
         hpx::is_unsequenced_execution_policy_v<ExPolicy>,
         util::in_in_out_result<InIter1, InIter2, OutIter>>
-    tag_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
+    hpx_invoke(hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
         InIter1 HPX_RESTRICT first1, InIter1 HPX_RESTRICT last1,
         InIter2 HPX_RESTRICT first2, InIter2 HPX_RESTRICT last2,
         OutIter HPX_RESTRICT dest, F&& f)

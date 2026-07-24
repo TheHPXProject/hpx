@@ -541,7 +541,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::loop_t, ExPolicy&&, Begin begin, End end, F&& f)
     {
         return detail::datapar_loop<Begin>::call(begin, end, HPX_FORWARD(F, f));
@@ -550,7 +550,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename CancelToken, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::loop_t, ExPolicy&&, Begin begin, End end,
         CancelToken& tok, F&& f)
     {
@@ -561,7 +561,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::const_loop_t, ExPolicy&&, Begin begin, End end,
         F&& f)
     {
@@ -572,7 +572,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename CancelToken, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::const_loop_t, ExPolicy&&, Begin begin, End end,
         CancelToken& tok, F&& f)
     {
@@ -584,7 +584,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename Pred>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::loop_pred_t<ExPolicy>, Begin first, End end,
         Pred&& pred)
     {
@@ -611,7 +611,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
         typename End, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE Begin tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE Begin hpx_invoke(
         hpx::parallel::util::loop_ind_t<ExPolicy>, Begin begin, End end, F&& f)
     {
         return detail::datapar_loop_ind<Begin>::call(
@@ -622,7 +622,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter1,
         typename Iter2, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE std::pair<Iter1, Iter2> tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE std::pair<Iter1, Iter2> hpx_invoke(
         hpx::parallel::util::loop2_t<ExPolicy>, Iter1 first1, Iter1 last1,
         Iter2 first2, F&& f)
     {
@@ -646,7 +646,7 @@ namespace hpx::parallel::util {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::loop_n_t<ExPolicy>, Iter it, std::size_t count,
         F&& f)
     {
@@ -657,7 +657,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
         typename CancelToken, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::loop_n_t<ExPolicy>, Iter it, std::size_t count,
         CancelToken& tok, F&& f)
     {
@@ -667,7 +667,7 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::const_loop_n_t<ExPolicy>, Iter it,
         std::size_t count, F&& f)
     {
@@ -678,7 +678,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
         typename CancelToken, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::const_loop_n_t<ExPolicy>, Iter it,
         std::size_t count, CancelToken& tok, F&& f)
     {
@@ -689,7 +689,7 @@ namespace hpx::parallel::util {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::loop_n_ind_t<ExPolicy>, Iter it, std::size_t count,
         F&& f)
     {
@@ -700,7 +700,7 @@ namespace hpx::parallel::util {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::loop_idx_n_t<ExPolicy>, std::size_t base_idx,
         Iter it, std::size_t count, F&& f)
     {
@@ -711,7 +711,7 @@ namespace hpx::parallel::util {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
         typename CancelToken, typename F>
         requires(hpx::is_vectorpack_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Iter hpx_invoke(
         hpx::parallel::util::loop_idx_n_t<ExPolicy>, std::size_t base_idx,
         Iter it, std::size_t count, CancelToken& tok, F&& f)
     {

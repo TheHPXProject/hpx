@@ -26,7 +26,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIterB,
         typename InIterE, typename T, typename Reduce>
         requires(hpx::is_unsequenced_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T hpx_invoke(
         sequential_reduce_t<ExPolicy>, ExPolicy&&, InIterB first, InIterE last,
         T init, Reduce&& r)
     {
@@ -48,7 +48,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T,
         typename FwdIter, typename Reduce>
         requires(hpx::is_unsequenced_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T hpx_invoke(
         sequential_reduce_t<ExPolicy>, FwdIter part_begin,
         std::size_t part_size, T init, Reduce r)
     {
@@ -68,7 +68,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
         typename Sent, typename T, typename Reduce, typename Convert>
         requires(hpx::is_unsequenced_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T hpx_invoke(
         sequential_reduce_t<ExPolicy>, ExPolicy&&, Iter first, Sent last,
         T init, Reduce&& r, Convert&& conv)
     {
@@ -91,7 +91,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T, typename Iter,
         typename Reduce, typename Convert>
         requires(hpx::is_unsequenced_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T hpx_invoke(
         sequential_reduce_t<ExPolicy>, Iter part_begin, std::size_t part_size,
         T init, Reduce r, Convert conv)
     {
@@ -112,7 +112,7 @@ namespace hpx::parallel::detail {
         typename Sent, typename Iter2, typename T, typename Reduce,
         typename Convert>
         requires(hpx::is_unsequenced_execution_policy_v<ExPolicy>)
-    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T tag_invoke(
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T hpx_invoke(
         sequential_reduce_t<ExPolicy>, Iter1 first1, Sent last1, Iter2 first2,
         T init, Reduce&& r, Convert&& conv)
     {

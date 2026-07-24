@@ -11,9 +11,9 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
@@ -215,14 +215,12 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct copy_n_t final
-      : hpx::functional::detail::tag_fallback<copy_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<copy_n_t<ExPolicy>, hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename OutIter>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr in_out_result<InIter, OutIter>
-            tag_fallback_invoke(hpx::parallel::util::copy_n_t<ExPolicy>,
-                InIter first, std::size_t count, OutIter dest)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr in_out_result<InIter, OutIter>
+            invoke_default(InIter first, std::size_t count, OutIter dest)
         {
             using category = hpx::traits::pointer_copy_category_t<
                 std::decay_t<

@@ -11,7 +11,6 @@
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/datapar/transform_loop.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 #include <hpx/parallel/util/transfer.hpp>
@@ -63,7 +62,7 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE
         typename std::enable_if<hpx::is_vectorpack_execution_policy_v<ExPolicy>,
             in_out_result<InIter, OutIter>>::type
-        tag_invoke(hpx::parallel::util::copy_n_t<ExPolicy>, InIter first,
+        hpx_invoke(hpx::parallel::util::copy_n_t<ExPolicy>, InIter first,
             std::size_t count, OutIter dest)
     {
         return detail::datapar_copy_n<InIter>::call(first, count, dest);
