@@ -175,6 +175,7 @@ namespace hpx::parcelset {
 
             ~parcelport() override
             {
+                receiver_.stop();
                 util::mpi_environment::finalize();
             }
 

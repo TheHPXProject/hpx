@@ -47,6 +47,30 @@ namespace hpx::parcelset::policies::mpi {
             post_new_header(l);
         }
 
+        void stop() noexcept
+        {
+            // Cancel the permanently re-posted wildcard header receive.
+            // Leaving it pending would let MPI_Finalize run with an active
+            // request on the communicator, which the MPI standard does not
+            // allow and which leaves live receive state for the MPI library
+            // to trip over during teardown. Errors are ignored: this runs
+            // directly before MPI is finalized anyway.
+            int is_finalized = 0;
+            MPI_Finalized(&is_finalized);
+            if (is_finalized)
+            {
+                return;
+            }
+
+            util::mpi_environment::scoped_lock l;
+            if (hdr_posted_)
+            {
+                hdr_posted_ = false;
+                MPI_Cancel(&hdr_request_);
+                MPI_Wait(&hdr_request_, MPI_STATUS_IGNORE);
+            }
+        }
+
         bool background_work() noexcept
         {
             // We first try to accept a new connection
@@ -146,12 +170,14 @@ namespace hpx::parcelset::policies::mpi {
                 &hdr_request_);
             util::mpi_environment::check_mpi_error(
                 l, HPX_CURRENT_SOURCE_LOCATION(), ret);
+            hdr_posted_ = true;
         }
 
         Parcelport& pp_;
 
         hpx::spinlock headers_mtx_;
         MPI_Request hdr_request_;
+        bool hdr_posted_ = false;
         std::vector<char> header_buffer_;
 
         hpx::spinlock connections_mtx_;
