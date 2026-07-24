@@ -259,6 +259,25 @@ namespace hpx::tracy {
             return nullptr;
         }
 
+        HPX_CORE_EXPORT std::uint64_t push_zone(char const* name) noexcept
+        {
+            char const* safe_name = intern_zone_label(name, "event");
+            TracyCZoneC(ctx, 0x0078D7, 1);
+            TracyCZoneName(ctx, safe_name, std::strlen(safe_name));
+            tracy_context data;
+            data.context = ctx;
+            return data.value;
+        }
+
+        HPX_CORE_EXPORT void pop_zone(std::uint64_t ctx_value) noexcept
+        {
+            if (ctx_value)
+            {
+                tracy_context data;
+                data.value = ctx_value;
+                TracyCZoneEnd(data.context);
+            }
+        }
     }    // namespace detail
 }    // namespace hpx::tracy
 
