@@ -89,9 +89,13 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // set up environment for the launched executable
     std::vector<std::string> env = get_environment();    // current environment
 
+    // the launched locality talks to this locality's AGAS server and runs its
+    // own parcelport on the same host
+    std::string const address =
+        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS);
+
     // pass along the console parcelport address
-    env.push_back("HPX_AGAS_SERVER_ADDRESS=" +
-        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS));
+    env.push_back("HPX_AGAS_SERVER_ADDRESS=" + address);
     env.push_back("HPX_AGAS_SERVER_PORT=" +
         hpx::get_config_entry(
             "hpx.agas.port", std::to_string(HPX_INITIAL_IP_PORT)));
@@ -101,8 +105,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // launch_process test uses 42).
     int const port = 43;
 
-    env.push_back("HPX_PARCEL_SERVER_ADDRESS=" +
-        hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS));
+    env.push_back("HPX_PARCEL_SERVER_ADDRESS=" + address);
     env.push_back("HPX_PARCEL_SERVER_PORT=" +
         std::to_string(HPX_CONNECTING_IP_PORT - port));
 
