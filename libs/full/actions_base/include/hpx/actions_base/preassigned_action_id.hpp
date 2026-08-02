@@ -183,8 +183,9 @@ namespace hpx::actions {
         supervision_manager_unregister_observer_action_id,
         supervision_manager_query_state_action_id,
         supervision_manager_await_terminal_action_id,
-        supervision_manager_register_activity_observer__action_id,
+        supervision_manager_register_activity_observer_action_id,
         supervision_manager_unregister_activity_observer_action_id,
+        supervision_manager_remove_target_action_id,
 
         // supervision agent
         supervision_invoke_if_active_action_id,

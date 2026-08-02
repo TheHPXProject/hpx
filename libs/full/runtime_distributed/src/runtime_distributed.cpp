@@ -179,7 +179,9 @@ namespace hpx {
       , parcel_handler_(rtcfg_)
 #endif
       , agas_client_(rtcfg_)
+#if defined(HPX_HAVE_SUPERVISION)
       , supervision_manager_(rtcfg)
+#endif
       , pre_main_(pre_main)
       , post_main_(post_main)
     {
@@ -865,12 +867,13 @@ namespace hpx {
         return agas_client_;
     }
 
+#if defined(HPX_HAVE_SUPERVISION)
     supervision::supervision_manager&
     runtime_distributed::get_supervision_manager()
     {
         return supervision_manager_;
     }
-
+#endif
 #if defined(HPX_HAVE_NETWORKING)
     parcelset::parcelhandler const& runtime_distributed::get_parcel_handler()
         const
@@ -1840,6 +1843,7 @@ namespace hpx::naming {
     }
 }    // namespace hpx::naming
 
+#if defined(HPX_HAVE_SUPERVISION)
 namespace hpx::supervision {
 
     supervision::supervision_manager& get_supervision_manager()
@@ -1847,6 +1851,8 @@ namespace hpx::supervision {
         return get_runtime_distributed().get_supervision_manager();
     }
 }    // namespace hpx::supervision
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_NETWORKING)
 namespace hpx::parcelset {

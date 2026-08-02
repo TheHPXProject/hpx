@@ -7,4 +7,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#if defined(HPX_HAVE_SUPERVISION)
 #include <hpx/modules/supervision.hpp>
+#endif

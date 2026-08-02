@@ -28,6 +28,7 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/string_util.hpp>
+#include <hpx/modules/supervision.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threadmanager.hpp>
@@ -654,10 +655,11 @@ namespace hpx { namespace components { namespace server {
                 naming::gid_type const here = agas_client.get_local_locality();
 
                 // unregister fixed components
+#if defined(HPX_HAVE_SUPERVISION)
                 auto const& supervision_manager =
                     supervision::get_supervision_manager();
                 supervision_manager.unregister_server_instance(ec);
-
+#endif
                 agas_client.unregister_server_instances(ec);
 
                 agas_client.unbind_local(

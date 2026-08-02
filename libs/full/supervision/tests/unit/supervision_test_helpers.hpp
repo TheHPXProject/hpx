@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <iostream>
 
 ///////////////////////////////////////////////////////////////////////////////
 // publish_event() now validates lifecycle event transitions and rejects
@@ -65,10 +66,13 @@ void print(Args... args)
                  (std::cout << ", " << args)));
 }
 
-#define HPX_TEST_RUN(func, ...)                                                \
-    std::cout << HPX_PP_STRINGIZE(func) << "(";                                \
-    print(__VA_ARGS__);                                                        \
-    std::cout << ")\n";                                                        \
-    func(__VA_ARGS__)
+#define HPX_SUPERVISION_TEST_RUN(func, ...)                                    \
+    do                                                                         \
+    {                                                                          \
+        std::cout << HPX_PP_STRINGIZE(func) << "(";                            \
+        print(__VA_ARGS__);                                                    \
+        std::cout << ")\n";                                                    \
+        func(__VA_ARGS__);                                                     \
+    } while (false) /**/
 
 #endif

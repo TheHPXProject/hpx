@@ -52,11 +52,15 @@ HPX_REGISTER_ACTION_ID(
 HPX_REGISTER_ACTION_ID(hpx::supervision::server::supervision_manager::
                            register_activity_observer_action,
     supervision_register_activity_observer__action,
-    hpx::actions::supervision_manager_register_activity_observer__action_id)
+    hpx::actions::supervision_manager_register_activity_observer_action_id)
 HPX_REGISTER_ACTION_ID(hpx::supervision::server::supervision_manager::
                            unregister_activity_observer_action,
     supervision_manager_unregister_activity_observer_action,
     hpx::actions::supervision_manager_unregister_activity_observer_action_id)
+HPX_REGISTER_ACTION_ID(
+    hpx::supervision::server::supervision_manager::remove_target_action,
+    supervision_manager_remove_target_action,
+    hpx::actions::supervision_manager_remove_target_action_id)
 
 namespace hpx::supervision {
 
@@ -485,6 +489,84 @@ namespace hpx::supervision {
         get_supervision_manager().unregister_observer(observer_handle, ec);
     }
 
+    ///////////////////////////////////////////////////////////////////////////
+    // Clear all locally tracked state for a target
+    namespace {
+
+        hpx::future<void> remove_target_helper(
+            hpx::id_type const& locality, hpx::id_type const& target)
+        {
+            using action_type =
+                server::supervision_manager::remove_target_action;
+            return supervision_dispatch<void, action_type>(
+                locality,
+                [&]() {
+                    get_supervision_manager().remove_target(target);
+                    return hpx::make_ready_future();
+                },
+                target);
+        }
+    }    // namespace
+
+    hpx::future<void> remove_target(
+        hpx::id_type const& locality, hpx::id_type const& target)
+    {
+        if (!hpx::naming::is_locality(locality))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::supervision::remove_target",
+                "The id passed as the first argument is not representing "
+                "a locality");
+        }
+        if (!target)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::supervision::remove_target",
+                "The id passed as the second argument is not representing "
+                "a valid target");
+        }
+
+        return remove_target_helper(locality, target);
+    }
+
+    void remove_target(hpx::launch::sync_policy, hpx::id_type const& locality,
+        hpx::id_type const& target, hpx::error_code& ec)
+    {
+        if (!hpx::naming::is_locality(locality))
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::supervision::remove_target",
+                "The id passed as the first argument is not representing "
+                "a locality");
+            return;
+        }
+        if (!target)
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::supervision::remove_target",
+                "The id passed as the second argument is not representing "
+                "a valid target");
+            return;
+        }
+
+        remove_target_helper(locality, target).get(ec);
+    }
+
+    // Local target-state removal
+    void remove_target(hpx::id_type const& target, hpx::error_code& ec)
+    {
+        if (!target)
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::supervision::remove_target",
+                "The id passed as the first argument is not representing "
+                "a valid target");
+            return;
+        }
+
+        get_supervision_manager().remove_target(target, ec);
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // Wait for the target to reach a terminal state
     namespace {
@@ -577,7 +659,7 @@ namespace hpx::supervision {
 
     ///////////////////////////////////////////////////////////////////////////
     dispatch_outcome check_admission(
-        hpx::id_type const& target, std::uint64_t const epoch) noexcept
+        hpx::id_type const& target, std::uint64_t const epoch)
     {
         if (!target)
         {

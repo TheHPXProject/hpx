@@ -7,7 +7,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file wait_each.hpp
-/// \page hpx::wait_each
+/// \page hpx::wait_each, hpx::wait_each_nothrow, hpx::wait_each_n, hpx::wait_each_n_nothrow
 /// \headerfile hpx/future.hpp
 
 #pragma once

@@ -175,7 +175,7 @@ namespace hpx {
 
         HPX_CXX_EXPORT inline bool is_locality(id_type const& id) noexcept
         {
-            return is_locality(id.get_gid());
+            return id && is_locality(id.get_gid());
         }
     }    // namespace naming
 

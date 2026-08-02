@@ -237,8 +237,9 @@ namespace hpx {
         ///        runtime.
         agas::addressing_service& get_agas_client();
 
+#if defined(HPX_HAVE_SUPERVISION)
         supervision::supervision_manager& get_supervision_manager();
-
+#endif
 #if defined(HPX_HAVE_NETWORKING)
         /// \brief Allow access to the parcel handler instance used by the HPX
         ///        runtime.
@@ -408,8 +409,9 @@ namespace hpx {
         agas::addressing_service agas_client_;
         applier::applier applier_;
 
+#if defined(HPX_HAVE_SUPERVISION)
         supervision::supervision_manager supervision_manager_;
-
+#endif
         // locality basename -> used cores
         using used_cores_map_type = std::map<std::string, std::uint32_t>;
         used_cores_map_type used_cores_map_;

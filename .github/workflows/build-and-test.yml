@@ -75,6 +75,7 @@ jobs:
             -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="${DOCUMENTATION_OUTPUT_FORMATS}" \
             -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-workrequesting-fifo \
             -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+            -DHPX_WITH_SUPERVISION=On \
             -DHPX_WITH_DATAPAR=On \
             -DHPX_WITH_DATAPAR_BACKEND=EMULATE
 

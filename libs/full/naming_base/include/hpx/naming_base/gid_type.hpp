@@ -110,10 +110,10 @@ namespace hpx::naming {
             std::uint64_t msb_id, std::uint64_t lsb_id) noexcept;
         explicit inline gid_type(std::uint64_t msb_id, void* lsb_id) noexcept;
 
-        inline constexpr gid_type(gid_type const& rhs) noexcept;
-        inline constexpr gid_type(gid_type&& rhs) noexcept;
+        constexpr gid_type(gid_type const& rhs) noexcept;
+        constexpr gid_type(gid_type&& rhs) noexcept;
 
-        ~gid_type() = default;
+        constexpr ~gid_type() = default;
 
         gid_type& operator=(std::uint64_t const lsb_id) noexcept
         {
@@ -123,8 +123,8 @@ namespace hpx::naming {
             return *this;
         }
 
-        inline gid_type& operator=(gid_type const& rhs) noexcept;
-        inline gid_type& operator=(gid_type&& rhs) noexcept;
+        constexpr gid_type& operator=(gid_type const& rhs) noexcept;
+        constexpr gid_type& operator=(gid_type&& rhs) noexcept;
 
         explicit constexpr operator bool() const noexcept
         {
@@ -249,7 +249,7 @@ namespace hpx::naming {
         {
             id_lsb_ = lsb;
         }
-        inline void set_lsb(void* lsb) noexcept
+        void set_lsb(void* lsb) noexcept
         {
             id_lsb_ = reinterpret_cast<std::uint64_t>(lsb);
         }
@@ -708,7 +708,7 @@ namespace hpx::naming {
         std::ostream& os, gid_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
-    inline constexpr gid_type::gid_type(
+    constexpr gid_type::gid_type(
         std::uint64_t const msb_id, std::uint64_t const lsb_id) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(msb_id))
       , id_lsb_(lsb_id)
@@ -721,20 +721,20 @@ namespace hpx::naming {
     {
     }
 
-    inline constexpr gid_type::gid_type(gid_type const& rhs) noexcept
+    constexpr gid_type::gid_type(gid_type const& rhs) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(rhs.get_msb()))
       , id_lsb_(rhs.get_lsb())
     {
     }
 
-    inline constexpr gid_type::gid_type(gid_type&& rhs) noexcept
+    constexpr gid_type::gid_type(gid_type&& rhs) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(rhs.get_msb()))
       , id_lsb_(rhs.get_lsb())
     {
         rhs.id_lsb_ = rhs.id_msb_ = 0;
     }
 
-    inline gid_type& gid_type::operator=(gid_type const& rhs) noexcept
+    constexpr gid_type& gid_type::operator=(gid_type const& rhs) noexcept
     {
         if (this != &rhs)
         {
@@ -744,7 +744,7 @@ namespace hpx::naming {
         }
         return *this;
     }
-    inline gid_type& gid_type::operator=(gid_type&& rhs) noexcept
+    constexpr gid_type& gid_type::operator=(gid_type&& rhs) noexcept
     {
         if (this != &rhs)
         {

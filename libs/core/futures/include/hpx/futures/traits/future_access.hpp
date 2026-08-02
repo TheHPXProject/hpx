@@ -121,7 +121,7 @@ namespace hpx::traits {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        template <typename T, typename Enable = void>
+        HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
         struct future_access_customization_point;
     }    // namespace detail
 

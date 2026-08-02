@@ -9,6 +9,8 @@
 exclude_paths:
   - "tools/**"
   - ".github/**"
+  - "tests/**"
+  - "**/tests/**"
 
 tools:
   duplication:

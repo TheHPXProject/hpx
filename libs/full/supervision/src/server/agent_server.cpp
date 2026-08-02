@@ -19,6 +19,8 @@
 #include <hpx/supervision/supervision_api.hpp>
 
 #include <cstddef>
+#include <exception>
+#include <mutex>
 
 using agent_component = hpx::supervision::server::agent_component;
 using agent_component_type = hpx::components::component<agent_component>;

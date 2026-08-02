@@ -29,7 +29,8 @@ CMake, has a large test suite, and follows Boost-style coding conventions.
 ## Coding style
 
 - Follow Boost coding standards.
-- Use 80-character lines.
+- Use 80-character (soft limit) lines that should not exceed 90
+  characters (hard limit).
 - Use spaces only; no tabs.
 - Avoid raw pointers, raw loops, and raw threads wherever possible.
 - Prefer STL-style identifiers: `my_class`, not `MyClass`.

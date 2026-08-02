@@ -5,10 +5,10 @@
 #  Distributed under the Boost Software License, Version 1.0. (See accompanying
 #  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests new_binpacking)
+set(tests colocating_policy new_binpacking)
 
 set(new_binpacking_PARAMETERS LOCALITIES 2)
-set(new_colocated_PARAMETERS LOCALITIES 2)
+set(colocating_policy_PARAMETERS LOCALITIES 2)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

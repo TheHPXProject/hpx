@@ -6,7 +6,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file wait_any.hpp
-/// \page hpx::wait_any
+/// \page hpx::wait_any, hpx::wait_any_nothrow, hpx::wait_any_n, hpx::wait_any_n_nothrow
 /// \headerfile hpx/future.hpp
 
 #pragma once

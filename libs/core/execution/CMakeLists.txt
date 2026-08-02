@@ -15,9 +15,11 @@ set(execution_headers
     hpx/execution/algorithms/detail/predicates.hpp
     hpx/execution/algorithms/detail/single_result.hpp
     hpx/execution/algorithms/detail/sync_wait_domain.hpp
+    hpx/execution/algorithms/future_sender.hpp
     hpx/execution/algorithms/keep_future.hpp
     hpx/execution/algorithms/make_future.hpp
     hpx/execution/algorithms/run_loop.hpp
+    hpx/execution/algorithms/sender_future.hpp
     hpx/execution/algorithms/sync_wait.hpp
     hpx/execution/algorithms/when_all.hpp
     hpx/execution/algorithms/when_all_vector.hpp

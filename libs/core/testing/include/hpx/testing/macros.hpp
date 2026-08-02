@@ -415,6 +415,7 @@
         ::hpx::util::detail::fixture{strm}, expression, exception)
 
 #define HPX_TEST_THROW_IMPL(fixture, expression, exception)                    \
+    do                                                                         \
     {                                                                          \
         bool caught_exception = false;                                         \
         try                                                                    \
@@ -432,8 +433,7 @@
             HPX_TEST_MSG_IMPL(fixture, false, "unexpected exception caught");  \
         }                                                                      \
         HPX_TEST_IMPL(fixture, caught_exception);                              \
-    }                                                                          \
-    /**/
+    } while (false) /**/
 
 ////////////////////////////////////////////////////////////////////////////////
 #define HPX_TEST_NO_THROW(...)                                                 \
@@ -448,6 +448,7 @@
     HPX_TEST_NO_THROW_IMPL(::hpx::util::detail::global_fixture(), expression)
 
 #define HPX_TEST_NO_THROW_IMPL(fixture, expression)                            \
+    do                                                                         \
     {                                                                          \
         bool caught_exception = false;                                         \
         try                                                                    \
@@ -460,5 +461,4 @@
         }                                                                      \
         HPX_TEST_MSG_IMPL(                                                     \
             fixture, !caught_exception, "unexpected exception caught");        \
-    }                                                                          \
-    /**/
+    } while (false) /**/

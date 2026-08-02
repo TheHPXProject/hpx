@@ -32,7 +32,7 @@ if(HPX_WITH_TESTS_HEADERS)
   add_hpx_header_tests(
     "components.unordered"
     HEADERS ${unordered_headers}
-    HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../include"
     COMPONENT_DEPENDENCIES unordered
   )
 endif()

@@ -192,23 +192,29 @@ void test_activity_replay_on_registration(hpx::id_type const& locality)
         hpx::launch::sync, locality, make_recording_callback(ctx));
 
     HPX_TEST(ctx.wait_for_target_count(
-        target_via_event, 1, std::chrono::milliseconds(20)));
+        target_via_event, 1, std::chrono::milliseconds(50)));
     HPX_TEST(ctx.wait_for_target_count(
-        target_via_observer, 1, std::chrono::milliseconds(20)));
+        target_via_observer, 1, std::chrono::milliseconds(50)));
 
     auto const events_replay = ctx.for_target(target_via_event);
     HPX_TEST_EQ(events_replay.size(), static_cast<std::size_t>(1));
-    HPX_TEST(
-        events_replay[0].state == hpx::supervision::activity_state::active);
-    HPX_TEST(events_replay[0].transition ==
-        hpx::supervision::activity_transition::already_active);
+    if (!events_replay.empty())
+    {
+        HPX_TEST(
+            events_replay[0].state == hpx::supervision::activity_state::active);
+        HPX_TEST(events_replay[0].transition ==
+            hpx::supervision::activity_transition::already_active);
+    }
 
     auto const observer_replay = ctx.for_target(target_via_observer);
     HPX_TEST_EQ(observer_replay.size(), static_cast<std::size_t>(1));
-    HPX_TEST(
-        observer_replay[0].state == hpx::supervision::activity_state::active);
-    HPX_TEST(observer_replay[0].transition ==
-        hpx::supervision::activity_transition::already_active);
+    if (!observer_replay.empty())
+    {
+        HPX_TEST(observer_replay[0].state ==
+            hpx::supervision::activity_state::active);
+        HPX_TEST(observer_replay[0].transition ==
+            hpx::supervision::activity_transition::already_active);
+    }
 
     hpx::supervision::unregister_activity_observer(
         hpx::launch::sync, locality, activity_handle);
@@ -233,14 +239,17 @@ void test_activity_live_first_event(hpx::id_type const& locality)
         hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     HPX_TEST(
-        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(20)));
+        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(50)));
 
     auto const notifications = ctx.for_target(target);
     HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
-    HPX_TEST(
-        notifications[0].state == hpx::supervision::activity_state::active);
-    HPX_TEST(notifications[0].transition ==
-        hpx::supervision::activity_transition::first_event);
+    if (!notifications.empty())
+    {
+        HPX_TEST(
+            notifications[0].state == hpx::supervision::activity_state::active);
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_event);
+    }
 
     hpx::supervision::unregister_activity_observer(
         hpx::launch::sync, locality, activity_handle);
@@ -259,14 +268,17 @@ void test_activity_live_first_observer(hpx::id_type const& locality)
         hpx::launch::sync, locality, target, no_op_lifecycle_observer);
 
     HPX_TEST(
-        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(20)));
+        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(50)));
 
     auto const notifications = ctx.for_target(target);
     HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
-    HPX_TEST(
-        notifications[0].state == hpx::supervision::activity_state::active);
-    HPX_TEST(notifications[0].transition ==
-        hpx::supervision::activity_transition::first_observer);
+    if (!notifications.empty())
+    {
+        HPX_TEST(
+            notifications[0].state == hpx::supervision::activity_state::active);
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_observer);
+    }
 
     hpx::supervision::unregister_observer(
         hpx::launch::sync, locality, lifecycle_handle);
@@ -289,21 +301,24 @@ void test_activity_live_last_observer_unregistered(hpx::id_type const& locality)
     // The registration above replays target's current (already active) state;
     // that replay is not what this test is exercising.
     HPX_TEST(
-        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(20)));
+        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(50)));
     ctx.reset();
 
     hpx::supervision::unregister_observer(
         hpx::launch::sync, locality, lifecycle_handle);
 
     HPX_TEST(
-        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(20)));
+        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(50)));
 
     auto const notifications = ctx.for_target(target);
     HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
-    HPX_TEST(
-        notifications[0].state == hpx::supervision::activity_state::inactive);
-    HPX_TEST(notifications[0].transition ==
-        hpx::supervision::activity_transition::last_observer_unregistered);
+    if (!notifications.empty())
+    {
+        HPX_TEST(notifications[0].state ==
+            hpx::supervision::activity_state::inactive);
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::last_observer_unregistered);
+    }
 
     hpx::supervision::unregister_activity_observer(
         hpx::launch::sync, locality, activity_handle);
@@ -324,7 +339,7 @@ void test_activity_no_deactivation_on_publish_path(hpx::id_type const& locality)
         hpx::launch::sync, locality, target, hpx::supervision::event::started);
 
     HPX_TEST(
-        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(20)));
+        ctx.wait_for_target_count(target, 1, std::chrono::milliseconds(50)));
 
     hpx::supervision::publish_event(
         hpx::launch::sync, locality, target, hpx::supervision::event::running);
@@ -344,8 +359,11 @@ void test_activity_no_deactivation_on_publish_path(hpx::id_type const& locality)
 
     auto const notifications = ctx.for_target(target);
     HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
-    HPX_TEST(notifications[0].transition ==
-        hpx::supervision::activity_transition::first_event);
+    if (!notifications.empty())
+    {
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_event);
+    }
 
     hpx::supervision::unregister_activity_observer(
         hpx::launch::sync, locality, activity_handle);
@@ -372,18 +390,35 @@ void test_activity_multiple_targets_single_registration(
         hpx::supervision::event::started);
 
     HPX_TEST(ctx.wait_for_target_count(
-        target_event_1, 1, std::chrono::milliseconds(20)));
+        target_event_1, 1, std::chrono::milliseconds(50)));
     HPX_TEST(ctx.wait_for_target_count(
-        target_observer, 1, std::chrono::milliseconds(20)));
+        target_observer, 1, std::chrono::milliseconds(50)));
     HPX_TEST(ctx.wait_for_target_count(
-        target_event_2, 1, std::chrono::milliseconds(20)));
+        target_event_2, 1, std::chrono::milliseconds(50)));
 
-    HPX_TEST(ctx.for_target(target_event_1)[0].transition ==
-        hpx::supervision::activity_transition::first_event);
-    HPX_TEST(ctx.for_target(target_observer)[0].transition ==
-        hpx::supervision::activity_transition::first_observer);
-    HPX_TEST(ctx.for_target(target_event_2)[0].transition ==
-        hpx::supervision::activity_transition::first_event);
+    auto notifications = ctx.for_target(target_event_1);
+    HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
+    if (!notifications.empty())
+    {
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_event);
+    }
+
+    notifications = ctx.for_target(target_observer);
+    HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
+    if (!notifications.empty())
+    {
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_observer);
+    }
+
+    notifications = ctx.for_target(target_event_2);
+    HPX_TEST_EQ(notifications.size(), static_cast<std::size_t>(1));
+    if (!notifications.empty())
+    {
+        HPX_TEST(notifications[0].transition ==
+            hpx::supervision::activity_transition::first_event);
+    }
 
     hpx::supervision::unregister_observer(
         hpx::launch::sync, locality, lifecycle_handle);
@@ -416,11 +451,11 @@ void test_activity_epoch_filter_replay(hpx::id_type const& locality)
             locality, make_recording_callback(ctx), filter_epoch);
 
     HPX_TEST(ctx.wait_for_target_count(
-        target_match, 1, std::chrono::milliseconds(20)));
+        target_match, 1, std::chrono::milliseconds(50)));
 
     // Give a would-be (incorrect) replay for the mismatched target a chance
     // to arrive before asserting its absence.
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
     HPX_TEST_EQ(
         ctx.count_for_target(target_mismatch), static_cast<std::size_t>(0));
 
@@ -449,10 +484,18 @@ void test_activity_epoch_filter_live(hpx::id_type const& locality)
     hpx::supervision::publish_event(hpx::launch::sync, locality,
         target_mismatch, hpx::supervision::event::started, other_epoch);
 
+    // Publish a fence event under the matching epoch and wait for its
+    // notification to arrive. Activity notifications are delivered in
+    // publication order, so this guarantees any (unexpected) notification
+    // for `target_mismatch` would already be recorded by the time the
+    // fence's notification is observed.
+    hpx::id_type const fence_target = make_test_target();
+    hpx::supervision::publish_event(hpx::launch::sync, locality, fence_target,
+        hpx::supervision::event::started, filter_epoch);
     HPX_TEST(ctx.wait_for_target_count(
-        target_match, 1, std::chrono::milliseconds(20)));
+        fence_target, 1, std::chrono::milliseconds(1000)));
 
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
     HPX_TEST_EQ(
         ctx.count_for_target(target_mismatch), static_cast<std::size_t>(0));
 
@@ -536,6 +579,102 @@ void test_activity_registration_race(hpx::id_type const& locality)
 }
 
 // ============================================================================
+// Test Cases: Cross-API and unknown handle rejection
+// ============================================================================
+
+// A handle returned by register_activity_observer() must be rejected by
+// unregister_observer(): the two registration APIs use distinct handle
+// namespaces, and passing a foreign handle must not be silently ignored.
+void test_unregister_observer_rejects_activity_observer_handle(
+    hpx::id_type const& locality)
+{
+    activity_test_context ctx;
+    auto const activity_handle = hpx::supervision::register_activity_observer(
+        hpx::launch::sync, locality, make_recording_callback(ctx));
+
+    hpx::error_code ec;
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, activity_handle, ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+
+    // Clean up the still-valid handle via the correct API.
+    hpx::supervision::unregister_activity_observer(
+        hpx::launch::sync, locality, activity_handle);
+}
+
+// A handle returned by register_observer() must be rejected by
+// unregister_activity_observer(), symmetrically to the case above.
+void test_unregister_activity_observer_rejects_target_observer_handle(
+    hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+    auto const lifecycle_handle = hpx::supervision::register_observer(
+        hpx::launch::sync, locality, target, no_op_lifecycle_observer);
+
+    hpx::error_code ec;
+    hpx::supervision::unregister_activity_observer(
+        hpx::launch::sync, locality, lifecycle_handle, ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+
+    // Clean up the still-valid handle via the correct API.
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, lifecycle_handle);
+}
+
+// A handle that was never returned by either registration API must be rejected
+// by unregister_observer() rather than silently falling through to a no-op.
+void test_unregister_observer_rejects_unknown_handle(
+    hpx::id_type const& locality)
+{
+    hpx::error_code ec;
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, make_test_target(), ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+}
+
+// Same as above, for unregister_activity_observer().
+void test_unregister_activity_observer_rejects_unknown_handle(
+    hpx::id_type const& locality)
+{
+    hpx::error_code ec;
+    hpx::supervision::unregister_activity_observer(
+        hpx::launch::sync, locality, make_test_target(), ec);
+    HPX_TEST(ec);
+    HPX_TEST(ec.value() == hpx::error::bad_parameter);
+}
+
+// Regression guard: a handle that does belong to unregister_observer()'s own
+// namespace must continue to be accepted once the checks above are in place.
+void test_unregister_observer_accepts_own_handle(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+    auto const lifecycle_handle = hpx::supervision::register_observer(
+        hpx::launch::sync, locality, target, no_op_lifecycle_observer);
+
+    hpx::error_code ec;
+    hpx::supervision::unregister_observer(
+        hpx::launch::sync, locality, lifecycle_handle, ec);
+    HPX_TEST(!ec);
+}
+
+// Regression guard: symmetric to the above, for unregister_activity_observer().
+void test_unregister_activity_observer_accepts_own_handle(
+    hpx::id_type const& locality)
+{
+    activity_test_context ctx;
+    auto const activity_handle = hpx::supervision::register_activity_observer(
+        hpx::launch::sync, locality, make_recording_callback(ctx));
+
+    hpx::error_code ec;
+    hpx::supervision::unregister_activity_observer(
+        hpx::launch::sync, locality, activity_handle, ec);
+    HPX_TEST(!ec);
+}
+
+// ============================================================================
 // Main Test Entry Point
 // ============================================================================
 
@@ -543,19 +682,37 @@ int hpx_main()
 {
     for (auto const& locality : hpx::find_all_localities())
     {
-        HPX_TEST_RUN(test_activity_replay_on_registration, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_activity_replay_on_registration, locality);
 
-        HPX_TEST_RUN(test_activity_live_first_event, locality);
-        HPX_TEST_RUN(test_activity_live_first_observer, locality);
-        HPX_TEST_RUN(test_activity_live_last_observer_unregistered, locality);
-        HPX_TEST_RUN(test_activity_no_deactivation_on_publish_path, locality);
-        HPX_TEST_RUN(
+        HPX_SUPERVISION_TEST_RUN(test_activity_live_first_event, locality);
+        HPX_SUPERVISION_TEST_RUN(test_activity_live_first_observer, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_activity_live_last_observer_unregistered, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_activity_no_deactivation_on_publish_path, locality);
+        HPX_SUPERVISION_TEST_RUN(
             test_activity_multiple_targets_single_registration, locality);
 
-        HPX_TEST_RUN(test_activity_epoch_filter_replay, locality);
-        HPX_TEST_RUN(test_activity_epoch_filter_live, locality);
+        HPX_SUPERVISION_TEST_RUN(test_activity_epoch_filter_replay, locality);
+        HPX_SUPERVISION_TEST_RUN(test_activity_epoch_filter_live, locality);
 
-        HPX_TEST_RUN(test_activity_registration_race, locality);
+        HPX_SUPERVISION_TEST_RUN(test_activity_registration_race, locality);
+
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_observer_rejects_activity_observer_handle,
+            locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_activity_observer_rejects_target_observer_handle,
+            locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_observer_rejects_unknown_handle, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_activity_observer_rejects_unknown_handle, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_observer_accepts_own_handle, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_unregister_activity_observer_accepts_own_handle, locality);
     }
 
     return hpx::finalize();

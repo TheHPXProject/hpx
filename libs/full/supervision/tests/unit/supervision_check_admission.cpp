@@ -55,6 +55,18 @@ void test_check_admission_rejected_after_terminal()
 
     HPX_TEST(hpx::supervision::check_admission(target) ==
         hpx::supervision::dispatch_outcome::rejected_fenced);
+
+    hpx::id_type const failed_target = make_test_target();
+
+    hpx::supervision::publish_event(
+        failed_target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(
+        failed_target, hpx::supervision::event::running);
+    hpx::supervision::publish_event(
+        failed_target, hpx::supervision::event::failed);
+
+    HPX_TEST(hpx::supervision::check_admission(failed_target) ==
+        hpx::supervision::dispatch_outcome::rejected_fenced);
 }
 
 // A terminal latch is scoped to the epoch it was recorded under: dispatch
@@ -75,6 +87,8 @@ void test_check_admission_scoped_to_epoch()
         hpx::supervision::dispatch_outcome::rejected_fenced);
     HPX_TEST(hpx::supervision::check_admission(target, epoch + 1) ==
         hpx::supervision::dispatch_outcome::admitted);
+    HPX_TEST(hpx::supervision::check_admission(target, epoch) ==
+        hpx::supervision::dispatch_outcome::rejected_fenced);
 }
 
 // An invalid target has nothing latched against it either.
@@ -90,11 +104,11 @@ void test_check_admission_admitted_for_invalid_target()
 
 int hpx_main()
 {
-    HPX_TEST_RUN(test_check_admission_admitted_for_unknown_target);
-    HPX_TEST_RUN(test_check_admission_admitted_before_terminal);
-    HPX_TEST_RUN(test_check_admission_rejected_after_terminal);
-    HPX_TEST_RUN(test_check_admission_scoped_to_epoch);
-    HPX_TEST_RUN(test_check_admission_admitted_for_invalid_target);
+    HPX_SUPERVISION_TEST_RUN(test_check_admission_admitted_for_unknown_target);
+    HPX_SUPERVISION_TEST_RUN(test_check_admission_admitted_before_terminal);
+    HPX_SUPERVISION_TEST_RUN(test_check_admission_rejected_after_terminal);
+    HPX_SUPERVISION_TEST_RUN(test_check_admission_scoped_to_epoch);
+    HPX_SUPERVISION_TEST_RUN(test_check_admission_admitted_for_invalid_target);
 
     return hpx::finalize();
 }

@@ -1025,6 +1025,18 @@ if(HPX_WITH_SPINLOCK_DEADLOCK_DETECTION)
   hpx_add_config_define(HPX_HAVE_SPINLOCK_DEADLOCK_DETECTION)
 endif()
 
+# Explicitly enable the supervision functionalities
+hpx_option(
+  HPX_WITH_SUPERVISION BOOL "Enable supervision functionalities. (default: OFF)"
+  OFF
+  CATEGORY "Modules"
+  ADVANCED
+)
+
+if(HPX_WITH_SUPERVISION)
+  hpx_add_config_define(HPX_HAVE_SUPERVISION)
+endif()
+
 # Profiling related build options
 hpx_option(
   HPX_WITH_APEX BOOL "Enable APEX instrumentation support." OFF

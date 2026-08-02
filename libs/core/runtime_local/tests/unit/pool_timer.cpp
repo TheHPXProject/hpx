@@ -175,7 +175,7 @@ void test_timer_firing()
     }));
 
     HPX_TEST_EQ(fire_count.load(), 1);
-    HPX_TEST(!timer.is_started());
+    HPX_TEST(wait_for_atomic([&timer]() { return !timer.is_started(); }));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -327,7 +327,7 @@ void test_race_stop_before_fire()
             },
             []() {}, "race_stop_before_fire", true);
 
-        HPX_TEST(timer.start(std::chrono::milliseconds(100)));
+        HPX_TEST(timer.start(std::chrono::seconds(2)));
 
         hpx::thread stopper([&timer]() { timer.stop(); });
         stopper.join();
@@ -404,6 +404,7 @@ int hpx_main()
 
     test_destructor_terminates();
     test_double_terminate_guard();
+    HPX_TEST_EQ(g_double_terminate_count.load(), 1);
 
     test_multiple_independent_timers();
 

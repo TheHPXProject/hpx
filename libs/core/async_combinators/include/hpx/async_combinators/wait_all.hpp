@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2013 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -6,7 +6,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file wait_all.hpp
-/// \page hpx::wait_all
+/// \page hpx::wait_all, hpx::wait_all_nothrow, hpx::wait_all_n, hpx::wait_all_n_nothrow
 /// \headerfile hpx/future.hpp
 
 #pragma once
@@ -20,9 +20,9 @@ namespace hpx {
     /// \param first    The iterator pointing to the first element of a
     ///                 sequence of \a future or \a shared_future objects for
     ///                 which \a wait_all should wait.
-    /// \param last     The iterator pointing to the last element of a
-    ///                 sequence of \a future or \a shared_future objects for
-    ///                 which \a wait_all should wait.
+    /// \param last     The iterator pointing to the element after the last one
+    ///                 of a sequence of \a future or \a shared_future objects
+    ///                 for which \a wait_all should wait.
     ///
     /// \note The function \a wait_all returns after all futures have become
     ///       ready. All input futures are still valid after \a wait_all
@@ -33,6 +33,9 @@ namespace hpx {
     ///                 behavior is undesirable, use \a wait_all_nothrow
     ///                 instead.
     ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
     template <typename InputIter>
     void wait_all(InputIter first, InputIter last);
 
@@ -53,6 +56,10 @@ namespace hpx {
     ///                 behavior is undesirable, use \a wait_all_nothrow
     ///                 instead.
     ///
+    ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
     template <typename R>
     void wait_all(std::vector<future<R>>&& futures);
 
@@ -73,6 +80,10 @@ namespace hpx {
     ///                 behavior is undesirable, use \a wait_all_nothrow
     ///                 instead.
     ///
+    ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
     template <typename R, std::size_t N>
     void wait_all(std::array<future<R>, N>&& futures);
 
@@ -138,8 +149,183 @@ namespace hpx {
     ///                 behavior is undesirable, use \a wait_all_n_nothrow
     ///                 instead.
     ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
     template <typename InputIter>
     void wait_all_n(InputIter begin, std::size_t count);
+
+    /// The function \a wait_all_nothrow is an operator allowing to join on the
+    /// result of all given futures. It AND-composes all future objects given
+    /// and returns after they finished executing, similar to \a wait_all. It
+    /// differs from \a wait_all in that it will not rethrow any exceptions
+    /// captured by the given futures while they became ready.
+    ///
+    /// \param first    The iterator pointing to the first element of a
+    ///                 sequence of \a future or \a shared_future objects for
+    ///                 which \a wait_all_nothrow should wait.
+    /// \param last     The iterator pointing to the element after the last one
+    ///                 of a sequence of \a future or \a shared_future objects
+    ///                 for which \a wait_all_nothrow should wait.
+    ///
+    /// \return         Returns \a true if any of the given futures held an
+    ///                 exception once it became ready, and \a false otherwise.
+    ///
+    /// \note The function \a wait_all_nothrow returns after all futures have
+    ///       become ready. All input futures are still valid after
+    ///       \a wait_all_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all, this function will not rethrow any
+    ///                 exceptions captured by the futures while becoming ready.
+    ///                 Any such exceptions are not rethrown by this call; the
+    ///                 caller can use the returned \a bool to detect their
+    ///                 presence.
+    ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
+    template <typename InputIter>
+    bool wait_all_nothrow(InputIter first, InputIter last);
+
+    /// The function \a wait_all_nothrow is an operator allowing to join on the
+    /// result of all given futures. It AND-composes all future objects given
+    /// and returns after they finished executing, similar to \a wait_all. It
+    /// differs from \a wait_all in that it will not rethrow any exceptions
+    /// captured by the given futures while they became ready.
+    ///
+    /// \param futures  A vector or array holding an arbitrary amount of
+    ///                 \a future or \a shared_future objects for which
+    ///                 \a wait_all_nothrow should wait.
+    ///
+    /// \return         Returns \a true if any of the given futures held an
+    ///                 exception once it became ready, and \a false otherwise.
+    ///
+    /// \note The function \a wait_all_nothrow returns after all futures have
+    ///       become ready. All input futures are still valid after
+    ///       \a wait_all_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all, this function will not rethrow any
+    ///                 exceptions captured by the futures while becoming ready.
+    ///                 Any such exceptions are not rethrown by this call; the
+    ///                 caller can use the returned \a bool to detect their
+    ///                 presence.
+    ///
+    template <typename R>
+    bool wait_all_nothrow(std::vector<future<R>>&& futures);
+
+    /// The function \a wait_all_nothrow is an operator allowing to join on the
+    /// result of all given futures. It AND-composes all future objects given
+    /// and returns after they finished executing, similar to \a wait_all. It
+    /// differs from \a wait_all in that it will not rethrow any exceptions
+    /// captured by the given futures while they became ready.
+    ///
+    /// \param futures  A vector or array holding an arbitrary amount of
+    ///                 \a future or \a shared_future objects for which
+    ///                 \a wait_all_nothrow should wait.
+    ///
+    /// \return         Returns \a true if any of the given futures held an
+    ///                 exception once it became ready, and \a false otherwise.
+    ///
+    /// \note The function \a wait_all_nothrow returns after all futures have
+    ///       become ready. All input futures are still valid after
+    ///       \a wait_all_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all, this function will not rethrow any
+    ///                 exceptions captured by the futures while becoming ready.
+    ///                 Any such exceptions are not rethrown by this call; the
+    ///                 caller can use the returned \a bool to detect their
+    ///                 presence.
+    ///
+    template <typename R, std::size_t N>
+    bool wait_all_nothrow(std::array<future<R>, N>&& futures);
+
+    /// The function \a wait_all_nothrow is an operator allowing to join on the
+    /// result of all given futures. It AND-composes all future objects given
+    /// and returns after they finished executing, similar to \a wait_all. It
+    /// differs from \a wait_all in that it will not rethrow any exceptions
+    /// captured by the given future while it became ready.
+    ///
+    /// \param f        A \a future or \a shared_future for which
+    ///                 \a wait_all_nothrow should wait.
+    ///
+    /// \return         Returns \a true if the given future held an exception
+    ///                 once it became ready, and \a false otherwise.
+    ///
+    /// \note The function \a wait_all_nothrow returns after the future has
+    ///       become ready. The input future is still valid after
+    ///       \a wait_all_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all, this function will not rethrow any
+    ///                 exception captured by the future while becoming ready.
+    ///                 Any such exception is silently discarded; the caller can
+    ///                 use the returned \a bool to detect its presence.
+    ///
+    template <typename T>
+    bool wait_all_nothrow(hpx::future<T> const& f);
+
+    /// The function \a wait_all_nothrow is an operator allowing to join on the
+    /// result of all given futures. It AND-composes all future objects given
+    /// and returns after they finished executing, similar to \a wait_all. It
+    /// differs from \a wait_all in that it will not rethrow any exceptions
+    /// captured by the given futures while they became ready.
+    ///
+    /// \param futures  An arbitrary number of \a future or \a shared_future
+    ///                 objects, possibly holding different types for which
+    ///                 \a wait_all_nothrow should wait.
+    ///
+    /// \return         Returns \a true if any of the given futures held an
+    ///                 exception once it became ready, and \a false otherwise.
+    ///
+    /// \note The function \a wait_all_nothrow returns after all futures have
+    ///       become ready. All input futures are still valid after
+    ///       \a wait_all_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all, this function will not rethrow any
+    ///                 exceptions captured by the futures while becoming ready.
+    ///                 Any such exceptions are not rethrown by this call; the
+    ///                 caller can use the returned \a bool to detect their
+    ///                 presence.
+    ///
+    template <typename... T>
+    bool wait_all_nothrow(T&&... futures);
+
+    /// The function \a wait_all_n_nothrow is an operator allowing to join on
+    /// the result of all given futures. It AND-composes all future objects
+    /// given and returns after they finished executing, similar to
+    /// \a wait_all_n. It differs from \a wait_all_n in that it will not
+    /// rethrow any exceptions captured by the given futures while they became
+    /// ready.
+    ///
+    /// \param begin    The iterator pointing to the first element of a
+    ///                 sequence of \a future or \a shared_future objects for
+    ///                 which \a wait_all_n_nothrow should wait.
+    /// \param count    The number of elements in the sequence starting at
+    ///                 \a first.
+    ///
+    /// \return         The function \a wait_all_n_nothrow returns a pair
+    ///                 consisting of an iterator referring to the first element
+    ///                 in the input sequence after the last processed element,
+    ///                 and a \a bool that is \a true if any of the given
+    ///                 futures held an exception once it became ready, and \a
+    ///                 false otherwise.
+    ///
+    /// \note The function \a wait_all_n_nothrow returns after all futures have
+    ///       become ready. All input futures are still valid after
+    ///       \a wait_all_n_nothrow returns.
+    ///
+    /// \note           Unlike \a wait_all_n, this function will not rethrow
+    ///                 any exceptions captured by the futures while becoming
+    ///                 ready. Any such exceptions are not rethrown by this
+    ///                 call; the caller can use the returned \a bool to detect
+    ///                 their presence.
+    ///
+    /// \note   The caller is responsible for keeping the \a futures container
+    ///         alive, unmoved, and unmodified until wait_all returns and all
+    ///         inspection of the futures is complete.
+    template <typename InputIter>
+    std::pair<InputIter, bool> wait_all_n_nothrow(
+        InputIter begin, std::size_t count);
+
 }    // namespace hpx
 
 #else    // DOXYGEN
@@ -236,7 +422,7 @@ namespace hpx::detail {
 
     template <typename R>
     using future_or_shared_state_result_t =
-        typename future_or_shared_state_result<R>::type;
+        future_or_shared_state_result<R>::type;
 
     ///////////////////////////////////////////////////////////////////////
     template <typename Tuple>
@@ -245,7 +431,7 @@ namespace hpx::detail {
     {
     private:
         using base_type = hpx::lcos::detail::future_data<void>;
-        using init_no_addref = typename base_type::init_no_addref;
+        using init_no_addref = base_type::init_no_addref;
 
         wait_all_frame(wait_all_frame const&) = delete;
         wait_all_frame(wait_all_frame&&) = delete;
@@ -255,7 +441,7 @@ namespace hpx::detail {
 
         template <std::size_t I>
         struct is_end
-          : std::integral_constant<bool, hpx::tuple_size<Tuple>::value == I>
+          : std::integral_constant<bool, hpx::tuple_size_v<Tuple> == I>
         {
         };
 
@@ -263,16 +449,22 @@ namespace hpx::detail {
         static constexpr bool is_end_v = is_end<I>::value;
 
     public:
-        explicit wait_all_frame(Tuple const& t) noexcept
+        explicit wait_all_frame(Tuple const& t)
           : base_type(init_no_addref{})
           , t_(t)
+        {
+        }
+
+        explicit wait_all_frame(Tuple&& t) noexcept
+          : base_type(init_no_addref{})
+          , t_(HPX_MOVE(t))
         {
         }
 
     protected:
         // Current element is a range (vector or array) of futures
         template <std::size_t I, typename Iter>
-        void await_range(Iter&& next, Iter&& end)
+        void await_range(Iter next, Iter end)
         {
             hpx::intrusive_ptr<wait_all_frame> this_(this);
             for (/**/; next != end; ++next)
@@ -294,10 +486,7 @@ namespace hpx::detail {
                             // re-evaluate it and continue to the next element
                             // in the sequence (if any).
                             next_future_data->set_on_completed(
-                                [this_ = HPX_MOVE(this_),
-                                    next = HPX_FORWARD(Iter, next),
-                                    end = HPX_FORWARD(
-                                        Iter, end)]() mutable -> void {
+                                [this_ = HPX_MOVE(this_), next, end]() mutable {
                                     this_->template await_range<I>(
                                         HPX_MOVE(next), HPX_MOVE(end));
                                 });
@@ -384,13 +573,13 @@ namespace hpx::detail {
             // Check if end of the tuple is reached
             if constexpr (is_end_v<I>)
             {
-                // simply make ourself ready
+                // simply make ourselves ready
                 this->set_data(util::unused);
             }
             else
             {
-                using future_type = hpx::util::decay_unwrap_t<
-                    typename hpx::tuple_element<I, Tuple>::type>;
+                using future_type =
+                    hpx::util::decay_unwrap_t<hpx::tuple_element_t<I, Tuple>>;
 
                 if constexpr (is_future_or_shared_state_v<future_type>)
                 {
@@ -423,8 +612,36 @@ namespace hpx::detail {
             return has_exceptional_results_;
         }
 
+        // Same as wait_all(), except that the final suspend is bounded by a
+        // given timeout instead of waiting indefinitely. Note that the
+        // individual input futures are only ever inspected/attached-to, never
+        // moved-from, so they remain valid (and can be queried with is_ready())
+        // whether the combined wait finishes because all them became ready or
+        // because the timeout elapsed first.
+        hpx::future_status wait_all_for(
+            hpx::chrono::steady_duration const& timeout)
+        {
+            do_await<0>();
+
+            // If there are still futures which are not ready, suspend and wait,
+            // but no longer than the given timeout. Note that this does not
+            // cancel/abandon the still outstanding futures; they simply
+            // continue to be resolved in the background and can still be
+            // queried by the caller after this function returns.
+            if (!this->is_ready(std::memory_order_relaxed))
+            {
+                return this->wait_until(timeout.from_now());
+            }
+            return hpx::future_status::ready;
+        }
+
+        bool has_exceptional_results() const noexcept
+        {
+            return has_exceptional_results_;
+        }
+
     private:
-        Tuple const& t_;
+        Tuple t_;
         bool has_exceptional_results_ = false;
     };
 }    // namespace hpx::detail
@@ -505,9 +722,8 @@ namespace hpx {
                 const_cast<std::array<Future, N> const&>(values));
         }
 
-        template <typename Iterator,
-            typename Enable =
-                std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
+        template <typename Iterator>
+            requires(hpx::traits::is_iterator_v<Iterator>)
         friend bool tag_invoke(wait_all_nothrow_t, Iterator begin, Iterator end)
         {
             if (begin == end)
@@ -634,9 +850,8 @@ namespace hpx {
             }
         }
 
-        template <typename Iterator,
-            typename Enable =
-                std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
+        template <typename Iterator>
+            requires(hpx::traits::is_iterator_v<Iterator>)
         friend void tag_invoke(wait_all_t, Iterator begin, Iterator end)
         {
             if (begin != end)
@@ -687,9 +902,8 @@ namespace hpx {
       : hpx::functional::tag<wait_all_n_nothrow_t>
     {
     private:
-        template <typename Iterator,
-            typename Enable =
-                std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
+        template <typename Iterator>
+            requires(hpx::traits::is_iterator_v<Iterator>)
         friend bool tag_invoke(
             wait_all_n_nothrow_t, Iterator begin, std::size_t count)
         {
@@ -709,9 +923,8 @@ namespace hpx {
       : hpx::functional::tag<wait_all_n_t>
     {
     private:
-        template <typename Iterator,
-            typename Enable =
-                std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
+        template <typename Iterator>
+            requires(hpx::traits::is_iterator_v<Iterator>)
         friend void tag_invoke(wait_all_n_t, Iterator begin, std::size_t count)
         {
             if (count != 0)

@@ -36,6 +36,7 @@ jobs:
               -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
               -DHPX_WITH_EXAMPLES=ON \
               -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_SUPERVISION=ON \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=3 \
               -DHPX_WITH_VERIFY_LOCKS=OFF \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=OFF \

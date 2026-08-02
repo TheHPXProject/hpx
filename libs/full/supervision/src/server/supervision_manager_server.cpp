@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iterator>
@@ -29,6 +30,7 @@
 #include <mutex>
 #include <optional>
 #include <ranges>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -97,15 +99,6 @@ namespace hpx::supervision::server {
         while (callbacks_in_flight_ > 0)
         {
             shutdown_cv_.wait(l);
-        }
-    }
-
-    void supervision_manager::finalize() const
-    {
-        if (!instance_name_.empty())
-        {
-            error_code ec(throwmode::lightweight);
-            agas::unregister_name(launch::sync, instance_name_, ec);
         }
     }
 
@@ -245,7 +238,15 @@ namespace hpx::supervision::server {
     {
         HPX_ASSERT_OWNS_LOCK(l);
 
-        current_epoch_[target] = epoch;
+        if (!is_valid_transition(event::unknown, ev))
+        {
+            l.unlock();
+
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "supervision_manager::apply_new_epoch_locked",
+                "invalid lifecycle event transition: a new epoch must begin "
+                "with a started event");
+        }
 
         lifecycle_state const state = {.actor = target,
             .last_event = ev,
@@ -407,6 +408,35 @@ namespace hpx::supervision::server {
 
             promise.set_exception(exception);
         }
+    }
+
+    supervision_manager::stale_waiters_t
+    supervision_manager::drain_all_waiters_for_target_locked(
+        std::unique_lock<hpx::spinlock>& l, hpx::id_type const& target)
+    {
+        HPX_ASSERT_OWNS_LOCK(l);
+
+        // waiters_ is keyed by (target, epoch); starting at epoch 0 and walking
+        // forward while target matches picks up every epoch entry for this
+        // target, not just the stale ones below some cutoff.
+        stale_waiters_t stale;
+        auto it =
+            waiters_.lower_bound(waiter_key{.target = target, .epoch = 0});
+        while (it != waiters_.end() && it->first.target == target)
+        {
+            // Move the waiter out before erasing so its promise can be
+            // resolved (with an explicit exception) after mtx_ is released.
+            stale.emplace_back(it->first.epoch, HPX_MOVE(it->second));
+            it = waiters_.erase(it);
+        }
+        if (!stale.empty())
+        {
+            // The removed waiters may have held the earliest pending
+            // deadline; recompute it so the timer sweep doesn't fire on
+            // stale state.
+            recompute_earliest_deadline_locked(l);
+        }
+        return stale;
     }
 
     // Opportunistic, lazy cleanup for abandoned await_terminal() waiters:
@@ -622,11 +652,11 @@ namespace hpx::supervision::server {
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
-            had_state_before = states_.contains(target);
+            auto const it = states_.find(target);
+            had_state_before = it != states_.end();
 
-            auto const epoch_it = current_epoch_.find(target);
             std::uint64_t const current_ep =
-                epoch_it != current_epoch_.end() ? epoch_it->second : 0;
+                had_state_before ? it->second.epoch : 0;
 
             if (epoch < current_ep)
             {
@@ -638,6 +668,18 @@ namespace hpx::supervision::server {
 
             if (epoch > current_ep)
             {
+                // reject an illegal epoch opening before any waiter state is
+                // touched, so a rejected 'publish' leaves waiters_ untouched
+                if (!is_valid_transition(event::unknown, ev))
+                {
+                    l.unlock();
+
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "supervision_manager::publish_event",
+                        "invalid lifecycle event transition: a new epoch must "
+                        "begin with a started event");
+                }
+
                 stale = drain_stale_waiters_locked(l, target, epoch);
 
                 auto&& result = apply_new_epoch_locked(l, target, ev, epoch);
@@ -822,10 +864,7 @@ namespace hpx::supervision::server {
                 std::unique_lock<hpx::spinlock> l(mtx_);
 
                 deactivated = unregister_observer_target(target, agent);
-                if (auto const it = agents_.find(agent); it != agents_.end())
-                {
-                    agents_.erase(it);
-                }
+                remove_target_from_agents_locked(l, agent, target);
 
                 // Only truly untracked (per the has-ever-published/
                 // has-observers predicate used by
@@ -1071,8 +1110,8 @@ namespace hpx::supervision::server {
         hpx::id_type const& target) const
     {
         std::scoped_lock<hpx::spinlock> l(mtx_);
-        auto const it = current_epoch_.find(target);
-        return it != current_epoch_.end() ? it->second : 0;
+        auto const it = states_.find(target);
+        return it != states_.end() ? it->second.epoch : 0;
     }
 
     void supervision_manager::unregister_observer(
@@ -1118,6 +1157,30 @@ namespace hpx::supervision::server {
                 }
                 agents_.erase(it);
             }
+            else if (std::ranges::find(activity_observers_, observer_handle,
+                         &observer_entry::agent) != activity_observers_.end())
+            {
+                // observer_handle was not registered via register_observer(),
+                // but was found registered via register_activity_observer():
+                // reject it before touching any state or dispatching
+                // deactivate_and_wait below.
+                l.unlock();
+
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "supervision_manager::unregister_observer",
+                    "observer_handle was not returned by register_observer()");
+            }
+            else
+            {
+                // observer_handle was never returned by either registration
+                // API.
+                l.unlock();
+
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "supervision_manager::unregister_observer",
+                    "observer_handle does not represent a handle previously "
+                    "returned by register_observer()");
+            }
 
             if (!deactivated_targets.empty())
             {
@@ -1145,6 +1208,110 @@ namespace hpx::supervision::server {
         // prevent the agent callback from being run inline as it may block
         using action_type = agent_component::deactivate_and_wait_action;
         hpx::async(hpx::launch::task, action_type(), observer_handle).get();
+    }
+
+    // Removes the target from the agent's entry in agents_ (the agent ->
+    // targets inverse map) and erases the entry entirely once it becomes empty.
+    void supervision_manager::remove_target_from_agents_locked(
+        std::unique_lock<hpx::spinlock>& l, hpx::id_type const& agent,
+        hpx::id_type const& target)
+    {
+        HPX_ASSERT_OWNS_LOCK(l);
+
+        if (auto const it = agents_.find(agent); it != agents_.end())
+        {
+            std::erase(it->second, target);
+            if (it->second.empty())
+            {
+                agents_.erase(it);
+            }
+        }
+    }
+
+    // Clears all locally tracked state for `target`: its recorded lifecycle
+    // state (states_), any per-target observers still registered for it
+    // (observers_, along with their corresponding entries in the agents_
+    // inverse lookup), and its activated_at_ entry. Unlike
+    // unregister_observer_target(), which removes a single observer_handle's
+    // entry for a target and leaves its recorded lifecycle state intact, this
+    // forgets every bit of local state associated with target, regardless of
+    // any specific observer handle.
+    void supervision_manager::remove_target(hpx::id_type const& target)
+    {
+        // Targets are considered tracked (see register_activity_observer()'s
+        // replay logic) if they have a recorded lifecycle state or at least one
+        // registered observer; captured before either map is mutated below to
+        // decide whether a deactivation notification is warranted.
+        bool was_tracked = false;
+
+        // The epoch target was in immediately before its state was removed,
+        // captured before state_ is erased below, for use in the
+        // activity_transition::last_observer_unregistered notification fired
+        // once mtx_ has been released (mirrors unregister_observer()).
+        std::uint64_t epoch_at_removal = 0;
+
+        // Snapshot of activity_observers_ taken in the very same mtx_ critical
+        // section as the states_/observers_/activated_at_ mutations below; see
+        // the matching comment in publish_event() for why this must not instead
+        // be taken later, after mtx_ has already been released.
+        std::vector<observer_entry> activity_observers_snapshot;
+
+        // waiters registered for this target (all epochs)
+        stale_waiters_t stale_waiters;
+
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            if (auto const it2 = states_.find(target); it2 != states_.end())
+            {
+                was_tracked = true;
+                epoch_at_removal = it2->second.epoch;
+            }
+
+            if (auto const it = observers_.find(target); it != observers_.end())
+            {
+                was_tracked = true;
+                for (auto const& [agent, _] : it->second)
+                {
+                    // remove target from agents
+                    remove_target_from_agents_locked(l, agent, target);
+                }
+                observers_.erase(it);
+            }
+
+            states_.erase(target);
+            activated_at_.erase(target);
+
+            // Drain every waiter registered for this target (all epochs) while
+            // still holding mtx_, so none are left to be picked up later by the
+            // deadline-based sweep.
+            stale_waiters = drain_all_waiters_for_target_locked(l, target);
+
+            if (was_tracked)
+            {
+                activity_observers_snapshot = activity_observers_;
+            }
+        }
+
+        // Resolve the drained waiters' futures immediately with an explicit
+        // exception, instead of letting them sit until their deadline expires.
+        if (!stale_waiters.empty())
+        {
+            invalidate_stale_waiters(target, epoch_at_removal, stale_waiters);
+        }
+
+        if (was_tracked)
+        {
+            activity_notification const activity_notification{.actor = target,
+                .state = activity_state::inactive,
+                .transition = activity_transition::last_observer_unregistered,
+                .event_time = std::chrono::steady_clock::now(),
+                .epoch = epoch_at_removal};
+
+            deliver_activity_notification(
+                activity_notification, activity_observers_snapshot)
+                .get();
+        }
     }
 
     hpx::future<void> supervision_manager::deliver_activity_notification(
@@ -1197,10 +1364,10 @@ namespace hpx::supervision::server {
         {
             using action_type =
                 activity_agent_component::invoke_if_active_action;
-            bool const keep_registered =
-                hpx::sync(action_type(), agent, notification);
+            hpx::future<bool> keep_registered = hpx::async(hpx::launch::task,
+                action_type(), agent, HPX_MOVE(notification));
 
-            if (!keep_registered)
+            if (!keep_registered.get())
             {
                 std::unique_lock<hpx::spinlock> l(mtx_);
                 std::erase_if(
@@ -1261,10 +1428,10 @@ namespace hpx::supervision::server {
             for (auto const& key : observers_ | std::views::keys)
             {
                 hpx::id_type const& target = key;
-                if (auto const epoch_it = current_epoch_.find(target);
-                    epoch_it != current_epoch_.end())
+                if (auto const states_it = states_.find(target);
+                    states_it != states_.end())
                 {
-                    tracked.try_emplace(target, epoch_it->second);
+                    tracked.try_emplace(target, states_it->second.epoch);
                 }
                 else
                 {
@@ -1333,15 +1500,39 @@ namespace hpx::supervision::server {
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
 
-            // Rejecting a handle that belongs to the
-            // observer_handle_kind::target_observer namespace (i.e. one
-            // returned by register_observer() rather than
-            // register_activity_observer()) is added in a later substep; this
-            // only removes a matching entry from activity_observers_, if any.
-            std::erase_if(activity_observers_,
+            // Remove the matching entry from activity_observers_, if any; a
+            // handle returned by register_observer() (found in agents_) or one
+            // never returned by either API is rejected below.
+            std::size_t const removed = std::erase_if(activity_observers_,
                 [&observer_handle](observer_entry const& entry) {
                     return entry.agent == observer_handle;
                 });
+
+            if (removed == 0)
+            {
+                if (agents_.contains(observer_handle))
+                {
+                    // observer_handle is valid, but was returned by
+                    // register_observer(), not
+                    // register_activity_observer(): reject it rather than
+                    // silently treating it as a no-op.
+                    l.unlock();
+
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "supervision_manager::unregister_activity_observer",
+                        "observer_handle was returned by register_observer(), "
+                        "not register_activity_observer()");
+                }
+
+                // observer_handle was never returned by either registration
+                // API.
+                l.unlock();
+
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "supervision_manager::unregister_activity_observer",
+                    "observer_handle does not represent a handle previously "
+                    "returned by register_activity_observer()");
+            }
         }
 
         // A delivery that was already in flight for this agent may still be
@@ -1350,7 +1541,7 @@ namespace hpx::supervision::server {
         // call returns, mirroring unregister_observer() above.
         using action_type =
             activity_agent_component::deactivate_and_wait_action;
-        hpx::sync(action_type(), observer_handle);
+        hpx::async(hpx::launch::task, action_type(), observer_handle).get();
     }
 
     lifecycle_state supervision_manager::query_state(hpx::id_type const& target)
@@ -1381,17 +1572,20 @@ namespace hpx::supervision::server {
         sweep_expired_waiters();
 
         std::unique_lock<hpx::spinlock> l(mtx_);
-        if (auto const it = states_.find(target); it != states_.end() &&
-            it->second.epoch == epoch && is_terminal(it->second.last_event))
+        auto const it = states_.find(target);
+        bool has_state = it != states_.end();
+        if (has_state && it->second.epoch == epoch &&
+            is_terminal(it->second.last_event))
         {
             lifecycle_state st = it->second;
             l.unlock();
             return hpx::make_ready_future(st);
         }
 
-        if (auto const epoch_it = current_epoch_.find(target);
-            epoch_it != current_epoch_.end() && epoch_it->second > epoch)
+        if (has_state && it->second.epoch > epoch)
         {
+            auto const previous_epoch = it->second.epoch;
+
             // the caller is asking about an epoch that has already been
             // superseded; a waiter registered under the stale epoch would only
             // ever be drained by a *future* epoch transition, so fail fast
@@ -1405,7 +1599,7 @@ namespace hpx::supervision::server {
                         "invoking await_terminal() for target {} is invalid: "
                         "epoch has advanced to {} beyond the requested epoch "
                         "{}",
-                        target, epoch_it->second, epoch)));
+                        target, previous_epoch, epoch)));
         }
 
         // std::chrono::steady_clock::duration::max() (the default) defers to
@@ -1418,6 +1612,7 @@ namespace hpx::supervision::server {
         auto const now = std::chrono::steady_clock::now();
         auto const no_deadline =
             (std::chrono::steady_clock::time_point::max) ();
+
         // avoid overflowing the time_point for very large timeouts
         auto const deadline = effective_timeout >= no_deadline - now ?
             no_deadline :
@@ -1454,14 +1649,16 @@ namespace hpx::supervision::server {
     {
         // set locality_id for this component
         if (locality_id == naming::invalid_locality_id)
-            locality_id = 0;    // if not given, we're on the root
+        {
+            locality_id = agas::get_locality_id();
+        }
 
         this->base_type::set_locality_id(locality_id);
 
         // now register this supervision instance with AGAS
-        instance_name_ = supervision::service_name;
-        instance_name_ += service_name;
-        instance_name_ += supervision::server::supervision_manager_name;
+        std::string instance_name = supervision::service_name;
+        instance_name += service_name;
+        instance_name += supervision::server::supervision_manager_name;
 
         auto const gid = get_unmanaged_id().get_gid();
         naming::address const manager_address(agas::get_locality(),
@@ -1472,14 +1669,24 @@ namespace hpx::supervision::server {
         if (ec)
             return;
 
+        instance_name_ = service_name;
+
         // register a gid (not the id) to avoid AGAS holding a reference to this
         // component
-        agas::register_name(launch::sync, instance_name_, gid, ec);
+        agas::register_name(launch::sync, instance_name, gid, ec);
     }
 
     void supervision_manager::unregister_server_instance(error_code& ec) const
     {
-        agas::unregister_name(launch::sync, instance_name_, ec);
-        this->base_type::finalize();
+        if (!instance_name_.empty())
+        {
+            std::string instance_name = supervision::service_name;
+            instance_name += instance_name_;
+            instance_name += supervision::server::supervision_manager_name;
+
+            agas::unregister_name(launch::sync, instance_name, ec);
+
+            instance_name_.clear();
+        }
     }
 }    // namespace hpx::supervision::server

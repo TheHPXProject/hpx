@@ -161,6 +161,22 @@ namespace hpx::supervision {
             ec = make_success_code();
     }
 
+    void supervision_manager::remove_target(
+        hpx::id_type const& target, hpx::error_code& ec) const
+    {
+        if (!server_)
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::supervision::supervision_manager::remove_target",
+                "server is not registered");
+            return;
+        }
+
+        server_->remove_target(target);
+        if (&ec != &throws)
+            ec = make_success_code();
+    }
+
     hpx::future<lifecycle_state> supervision_manager::await_terminal(
         hpx::id_type const& target, std::uint64_t const epoch,
         std::chrono::steady_clock::duration const timeout,

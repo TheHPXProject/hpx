@@ -83,20 +83,6 @@ namespace hpx::supervision::server {
         std::chrono::steady_clock::time_point deadline;
     };
 
-    // Discriminates which registration API a given observer handle originated
-    // from. register_activity_observer() handles are reserved into their
-    // own namespace, distinct from register_observer() handles, so that
-    // unregister_activity_observer() (and, symmetrically,
-    // unregister_observer()) can reject a handle that was returned by the other
-    // registration API rather than silently misinterpreting it. Only the tag is
-    // reserved here; the storage and rejection logic that consult it are added
-    // in a later substep.
-    enum class observer_handle_kind : std::uint8_t
-    {
-        target_observer,
-        activity_observer
-    };
-
     struct supervision_manager
       : hpx::components::fixed_component_base<supervision_manager>
     {
@@ -105,8 +91,6 @@ namespace hpx::supervision::server {
         supervision_manager();
 
         ~supervision_manager();
-
-        void finalize() const;
 
         void register_server_instance(char const* service_name,
             std::uint32_t locality_id, error_code& ec = throws);
@@ -154,8 +138,33 @@ namespace hpx::supervision::server {
         {
         };
 
-        /// Registers an activity observer for the given target and replays its
-        /// current state if the target is already active.
+        /// \brief Clears all locally tracked state for `target`.
+        ///
+        /// Unlike unregister_observer(), which removes a single previously
+        /// registered observer handle (and leaves any recorded lifecycle state
+        /// for its target(s) intact), remove_target() unconditionally forgets
+        /// every piece of local bookkeeping this supervision manager holds for
+        /// `target` - its recorded lifecycle state and current epoch (see
+        /// publish_event()), and any per-target observers still registered for
+        /// it (see register_observer()) - regardless of any specific observer
+        /// handle. Intended for callers that know `target` will never be
+        /// queried or observed again locally (e.g. after a failed registration
+        /// that seeded some state for it, or once a peer has been evicted) and
+        /// want to reclaim that local state instead of letting it accumulate
+        /// indefinitely.
+        void remove_target(hpx::id_type const& target);
+
+        struct remove_target_action
+          : hpx::actions::make_action_t<
+                decltype(&supervision_manager::remove_target),
+                &supervision_manager::remove_target, remove_target_action>
+        {
+        };
+
+        /// \brief Registers a locality-scoped activity observer.
+        ///
+        /// Replays targets that are already active when registration takes its
+        /// snapshot.
         ///
         /// The snapshot of the target's tracked state and the insertion of the
         /// observer into the tracked set happen atomically under `mtx_`, which
@@ -179,13 +188,14 @@ namespace hpx::supervision::server {
         {
         };
 
-        // Unregister a handle previously returned by
-        // register_activity_observer(). As with unregister_observer(),
-        // no orphaned callbacks fire after this call completes.
-        // `observer_handle` must belong to the
-        // observer_handle_kind::activity_observer namespace; a handle
-        // from register_observer() is rejected (rejection logic added in a
-        // later substep).
+        /// \brief Unregisters an activity observer.
+        ///
+        /// The handle must have been returned by register_activity_observer().
+        /// As with unregister_observer(), no orphaned callbacks fire after this
+        /// call completes. `observer_handle` must have been returned by
+        /// register_activity_observer(); a handle returned by
+        /// register_observer() instead (i.e. found in agents_ rather than
+        /// activity_observers_) is rejected.
         void unregister_activity_observer(hpx::id_type const& observer_handle);
 
         struct unregister_activity_observer_action
@@ -347,6 +357,14 @@ namespace hpx::supervision::server {
 
         static void invalidate_expired_waiters(expired_waiters_t& expired);
 
+        // Drains *all* waiters registered for `target`, across every epoch
+        // (unlike drain_stale_waiters_locked, which only drains epochs below a
+        // cutoff). Used when the target is being removed entirely, so no waiter
+        // should be left behind regardless of which epoch it was registered
+        // under.
+        stale_waiters_t drain_all_waiters_for_target_locked(
+            std::unique_lock<hpx::spinlock>& l, hpx::id_type const& target);
+
         // Opportunistic, lazy cleanup for abandoned await_terminal() waiters:
         // acquires mtx_, drains any waiter past its deadline, then invalidates
         // the drained waiters after releasing the lock. Called from both
@@ -390,14 +408,28 @@ namespace hpx::supervision::server {
         void recompute_earliest_deadline_locked(
             std::unique_lock<hpx::spinlock>& l);
 
+        // Removes the target from the agent's entry in agents_ (the agent ->
+        // targets inverse map) and erases the entry entirely once it becomes
+        // empty.
+        void remove_target_from_agents_locked(
+            std::unique_lock<hpx::spinlock>& l, hpx::id_type const& agent,
+            hpx::id_type const& target);
+
     private:
         mutable hpx::spinlock mtx_;
-        std::string instance_name_;
+
+        // Serializes the actual pool_timer::init()/stop()/start() calls made by
+        // arm_sweep_timer_locked() and by the destructor, which perform them
+        // with mtx_ released (see arm_sweep_timer_locked() for why):
+        // sweep_timer_ is not safe against concurrent init()/stop()/start()
+        // calls, so this dedicated (non-busy-wait) lock protects it instead of
+        // mtx_.
+        hpx::spinlock sweep_timer_mtx_;
+
+        mutable std::string instance_name_;
 
         // registered events: targets -> states
         std::map<hpx::id_type, lifecycle_state> states_;
-        // current epoch per target: targets -> epoch
-        std::map<hpx::id_type, std::uint64_t> current_epoch_;
         // registered observers: targets -> observer entries (agent +
         // optional epoch filter)
         std::map<hpx::id_type, std::vector<observer_entry>> observers_;
@@ -409,8 +441,9 @@ namespace hpx::supervision::server {
         // delivered every activation/ deactivation transition recorded for any
         // target this manager tracks (filtered only by each entry's own
         // epoch_filter). Kept entirely separate from observers_/agents_ above
-        // so that this collection only ever holds
-        // observer_handle_kind::activity_observer handles.
+        // so that this collection only ever holds handles returned by
+        // register_activity_observer(), never ones returned by
+        // register_observer().
         std::vector<observer_entry> activity_observers_;
 
         // Records, for every target currently tracked (i.e. present in states_
@@ -464,14 +497,6 @@ namespace hpx::supervision::server {
         std::chrono::steady_clock::time_point armed_deadline_ =
             (std::chrono::steady_clock::time_point::max) ();
 
-        // Serializes the actual pool_timer::init()/stop()/start() calls made by
-        // arm_sweep_timer_locked() and by the destructor, which perform them
-        // with mtx_ released (see arm_sweep_timer_locked() for why):
-        // sweep_timer_ is not safe against concurrent init()/stop()/start()
-        // calls, so this dedicated (non-busy-wait) lock protects it instead of
-        // mtx_.
-        hpx::spinlock sweep_timer_mtx_;
-
         // Set by the destructor, under mtx_, before waiting for any
         // sweep_timer_callback() invocation already in flight (tracked by
         // callbacks_in_flight_) to finish; checked by sweep_timer_callback()
@@ -515,3 +540,6 @@ HPX_REGISTER_ACTION_DECLARATION(
 HPX_REGISTER_ACTION_DECLARATION(
     hpx::supervision::server::supervision_manager::await_terminal_action,
     supervision_await_terminal_action)
+HPX_REGISTER_ACTION_DECLARATION(
+    hpx::supervision::server::supervision_manager::remove_target_action,
+    supervision_remove_target_action)

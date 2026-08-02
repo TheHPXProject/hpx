@@ -35,6 +35,7 @@ jobs:
               -DHPX_WITH_EXAMPLES=ON \
               -DHPX_WITH_TESTS=ON \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+              -DHPX_WITH_SUPERVISION=ON \
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \

@@ -34,7 +34,7 @@ if(HPX_WITH_TESTS_HEADERS)
   add_hpx_header_tests(
     "components.partitioned_vector"
     HEADERS ${partitioned_vector_headers}
-    HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    HEADER_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../include"
     COMPONENT_DEPENDENCIES partitioned_vector
   )
 endif()

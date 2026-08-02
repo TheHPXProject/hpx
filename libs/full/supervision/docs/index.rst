@@ -18,7 +18,7 @@ localities.
 Overview
 ========
 
-Four core operations are exposed, each with a local (synchronous) call and
+Several core operations are exposed, each with a local (synchronous) call and
 a remote (locality-qualified, future-returning or ``launch::sync_policy``)
 call:
 
@@ -71,7 +71,27 @@ Unregistering observers
 .. cpp:function:: void hpx::supervision::unregister_observer(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& observer_handle, hpx::error_code& ec = hpx::throws)
 .. cpp:function:: void hpx::supervision::unregister_observer(hpx::id_type const& observer_handle, hpx::error_code& ec = hpx::throws)
 
-    Unregister a previously registered observer.
+    Unregister a previously registered observer. ``observer_handle`` must
+    have been obtained from ``register_observer``; a handle obtained from
+    ``register_activity_observer``, or any handle never returned by either
+    registration function, is rejected.
+
+Removing target state
+---------------------
+
+.. cpp:function:: hpx::future<void> hpx::supervision::remove_target(hpx::id_type const& locality, hpx::id_type const& target)
+.. cpp:function:: void hpx::supervision::remove_target(hpx::launch::sync_policy, hpx::id_type const& locality, hpx::id_type const& target, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: void hpx::supervision::remove_target(hpx::id_type const& target, hpx::error_code& ec = hpx::throws)
+
+    Clear all locally tracked state for ``target``. Unlike
+    ``unregister_observer``, which removes a single previously registered
+    observer handle, ``remove_target`` unconditionally forgets every piece of
+    local state held for ``target`` - its recorded lifecycle state and
+    current epoch, and any observers still registered for it - regardless of
+    any specific observer handle. Intended for callers that know ``target``
+    will never be queried or observed again locally (e.g. after a failed
+    registration that seeded some state for it, or once a peer has been
+    evicted), so that local state does not accumulate indefinitely.
 
 Waiting for terminal events
 ---------------------------
@@ -143,7 +163,7 @@ Registering activity observers
     internal lock, which guarantees exactly-once delivery: the observer
     receives either the replay or a live transition that raced with
     registration, but never both and never neither.
-    
+
     Note that the notification itself (replay or live) is delivered after the
     lock is released. Its delivery order relative to any other concurrent live
     notification for the same target is *not* guaranteed, only the
@@ -166,7 +186,8 @@ Unregistering activity observers
 
     Unregister a previously registered activity observer. ``observer_handle``
     must have been obtained from ``register_activity_observer``; a
-    handle obtained from ``register_observer`` is rejected.
+    handle obtained from ``register_observer``, or any handle never returned
+    by either registration function, is rejected.
 
 See the :ref:`API reference <modules_supervision_api>` of this module for
 more details.

@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file hpx/supervision/supervision_api.hpp
-/// \page hpx::supervision::publish_event, hpx::supervision::query_state, hpx::supervision::register_observer, hpx::supervision::unregister_observer, hpx::supervision::register_activity_observer, hpx::supervision::unregister_activity_observer
+/// \page hpx::supervision::publish_event, hpx::supervision::query_state, hpx::supervision::register_observer, hpx::supervision::unregister_observer, hpx::supervision::remove_target, hpx::supervision::register_activity_observer, hpx::supervision::unregister_activity_observer
 /// \headerfile hpx/supervision.hpp
 
 #pragma once
@@ -535,32 +535,34 @@ namespace hpx::supervision {
         std::optional<std::uint64_t> epoch_filter = std::nullopt,
         hpx::error_code& ec = hpx::throws);
 
-    /// \brief Unregister a previously registered observer on a possibly
-    ///        remote locality.
+    /// \brief Unregister a previously registered observer on a possibly remote
+    ///        locality.
     ///
     /// \param locality        [in] The locality on which the observer was
     ///                        registered.
     /// \param observer_handle [in] The handle returned by a prior call to
-    ///                        \a register_observer().
+    ///                        \a register_observer(). Only handles returned
+    ///                        from that function are accepted; passing a handle
+    ///                        obtained from \a register_activity_observer() (or
+    ///                        any foreign handle) is rejected.
     ///
     /// \returns               A future that becomes ready once the
     ///                        observer has been unregistered.
     ///
     /// \throws                hpx::exception if \a locality does not
-    ///                        represent a locality, or if
-    ///                        \a observer_handle does not represent a
-    ///                        valid observer handle. The returned future
-    ///                        becomes exceptional if the operation
-    ///                        fails.
+    ///                        represent a locality, or if \a observer_handle
+    ///                        does not represent a valid observer handle. The
+    ///                        returned future becomes exceptional if the
+    ///                        operation fails.
     ///
     /// \note                  Once the returned future has become ready,
-    ///                        no orphaned callbacks fire after
-    ///                        unregistration completes.
+    ///                        no orphaned callbacks fire after unregistration
+    ///                        completes.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<void> unregister_observer(
         hpx::id_type const& locality, hpx::id_type const& observer_handle);
 
-    /// \brief Unregister a previously registered observer on a possibly
-    ///        remote locality, blocking until the operation has completed.
+    /// \brief Unregister a previously registered observer on a possibly remote
+    ///        locality, blocking until the operation has completed.
     ///
     /// This is the synchronous equivalent of
     /// \a unregister_observer(hpx::id_type const&, hpx::id_type const&).
@@ -568,17 +570,18 @@ namespace hpx::supervision {
     /// \param locality        [in] The locality on which the observer was
     ///                        registered.
     /// \param observer_handle [in] The handle returned by a prior call to
-    ///                        \a register_observer().
+    ///                        \a register_observer(). See the asynchronous
+    ///                        overload regarding foreign handles.
     /// \param ec              [in,out] this represents the error status on
     ///                        exit, if this pre-initialized to
     ///                        \a hpx::throws the function will throw on
     ///                        error instead.
     ///
     /// \throws                hpx::exception if \a locality does not
-    ///                        represent a locality, or if
-    ///                        \a observer_handle does not represent a
-    ///                        valid observer handle, unless \a ec was
-    ///                        initialized not to \a hpx::throws.
+    ///                        represent a locality, or if \a observer_handle
+    ///                        does not represent a valid observer handle,
+    ///                        unless \a ec was initialized not to \a
+    ///                        hpx::throws.
     ///
     /// \note                  No orphaned callbacks fire after
     ///                        unregistration completes.
@@ -591,21 +594,93 @@ namespace hpx::supervision {
     ///
     /// \param observer_handle [in] The handle returned by a prior call to
     ///                        \a register_observer(). Must be local to the
-    ///                        calling locality.
+    ///                        calling locality. See the remote overload
+    ///                        regarding foreign handles.
     /// \param ec              [in,out] this represents the error status on
     ///                        exit, if this is pre-initialized to
     ///                        \a hpx::throws the function will throw on
     ///                        error instead.
     ///
     /// \throws                hpx::exception if \a observer_handle does
-    ///                        not represent a valid observer handle,
-    ///                        unless \a ec was not pre-initialized to
+    ///                        not represent a valid observer handle, unless \a
+    ///                        ec was not pre-initialized to
     ///                        \a hpx::throws.
     ///
     /// \note                  No orphaned callbacks fire after
     ///                        unregistration completes.
     HPX_CXX_EXPORT HPX_EXPORT void unregister_observer(
         hpx::id_type const& observer_handle, hpx::error_code& ec = hpx::throws);
+
+    /// \brief Clear all locally tracked state for a target on a possibly remote
+    ///        locality.
+    ///
+    /// Unlike \a unregister_observer(), which removes a single previously
+    /// registered observer handle, \a remove_target() unconditionally forgets
+    /// every piece of local state held for \a target - its recorded lifecycle
+    /// state (see \a publish_event() / \a query_state()) and any observers
+    /// still registered for it (see \a register_observer()) - regardless of any
+    /// specific observer handle.
+    ///
+    /// \param locality [in] The locality on which \a target's state is
+    ///                 tracked.
+    /// \param target   [in] The actor (or component) whose locally tracked
+    ///                 state should be removed.
+    ///
+    /// \returns        A future that becomes ready once \a target's state
+    ///                 has been removed.
+    ///
+    /// \throws         hpx::exception if \a locality does not represent a
+    ///                 locality, or if \a target does not represent a valid
+    ///                 target. The returned future becomes exceptional if the
+    ///                 operation fails.
+    ///
+    /// \note           This is intended for callers that know \a target
+    ///                 will never be queried or observed again locally (e.g.
+    ///                 after a failed registration that seeded some state for
+    ///                 it, or once a peer has been evicted), so that local
+    ///                 state does not accumulate indefinitely. It is not itself
+    ///                 a lifecycle event and does not affect
+    ///                 \a target's state on any other locality.
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future<void> remove_target(
+        hpx::id_type const& locality, hpx::id_type const& target);
+
+    /// \brief Clear all locally tracked state for a target on a possibly remote
+    ///        locality, blocking until the operation has completed.
+    ///
+    /// This is the synchronous equivalent of
+    /// \a remove_target(hpx::id_type const&, hpx::id_type const&).
+    ///
+    /// \param locality [in] The locality on which \a target's state is
+    ///                 tracked.
+    /// \param target   [in] The actor (or component) whose locally tracked
+    ///                 state should be removed.
+    /// \param ec       [in,out] this represents the error status on exit,
+    ///                 if this pre-initialized to \a hpx::throws the function
+    ///                 will throw on error instead.
+    ///
+    /// \throws         hpx::exception if \a locality does not represent a
+    ///                 locality, or if \a target does not represent a valid
+    ///                 target, unless \a ec was initialized not to \a
+    ///                 hpx::throws.
+    HPX_CXX_EXPORT HPX_EXPORT void remove_target(hpx::launch::sync_policy,
+        hpx::id_type const& locality, hpx::id_type const& target,
+        hpx::error_code& ec = hpx::throws);
+
+    /// \brief Clear all locally tracked state for a target on the local
+    ///        locality.
+    ///
+    /// \param target [in] The actor (or component) whose locally tracked
+    ///               state should be removed. Must be local to the calling
+    ///               locality.
+    /// \param ec     [in,out] this represents the error status on exit, if
+    ///               this is pre-initialized to \a hpx::throws the function
+    ///               will throw on error instead.
+    ///
+    /// \throws       hpx::exception if \a target does not represent a valid
+    ///               target, unless \a ec was not pre-initialized to \a
+    ///               hpx::throws.
+    HPX_CXX_EXPORT HPX_EXPORT void remove_target(
+        hpx::id_type const& target, hpx::error_code& ec = hpx::throws);
 
     /// \brief Asynchronously wait for a target actor on a possibly remote
     ///        locality to reach a terminal lifecycle event (\c completed or
@@ -813,7 +888,7 @@ namespace hpx::supervision {
     ///               to the owning locality); this API provides no such
     ///               mechanism.
     HPX_CXX_EXPORT HPX_EXPORT dispatch_outcome check_admission(
-        hpx::id_type const& target, std::uint64_t epoch = 0) noexcept;
+        hpx::id_type const& target, std::uint64_t epoch = 0);
 
     /// \brief The activity state of a supervised target, as tracked by
     ///        \a register_activity_observer().

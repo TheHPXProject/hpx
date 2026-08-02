@@ -20,15 +20,11 @@
 
 namespace hpx::supervision::server {
 
-    // Local counterpart of agent_component used by
-    // register_activity_observer()/unregister_activity_observer().
-    // Unlike agent_component, instances of this component are only ever
-    // resolved and invoked locally (via hpx::get_ptr()), never through an
-    // action: activity-observer delivery is currently only wired for local
-    // registrations, so this class deliberately declares no actions of its
-    // own. Cross-locality delivery is added when the remote
-    // register_activity_observer()/unregister_activity_observer()
-    // overloads are wired in a later substep.
+    // Counterpart of agent_component used by
+    // register_activity_observer()/unregister_activity_observer(). Mirrors
+    // agent_component: delivery and deactivation are exposed as actions so that
+    // registrations made against a remote locality's supervision manager can be
+    // serviced there as well.
     class HPX_EXPORT activity_agent_component
       : public hpx::components::component_base<activity_agent_component>
     {

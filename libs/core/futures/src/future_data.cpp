@@ -16,6 +16,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/memory.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -251,6 +252,8 @@ namespace hpx::lcos::detail {
     template <typename Callback>
     void handle_on_completed_impl(Callback&& on_completed)
     {
+        HPX_TRACING_MARK_EVENT("future::handle_on_completed");
+
         // We need to run the completion on a new thread if we are on a non HPX
         // thread.
         bool const is_hpx_thread = nullptr != hpx::threads::get_self_ptr();

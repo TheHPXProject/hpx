@@ -52,10 +52,12 @@ namespace hpx::detail {
         lbt_ << "(2nd stage) pre_main: registered AGAS client-side "
                 "performance counter types";
 
+#if defined(HPX_HAVE_SUPERVISION)
         auto const& supervision_manager =
             supervision::get_supervision_manager();
         supervision_manager.register_server_instance();
         lbt_ << "(2nd stage) pre_main: registered supervision infrastructure";
+#endif
 
         get_runtime_distributed().register_counter_types();
         lbt_ << "(2nd stage) pre_main: registered runtime performance "
