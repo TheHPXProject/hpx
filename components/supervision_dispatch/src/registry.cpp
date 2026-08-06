@@ -13,7 +13,6 @@
 
 #include <hpx/supervision_dispatch/registry.hpp>
 #include <hpx/supervision_dispatch/server/registry.hpp>
-#include <hpx/supervision_dispatch/shadow_id.hpp>
 
 #include <cstddef>
 #include <cstdint>

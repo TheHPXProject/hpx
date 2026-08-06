@@ -82,8 +82,7 @@ namespace hpx::supervision {
         return peers;
     }
 
-    std::vector<joined_discovery_result> fan_out_join(
-        registry const& local_registry,
+    std::vector<discovered_peer> fan_out_join(registry const& local_registry,
         std::vector<discovered_peer> const& peers,
         hpx::chrono::steady_duration const& timeout)
     {
@@ -104,22 +103,22 @@ namespace hpx::supervision {
         // queryable regardless of the returned status.
         hpx::wait_all_for_nothrow(timeout, shadow_futures);
 
-        std::vector<joined_discovery_result> joined;
+        std::vector<discovered_peer> joined;
         joined.reserve(shadow_futures.size());
 
         for (std::size_t i = 0; i != shadow_futures.size(); ++i)
         {
             hpx::future<joined_peer>& f = shadow_futures[i];
 
-            // peers[i] is still correctly correlated with shadow_futures[i] here
-            // (this loop is the only place that index pairing is used), so pair
-            // the surviving peer with its shadow_id directly rather than
-            // flattening to a bare shadow_id and forcing every caller to
-            // re-derive the pairing (ambiguous once timed-out peers are dropped).
+            // peers[i] is still correctly correlated with shadow_futures[i]
+            // here (this loop is the only place that index pairing is used), so
+            // pair the surviving peer with its locality directly rather than
+            // flattening to a bare locality id and forcing every caller to
+            // re-derive the pairing (ambiguous once timed-out peers are
+            // dropped).
             if (f.is_ready() && !f.has_exception())
             {
-                joined.push_back(joined_discovery_result{
-                    .peer = peers[i], .shadow = f.get().shadow});
+                joined.push_back(peers[i]);
                 continue;
             }
 
@@ -135,7 +134,7 @@ namespace hpx::supervision {
         return joined;
     }
 
-    std::vector<joined_discovery_result> discover_and_join(
+    std::vector<discovered_peer> discover_and_join(
         registry const& local_registry,
         hpx::chrono::steady_duration const& timeout)
     {
@@ -149,28 +148,29 @@ namespace hpx::supervision {
         };
 
         std::vector<discovered_peer> const peers = discover_peers(remaining());
-        std::vector<joined_discovery_result> joined =
+        std::vector<discovered_peer> joined =
             fan_out_join(local_registry, peers, remaining());
 
         // fan_out_join()'s success only means join() settled server-side; the
         // registry component's own bookkeeping (marking the entry ready /
         // non-evicting) may not yet be reflected by the very next
         // snapshot_peers() call. snapshot_peers() only ever returns fully
-        // joined, non-evicting peers, so a joined shadow_id simply won't
+        // joined, non-evicting peers, so a joined locality simply won't
         // appear in the list until that settles. Poll briefly for that
         // visibility before returning, so callers (failure_detection_loop(),
-        // find_shadow_for()) never observe a "joined" peer the registry
+        // find_locality_for()) never observe a "joined" peer the registry
         // snapshot doesn't yet reflect.
         for (;;)
         {
+            hpx::error_code ec(hpx::throwmode::lightweight);
             auto const snapshot =
-                local_registry.snapshot_peers(hpx::launch::sync);
+                local_registry.snapshot_peers(hpx::launch::sync, ec);
 
-            bool const all_visible = std::ranges::all_of(
-                joined, [&](joined_discovery_result const& r) {
+            bool const all_visible = !ec &&
+                std::ranges::all_of(joined, [&](discovered_peer const& peer) {
                     return std::ranges::any_of(
                         snapshot, [&](server::peer_snapshot const& p) {
-                            return p.shadow == r.shadow;
+                            return p.peer_locality == peer.locality;
                         });
                 });
 

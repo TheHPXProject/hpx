@@ -100,18 +100,18 @@ void test_fencing_without_prior_successful_query(
     std::uint64_t const join_epoch = peer->join_epoch;
     HPX_TEST_NEQ(join_epoch, static_cast<std::uint64_t>(0));
     HPX_TEST_EQ(
-        hpx::supervision::query_state(peer->shadow.get()).epoch, join_epoch);
+        hpx::supervision::query_state(peer->peer_locality).epoch, join_epoch);
 
     bool const fenced = wait_until_fenced(
-        peer->shadow.get(), join_epoch, std::chrono::seconds(5));
+        peer->peer_locality, join_epoch, std::chrono::seconds(5));
     HPX_TEST(fenced);
 
     HPX_TEST(
-        hpx::supervision::check_admission(peer->shadow.get(), join_epoch) ==
+        hpx::supervision::check_admission(peer->peer_locality, join_epoch) ==
         hpx::supervision::dispatch_outcome::rejected_fenced);
 
     hpx::future<int> f = hpx::supervision::dispatch_work<probe_action>(
-        peer->shadow, peer_locality, join_epoch);
+        peer->peer_locality, join_epoch);
 
     bool caught = false;
     try
@@ -148,7 +148,7 @@ void test_cross_locality_authoritative_fence(hpx::id_type const& peer_locality)
 
     hpx::supervision::joined_peer const peer =
         r.join(hpx::launch::sync, peer_sentinel, peer_locality);
-    HPX_TEST_NEQ(peer.shadow, hpx::supervision::invalid_shadow_id);
+    HPX_TEST_NEQ(peer.target, hpx::invalid_id);
 
     // Bring the peer sentinel to a legal terminal state (started -> failed)
     // directly on peer_locality, triggering the registry's lifecycle observer.
@@ -162,7 +162,7 @@ void test_cross_locality_authoritative_fence(hpx::id_type const& peer_locality)
     // observed as fenced here, the peer_locality-side mirror is guaranteed to
     // be in place too.
     bool const fenced =
-        wait_until_fenced(peer.shadow.get(), 0, std::chrono::seconds(5));
+        wait_until_fenced(peer.target, 0, std::chrono::seconds(5));
     HPX_TEST(fenced);
 
     // Dispatch fenced_action directly to peer_locality, bypassing
@@ -170,11 +170,11 @@ void test_cross_locality_authoritative_fence(hpx::id_type const& peer_locality)
     // authoritative re-check performed on peer_locality's own
     // supervision_manager decides the outcome.
     using probe_fenced_action = hpx::supervision::fenced_action<probe_action,
-        hpx::supervision::shadow_id, hpx::id_type, std::uint64_t>;
+        hpx::id_type, std::uint64_t>;
 
     hpx::future<int> f =
         hpx::async(probe_fenced_action(), hpx::colocated(peer_locality),
-            probe_action(), peer.shadow, peer_locality, std::uint64_t{0});
+            probe_action(), peer.target, std::uint64_t{0});
 
     bool caught = false;
     try

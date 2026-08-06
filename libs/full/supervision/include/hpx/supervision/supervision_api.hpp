@@ -844,8 +844,8 @@ namespace hpx::supervision {
     ///                matches the target's current epoch may cause the wait to
     ///                resolve immediately with a mismatch-related error.
     /// \param timeout Optional upper bound on how long to wait before giving
-    ///                up. If not supplied, waits indefinitely for a terminal
-    ///                state.
+    ///                up. If not supplied, uses the local supervision
+    ///                manager's default timeout.
     /// \param ec      Used to report errors instead of throwing an
     ///                exception. When \p target does not represent a valid id,
     ///                \c hpx::error::bad_parameter is reported. If the

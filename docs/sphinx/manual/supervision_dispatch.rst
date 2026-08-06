@@ -53,8 +53,7 @@ down with a single call to ``finalize()``:
 #. Registration of both symbol names.
 #. A single ``discover_and_join()`` pass that joins every peer registry
    reachable within ``discovery_timeout``. Its result is a list of
-   ``joined_discovery_result`` (peer paired with the shadow id its ``join()``
-   call was assigned); peers that time out mid-pass are omitted from that
+   ``discovered_peer``; peers that time out mid-pass are omitted from that
    list entirely rather than leaving a gap in it.
 
 ``init()`` is idempotent: calling it while already active is a no-op, and
@@ -599,7 +598,7 @@ handle a single error regardless of which side detected the fence:
     ----------------                         ---------------
     dispatch_work(action, target, epoch, args...)
       check_admission(target, epoch)   <-- reads local shadow (non-authoritative)
-        rejected -> exceptiona future, done (no dispatch sent)
+        rejected -> exceptional future, done (no dispatch sent)
         admitted -> hpx::async(fenced_action, hpx::colocated(target), ...)
                                           |
                                           v

@@ -4,8 +4,12 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \headerfile hpx/supervision_dispatch/testing.hpp
-/// \page hpx::supervision::testing::local_snapshot_peers, hpx::supervision::testing::set_failure_detection_poll_timeout_for_testing, hpx::supervision::testing::last_join_shadow, hpx::supervision::testing::suspend_heartbeat_for_testing, hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing
+/// \file hpx/supervision_dispatch/testing.hpp
+/// \page hpx::supervision::testing::local_snapshot_peers
+/// \page hpx::supervision::testing::set_failure_detection_poll_timeout_for_testing
+/// \page hpx::supervision::testing::last_join_locality
+/// \page hpx::supervision::testing::suspend_heartbeat_for_testing
+/// \page hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing
 /// \headerfile hpx/supervision_dispatch.hpp
 
 #pragma once
@@ -15,7 +19,6 @@
 #include <hpx/modules/timing.hpp>
 
 #include <hpx/supervision_dispatch/export_definitions.hpp>
-#include <hpx/supervision_dispatch/shadow_id.hpp>
 
 #include <chrono>
 #include <vector>
@@ -46,12 +49,12 @@ namespace hpx::supervision::testing {
     set_failure_detection_poll_timeout_for_testing(
         hpx::chrono::steady_duration const& timeout);
 
-    /// Returns the shadow target most recently minted by join(), regardless of
-    /// whether the register_observers() call that followed it went on to succeed
-    /// or fail. Lets tests verify that a failed join() does not leak the
-    /// shadow's locally tracked supervision state (see
+    /// Returns the locality most recently returned by join(), regardless of
+    /// whether the register_observers() call that followed it went on to
+    /// succeed or fail. Lets tests verify that a failed join() does not leak
+    /// that locality's local supervision state (see
     /// registry::register_observers()'s catch block).
-    HPX_SUPERVISION_DISPATCH_EXPORT shadow_id last_join_shadow();
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::id_type last_join_locality();
 
     /// Stops this locality's own heartbeat_loop() without finalizing the
     /// dispatcher, simulating a hard crash (all lifecycle activity ceases,
@@ -61,7 +64,7 @@ namespace hpx::supervision::testing {
     /// only so failure-detection tests can deterministically simulate silence
     /// instead of relying on the absence of explicit calls, which no longer
     /// implies silence now that heartbeats are mirrored onto observers'
-    /// shadows.
+    /// local supervision state.
     HPX_SUPERVISION_DISPATCH_EXPORT void suspend_heartbeat_for_testing();
 
     /// Reports whether failure_detection_loop() currently has one or more

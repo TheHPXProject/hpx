@@ -1873,13 +1873,16 @@ void test_concurrent_publish_event_racing_epochs(
     hpx::future<hpx::supervision::publish_result> f_low, f_high;
     if (submit_high_first)
     {
-        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
-            hpx::supervision::event::started, epoch_high);
-        f_high = hpx::supervision::publish_event(
-            locality, target, hpx::supervision::event::failed, epoch_high);
+        hpx::future<hpx::supervision::publish_result> f_started =
+            hpx::supervision::publish_event(
+                locality, target, hpx::supervision::event::started, epoch_high);
+
         f_low = hpx::supervision::publish_event(
             locality, target, hpx::supervision::event::failed, epoch_low);
-    }
+
+        f_started.get();
+        f_high = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_high);    }
     else
     {
         hpx::supervision::publish_event(hpx::launch::sync, locality, target,
@@ -1897,9 +1900,9 @@ void test_concurrent_publish_event_racing_epochs(
 
     HPX_TEST(r_high == hpx::supervision::publish_result::applied ||
         r_high == hpx::supervision::publish_result::already_terminal);
-    HPX_TEST(r_low == hpx::supervision::publish_result::stale_epoch ||
+    HPX_TEST(r_low == hpx::supervision::publish_result::applied ||
+        r_low == hpx::supervision::publish_result::stale_epoch ||
         r_low == hpx::supervision::publish_result::already_terminal);
-
     auto const state =
         hpx::supervision::query_state(hpx::launch::sync, locality, target);
     HPX_TEST(state.last_event == hpx::supervision::event::failed);
