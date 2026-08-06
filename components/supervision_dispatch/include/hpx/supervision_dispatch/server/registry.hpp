@@ -98,7 +98,7 @@ namespace hpx::supervision::server {
         /// \endcond
 
         void leave(hpx::id_type const& peer_sentinel,
-            hpx::id_type const& peer_locality, shadow_id const& shadow);
+            hpx::id_type const& peer_locality, std::uint64_t join_epoch);
 
         /// \cond NOINTERNAL
         struct leave_action
@@ -109,18 +109,17 @@ namespace hpx::supervision::server {
         /// \endcond
 
     protected:
-        // Returns {shadow, stored_peer_locality, true} if peer_sentinel is
-        // already fully joined (stored_peer_locality being the peer_locality
-        // originally recorded for it by join(), not necessarily the one passed
-        // to the current call), or {shadow_id(), hpx::id_type(), false} once
-        // this call has reserved a fresh entry for it and the caller is
-        // responsible for completing the join.
-        std::tuple<shadow_id, hpx::id_type, bool> reserve_ownership(
-            hpx::id_type const& peer_sentinel);
-
+        // Returns {shadow, stored_peer_locality, stored_join_epoch, true} if
+        // peer_sentinel is already fully joined (stored_peer_locality being
+        // the peer_locality originally recorded for it by join(), not
+        // necessarily the one passed to the current call), or {shadow_id(),
+        // hpx::id_type(), 0, false} once this call has reserved a fresh entry
+        // for it and the caller is responsible for completing the join.
+        std::tuple<shadow_id, hpx::id_type, std::uint64_t, bool>
+        reserve_ownership(hpx::id_type const& peer_sentinel);
         std::pair<hpx::id_type, hpx::id_type> register_observers(
-            hpx::id_type const& peer_sentinel,
-            hpx::id_type const& peer_locality, shadow_id const& shadow);
+            hpx::id_type const& peer_sentinel, hpx::id_type const& peer_locality,
+        shadow_id const& shadow, std::uint64_t join_epoch);
 
         // Evicts a peer that has reached a terminal lifecycle event: erases its
         // entry from peers_, unregisters its lifecycle_observer and
@@ -130,11 +129,11 @@ namespace hpx::supervision::server {
         // acquisition needed to safely mutate peers_ happens on a separate task
         // rather than inline in that callback (see the comment on
         // register_observers() for why the callback itself must not take mtx_).
-        // `shadow` identifies which entry to evict: if peer_sentinel has since
-        // been re-joined (fresh shadow) or already evicted by a racing terminal
-        // notification, this is a no-op.
+        // `join_epoch` identifies which entry to evict: if peer_sentinel has
+        // since been re-joined (fresh join_epoch) or already evicted by a
+        // racing terminal notification, this is a no-op.
         void evict_peer(hpx::id_type const& peer_sentinel,
-            hpx::id_type const& peer_locality, shadow_id const& shadow,
+            hpx::id_type const& peer_locality, std::uint64_t join_epoch,
             hpx::id_type keep_alive);
 
         /// Unregisters a peer's observers and removes its shadow state.
@@ -181,7 +180,9 @@ namespace hpx::supervision::server {
             /// local state current between terminal events).
             hpx::id_type activity_observer;
 
-            /// The epoch at which this peer was joined, recorded by join().
+            /// The epoch at which this peer was joined, recorded by join()
+            /// and used by evict_peer() (instead of shadow) to identify
+            /// which entry a deferred eviction refers to.
             std::uint64_t join_epoch;
 
             /// False while a join() call has reserved ownership of this peer

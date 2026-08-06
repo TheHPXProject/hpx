@@ -86,10 +86,10 @@ namespace hpx::supervision {
                     return;    // nothing was registered; nothing to retract
                 }
 
-                auto const [shadow, _] = fut.get();
+                joined_peer const joined = fut.get();
                 using action_type = server::registry::leave_action;
-                hpx::post(
-                    action_type(), id, sentinel_id, peer_locality, shadow);
+                hpx::post(action_type(), id, sentinel_id, peer_locality,
+                    joined.join_epoch);
             });
     }
 

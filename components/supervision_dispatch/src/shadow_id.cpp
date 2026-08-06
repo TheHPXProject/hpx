@@ -19,6 +19,7 @@ namespace hpx::supervision {
 
     std::ostream& operator<<(std::ostream& strm, joined_peer const& peer)
     {
-        return strm << peer.shadow  << " (" << peer.target << ")";
+        return strm << peer.shadow << " (" << peer.target << ", epoch "
+                    << peer.join_epoch << ")";
     }
 }    // namespace hpx::supervision

@@ -17,6 +17,7 @@
 #include <hpx/supervision_dispatch/export_definitions.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iosfwd>
 
@@ -207,12 +208,23 @@ namespace hpx::supervision {
         /// \c hpx::colocated() and used as the destination of
         /// \c hpx::sync(act, target, ts...) inside \c dispatch_work().
         hpx::id_type target;
+
+        /// \brief The epoch at which this peer was joined.
+        ///
+        /// Recorded by \c registry::join() and used, instead of \c shadow,
+        /// to identify which registry entry a later \c registry::leave()
+        /// call refers to - so that a racing re-join of the same peer
+        /// sentinel (which mints a fresh \c shadow and \c join_epoch of its
+        /// own) cannot be mistaken for the join this \c joined_peer was
+        /// returned from.
+        std::uint64_t join_epoch = 0;
     };
 
     inline bool operator==(
         joined_peer const& lhs, joined_peer const& rhs) noexcept
     {
-        return lhs.shadow == rhs.shadow && lhs.target == rhs.target;
+        return lhs.shadow == rhs.shadow && lhs.target == rhs.target &&
+            lhs.join_epoch == rhs.join_epoch;
     }
     inline bool operator!=(
         joined_peer const& lhs, joined_peer const& rhs) noexcept

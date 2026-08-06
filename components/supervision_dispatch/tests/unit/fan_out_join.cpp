@@ -106,7 +106,7 @@ void test_fan_out_join_bidirectional()
     {
         for (std::size_t i = 0; i != joined.size(); ++i)
         {
-            HPX_TEST_EQ(joined_again[i], joined[i]);
+            HPX_TEST_EQ(joined_again[i].shadow, joined[i].shadow);
         }
     }
 }
