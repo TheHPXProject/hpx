@@ -1882,7 +1882,8 @@ void test_concurrent_publish_event_racing_epochs(
 
         f_started.get();
         f_high = hpx::supervision::publish_event(
-            locality, target, hpx::supervision::event::failed, epoch_high);    }
+            locality, target, hpx::supervision::event::failed, epoch_high);
+    }
     else
     {
         hpx::supervision::publish_event(hpx::launch::sync, locality, target,

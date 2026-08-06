@@ -19,6 +19,8 @@
 #include <hpx/supervision_dispatch/sentinel.hpp>
 
 #include <chrono>
+#include <cstdint>
+#include <limits>
 #include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -40,6 +42,15 @@ namespace hpx::supervision {
     // and bounded.
     inline constexpr std::chrono::milliseconds default_discovery_timeout{60000};
 
+    // Sentinel discovered_peer::join_epoch value meaning "never joined" (see
+    // below). Deliberately distinct from any real join epoch: a successful
+    // registry::join() can legitimately return an epoch of 0 for a peer
+    // whose epoch counter is still at its initial value (see
+    // registry_server.cpp's seed_epoch), so 0 cannot double as "unjoined"
+    // without misclassifying that peer as invalid.
+    inline constexpr std::uint64_t unjoined_epoch =
+        (std::numeric_limits<std::uint64_t>::max)();
+
     // A peer whose supervision_dispatch sentinel and registry names (see
     // sentinel::register_name()/registry::register_name()) were both
     // successfully resolved by discover_peers().
@@ -52,12 +63,12 @@ namespace hpx::supervision {
         // The epoch this peer was joined at, as returned by the
         // local_registry.join(sentinel_client, locality) call that
         // fan_out_join()/discover_and_join() already perform internally. Left
-        // at its default (0) for peers returned by discover_peers() alone,
-        // which never calls join(). Together with locality - which is already
-        // the same value as joined_peer::target - this carries everything
-        // dispatch_work() needs to fence a call against this peer, without
-        // requiring a separate join() call at the use site.
-        std::uint64_t join_epoch = 0;
+        // at its default (unjoined_epoch) for peers returned by
+        // discover_peers() alone, which never calls join(). Together with
+        // locality - which is already the same value as joined_peer::target -
+        // this carries everything dispatch_work() needs to fence a call against
+        // this peer, without requiring a separate join() call at the use site.
+        std::uint64_t join_epoch = unjoined_epoch;
     };
 
     /// Performs a one-time discovery pull for supervision_dispatch peers:

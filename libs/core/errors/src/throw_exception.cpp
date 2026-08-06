@@ -16,26 +16,27 @@
 
 namespace hpx::detail {
 
-    [[noreturn]] void throw_exception(error errcode, std::string const& msg,
-        std::string const& func, std::string const& file, long line)
+    [[noreturn]] void throw_exception(error const errcode,
+        std::string const& msg, std::string const& func,
+        std::string const& file, long const line, hpx::throwmode const mode)
     {
         filesystem::path const p(file);
-        hpx::detail::throw_exception(
-            hpx::exception(errcode, msg, hpx::throwmode::plain), func,
+        hpx::detail::throw_exception(hpx::exception(errcode, msg, mode), func,
             hpx::filesystem::to_string(p), line);
     }
 
     [[noreturn]] void rethrow_exception(
-        exception const& e, std::string const& func)
+        exception const& e, std::string const& func, hpx::throwmode const mode)
     {
         hpx::detail::throw_exception(
-            hpx::exception(e.get_error(), e.what(), hpx::throwmode::rethrow),
-            func, hpx::get_error_file_name(e), hpx::get_error_line_number(e));
+            hpx::exception(e.get_error(), e.what(), mode), func,
+            hpx::get_error_file_name(e), hpx::get_error_line_number(e));
     }
 
-    std::exception_ptr get_exception(error errcode, std::string const& msg,
-        throwmode mode, std::string const& /* func */, std::string const& file,
-        long line, std::string const& auxinfo)
+    std::exception_ptr get_exception(error const errcode,
+        std::string const& msg, throwmode const mode,
+        std::string const& /* func */, std::string const& file, long const line,
+        std::string const& auxinfo)
     {
         filesystem::path const p(file);
         return hpx::detail::get_exception(hpx::exception(errcode, msg, mode),
@@ -44,15 +45,16 @@ namespace hpx::detail {
 
     std::exception_ptr get_exception(std::error_code const& ec,
         std::string const& /* msg */, throwmode /* mode */,
-        std::string const& func, std::string const& file, long line,
+        std::string const& func, std::string const& file, long const line,
         std::string const& auxinfo)
     {
         return hpx::detail::get_exception(
             hpx::exception(ec), func, file, line, auxinfo);
     }
 
-    void throws_if(hpx::error_code& ec, error errcode, std::string const& msg,
-        std::string const& func, std::string const& file, long line)
+    void throws_if(hpx::error_code& ec, error const errcode,
+        std::string const& msg, std::string const& func,
+        std::string const& file, long const line)
     {
         if (&ec == &hpx::throws)
         {
@@ -67,8 +69,8 @@ namespace hpx::detail {
                 hpx::throwmode::plain);
     }
 
-    void throws_bad_alloc_if(
-        hpx::error_code& ec, char const* func, char const* file, long line)
+    void throws_bad_alloc_if(hpx::error_code& ec, char const* func,
+        char const* file, long const line)
     {
         if (&ec == &hpx::throws)
         {

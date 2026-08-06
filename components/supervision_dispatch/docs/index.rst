@@ -42,9 +42,9 @@ Lifecycle initialization and shutdown
 .. cpp:function:: void hpx::supervision::finalize()
 
     Performs one-shot, idempotent teardown of the runtime previously started
-    by ``init()``: publishes ``event::completed`` at a new epoch, unregisters
-    both symbol names, and releases both components. A no-op unless the
-    runtime is currently ``active``.
+    by ``init()``: publishes ``event::completed`` at the current/unchanged
+    epoch, unregisters both symbol names, and releases both components. A
+    no-op unless the runtime is currently ``active``.
 
 .. cpp:function:: bool hpx::supervision::is_initialized() noexcept
 
@@ -58,8 +58,11 @@ Peer discovery
 .. cpp:struct:: hpx::supervision::discovered_peer
 
     A peer whose sentinel and registry symbol names both resolved during a
-    ``discover_peers()`` call. Holds ``locality``, ``sentinel_client``, and
-    ``registry_client``.
+    ``discover_peers()`` call. Holds ``locality``, ``sentinel_client``,
+    ``registry_client``, and ``join_epoch``. ``discover_peers()`` leaves
+    ``join_epoch`` at ``hpx::supervision::unjoined_epoch`` (never ``0``, which
+    is a legitimate join epoch); ``fan_out_join()`` fills it in with the
+    epoch recorded by ``registry::join()``.
 
 .. cpp:function:: std::vector<hpx::supervision::discovered_peer> hpx::supervision::discover_peers(hpx::chrono::steady_duration const& timeout = hpx::supervision::default_discovery_timeout)
 
@@ -90,6 +93,36 @@ Peer discovery
 
     Returns the same ``discovered_peer`` vector produced by
     ``fan_out_join()`` for the peers it discovered.
+
+State query and event publication
+---------------------------------
+
+.. cpp:function:: hpx::future<hpx::supervision::lifecycle_state> hpx::supervision::query_state(hpx::supervision::supervision_handle const& handle)
+.. cpp:function:: hpx::supervision::lifecycle_state hpx::supervision::query_state(hpx::launch::sync_policy, hpx::supervision::supervision_handle const& handle, hpx::error_code& ec = hpx::throws)
+.. cpp:function:: hpx::future<hpx::supervision::lifecycle_state> hpx::supervision::query_state(hpx::supervision::supervision_handle const& handle, hpx::supervision::discovered_peer const& peer)
+.. cpp:function:: hpx::supervision::lifecycle_state hpx::supervision::query_state(hpx::launch::sync_policy, hpx::supervision::supervision_handle const& handle, hpx::supervision::discovered_peer const& peer, hpx::error_code& ec = hpx::throws)
+
+    Handle-based convenience overloads of ``hpx::supervision::query_state``.
+    The self variants resolve the target from ``handle.sentinel_client`` and
+    query it on the local locality (``hpx::find_here()``); the peer variants
+    resolve both locality and target from ``peer`` instead - ``handle`` is
+    accepted only for overload resolution and symmetry with the self
+    variants, and is otherwise unused in that case. Each overload is a thin
+    forwarder over the corresponding raw-id ``query_state()`` overload in
+    :ref:`modules_supervision`; see that module's reference for the fields
+    of the returned ``lifecycle_state``, including the ``epoch`` value
+    useful for recovering the epoch a handle's sentinel was started at.
+
+.. cpp:function:: hpx::future<hpx::supervision::publish_result> hpx::supervision::publish_event(hpx::supervision::supervision_handle const& handle, hpx::supervision::event ev, std::uint64_t epoch = 0)
+.. cpp:function:: hpx::supervision::publish_result hpx::supervision::publish_event(hpx::launch::sync_policy, hpx::supervision::supervision_handle const& handle, hpx::supervision::event ev, std::uint64_t epoch = 0, hpx::error_code& ec = hpx::throws)
+
+    Handle-based convenience overloads of ``hpx::supervision::publish_event``
+    that resolve locality and target from ``handle.sentinel_client`` instead
+    of requiring the caller to name them explicitly. Thin forwarders over
+    the raw-id ``publish_event()`` overloads in
+    :ref:`modules_supervision`. There is no peer variant: a locality
+    publishes lifecycle events only for the sentinel it owns, never on
+    behalf of a peer's.
 
 Sentinel client
 ---------------
@@ -171,7 +204,7 @@ unit tests for this module deterministic:
 
 .. cpp:function:: std::vector<hpx::supervision::server::peer_snapshot> hpx::supervision::testing::local_snapshot_peers()
 .. cpp:function:: void hpx::supervision::testing::set_failure_detection_poll_timeout_for_testing(hpx::chrono::steady_duration const& timeout)
-.. cpp:function:: hpx::id_type hpx::supervision::testing::last_join_shadow()
+.. cpp:function:: hpx::id_type hpx::supervision::testing::last_join_locality()
 .. cpp:function:: void hpx::supervision::testing::suspend_heartbeat_for_testing()
 .. cpp:function:: bool hpx::supervision::testing::failure_detection_sweep_in_flight_for_testing()
 

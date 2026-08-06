@@ -152,17 +152,27 @@ void test_cross_locality_authoritative_fence(hpx::id_type const& peer_locality)
 
     // Bring the peer sentinel to a legal terminal state (started -> failed)
     // directly on peer_locality, triggering the registry's lifecycle observer.
+    //
+    // This test shares peer_locality with
+    // test_fencing_without_prior_successful_query(), which runs first and can
+    // drive peer_locality's shadow past epoch 0 (join()'s escalation logic
+    // seeds a fresh epoch past whatever terminal state that earlier test left
+    // behind). publish_event()'s "never regress" contract would then silently
+    // drop a publish at a stale, lower epoch, so every epoch used below must
+    // be the actual value returned by join() (peer.join_epoch), not a
+    // hardcoded 0.
     peer_sentinel.start(hpx::launch::sync);
     hpx::supervision::publish_event(hpx::launch::sync, peer_locality,
-        peer_sentinel.get_id(), hpx::supervision::event::failed, 0);
+        peer_sentinel.get_id(), hpx::supervision::event::failed,
+        peer.join_epoch);
 
     // Wait for the observer's mirroring callback to run. Its dual-publish onto
     // peer_locality (see register_observers() in registry_server.cpp) happens
     // strictly before its local publish returns, so once the local mirror is
     // observed as fenced here, the peer_locality-side mirror is guaranteed to
     // be in place too.
-    bool const fenced =
-        wait_until_fenced(peer.target, 0, std::chrono::seconds(5));
+    bool const fenced = wait_until_fenced(
+        peer.target, peer.join_epoch, std::chrono::seconds(5));
     HPX_TEST(fenced);
 
     // Dispatch fenced_action directly to peer_locality, bypassing
@@ -174,7 +184,7 @@ void test_cross_locality_authoritative_fence(hpx::id_type const& peer_locality)
 
     hpx::future<int> f =
         hpx::async(probe_fenced_action(), hpx::colocated(peer_locality),
-            probe_action(), peer.target, std::uint64_t{0});
+            probe_action(), peer.target, peer.join_epoch);
 
     bool caught = false;
     try

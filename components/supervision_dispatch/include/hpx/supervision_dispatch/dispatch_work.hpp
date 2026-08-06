@@ -106,7 +106,8 @@ namespace hpx::supervision {
             // Surface this as an exceptional future so callers can distinguish
             // "fenced" dispatch failures from other errors.
 
-            HPX_THROW_EXCEPTION(hpx::error::target_fenced,
+            HPX_THROW_EXCEPTION_MODE(hpx::error::target_fenced,
+                hpx::throwmode::lightweight,
                 "hpx::supervision::invoke_fenced_action",
                 "target has latched a terminal event for this epoch "
                 "since the client-side admission check; dispatch was "
@@ -191,6 +192,7 @@ namespace hpx::supervision {
             // detected the fence.
             return hpx::make_exceptional_future<typename Action::result_type>(
                 HPX_GET_EXCEPTION(hpx::error::target_fenced,
+                    hpx::throwmode::lightweight,
                     "hpx::supervision::dispatch_work",
                     "target has already latched a terminal event for this "
                     "epoch; dispatch was fenced and the wrapped action was "
@@ -244,10 +246,13 @@ namespace hpx::supervision {
     /// as `dispatch_work<Action>(peer.locality, peer.join_epoch, ts...)`, so
     /// callers do not need to unpack the locality/epoch pair themselves.
     ///
-    /// \note This trusts \p peer.join_epoch as-is, so it is only correct for
-    ///       peers returned by fan_out_join()/discover_and_join(); a
-    ///       discovered_peer obtained from discover_peers() alone still has
-    ///       join_epoch == 0 and would fence against the wrong epoch.
+    /// \p peer.join_epoch is checked against unjoined_epoch first: a
+    /// discovered_peer obtained from discover_peers() alone (as opposed to
+    /// fan_out_join()/discover_and_join()) never calls join() and so is left
+    /// at that sentinel. Dispatching against such a peer is rejected up
+    /// front, using the same target_fenced exceptional future as the
+    /// primary overload, rather than silently forwarding an epoch that was
+    /// never actually joined.
     ///
     /// \tparam Action The action type to dispatch (deduced from the
     ///                \p Action instance argument).
@@ -256,14 +261,28 @@ namespace hpx::supervision {
     /// \param peer The discovered/joined peer to dispatch to.
     /// \param ts   Additional arguments forwarded to the action.
     ///
-    /// \return A future holding the result of the dispatched action. If the
-    ///         local admission check fails, an already-exceptional future is
-    ///         returned immediately without an actual dispatch.
+    /// \return A future holding the result of the dispatched action. If
+    ///         \p peer has not been joined, or the local admission check
+    ///         fails, an already-exceptional future is returned immediately
     template <typename Action, typename... Ts>
         requires(hpx::traits::is_action_v<Action>)
     decltype(auto) dispatch_work(
         Action, discovered_peer const& peer, Ts&&... ts)
     {
+        if (peer.join_epoch == unjoined_epoch)
+        {
+            // Peer was never joined (e.g. came from discover_peers() alone, not
+            // fan_out_join()/discover_and_join()); reject up front rather than
+            // silently fencing against epoch 0.
+            return hpx::make_exceptional_future<
+                typename Action::result_type>(HPX_GET_EXCEPTION(
+                hpx::error::target_fenced, hpx::throwmode::lightweight,
+                "hpx::supervision::dispatch_work",
+                "peer has not completed fan_out_join()/discover_and_join() "
+                "(join_epoch is un-initialized); dispatch was rejected and the "
+                "wrapped action was not invoked"));
+        }
+
         return dispatch_work<Action>(
             peer.locality, peer.join_epoch, HPX_FORWARD(Ts, ts)...);
     }

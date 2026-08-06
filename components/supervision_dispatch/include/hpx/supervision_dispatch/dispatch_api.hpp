@@ -18,6 +18,8 @@
 #include <hpx/supervision_dispatch/discovery.hpp>
 #include <hpx/supervision_dispatch/export_definitions.hpp>
 
+#include <cstdint>
+
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::supervision {
@@ -140,6 +142,186 @@ namespace hpx::supervision {
     ///       finalize() is concurrently in flight.
     ///
     HPX_SUPERVISION_DISPATCH_EXPORT bool is_initialized() noexcept;
+
+    /// \brief Query the current dispatch-cycle epoch of the supervision-
+    ///        dispatch runtime on a possibly remote locality.
+    ///
+    /// This is the counter maintained internally by \a init() (incremented
+    /// once per successful \a init() call on \a locality, and used as the
+    /// epoch \a locality's own sentinel publishes \c event::started under -
+    /// see \a run_init_sequence()). It is unrelated to any particular
+    /// target's \a lifecycle_state::epoch (see \a query_state()): in
+    /// particular, \a server::registry::join() uses this to seed a freshly
+    /// joined peer's local shadow from the peer's own real epoch instead of
+    /// guessing 0, so that shadow does not go stale the moment the peer's own
+    /// first lifecycle notification mirrors in (see
+    /// \a server::registry::register_observers()).
+    ///
+    /// \param locality [in] The locality whose dispatch-cycle epoch is
+    ///                 queried.
+    ///
+    /// \return A future holding \a locality's current epoch (0 if \a init()
+    ///         has never successfully completed on \a locality).
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::future<std::uint64_t> current_epoch(
+        hpx::id_type const& locality);
+
+    /// \brief Query the current dispatch-cycle epoch of the supervision-
+    ///        dispatch runtime on a possibly remote locality, blocking until
+    ///        the result is available.
+    ///
+    /// This is the synchronous equivalent of
+    /// \a current_epoch(hpx::id_type const&).
+    ///
+    /// \param policy   Tag selecting the blocking overload of
+    ///                 \a current_epoch().
+    /// \param locality [in] The locality whose dispatch-cycle epoch is
+    ///                 queried.
+    /// \param ec       [in,out] this represents the error status on exit,
+    ///                 if this is pre-initialized to \a hpx::throws the
+    ///                 function will throw on error instead.
+    ///
+    /// \return \a locality's current epoch (0 if \a init() has never
+    ///         successfully completed on \a locality).
+    HPX_SUPERVISION_DISPATCH_EXPORT std::uint64_t current_epoch(
+        hpx::launch::sync_policy policy, hpx::id_type const& locality,
+        hpx::error_code& ec = hpx::throws);
+
+    /// \brief Query the last known lifecycle state of the sentinel owned by
+    ///        \a handle, on the local locality.
+    ///
+    /// Convenience overload of
+    /// \a hpx::supervision::query_state(hpx::id_type const&, hpx::id_type
+    /// const&) that resolves the target from \a handle instead of requiring the
+    /// caller to name it explicitly. Forwards to
+    /// `hpx::supervision::query_state(hpx::find_here(),
+    /// handle.sentinel_client.get_id())`.
+    ///
+    /// \param handle [in] The supervision_handle (typically returned by
+    ///               init()) whose sentinel_client's state is queried.
+    ///
+    /// \return A future holding the last event recorded for
+    ///         \a handle.sentinel_client, together with its timestamp,
+    ///         sequence number, and epoch (see \a lifecycle_state::epoch -- in
+    ///         particular, useful for recovering the epoch \a init() started
+    ///         this handle's sentinel at, for use with publish_event()).
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::future<lifecycle_state> query_state(
+        supervision_handle const& handle);
+
+    /// \brief Query the last known lifecycle state of the sentinel owned by
+    ///        \a handle, blocking until the result is available.
+    ///
+    /// This is the synchronous equivalent of
+    /// \a query_state(supervision_handle const&).
+    ///
+    /// \param policy Tag selecting the blocking overload of query_state().
+    /// \param handle [in] The supervision_handle whose sentinel_client's
+    ///               state is queried.
+    /// \param ec       [in,out] this represents the error status on exit,
+    ///                 if this is pre-initialized to \a hpx::throws the
+    ///                 function will throw on error instead.
+    ///
+    /// \throws         hpx::exception if \a handle does not hold a valid
+    ///                 sentinel client, unless \a ec was not pre-initialized to
+    ///                 \a hpx::throws.
+    ///
+    /// \return The last event recorded for \a handle.sentinel_client.
+    HPX_SUPERVISION_DISPATCH_EXPORT lifecycle_state query_state(
+        hpx::launch::sync_policy policy, supervision_handle const& handle,
+        hpx::error_code& ec = hpx::throws);
+
+    /// \brief Query the last known lifecycle state of a discovered peer's
+    ///        sentinel.
+    ///
+    /// Convenience overload of
+    /// \a hpx::supervision::query_state(hpx::id_type const&, hpx::id_type
+    /// const&) that resolves the (locality, target) pair from \a peer instead
+    /// of requiring the caller to name them explicitly. Forwards to
+    /// `hpx::supervision::query_state(peer.locality,
+    /// peer.sentinel_client.get_id())`.
+    ///
+    /// \param handle [in] Unused beyond overload resolution and symmetry
+    ///               with the self-query overload above; \a peer alone carries
+    ///               everything this call needs.
+    /// \param peer   [in] The peer (typically returned by discover_peers()/
+    ///               discover_and_join()) whose sentinel's state is queried.
+    ///
+    /// \return A future holding the last event recorded for
+    ///         \a peer.sentinel_client, as observed by the supervision
+    ///         manager running on \a peer.locality.
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::future<lifecycle_state> query_state(
+        supervision_handle const& handle, discovered_peer const& peer);
+
+    /// \brief Query the last known lifecycle state of a discovered peer's
+    ///        sentinel, blocking until the result is available.
+    ///
+    /// This is the synchronous equivalent of
+    /// \a query_state(supervision_handle const&, discovered_peer const&).
+    ///
+    /// \param policy Tag selecting the blocking overload of query_state().
+    /// \param handle [in] Unused beyond overload resolution; see the
+    ///               asynchronous overload.
+    /// \param peer   [in] The peer whose sentinel's state is queried.
+    /// \param ec       [in,out] this represents the error status on exit,
+    ///                 if this is pre-initialized to \a hpx::throws the
+    ///                 function will throw on error instead.
+    ///
+    /// \throws         hpx::exception if \a handle does not hold a valid
+    ///                 sentinel client, unless \a ec was not pre-initialized to
+    ///                 \a hpx::throws.
+    ///
+    /// \return The last event recorded for \a peer.sentinel_client.
+    HPX_SUPERVISION_DISPATCH_EXPORT lifecycle_state query_state(
+        hpx::launch::sync_policy policy, supervision_handle const& handle,
+        discovered_peer const& peer, hpx::error_code& ec = hpx::throws);
+
+    /// \brief Publish a lifecycle event for the sentinel owned by \a handle.
+    ///
+    /// Convenience overload of
+    /// \a hpx::supervision::publish_event(hpx::id_type const&, hpx::id_type
+    /// const&, event, std::uint64_t) that resolves locality and target from
+    /// \a handle instead of requiring the caller to name them explicitly.
+    /// Forwards to `hpx::supervision::publish_event(hpx::find_here(),
+    /// handle.sentinel_client.get_id(), ev, epoch)`.
+    ///
+    /// \param handle [in] The supervision_handle (typically returned by
+    ///               init()) whose sentinel_client the event is published for.
+    /// \param ev     [in] The lifecycle event to publish.
+    /// \param epoch  [in] The epoch this publication belongs to. Typically
+    ///               obtained from a prior `query_state(hpx::launch::sync,
+    ///               handle).epoch` call. See the raw-id overload for the
+    ///               epoch-scoped semantics.
+    ///
+    /// \return A future that becomes ready once the event has been recorded,
+    ///         holding the same \a publish_result values as the raw-id
+    ///         overload.
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::future<publish_result> publish_event(
+        supervision_handle const& handle, event ev, std::uint64_t epoch = 0);
+
+    /// \brief Publish a lifecycle event for the sentinel owned by \a handle,
+    ///        blocking until the operation has completed.
+    ///
+    /// This is the synchronous equivalent of
+    /// \a publish_event(supervision_handle const&, event, std::uint64_t).
+    ///
+    /// \param policy [in] Tag selecting the blocking overload of
+    ///               publish_event().
+    /// \param handle [in] The supervision_handle whose sentinel_client the
+    ///               event is published for.
+    /// \param ev     [in] The lifecycle event to publish.
+    /// \param epoch  [in] The epoch this publication belongs to. See the
+    ///               asynchronous overload.
+    /// \param ec       [in,out] this represents the error status on exit,
+    ///                 if this is pre-initialized to \a hpx::throws the
+    ///                 function will throw on error instead.
+    ///
+    /// \throws         hpx::exception if \a handle does not hold a valid
+    ///                 sentinel client, unless \a ec was not pre-initialized to
+    ///                 \a hpx::throws.
+    ///
+    /// \return The same \a publish_result values as the raw-id overload.
+    HPX_SUPERVISION_DISPATCH_EXPORT publish_result publish_event(
+        hpx::launch::sync_policy policy, supervision_handle const& handle,
+        event ev, std::uint64_t epoch = 0, hpx::error_code& ec = hpx::throws);
 
 }    // namespace hpx::supervision
 

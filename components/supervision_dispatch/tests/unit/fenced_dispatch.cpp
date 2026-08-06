@@ -77,7 +77,7 @@ void test_dispatch_success(hpx::id_type const& locality)
         r.join(hpx::launch::sync, peer_sentinel, locality);
 
     HPX_TEST_NEQ(peer.target, hpx::invalid_id);
-    HPX_TEST_NEQ(peer.target, locality);
+    HPX_TEST_EQ(peer.target, locality);
 
     hpx::future<int> f = hpx::supervision::dispatch_work(
         count_invocation_action(), peer.target, epoch);

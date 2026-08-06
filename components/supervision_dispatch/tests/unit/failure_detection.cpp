@@ -204,6 +204,25 @@ void test_clean_shutdown_during_in_flight_sweep(
     hpx::supervision::finalize();
     HPX_TEST_NO_THROW(hpx::supervision::init(hpx::launch::sync));
 
+    // Rejoin latency (peer becoming visible via snapshot_peers()) must not eat
+    // into the window meant to observe an in-flight sweep below. Wait (bounded)
+    // for the peer to reappear in the registry first.
+    {
+        auto const rejoin_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        bool rejoined = false;
+        while (std::chrono::steady_clock::now() < rejoin_deadline)
+        {
+            if (find_locality_for(peer_locality).has_value())
+            {
+                rejoined = true;
+                break;
+            }
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        HPX_TEST(rejoined);
+    }
+
     auto const deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(5);
     bool sweep_started = false;

@@ -160,7 +160,6 @@ namespace hpx::supervision::server {
         // Returns {stored_peer_locality, stored_join_epoch, true} if
         // peer_sentinel is already fully joined (stored_peer_locality being
         // necessarily the one passed to the current call), or {hpx::id_type(),
-        // 0, false} once this call has reserved a fresh entry hpx::id_type(),
         // 0, false} once this call has reserved a fresh entry for it and the
         // caller is responsible for completing the join.
         std::tuple<hpx::id_type, std::uint64_t, bool> reserve_ownership(
@@ -172,37 +171,54 @@ namespace hpx::supervision::server {
 
         // Evicts a peer that has reached a terminal lifecycle event: erases its
         // entry from peers_, unregisters its lifecycle_observer and
-        // activity_observer on peer_locality, and removes peer_locality's
-        // local supervision state. Called via hpx::post() from the
-        // (lock-free) lifecycle observer callback installed in
-        // register_observers(), so that the mtx_ acquisition needed to
-        // safely mutate peers_ happens on a separate task rather than inline
-        // in that callback (see the comment on register_observers() for why
-        // the callback itself must not take mtx_).
+        // activity_observer on peer_locality, and (unless preserve_terminal_
+        // state is set) removes peer_locality's local supervision state. Called
+        // via hpx::post() from the (lock-free) lifecycle observer callback
+        // installed in register_observers(), so that the mtx_ acquisition
+        // needed to safely mutate peers_ happens on a separate task rather than
+        // inline in that callback (see the comment on register_observers() for
+        // why the callback itself must not take mtx_).
+        //
         // `join_epoch` identifies which entry to evict: if peer_sentinel has
         // since been re-joined (fresh join_epoch) or already evicted by a
         // racing terminal notification, this is a no-op.
+        //
+        // `preserve_terminal_state` is true for terminal-notification-driven
+        // evictions (leaving the peer's last published event in place as a
+        // tombstone, see cleanup_peer()) and false for an explicit leave().
         void evict_peer(hpx::id_type const& peer_sentinel,
             hpx::id_type const& peer_locality, std::uint64_t join_epoch,
-            hpx::id_type keep_alive);
+            hpx::id_type keep_alive, bool preserve_terminal_state);
 
-        /// Unregisters a peer's observers and removes its locally tracked
-        /// supervision state.
+        /// Unregisters a peer's observers and, unless
+        ///  \p preserve_terminal_state is set, removes its locally tracked
+        ///     supervision state.
         ///
         /// Performs the actual peer teardown deferred by evict_peer():
         /// unregisters \p lifecycle_observer and \p activity_observer on
-        /// \p peer_locality and removes \p peer_locality's locally tracked
-        /// supervision state. Kept separate from evict_peer() because
-        /// evict_peer() only posts this work as a task (via hpx::post())
-        /// rather than performing it inline.
+        /// \p peer_locality, and removes \p peer_locality's locally tracked
+        /// supervision state unless \p preserve_terminal_state is true, in
+        /// which case that state - which was last set to the peer's terminal
+        /// event by register_observers()'s lifecycle callback - is left in
+        /// place as a tombstone rather than reset to "unknown". This lets any
+        /// admission check still in flight against \p peer_locality (e.g.
+        /// check_admission()) keep observing the fenced/terminal outcome after
+        /// eviction has run, instead of racing against it. A subsequent join()
+        /// re-seeding this locality with a fresh epoch naturally overwrites the
+        /// tombstone. Kept separate from evict_peer() because evict_peer() only
+        /// posts this work as a task (via hpx::post()) rather than performing
+        /// it inline.
         ///
-        /// \param peer_locality The locality that owns the observers, and
-        ///        whose local supervision state is removed.
+        /// \param peer_locality The locality that owns the observers, and whose
+        ///        local supervision state is removed.
         /// \param lifecycle_observer The lifecycle observer id to unregister.
         /// \param activity_observer The activity observer id to unregister.
+        /// \param preserve_terminal_state If true, leave peer_locality's
+        ///        local supervision state in place instead of removing it.
         static void cleanup_peer(hpx::id_type const& peer_locality,
             hpx::id_type const& lifecycle_observer,
-            hpx::id_type const& activity_observer);
+            hpx::id_type const& activity_observer,
+            bool preserve_terminal_state);
 
     private:
         /// Internal bookkeeping for a single joined (or joining) peer.
@@ -246,6 +262,14 @@ namespace hpx::supervision::server {
             /// dropped, and lets snapshot_peers() exclude a peer that is
             /// already tearing down.
             bool evict_pending = false;
+
+            /// The preserve_terminal_state argument evict_peer() was called
+            /// with when it set evict_pending above, remembered so that
+            /// join()'s deferred cleanup_peer() call (once the join in progress
+            /// completes) preserves or drops peer_locality's local supervision
+            /// state consistently with what the racing terminal notification
+            /// requested.
+            bool evict_preserve_terminal_state = false;
         };
 
         mutable hpx::spinlock mtx_;

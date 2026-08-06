@@ -183,7 +183,8 @@ namespace hpx::supervision {
                 std::ranges::all_of(joined, [&](discovered_peer const& peer) {
                     return std::ranges::any_of(
                         snapshot, [&](server::peer_snapshot const& p) {
-                            return p.peer_locality == peer.locality;
+                            return p.peer_locality == peer.locality &&
+                                p.join_epoch == peer.join_epoch;
                         });
                 });
 

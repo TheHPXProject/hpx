@@ -13,6 +13,7 @@ set(tests
     failure_detection_join
     fan_out_join
     fenced_dispatch
+    query_publish
     registry_join
     registry_snapshot
     sentinel_start

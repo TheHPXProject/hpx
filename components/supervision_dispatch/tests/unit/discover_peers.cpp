@@ -110,8 +110,12 @@ void test_discover_peers_finds_registered_peer()
     HPX_TEST(elapsed < test_discovery_timeout);
 
     bool found = false;
-    for (auto const& [locality, sentinel_client, registry_client, _] : peers)
+    for (auto const& [locality, sentinel_client, registry_client, epoch] :
+        peers)
     {
+        // epoch should default to unjoined_epoch since discover_peers() never
+        // calls join()
+        HPX_TEST_EQ(epoch, hpx::supervision::unjoined_epoch);
         if (locality == target_locality)
         {
             found = true;
