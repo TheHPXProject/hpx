@@ -115,7 +115,14 @@ void test_copy_if_sender_exception(
     }
     catch (Exception const&)
     {
-        caught_expected_exception = true;
+        if constexpr (std::is_same_v<Exception, std::runtime_error>)
+        {
+            HPX_TEST(false);
+        }
+        else
+        {
+            caught_expected_exception = true;
+        }
     }
     catch (...)
     {

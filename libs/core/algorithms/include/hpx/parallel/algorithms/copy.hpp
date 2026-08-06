@@ -324,6 +324,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/transfer.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
+#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -334,6 +335,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <exception>
 #include <iterator>
 #include <memory>
 #include <type_traits>
@@ -811,9 +813,18 @@ namespace hpx {
                 return hpx::parallel::util::get_second_element(
                     hpx::parallel::execution::async_execute(policy.executor(),
                         [first, last, dest, pred = HPX_MOVE(pred)]() mutable {
-                            return hpx::parallel::detail::sequential_copy_if(
-                                first, last, dest, HPX_MOVE(pred),
-                                hpx::identity_v);
+                            try
+                            {
+                                return hpx::parallel::detail::
+                                    sequential_copy_if(first, last, dest,
+                                        HPX_MOVE(pred), hpx::identity_v);
+                            }
+                            catch (...)
+                            {
+                                hpx::parallel::util::detail::
+                                    handle_local_exceptions<ExPolicy>::call(
+                                        std::current_exception());
+                            }
                         }));
             }
             else
