@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iosfwd>
 #include <utility>
 #include <vector>
@@ -445,5 +446,19 @@ namespace hpx::traits {
         using type = std::vector<hpx::id_type>;
     };
 }    // namespace hpx::traits
+
+///////////////////////////////////////////////////////////////////////////////
+namespace std {
+
+    // specialize std::hash for hpx::id_type
+    template <>
+    struct hash<::hpx::id_type>
+    {
+        std::size_t operator()(::hpx::id_type const& id) const noexcept
+        {
+            return hash<::hpx::naming::gid_type>()(id.get_gid());
+        }
+    };
+}    // namespace std
 
 #include <hpx/config/warnings_suffix.hpp>

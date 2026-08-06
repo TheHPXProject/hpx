@@ -81,15 +81,15 @@ void test_fan_out_join_bidirectional()
 
     HPX_TEST_EQ(peers.size(), remote_localities.size());
 
-    std::vector<hpx::id_type> const shadows =
+    std::vector<hpx::supervision::shadow_id> const shadows =
         hpx::supervision::fan_out_join(local_registry, peers);
 
     HPX_TEST_EQ(shadows.size(), peers.size());
-    for (hpx::id_type const& shadow : shadows)
+    for (hpx::supervision::shadow_id const& shadow : shadows)
     {
-        HPX_TEST_NEQ(shadow, hpx::invalid_id);
+        HPX_TEST_NEQ(shadow, hpx::supervision::invalid_shadow_id);
 
-        auto const state = hpx::supervision::query_state(shadow);
+        auto const state = hpx::supervision::query_state(shadow.get());
         HPX_TEST(state.last_event == hpx::supervision::event::started);
     }
 
@@ -98,7 +98,7 @@ void test_fan_out_join_bidirectional()
     // Idempotency: fanning out against the very same peer list again must not
     // create duplicate shadows -- this is exactly the concern raised by two
     // localities concurrently fanning out against each other.
-    std::vector<hpx::id_type> const shadows_again =
+    std::vector<hpx::supervision::shadow_id> const shadows_again =
         hpx::supervision::fan_out_join(local_registry, peers);
 
     HPX_TEST_EQ(shadows_again.size(), shadows.size());

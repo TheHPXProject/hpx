@@ -24,9 +24,8 @@ namespace hpx::supervision::server {
     hpx::supervision::publish_result sentinel::start(
         std::uint64_t const epoch) const
     {
-        return hpx::supervision::publish_event(hpx::launch::sync,
-            hpx::find_here(), get_unmanaged_id(),
-            hpx::supervision::event::started, epoch);
+        return hpx::supervision::publish_event(
+            get_unmanaged_id(), hpx::supervision::event::started, epoch);
     }
 }    // namespace hpx::supervision::server
 

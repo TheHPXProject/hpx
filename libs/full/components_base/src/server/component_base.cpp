@@ -151,6 +151,6 @@ namespace hpx::components::detail {
 
     hpx::id_type base_component::get_unmanaged_id(naming::gid_type const& gid)
     {
-        return {gid, hpx::id_type::management_type::managed};
+        return {gid, hpx::id_type::management_type::unmanaged};
     }
 }    // namespace hpx::components::detail

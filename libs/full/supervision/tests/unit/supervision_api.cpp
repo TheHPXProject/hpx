@@ -311,7 +311,7 @@ void test_register_observer_keeps_initial_state_snapshot()
     hpx::spinlock received_mtx;
     std::vector<hpx::supervision::lifecycle_event_notification> received;
 
-    hpx::supervision::server::detail::set_register_observer_snapshot_hook([&] {
+    hpx::supervision::testing::set_register_observer_snapshot_hook([&] {
         snapshot_taken.store(true);
         while (!continue_registration.load())
         {
@@ -320,8 +320,7 @@ void test_register_observer_keeps_initial_state_snapshot()
     });
 
     auto clear_hook = hpx::experimental::scope_exit([] {
-        hpx::supervision::server::detail::set_register_observer_snapshot_hook(
-            {});
+        hpx::supervision::testing::set_register_observer_snapshot_hook({});
     });
 
     auto registration = hpx::async([&] {
@@ -1809,6 +1808,104 @@ void test_legal_new_epoch_opened_with_started(hpx::id_type const& locality)
     HPX_TEST(state.last_event == hpx::supervision::event::started);
 }
 
+// ---------------------------------------------------------------------------
+// Regression coverage for two independent failure-detection paths in
+// failure_detection_loop() (the query_failures consecutive-failure threshold,
+// and the await_terminal timeout) can both call publish_event(shadow,
+// event::failed, epoch, ...) for the same shadow from overlapping sweep phases,
+// each with a potentially different captured epoch. These tests isolate and
+// directly stress publish_event()'s own compare-and-mutate contract under
+// concurrency, which is the primitive both paths rely on to stay safe.
+// ---------------------------------------------------------------------------
+
+// Case A: both callers race with the *same* epoch (models both detection
+// paths deriving from an identical shadow snapshot). event::failed is
+// terminal/latched, so the expected outcome is exactly one applied + one
+// already_terminal, with the shadow ending up fenced at that one epoch
+// either way.
+void test_concurrent_publish_event_same_epoch(hpx::id_type const& locality)
+{
+    hpx::id_type const target = make_test_target();
+    constexpr std::uint64_t epoch = 5;
+
+    reach_running_at_epoch(locality, target, epoch);
+
+    auto f1 = hpx::supervision::publish_event(
+        locality, target, hpx::supervision::event::failed, epoch);
+    auto f2 = hpx::supervision::publish_event(
+        locality, target, hpx::supervision::event::failed, epoch);
+
+    hpx::wait_all(f1, f2);
+
+    auto const r1 = f1.get();
+    auto const r2 = f2.get();
+
+    bool const one_applied_one_latched =
+        (r1 == hpx::supervision::publish_result::applied &&
+            r2 == hpx::supervision::publish_result::already_terminal) ||
+        (r2 == hpx::supervision::publish_result::applied &&
+            r1 == hpx::supervision::publish_result::already_terminal);
+    HPX_TEST(one_applied_one_latched);
+
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::failed);
+    HPX_TEST_EQ(state.epoch, epoch);
+}
+
+// Case B: the two callers race with *different* epochs (models a concurrent
+// reactive eviction, or a stale in-flight await_terminal continuation from an
+// earlier sweep, bumping the epoch mid-race against a fresher query-failure
+// fence). Invariant under test: the final stored state always converges to the
+// *maximum* submitted epoch, independent of submission order.
+//
+// Run with both submission orders to rule out an ordering-dependent bug that
+// only manifests when the lower epoch happens to be submitted first.
+void test_concurrent_publish_event_racing_epochs(
+    hpx::id_type const& locality, bool const submit_high_first)
+{
+    hpx::id_type const target = make_test_target();
+    constexpr std::uint64_t epoch_low = 10;
+    constexpr std::uint64_t epoch_high = 11;
+
+    reach_running_at_epoch(locality, target, epoch_low);
+
+    hpx::future<hpx::supervision::publish_result> f_low, f_high;
+    if (submit_high_first)
+    {
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::started, epoch_high);
+        f_high = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_high);
+        f_low = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_low);
+    }
+    else
+    {
+        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
+            hpx::supervision::event::started, epoch_high);
+        f_low = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_low);
+        f_high = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_high);
+    }
+
+    hpx::wait_all(f_low, f_high);
+
+    auto const r_low = f_low.get();
+    auto const r_high = f_high.get();
+
+    HPX_TEST(r_high == hpx::supervision::publish_result::applied ||
+        r_high == hpx::supervision::publish_result::already_terminal);
+    HPX_TEST(r_low == hpx::supervision::publish_result::stale_epoch ||
+        r_low == hpx::supervision::publish_result::already_terminal);
+
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, locality, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::failed);
+    HPX_TEST_EQ(state.epoch, epoch_high);
+}
+
 // ============================================================================
 // Main Test Entry Point
 // ============================================================================
@@ -1894,6 +1991,13 @@ int hpx_main()
             test_illegal_new_epoch_opened_with_non_started, locality);
         HPX_SUPERVISION_TEST_RUN(
             test_legal_new_epoch_opened_with_started, locality);
+
+        HPX_SUPERVISION_TEST_RUN(
+            test_concurrent_publish_event_same_epoch, locality);
+        HPX_SUPERVISION_TEST_RUN(
+            test_concurrent_publish_event_racing_epochs, locality, true);
+        HPX_SUPERVISION_TEST_RUN(
+            test_concurrent_publish_event_racing_epochs, locality, false);
     }
 
     HPX_SUPERVISION_TEST_RUN(test_publish_completion);

@@ -7,9 +7,9 @@
 
 .. _modules_supervision:
 
-===========
-supervision
-===========
+==================
+Supervision module
+==================
 
 The supervision module provides lifecycle event publication, state querying,
 and observer registration for actors/components running on local or remote
@@ -107,7 +107,7 @@ Waiting for terminal events
     ``target`` in ``epoch``, the returned future is immediately satisfied
     with that state. Waits are scoped to a single epoch: if ``target``'s
     epoch advances past ``epoch`` before a terminal event occurs, any
-   outstanding waiter for the stale epoch is invalidated. A waiter that
+    outstanding waiter for the stale epoch is invalidated. A waiter that
     reaches neither of these outcomes is bounded by ``timeout`` (or a
     built-in default if ``timeout`` is left at its sentinel value
     ``std::chrono::steady_clock::duration::max()``), after which it is

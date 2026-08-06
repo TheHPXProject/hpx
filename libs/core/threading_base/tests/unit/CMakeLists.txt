@@ -5,7 +5,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests set_thread_affinity thread_exit_callbacks thread_data_is_background)
+set(tests execution_agent set_thread_affinity thread_exit_callbacks
+          thread_data_is_background
+)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

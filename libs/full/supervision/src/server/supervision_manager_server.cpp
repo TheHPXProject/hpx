@@ -19,6 +19,7 @@
 #include <hpx/supervision/server/agent.hpp>
 #include <hpx/supervision/server/supervision_manager.hpp>
 #include <hpx/supervision/supervision_api.hpp>
+#include <hpx/supervision/testing.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -34,38 +35,37 @@
 #include <utility>
 #include <vector>
 
+namespace {
+
+    // Testing infrastructure support
+    hpx::spinlock register_observer_hook_mtx;
+    std::function<void()> register_observer_snapshot_hook;
+
+    std::function<void()> get_register_observer_snapshot_hook()
+    {
+        std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
+        return register_observer_snapshot_hook;
+    }
+
+    // Default deadline (relative to registration time) given to
+    // await_terminal() waiters, bounding how long an abandoned waiter (dropped
+    // future, or target that never publishes another event) can remain in
+    // waiters_ before sweep_expired_waiters() erases it. Used whenever
+    // await_terminal() is called with its `timeout` parameter left at its
+    // sentinel value (see supervision_manager::await_terminal).
+    constexpr std::int64_t default_await_terminal_timeout_ms = 60000;
+}    // namespace
+
+namespace hpx::supervision::testing {
+
+    void set_register_observer_snapshot_hook(std::function<void()> hook)
+    {
+        std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
+        register_observer_snapshot_hook = HPX_MOVE(hook);
+    }
+}    // namespace hpx::supervision::testing
+
 namespace hpx::supervision::server {
-
-    namespace {
-
-        // Testing infrastructure support
-        hpx::spinlock register_observer_hook_mtx;
-        std::function<void()> register_observer_snapshot_hook;
-
-        std::function<void()> get_register_observer_snapshot_hook()
-        {
-            std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
-            return register_observer_snapshot_hook;
-        }
-
-        // Default deadline (relative to registration time) given to
-        // await_terminal() waiters, bounding how long an abandoned waiter
-        // (dropped future, or target that never publishes another event) can
-        // remain in waiters_ before sweep_expired_waiters() erases it. Used
-        // whenever await_terminal() is called with its `timeout` parameter
-        // left at its sentinel value (see
-        // supervision_manager::await_terminal).
-        constexpr std::int64_t default_await_terminal_timeout_ms = 60000;
-    }    // namespace
-
-    namespace detail {
-
-        void set_register_observer_snapshot_hook(std::function<void()> hook)
-        {
-            std::lock_guard<hpx::spinlock> l(register_observer_hook_mtx);
-            register_observer_snapshot_hook = HPX_MOVE(hook);
-        }
-    }    // namespace detail
 
     supervision_manager::supervision_manager()
       : base_type(supervision::detail::supervision_manager_msb,
@@ -417,7 +417,7 @@ namespace hpx::supervision::server {
         HPX_ASSERT_OWNS_LOCK(l);
 
         // waiters_ is keyed by (target, epoch); starting at epoch 0 and walking
-        // forward while target matches picks up every epoch entry for this
+        // forward while target matches, picks up every epoch entry for this
         // target, not just the stale ones below some cutoff.
         stale_waiters_t stale;
         auto it =
@@ -1573,7 +1573,7 @@ namespace hpx::supervision::server {
 
         std::unique_lock<hpx::spinlock> l(mtx_);
         auto const it = states_.find(target);
-        bool has_state = it != states_.end();
+        bool const has_state = it != states_.end();
         if (has_state && it->second.epoch == epoch &&
             is_terminal(it->second.last_event))
         {
@@ -1619,8 +1619,9 @@ namespace hpx::supervision::server {
             now + effective_timeout;
         hpx::promise<lifecycle_state> p;
         auto f = p.get_future();
+
         waiters_[waiter_key{.target = target, .epoch = epoch}].push_back(
-            waiter_entry{HPX_MOVE(p), deadline});
+            waiter_entry{.promise = HPX_MOVE(p), .deadline = deadline});
         earliest_deadline_ = (std::min) (earliest_deadline_, deadline);
 
         // guarantee this waiter is swept at or after its deadline even if this

@@ -4,6 +4,10 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+/// \file hpx/supervision_dispatch/discovery.hpp
+/// \page hpx::supervision::discover_peers, hpx::supervision::fan_out_join, hpx::supervision::discover_and_join
+/// \headerfile hpx/supervision_dispatch.hpp
+
 #pragma once
 
 #include <hpx/config.hpp>
@@ -23,9 +27,9 @@ namespace hpx::supervision {
 
     // Default bound for discover_peers(): matches the supervision module's own
     // default await_terminal() timeout (see default_await_terminal_timeout_ms
-    // in supervision_manager_server.cpp) -- long enough to absorb
-    // AGAS/peer-startup jitter, short enough to keep a one-time discovery pass
-    // cheap and bounded.
+    // in supervision_manager_server.cpp) - long enough to absorb AGAS/
+    // peer-startup jitter, short enough to keep a one-time discovery pass cheap
+    // and bounded.
     inline constexpr std::chrono::milliseconds default_discovery_timeout{60000};
 
     // A peer whose supervision_dispatch sentinel and registry names (see
@@ -34,8 +38,8 @@ namespace hpx::supervision {
     struct discovered_peer
     {
         hpx::id_type locality;
-        hpx::supervision::sentinel sentinel_client;
-        hpx::supervision::registry registry_client;
+        sentinel sentinel_client;
+        registry registry_client;
     };
 
     /// Performs a one-time discovery pull for supervision_dispatch peers:
@@ -47,14 +51,13 @@ namespace hpx::supervision {
     /// Because constructing a sentinel/registry client from a symbolic name
     /// (see client_base's symbolic-name constructor) waits/resolves once the
     /// symbol is bound rather than failing fast on one that is not (yet)
-    /// registered, localities that never called register_name() (e.g.
-    /// because they have not run init_supervision() yet) would otherwise hang
-    /// this call indefinitely. Instead, once \a timeout elapses, only the
-    /// candidates whose sentinel *and* registry clients had both resolved by
-    /// then (checked via the non-blocking is_ready()) are returned; every other
-    /// candidate is simply excluded as not currently participating in
-    /// supervision -- discover_peers() itself never fails or throws on their
-    /// account.
+    /// registered, localities that never called register_name() (e.g. because
+    /// they have not run init_supervision() yet) would otherwise hang this call
+    /// indefinitely. Instead, once \a timeout elapses, only the candidates
+    /// whose sentinel *and* registry clients had both resolved by then (checked
+    /// via the non-blocking is_ready()) are returned; every other candidate is
+    /// simply excluded as not currently participating in supervision -
+    /// discover_peers() itself never fails or throws on their account.
     ///
     /// \param timeout  The maximum duration to wait, across all candidates
     ///                 combined, for their sentinel and registry names to
@@ -64,9 +67,8 @@ namespace hpx::supervision {
     ///                 resolved within \a timeout, paired with the numeric
     ///                 locality id they are pinned to.
     HPX_SUPERVISION_DISPATCH_EXPORT
-    std::vector<hpx::supervision::discovered_peer> discover_peers(
-        hpx::chrono::steady_duration const& timeout =
-            default_discovery_timeout);
+    std::vector<discovered_peer> discover_peers(
+        chrono::steady_duration const& timeout = default_discovery_timeout);
 
     /// Reactively fans out join() calls from \a local_registry to every peer in
     /// \a peers (typically the result of a prior discover_peers() call):
@@ -76,9 +78,9 @@ namespace hpx::supervision {
     /// This reuses registry::join()'s existing reservation/idempotency
     /// machinery unchanged (see server::registry::reserve_ownership()) rather
     /// than duplicating any of it, so calling fan_out_join() more than once
-    /// with (partially) overlapping peer lists -- or racing with an inbound
+    /// with (partially) overlapping peer lists - or racing with an inbound
     /// join() call from one of those same peers, e.g. because that peer is
-    /// concurrently running its own fan_out_join() against this locality -- is
+    /// concurrently running its own fan_out_join() against this locality - is
     /// safe and never creates more than one shadow per peer sentinel.
     ///
     /// fan_out_join() itself is reactive only: it performs exactly one round of
@@ -88,12 +90,19 @@ namespace hpx::supervision {
     /// \param local_registry The registry to join every peer in \a peers to.
     /// \param peers          The peers to join, typically returned by a prior
     ///                       discover_peers() call.
+    /// \param timeout  The maximum duration to wait, across all peers
+    ///                 combined, for their join() calls to settle. Peers whose
+    ///                 join() has not settled (or failed) within this bound are
+    ///                 silently dropped from the result, rather than hanging or
+    ///                 throwing.
     ///
-    /// \return The shadow target id that \a local_registry created (or already
-    ///         had) for each entry in \a peers, in the same order.
-    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<hpx::id_type> fan_out_join(
-        hpx::supervision::registry const& local_registry,
-        std::vector<hpx::supervision::discovered_peer> const& peers);
+    /// \return The shadow target IDs for peers whose join() calls settled
+    ///         successfully within \a timeout, in the same relative order as
+    ///         \a peers.
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<shadow_id> fan_out_join(
+        registry const& local_registry,
+        std::vector<discovered_peer> const& peers,
+        chrono::steady_duration const& timeout = default_discovery_timeout);
 
     /// Composes a single reactive discovery-and-join pass for
     /// supervision_dispatch peers: performs exactly one discover_peers() pull
@@ -103,29 +112,27 @@ namespace hpx::supervision {
     /// peer list out to \a local_registry via a single fan_out_join() pass.
     ///
     /// discover_and_join() introduces no state, polling thread, timer, or
-    /// repeated broadcast of its own -- it is a pure composition of
+    /// repeated broadcast of its own - it is a pure composition of
     /// discover_peers() and fan_out_join(), each of which is itself bounded to
     /// a single round of resolution/join calls. Because fan_out_join() reuses
     /// registry::join()'s existing reservation/idempotency machinery unchanged
     /// (see server::registry::reserve_ownership()), calling discover_and_join()
-    /// more than once -- whether to pick up newly started peers or purely by
-    /// accident -- is safe and never creates more than one shadow per peer
+    /// more than once - whether to pick up newly started peers or purely by
+    /// accident - is safe and never creates more than one shadow per peer
     /// sentinel; repeated invocations simply return the (stable) shadow ids
     /// already owned for peers that were previously joined.
     ///
     /// \param local_registry The registry to join every discovered peer to.
     /// \param timeout        The maximum duration to wait, across all discovery
     ///                       candidates combined, for their sentinel and
-    ///                       registry names to resolve (see
-    ///                       discover_peers()).
+    ///                       registry names to resolve (see discover_peers()).
     ///
     /// \return The shadow target id that \a local_registry created (or already
     ///         had) for each peer discovered within \a timeout, in the same
     ///         order as returned by discover_peers().
-    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<hpx::id_type> discover_and_join(
-        hpx::supervision::registry const& local_registry,
-        hpx::chrono::steady_duration const& timeout =
-            default_discovery_timeout);
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<shadow_id> discover_and_join(
+        registry const& local_registry,
+        chrono::steady_duration const& timeout = default_discovery_timeout);
 
 }    // namespace hpx::supervision
 

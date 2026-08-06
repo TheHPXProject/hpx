@@ -47,8 +47,9 @@ HPX_PLAIN_ACTION(get_locality, get_locality_action)
 // locality id directly (no colocation hop)
 void test_direct_locality_routing()
 {
-    std::vector<hpx::id_type> const localities = hpx::find_all_localities();
-    hpx::id_type const& target_locality = localities.back();
+    std::vector<hpx::id_type> const localities = hpx::find_remote_localities();
+    hpx::id_type const& target_locality =
+        localities.empty() ? hpx::find_here() : localities[0];
 
     auto const policy = hpx::components::colocated(target_locality);
 
@@ -67,17 +68,18 @@ void test_direct_locality_routing()
 // same locality id, not a default-constructed id_type
 void test_bulk_create_reports_locality_id()
 {
-    std::vector<hpx::id_type> const localities = hpx::find_all_localities();
-    hpx::id_type const& target_locality = localities.back();
+    std::vector<hpx::id_type> const localities = hpx::find_remote_localities();
+    hpx::id_type const& target_locality =
+        localities.empty() ? hpx::find_here() : localities[0];
 
     auto const policy = hpx::components::colocated(target_locality);
 
     auto const results = policy.bulk_create<false, test_server>(3).get();
 
     HPX_TEST_EQ(results.size(), static_cast<std::size_t>(1));
-    HPX_TEST(static_cast<bool>(results[0].first));
     if (!results.empty())
     {
+        HPX_TEST(static_cast<bool>(results[0].first));
         HPX_TEST_EQ(results[0].first, target_locality);
         HPX_TEST_EQ(results[0].second.size(), static_cast<std::size_t>(3));
 

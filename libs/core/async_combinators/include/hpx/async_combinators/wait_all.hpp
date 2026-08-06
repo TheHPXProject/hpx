@@ -425,13 +425,25 @@ namespace hpx::detail {
         future_or_shared_state_result<R>::type;
 
     ///////////////////////////////////////////////////////////////////////
-    template <typename Tuple>
+    template <typename Tuple, typename Derived = void>
     struct wait_all_frame    //-V690
       : hpx::lcos::detail::future_data<void>
     {
     private:
         using base_type = hpx::lcos::detail::future_data<void>;
         using init_no_addref = base_type::init_no_addref;
+
+        using derived_type = std::conditional_t<std::is_void_v<Derived>,
+            wait_all_frame<Tuple>, Derived>;
+
+        derived_type& derived()
+        {
+            return static_cast<derived_type&>(*this);
+        }
+        derived_type const& derived() const
+        {
+            return static_cast<derived_type const&>(*this);
+        }
 
         wait_all_frame(wait_all_frame const&) = delete;
         wait_all_frame(wait_all_frame&&) = delete;
@@ -467,7 +479,7 @@ namespace hpx::detail {
         void await_range(Iter next, Iter end)
         {
             hpx::intrusive_ptr<wait_all_frame> this_(this);
-            for (/**/; next != end; ++next)
+            for (/**/; next != end && derived().continue_waiting(); ++next)
             {
                 auto next_future_data =
                     hpx::traits::detail::get_shared_state(*next);
@@ -531,6 +543,11 @@ namespace hpx::detail {
         template <std::size_t I>
         HPX_FORCEINLINE void await_future()
         {
+            if (!derived().continue_waiting())
+            {
+                return;
+            }
+
             hpx::intrusive_ptr<wait_all_frame> this_(this);
             auto next_future_data =
                 hpx::traits::detail::get_shared_state(hpx::get<I>(t_));
@@ -570,6 +587,11 @@ namespace hpx::detail {
         template <std::size_t I>
         HPX_FORCEINLINE void do_await()
         {
+            if (!derived().continue_waiting())
+            {
+                return;
+            }
+
             // Check if end of the tuple is reached
             if constexpr (is_end_v<I>)
             {
@@ -612,32 +634,19 @@ namespace hpx::detail {
             return has_exceptional_results_;
         }
 
-        // Same as wait_all(), except that the final suspend is bounded by a
-        // given timeout instead of waiting indefinitely. Note that the
-        // individual input futures are only ever inspected/attached-to, never
-        // moved-from, so they remain valid (and can be queried with is_ready())
-        // whether the combined wait finishes because all them became ready or
-        // because the timeout elapsed first.
-        hpx::future_status wait_all_for(
-            hpx::chrono::steady_duration const& timeout)
-        {
-            do_await<0>();
-
-            // If there are still futures which are not ready, suspend and wait,
-            // but no longer than the given timeout. Note that this does not
-            // cancel/abandon the still outstanding futures; they simply
-            // continue to be resolved in the background and can still be
-            // queried by the caller after this function returns.
-            if (!this->is_ready(std::memory_order_relaxed))
-            {
-                return this->wait_until(timeout.from_now());
-            }
-            return hpx::future_status::ready;
-        }
-
+        /// Returns whether at least one of the awaited futures completed with
+        /// an exception.
         bool has_exceptional_results() const noexcept
         {
             return has_exceptional_results_;
+        }
+
+        /// Extension point allowing derived frames to abort waiting early
+        /// (e.g. on timeout). Returning false from this function stops
+        /// further waiting/traversal of the remaining futures.
+        constexpr static bool continue_waiting() noexcept
+        {
+            return true;
         }
 
     private:

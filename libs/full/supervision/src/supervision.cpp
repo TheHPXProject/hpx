@@ -657,6 +657,26 @@ namespace hpx::supervision {
             ec);
     }
 
+    lifecycle_state await_terminal(hpx::launch::sync_policy,
+        hpx::id_type const& target, std::uint64_t const epoch,
+        std::optional<std::chrono::steady_clock::duration> const timeout,
+        hpx::error_code& ec)
+    {
+        if (!target)
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::supervision::await_terminal",
+                "The id passed as the first argument is not representing "
+                "a valid target");
+            return {};
+        }
+
+        return get_supervision_manager()
+            .await_terminal(target, epoch,
+                timeout.value_or((std::chrono::steady_clock::duration::max) ()))
+            .get(ec);
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     dispatch_outcome check_admission(
         hpx::id_type const& target, std::uint64_t const epoch)

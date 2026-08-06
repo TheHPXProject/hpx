@@ -28,6 +28,13 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
+    - name: Set environment
+      shell: bash
+      run: |
+          git config --global --add safe.directory /__w/hpx/hpx
+          echo "sha_long=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "sha_short=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_ENV"
+
     - name: Configure
       shell: bash
       run: |
@@ -40,7 +47,9 @@ jobs:
               -DHPX_WITH_EXAMPLES=ON \
               -DHPX_WITH_TESTS=OFF \
               -DHPX_WITH_DOCUMENTATION=ON \
-              -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="html;singlehtml;latexpdf"
+              -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="html;singlehtml;latexpdf" \
+              -DHPX_WITH_GIT_COMMIT=${{ env.sha_long }} \
+              -DHPX_WITH_GIT_COMMIT_SHORT=${{ env.sha_short }}
 
     - name: Build Documentation (HTML)
       timeout-minutes: 120

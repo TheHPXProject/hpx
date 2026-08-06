@@ -44,150 +44,150 @@ Functions
 
 .. table:: `hpx` functions of header ``hpx/algorithm.hpp``
 
-   =================================================  ==========================================================
-   `hpx` function                                     C++ standard
-   =================================================  ==========================================================
-   :cpp:func:`hpx::adjacent_find`                     :cppreference-generic:`algorithm,adjacent_find`
-   :cpp:func:`hpx::all_of`                            :cppreference-generic:`algorithm,all_any_none_of,all_of`
-   :cpp:func:`hpx::any_of`                            :cppreference-generic:`algorithm,all_any_none_of,any_of`
-   :cpp:func:`hpx::copy`                              :cppreference-generic:`algorithm,copy`
-   :cpp:func:`hpx::copy_if`                           :cppreference-generic:`algorithm,copy,copy_if`
-   :cpp:func:`hpx::copy_n`                            :cppreference-generic:`algorithm,copy_n`
-   :cpp:func:`hpx::count`                             :cppreference-generic:`algorithm,count`
-   :cpp:func:`hpx::count_if`                          :cppreference-generic:`algorithm,count,count_if`
-   :cpp:func:`hpx::ends_with`                         :cppreference-generic:`algorithm/ranges,ends_with`
-   :cpp:func:`hpx::equal`                             :cppreference-generic:`algorithm,equal`
-   :cpp:func:`hpx::fill`                              :cppreference-generic:`algorithm,fill`
-   :cpp:func:`hpx::fill_n`                            :cppreference-generic:`algorithm,fill_n`
-   :cpp:func:`hpx::find`                              :cppreference-generic:`algorithm,find`
-   :cpp:func:`hpx::find_end`                          :cppreference-generic:`algorithm,find_end`
-   :cpp:func:`hpx::find_first_of`                     :cppreference-generic:`algorithm,find_first_of`
-   :cpp:func:`hpx::find_if`                           :cppreference-generic:`algorithm,find,find_if`
-   :cpp:func:`hpx::find_if_not`                       :cppreference-generic:`algorithm,find,find_if_not`
-   :cpp:func:`hpx::for_each`                          :cppreference-generic:`algorithm,for_each`
-   :cpp:func:`hpx::for_each_n`                        :cppreference-generic:`algorithm,for_each_n`
-   :cpp:func:`hpx::generate`                          :cppreference-generic:`algorithm,generate`
-   :cpp:func:`hpx::generate_n`                        :cppreference-generic:`algorithm,generate_n`
-   :cpp:func:`hpx::includes`                          :cppreference-generic:`algorithm,includes`
-   :cpp:func:`hpx::inplace_merge`                     :cppreference-generic:`algorithm,inplace_merge`
-   :cpp:func:`hpx::is_heap`                           :cppreference-generic:`algorithm,is_heap`
-   :cpp:func:`hpx::is_heap_until`                     :cppreference-generic:`algorithm,is_heap_until`
-   :cpp:func:`hpx::is_partitioned`                    :cppreference-generic:`algorithm,is_partitioned`
-   :cpp:func:`hpx::is_sorted`                         :cppreference-generic:`algorithm,is_sorted`
-   :cpp:func:`hpx::is_sorted_until`                   :cppreference-generic:`algorithm,is_sorted_until`
-   :cpp:func:`hpx::lexicographical_compare`           :cppreference-generic:`algorithm,lexicographical_compare`
-   :cpp:func:`hpx::make_heap`                         :cppreference-generic:`algorithm,make_heap`
-   :cpp:func:`hpx::max_element`                       :cppreference-generic:`algorithm,max_element`
-   :cpp:func:`hpx::merge`                             :cppreference-generic:`algorithm,merge`
-   :cpp:func:`hpx::min_element`                       :cppreference-generic:`algorithm,min_element`
-   :cpp:func:`hpx::minmax_element`                    :cppreference-generic:`algorithm,minmax_element`
-   :cpp:func:`hpx::mismatch`                          :cppreference-generic:`algorithm,mismatch`
-   :cpp:func:`hpx::move`                              :cppreference-generic:`algorithm,move`
-   :cpp:func:`hpx::none_of`                           :cppreference-generic:`algorithm,all_any_none_of,none_of`
-   :cpp:func:`hpx::nth_element`                       :cppreference-generic:`algorithm,nth_element`
-   :cpp:func:`hpx::partial_sort`                      :cppreference-generic:`algorithm,partial_sort`
-   :cpp:func:`hpx::partial_sort_copy`                 :cppreference-generic:`algorithm,partial_sort_copy`
-   :cpp:func:`hpx::partition`                         :cppreference-generic:`algorithm,partition`
-   :cpp:func:`hpx::partition_copy`                    :cppreference-generic:`algorithm,partition_copy`
-   :cpp:func:`hpx::experimental::reduce_by_key`       `reduce_by_key <https://thrust.github.io/doc/group__reductions_gad5623f203f9b3fdcab72481c3913f0e0.html>`_
-   :cpp:func:`hpx::remove`                            :cppreference-generic:`algorithm,remove`
-   :cpp:func:`hpx::remove_copy`                       :cppreference-generic:`algorithm,remove_copy`
-   :cpp:func:`hpx::remove_copy_if`                    :cppreference-generic:`algorithm,remove_copy,remove_copy_if`
-   :cpp:func:`hpx::remove_if`                         :cppreference-generic:`algorithm,remove,remove_if`
-   :cpp:func:`hpx::replace`                           :cppreference-generic:`algorithm,replace`
-   :cpp:func:`hpx::replace_copy`                      :cppreference-generic:`algorithm,replace_copy`
-   :cpp:func:`hpx::replace_copy_if`                   :cppreference-generic:`algorithm,replace_copy,replace_copy_if`
-   :cpp:func:`hpx::replace_if`                        :cppreference-generic:`algorithm,replace,replace_if`
-   :cpp:func:`hpx::reverse`                           :cppreference-generic:`algorithm,reverse`
-   :cpp:func:`hpx::reverse_copy`                      :cppreference-generic:`algorithm,reverse_copy`
-   :cpp:func:`hpx::rotate`                            :cppreference-generic:`algorithm,rotate`
-   :cpp:func:`hpx::rotate_copy`                       :cppreference-generic:`algorithm,rotate_copy`
-   :cpp:func:`hpx::search`                            :cppreference-generic:`algorithm,search`
-   :cpp:func:`hpx::search_n`                          :cppreference-generic:`algorithm,search_n`
-   :cpp:func:`hpx::set_difference`                    :cppreference-generic:`algorithm,set_difference`
-   :cpp:func:`hpx::set_intersection`                  :cppreference-generic:`algorithm,set_intersection`
-   :cpp:func:`hpx::set_symmetric_difference`          :cppreference-generic:`algorithm,set_symmetric_difference`
-   :cpp:func:`hpx::set_union`                         :cppreference-generic:`algorithm,set_union`
-   :cpp:func:`hpx::shift_left`                        :cppreference-generic:`algorithm,shift,shift_left`
-   :cpp:func:`hpx::shift_right`                       :cppreference-generic:`algorithm,shift,shift_right`
-   :cpp:func:`hpx::sort`                              :cppreference-generic:`algorithm,sort`
-   :cpp:func:`hpx::experimental::sort_by_key`         `sort_by_key <https://thrust.github.io/doc/group__sorting_gabe038d6107f7c824cf74120500ef45ea.html>`_
-   :cpp:func:`hpx::stable_partition`                  :cppreference-generic:`algorithm,stable_partition`
-   :cpp:func:`hpx::stable_sort`                       :cppreference-generic:`algorithm,stable_sort`
-   :cpp:func:`hpx::starts_with`                       :cppreference-generic:`algorithm/ranges,starts_with`
-   :cpp:func:`hpx::swap_ranges`                       :cppreference-generic:`algorithm,swap_ranges`
-   :cpp:func:`hpx::transform`                         :cppreference-generic:`algorithm,transform`
-   :cpp:func:`hpx::unique`                            :cppreference-generic:`algorithm,unique`
-   :cpp:func:`hpx::unique_copy`                       :cppreference-generic:`algorithm,unique_copy`
-   :cpp:func:`hpx::experimental::for_loop`            |cpp19_n4808|_
-   :cpp:func:`hpx::experimental::for_loop_strided`    |cpp19_n4808|_
-   :cpp:func:`hpx::experimental::for_loop_n`          |cpp19_n4808|_
-   :cpp:func:`hpx::experimental::for_loop_n_strided`  |cpp19_n4808|_
-   =================================================  ==========================================================
+   ================================================  ==========================================================
+   `hpx` function                                    C++ standard
+   ================================================  ==========================================================
+   :hpx-api:`hpx::adjacent_find`                     :cppreference-generic:`algorithm,adjacent_find`
+   :hpx-api:`hpx::all_of`                            :cppreference-generic:`algorithm,all_any_none_of,all_of`
+   :hpx-api:`hpx::any_of`                            :cppreference-generic:`algorithm,all_any_none_of,any_of`
+   :hpx-api:`hpx::copy`                              :cppreference-generic:`algorithm,copy`
+   :hpx-api:`hpx::copy_if`                           :cppreference-generic:`algorithm,copy,copy_if`
+   :hpx-api:`hpx::copy_n`                            :cppreference-generic:`algorithm,copy_n`
+   :hpx-api:`hpx::count`                             :cppreference-generic:`algorithm,count`
+   :hpx-api:`hpx::count_if`                          :cppreference-generic:`algorithm,count,count_if`
+   :hpx-api:`hpx::ends_with`                         :cppreference-generic:`algorithm/ranges,ends_with`
+   :hpx-api:`hpx::equal`                             :cppreference-generic:`algorithm,equal`
+   :hpx-api:`hpx::fill`                              :cppreference-generic:`algorithm,fill`
+   :hpx-api:`hpx::fill_n`                            :cppreference-generic:`algorithm,fill_n`
+   :hpx-api:`hpx::find`                              :cppreference-generic:`algorithm,find`
+   :hpx-api:`hpx::find_end`                          :cppreference-generic:`algorithm,find_end`
+   :hpx-api:`hpx::find_first_of`                     :cppreference-generic:`algorithm,find_first_of`
+   :hpx-api:`hpx::find_if`                           :cppreference-generic:`algorithm,find,find_if`
+   :hpx-api:`hpx::find_if_not`                       :cppreference-generic:`algorithm,find,find_if_not`
+   :hpx-api:`hpx::for_each`                          :cppreference-generic:`algorithm,for_each`
+   :hpx-api:`hpx::for_each_n`                        :cppreference-generic:`algorithm,for_each_n`
+   :hpx-api:`hpx::generate`                          :cppreference-generic:`algorithm,generate`
+   :hpx-api:`hpx::generate_n`                        :cppreference-generic:`algorithm,generate_n`
+   :hpx-api:`hpx::includes`                          :cppreference-generic:`algorithm,includes`
+   :hpx-api:`hpx::inplace_merge`                     :cppreference-generic:`algorithm,inplace_merge`
+   :hpx-api:`hpx::is_heap`                           :cppreference-generic:`algorithm,is_heap`
+   :hpx-api:`hpx::is_heap_until`                     :cppreference-generic:`algorithm,is_heap_until`
+   :hpx-api:`hpx::is_partitioned`                    :cppreference-generic:`algorithm,is_partitioned`
+   :hpx-api:`hpx::is_sorted`                         :cppreference-generic:`algorithm,is_sorted`
+   :hpx-api:`hpx::is_sorted_until`                   :cppreference-generic:`algorithm,is_sorted_until`
+   :hpx-api:`hpx::lexicographical_compare`           :cppreference-generic:`algorithm,lexicographical_compare`
+   :hpx-api:`hpx::make_heap`                         :cppreference-generic:`algorithm,make_heap`
+   :hpx-api:`hpx::max_element`                       :cppreference-generic:`algorithm,max_element`
+   :hpx-api:`hpx::merge`                             :cppreference-generic:`algorithm,merge`
+   :hpx-api:`hpx::min_element`                       :cppreference-generic:`algorithm,min_element`
+   :hpx-api:`hpx::minmax_element`                    :cppreference-generic:`algorithm,minmax_element`
+   :hpx-api:`hpx::mismatch`                          :cppreference-generic:`algorithm,mismatch`
+   :hpx-api:`hpx::move`                              :cppreference-generic:`algorithm,move`
+   :hpx-api:`hpx::none_of`                           :cppreference-generic:`algorithm,all_any_none_of,none_of`
+   :hpx-api:`hpx::nth_element`                       :cppreference-generic:`algorithm,nth_element`
+   :hpx-api:`hpx::partial_sort`                      :cppreference-generic:`algorithm,partial_sort`
+   :hpx-api:`hpx::partial_sort_copy`                 :cppreference-generic:`algorithm,partial_sort_copy`
+   :hpx-api:`hpx::partition`                         :cppreference-generic:`algorithm,partition`
+   :hpx-api:`hpx::partition_copy`                    :cppreference-generic:`algorithm,partition_copy`
+   :hpx-api:`hpx::experimental::reduce_by_key`       `reduce_by_key <https://thrust.github.io/doc/group__reductions_gad5623f203f9b3fdcab72481c3913f0e0.html>`_
+   :hpx-api:`hpx::remove`                            :cppreference-generic:`algorithm,remove`
+   :hpx-api:`hpx::remove_copy`                       :cppreference-generic:`algorithm,remove_copy`
+   :hpx-api:`hpx::remove_copy_if`                    :cppreference-generic:`algorithm,remove_copy,remove_copy_if`
+   :hpx-api:`hpx::remove_if`                         :cppreference-generic:`algorithm,remove,remove_if`
+   :hpx-api:`hpx::replace`                           :cppreference-generic:`algorithm,replace`
+   :hpx-api:`hpx::replace_copy`                      :cppreference-generic:`algorithm,replace_copy`
+   :hpx-api:`hpx::replace_copy_if`                   :cppreference-generic:`algorithm,replace_copy,replace_copy_if`
+   :hpx-api:`hpx::replace_if`                        :cppreference-generic:`algorithm,replace,replace_if`
+   :hpx-api:`hpx::reverse`                           :cppreference-generic:`algorithm,reverse`
+   :hpx-api:`hpx::reverse_copy`                      :cppreference-generic:`algorithm,reverse_copy`
+   :hpx-api:`hpx::rotate`                            :cppreference-generic:`algorithm,rotate`
+   :hpx-api:`hpx::rotate_copy`                       :cppreference-generic:`algorithm,rotate_copy`
+   :hpx-api:`hpx::search`                            :cppreference-generic:`algorithm,search`
+   :hpx-api:`hpx::search_n`                          :cppreference-generic:`algorithm,search_n`
+   :hpx-api:`hpx::set_difference`                    :cppreference-generic:`algorithm,set_difference`
+   :hpx-api:`hpx::set_intersection`                  :cppreference-generic:`algorithm,set_intersection`
+   :hpx-api:`hpx::set_symmetric_difference`          :cppreference-generic:`algorithm,set_symmetric_difference`
+   :hpx-api:`hpx::set_union`                         :cppreference-generic:`algorithm,set_union`
+   :hpx-api:`hpx::shift_left`                        :cppreference-generic:`algorithm,shift,shift_left`
+   :hpx-api:`hpx::shift_right`                       :cppreference-generic:`algorithm,shift,shift_right`
+   :hpx-api:`hpx::sort`                              :cppreference-generic:`algorithm,sort`
+   :hpx-api:`hpx::experimental::sort_by_key`         `sort_by_key <https://thrust.github.io/doc/group__sorting_gabe038d6107f7c824cf74120500ef45ea.html>`_
+   :hpx-api:`hpx::stable_partition`                  :cppreference-generic:`algorithm,stable_partition`
+   :hpx-api:`hpx::stable_sort`                       :cppreference-generic:`algorithm,stable_sort`
+   :hpx-api:`hpx::starts_with`                       :cppreference-generic:`algorithm/ranges,starts_with`
+   :hpx-api:`hpx::swap_ranges`                       :cppreference-generic:`algorithm,swap_ranges`
+   :hpx-api:`hpx::transform`                         :cppreference-generic:`algorithm,transform`
+   :hpx-api:`hpx::unique`                            :cppreference-generic:`algorithm,unique`
+   :hpx-api:`hpx::unique_copy`                       :cppreference-generic:`algorithm,unique_copy`
+   :hpx-api:`hpx::experimental::for_loop`            |cpp19_n4808|_
+   :hpx-api:`hpx::experimental::for_loop_strided`    |cpp19_n4808|_
+   :hpx-api:`hpx::experimental::for_loop_n`          |cpp19_n4808|_
+   :hpx-api:`hpx::experimental::for_loop_n_strided`  |cpp19_n4808|_
+   ================================================  ==========================================================
 
 .. table:: `hpx::ranges` functions of header ``hpx/algorithm.hpp``
 
-   =======================================================  =================================================================
-   `hpx::ranges` function                                   C++ standard
-   =======================================================  =================================================================
-   :cpp:func:`hpx::ranges::adjacent_find`                   :cppreference-generic:`algorithm/ranges,adjacent_find`
-   :cpp:func:`hpx::ranges::all_of`                          :cppreference-generic:`algorithm/ranges,all_any_none_of,all_of`
-   :cpp:func:`hpx::ranges::any_of`                          :cppreference-generic:`algorithm/ranges,all_any_none_of,any_of`
-   :cpp:func:`hpx::ranges::copy`                            :cppreference-generic:`algorithm/ranges,copy`
-   :cpp:func:`hpx::ranges::copy_if`                         :cppreference-generic:`algorithm/ranges,copy,copy_if`
-   :cpp:func:`hpx::ranges::copy_n`                          :cppreference-generic:`algorithm/ranges,copy_n`
-   :cpp:func:`hpx::ranges::count`                           :cppreference-generic:`algorithm/ranges,count`
-   :cpp:func:`hpx::ranges::count_if`                        :cppreference-generic:`algorithm/ranges,count,count_if`
-   :cpp:func:`hpx::ranges::ends_with`                       :cppreference-generic:`algorithm/ranges,ends_with`
-   :cpp:func:`hpx::ranges::equal`                           :cppreference-generic:`algorithm/ranges,equal`
-   :cpp:func:`hpx::ranges::fill`                            :cppreference-generic:`algorithm/ranges,fill`
-   :cpp:func:`hpx::ranges::fill_n`                          :cppreference-generic:`algorithm/ranges,fill_n`
-   :cpp:func:`hpx::ranges::find`                            :cppreference-generic:`algorithm/ranges,find`
-   :cpp:func:`hpx::ranges::find_end`                        :cppreference-generic:`algorithm/ranges,find_end`
-   :cpp:func:`hpx::ranges::find_first_of`                   :cppreference-generic:`algorithm/ranges,find_first_of`
-   :cpp:func:`hpx::ranges::find_if`                         :cppreference-generic:`algorithm/ranges,find,find_if`
-   :cpp:func:`hpx::ranges::find_if_not`                     :cppreference-generic:`algorithm/ranges,find,find_if_not`
-   :cpp:func:`hpx::ranges::for_each`                        :cppreference-generic:`algorithm/ranges,for_each`
-   :cpp:func:`hpx::ranges::for_each_n`                      :cppreference-generic:`algorithm/ranges,for_each_n`
-   :cpp:func:`hpx::ranges::generate`                        :cppreference-generic:`algorithm/ranges,generate`
-   :cpp:func:`hpx::ranges::generate_n`                      :cppreference-generic:`algorithm/ranges,generate_n`
-   :cpp:func:`hpx::ranges::includes`                        :cppreference-generic:`algorithm/ranges,includes`
-   :cpp:func:`hpx::ranges::inplace_merge`                   :cppreference-generic:`algorithm/ranges,inplace_merge`
-   :cpp:func:`hpx::ranges::is_heap`                         :cppreference-generic:`algorithm/ranges,is_heap`
-   :cpp:func:`hpx::ranges::is_heap_until`                   :cppreference-generic:`algorithm/ranges,is_heap_until`
-   :cpp:func:`hpx::ranges::is_partitioned`                  :cppreference-generic:`algorithm/ranges,is_partitioned`
-   :cpp:func:`hpx::ranges::is_sorted`                       :cppreference-generic:`algorithm/ranges,is_sorted`
-   :cpp:func:`hpx::ranges::is_sorted_until`                 :cppreference-generic:`algorithm/ranges,is_sorted_until`
-   :cpp:func:`hpx::ranges::make_heap`                       :cppreference-generic:`algorithm/ranges,make_heap`
-   :cpp:func:`hpx::ranges::max_element`                     :cppreference-generic:`algorithm/ranges,max_element`
-   :cpp:func:`hpx::ranges::merge`                           :cppreference-generic:`algorithm/ranges,merge`
-   :cpp:func:`hpx::ranges::min_element`                     :cppreference-generic:`algorithm/ranges,min_element`
-   :cpp:func:`hpx::ranges::minmax_element`                  :cppreference-generic:`algorithm/ranges,minmax_element`
-   :cpp:func:`hpx::ranges::mismatch`                        :cppreference-generic:`algorithm/ranges,mismatch`
-   :cpp:func:`hpx::ranges::move`                            :cppreference-generic:`algorithm/ranges,move`
-   :cpp:func:`hpx::ranges::none_of`                         :cppreference-generic:`algorithm/ranges,all_any_none_of,none_of`
-   :cpp:func:`hpx::ranges::nth_element`                     :cppreference-generic:`algorithm/ranges,nth_element`
-   :cpp:func:`hpx::ranges::partial_sort`                    :cppreference-generic:`algorithm/ranges,partial_sort`
-   :cpp:func:`hpx::ranges::partial_sort_copy`               :cppreference-generic:`algorithm/ranges,partial_sort_copy`
-   :cpp:func:`hpx::ranges::partition`                       :cppreference-generic:`algorithm/ranges,partition`
-   :cpp:func:`hpx::ranges::partition_copy`                  :cppreference-generic:`algorithm/ranges,partition_copy`
-   :cpp:func:`hpx::ranges::set_difference`                  :cppreference-generic:`algorithm/ranges,set_difference`
-   :cpp:func:`hpx::ranges::set_intersection`                :cppreference-generic:`algorithm/ranges,set_intersection`
-   :cpp:func:`hpx::ranges::set_symmetric_difference`        :cppreference-generic:`algorithm/ranges,set_symmetric_difference`
-   :cpp:func:`hpx::ranges::set_union`                       :cppreference-generic:`algorithm/ranges,set_union`
-   :cpp:func:`hpx::ranges::shift_left`                      |p2440|_
-   :cpp:func:`hpx::ranges::shift_right`                     |p2440|_
-   :cpp:func:`hpx::ranges::sort`                            :cppreference-generic:`algorithm/ranges,sort`
-   :cpp:func:`hpx::ranges::stable_partition`                :cppreference-generic:`algorithm/ranges,stable_partition`
-   :cpp:func:`hpx::ranges::stable_sort`                     :cppreference-generic:`algorithm/ranges,stable_sort`
-   :cpp:func:`hpx::ranges::starts_with`                     :cppreference-generic:`algorithm/ranges,starts_with`
-   :cpp:func:`hpx::ranges::swap_ranges`                     :cppreference-generic:`algorithm/ranges,swap_ranges`
-   :cpp:func:`hpx::ranges::transform`                       :cppreference-generic:`algorithm/ranges,transform`
-   :cpp:func:`hpx::ranges::unique`                          :cppreference-generic:`algorithm/ranges,unique`
-   :cpp:func:`hpx::ranges::unique_copy`                     :cppreference-generic:`algorithm/ranges,unique_copy`
-   :cpp:func:`hpx::ranges::experimental::for_loop`          |cpp19_n4808|_
-   :cpp:func:`hpx::ranges::experimental::for_loop_strided`  |cpp19_n4808|_
-   =======================================================  =================================================================
+   ======================================================  =================================================================
+   `hpx::ranges` function                                  C++ standard
+   ======================================================  =================================================================
+   :hpx-api:`hpx::ranges::adjacent_find`                   :cppreference-generic:`algorithm/ranges,adjacent_find`
+   :hpx-api:`hpx::ranges::all_of`                          :cppreference-generic:`algorithm/ranges,all_any_none_of,all_of`
+   :hpx-api:`hpx::ranges::any_of`                          :cppreference-generic:`algorithm/ranges,all_any_none_of,any_of`
+   :hpx-api:`hpx::ranges::copy`                            :cppreference-generic:`algorithm/ranges,copy`
+   :hpx-api:`hpx::ranges::copy_if`                         :cppreference-generic:`algorithm/ranges,copy,copy_if`
+   :hpx-api:`hpx::ranges::copy_n`                          :cppreference-generic:`algorithm/ranges,copy_n`
+   :hpx-api:`hpx::ranges::count`                           :cppreference-generic:`algorithm/ranges,count`
+   :hpx-api:`hpx::ranges::count_if`                        :cppreference-generic:`algorithm/ranges,count,count_if`
+   :hpx-api:`hpx::ranges::ends_with`                       :cppreference-generic:`algorithm/ranges,ends_with`
+   :hpx-api:`hpx::ranges::equal`                           :cppreference-generic:`algorithm/ranges,equal`
+   :hpx-api:`hpx::ranges::fill`                            :cppreference-generic:`algorithm/ranges,fill`
+   :hpx-api:`hpx::ranges::fill_n`                          :cppreference-generic:`algorithm/ranges,fill_n`
+   :hpx-api:`hpx::ranges::find`                            :cppreference-generic:`algorithm/ranges,find`
+   :hpx-api:`hpx::ranges::find_end`                        :cppreference-generic:`algorithm/ranges,find_end`
+   :hpx-api:`hpx::ranges::find_first_of`                   :cppreference-generic:`algorithm/ranges,find_first_of`
+   :hpx-api:`hpx::ranges::find_if`                         :cppreference-generic:`algorithm/ranges,find,find_if`
+   :hpx-api:`hpx::ranges::find_if_not`                     :cppreference-generic:`algorithm/ranges,find,find_if_not`
+   :hpx-api:`hpx::ranges::for_each`                        :cppreference-generic:`algorithm/ranges,for_each`
+   :hpx-api:`hpx::ranges::for_each_n`                      :cppreference-generic:`algorithm/ranges,for_each_n`
+   :hpx-api:`hpx::ranges::generate`                        :cppreference-generic:`algorithm/ranges,generate`
+   :hpx-api:`hpx::ranges::generate_n`                      :cppreference-generic:`algorithm/ranges,generate_n`
+   :hpx-api:`hpx::ranges::includes`                        :cppreference-generic:`algorithm/ranges,includes`
+   :hpx-api:`hpx::ranges::inplace_merge`                   :cppreference-generic:`algorithm/ranges,inplace_merge`
+   :hpx-api:`hpx::ranges::is_heap`                         :cppreference-generic:`algorithm/ranges,is_heap`
+   :hpx-api:`hpx::ranges::is_heap_until`                   :cppreference-generic:`algorithm/ranges,is_heap_until`
+   :hpx-api:`hpx::ranges::is_partitioned`                  :cppreference-generic:`algorithm/ranges,is_partitioned`
+   :hpx-api:`hpx::ranges::is_sorted`                       :cppreference-generic:`algorithm/ranges,is_sorted`
+   :hpx-api:`hpx::ranges::is_sorted_until`                 :cppreference-generic:`algorithm/ranges,is_sorted_until`
+   :hpx-api:`hpx::ranges::make_heap`                       :cppreference-generic:`algorithm/ranges,make_heap`
+   :hpx-api:`hpx::ranges::max_element`                     :cppreference-generic:`algorithm/ranges,max_element`
+   :hpx-api:`hpx::ranges::merge`                           :cppreference-generic:`algorithm/ranges,merge`
+   :hpx-api:`hpx::ranges::min_element`                     :cppreference-generic:`algorithm/ranges,min_element`
+   :hpx-api:`hpx::ranges::minmax_element`                  :cppreference-generic:`algorithm/ranges,minmax_element`
+   :hpx-api:`hpx::ranges::mismatch`                        :cppreference-generic:`algorithm/ranges,mismatch`
+   :hpx-api:`hpx::ranges::move`                            :cppreference-generic:`algorithm/ranges,move`
+   :hpx-api:`hpx::ranges::none_of`                         :cppreference-generic:`algorithm/ranges,all_any_none_of,none_of`
+   :hpx-api:`hpx::ranges::nth_element`                     :cppreference-generic:`algorithm/ranges,nth_element`
+   :hpx-api:`hpx::ranges::partial_sort`                    :cppreference-generic:`algorithm/ranges,partial_sort`
+   :hpx-api:`hpx::ranges::partial_sort_copy`               :cppreference-generic:`algorithm/ranges,partial_sort_copy`
+   :hpx-api:`hpx::ranges::partition`                       :cppreference-generic:`algorithm/ranges,partition`
+   :hpx-api:`hpx::ranges::partition_copy`                  :cppreference-generic:`algorithm/ranges,partition_copy`
+   :hpx-api:`hpx::ranges::set_difference`                  :cppreference-generic:`algorithm/ranges,set_difference`
+   :hpx-api:`hpx::ranges::set_intersection`                :cppreference-generic:`algorithm/ranges,set_intersection`
+   :hpx-api:`hpx::ranges::set_symmetric_difference`        :cppreference-generic:`algorithm/ranges,set_symmetric_difference`
+   :hpx-api:`hpx::ranges::set_union`                       :cppreference-generic:`algorithm/ranges,set_union`
+   :hpx-api:`hpx::ranges::shift_left`                      |p2440|_
+   :hpx-api:`hpx::ranges::shift_right`                     |p2440|_
+   :hpx-api:`hpx::ranges::sort`                            :cppreference-generic:`algorithm/ranges,sort`
+   :hpx-api:`hpx::ranges::stable_partition`                :cppreference-generic:`algorithm/ranges,stable_partition`
+   :hpx-api:`hpx::ranges::stable_sort`                     :cppreference-generic:`algorithm/ranges,stable_sort`
+   :hpx-api:`hpx::ranges::starts_with`                     :cppreference-generic:`algorithm/ranges,starts_with`
+   :hpx-api:`hpx::ranges::swap_ranges`                     :cppreference-generic:`algorithm/ranges,swap_ranges`
+   :hpx-api:`hpx::ranges::transform`                       :cppreference-generic:`algorithm/ranges,transform`
+   :hpx-api:`hpx::ranges::unique`                          :cppreference-generic:`algorithm/ranges,unique`
+   :hpx-api:`hpx::ranges::unique_copy`                     :cppreference-generic:`algorithm/ranges,unique_copy`
+   :hpx-api:`hpx::ranges::experimental::for_loop`          |cpp19_n4808|_
+   :hpx-api:`hpx::ranges::experimental::for_loop_strided`  |cpp19_n4808|_
+   ======================================================  =================================================================
 
 .. _public_api_header_hpx_any:
 
@@ -218,14 +218,14 @@ Functions
 
 .. table:: Functions of header ``hpx/any.hpp``
 
-   =======================================  ================================================
-   Function                                 C++ standard
-   =======================================  ================================================
-   :cpp:func:`hpx::any_cast`                :cppreference-generic:`utility/any,any_cast`
-   :cpp:func:`hpx::make_any`                :cppreference-generic:`utility/any,make_any`
-   :cpp:func:`hpx::make_any_nonser`
-   :cpp:func:`hpx::make_unique_any_nonser`
-   =======================================  ================================================
+   ======================================  ================================================
+   Function                                C++ standard
+   ======================================  ================================================
+   :hpx-api:`hpx::any_cast`                :cppreference-generic:`utility/any,any_cast`
+   :hpx-api:`hpx::make_any`                :cppreference-generic:`utility/any,make_any`
+   :hpx-api:`hpx::make_any_nonser`
+   :hpx-api:`hpx::make_unique_any_nonser`
+   ======================================  ================================================
 
 .. _public_api_header_hpx_assert:
 
@@ -478,18 +478,18 @@ Functions
 
 .. table:: Functions of header ``hpx/functional.hpp``
 
-   ========================================  =====================================================
+   =======================================  =====================================================
    Function                                  C++ standard
-   ========================================  =====================================================
-   :cpp:func:`hpx::annotated_function`
-   :cpp:func:`hpx::bind`                     :cppreference-generic:`utility/functional,bind`
-   :cpp:func:`hpx::bind_back`                :cppreference-generic:`utility/functional,bind_front`
-   :cpp:func:`hpx::bind_front`               :cppreference-generic:`utility/functional,bind_front`
-   :cpp:func:`hpx::invoke`                   :cppreference-generic:`utility/functional,invoke`
-   :cpp:func:`hpx::invoke_fused`             :cppreference-generic:`utility,apply`
-   :cpp:func:`hpx::invoke_fused_r`
-   :cpp:func:`hpx::mem_fn`                   :cppreference-generic:`utility/functional,mem_fn`
-   ========================================  =====================================================
+   ======================================  =====================================================
+   :hpx-api:`hpx::annotated_function`
+   :hpx-api:`hpx::bind`                     :cppreference-generic:`utility/functional,bind`
+   :hpx-api:`hpx::bind_back`                :cppreference-generic:`utility/functional,bind_front`
+   :hpx-api:`hpx::bind_front`               :cppreference-generic:`utility/functional,bind_front`
+   :hpx-api:`hpx::invoke`                   :cppreference-generic:`utility/functional,invoke`
+   :hpx-api:`hpx::invoke_fused`             :cppreference-generic:`utility,apply`
+   :hpx-api:`hpx::invoke_fused_r`
+   :hpx-api:`hpx::mem_fn`                   :cppreference-generic:`utility/functional,mem_fn`
+   =======================================  =====================================================
 
 .. _public_api_header_hpx_future:
 
@@ -500,8 +500,8 @@ The header :hpx-header:`libs/full/include/include,hpx/future.hpp` corresponds to
 C++ standard library header :cppreference-header:`future`. See :ref:`extend_futures` for more
 information about extensions to futures compared to the C++ standard library.
 
-This header file also contains overloads of :cpp:func:`hpx::async`,
-:cpp:func:`hpx::post`, :cpp:func:`hpx::sync`, and :cpp:func:`hpx::dataflow` that can be used with
+This header file also contains overloads of :hpx-api:`hpx::async`,
+:hpx-api:`hpx::post`, :hpx-api:`hpx::sync`, and :hpx-api:`hpx::dataflow` that can be used with
 actions. See :ref:`action_invocation` for more information about invoking actions.
 
 Classes
@@ -540,45 +540,45 @@ Functions
 
 .. table:: Functions of header ``hpx/future.hpp``
 
-   ========================================  =====================================
-   Function                                  C++ standard
-   ========================================  =====================================
-   :cpp:func:`hpx::async`                    :cppreference-generic:`thread,async`
-   :cpp:func:`hpx::post`
-   :cpp:func:`hpx::sync`
-   :cpp:func:`hpx::dataflow`
-   :cpp:func:`hpx::make_future`
-   :cpp:func:`hpx::make_shared_future`
-   :cpp:func:`hpx::make_ready_future`        |p0159|_
-   :cpp:func:`hpx::make_ready_future_alloc`
-   :cpp:func:`hpx::make_ready_future_at`
-   :cpp:func:`hpx::make_ready_future_after`
-   :cpp:func:`hpx::make_exceptional_future`  |p0159|_
-   :cpp:func:`hpx::when_all`                 |p0159|_
-   :cpp:func:`hpx::when_any`                 |p0159|_
-   :cpp:func:`hpx::when_some`
-   :cpp:func:`hpx::when_each`
-   :cpp:func:`hpx::wait_all`
-   :cpp:func:`hpx::wait_all_nothrow`
-   :cpp:func:`hpx::wait_all_n`
-   :cpp:func:`hpx::wait_all_n_nothrow`
-   :cpp:func:`hpx::wait_all_for`
-   :cpp:func:`hpx::wait_all_for_nothrow`
-   :cpp:func:`hpx::wait_all_for_n`
-   :cpp:func:`hpx::wait_all_for_n_nothrow`
-   :cpp:func:`hpx::wait_any`
-   :cpp:func:`hpx::wait_any_n`
-   :cpp:func:`hpx::wait_any_nothrow`
-   :cpp:func:`hpx::wait_any_n_nothrow`
-   :cpp:func:`hpx::wait_some`
-   :cpp:func:`hpx::wait_some_n`
-   :cpp:func:`hpx::wait_some_nothrow`
-   :cpp:func:`hpx::wait_some_n_nothrow`
-   :cpp:func:`hpx::wait_each`
-   :cpp:func:`hpx::wait_each_n`
-   :cpp:func:`hpx::wait_each_nothrow`
-   :cpp:func:`hpx::wait_each_n_nothrow`
-   ========================================  =====================================
+   =======================================  =====================================
+   Function                                 C++ standard
+   =======================================  =====================================
+   :hpx-api:`hpx::async`                    :cppreference-generic:`thread,async`
+   :hpx-api:`hpx::post`
+   :hpx-api:`hpx::sync`
+   :hpx-api:`hpx::dataflow`
+   :hpx-api:`hpx::make_future`
+   :hpx-api:`hpx::make_shared_future`
+   :hpx-api:`hpx::make_ready_future`        |p0159|_
+   :hpx-api:`hpx::make_ready_future_alloc`
+   :hpx-api:`hpx::make_ready_future_at`
+   :hpx-api:`hpx::make_ready_future_after`
+   :hpx-api:`hpx::make_exceptional_future`  |p0159|_
+   :hpx-api:`hpx::when_all`                 |p0159|_
+   :hpx-api:`hpx::when_any`                 |p0159|_
+   :hpx-api:`hpx::when_some`
+   :hpx-api:`hpx::when_each`
+   :hpx-api:`hpx::wait_all`
+   :hpx-api:`hpx::wait_all_nothrow`
+   :hpx-api:`hpx::wait_all_n`
+   :hpx-api:`hpx::wait_all_n_nothrow`
+   :hpx-api:`hpx::wait_all_for`
+   :hpx-api:`hpx::wait_all_for_nothrow`
+   :hpx-api:`hpx::wait_all_for_n`
+   :hpx-api:`hpx::wait_all_for_n_nothrow`
+   :hpx-api:`hpx::wait_any`
+   :hpx-api:`hpx::wait_any_n`
+   :hpx-api:`hpx::wait_any_nothrow`
+   :hpx-api:`hpx::wait_any_n_nothrow`
+   :hpx-api:`hpx::wait_some`
+   :hpx-api:`hpx::wait_some_n`
+   :hpx-api:`hpx::wait_some_nothrow`
+   :hpx-api:`hpx::wait_some_n_nothrow`
+   :hpx-api:`hpx::wait_each`
+   :hpx-api:`hpx::wait_each_n`
+   :hpx-api:`hpx::wait_each_nothrow`
+   :hpx-api:`hpx::wait_each_n_nothrow`
+   =======================================  =====================================
 
 .. _public_api_header_hpx_init:
 
@@ -611,17 +611,17 @@ Functions
    +------------------------------+
    | Function                     |
    +==============================+
-   | :cpp:func:`hpx::init`        |
+   | :hpx-api:`hpx::init`         |
    +------------------------------+
-   | :cpp:func:`hpx::start`       |
+   | :hpx-api:`hpx::start`        |
    +------------------------------+
-   | :cpp:func:`hpx::finalize`    |
+   | :hpx-api:`hpx::finalize`     |
    +------------------------------+
-   | :cpp:func:`hpx::disconnect`  |
+   | :hpx-api:`hpx::disconnect`   |
    +------------------------------+
-   | :cpp:func:`hpx::suspend`     |
+   | :hpx-api:`hpx::suspend`      |
    +------------------------------+
-   | :cpp:func:`hpx::resume`      |
+   | :hpx-api:`hpx::resume`       |
    +------------------------------+
 
 .. _public_api_header_hpx_latch:
@@ -686,7 +686,7 @@ Functions
    +----------------------------+------------------------------------------+
    | Class                      | C++ standard                             |
    +============================+==========================================+
-   | :cpp:func:`hpx::call_once` | :cppreference-generic:`thread,call_once` |
+   | :hpx-api:`hpx::call_once`  | :cppreference-generic:`thread,call_once` |
    +----------------------------+------------------------------------------+
 
 .. _public_api_header_hpx_memory:
@@ -704,37 +704,37 @@ Functions
 
 .. table:: `hpx` functions of header ``hpx/memory.hpp``
 
-   ================================================== ================================================================
-   `hpx` function                                     C++ standard
-   ================================================== ================================================================
-   :cpp:func:`hpx::uninitialized_copy`                :cppreference-generic:`memory,uninitialized_copy`
-   :cpp:func:`hpx::uninitialized_copy_n`              :cppreference-generic:`memory,uninitialized_copy_n`
-   :cpp:func:`hpx::uninitialized_default_construct`   :cppreference-generic:`memory,uninitialized_default_construct`
-   :cpp:func:`hpx::uninitialized_default_construct_n` :cppreference-generic:`memory,uninitialized_default_construct_n`
-   :cpp:func:`hpx::uninitialized_fill`                :cppreference-generic:`memory,uninitialized_fill`
-   :cpp:func:`hpx::uninitialized_fill_n`              :cppreference-generic:`memory,uninitialized_fill_n`
-   :cpp:func:`hpx::uninitialized_move`                :cppreference-generic:`memory,uninitialized_move`
-   :cpp:func:`hpx::uninitialized_move_n`              :cppreference-generic:`memory,uninitialized_move_n`
-   :cpp:func:`hpx::uninitialized_value_construct`     :cppreference-generic:`memory,uninitialized_value_construct`
-   :cpp:func:`hpx::uninitialized_value_construct_n`   :cppreference-generic:`memory,uninitialized_value_construct_n`
-   ================================================== ================================================================
+   ================================================= ================================================================
+   `hpx` function                                    C++ standard
+   ================================================= ================================================================
+   :hpx-api:`hpx::uninitialized_copy`                :cppreference-generic:`memory,uninitialized_copy`
+   :hpx-api:`hpx::uninitialized_copy_n`              :cppreference-generic:`memory,uninitialized_copy_n`
+   :hpx-api:`hpx::uninitialized_default_construct`   :cppreference-generic:`memory,uninitialized_default_construct`
+   :hpx-api:`hpx::uninitialized_default_construct_n` :cppreference-generic:`memory,uninitialized_default_construct_n`
+   :hpx-api:`hpx::uninitialized_fill`                :cppreference-generic:`memory,uninitialized_fill`
+   :hpx-api:`hpx::uninitialized_fill_n`              :cppreference-generic:`memory,uninitialized_fill_n`
+   :hpx-api:`hpx::uninitialized_move`                :cppreference-generic:`memory,uninitialized_move`
+   :hpx-api:`hpx::uninitialized_move_n`              :cppreference-generic:`memory,uninitialized_move_n`
+   :hpx-api:`hpx::uninitialized_value_construct`     :cppreference-generic:`memory,uninitialized_value_construct`
+   :hpx-api:`hpx::uninitialized_value_construct_n`   :cppreference-generic:`memory,uninitialized_value_construct_n`
+   ================================================ ================================================================
 
 .. table:: `hpx::ranges` functions of header ``hpx/memory.hpp``
 
-   ========================================================== =======================================================================
-   `hpx::ranges` function                                     C++ standard
-   ========================================================== =======================================================================
-   :cpp:func:`hpx::ranges::uninitialized_copy`                :cppreference-generic:`memory/ranges,uninitialized_copy`
-   :cpp:func:`hpx::ranges::uninitialized_copy_n`              :cppreference-generic:`memory/ranges,uninitialized_copy_n`
-   :cpp:func:`hpx::ranges::uninitialized_default_construct`   :cppreference-generic:`memory/ranges,uninitialized_default_construct`
-   :cpp:func:`hpx::ranges::uninitialized_default_construct_n` :cppreference-generic:`memory/ranges,uninitialized_default_construct_n`
-   :cpp:func:`hpx::ranges::uninitialized_fill`                :cppreference-generic:`memory/ranges,uninitialized_fill`
-   :cpp:func:`hpx::ranges::uninitialized_fill_n`              :cppreference-generic:`memory/ranges,uninitialized_fill_n`
-   :cpp:func:`hpx::ranges::uninitialized_move`                :cppreference-generic:`memory/ranges,uninitialized_move`
-   :cpp:func:`hpx::ranges::uninitialized_move_n`              :cppreference-generic:`memory/ranges,uninitialized_move_n`
-   :cpp:func:`hpx::ranges::uninitialized_value_construct`     :cppreference-generic:`memory/ranges,uninitialized_value_construct`
-   :cpp:func:`hpx::ranges::uninitialized_value_construct_n`   :cppreference-generic:`memory/ranges,uninitialized_value_construct_n`
-   ========================================================== =======================================================================
+   ========================================================= =======================================================================
+   `hpx::ranges` function                                    C++ standard
+   ========================================================= =======================================================================
+   :hpx-api:`hpx::ranges::uninitialized_copy`                :cppreference-generic:`memory/ranges,uninitialized_copy`
+   :hpx-api:`hpx::ranges::uninitialized_copy_n`              :cppreference-generic:`memory/ranges,uninitialized_copy_n`
+   :hpx-api:`hpx::ranges::uninitialized_default_construct`   :cppreference-generic:`memory/ranges,uninitialized_default_construct`
+   :hpx-api:`hpx::ranges::uninitialized_default_construct_n` :cppreference-generic:`memory/ranges,uninitialized_default_construct_n`
+   :hpx-api:`hpx::ranges::uninitialized_fill`                :cppreference-generic:`memory/ranges,uninitialized_fill`
+   :hpx-api:`hpx::ranges::uninitialized_fill_n`              :cppreference-generic:`memory/ranges,uninitialized_fill_n`
+   :hpx-api:`hpx::ranges::uninitialized_move`                :cppreference-generic:`memory/ranges,uninitialized_move`
+   :hpx-api:`hpx::ranges::uninitialized_move_n`              :cppreference-generic:`memory/ranges,uninitialized_move_n`
+   :hpx-api:`hpx::ranges::uninitialized_value_construct`     :cppreference-generic:`memory/ranges,uninitialized_value_construct`
+   :hpx-api:`hpx::ranges::uninitialized_value_construct_n`   :cppreference-generic:`memory/ranges,uninitialized_value_construct_n`
+   ========================================================= =======================================================================
 
 .. _public_api_header_hpx_numeric:
 
@@ -750,36 +750,36 @@ Functions
 
 .. table:: `hpx` functions of header ``hpx/numeric.hpp``
 
-   ========================================= ==========================================================
-   `hpx` function                                     C++ standard
-   ========================================= ==========================================================
-   :cpp:func:`hpx::adjacent_difference`      :cppreference-generic:`algorithm,adjacent_difference`
-   :cpp:func:`hpx::exclusive_scan`           :cppreference-generic:`algorithm,exclusive_scan`
-   :cpp:func:`hpx::inclusive_scan`           :cppreference-generic:`algorithm,inclusive_scan`
-   :cpp:func:`hpx::reduce`                   :cppreference-generic:`algorithm,reduce`
-   :cpp:func:`hpx::transform_exclusive_scan` :cppreference-generic:`algorithm,transform_exclusive_scan`
-   :cpp:func:`hpx::transform_inclusive_scan` :cppreference-generic:`algorithm,transform_inclusive_scan`
-   :cpp:func:`hpx::transform_reduce`         :cppreference-generic:`algorithm,transform_reduce`
-   ========================================= ==========================================================
+   ======================================== ==========================================================
+   `hpx` function                                    C++ standard
+   ======================================== ==========================================================
+   :hpx-api:`hpx::adjacent_difference`      :cppreference-generic:`algorithm,adjacent_difference`
+   :hpx-api:`hpx::exclusive_scan`           :cppreference-generic:`algorithm,exclusive_scan`
+   :hpx-api:`hpx::inclusive_scan`           :cppreference-generic:`algorithm,inclusive_scan`
+   :hpx-api:`hpx::reduce`                   :cppreference-generic:`algorithm,reduce`
+   :hpx-api:`hpx::transform_exclusive_scan` :cppreference-generic:`algorithm,transform_exclusive_scan`
+   :hpx-api:`hpx::transform_inclusive_scan` :cppreference-generic:`algorithm,transform_inclusive_scan`
+   :hpx-api:`hpx::transform_reduce`         :cppreference-generic:`algorithm,transform_reduce`
+   ======================================== ==========================================================
 
 .. table:: `hpx::ranges` functions of header ``hpx/numeric.hpp``
 
    +--------------------------------------------------+
    | `hpx::ranges` function                           |
    +==================================================+
-   | :cpp:func:`hpx::ranges::adjacent_difference`     |
+   | :hpx-api:`hpx::ranges::adjacent_difference`      |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::exclusive_scan`          |
+   | :hpx-api:`hpx::ranges::exclusive_scan`           |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::inclusive_scan`          |
+   | :hpx-api:`hpx::ranges::inclusive_scan`           |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::reduce`                  |
+   | :hpx-api:`hpx::ranges::reduce`                   |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::transform_exclusive_scan`|
+   | :hpx-api:`hpx::ranges::transform_exclusive_scan` |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::transform_inclusive_scan`|
+   | :hpx-api:`hpx::ranges::transform_inclusive_scan` |
    +--------------------------------------------------+
-   | :cpp:func:`hpx::ranges::transform_reduce`        |
+   | :hpx-api:`hpx::ranges::transform_reduce`         |
    +--------------------------------------------------+
 
 .. _public_api_header_hpx_optional:
@@ -838,37 +838,37 @@ Functions
    +------------------------------------------------------------+
    | Function                                                   |
    +============================================================+
-   | :cpp:func:`hpx::find_root_locality`                        |
+   | :hpx-api:`hpx::find_root_locality`                         |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::find_all_localities`                       |
+   | :hpx-api:`hpx::find_all_localities`                        |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::find_remote_localities`                    |
+   | :hpx-api:`hpx::find_remote_localities`                     |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::find_locality`                             |
+   | :hpx-api:`hpx::find_locality`                              |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_colocation_id`                         |
+   | :hpx-api:`hpx::get_colocation_id`                          |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_locality_id`                           |
+   | :hpx-api:`hpx::get_locality_id`                            |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_num_worker_threads`                    |
+   | :hpx-api:`hpx::get_num_worker_threads`                     |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_worker_thread_num`                     |
+   | :hpx-api:`hpx::get_worker_thread_num`                      |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_thread_name`                           |
+   | :hpx-api:`hpx::get_thread_name`                            |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::register_pre_startup_function`             |
+   | :hpx-api:`hpx::register_pre_startup_function`              |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::register_startup_function`                 |
+   | :hpx-api:`hpx::register_startup_function`                  |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::register_pre_shutdown_function`            |
+   | :hpx-api:`hpx::register_pre_shutdown_function`             |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::register_shutdown_function`                |
+   | :hpx-api:`hpx::register_shutdown_function`                 |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_num_localities`                        |
+   | :hpx-api:`hpx::get_num_localities`                         |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::get_locality_name`                         |
+   | :hpx-api:`hpx::get_locality_name`                          |
    +------------------------------------------------------------+
-   | :cpp:func:`hpx::local::termination_detection`              |
+   | :hpx-api:`hpx::local::termination_detection`               |
    +------------------------------------------------------------+
 
 .. _public_api_header_hpx_scope:
@@ -1032,9 +1032,9 @@ Functions
    +-----------------------------------------------------------------+
    | Function                                                        |
    +=================================================================+
-   | :cpp:func:`hpx::experimental::define_task_block`                |
+   | :hpx-api:`hpx::experimental::define_task_block`                 |
    +-----------------------------------------------------------------+
-   | :cpp:func:`hpx::experimental::define_task_block_restore_thread` |
+   | :hpx-api:`hpx::experimental::define_task_block_restore_thread`  |
    +-----------------------------------------------------------------+
 
 .. _public_api_header_hpx_task_group:
@@ -1083,14 +1083,14 @@ Functions
 
 .. table:: Functions of header ``hpx/thread.hpp``
 
-   =========================================  ==========================================
-   Function                                     C++ standard
-   =========================================  ==========================================
-   :cpp:func:`hpx::this_thread::yield`        :cppreference-generic:`thread,yield`
-   :cpp:func:`hpx::this_thread::get_id`       :cppreference-generic:`thread,get_id`
-   :cpp:func:`hpx::this_thread::sleep_for`    :cppreference-generic:`thread,sleep_for`
-   :cpp:func:`hpx::this_thread::sleep_until`  :cppreference-generic:`thread,sleep_until`
-   =========================================  ==========================================
+   ========================================  ==========================================
+   Function                                    C++ standard
+   ========================================  ==========================================
+   :hpx-api:`hpx::this_thread::yield`        :cppreference-generic:`thread,yield`
+   :hpx-api:`hpx::this_thread::get_id`       :cppreference-generic:`thread,get_id`
+   :hpx-api:`hpx::this_thread::sleep_for`    :cppreference-generic:`thread,sleep_for`
+   :hpx-api:`hpx::this_thread::sleep_until`  :cppreference-generic:`thread,sleep_until`
+   ========================================  ==========================================
 
 .. _public_api_header_hpx_tuple:
 
@@ -1130,15 +1130,15 @@ Functions
 
 .. table:: Functions of header ``hpx/tuple.hpp``
 
-   =================================  ======================================================
-   Function                           C++ standard
-   =================================  ======================================================
-   :cpp:func:`hpx::make_tuple`        :cppreference-generic:`utility/tuple,tuple_element`
-   :cpp:func:`hpx::tie`               :cppreference-generic:`utility/tuple,tie`
-   :cpp:func:`hpx::forward_as_tuple`  :cppreference-generic:`utility/tuple,forward_as_tuple`
-   :cpp:func:`hpx::tuple_cat`         :cppreference-generic:`utility/tuple,tuple_cat`
-   :cpp:func:`hpx::get`               :cppreference-generic:`utility/tuple,get`
-   =================================  ======================================================
+   ================================  ======================================================
+   Function                          C++ standard
+   ================================  ======================================================
+   :hpx-api:`hpx::make_tuple`        :cppreference-generic:`utility/tuple,tuple_element`
+   :hpx-api:`hpx::tie`               :cppreference-generic:`utility/tuple,tie`
+   :hpx-api:`hpx::forward_as_tuple`  :cppreference-generic:`utility/tuple,forward_as_tuple`
+   :hpx-api:`hpx::tuple_cat`         :cppreference-generic:`utility/tuple,tuple_cat`
+   :hpx-api:`hpx::get`               :cppreference-generic:`utility/tuple,get`
+   ================================  ======================================================
 
 .. _public_api_header_hpx_type_traits:
 
@@ -1191,17 +1191,17 @@ Functions
    +----------------------------------+
    | Function                         |
    +==================================+
-   | :cpp:func:`hpx::unwrap`          |
+   | :hpx-api:`hpx::unwrap`           |
    +----------------------------------+
-   | :cpp:func:`hpx::unwrap_n`        |
+   | :hpx-api:`hpx::unwrap_n`         |
    +----------------------------------+
-   | :cpp:func:`hpx::unwrap_all`      |
+   | :hpx-api:`hpx::unwrap_all`       |
    +----------------------------------+
-   | :cpp:func:`hpx::unwrapping`      |
+   | :hpx-api:`hpx::unwrapping`       |
    +----------------------------------+
-   | :cpp:func:`hpx::unwrapping_n`    |
+   | :hpx-api:`hpx::unwrapping_n`     |
    +----------------------------------+
-   | :cpp:func:`hpx::unwrapping_all`  |
+   | :hpx-api:`hpx::unwrapping_all`   |
    +----------------------------------+
 
 .. _public_api_header_hpx_version:
@@ -1243,23 +1243,23 @@ Functions
    +-----------------------------------------+
    | Function                                |
    +=========================================+
-   | :cpp:func:`hpx::major_version`          |
+   | :hpx-api:`hpx::major_version`           |
    +-----------------------------------------+
-   | :cpp:func:`hpx::minor_version`          |
+   | :hpx-api:`hpx::minor_version`           |
    +-----------------------------------------+
-   | :cpp:func:`hpx::subminor_version`       |
+   | :hpx-api:`hpx::subminor_version`        |
    +-----------------------------------------+
-   | :cpp:func:`hpx::full_version`           |
+   | :hpx-api:`hpx::full_version`            |
    +-----------------------------------------+
-   | :cpp:func:`hpx::full_version_as_string` |
+   | :hpx-api:`hpx::full_version_as_string`  |
    +-----------------------------------------+
-   | :cpp:func:`hpx::tag`                    |
+   | :hpx-api:`hpx::tag`                     |
    +-----------------------------------------+
-   | :cpp:func:`hpx::agas_version`           |
+   | :hpx-api:`hpx::agas_version`            |
    +-----------------------------------------+
-   | :cpp:func:`hpx::build_type`             |
+   | :hpx-api:`hpx::build_type`              |
    +-----------------------------------------+
-   | :cpp:func:`hpx::build_date_time`        |
+   | :hpx-api:`hpx::build_date_time`         |
    +-----------------------------------------+
 
 .. _public_api_header_hpx_wrap_main:

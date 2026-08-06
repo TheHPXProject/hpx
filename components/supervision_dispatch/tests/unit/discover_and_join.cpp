@@ -76,16 +76,16 @@ void test_discover_and_join_bidirectional()
 
     // Only the composed entry point is exercised here -- no direct
     // discover_peers()/fan_out_join() calls.
-    std::vector<hpx::id_type> const shadows =
+    std::vector<hpx::supervision::shadow_id> const shadows =
         hpx::supervision::discover_and_join(
             local_registry, test_discovery_timeout);
 
     HPX_TEST_EQ(shadows.size(), remote_localities.size());
-    for (hpx::id_type const& shadow : shadows)
+    for (hpx::supervision::shadow_id const& shadow : shadows)
     {
-        HPX_TEST_NEQ(shadow, hpx::invalid_id);
+        HPX_TEST_NEQ(shadow, hpx::supervision::invalid_shadow_id);
 
-        auto const state = hpx::supervision::query_state(shadow);
+        auto const state = hpx::supervision::query_state(shadow.get());
         HPX_TEST(state.last_event == hpx::supervision::event::started);
     }
 
@@ -95,7 +95,7 @@ void test_discover_and_join_bidirectional()
     // shadows, mirroring fan_out_join()'s own idempotency guarantee -- this is
     // exactly the concern raised by two localities concurrently discovering and
     // joining each other.
-    std::vector<hpx::id_type> const shadows_again =
+    std::vector<hpx::supervision::shadow_id> const shadows_again =
         hpx::supervision::discover_and_join(
             local_registry, test_discovery_timeout);
 

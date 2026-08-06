@@ -5,7 +5,11 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file hpx/supervision/supervision_api.hpp
-/// \page hpx::supervision::publish_event, hpx::supervision::query_state, hpx::supervision::register_observer, hpx::supervision::unregister_observer, hpx::supervision::remove_target, hpx::supervision::register_activity_observer, hpx::supervision::unregister_activity_observer
+/// \page hpx::supervision::publish_event, hpx::supervision::query_state
+/// \page hpx::supervision::register_observer, hpx::supervision::unregister_observer
+/// \page hpx::supervision::remove_target, hpx::supervision::register_activity_observer
+/// \page hpx::supervision::unregister_activity_observer, hpx::supervision::check_admission
+/// \page hpx::supervision::await_terminal, hpx::supervision::is_valid_transition
 /// \headerfile hpx/supervision.hpp
 
 #pragma once
@@ -820,6 +824,45 @@ namespace hpx::supervision {
     ///               \a hpx::throws.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<lifecycle_state> await_terminal(
         hpx::id_type const& target, std::uint64_t epoch = 0,
+        std::optional<std::chrono::steady_clock::duration> timeout =
+            std::nullopt,
+        hpx::error_code& ec = hpx::throws);
+
+    /// \brief Synchronously wait for a local supervised target to reach a
+    ///        terminal lifecycle state (\c completed or \c failed).
+    ///
+    /// This overload is restricted to targets that are guaranteed to be local
+    /// to the calling locality. Because no dispatch/AGAS round-trip is
+    /// required, it is cheaper than the remote \c hpx::launch::sync_policy
+    /// overload and simply blocks the calling thread on the underlying local
+    /// future.
+    ///
+    /// \param target  The id of the supervised entity to wait on. Must
+    ///                refer to a component that is local to this locality.
+    /// \param epoch   The join/generation epoch the caller expects \p target
+    ///                to still be part of. Passing an epoch that no longer
+    ///                matches the target's current epoch may cause the wait to
+    ///                resolve immediately with a mismatch-related error.
+    /// \param timeout Optional upper bound on how long to wait before giving
+    ///                up. If not supplied, waits indefinitely for a terminal
+    ///                state.
+    /// \param ec      Used to report errors instead of throwing an
+    ///                exception. When \p target does not represent a valid id,
+    ///                \c hpx::error::bad_parameter is reported. If the
+    ///                wait is cancelled due to \p timeout elapsing without a
+    ///                terminal state being reached, \c
+    ///                hpx::error::future_cancelled is reported.
+    ///
+    /// \returns The terminal \c lifecycle_state observed for \p target, or a
+    ///          default-constructed \c lifecycle_state if an error occurred and
+    ///          \p ec was used to report it.
+    ///
+    /// \throws hpx::exception if \p ec is \c hpx::throws (the default) and an
+    ///         error is encountered; otherwise sets \p ec to reflect the error
+    ///         and returns.
+    HPX_CXX_EXPORT HPX_EXPORT lifecycle_state await_terminal(
+        hpx::launch::sync_policy, hpx::id_type const& target,
+        std::uint64_t epoch = 0,
         std::optional<std::chrono::steady_clock::duration> timeout =
             std::nullopt,
         hpx::error_code& ec = hpx::throws);

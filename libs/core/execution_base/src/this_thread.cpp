@@ -18,6 +18,7 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -35,6 +36,13 @@ extern "C" int sched_yield(void);
 #endif
 #include <time.h>
 #endif
+
+namespace {
+    // Upper bound on how long any single sleep_for/sleep_until increment blocks
+    // before re-checking wait_cond(). Keeps the fallback agent reasonably
+    // responsive without spinning.
+    constexpr std::chrono::milliseconds default_agent_poll_interval{20};
+}    // namespace
 
 namespace hpx::execution_base {
 
@@ -163,19 +171,47 @@ namespace hpx::execution_base {
 
         threads::thread_restart_state default_agent::sleep_for(
             hpx::chrono::steady_duration const& sleep_duration,
-            hpx::move_only_function<bool()>&& /* wait_cond */,
-            char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* desc)
         {
-            std::this_thread::sleep_for(sleep_duration.value());
-            return threads::thread_restart_state::timeout;
+            return sleep_until(
+                hpx::chrono::steady_time_point(
+                    std::chrono::steady_clock::now() + sleep_duration.value()),
+                HPX_MOVE(wait_cond), desc);
         }
 
         threads::thread_restart_state default_agent::sleep_until(
             hpx::chrono::steady_time_point const& sleep_time,
-            hpx::move_only_function<bool()>&& /* wait_cond */,
-            char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* /* desc */)
         {
-            std::this_thread::sleep_until(sleep_time.value());
+            auto const cond = HPX_MOVE(wait_cond);
+            auto const deadline = sleep_time.value();
+            while (true)
+            {
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+
+                auto const now = std::chrono::steady_clock::now();
+                if (now >= deadline)
+                {
+                    break;
+                }
+
+                auto const remaining = deadline - now;
+                std::this_thread::sleep_for((std::min) (remaining,
+                    std::chrono::duration_cast<
+                        std::remove_const_t<decltype(remaining)>>(
+                        default_agent_poll_interval)));
+            }
+
+            // final check right at/after the deadline, in case wait_cond became
+            // true during the last sleep increment
+            if (cond && cond())
+            {
+                return threads::thread_restart_state::signaled;
+            }
+
             return threads::thread_restart_state::timeout;
         }
     }    // namespace

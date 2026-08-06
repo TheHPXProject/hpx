@@ -4,28 +4,6 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-# used while generating sphinx config file
-set(doxygen_definition_list
-    "DOXYGEN:=1"
-    "BOOST_SYSTEM_NOEXCEPT="
-    "HPX_EXCEPTION_EXPORT="
-    "HPX_CORE_EXPORT="
-    "HPX_CXX_CORE_EXPORT="
-    "HPX_CXX_EXPORT="
-    "HPX_FULL_EXPORT="
-    "HPX_EXPORT="
-    "HPX_ALWAYS_EXPORT="
-    "extern="
-    "HPX_FORCEINLINE="
-    "HPX_CONCEPT_REQUIRES_(...)="
-    "requires(...)="
-    "HPX_HOST_DEVICE="
-)
-
-foreach(doxygen_predef ${doxygen_definition_list})
-  set(doxygen_definitions "${doxygen_definitions} \"${doxygen_predef}\"")
-endforeach()
-
 # Generate rst files with CMake variables and toolchains
 set(HPX_CMAKE_OPTIONS_RST "")
 foreach(_cat ${HPX_OPTION_CATEGORIES})
@@ -182,22 +160,58 @@ foreach(sphinx_source_file ${sphinx_libs_source_files})
   )
 endforeach()
 
+# Copy the Sphinx source files of the components directory to build directory
+file(
+  GLOB_RECURSE sphinx_components_source_files
+  LIST_DIRECTORIES false
+  RELATIVE "${PROJECT_SOURCE_DIR}/components"
+  "${PROJECT_SOURCE_DIR}/components/*/docs/*"
+)
+
+foreach(sphinx_source_file ${sphinx_components_source_files})
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sphinx/components/${sphinx_source_file}"
+    DEPENDS "${PROJECT_SOURCE_DIR}/components/${sphinx_source_file}"
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      "${PROJECT_SOURCE_DIR}/components/${sphinx_source_file}"
+      "${CMAKE_CURRENT_BINARY_DIR}/sphinx/components/${sphinx_source_file}"
+  )
+endforeach()
+
+foreach(sphinx_source_file ${sphinx_components_source_files})
+  set(sphinx_source_files_build
+      ${sphinx_source_files_build}
+      "${CMAKE_CURRENT_BINARY_DIR}/sphinx/components/${sphinx_source_file}"
+  )
+endforeach()
+
 # Create links to source files so that they are visible to sphinx
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src"
-     SYMBOLIC
-)
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/hpx" "${CMAKE_CURRENT_BINARY_DIR}/hpx"
-     SYMBOLIC
-)
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/examples"
-     "${CMAKE_CURRENT_BINARY_DIR}/examples" SYMBOLIC
-)
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/tests"
-     "${CMAKE_CURRENT_BINARY_DIR}/tests" SYMBOLIC
-)
-file(CREATE_LINK "${PROJECT_SOURCE_DIR}/libs"
-     "${CMAKE_CURRENT_BINARY_DIR}/libs" SYMBOLIC
-)
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/src")
+  file(CREATE_LINK "${PROJECT_SOURCE_DIR}/src"
+       "${CMAKE_CURRENT_BINARY_DIR}/src" SYMBOLIC
+  )
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/hpx")
+  file(CREATE_LINK "${PROJECT_SOURCE_DIR}/hpx"
+       "${CMAKE_CURRENT_BINARY_DIR}/hpx" SYMBOLIC
+  )
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/examples")
+  file(CREATE_LINK "${PROJECT_SOURCE_DIR}/examples"
+       "${CMAKE_CURRENT_BINARY_DIR}/examples" SYMBOLIC
+  )
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/tests")
+  file(CREATE_LINK "${PROJECT_SOURCE_DIR}/tests"
+       "${CMAKE_CURRENT_BINARY_DIR}/tests" SYMBOLIC
+  )
+endif()
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/libs")
+  file(CREATE_LINK "${PROJECT_SOURCE_DIR}/libs"
+       "${CMAKE_CURRENT_BINARY_DIR}/libs" SYMBOLIC
+  )
+endif()
 
 add_custom_target(docs)
 add_custom_target(docs-html)
@@ -240,14 +254,16 @@ foreach(output_format ${HPX_WITH_DOCUMENTATION_OUTPUT_FORMATS})
   add_custom_command(
     OUTPUT "${SPHINX_DOCS_OUTPUT_FILE}"
     DEPENDS "${sphinx_source_files_build}"
+            "${DOXYGEN_OUTPUT_DIRECTORY}/index.xml"
     COMMAND ${SPHINX_DOCS_BUILD_COMMAND}
   )
 
   add_custom_target(
     docs-${output_format}-file ALL DEPENDS ${SPHINX_DOCS_OUTPUT_FILE}
   )
-  add_dependencies(docs-${output_format} docs-${output_format}-file)
+  add_dependencies(docs-${output_format}-file hpx_autodoc)
 
+  add_dependencies(docs-${output_format} docs-${output_format}-file)
   add_dependencies(docs docs-${output_format})
 endforeach()
 

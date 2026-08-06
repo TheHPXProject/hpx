@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # Copyright (c) 2020-@HPX_COPYRIGHT_YEAR@ STE||AR Group
 # Copyright (c) 2018 Mikael Simberg
 #
@@ -24,7 +22,11 @@ import re
 import sys
 import traceback
 import logging as py_logging
+import glob
+import json
+import xml.etree.ElementTree as ET
 from datetime import datetime
+
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -60,7 +62,7 @@ extensions = [
 # Fix Sphinx/Breathe duplicate declaration warnings caused by repeated
 # C++ namespace rendering. Apply a filter to suppress only namespace
 # types (hpx, ranges, experimental) emitted as cpp:type duplicates.
-# This prevents false-positive “Duplicate C++ declaration” warnings
+# This prevents false-positive 'Duplicate C++ declaration' warnings
 # while preserving all real API duplication checks.
 class _BreatheNamespaceDuplicateFilter(py_logging.Filter):
     namespace_type_declarations = {
@@ -91,23 +93,207 @@ breathe_projects_source = {}
 
 hpx_source_dir = '@HPX_SOURCE_DIR@'
 hpx_libs_dir = hpx_source_dir + '/libs'
+hpx_components_dir = hpx_source_dir + '/components'
 hpx_libs = {}
+hpx_components = []
 header_info = {}
+all_symbol_anchors = {}
+
+
+_doxygen_xml_dir = os.path.abspath(breathe_projects['hpx'])
+_function_signatures_by_qualname = None
+_symbol_kinds_by_qualname = None
+
+# Maps a Doxygen compounddef/memberdef "kind" attribute to the Breathe
+# directive used to document it.
+_DOXYGEN_KIND_TO_DIRECTIVE = {
+    'class': 'doxygenclass',
+    'struct': 'doxygenstruct',
+    'union': 'doxygenclass',
+    'variable': 'doxygenvariable',
+    'enum': 'doxygenenum',
+    'typedef': 'doxygentypedef',
+    'function': 'doxygenfunction',
+}
+
+
+def _load_doxygen_function_signatures():
+    """Lazily parse the already-generated Doxygen XML once, building a map
+    from fully-qualified function name -> list of real Doxygen
+    <argsstring> signatures (one entry per overload)."""
+    global _function_signatures_by_qualname
+    if _function_signatures_by_qualname is not None:
+        return _function_signatures_by_qualname
+
+    signatures = {}
+    for xml_path in glob.glob(os.path.join(_doxygen_xml_dir, '*.xml')):
+        if os.path.basename(xml_path) in ('index.xml', 'Doxyfile.xml'):
+            continue
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            continue
+
+        # Walk compounddef -> compoundname so every memberdef inside it is
+        # keyed consistently, instead of relying on each memberdef's own
+        # (unreliably-populated) <qualifiedname>
+        for compounddef in tree.getroot().iter('compounddef'):
+            compoundname_el = compounddef.find('compoundname')
+            compoundname = (compoundname_el.text.strip()
+                if compoundname_el is not None and compoundname_el.text else '')
+
+            for memberdef in compounddef.iter('memberdef'):
+                if memberdef.get('kind') != 'function':
+                    continue
+
+                name_el = memberdef.find('name')
+                if name_el is None or not name_el.text:
+                    continue
+                name = name_el.text.strip()
+
+                qualname = f'{compoundname}::{name}' if compoundname else name
+
+                argsstring_el = memberdef.find('argsstring')
+                argsstring = (argsstring_el.text.strip()
+                    if argsstring_el is not None and argsstring_el.text else '')
+
+                signatures.setdefault(qualname, []).append(argsstring)
+
+    _function_signatures_by_qualname = signatures
+    return signatures
+
+
+def _load_doxygen_symbol_kinds():
+    """Lazily parse the already-generated Doxygen XML once, building a map
+    from fully-qualified symbol name (as it appears in the XML) -> Breathe
+    directive name ("doxygenclass", "doxygenstruct", "doxygenvariable",
+    ...), mirroring the compounddef/memberdef walk already done by
+    _load_doxygen_function_signatures()."""
+    global _symbol_kinds_by_qualname
+    if _symbol_kinds_by_qualname is not None:
+        return _symbol_kinds_by_qualname
+    kinds = {}
+    for xml_path in glob.glob(os.path.join(_doxygen_xml_dir, '*.xml')):
+        if os.path.basename(xml_path) in ('index.xml', 'Doxyfile.xml'):
+            continue
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            continue
+        for compounddef in tree.getroot().iter('compounddef'):
+            compoundname_el = compounddef.find('compoundname')
+            compoundname = (compoundname_el.text.strip()
+                if compoundname_el is not None and compoundname_el.text else '')
+            # Classes/structs/unions are themselves compounds - record the
+            # compound's own fully-qualified name.
+            compound_directive = _DOXYGEN_KIND_TO_DIRECTIVE.get(
+                compounddef.get('kind'))
+            if compound_directive and compoundname:
+                kinds[compoundname] = compound_directive
+            # Variables, enums, typedefs and functions are members of a
+            # namespace/class compound - qualify them with the enclosing
+            # compound's name, exactly like the overload-disambiguation map
+            # above, so e.g. `hpx::adjacent_find` (a variable in namespace
+            # `hpx`) never collides with an unrelated `detail::adjacent_find`
+            # struct that merely shares the unqualified name.
+            for memberdef in compounddef.iter('memberdef'):
+                name_el = memberdef.find('name')
+                if name_el is None or not name_el.text:
+                    continue
+                name = name_el.text.strip()
+                qualname = f'{compoundname}::{name}' if compoundname else name
+                member_directive = _DOXYGEN_KIND_TO_DIRECTIVE.get(
+                    memberdef.get('kind'))
+                if member_directive:
+                    kinds[qualname] = member_directive
+    _symbol_kinds_by_qualname = kinds
+    return kinds
+
+
+_doc_logger = py_logging.getLogger('hpx.sphinx.doxygen_overloads')
+
+def find_overloads(qualified_name):
+    """Return the real Doxygen <argsstring> signatures needed to
+    disambiguate `.. doxygenfunction::` for every overload of
+    `qualified_name`.
+
+    - [] if there are 0 or 1 matching entries: caller emits a single bare,
+      unsuffixed directive (unambiguous).
+    - list of signatures if there are multiple overloads: caller emits one
+      directive per signature.
+    """
+    signatures = _load_doxygen_function_signatures()
+    matches = signatures.get(qualified_name)
+
+    if matches is None:
+        # Key entirely absent from the map - distinct from "legitimately
+        # has exactly one overload". Likely a naming/parsing mismatch or
+        # incomplete Doxygen XML, worth surfacing in the build log.
+        _doc_logger.warning(
+            "doxygenfunction target '%s' not found in Doxygen XML "
+            "signature map (%d qualified names loaded from %s); "
+            "emitting an unsuffixed directive that may fail to resolve "
+            "or resolve ambiguously at Sphinx build time.",
+            qualified_name, len(signatures), _doxygen_xml_dir)
+        return []
+
+    return matches if len(matches) > 1 else []
+
+
+def detect_symbol_kind(title):
+    """Look up the Breathe directive for a \\page-tagged symbol title from
+    the already-generated Doxygen XML, keyed by the exact fully-qualified
+    name (e.g. `hpx::adjacent_find`). Unlike scanning the raw header text,
+    this can't be fooled by an unrelated same-named symbol declared in a
+    different (e.g. detail) namespace."""
+    if not title:
+        return "doxygenfunction"
+
+    kinds = _load_doxygen_symbol_kinds()
+    kind = kinds.get(title)
+    if kind is None:
+        _doc_logger.warning(
+            "symbol '%s' not found in Doxygen XML kind map (%d qualified "
+            "names loaded from %s); falling back to doxygenfunction, which "
+            "may fail to resolve.",
+            title, len(kinds), _doxygen_xml_dir)
+        return "doxygenfunction"
+    return kind
+
 
 def get_info_from_file(source):
-    title = "None"
+    page_groups = []
     header = "None"
-
+    kind_map = {}
     if os.path.exists(source):
         with open(source, 'r') as file:
-            # Search for patterns indicating the title and header
-            for line in file:
-                if "/// \\page" in line:
-                    title = line.split("/// \\page", 1)[-1].strip()
-                elif "/// \\headerfile" in line:
-                    header = line.split("/// \\headerfile", 1)[-1].strip()
+            content = file.read()
+        for line in content.splitlines():
+            if "/// \\page" in line:
+                page_value = line.split("/// \\page", 1)[-1].strip()
+                group = [t.strip() for t in page_value.split(',') if t.strip()]
+                if group:
+                    page_groups.append(group)
+            elif "/// \\headerfile" in line:
+                header = line.split("/// \\headerfile", 1)[-1].strip()
 
-    return title, header
+        # Merge every \page tag in this header into one group so all its
+        # symbols become mutual "See also" siblings, regardless of which
+        # \page line introduced them. De-duplicate titles that appear in
+        # more than one tag, preserving first-seen order.
+        merged_group = []
+        for group in page_groups:
+            for title in group:
+                if title not in merged_group:
+                    merged_group.append(title)
+        page_groups = [merged_group] if merged_group else [["None"]]
+        for title in merged_group:
+            kind_map[title] = detect_symbol_kind(title)
+
+    if not page_groups:
+        page_groups = [["None"]]
+    return page_groups, header, kind_map
+
 
 # Dictionary including the hpx headers with their base path
 # needed to link to the hpx header files themselves.
@@ -206,7 +392,8 @@ for lib_dir in os.listdir(hpx_libs_dir):
                     try:
                         for line in open(header_file_path):
                             if '/// \\' in line:
-                                page_title, include_header = get_info_from_file(header_file_path)
+                                page_title, include_header, kind_map = \
+                                    get_info_from_file(header_file_path)
                                 skip = False
                                 break
                     except:
@@ -219,14 +406,65 @@ for lib_dir in os.listdir(hpx_libs_dir):
                     include_index = header_file_path.find(include_prefix)
                     if include_index != -1:
                         header = header_file_path[include_index + len(include_prefix):]
-                        header_info[header] = (page_title, include_header)
+                        header_info[header] = (page_title, include_header, kind_map)
+
+
+# Scan the components directory for source files to be included in
+# the documentation
+for module in os.listdir(hpx_components_dir):
+    full_module_dir = os.path.join(hpx_components_dir, module)
+    if not os.path.isdir(full_module_dir):
+        continue
+
+    breathe_projects_source[module] = (full_module_dir, [])
+    hpx_components.append(module)
+
+    for subdir_full, dirs, files in os.walk(full_module_dir):
+        subdir = subdir_full[len(full_module_dir) + 1:]
+        if len(subdir) == 0:
+            continue
+        if subdir != 'include' and not subdir.startswith('include/'):
+            continue
+        if '/detail' in subdir or '/include_compatibility' in subdir:
+            continue
+
+        # full_module_dir is already the module directory (unlike the libs
+        # loop), so subdir already starts with "include/..." - no module
+        # name segment to strip here.
+
+        for f in files:
+            if file_regex.match(f) is None:
+                continue
+            header_file_path = subdir_full + '/' + f
+            skip = True
+            try:
+                for line in open(header_file_path):
+                    if '/// \\' in line:
+                        page_title, include_header, kind_map = \
+                            get_info_from_file(header_file_path)
+                        skip = False
+                        break
+            except Exception:
+                print('Exception while processing %s' % f)
+                print(traceback.format_exc())
+            if skip:
+                continue
+            breathe_projects_source[module][1].append(subdir + '/' + f)
+            include_prefix = 'include/'
+            include_index = header_file_path.find(include_prefix)
+            if include_index != -1:
+                header = header_file_path[include_index + len(include_prefix):]
+                header_info[header] = (page_title, include_header, kind_map)
+
 
 # Generate the rst files for the API documentation
 api_refs = ''
 api_ref_header = '''
 ..
     Copyright (C) 2019 Thomas Heller
+    Copyright (C) 2019-2026 The STE||AR Group
 
+    SPDX-License-Identifier: BSL-1.0
     Distributed under the Boost Software License, Version 1.0. (See accompanying
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
@@ -248,8 +486,10 @@ api_ref_file = '''
 
 api_header_file = '''
 ..
-    Copyright (C) 2022 Dimitra Karatza
+    Copyright (C) 2022-2026 Dimitra Karatza
+    Copyright (C) 2022-2026 The STE||AR Group
 
+    SPDX-License-Identifier: BSL-1.0
     Distributed under the Boost Software License, Version 1.0. (See accompanying
     file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
@@ -275,45 +515,149 @@ api_file = '''
 
 '''
 
+api_symbol_file = '''
+..
+    Copyright (C) 2022-2026 Dimitra Karatza
+    Copyright (C) 2022-2026 The STE||AR Group
+
+    SPDX-License-Identifier: BSL-1.0
+    Distributed under the Boost Software License, Version 1.0. (See accompanying
+    file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+.. _modules_{0}_api:
+
+{3}
+{1}
+{3}
+
+Defined in header {2}.
+
+See :ref:`public_api` for a list of names and headers that are part of the public
+|hpx| API.
+
+{4}
+{5}
+'''
+
+
+def sanitize_page_name(title):
+    return re.sub(r'[^A-Za-z0-9_]+', '_', title).strip('_')
+
+
+def generate_module_api_refs(module, out_root):
+    """Generate full_api.rst and per-header/per-symbol API pages for a
+    single module. `out_root` is the doc-tree-relative path under which
+    the module's own `api/` directory lives, e.g. 'libs/full/supervision'
+    or 'components/supervision_dispatch'. Returns the toctree entry line
+    for full_api.rst, or '' if the module had no scanned sources."""
+    assert module in breathe_projects_source.keys()
+    module_sources = breathe_projects_source[module]
+    if len(module_sources[1]) == 0:
+        return ''
+
+    basedir = os.path.abspath('.') + '/' + out_root + '/api'
+    if not os.path.exists(basedir):
+        os.makedirs(basedir)
+    module_api_ref = open(basedir + '/full_api.rst', 'w')
+    module_api_ref.write(api_ref_header.format(module, '-' * len(module)))
+
+    header_refs = ''
+    header_names = set()       # uniquifies whole-file pages (headers w/o \page)
+    symbol_page_names = set()  # uniquifies per-symbol pages (headers w/ \page)
+    for source in module_sources[1]:
+        header = source[len('include/'):]
+        header_splitted = re.split('[/ .]', header)
+
+        header_name = header_splitted[-2]
+        if header_name in header_names:
+            header_name = '{0}_{1}'.format(header_splitted[-3], header_name)
+        header_names.add(header_name)
+
+        page_groups, include_header, kind_map = header_info.get(
+            header, ([["None"]], "None", {}))
+        if include_header == "None":
+            include_header = header
+
+        if page_groups == [["None"]]:
+            header_ref = open(basedir + '/' + header_name + '.rst', 'w')
+            header_ref.write(api_header_file.format(header, module, header,
+                find_link_hpx_header(include_header), '-' * len(header)))
+            header_ref.close()
+            header_refs += '   /' + out_root + '/api/' + header_name + '.rst\n'
+            continue
+
+        title_to_pagename = {}
+        for group in page_groups:
+            for title in group:
+                if title == "None":
+                    continue
+                symbol_page_name = header_name + '_' + sanitize_page_name(title)
+                if symbol_page_name in symbol_page_names:
+                    prefix = (header_splitted[-3]
+                        if len(header_splitted) >= 3 else module)
+                    symbol_page_name = '{0}_{1}'.format(
+                        prefix, symbol_page_name)
+                symbol_page_names.add(symbol_page_name)
+                title_to_pagename[title] = symbol_page_name
+                all_symbol_anchors[title] = 'modules_{0}_api'.format(symbol_page_name)
+
+        for group in page_groups:
+            for page_title in group:
+                if page_title == "None":
+                    continue
+                symbol_page_name = title_to_pagename[page_title]
+                siblings = [t for t in group if t != page_title]
+                see_also = ""
+                if siblings:
+                    see_also = "\nSee also:\n\n" + "\n".join(
+                        '   - :ref:`{0} <modules_{1}_api>`'.format(
+                            sib, title_to_pagename[sib])
+                        for sib in siblings) + "\n"
+
+                symbol_ref = open(basedir + '/' + symbol_page_name + '.rst', 'w')
+                kind = kind_map.get(page_title, 'doxygenfunction')
+
+                if kind == 'doxygenfunction':
+                    overload_sigs = find_overloads(page_title)
+                else:
+                    overload_sigs = []
+
+                if not overload_sigs:
+                    directive_block = '.. {0}:: {1}\n   :project: hpx'.format(kind, page_title)
+                else:
+                    directive_block = '\n'.join(
+                        '.. {0}:: {1}{2}\n   :project: hpx'.format(kind, page_title, sig)
+                        for sig in overload_sigs)
+
+                symbol_ref.write(api_symbol_file.format(
+                    symbol_page_name, page_title,
+                    find_link_hpx_header(include_header),
+                    '-' * len(page_title), see_also, directive_block))
+
+                symbol_ref.close()
+                header_refs += ('   /' + out_root +
+                    '/api/' + symbol_page_name + '.rst\n')
+
+    module_api_ref.write(api_file)
+    module_api_ref.write(header_refs)
+    module_api_ref.close()
+    return '   /' + out_root + '/api/full_api.rst\n'
+
+
 for lib in hpx_libs.keys():
     for module in sorted(hpx_libs[lib]):
-        assert module in breathe_projects_source.keys()
-        module_sources = breathe_projects_source[module]
-        if len(module_sources[1]) == 0:
-            continue
-        basedir = os.path.abspath('.') + '/libs/' + lib + '/' + module + '/api'
-        if not os.path.exists(basedir):
-            os.makedirs(basedir)
-        module_api_ref = open(basedir + '/full_api.rst', 'w')
-        module_api_ref.write(api_ref_header.format(module, '-' * len(module)))
-        header_refs = ''
-        header_names = set()
-        for source in module_sources[1]:
-            header = source[len('include/'):]
-            header_splitted = re.split('[/ .]',header)
+        api_refs += generate_module_api_refs(module, 'libs/' + lib + '/' + module)
 
-            header_name = header_splitted[-2]
-            # create a new, longer header name if current one already exists
-            if header_name in header_names:
-                header_name = '{0}_{1}'.format(header_splitted[-3], header_name)
-            header_names.add(header_name)
+for module in sorted(hpx_components):
+    api_refs += generate_module_api_refs(module, 'components/' + module)
 
-            # Get the info from the dictionary using the header file path
-            page_title, include_header = header_info.get(header, ("None", "None"))
-            if page_title == "None":
-                page_title = header
-            if include_header == "None":
-                include_header = header
 
-            header_ref = open(basedir + '/' + header_name + '.rst', 'w')
-            header_ref.write(api_header_file.format(header, module, page_title,
-                find_link_hpx_header(include_header), '-' * len(page_title)))
-            header_ref.close()
-            header_refs += '   /libs/' + lib + '/' + module + '/api/' + header_name + '.rst\n'
-        module_api_ref.write(api_file)
-        module_api_ref.write(header_refs)
-        module_api_ref.close()
-        api_refs += '   /libs/' + lib + '/' + module + '/api/full_api.rst\n'
+# write found symbols to 'symbol_anchors.json' for the :hpx-api: sphinx
+# role to pick up (see: extensions/sphinx-hpx.py)
+json_path = os.path.join(os.path.abspath('.'), 'api/symbol_anchors.json')
+with open(json_path, 'w') as json_file:
+    json.dump(all_symbol_anchors, json_file, indent=2, sort_keys=True)
+
 
 api_rst = open(os.path.abspath('.') + '/api/full_api.rst', 'w')
 for line in open(hpx_source_dir + '/docs/sphinx/api/full_api.rst').readlines():

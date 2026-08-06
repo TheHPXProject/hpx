@@ -24,6 +24,7 @@ if(HPX_WITH_SUPERVISION)
       hpx/supervision/supervision_manager.hpp
       hpx/supervision/supervision_api.hpp
       hpx/supervision/supervision_fwd.hpp
+      hpx/supervision/testing.hpp
       hpx/supervision/server/activity_agent.hpp
       hpx/supervision/server/agent.hpp
       hpx/supervision/server/supervision_manager.hpp

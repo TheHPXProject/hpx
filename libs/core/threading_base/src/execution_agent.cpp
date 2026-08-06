@@ -19,6 +19,7 @@
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_description.hpp>
+#include <hpx/threading_base/thread_helpers.hpp>
 #include <hpx/threading_base/thread_num_tss.hpp>
 
 #ifdef HPX_HAVE_THREAD_DESCRIPTION
@@ -36,6 +37,16 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+
+namespace {
+
+    // Below this remaining duration, the multi-hop suspend()/at_timer/
+    // wake_timer machinery (two extra HPX threads plus an ASIO timer
+    // round-trip) costs more than just spinning/yielding a few times and
+    // rechecking cond(). Tune independently of yield_k's iteration thresholds
+    // since this is a wall-clock cutoff, not a counter.
+    constexpr std::chrono::microseconds sleep_until_spin_threshold{10};
+}    // namespace
 
 namespace hpx::threads {
 
@@ -119,25 +130,47 @@ namespace hpx::threads {
         hpx::chrono::steady_time_point const& sleep_time,
         hpx::move_only_function<bool()>&& wait_cond, char const* desc)
     {
-        // Just yield until time has passed by (or until wait_condition has been
-        // met)...
-        auto now = std::chrono::steady_clock::now();
         auto const cond = HPX_MOVE(wait_cond);
 
-        // Note: we yield at least once to allow for other threads to make
-        // progress in any case. We also use yield instead of yield_k for the
-        // same reason.
-        std::size_t k = 0;
-        do
+        // fast path: already satisfied, no need to suspend or spin at all
+        if (cond && cond())
         {
-            if (k < 32 || k & 1)    //-V112
+            return threads::thread_restart_state::signaled;
+        }
+
+        std::size_t k = 0;
+        for (;;)
+        {
+            auto const now = std::chrono::steady_clock::now();
+            if (now >= sleep_time.value())
             {
-                do_yield(
-                    desc, hpx::threads::thread_schedule_state::pending_boost);
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+                return threads::thread_restart_state::timeout;
             }
-            else
+
+            if (sleep_time.value() - now < sleep_until_spin_threshold)
             {
-                do_yield(desc, hpx::threads::thread_schedule_state::pending);
+                // sub-threshold tail: spin/yield via the existing backoff
+                // ladder instead of arming a scheduler timer for a remainder
+                // too short to make the round trip worthwhile
+                yield_k(k++, desc);
+
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+                continue;
+            }
+
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            threads::thread_restart_state const statex =
+                hpx::this_thread::suspend(sleep_time, desc, ec);
+            if (ec)
+            {
+                return threads::thread_restart_state::abort;
             }
 
             if (cond && cond())
@@ -145,11 +178,16 @@ namespace hpx::threads {
                 return threads::thread_restart_state::signaled;
             }
 
-            ++k;
-            now = std::chrono::steady_clock::now();
-        } while (now < sleep_time.value());
+            if (statex == threads::thread_restart_state::timeout)
+            {
+                return threads::thread_restart_state::timeout;
+            }
 
-        return threads::thread_restart_state::timeout;
+            // woken early (e.g. condition_variable::notify_one's direct
+            // ctx.resume() -> set_thread_state), condition still false,
+            // deadline not yet reached - loop; next iteration re-evaluates
+            // remaining time and picks suspend() or the spin tail again
+        }
     }
 
     hpx::threads::thread_restart_state execution_agent::do_yield(

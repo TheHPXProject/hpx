@@ -14,6 +14,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/supervision_dispatch/server/registry.hpp>
+#include <hpx/supervision_dispatch/shadow_id.hpp>
 
 #include <atomic>
 #include <cstdint>
@@ -21,56 +22,87 @@
 #include <mutex>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 HPX_REGISTER_ACTION(hpx::supervision::server::registry::join_action,
     supervision_dispatch_registry_join_action)
+HPX_REGISTER_ACTION(hpx::supervision::server::registry::snapshot_peers_action,
+    supervision_dispatch_registry_snapshot_peers_action)
+HPX_REGISTER_ACTION(hpx::supervision::server::registry::leave_action,
+    supervision_dispatch_registry_leave_action)
 
-namespace hpx::supervision::server {
+namespace {
 
-    namespace {
+    // Testing infrastructure support: records the shadow target most
+    // recently minted by make_shadow_target(), so tests can retrieve it
+    // via detail::last_join_shadow() even when join() goes on to throw
+    // (in which case the shadow id is otherwise never handed back to the
+    // caller).
+    hpx::spinlock last_join_shadow_mtx;
+    hpx::supervision::shadow_id last_join_shadow_target;
 
-        // Testing infrastructure support: records the shadow target most
-        // recently minted by make_shadow_target(), so tests can retrieve it
-        // via detail::last_join_shadow() even when join() goes on to throw
-        // (in which case the shadow id is otherwise never handed back to the
-        // caller).
-        hpx::spinlock last_join_shadow_mtx;
-        hpx::id_type last_join_shadow_target;
+    std::atomic<std::uint64_t> shadow_target_counter{1};
 
-        // Hand out a fresh, locally-unique id to serve as a "shadow" target: a
-        // purely local lookup key that the supervision manager on this locality
-        // uses to mirror a joined peer's lifecycle state (via
-        // publish_event()/check_admission()). It is never resolved or
-        // dereferenced as a component id, so it does not need to name a real,
-        // live component (the public hpx::supervision API treats targets as
-        // opaque lookup keys).
-        hpx::id_type make_shadow_target()
-        {
-            static std::atomic<std::uint64_t> counter{1};
-            naming::gid_type const gid(
-                0x2ull, counter.fetch_add(1, std::memory_order_relaxed));
+    // Hand out a fresh, locally-unique id to serve as a "shadow" target: a
+    // purely local lookup key that the supervision manager on this locality
+    // uses to mirror a joined peer's lifecycle state (via
+    // publish_event()/check_admission()). It is never resolved or
+    // dereferenced as a component id, so it does not need to name a real,
+    // live component (the public hpx::supervision API treats targets as
+    // opaque lookup keys).
+    hpx::supervision::shadow_id make_shadow_target()
+    {
+        // Shadow targets are never resolved or dereferenced, so always
+        // construct them as unmanaged ids that pretend to live on the
+        // current locality.
+        hpx::naming::gid_type const gid(0x2ull,
+            shadow_target_counter.fetch_add(1, std::memory_order_relaxed));
+        hpx::naming::gid_type const locality_aware_gid =
+            hpx::naming::replace_locality_id(gid, hpx::get_locality_id());
 
-            hpx::id_type shadow(gid, hpx::id_type::management_type::unmanaged);
+        hpx::id_type shadow(
+            locality_aware_gid, hpx::id_type::management_type::unmanaged);
 
-            {
-                std::scoped_lock<hpx::spinlock> l(last_join_shadow_mtx);
-                last_join_shadow_target = shadow;
-            }
-
-            return shadow;
-        }
-    }    // namespace
-
-    namespace detail {
-
-        hpx::id_type last_join_shadow()
         {
             std::scoped_lock<hpx::spinlock> l(last_join_shadow_mtx);
-            return last_join_shadow_target;
+            last_join_shadow_target = hpx::supervision::shadow_id(shadow);
         }
-    }    // namespace detail
+
+        return hpx::supervision::shadow_id(HPX_MOVE(shadow));
+    }
+
+    void unregister_observers(hpx::id_type const& peer_locality,
+        hpx::id_type const& lifecycle_observer,
+        hpx::id_type const& activity_observer)
+    {
+        if (lifecycle_observer)
+        {
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            hpx::supervision::unregister_observer(
+                hpx::launch::sync, peer_locality, lifecycle_observer, ec);
+        }
+        if (activity_observer)
+        {
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            hpx::supervision::unregister_activity_observer(
+                hpx::launch::sync, peer_locality, activity_observer, ec);
+        }
+    }
+
+}    // namespace
+
+namespace hpx::supervision::testing {
+
+    hpx::supervision::shadow_id last_join_shadow()
+    {
+        std::scoped_lock<hpx::spinlock> l(last_join_shadow_mtx);
+        return last_join_shadow_target;
+    }
+}    // namespace hpx::supervision::testing
+
+namespace hpx::supervision::server {
 
     registry::registry() = default;
 
@@ -88,22 +120,20 @@ namespace hpx::supervision::server {
     // asynchronously with respect to join()/re-join races.
     std::pair<hpx::id_type, hpx::id_type> registry::register_observers(
         hpx::id_type const& peer_sentinel, hpx::id_type const& peer_locality,
-        hpx::id_type const& shadow)
+        shadow_id const& shadow)
     {
         hpx::id_type activity_observer;
         hpx::id_type lifecycle_observer;
         try
         {
             // Register for lifecycle-event notifications published for the
-            // peer's sentinel. Terminal notifications are re-published onto
-            // the local shadow (see below).
+            // peer's sentinel. Terminal notifications are re-published onto the
+            // local shadow (see below).
             auto observer =
                 [shadow, peer_sentinel, peer_locality, this,
                     keep_alive = get_id()](
                     hpx::supervision::lifecycle_event_notification const&
-                        notification) {
-                    HPX_UNUSED(keep_alive);
-
+                        notification) mutable {
                     // Read the shadow's current epoch/state before mirroring.
                     // If the shadow hasn't been seeded yet (epoch mismatch or
                     // still "unknown"), open its epoch with `started` at the
@@ -111,55 +141,39 @@ namespace hpx::supervision::server {
                     // apply_new_epoch_locked()'s "new epoch must begin with
                     // started" invariant satisfied even when the peer joins
                     // mid-epoch.
+                    hpx::error_code ec(hpx::throwmode::lightweight);
                     auto const shadow_state =
-                        hpx::supervision::query_state(shadow);
-                    if (shadow_state.epoch != notification.epoch ||
-                        shadow_state.last_event ==
-                            hpx::supervision::event::unknown)
+                        hpx::supervision::query_state(shadow.get(), ec);
+                    if (ec ||
+                        (shadow_state.epoch != notification.epoch ||
+                            shadow_state.last_event ==
+                                hpx::supervision::event::unknown))
                     {
-                        hpx::error_code ec(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(shadow,
+                        hpx::error_code ec1(hpx::throwmode::lightweight);
+                        hpx::supervision::publish_event(shadow.get(),
                             hpx::supervision::event::started,
-                            notification.epoch, ec);
+                            notification.epoch, ec1);
                     }
 
+                    // Mirror the peer's event onto the shadow at the same epoch
+                    // it actually occurred in.
+                    hpx::error_code ec2(hpx::throwmode::lightweight);
+                    hpx::supervision::publish_event(shadow.get(),
+                        notification.event, notification.epoch, ec2);
+
+                    // Evict the peer if it has reached a terminal event, so
+                    // peers_ does not grow without bound over the lifetime of a
+                    // long-running registry. Deferred via hpx::post() rather
+                    // than done inline here: this callback intentionally avoids
+                    // taking mtx_ (see the comment on register_observers()
+                    // above explaining why `shadow` is captured by value), so
+                    // the eviction - which does need mtx_ to safely mutate
+                    // peers_ - runs as a separate task once this terminal
+                    // publish has completed.
                     if (hpx::supervision::is_terminal(notification.event))
                     {
-                        // `event::completed` is only reachable from `running`
-                        // or `suspending`, whereas this observer only mirrors
-                        // the terminal notification itself, not the peer's full
-                        // event history; bridge through an intermediate
-                        // `running` transition (valid from the `started` seed
-                        // above) at the same epoch before latching `completed`.
-                        // `event::failed` needs no such bridge: it is directly
-                        // reachable from `started`.
-                        if (notification.event ==
-                            hpx::supervision::event::completed)
-                        {
-                            hpx::error_code ec(hpx::throwmode::lightweight);
-                            hpx::supervision::publish_event(shadow,
-                                hpx::supervision::event::running,
-                                notification.epoch, ec);
-                        }
-
-                        // Mirror the peer's terminal event onto the shadow at
-                        // the same epoch it actually occurred in.
-                        hpx::error_code ec(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(
-                            shadow, notification.event, notification.epoch, ec);
-
-                        // Evict the peer now that it has reached a terminal
-                        // event, so peers_ does not grow without bound over
-                        // the lifetime of a long-running registry. Deferred
-                        // via hpx::post() rather than done inline here: this
-                        // callback intentionally avoids taking mtx_ (see the
-                        // comment on register_observers() above explaining
-                        // why `shadow` is captured by value), so the
-                        // eviction -- which does need mtx_ to safely mutate
-                        // peers_ -- runs as a separate task once this
-                        // terminal publish has completed.
                         hpx::post(&registry::evict_peer, this, peer_sentinel,
-                            peer_locality, shadow);
+                            peer_locality, shadow, HPX_MOVE(keep_alive));
                     }
                     return true;
                 };
@@ -186,18 +200,8 @@ namespace hpx::supervision::server {
             // The activity-observer registration failed after the lifecycle
             // observer was registered successfully; unregister both again so
             // neither is leaked on the peer's locality.
-            if (lifecycle_observer)
-            {
-                hpx::error_code ec(hpx::throwmode::lightweight);
-                hpx::supervision::unregister_observer(
-                    hpx::launch::sync, peer_locality, lifecycle_observer, ec);
-            }
-            if (activity_observer)
-            {
-                hpx::error_code ec(hpx::throwmode::lightweight);
-                hpx::supervision::unregister_activity_observer(
-                    hpx::launch::sync, peer_locality, activity_observer, ec);
-            }
+            unregister_observers(
+                peer_locality, lifecycle_observer, activity_observer);
 
             std::rethrow_exception(original);
         }
@@ -205,7 +209,7 @@ namespace hpx::supervision::server {
         return std::make_pair(lifecycle_observer, activity_observer);
     }
 
-    std::pair<hpx::id_type, bool> registry::reserve_ownership(
+    std::pair<shadow_id, bool> registry::reserve_ownership(
         hpx::id_type const& peer_sentinel)
     {
         std::unique_lock l(mtx_);
@@ -238,7 +242,7 @@ namespace hpx::supervision::server {
         return {};
     }
 
-    hpx::id_type registry::join(
+    joined_peer registry::join(
         hpx::id_type const& peer_sentinel, hpx::id_type const& peer_locality)
     {
         // Reserve ownership of peer_sentinel before performing any of
@@ -246,11 +250,12 @@ namespace hpx::supervision::server {
         auto [shadow, reserved] = reserve_ownership(peer_sentinel);
         if (reserved)
         {
-            return shadow;
+            return {.shadow = shadow, .target = peer_locality};
         }
 
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
+        std::uint64_t seed_epoch;
         try
         {
             shadow = make_shadow_target();
@@ -262,11 +267,11 @@ namespace hpx::supervision::server {
                 hpx::error_code ec(hpx::throwmode::lightweight);
                 auto const peer_state = hpx::supervision::query_state(
                     hpx::launch::sync, peer_locality, peer_sentinel, ec);
-                std::uint64_t const seed_epoch = !ec ? peer_state.epoch : 0;
+                seed_epoch = !ec ? peer_state.epoch : 0;
 
                 hpx::error_code ec1(hpx::throwmode::lightweight);
-                hpx::supervision::publish_event(
-                    shadow, hpx::supervision::event::started, seed_epoch, ec1);
+                hpx::supervision::publish_event(shadow.get(),
+                    hpx::supervision::event::started, seed_epoch, ec1);
             }
 
             {
@@ -293,7 +298,7 @@ namespace hpx::supervision::server {
             if (shadow)
             {
                 hpx::error_code ec(hpx::throwmode::lightweight);
-                hpx::supervision::remove_target(shadow, ec);
+                hpx::supervision::remove_target(shadow.get(), ec);
             }
 
             std::rethrow_exception(std::current_exception());
@@ -305,9 +310,11 @@ namespace hpx::supervision::server {
             peer_entry& entry = peers_.at(peer_sentinel);
             HPX_ASSERT(!entry.ready);
 
+            entry.peer_locality = peer_locality;
             entry.shadow = shadow;
             entry.lifecycle_observer = lifecycle_observer;
             entry.activity_observer = activity_observer;
+            entry.join_epoch = seed_epoch;
             entry.ready = true;
 
             if (entry.evict_pending)
@@ -323,11 +330,41 @@ namespace hpx::supervision::server {
             cleanup_peer(
                 peer_locality, lifecycle_observer, activity_observer, shadow);
         }
-        return shadow;
+        return {.shadow = shadow, .target = peer_locality};
+    }
+
+    // Implementation note: iterates peers_ under mtx_ and copies out the
+    // peer_sentinel/peer_locality/shadow/join_epoch fields for entries that are
+    // fully joined and not pending eviction, deliberately omitting the ready/
+    // evict_pending bookkeeping fields from the returned view.
+    std::vector<peer_snapshot> registry::snapshot_peers() const
+    {
+        std::scoped_lock<hpx::spinlock> l(mtx_);
+
+        std::vector<peer_snapshot> result;
+        result.reserve(peers_.size());
+        for (auto const& [peer_sentinel, entry] : peers_)
+        {
+            if (entry.ready && !entry.evict_pending)
+            {
+                result.push_back(peer_snapshot{.peer_sentinel = peer_sentinel,
+                    .peer_locality = entry.peer_locality,
+                    .shadow = entry.shadow,
+                    .join_epoch = entry.join_epoch});
+            }
+        }
+        return result;
+    }
+
+    void registry::leave(hpx::id_type const& peer_sentinel,
+        hpx::id_type const& peer_locality, shadow_id const& shadow)
+    {
+        evict_peer(peer_sentinel, peer_locality, shadow, hpx::invalid_id);
     }
 
     void registry::evict_peer(hpx::id_type const& peer_sentinel,
-        hpx::id_type const& peer_locality, hpx::id_type const& shadow)
+        hpx::id_type const& peer_locality, shadow_id const& shadow,
+        [[maybe_unused]] hpx::id_type keep_alive)
     {
         hpx::id_type lifecycle_observer;
         hpx::id_type activity_observer;
@@ -367,25 +404,15 @@ namespace hpx::supervision::server {
 
     void registry::cleanup_peer(hpx::id_type const& peer_locality,
         hpx::id_type const& lifecycle_observer,
-        hpx::id_type const& activity_observer, hpx::id_type const& shadow)
+        hpx::id_type const& activity_observer, shadow_id const& shadow)
     {
-        if (lifecycle_observer)
-        {
-            hpx::error_code ec(hpx::throwmode::lightweight);
-            hpx::supervision::unregister_observer(
-                hpx::launch::sync, peer_locality, lifecycle_observer, ec);
-        }
-        if (activity_observer)
-        {
-            hpx::error_code ec(hpx::throwmode::lightweight);
-            hpx::supervision::unregister_activity_observer(
-                hpx::launch::sync, peer_locality, activity_observer, ec);
-        }
+        unregister_observers(
+            peer_locality, lifecycle_observer, activity_observer);
 
         // Drop the shadow's local state now that the peer has been evicted;
         // nothing will consult it again.
         hpx::error_code ec(hpx::throwmode::lightweight);
-        hpx::supervision::remove_target(shadow, ec);
+        hpx::supervision::remove_target(shadow.get(), ec);
     }
 }    // namespace hpx::supervision::server
 

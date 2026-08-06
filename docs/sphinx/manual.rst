@@ -38,4 +38,5 @@ information on how to build and use |hpx| in different scenarios.
    manual/executors
    manual/error_handling
    manual/iostreams
+   manual/supervision_dispatch
    manual/troubleshooting

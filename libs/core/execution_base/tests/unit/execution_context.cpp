@@ -165,7 +165,7 @@ void test_suspend_resume()
     bool resumed = false;
 
     std::thread t1([&mtx, &suspended, &resumed]() {
-        auto context = hpx::execution_base::this_thread::agent();
+        auto const context = hpx::execution_base::this_thread::agent();
         {
             std::unique_lock<std::mutex> l(mtx);
             suspended = context;
@@ -189,12 +189,13 @@ void test_suspend_resume()
 
 void test_sleep()
 {
-    auto now = std::chrono::steady_clock::now();
-    auto sleep_duration = std::chrono::milliseconds(100);
+    auto const now = std::chrono::steady_clock::now();
+    auto const sleep_duration = std::chrono::milliseconds(100);
     hpx::execution_base::this_thread::sleep_for(sleep_duration);
     HPX_TEST(now + sleep_duration <= std::chrono::steady_clock::now());
 
-    auto sleep_time = sleep_duration * 2 + std::chrono::steady_clock::now();
+    auto const sleep_time =
+        sleep_duration * 2 + std::chrono::steady_clock::now();
     hpx::execution_base::this_thread::sleep_until(sleep_time);
     HPX_TEST(now + sleep_duration * 2 <= std::chrono::steady_clock::now());
 }
@@ -209,7 +210,7 @@ void test_sleep_with_predicate()
         hpx::execution_base::this_thread::reset_agent ctx(dummy);
 
         dummy_sleep_for_called = 0;
-        auto state = hpx::execution_base::this_thread::agent().sleep_for(
+        auto const state = hpx::execution_base::this_thread::agent().sleep_for(
             std::chrono::milliseconds(100), []() { return true; });
         HPX_TEST_EQ(dummy_sleep_for_called, 1u);
         HPX_TEST(state == hpx::threads::thread_restart_state::signaled);
@@ -221,9 +222,11 @@ void test_sleep_with_predicate()
         hpx::execution_base::this_thread::reset_agent ctx(dummy);
 
         dummy_sleep_until_called = 0;
-        auto state = hpx::execution_base::this_thread::agent().sleep_until(
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(100),
-            []() { return false; });
+        auto const state =
+            hpx::execution_base::this_thread::agent().sleep_until(
+                std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(100),
+                []() { return false; });
         HPX_TEST_EQ(dummy_sleep_until_called, 1u);
         HPX_TEST(state == hpx::threads::thread_restart_state::timeout);
     }
@@ -234,23 +237,59 @@ void test_sleep_with_predicate()
         hpx::execution_base::this_thread::reset_agent ctx(dummy);
 
         auto flag = std::make_unique<bool>(true);
-        auto state = hpx::execution_base::this_thread::agent().sleep_for(
+        auto const state = hpx::execution_base::this_thread::agent().sleep_for(
             std::chrono::milliseconds(100),
             [flag = std::move(flag)]() { return *flag; });
         HPX_TEST(state == hpx::threads::thread_restart_state::signaled);
     }
 
     // the real (default) agent used when no other agent context has been
-    // installed does not support predicate-based early wake up: it always waits
-    // out the full duration and reports a timeout, regardless of the predicate
-    // passed in.
+    // installed now also supports predicate-based early wake up (checked at
+    // up to default_agent_poll_interval granularity): if the predicate is
+    // already true it returns signaled well before the requested duration
+    // elapses.
     {
-        auto now = std::chrono::steady_clock::now();
-        auto sleep_duration = std::chrono::milliseconds(100);
-        auto state = hpx::execution_base::this_thread::agent().sleep_for(
+        constexpr auto sleep_duration = std::chrono::milliseconds(100);
+        auto const now = std::chrono::steady_clock::now();
+        auto const state = hpx::execution_base::this_thread::agent().sleep_for(
             sleep_duration, []() { return true; });
+        HPX_TEST(state == hpx::threads::thread_restart_state::signaled);
+        HPX_TEST(std::chrono::steady_clock::now() < now + sleep_duration);
+    }
+
+    // the real (default) agent still reports a timeout when the predicate
+    // never becomes true, and waits out (approximately) the full duration.
+    {
+        constexpr auto sleep_duration = std::chrono::milliseconds(100);
+        auto const now = std::chrono::steady_clock::now();
+        auto const state = hpx::execution_base::this_thread::agent().sleep_for(
+            sleep_duration, []() { return false; });
         HPX_TEST(state == hpx::threads::thread_restart_state::timeout);
         HPX_TEST(now + sleep_duration <= std::chrono::steady_clock::now());
+    }
+
+    // predicate starts false and becomes true partway through a much longer
+    // deadline: verifies the poll loop actually re-checks the predicate rather
+    // than only at the initial call and the final deadline check.
+    {
+        std::atomic<bool> flag{false};
+        std::thread setter([&flag]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            flag.store(true);
+        });
+
+        constexpr auto sleep_duration = std::chrono::milliseconds(500);
+        auto const now = std::chrono::steady_clock::now();
+        auto const state = hpx::execution_base::this_thread::agent().sleep_for(
+            sleep_duration, [&flag]() { return flag.load(); });
+
+        setter.join();
+
+        HPX_TEST(state == hpx::threads::thread_restart_state::signaled);
+        // must return well before the full 500ms deadline, proving the
+        // predicate was polled mid-wait (poll interval is 20ms) and not only
+        // checked once up front or at the deadline.
+        HPX_TEST(std::chrono::steady_clock::now() < now + sleep_duration / 2);
     }
 }
 

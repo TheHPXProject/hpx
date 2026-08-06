@@ -765,7 +765,8 @@ namespace std {
     template <>
     struct hash<hpx::naming::gid_type>
     {
-        std::size_t operator()(::hpx::naming::gid_type const& gid) const
+        std::size_t operator()(
+            ::hpx::naming::gid_type const& gid) const noexcept
         {
             std::size_t const h1(std::hash<std::uint64_t>()(gid.get_lsb()));
             std::size_t const h2(std::hash<std::uint64_t>()(

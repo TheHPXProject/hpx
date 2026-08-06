@@ -48,7 +48,9 @@ namespace hpx::supervision {
     publish_result sentinel::start(hpx::launch::sync_policy,
         std::uint64_t const epoch, hpx::error_code& ec) const
     {
-        return start(epoch).get(ec);
+        using action_type = hpx::supervision::server::sentinel::start_action;
+        return async(hpx::launch::sync, action_type(), this->get_id(), epoch)
+            .get(ec);
     }
 
     hpx::future<bool> sentinel::register_name()

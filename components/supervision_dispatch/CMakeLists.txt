@@ -14,25 +14,28 @@ set(HPX_COMPONENTS
 )
 
 set(supervision_dispatch_headers
-    hpx/supervision_dispatch/server/registry.hpp
-    hpx/supervision_dispatch/server/sentinel.hpp
+    hpx/supervision_dispatch/export_definitions.hpp
     hpx/supervision_dispatch/discovery.hpp
     hpx/supervision_dispatch/dispatch_api.hpp
     hpx/supervision_dispatch/dispatch_work.hpp
     hpx/supervision_dispatch/registry.hpp
     hpx/supervision_dispatch/sentinel.hpp
-    hpx/supervision_dispatch/export_definitions.hpp
+    hpx/supervision_dispatch/shadow_id.hpp
+    hpx/supervision_dispatch/testing.hpp
+    hpx/supervision_dispatch/server/registry.hpp
+    hpx/supervision_dispatch/server/sentinel.hpp
     hpx/supervision_dispatch.hpp
 )
 
 set(supervision_dispatch_sources
-    server/registry_server.cpp
-    server/sentinel_server.cpp
+    component_module.cpp
     discovery.cpp
     dispatch_api.cpp
     registry.cpp
     sentinel.cpp
-    component_module.cpp
+    server/registry_server.cpp
+    server/sentinel_server.cpp
+    shadow_id.cpp
 )
 
 add_hpx_component(

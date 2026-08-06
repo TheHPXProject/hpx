@@ -558,6 +558,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <type_traits>
 #include <vector>
@@ -570,6 +571,77 @@ namespace hpx {
 #endif
 
 namespace hpx {
+
+    namespace detail {
+
+        ///////////////////////////////////////////////////////////////////////
+        template <typename Tuple>
+        struct wait_all_for_frame
+          : wait_all_frame<Tuple, wait_all_for_frame<Tuple>>
+        {
+            using base_type = wait_all_frame<Tuple, wait_all_for_frame<Tuple>>;
+
+            explicit wait_all_for_frame(Tuple const& t)
+              : base_type(t)
+            {
+            }
+
+            explicit wait_all_for_frame(Tuple&& t) noexcept
+              : base_type(HPX_MOVE(t))
+            {
+            }
+
+            wait_all_for_frame(wait_all_for_frame const&) = delete;
+            wait_all_for_frame(wait_all_for_frame&&) = delete;
+
+            wait_all_for_frame& operator=(wait_all_for_frame const&) = delete;
+            wait_all_for_frame& operator=(wait_all_for_frame&&) = delete;
+
+            // Same as wait_all(), except that the final suspend is bounded by a
+            // given timeout instead of waiting indefinitely. Note that the
+            // individual input futures are only ever inspected/attached-to,
+            // never moved-from, so they remain valid (and can be queried with
+            // is_ready()) whether the combined wait finishes because all them
+            // became ready or because the timeout elapsed first.
+            hpx::future_status wait_all_for(
+                hpx::chrono::steady_duration const& timeout)
+            {
+                // Every fresh invocation of wait_all_for() must reset the flag.
+                continue_waiting_.store(true, std::memory_order_release);
+
+                this->base_type::template do_await<0>();
+
+                // If there are still futures which are not ready, suspend and wait,
+                // but no longer than the given timeout. Note that this does not
+                // cancel/abandon the still outstanding futures; they simply
+                // continue to be resolved in the background and can still be
+                // queried by the caller after this function returns.
+                if (!this->is_ready(std::memory_order_relaxed))
+                {
+                    hpx::future_status const status =
+                        this->wait_until(timeout.from_now());
+                    if (status == hpx::future_status::timeout)
+                    {
+                        // this will prevent pending continuations from
+                        // continuing through the sequence of futures
+                        continue_waiting_.store(
+                            false, std::memory_order_release);
+                    }
+                    return status;
+                }
+
+                return hpx::future_status::ready;
+            }
+
+            bool continue_waiting() const noexcept
+            {
+                return continue_waiting_.load(std::memory_order_acquire);
+            }
+
+        private:
+            std::atomic<bool> continue_waiting_{true};
+        };
+    }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct wait_all_for_nothrow_result
@@ -590,7 +662,7 @@ namespace hpx {
             if (!values.empty())
             {
                 using result_type = hpx::tuple<std::vector<Future> const&>;
-                using frame_type = hpx::detail::wait_all_frame<result_type>;
+                using frame_type = hpx::detail::wait_all_for_frame<result_type>;
 
                 result_type data(values);
 
@@ -615,7 +687,7 @@ namespace hpx {
             if (!values.empty())
             {
                 using result_type = hpx::tuple<std::vector<Future>>;
-                using frame_type = hpx::detail::wait_all_frame<result_type>;
+                using frame_type = hpx::detail::wait_all_for_frame<result_type>;
 
                 result_type data(HPX_MOVE(values));
 
@@ -666,7 +738,7 @@ namespace hpx {
             hpx::chrono::steady_duration const& timeout)
         {
             using result_type = hpx::tuple<std::array<Future, N> const&>;
-            using frame_type = hpx::detail::wait_all_frame<result_type>;
+            using frame_type = hpx::detail::wait_all_for_frame<result_type>;
 
             result_type data(values);
 
@@ -684,7 +756,7 @@ namespace hpx {
             hpx::chrono::steady_duration const& timeout)
         {
             using result_type = hpx::tuple<std::array<Future, N>>;
-            using frame_type = hpx::detail::wait_all_frame<result_type>;
+            using frame_type = hpx::detail::wait_all_for_frame<result_type>;
 
             result_type data(HPX_MOVE(values));
 
@@ -757,7 +829,7 @@ namespace hpx {
             {
                 using result_type =
                     hpx::tuple<traits::detail::shared_state_ptr_for_t<Ts>...>;
-                using frame_type = hpx::detail::wait_all_frame<result_type>;
+                using frame_type = hpx::detail::wait_all_for_frame<result_type>;
 
                 result_type values =
                     result_type(hpx::traits::detail::get_shared_state(ts)...);

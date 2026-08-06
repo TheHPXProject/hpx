@@ -44,9 +44,9 @@ Functions
    +-------------------------------------------+
    | Function                                  |
    +===========================================+
-   | :cpp:func:`hpx::distributed::wait`        |
+   | :hpx-api:`hpx::distributed::wait`         |
    +-------------------------------------------+
-   | :cpp:func:`hpx::distributed::synchronize` |
+   | :hpx-api:`hpx::distributed::synchronize`  |
    +-------------------------------------------+
 
 .. _public_distr_api_header_collectives:
@@ -92,49 +92,49 @@ Functions
    +----------------------------------------------------------------+
    | Function                                                       |
    +================================================================+
-   | :cpp:func:`hpx::collectives::all_gather`                       |
+   | :hpx-api:`hpx::collectives::all_gather`                        |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::all_reduce`                       |
+   | :hpx-api:`hpx::collectives::all_reduce`                        |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::all_to_all`                       |
+   | :hpx-api:`hpx::collectives::all_to_all`                        |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::broadcast_to`                     |
+   | :hpx-api:`hpx::collectives::broadcast_to`                      |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::broadcast_from`                   |
+   | :hpx-api:`hpx::collectives::broadcast_from`                    |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::create_channel_communicator`      |
+   | :hpx-api:`hpx::collectives::create_channel_communicator`       |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::set`                              |
+   | :hpx-api:`hpx::collectives::set`                               |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::get`                              |
+   | :hpx-api:`hpx::collectives::get`                               |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::create_communicator`              |
+   | :hpx-api:`hpx::collectives::create_communicator`               |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::create_hierarchical_communicator` |
+   | :hpx-api:`hpx::collectives::create_hierarchical_communicator`  |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::create_local_communicator`        |
+   | :hpx-api:`hpx::collectives::create_local_communicator`         |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::communicator::set_info`           |
+   | :hpx-api:`hpx::collectives::communicator::set_info`            |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::communicator::get_info`           |
+   | :hpx-api:`hpx::collectives::communicator::get_info`            |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::communicator::is_root`            |
+   | :hpx-api:`hpx::collectives::communicator::is_root`             |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::exclusive_scan`                   |
+   | :hpx-api:`hpx::collectives::exclusive_scan`                    |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::gather_here`                      |
+   | :hpx-api:`hpx::collectives::gather_here`                       |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::gather_there`                     |
+   | :hpx-api:`hpx::collectives::gather_there`                      |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::inclusive_scan`                   |
+   | :hpx-api:`hpx::collectives::inclusive_scan`                    |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::reduce_here`                      |
+   | :hpx-api:`hpx::collectives::reduce_here`                       |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::reduce_there`                     |
+   | :hpx-api:`hpx::collectives::reduce_there`                      |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::scatter_from`                     |
+   | :hpx-api:`hpx::collectives::scatter_from`                      |
    +----------------------------------------------------------------+
-   | :cpp:func:`hpx::collectives::scatter_to`                       |
+   | :hpx-api:`hpx::collectives::scatter_to`                        |
    +----------------------------------------------------------------+
 
 .. _public_distr_api_header_latch:
@@ -165,17 +165,17 @@ Member functions
    +----------------------------------------------------------+
    | Function                                                 |
    +==========================================================+
-   | :cpp:func:`hpx::distributed::latch::count_down_and_wait` |
+   | :hpx-api:`hpx::distributed::latch::count_down_and_wait`  |
    +----------------------------------------------------------+
-   | :cpp:func:`hpx::distributed::latch::arrive_and_wait`     |
+   | :hpx-api:`hpx::distributed::latch::arrive_and_wait`      |
    +----------------------------------------------------------+
-   | :cpp:func:`hpx::distributed::latch::count_down`          |
+   | :hpx-api:`hpx::distributed::latch::count_down`           |
    +----------------------------------------------------------+
-   | :cpp:func:`hpx::distributed::latch::is_ready`            |
+   | :hpx-api:`hpx::distributed::latch::is_ready`             |
    +----------------------------------------------------------+
-   | :cpp:func:`hpx::distributed::latch::try_wait`            |
+   | :hpx-api:`hpx::distributed::latch::try_wait`             |
    +----------------------------------------------------------+
-   | :cpp:func:`hpx::distributed::latch::wait`                |
+   | :hpx-api:`hpx::distributed::latch::wait`                 |
    +----------------------------------------------------------+
 
 .. _public_distr_api_header_async:
@@ -184,8 +184,8 @@ Member functions
 =================
 
 The header :hpx-header:`libs/full/async_distributed/include,hpx/async.hpp`
-includes distributed implementations of :cpp:func:`hpx::async`,
-:cpp:func:`hpx::post`, :cpp:func:`hpx::sync`, and :cpp:func:`hpx::dataflow`.
+includes distributed implementations of :hpx-api:`hpx::async`,
+:hpx-api:`hpx::post`, :hpx-api:`hpx::sync`, and :hpx-api:`hpx::dataflow`.
 For information regarding the C++ standard library header, see :ref:`public_api`.
 
 Functions
@@ -268,5 +268,5 @@ Functions
    +----------------------------------------------------------+
    | Function                                                 |
    +==========================================================+
-   | :cpp:func:`hpx::new_`                                    |
+   | :hpx-api:`hpx::new_`                                     |
    +----------------------------------------------------------+
