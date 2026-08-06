@@ -276,3 +276,43 @@ if(HPX_WITH_CXX_MODULES AND (CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     )
   endforeach()
 endif()
+
+# Contract precondition violation tests for the sorting/heap algorithm family
+# (nth_element, partial_sort, partial_sort_copy, is_heap, is_heap_until,
+# make_heap, sort_by_key). Each of these deliberately calls the algorithm with
+# an out-of-order iterator argument that violates its HPX_PRE precondition.
+# Under native C++26 contracts the precondition check aborts before the
+# (otherwise unsafe) algorithm body runs; without native contracts HPX_PRE is a
+# no-op and the call would fall through into undefined behavior unrelated to
+# contracts. These tests are therefore only built and run when native contracts
+# are available, mirroring the gating used by
+# libs/core/contracts/tests/unit/CMakeLists.txt.
+if(HPX_WITH_CXX26_CONTRACTS)
+  set(contract_violation_tests
+      nth_element_contract_violation
+      partial_sort_contract_violation
+      partial_sort_copy_contract_violation
+      is_heap_contract_violation
+      is_heap_until_contract_violation
+      make_heap_contract_violation
+      sort_by_key_contract_violation
+  )
+
+  foreach(test ${contract_violation_tests})
+    set(${test}_PARAMETERS FAILURE_EXPECTED)
+
+    source_group("Source Files" FILES ${test}.cpp)
+
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${test}.cpp
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Tests/Unit/Modules/Core/Algorithms"
+    )
+
+    add_hpx_unit_test(
+      "modules.algorithms.algorithms" ${test} ${${test}_PARAMETERS}
+    )
+  endforeach()
+endif()

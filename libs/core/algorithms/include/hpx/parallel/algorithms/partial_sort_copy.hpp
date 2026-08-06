@@ -150,6 +150,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
@@ -372,6 +373,7 @@ namespace hpx {
         // clang-format on
         static RandIter invoke_default(InIter first, InIter last,
             RandIter d_first, RandIter d_last, Comp comp = Comp())
+            HPX_PRE(d_first <= d_last)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -403,6 +405,7 @@ namespace hpx {
         static parallel::util::detail::algorithm_result_t<ExPolicy, RandIter>
         invoke_default(ExPolicy&& policy, FwdIter first, FwdIter last,
             RandIter d_first, RandIter d_last, Comp comp = Comp())
+            HPX_PRE(d_first <= d_last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

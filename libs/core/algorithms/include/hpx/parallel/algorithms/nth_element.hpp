@@ -134,6 +134,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -434,8 +435,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static void invoke_default(
-            RandomIt first, RandomIt nth, RandomIt last, Pred pred = Pred())
+        static void invoke_default(RandomIt first, RandomIt nth, RandomIt last,
+            Pred pred = Pred()) HPX_PRE(first <= nth && nth <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random iterator.");
@@ -459,6 +460,7 @@ namespace hpx {
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandomIt first,
             RandomIt nth, RandomIt last, Pred pred = Pred())
+            HPX_PRE(first <= nth && nth <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random iterator.");
