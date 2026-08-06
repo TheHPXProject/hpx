@@ -97,6 +97,11 @@ void test_wait_for_notify_before_timeout()
             hpx::this_thread::yield();
         }
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
+        {
+            std::lock_guard<hpx::mutex> l(mtx);
+            flag = true;
+        }
+        cv.notify_one();
     });
 
     bool result = false;

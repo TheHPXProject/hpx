@@ -90,7 +90,8 @@ namespace {
         // settles (whether it succeeds, throws, or rolls back). Concurrent
         // callers observing state == initializing attach to this shared_future
         // instead of starting a second, redundant init sequence.
-        hpx::shared_future<void> in_flight_init_;
+        hpx::shared_future<hpx::supervision::supervision_handle>
+            in_flight_init_;
 
         // Owned/guarded the same way sentinel_/registry_ already are.
         // failure_detection_task_ holds the running poll loop so finalize() can
@@ -137,6 +138,18 @@ namespace {
     {
         static dispatch_state state;
         return state;
+    }
+
+    // Builds a ready shared_future carrying a copy of the currently-active
+    // sentinel_/registry_ pair, taken under mtx_ so the read never observes a
+    // partially-constructed pair racing a concurrent init()/finalize()
+    // transition. Used by every "already active" return path in init().
+    hpx::shared_future<hpx::supervision::supervision_handle> make_active_handle(
+        dispatch_state& ds)
+    {
+        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+        return hpx::make_ready_future(
+            hpx::supervision::supervision_handle{ds.sentinel_, ds.registry_});
     }
 
     // Runs the actual initialization sequence. Only ever invoked by the caller
@@ -426,6 +439,15 @@ namespace {
                         .consecutive_query_failures = 0});
                 auto& [last_known_epoch, failures] = it->second;
 
+                // A pre-existing tracking entry from an earlier join epoch
+                // (e.g. the peer left and rejoined) must not carry over its
+                // stale failure count or epoch.
+                if (last_known_epoch != peer.join_epoch)
+                {
+                    last_known_epoch = peer.join_epoch;
+                    failures = 0;
+                }
+
                 if (ec || state.ec)
                 {
                     // Guard against sustained unreachability. Best-effort fence
@@ -624,7 +646,7 @@ namespace hpx::supervision {
     }    // namespace testing
 
     ////////////////////////////////////////////////////////////////////////////
-    hpx::shared_future<void> init(
+    hpx::shared_future<supervision_handle> init(
         hpx::chrono::steady_duration const& discovery_timeout)
     {
         dispatch_state& ds = get_dispatch_state();
@@ -638,12 +660,14 @@ namespace hpx::supervision {
             hpx::future<void> f =
                 hpx::async(&run_init_sequence, discovery_timeout);
 
-            hpx::shared_future<void> sf =
-                f.then(hpx::launch::sync, [&ds](hpx::future<void>&& result) {
+            hpx::shared_future<supervision_handle> sf = f.then(
+                hpx::launch::sync,
+                [&ds](hpx::future<void>&& result) -> supervision_handle {
                     if (result.has_value())
                     {
                         std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.in_flight_init_ = shared_future<void>();
+                        ds.in_flight_init_ =
+                            shared_future<supervision_handle>();
 
                         ds.state_.store(dispatcher_lifecycle_state::active);
 
@@ -656,24 +680,26 @@ namespace hpx::supervision {
                             false, std::memory_order_release);
 
                         // Start the poll loops as the last step of the success
-                        // path - after discover_and_join() has returned, so the
+                        // path., after discover_and_join() has returned, so the
                         // loops never race initialization.
                         ds.failure_detection_task_ =
                             hpx::async(&failure_detection_loop);
 
                         ds.heartbeat_task_ = hpx::async(&heartbeat_loop);
+                        return supervision_handle{
+                            .sentinel_client = ds.sentinel_,
+                            .registry_client = ds.registry_};
                     }
-                    else
-                    {
-                        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.sentinel_ = hpx::supervision::sentinel();
-                        ds.registry_ = hpx::supervision::registry();
 
-                        ds.in_flight_init_ = shared_future<void>();
-                        ds.state_.store(
-                            dispatcher_lifecycle_state::uninitialized);
-                    }
+                    std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                    ds.sentinel_ = hpx::supervision::sentinel();
+                    ds.registry_ = hpx::supervision::registry();
+
+                    ds.in_flight_init_ = shared_future<supervision_handle>();
+                    ds.state_.store(dispatcher_lifecycle_state::uninitialized);
+
                     result.get();    // rethrow exception, if any
+                    return {};
                 });
 
             {
@@ -687,13 +713,14 @@ namespace hpx::supervision {
         switch (expected)
         {
         case dispatcher_lifecycle_state::active:
-            return hpx::make_ready_future();
+            return make_active_handle(ds);
 
         case dispatcher_lifecycle_state::finalizing:
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
-                hpx::error::invalid_status, "hpx::supervision::init",
-                "cannot initialize while a concurrent "
-                "finalize() is in progress"));
+            return hpx::make_exceptional_future<supervision_handle>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    "hpx::supervision::init",
+                    "cannot initialize while a concurrent finalize() is in "
+                    "progress"));
 
         case dispatcher_lifecycle_state::initializing:
         default:
@@ -720,7 +747,7 @@ namespace hpx::supervision {
                 auto const current = ds.state_.load(std::memory_order_acquire);
                 if (current == dispatcher_lifecycle_state::active)
                 {
-                    return hpx::make_ready_future();
+                    return make_active_handle(ds);
                 }
                 if (current != dispatcher_lifecycle_state::initializing)
                 {
@@ -729,17 +756,16 @@ namespace hpx::supervision {
                 hpx::this_thread::yield();
             }
 
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
-                hpx::error::invalid_status, "hpx::supervision::init",
-                "timed out attaching to a concurrent "
-                "init() call; retry"));
+            return hpx::make_exceptional_future<supervision_handle>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    "hpx::supervision::init",
+                    "timed out attaching to a concurrent init() call; retry"));
         }
     }
-
-    void init(hpx::launch::sync_policy,
+    supervision_handle init(hpx::launch::sync_policy,
         hpx::chrono::steady_duration const& discovery_timeout)
     {
-        init(discovery_timeout).get();
+        return init(discovery_timeout).get();
     }
 
     void finalize()
@@ -793,7 +819,8 @@ namespace hpx::supervision {
 
             // Drop any settled handle from the completed init cycle so a later
             // cycle's attaching caller can never observe it.
-            ds.in_flight_init_ = hpx::shared_future<void>();
+            ds.in_flight_init_ =
+                hpx::shared_future<hpx::supervision::supervision_handle>();
         }
 
         HPX_ASSERT(local_sentinel);    // active implies sentinel_ was set

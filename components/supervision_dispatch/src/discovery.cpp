@@ -10,6 +10,7 @@
 #include <hpx/modules/runtime_distributed.hpp>
 
 #include <hpx/supervision_dispatch/discovery.hpp>
+#include <hpx/supervision_dispatch/dispatch_api.hpp>
 #include <hpx/supervision_dispatch/registry.hpp>
 #include <hpx/supervision_dispatch/sentinel.hpp>
 
@@ -118,7 +119,12 @@ namespace hpx::supervision {
             // dropped).
             if (f.is_ready() && !f.has_exception())
             {
-                joined.push_back(peers[i]);
+                // Surface the join_epoch join() already computed, so callers
+                // can dispatch directly against {peer.locality,
+                // peer.join_epoch} without a redundant follow-up join() call.
+                discovered_peer joined_peer_entry = peers[i];
+                joined_peer_entry.join_epoch = f.get().join_epoch;
+                joined.push_back(HPX_MOVE(joined_peer_entry));
                 continue;
             }
 
@@ -132,6 +138,13 @@ namespace hpx::supervision {
         }
 
         return joined;
+    }
+
+    std::vector<discovered_peer> fan_out_join(supervision_handle const& handle,
+        std::vector<discovered_peer> const& peers,
+        hpx::chrono::steady_duration const& timeout)
+    {
+        return fan_out_join(handle.registry_client, peers, timeout);
     }
 
     std::vector<discovered_peer> discover_and_join(
@@ -180,6 +193,13 @@ namespace hpx::supervision {
             hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return joined;
+    }
+
+    std::vector<discovered_peer> discover_and_join(
+        supervision_handle const& handle,
+        hpx::chrono::steady_duration const& timeout)
+    {
+        return discover_and_join(handle.registry_client, timeout);
     }
 }    // namespace hpx::supervision
 

@@ -25,6 +25,14 @@
 
 namespace hpx::supervision {
 
+    // Forward declaration only: supervision_handle is defined in
+    // dispatch_api.hpp, which itself includes this header (for discovered_peer/
+    // sentinel/registry) - including it back here would create a cycle. The
+    // supervision_handle-taking overloads below only ever need a reference to
+    // it, so a forward declaration is sufficient here; discovery.cpp includes
+    // dispatch_api.hpp for the full definition.
+    struct supervision_handle;
+
     // Default bound for discover_peers(): matches the supervision module's own
     // default await_terminal() timeout (see default_await_terminal_timeout_ms
     // in supervision_manager_server.cpp) - long enough to absorb AGAS/
@@ -40,6 +48,16 @@ namespace hpx::supervision {
         hpx::id_type locality;
         sentinel sentinel_client;
         registry registry_client;
+
+        // The epoch this peer was joined at, as returned by the
+        // local_registry.join(sentinel_client, locality) call that
+        // fan_out_join()/discover_and_join() already perform internally. Left
+        // at its default (0) for peers returned by discover_peers() alone,
+        // which never calls join(). Together with locality - which is already
+        // the same value as joined_peer::target - this carries everything
+        // dispatch_work() needs to fence a call against this peer, without
+        // requiring a separate join() call at the use site.
+        std::uint64_t join_epoch = 0;
     };
 
     /// Performs a one-time discovery pull for supervision_dispatch peers:
@@ -99,9 +117,32 @@ namespace hpx::supervision {
     /// \return The peer/shadow pairs for peers whose join() calls settled
     ///         successfully within \a timeout, in the same relative order as
     ///         \a peers (with unsuccessful/timed-out peers omitted, rather
-    ///         than left as gaps).
+    ///         than left as gaps). Each returned discovered_peer::join_epoch
+    ///         is populated from the corresponding join() call, so callers
+    ///         can dispatch against `{peer.locality, peer.join_epoch}`
+    ///         directly, without needing a separate join() call to obtain it.
     HPX_SUPERVISION_DISPATCH_EXPORT std::vector<discovered_peer> fan_out_join(
         registry const& local_registry,
+        std::vector<discovered_peer> const& peers,
+        chrono::steady_duration const& timeout = default_discovery_timeout);
+
+    /// Convenience overload of fan_out_join() that joins every peer in
+    /// \a peers to \a handle.registry_client, i.e. the registry owned by a
+    /// prior init() call, rather than requiring the caller to name that
+    /// registry explicitly. Forwards directly to the registry-taking overload.
+    ///
+    /// \param handle The supervision_handle (typically returned by init())
+    ///               whose registry_client every peer in \a peers is joined to.
+    /// \param peers          The peers to join, typically returned by a prior
+    ///                       discover_peers() call.
+    /// \param timeout  The maximum duration to wait, across all peers
+    ///                 combined, for their join() calls to settle.
+    ///
+    /// \return The peer/shadow pairs for peers whose join() calls settled
+    ///         successfully within \a timeout, as described for the
+    ///         registry-taking overload above.
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<discovered_peer> fan_out_join(
+        supervision_handle const& handle,
         std::vector<discovered_peer> const& peers,
         chrono::steady_duration const& timeout = default_discovery_timeout);
 
@@ -134,6 +175,24 @@ namespace hpx::supervision {
     ///         discover_peers().
     HPX_SUPERVISION_DISPATCH_EXPORT std::vector<discovered_peer>
     discover_and_join(registry const& local_registry,
+        chrono::steady_duration const& timeout = default_discovery_timeout);
+
+    /// Convenience overload of discover_and_join() that discovers and joins
+    /// peers to \a handle.registry_client, i.e. the registry owned by a prior
+    /// init() call, rather than requiring the caller to name that registry
+    /// explicitly. Forwards directly to the registry-taking overload.
+    ///
+    /// \param handle  The supervision_handle (typically returned by init())
+    ///                whose registry_client every discovered peer is joined to.
+    /// \param timeout The maximum duration to wait, across all discovery
+    ///                candidates combined, for their sentinel and registry
+    ///                names to resolve (see discover_peers()).
+    ///
+    /// \return The peer/shadow pair for each peer discovered and successfully
+    ///         joined within \a timeout, as described for the registry-taking
+    ///         overload above.
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<discovered_peer>
+    discover_and_join(supervision_handle const& handle,
         chrono::steady_duration const& timeout = default_discovery_timeout);
 
 }    // namespace hpx::supervision

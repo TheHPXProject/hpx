@@ -22,6 +22,15 @@
 
 namespace hpx::supervision {
 
+    /// A small, copyable handle to the sentinel/registry pair owned by a
+    /// successful init() call, returned once the supervision-dispatch
+    /// runtime for this locality has reached the \a active state.
+    struct supervision_handle
+    {
+        sentinel sentinel_client;
+        registry registry_client;
+    };
+
     /// Performs one-shot, idempotent initialization of the supervision-dispatch
     /// runtime for this locality. On the first successful call, this function
     /// atomically transitions the internal lifecycle state from
@@ -50,10 +59,11 @@ namespace hpx::supervision {
     ///                          during the discover_and_join() step (see
     ///                          discover_peers()).
     ///
-    /// \return A shared future that becomes ready (with a void value) once the
-    ///         supervision runtime has reached the \a active state, or that
-    ///         becomes exceptional if initialization could not complete (e.g.
-    ///         due to a concurrent finalize still in progress).
+    /// \return A shared future that becomes ready, holding a
+    ///         \a supervision_handle for the sentinel/registry pair owned by
+    ///         this init() cycle, once the supervision runtime has reached the
+    ///         \a active state, or that becomes exceptional if initialization
+    ///         fails.
     ///
     /// \note This function has no effect on any state that has not yet been
     ///       created by a successful call -- in particular, no symbol name is
@@ -61,7 +71,7 @@ namespace hpx::supervision {
     ///       function (or a concurrent call it is attached to) actually runs
     ///       the initialization sequence.
     ///
-    HPX_SUPERVISION_DISPATCH_EXPORT hpx::shared_future<void> init(
+    HPX_SUPERVISION_DISPATCH_EXPORT hpx::shared_future<supervision_handle> init(
         hpx::chrono::steady_duration const& discovery_timeout =
             default_discovery_timeout);
 
@@ -75,13 +85,16 @@ namespace hpx::supervision {
     /// become ready (or exceptional) before returning, rather than handing the
     /// future back to the caller.
     ///
-    /// \param launch::sync_policy Tag selecting the blocking overload of
+    /// \param policy              Tag selecting the blocking overload of
     ///                            \a init().
     /// \param discovery_timeout   The maximum duration to wait, across all
     ///                            discovery candidates combined, for peer
     ///                            sentinel/registry symbol names to resolve
     ///                            during the discover_and_join() step (see
     ///                            discover_peers()).
+    ///
+    /// \return A \a supervision_handle for the sentinel/registry pair owned
+    ///         by this init() cycle.
     ///
     /// \throws hpx::exception if initialization could not complete (e.g. due to
     ///         a concurrent finalize() still in progress). Calling this while
@@ -90,7 +103,8 @@ namespace hpx::supervision {
     /// \note As with the asynchronous overload, no symbol name is registered
     ///       and no event is published unless this call (or a concurrent call
     ///       it attaches to) actually performs the initialization sequence.
-    HPX_SUPERVISION_DISPATCH_EXPORT void init(hpx::launch::sync_policy,
+    HPX_SUPERVISION_DISPATCH_EXPORT supervision_handle init(
+        hpx::launch::sync_policy policy,
         hpx::chrono::steady_duration const& discovery_timeout =
             default_discovery_timeout);
 

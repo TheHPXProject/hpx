@@ -28,8 +28,8 @@ Overview
 Lifecycle initialization and shutdown
 -------------------------------------
 
-.. cpp:function:: hpx::shared_future<void> hpx::supervision::init(hpx::chrono::steady_duration const& discovery_timeout = hpx::supervision::default_discovery_timeout)
-.. cpp:function:: void hpx::supervision::init(hpx::launch::sync_policy, hpx::chrono::steady_duration const& discovery_timeout = hpx::supervision::default_discovery_timeout)
+.. cpp:function:: hpx::shared_future<hpx::supervision::supervision_handle> hpx::supervision::init(hpx::chrono::steady_duration const& discovery_timeout = hpx::supervision::default_discovery_timeout)
+.. cpp:function:: hpx::supervision::supervision_handle hpx::supervision::init(hpx::launch::sync_policy, hpx::chrono::steady_duration const& discovery_timeout = hpx::supervision::default_discovery_timeout)
 
     Performs one-shot, idempotent initialization of the supervision-dispatch
     runtime for this locality: creates a local sentinel and registry,

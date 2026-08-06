@@ -110,7 +110,7 @@ void test_discover_peers_finds_registered_peer()
     HPX_TEST(elapsed < test_discovery_timeout);
 
     bool found = false;
-    for (auto const& [locality, sentinel_client, registry_client] : peers)
+    for (auto const& [locality, sentinel_client, registry_client, _] : peers)
     {
         if (locality == target_locality)
         {

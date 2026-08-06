@@ -27,6 +27,8 @@
 #include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/supervision.hpp>
 
+#include <hpx/supervision_dispatch/discovery.hpp>
+
 #include <cstdint>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -231,6 +233,39 @@ namespace hpx::supervision {
         std::uint64_t const epoch, Ts&&... ts)
     {
         return dispatch_work<Action>(target, epoch, HPX_FORWARD(Ts, ts)...);
+    }
+
+    /// \brief Dispatch an action to \p peer under supervision fencing, by
+    ///        discovered_peer argument.
+    ///
+    /// Convenience overload of dispatch_work() that dispatches directly against
+    /// a discovered_peer (typically returned by fan_out_join() or
+    /// discover_and_join()), forwarding to the primary dispatch_work() overload
+    /// as `dispatch_work<Action>(peer.locality, peer.join_epoch, ts...)`, so
+    /// callers do not need to unpack the locality/epoch pair themselves.
+    ///
+    /// \note This trusts \p peer.join_epoch as-is, so it is only correct for
+    ///       peers returned by fan_out_join()/discover_and_join(); a
+    ///       discovered_peer obtained from discover_peers() alone still has
+    ///       join_epoch == 0 and would fence against the wrong epoch.
+    ///
+    /// \tparam Action The action type to dispatch (deduced from the
+    ///                \p Action instance argument).
+    /// \tparam Ts     Types of the additional arguments forwarded to \p Action.
+    ///
+    /// \param peer The discovered/joined peer to dispatch to.
+    /// \param ts   Additional arguments forwarded to the action.
+    ///
+    /// \return A future holding the result of the dispatched action. If the
+    ///         local admission check fails, an already-exceptional future is
+    ///         returned immediately without an actual dispatch.
+    template <typename Action, typename... Ts>
+        requires(hpx::traits::is_action_v<Action>)
+    decltype(auto) dispatch_work(
+        Action, discovered_peer const& peer, Ts&&... ts)
+    {
+        return dispatch_work<Action>(
+            peer.locality, peer.join_epoch, HPX_FORWARD(Ts, ts)...);
     }
 }    // namespace hpx::supervision
 
