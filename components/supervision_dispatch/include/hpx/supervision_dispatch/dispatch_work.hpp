@@ -55,6 +55,16 @@ namespace hpx::supervision {
     /// `admitted`, the target may have latched a terminal event for this epoch
     /// in the meantime, and this re-check will catch it.
     ///
+    /// This re-check is authoritative only because a joining registry (see
+    /// components/supervision_dispatch/src/server/registry_server.cpp)
+    /// dual-publishes lifecycle mirrors for a joined peer onto that peer's own
+    /// locality, in addition to the joining registry's local copy: \p target
+    /// must resolve to that same peer locality for this guarantee to hold.
+    /// Dispatching \p shadow against an unrelated third locality - one that
+    /// never received the dual-published mirror for this shadow - remains out
+    /// of contract; the re-check performed there consults a supervision_manager
+    /// state that was never seeded for \p shadow and so cannot detect fencing.
+    ///
     /// \tparam Action  The wrapped HPX action type to invoke on admission.
     /// \tparam ShadowId Type of the shadow identifier.
     /// \tparam IdType  Type of the target identifier forwarded to \p act (this

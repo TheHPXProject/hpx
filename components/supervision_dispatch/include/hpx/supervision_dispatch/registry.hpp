@@ -110,10 +110,11 @@ namespace hpx::supervision {
         ///
         /// Used by fan_out_join() for any join() that did not complete within
         /// its wait_all_for_nothrow() timeout: the join is silently excluded
-        /// from that call's returned joined_ids, so this ensures its eventual
-        /// side effects on the registry are discarded too, keeping "dropped
-        /// means dropped" true for snapshot_peers() as well. Exceptions from
-        /// the underlying join() are swallowed here (nothing to retract).
+        /// from that call's returned joined_discovery_result list, so this
+        /// ensures its eventual side effects on the registry are discarded
+        /// too, keeping "dropped means dropped" true for snapshot_peers() as
+        /// well. Exceptions from the underlying join() are swallowed here
+        /// (nothing to retract).
         ///
         /// \param peer_sentinel The peer sentinel to leave.
         /// \param peer_locality The locality that owns \p peer_sentinel.

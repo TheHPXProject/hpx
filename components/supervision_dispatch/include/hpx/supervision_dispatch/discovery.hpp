@@ -70,6 +70,22 @@ namespace hpx::supervision {
     std::vector<discovered_peer> discover_peers(
         chrono::steady_duration const& timeout = default_discovery_timeout);
 
+    /// The result of successfully join()-ing a single discovered peer: pairs
+    /// the resolved peer (as returned by discover_peers()) with the shadow_id
+    /// that join() produced for it.
+    ///
+    /// fan_out_join() silently drops peers whose join() call does not settle
+    /// within its timeout, so the surviving entries here are a same-order
+    /// *subset* of the input peers list, not index-aligned with it.
+    /// Returning peer/shadow pairs directly means callers never need to
+    /// re-zip a shadow id against the peers list themselves, and never risk
+    /// doing so against a stale index after some peers were dropped.
+    struct joined_discovery_result
+    {
+        discovered_peer peer;
+        shadow_id shadow;
+    };
+
     /// Reactively fans out join() calls from \a local_registry to every peer in
     /// \a peers (typically the result of a prior discover_peers() call):
     /// for each entry, this calls `local_registry.join(peer.sentinel_client,
@@ -96,11 +112,12 @@ namespace hpx::supervision {
     ///                 silently dropped from the result, rather than hanging or
     ///                 throwing.
     ///
-    /// \return The shadow target IDs for peers whose join() calls settled
+    /// \return The peer/shadow pairs for peers whose join() calls settled
     ///         successfully within \a timeout, in the same relative order as
-    ///         \a peers.
-    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<shadow_id> fan_out_join(
-        registry const& local_registry,
+    ///         \a peers (with unsuccessful/timed-out peers omitted, rather
+    ///         than left as gaps).
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<joined_discovery_result>
+    fan_out_join(registry const& local_registry,
         std::vector<discovered_peer> const& peers,
         chrono::steady_duration const& timeout = default_discovery_timeout);
 
@@ -127,11 +144,12 @@ namespace hpx::supervision {
     ///                       candidates combined, for their sentinel and
     ///                       registry names to resolve (see discover_peers()).
     ///
-    /// \return The shadow target id that \a local_registry created (or already
-    ///         had) for each peer discovered within \a timeout, in the same
-    ///         order as returned by discover_peers().
-    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<shadow_id> discover_and_join(
-        registry const& local_registry,
+    /// \return The peer/shadow pair that \a local_registry created (or
+    ///         already had) for each peer discovered and successfully joined
+    ///         within \a timeout, in the same relative order as returned by
+    ///         discover_peers().
+    HPX_SUPERVISION_DISPATCH_EXPORT std::vector<joined_discovery_result>
+    discover_and_join(registry const& local_registry,
         chrono::steady_duration const& timeout = default_discovery_timeout);
 
 }    // namespace hpx::supervision

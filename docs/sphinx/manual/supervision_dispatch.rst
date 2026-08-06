@@ -52,7 +52,10 @@ down with a single call to ``finalize()``:
    discover and join a not-yet-started sentinel.
 #. Registration of both symbol names.
 #. A single ``discover_and_join()`` pass that joins every peer registry
-   reachable within ``discovery_timeout``.
+   reachable within ``discovery_timeout``. Its result is a list of
+   ``joined_discovery_result`` (peer paired with the shadow id its ``join()``
+   call was assigned); peers that time out mid-pass are omitted from that
+   list entirely rather than leaving a gap in it.
 
 ``init()`` is idempotent: calling it while already active is a no-op, and
 concurrent callers attach to a single in-flight initialization rather than

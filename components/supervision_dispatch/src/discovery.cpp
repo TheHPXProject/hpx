@@ -82,7 +82,8 @@ namespace hpx::supervision {
         return peers;
     }
 
-    std::vector<shadow_id> fan_out_join(registry const& local_registry,
+    std::vector<joined_discovery_result> fan_out_join(
+        registry const& local_registry,
         std::vector<discovered_peer> const& peers,
         hpx::chrono::steady_duration const& timeout)
     {
@@ -103,20 +104,22 @@ namespace hpx::supervision {
         // queryable regardless of the returned status.
         hpx::wait_all_for_nothrow(timeout, shadow_futures);
 
-        std::vector<shadow_id> joined_ids;
-        joined_ids.reserve(shadow_futures.size());
+        std::vector<joined_discovery_result> joined;
+        joined.reserve(shadow_futures.size());
 
         for (std::size_t i = 0; i != shadow_futures.size(); ++i)
         {
             hpx::future<joined_peer>& f = shadow_futures[i];
 
-            // Only keep peers whose join() settled successfully within the
-            // timeout; anything still pending or that failed is dropped rather
-            // than propagated - mirrors discover_peers()'s own "missing peer
-            // is not an error" contract.
+            // peers[i] is still correctly correlated with shadow_futures[i] here
+            // (this loop is the only place that index pairing is used), so pair
+            // the surviving peer with its shadow_id directly rather than
+            // flattening to a bare shadow_id and forcing every caller to
+            // re-derive the pairing (ambiguous once timed-out peers are dropped).
             if (f.is_ready() && !f.has_exception())
             {
-                joined_ids.push_back(f.get().shadow);
+                joined.push_back(joined_discovery_result{
+                    .peer = peers[i], .shadow = f.get().shadow});
                 continue;
             }
 
@@ -129,10 +132,11 @@ namespace hpx::supervision {
                 peers[i].sentinel_client, peers[i].locality, HPX_MOVE(f));
         }
 
-        return joined_ids;
+        return joined;
     }
 
-    std::vector<shadow_id> discover_and_join(registry const& local_registry,
+    std::vector<joined_discovery_result> discover_and_join(
+        registry const& local_registry,
         hpx::chrono::steady_duration const& timeout)
     {
         // One shared budget for discovery, join, and visibility polling.
@@ -145,7 +149,7 @@ namespace hpx::supervision {
         };
 
         std::vector<discovered_peer> const peers = discover_peers(remaining());
-        std::vector<shadow_id> joined =
+        std::vector<joined_discovery_result> joined =
             fan_out_join(local_registry, peers, remaining());
 
         // fan_out_join()'s success only means join() settled server-side; the
@@ -162,11 +166,11 @@ namespace hpx::supervision {
             auto const snapshot =
                 local_registry.snapshot_peers(hpx::launch::sync);
 
-            bool const all_visible =
-                std::ranges::all_of(joined, [&](shadow_id const& id) {
+            bool const all_visible = std::ranges::all_of(
+                joined, [&](joined_discovery_result const& r) {
                     return std::ranges::any_of(
                         snapshot, [&](server::peer_snapshot const& p) {
-                            return p.shadow == id;
+                            return p.shadow == r.shadow;
                         });
                 });
 

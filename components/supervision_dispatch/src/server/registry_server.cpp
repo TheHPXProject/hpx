@@ -148,11 +148,26 @@ namespace hpx::supervision::server {
                         (shadow_state.epoch != notification.epoch ||
                             shadow_state.last_event ==
                                 hpx::supervision::event::unknown))
+
+                    // Seed locally and on the the mirror hosted on the peer's
+                    // own locality, so a caller dispatching to a target that
+                    // resolves there sees an authoritative admission check (see
+                    // invoke_fenced_action() in dispatch_work.hpp). Lightweight
+                    // and swallowed on purpose: if the peer's locality is
+                    // already gone (e.g. concurrent failure), the local mirror,
+                    // which is what dispatch_work's caller-local early-out
+                    // actually uses today - must not be affected.
                     {
                         hpx::error_code ec1(hpx::throwmode::lightweight);
                         hpx::supervision::publish_event(shadow.get(),
                             hpx::supervision::event::started,
                             notification.epoch, ec1);
+
+                        hpx::error_code ec1r(hpx::throwmode::lightweight);
+                        hpx::supervision::publish_event(hpx::launch::sync,
+                            peer_locality, shadow.get(),
+                            hpx::supervision::event::started,
+                            notification.epoch, ec1r);
                     }
 
                     // Mirror the peer's event onto the shadow at the same epoch
@@ -160,6 +175,13 @@ namespace hpx::supervision::server {
                     hpx::error_code ec2(hpx::throwmode::lightweight);
                     hpx::supervision::publish_event(shadow.get(),
                         notification.event, notification.epoch, ec2);
+
+                    // Routed mirror of the actual event, on peer_locality (see
+                    // comment above).
+                    hpx::error_code ec2r(hpx::throwmode::lightweight);
+                    hpx::supervision::publish_event(hpx::launch::sync,
+                        peer_locality, shadow.get(), notification.event,
+                        notification.epoch, ec2r);
 
                     // Evict the peer if it has reached a terminal event, so
                     // peers_ does not grow without bound over the lifetime of a
@@ -209,7 +231,7 @@ namespace hpx::supervision::server {
         return std::make_pair(lifecycle_observer, activity_observer);
     }
 
-    std::pair<shadow_id, bool> registry::reserve_ownership(
+    std::tuple<shadow_id, hpx::id_type, bool> registry::reserve_ownership(
         hpx::id_type const& peer_sentinel)
     {
         std::unique_lock l(mtx_);
@@ -230,7 +252,7 @@ namespace hpx::supervision::server {
 
             if (it->second.ready)
             {
-                return {it->second.shadow, true};
+                return {it->second.shadow, it->second.peer_locality, true};
             }
 
             // Another call already reserved this peer; wait for it to
@@ -245,11 +267,23 @@ namespace hpx::supervision::server {
     joined_peer registry::join(
         hpx::id_type const& peer_sentinel, hpx::id_type const& peer_locality)
     {
+        if (!hpx::naming::is_locality(peer_locality))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                "hpx::supervision::server::registry::join",
+                "The id passed as peer_locality is not representing a "
+                "locality");
+        }
+
         // Reserve ownership of peer_sentinel before performing any of
         // the remote registration calls.
-        auto [shadow, reserved] = reserve_ownership(peer_sentinel);
+        auto [shadow, peer_locality, reserved] =
+            reserve_ownership(peer_sentinel);
         if (reserved)
         {
+            // Reflect the peer_locality originally recorded for this entry by
+            // the join() call that created it, not necessarily the one passed
+            // to this call.
             return {.shadow = shadow, .target = peer_locality};
         }
 
@@ -272,6 +306,13 @@ namespace hpx::supervision::server {
                 hpx::error_code ec1(hpx::throwmode::lightweight);
                 hpx::supervision::publish_event(shadow.get(),
                     hpx::supervision::event::started, seed_epoch, ec1);
+
+                // Mirror the seed onto the peer's own locality too, for parity
+                // with register_observers()'s seeding path (see comment there).
+                hpx::error_code ec1r(hpx::throwmode::lightweight);
+                hpx::supervision::publish_event(hpx::launch::sync,
+                    peer_locality, shadow.get(),
+                    hpx::supervision::event::started, seed_epoch, ec1r);
             }
 
             {
@@ -299,6 +340,12 @@ namespace hpx::supervision::server {
             {
                 hpx::error_code ec(hpx::throwmode::lightweight);
                 hpx::supervision::remove_target(shadow.get(), ec);
+
+                // Retract the mirrored remote copy too (see cleanup_peer()
+                // below).
+                hpx::error_code ecr(hpx::throwmode::lightweight);
+                hpx::supervision::remove_target(
+                    hpx::launch::sync, peer_locality, shadow.get(), ecr);
             }
 
             std::rethrow_exception(std::current_exception());
@@ -413,6 +460,12 @@ namespace hpx::supervision::server {
         // nothing will consult it again.
         hpx::error_code ec(hpx::throwmode::lightweight);
         hpx::supervision::remove_target(shadow.get(), ec);
+
+        // Retract the mirrored remote copy too, so it doesn't leak on the
+        // peer's locality once this registry stops tracking the peer.
+        hpx::error_code ecr(hpx::throwmode::lightweight);
+        hpx::supervision::remove_target(
+            hpx::launch::sync, peer_locality, shadow.get(), ecr);
     }
 }    // namespace hpx::supervision::server
 

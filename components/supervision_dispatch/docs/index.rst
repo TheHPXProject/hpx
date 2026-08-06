@@ -68,18 +68,38 @@ Peer discovery
     single wait for ``timeout``. Localities that have not yet called
     ``init()`` are silently excluded rather than causing a hang or failure.
 
-.. cpp:function:: std::vector<hpx::id_type> hpx::supervision::fan_out_join(hpx::supervision::registry const& local_registry, std::vector<hpx::supervision::discovered_peer> const& peers)
+.. cpp:struct:: hpx::supervision::joined_discovery_result
+
+    Pairs a resolved ``discovered_peer`` with the ``shadow_id`` that
+    ``registry::join()`` produced for it, so callers of ``fan_out_join()``
+    and ``discover_and_join()`` never need to re-correlate a shadow id
+    against the peer list themselves.
+
+    .. cpp:member:: hpx::supervision::discovered_peer peer
+    .. cpp:member:: hpx::supervision::shadow_id shadow
+
+.. cpp:function:: std::vector<hpx::supervision::joined_discovery_result> hpx::supervision::fan_out_join(hpx::supervision::registry const& local_registry, std::vector<hpx::supervision::discovered_peer> const& peers, hpx::chrono::steady_duration const& timeout = hpx::supervision::default_discovery_timeout)
 
     Fans out ``join()`` calls from ``local_registry`` to every entry in
     ``peers``. Reuses ``registry::join()``'s reservation/idempotency
     machinery, so repeated or overlapping calls never create more than one
     shadow per peer sentinel.
 
-.. cpp:function:: std::vector<hpx::id_type> hpx::supervision::discover_and_join(hpx::supervision::registry const& local_registry, hpx::chrono::steady_duration const& timeout = hpx::supervision::default_discovery_timeout)
+    Returns a ``joined_discovery_result`` for each peer whose ``join()``
+    call settled successfully within ``timeout``, in the same relative
+    order as ``peers``. Peers whose ``join()`` call did not settle in time
+    are omitted from the result (rather than left as gaps or defaulted
+    entries), so the returned vector is a same-order *subset* of ``peers``,
+    not index-aligned with it.
+
+.. cpp:function:: std::vector<hpx::supervision::joined_discovery_result> hpx::supervision::discover_and_join(hpx::supervision::registry const& local_registry, hpx::chrono::steady_duration const& timeout = hpx::supervision::default_discovery_timeout)
 
     Composes a single reactive discovery-and-join pass: one
     ``discover_peers()`` pull followed by one ``fan_out_join()`` call.
     Introduces no polling, timer, or repeated broadcast of its own.
+
+    Returns the same ``joined_discovery_result`` vector produced by
+    ``fan_out_join()`` for the peers it discovered.
 
 Sentinel client
 ---------------
