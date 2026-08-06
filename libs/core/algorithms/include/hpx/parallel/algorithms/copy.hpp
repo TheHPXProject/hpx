@@ -792,9 +792,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Pred pred)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -804,11 +803,27 @@ namespace hpx {
                             hpx::traits::iter_value_t<FwdIter1>>),
                 "Requires at least forward iterator or sequential execution.");
 
-            return hpx::parallel::util::get_second_element(
-                hpx::parallel::detail::copy_if<
-                    hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>()
-                    .call(HPX_FORWARD(ExPolicy, policy), first, last, dest,
-                        HPX_MOVE(pred), hpx::identity_v));
+            constexpr bool has_scheduler_executor =
+                hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
+
+            if constexpr (has_scheduler_executor)
+            {
+                return hpx::parallel::util::get_second_element(
+                    hpx::parallel::execution::async_execute(policy.executor(),
+                        [first, last, dest, pred = HPX_MOVE(pred)]() mutable {
+                            return hpx::parallel::detail::sequential_copy_if(
+                                first, last, dest, HPX_MOVE(pred),
+                                hpx::identity_v);
+                        }));
+            }
+            else
+            {
+                return hpx::parallel::util::get_second_element(
+                    hpx::parallel::detail::copy_if<hpx::parallel::util::
+                            in_out_result<FwdIter1, FwdIter2>>()
+                        .call(HPX_FORWARD(ExPolicy, policy), first, last, dest,
+                            HPX_MOVE(pred), hpx::identity_v));
+            }
         }
 
         template <typename FwdIter1, typename FwdIter2, typename Pred>
