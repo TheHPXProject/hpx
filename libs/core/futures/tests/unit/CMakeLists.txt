@@ -6,6 +6,8 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
+    causal_chain
+    causal_exception
     direct_scoped_execution
     future
     future_ref
@@ -25,6 +27,8 @@ endif()
 
 set(future_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_then_PARAMETERS THREADS_PER_LOCALITY 4)
+set(causal_chain_PARAMETERS THREADS_PER_LOCALITY 2)
+set(causal_exception_PARAMETERS THREADS_PER_LOCALITY 2)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
