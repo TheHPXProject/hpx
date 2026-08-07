@@ -234,28 +234,18 @@ namespace hpx::execution::experimental {
         HPX_CXX_CORE_EXPORT template <typename Sender, typename Allocator>
         auto make_future(Sender&& sender, Allocator const& allocator)
         {
-            // Debug-only runtime guard against the silent-hang case:
-            // this 1-argument fallback constructs a future_data that
-            // never drives loop.run(), so a sender whose set_value
+            // Prevent the silent-hang case: a sender whose set_value
             // completion scheduler is a run_loop_scheduler produces a
-            // future that hangs in get(). The public make_future CPO
-            // routes such senders to the scheduler-form overload, so
-            // reaching this body with a run-loop completion scheduler
-            // indicates a direct call to detail::make_future rather than
-            // the public API. HPX_ASSERT_MSG is a no-op in release builds
-            // (HPX_DEBUG off), so this only catches the misuse in debug;
-            // an unconditional throw would also alter the release-mode
-            // failure shape and is left out intentionally -- the assert
-            // exists to flag bypassing the public CPO during development,
-            // not to harden release-mode misuse. static_assert is avoided
-            // here because overload-resolution probing may instantiate
-            // this body before the scheduler-form overload is selected.
-            HPX_ASSERT_MSG(!sender_completion_is_run_loop_scheduler<
-                               std::decay_t<Sender>>::value,
-                "make_future(sender) cannot drive the parent run_loop when "
-                "the sender's completion scheduler is a run_loop_scheduler. "
-                "Use make_future(loop.get_scheduler(), sender) so the "
-                "resulting future can drive the loop in its get().");
+            // future that hangs in get(). Use
+            // make_future(loop.get_scheduler(), sender) instead.
+            if constexpr (sender_completion_is_run_loop_scheduler<
+                              std::decay_t<Sender>>::value)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                    "hpx::execution::experimental::make_future",
+                    "make_future cannot be used with a sender that completes "
+                    "on a run_loop_scheduler as it causes a deadlock");
+            }
 
             using allocator_type = Allocator;
 
