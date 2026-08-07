@@ -25,6 +25,32 @@ namespace ex = hpx::execution::experimental;
 namespace tt = hpx::this_thread::experimental;
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
+void test_copy_if_scheduler(
+    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
+{
+    static_assert(!hpx::is_async_execution_policy_v<ExPolicy>);
+
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+    using scheduler_type = ex::thread_pool_policy_scheduler<LnPolicy>;
+
+    std::vector<int> input{1, 2, 3, 4, 5, 6};
+    std::vector<int> output(input.size(), -1);
+    auto exec = ex::explicit_scheduler_executor(scheduler_type(ln_policy));
+
+    auto result = hpx::copy_if(ex_policy.on(exec), iterator(input.begin()),
+        iterator(input.end()), output.begin(),
+        [](int value) { return value % 2 == 0; });
+    static_assert(std::is_same_v<decltype(result), base_iterator>);
+
+    HPX_TEST(result == output.begin() + 3);
+    std::vector<int> const expected{2, 4, 6};
+    HPX_TEST(std::equal(expected.begin(), expected.end(), output.begin()));
+    HPX_TEST(std::all_of(
+        result, output.end(), [](int value) { return value == -1; }));
+}
+
+template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_copy_if_sender_case(LnPolicy ln_policy, ExPolicy&& ex_policy,
     IteratorTag, std::vector<int> input, std::vector<int> const& expected)
 {
@@ -136,6 +162,11 @@ template <typename IteratorTag>
 void copy_if_sender_test()
 {
     using namespace hpx::execution;
+
+    test_copy_if_scheduler(hpx::launch::sync, seq, IteratorTag{});
+    test_copy_if_scheduler(hpx::launch::sync, unseq, IteratorTag{});
+    test_copy_if_scheduler(hpx::launch::async, par, IteratorTag{});
+    test_copy_if_scheduler(hpx::launch::async, par_unseq, IteratorTag{});
 
     test_copy_if_sender(hpx::launch::sync, seq(task), IteratorTag{});
     test_copy_if_sender(hpx::launch::sync, unseq(task), IteratorTag{});

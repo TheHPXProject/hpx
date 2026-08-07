@@ -810,8 +810,13 @@ namespace hpx {
 
             if constexpr (has_scheduler_executor)
             {
+                using result_handler =
+                    hpx::parallel::util::detail::algorithm_result<ExPolicy,
+                        hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>;
+
                 return hpx::parallel::util::get_second_element(
-                    hpx::parallel::execution::async_execute(policy.executor(),
+                    result_handler::get(hpx::parallel::execution::async_execute(
+                        policy.executor(),
                         [first, last, dest, pred = HPX_MOVE(pred)]() mutable {
                             try
                             {
@@ -825,7 +830,7 @@ namespace hpx {
                                     handle_local_exceptions<ExPolicy>::call(
                                         std::current_exception());
                             }
-                        }));
+                        })));
             }
             else
             {
