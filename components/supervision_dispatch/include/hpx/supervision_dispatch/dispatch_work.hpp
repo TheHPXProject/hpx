@@ -294,6 +294,59 @@ namespace hpx::supervision {
         return dispatch_work<Action>(
             peer.shadow, peer.target, epoch, HPX_FORWARD(Ts, ts)...);
     }
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/modules/actions_base.hpp>
+    /// \brief Dispatch a reflected function under supervision fencing,
+    ///        by C++26 reflection (shadow + target + epoch overload).
+    ///
+    /// Equivalent to:
+    /// \code
+    ///   dispatch_work<hpx::actions::reflect_action<^^fn>>(shadow, target, epoch, ts...);
+    /// \endcode
+    ///
+    /// \tparam F    A std::meta::info reflection of the free function to dispatch.
+    /// \tparam Ts   Types of the additional arguments forwarded to \p F.
+    /// \param shadow The shadow identifier for the target.
+    /// \param target Identifier of the target component instance.
+    /// \param epoch  The fencing epoch to check admission for.
+    /// \param ts     Additional arguments forwarded to the reflected function.
+    // clang-format off
+    template <std::meta::info F, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    decltype(auto) dispatch_work(
+        shadow_id const& shadow, hpx::id_type const& target,
+        std::uint64_t const epoch, Ts&&... ts)
+    // clang-format on
+    {
+        return dispatch_work<hpx::actions::reflect_action<F>>(
+            shadow, target, epoch, HPX_FORWARD(Ts, ts)...);
+    }
+    /// \brief Dispatch a reflected function under supervision fencing,
+    ///        by C++26 reflection (joined_peer + epoch overload).
+    ///
+    /// Equivalent to:
+    /// \code
+    ///   dispatch_work(hpx::actions::reflect_action<^^fn>(), peer, epoch, ts...);
+    /// \endcode
+    ///
+    /// \tparam F   A std::meta::info reflection of the free function to dispatch.
+    /// \tparam Ts  Types of the additional arguments forwarded to \p F.
+    /// \param peer  The joined peer to dispatch to.
+    /// \param epoch The fencing epoch to check admission for.
+    /// \param ts    Additional arguments forwarded to the reflected function.
+    // clang-format off
+    template <std::meta::info F, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    decltype(auto) dispatch_work(
+        joined_peer const& peer, std::uint64_t const epoch, Ts&&... ts)
+    // clang-format on
+    {
+        return dispatch_work(hpx::actions::reflect_action<F>(), peer, epoch,
+            HPX_FORWARD(Ts, ts)...);
+    }
+#endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx::supervision
 
 #include <hpx/config/warnings_suffix.hpp>
