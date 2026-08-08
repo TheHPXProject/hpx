@@ -258,6 +258,7 @@ namespace hpx::detail {
         hpx::collectives::detail::reset_global_communicator();
         hpx::collectives::detail::reset_local_communicator();
         hpx::collectives::detail::reset_world_channel_communicator();
+        hpx::collectives::detail::reset_cached_channel_communicators();
 
         // simply destroy global barrier
         hpx::distributed::barrier::get_global_barrier().detach();

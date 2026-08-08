@@ -36,6 +36,17 @@ namespace hpx { namespace collectives {
     /// \param root_site    The site that is responsible for creating the
     ///                     all_to_all support object. This value is optional
     ///                     and defaults to '0' (zero).
+    /// \param threshold    The fixed row-size threshold, in bytes, at or above
+    ///                     which rows are exchanged directly between sites
+    ///                     instead of being routed through one communicator
+    ///                     site. Automatic selection uses sizeof(T) only for a
+    ///                     trivially copyable T; other row types stay routed
+    ///                     unless every site passes zero. See
+    ///                     \a pairwise_threshold_arg for the default and the
+    ///                     remaining direct-exchange requirements. Successive
+    ///                     generations using one basename may select different
+    ///                     paths. Which path runs affects performance only,
+    ///                     never the result.
     ///
     /// \returns    This function returns a future holding a vector with all
     ///             values send by all participating sites. It will become
@@ -47,7 +58,8 @@ namespace hpx { namespace collectives {
         num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg(),
         generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
+        root_site_arg root_site = root_site_arg(),
+        pairwise_threshold_arg threshold = pairwise_threshold_arg());
 
     /// AllToAll a set of values from different call sites
     ///
@@ -131,6 +143,17 @@ namespace hpx { namespace collectives {
     /// \param root_site    The site that is responsible for creating the
     ///                     all_to_all support object. This value is optional
     ///                     and defaults to '0' (zero).
+    /// \param threshold    The fixed row-size threshold, in bytes, at or above
+    ///                     which rows are exchanged directly between sites
+    ///                     instead of being routed through one communicator
+    ///                     site. Automatic selection uses sizeof(T) only for a
+    ///                     trivially copyable T; other row types stay routed
+    ///                     unless every site passes zero. See
+    ///                     \a pairwise_threshold_arg for the default and the
+    ///                     remaining direct-exchange requirements. Successive
+    ///                     generations using one basename may select different
+    ///                     paths. Which path runs affects performance only,
+    ///                     never the result.
     ///
     /// \returns    This function returns a vector with all values send by all
     ///             participating sites. This function executes synchronously and
@@ -142,7 +165,8 @@ namespace hpx { namespace collectives {
         num_sites_arg num_sites = num_sites_arg(),
         this_site_arg this_site = this_site_arg(),
         generation_arg generation = generation_arg(),
-        root_site_arg root_site = root_site_arg());
+        root_site_arg root_site = root_site_arg(),
+        pairwise_threshold_arg threshold = pairwise_threshold_arg());
 
     /// AllToAll a set of values from different call sites
     ///
@@ -213,10 +237,12 @@ namespace hpx { namespace collectives {
 
 #include <hpx/assert.hpp>
 #include <hpx/collectives/argument_types.hpp>
+#include <hpx/collectives/channel_communicator.hpp>
 #include <hpx/collectives/create_communicator.hpp>
 #include <hpx/collectives/detail/flattened_data.hpp>
 #include <hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp>
 #include <hpx/collectives/detail/hierarchical_helpers.hpp>
+#include <hpx/collectives/detail/pairwise_all_to_all_helpers.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
@@ -225,6 +251,7 @@ namespace hpx { namespace collectives {
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -598,17 +625,126 @@ namespace hpx::collectives {
             HPX_MOVE(fid), HPX_MOVE(local_result), this_site, generation);
     }
 
+    namespace detail {
+
+        // all_to_all_by_name: resolves a basename call onto one of the two
+        // exchange paths.
+        //
+        // The routed path is the default and always available. The direct
+        // path additionally needs two things the routed path does not: a
+        // channel communicator, which only a basename can produce, and an
+        // explicit generation, which is what gives every site the same
+        // exchange tag. A default generation therefore stays routed. Which
+        // path runs is a performance choice rather than a semantic one, so an
+        // otherwise valid call is served rather than rejected.
+        //
+        // An explicit routed generation gets its own collective communicator
+        // from create_communicator. Direct generations share a channel
+        // communicator and use the generation as the exchange tag. The two
+        // paths therefore do not share a gate, and successive generations may
+        // choose different paths.
+        template <typename T>
+        hpx::future<std::vector<T>> all_to_all_by_name(char const* basename,
+            std::vector<T>&& local_result, num_sites_arg num_sites,
+            this_site_arg this_site, generation_arg const generation,
+            root_site_arg const root_site,
+            pairwise_threshold_arg const threshold)
+        {
+            // Validation cannot depend on which path serves the call: the
+            // routed path rejects a zero generation inside detail::all_to_all,
+            // while the direct path would accept it as an exchange tag, since
+            // only a default generation reads as "unspecified" there. Reject it
+            // before the path is chosen, so a performance knob cannot move the
+            // boundary of what the operation accepts.
+            if (generation == 0)
+            {
+                return hpx::make_exceptional_future<std::vector<T>>(
+                    HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::all_to_all",
+                        "the generation number shouldn't be zero"));
+            }
+
+            if (num_sites.is_default())
+            {
+                num_sites =
+                    num_sites_arg(agas::get_num_localities(hpx::launch::sync));
+            }
+            if (this_site.is_default())
+            {
+                this_site = this_site_arg(agas::get_locality_id());
+            }
+
+            // Leave malformed communicator arguments to the routed path's
+            // existing validation instead of changing their behavior here.
+            if (basename != nullptr && basename[0] != '\0' &&
+                this_site < num_sites && root_site < num_sites &&
+                !generation.is_default() &&
+                exchange_pairwise(static_cast<std::size_t>(num_sites),
+                    pairwise_type_bytes<T>(), threshold))
+            {
+                // The channel communicator carries a name of its own so it
+                // cannot collide with the collective communicator registered
+                // under this basename. That name spans a group of sites rather
+                // than a single call: one communicator serves every
+                // generation, and the exchange tag is what keeps the
+                // generations apart. Registering a name per generation instead
+                // would put an AGAS registration and a full peer lookup back
+                // into every call, which is the cost this path exists to
+                // remove.
+                //
+                // The site count belongs in the name because two groups of
+                // different size are two different communicators, and the
+                // cache creates one only on the first call that names it.
+                std::string channel_basename(basename);
+                HPX_ASSERT(!channel_basename.empty());
+                if (channel_basename.back() != '/')
+                {
+                    channel_basename += '/';
+                }
+                channel_basename += "pairwise/" +
+                    std::to_string(static_cast<std::size_t>(num_sites)) + "/";
+
+                std::size_t const num_sites_value = num_sites;
+                std::size_t const this_site_value = this_site;
+                tag_arg const tag(static_cast<std::size_t>(generation));
+
+                // The communicator is chained onto rather than waited for.
+                // This function backs an overload that hands the caller a
+                // future, so it must not spend the caller's thread on the
+                // first call's AGAS registration before returning one. The
+                // communicator type is spelled out because the unqualified
+                // name resolves to the detail class in this namespace.
+                return get_cached_channel_communicator(
+                    HPX_MOVE(channel_basename), num_sites, this_site)
+                    .then(hpx::launch::sync,
+                        [local_result = HPX_MOVE(local_result), num_sites_value,
+                            this_site_value, tag](hpx::shared_future<
+                            hpx::collectives::channel_communicator>&&
+                                f) mutable {
+                            return pairwise_all_to_all(f.get(),
+                                HPX_MOVE(local_result), num_sites_value,
+                                this_site_value, tag);
+                        });
+            }
+
+            return hpx::collectives::all_to_all(
+                hpx::collectives::create_communicator(
+                    basename, num_sites, this_site, generation, root_site),
+                HPX_MOVE(local_result), this_site);
+        }
+    }    // namespace detail
+
     HPX_CXX_EXPORT template <typename T>
     hpx::future<std::vector<T>> all_to_all(char const* basename,
         std::vector<T>&& local_result,
         num_sites_arg const num_sites = num_sites_arg(),
         this_site_arg const this_site = this_site_arg(),
         generation_arg const generation = generation_arg(),
-        root_site_arg const root_site = root_site_arg())
+        root_site_arg const root_site = root_site_arg(),
+        pairwise_threshold_arg const threshold = pairwise_threshold_arg())
     {
-        return all_to_all(create_communicator(basename, num_sites, this_site,
-                              generation, root_site),
-            HPX_MOVE(local_result), this_site);
+        return detail::all_to_all_by_name(basename, HPX_MOVE(local_result),
+            num_sites, this_site, generation, root_site, threshold);
     }
 
     // Forward declaration of the hierarchical overload (defined below) so the
@@ -653,11 +789,11 @@ namespace hpx::collectives {
         num_sites_arg const num_sites = num_sites_arg(),
         this_site_arg const this_site = this_site_arg(),
         generation_arg const generation = generation_arg(),
-        root_site_arg const root_site = root_site_arg())
+        root_site_arg const root_site = root_site_arg(),
+        pairwise_threshold_arg const threshold = pairwise_threshold_arg())
     {
-        return all_to_all(create_communicator(basename, num_sites, this_site,
-                              generation, root_site),
-            HPX_MOVE(local_result), this_site)
+        return detail::all_to_all_by_name(basename, HPX_MOVE(local_result),
+            num_sites, this_site, generation, root_site, threshold)
             .get();
     }
     ///////////////////////////////////////////////////////////////////////////

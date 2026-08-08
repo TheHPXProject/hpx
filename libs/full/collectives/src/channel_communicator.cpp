@@ -20,8 +20,10 @@
 #include <hpx/collectives/channel_communicator.hpp>
 
 #include <cstddef>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <utility>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -180,6 +182,67 @@ namespace hpx::collectives {
             {
                 world_channel_communicator.free();
             }
+        }
+    }    // namespace detail
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Channel communicators shared by name
+    namespace {
+
+        std::map<std::string, hpx::shared_future<channel_communicator>>
+            cached_channel_communicators;
+        hpx::mutex cached_channel_communicators_mtx;
+    }    // namespace
+
+    namespace detail {
+
+        hpx::shared_future<collectives::channel_communicator>
+        get_cached_channel_communicator(std::string name,
+            num_sites_arg const num_sites, this_site_arg const this_site)
+        {
+            std::unique_lock<hpx::mutex> l(cached_channel_communicators_mtx);
+            [[maybe_unused]] util::ignore_while_checking il(&l);
+
+            if (auto const it = cached_channel_communicators.find(name);
+                it != cached_channel_communicators.end())
+            {
+                // Hand an exceptional creation back unchanged. Retrying after
+                // another site may already have registered its endpoint could
+                // split the sites across different communicators; recovery
+                // therefore needs a new basename.
+                return it->second;
+            }
+
+            auto const it =
+                cached_channel_communicators
+                    .emplace(HPX_MOVE(name),
+                        hpx::shared_future<collectives::channel_communicator>())
+                    .first;
+
+            try
+            {
+                // The key backs the name, not the argument: the asynchronous
+                // factory reads the string back in a continuation of its own,
+                // by which time an argument owned by the caller may be gone.
+                it->second = collectives::create_channel_communicator(
+                    it->first.c_str(), num_sites, this_site)
+                                 .share();
+            }
+            catch (...)
+            {
+                cached_channel_communicators.erase(it);
+                throw;
+            }
+
+            return it->second;
+        }
+
+        void reset_cached_channel_communicators()
+        {
+            std::unique_lock<hpx::mutex> l(cached_channel_communicators_mtx);
+            [[maybe_unused]] util::ignore_while_checking il(&l);
+
+            cached_channel_communicators.clear();
         }
     }    // namespace detail
 }    // namespace hpx::collectives

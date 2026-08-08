@@ -24,6 +24,7 @@ set(tests
     fold
     global_spmd_block
     hierarchical_helpers
+    pairwise_all_to_all
     reduce_direct
     remote_latch
     subtree_gather_scatter
@@ -48,6 +49,7 @@ if(HPX_WITH_NETWORKING)
       inclusive_scan_
       inclusive_scan_hierarchical
       inclusive_scan_sync
+      pairwise_all_to_all_dispatch
       reduce
       reduce_hierarchical
       reduce_sync
@@ -66,6 +68,10 @@ if(HPX_WITH_NETWORKING)
   # The flat-vs-tree comparison needs a real tree. Five localities with arity
   # two also exercises an uneven subtree with an intermediate payload hop.
   set(hierarchical_flat_fallback_PARAMETERS LOCALITIES 5)
+
+  # Below three sites the direct exchange collapses into the routed one, so the
+  # dispatch has nothing left to choose between.
+  set(pairwise_all_to_all_dispatch_PARAMETERS LOCALITIES 3)
 endif()
 foreach(test ${tests})
   set(sources ${test}.cpp)

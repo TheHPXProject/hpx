@@ -28,6 +28,7 @@ set(collectives_headers
     hpx/collectives/detail/hierarchical_helpers.hpp
     hpx/collectives/detail/hierarchical_scan_helpers.hpp
     hpx/collectives/detail/latch.hpp
+    hpx/collectives/detail/pairwise_all_to_all_helpers.hpp
     hpx/collectives/exclusive_scan.hpp
     hpx/collectives/fold.hpp
     hpx/collectives/gather.hpp
@@ -89,6 +90,7 @@ add_hpx_module(
     "hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp"
     "hpx/collectives/detail/hierarchical_helpers.hpp"
     "hpx/collectives/detail/hierarchical_scan_helpers.hpp"
+    "hpx/collectives/detail/pairwise_all_to_all_helpers.hpp"
   COMPAT_HEADERS ${collectives_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES

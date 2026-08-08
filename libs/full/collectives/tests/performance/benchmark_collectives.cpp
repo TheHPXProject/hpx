@@ -42,6 +42,35 @@ constexpr char const* inclusive_scan_direct_basename =
 constexpr char const* exclusive_scan_direct_basename =
     "/test/exclusive_scan_direct/";
 constexpr char const* barrier_bench_basename = "/test/barrier_bench/";
+
+// Measurement scaffolding: which all_to_all exchange path the one-shot
+// benchmark asks for. The dispatch table below fixes the one-shot signature
+// for every operation, so this is threaded as a file-scope option rather than
+// as an extra parameter on all ten of them. -1 leaves the library default.
+int pairwise_threshold_option = -1;
+
+pairwise_threshold_arg benchmark_pairwise_threshold(
+    std::size_t const block_size) noexcept
+{
+    if (pairwise_threshold_option == -1)
+    {
+        return pairwise_threshold_arg();
+    }
+
+    std::size_t const threshold =
+        static_cast<std::size_t>(pairwise_threshold_option);
+    std::size_t const threshold_elements =
+        (threshold + sizeof(int) - 1) / sizeof(int);
+
+    // The benchmark gives every site the same row size, so it can make the
+    // globally consistent choice that the general vector-row API cannot infer.
+    // Zero forces pairwise; any non-zero value keeps an unmeasurable vector row
+    // on the routed path.
+    bool const use_pairwise =
+        threshold == 0 || block_size >= threshold_elements;
+    return pairwise_threshold_arg(use_pairwise ? 0 : 1);
+}
+
 constexpr char const* exclusive_scan_basename = "/test/exclusive_scan_direct/";
 constexpr char const* inclusive_scan_basename = "/test/inclusive_scan_direct/";
 
@@ -1627,7 +1656,8 @@ void test_one_shot_use_all_to_all(int lpn, std::size_t iterations,
         hpx::chrono::high_resolution_timer const timer;
         recv_data = all_to_all(all_to_all_direct_basename, std::move(iter_data),
             num_sites_arg(num_localities), this_site_arg(this_locality),
-            generation_arg(i + 1))
+            generation_arg(i + 1), root_site_arg(0),
+            benchmark_pairwise_threshold(block_size))
                         .get();
         // Reduce max elapsed time to root
         double max_elapsed = timer.elapsed();
@@ -1647,8 +1677,11 @@ void test_one_shot_use_all_to_all(int lpn, std::size_t iterations,
 
     if (this_locality == 0)
     {
-        write_to_file(operation, "single_use", -1, num_localities, lpn,
-            test_size, warmup_iterations, iterations, std::move(result));
+        std::string const mod_name = pairwise_threshold_option == -1 ?
+            "single_use" :
+            "single_use_p" + std::to_string(pairwise_threshold_option);
+        write_to_file(operation, mod_name, -1, num_localities, lpn, test_size,
+            warmup_iterations, iterations, std::move(result));
     }
 }
 
@@ -2118,11 +2151,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
     int const iterations = vm["iterations"].as<int>();
     int const fallback_threshold = vm["fallback_threshold"].as<int>();
     int const warmup_iterations = vm["warmup_iterations"].as<int>();
+    pairwise_threshold_option = vm["pairwise_threshold"].as<int>();
 
-    if (iterations <= 0 || warmup_iterations < 0 || test_size <= 0 || lpn <= 0)
+    if (iterations <= 0 || warmup_iterations < 0 || test_size <= 0 ||
+        lpn <= 0 || pairwise_threshold_option < -1)
     {
         std::cout << "error: iterations and test_size and lpn must be > 0; "
-                     "warmup_iterations must be >= 0\n";
+                     "warmup_iterations must be >= 0; pairwise_threshold "
+                     "must be >= -1\n";
         return hpx::finalize();
     }
 
@@ -2220,7 +2256,12 @@ int main(int argc, char* argv[])
             "default (16). Set to 0 to force tree construction. Only meaningful "
             "with hierarchical mode.")
         ("warmup_iterations", value<int>()->default_value(3),
-            "Number of warmup iterations before the timed loop (default 3)");
+            "Number of warmup iterations before the timed loop (default 3)")
+        ("pairwise_threshold", value<int>()->default_value(-1),
+            "Per-pair payload size in bytes at or above which the one-shot "
+            "all_to_all exchanges rows directly between sites. -1 uses the "
+            "library default. Set to 0 to force the direct exchange. Only "
+            "meaningful with --operation=all_to_all and --arity=-1.");
     // clang-format on
 
     std::vector<std::string> const cfg = {"hpx.run_hpx_main!=1"};

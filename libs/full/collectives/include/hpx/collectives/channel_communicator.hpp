@@ -135,6 +135,7 @@ namespace hpx { namespace collectives {
 
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace hpx::collectives {
@@ -273,6 +274,36 @@ namespace hpx::collectives {
 
         HPX_EXPORT void create_world_channel_communicator();
         HPX_EXPORT void reset_world_channel_communicator();
+
+        ///////////////////////////////////////////////////////////////////////
+        // Returns the channel communicator registered under the given name,
+        // creating it on first use and handing out the same one afterwards.
+        //
+        // A caller that repeats an exchange over one fixed set of sites, and
+        // separates the individual exchanges by tag rather than by name, would
+        // otherwise pay a fresh AGAS registration plus a full peer lookup on
+        // every repetition -- which is the cost such a caller went to the
+        // channel communicator to avoid in the first place.
+        //
+        // The name must therefore identify the group of sites and not one
+        // operation on it: every call naming a given communicator has to agree
+        // on num_sites, because only the first call creates it. The future is
+        // shared because the communicator is, and returning it unwaited keeps
+        // an asynchronous caller asynchronous.
+        //
+        // Entries live until reset_cached_channel_communicators drops them
+        // during runtime shutdown, which is what releases the registered names
+        // while AGAS is still up.
+        //
+        // The communicator type has to be qualified: inside this namespace the
+        // unqualified name resolves to the detail implementation class, not to
+        // the public handle callers hold.
+        HPX_EXPORT hpx::shared_future<collectives::channel_communicator>
+        get_cached_channel_communicator(std::string name,
+            num_sites_arg num_sites = num_sites_arg(),
+            this_site_arg this_site = this_site_arg());
+
+        HPX_EXPORT void reset_cached_channel_communicators();
     }    // namespace detail
 }    // namespace hpx::collectives
 
