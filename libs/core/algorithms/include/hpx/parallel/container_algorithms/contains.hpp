@@ -151,8 +151,7 @@ namespace hpx::parallel::detail {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct contains_t final
-      : hpx::detail::tag_dispatch<contains_t,
-            hpx::functional::detail::tag_fallback<contains_t>>
+      : hpx::detail::tag_dispatch<contains_t, hpx::detail::no_base>
     {
         template <typename Iterator, typename Sentinel, typename T,
             typename Proj = hpx::identity>
@@ -235,8 +234,7 @@ namespace hpx::ranges {
     } contains{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct contains_subrange_t final
-      : hpx::detail::tag_dispatch<contains_subrange_t,
-            hpx::functional::detail::tag_fallback<contains_subrange_t>>
+      : hpx::detail::tag_dispatch<contains_subrange_t, hpx::detail::no_base>
     {
         template <typename FwdIter1, typename Sent1, typename FwdIter2,
             typename Sent2, typename Pred = ranges::equal_to,

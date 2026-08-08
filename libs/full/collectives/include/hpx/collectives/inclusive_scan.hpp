@@ -223,7 +223,6 @@ namespace hpx { namespace collectives {
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/collectives/argument_types.hpp>

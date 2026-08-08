@@ -391,14 +391,6 @@ namespace hpx::execution::experimental {
         };
     }    // namespace detail
 
-    template <typename Future, typename Scheduler>
-    auto tag_invoke(continues_on_t, detail::keep_future_sender<Future>&& sndr,
-        Scheduler&& scheduler)
-    {
-        return detail::keep_future_continues_on_sender<Future, Scheduler>{
-            HPX_MOVE(sndr.future), HPX_FORWARD(Scheduler, scheduler)};
-    }
-
     HPX_CXX_CORE_EXPORT inline constexpr struct keep_future_t final
     {
         // clang-format off

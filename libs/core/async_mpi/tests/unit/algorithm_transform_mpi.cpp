@@ -29,7 +29,7 @@ namespace tt = hpx::this_thread::experimental;
 template <typename T>
 auto hpx_invoke(mpi::transform_mpi_t, custom_type<T>& c)
 {
-    c.tag_invoke_overload_called = true;
+    c.overload_called = true;
     return mpi::transform_mpi(
         ex::just(&c.x, 1, MPI_INT, 0, MPI_COMM_WORLD), MPI_Ibcast);
 }

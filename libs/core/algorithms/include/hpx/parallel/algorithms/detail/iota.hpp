@@ -7,7 +7,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -32,14 +31,12 @@ namespace hpx::parallel::detail {
         return first;
     }
 
-    HPX_CXX_CORE_EXPORT struct sequential_iota_t
-      : hpx::functional::detail::tag_fallback<sequential_iota_t>
+    HPX_CXX_CORE_EXPORT struct sequential_iota_t final
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Sent,
             typename T>
-        friend constexpr FwdIter tag_fallback_invoke(
-            sequential_iota_t, ExPolicy&&, FwdIter first, Sent last, T& value)
+        HPX_HOST_DEVICE HPX_FORCEINLINE constexpr FwdIter operator()(
+            ExPolicy&&, FwdIter first, Sent last, T& value) const
         {
             return sequential_iota_helper(first, last, value);
         }

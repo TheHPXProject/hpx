@@ -28,12 +28,12 @@ int hpx_main()
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        tt::sync_wait(custom_sender{
-            start_called, connect_called, tag_invoke_overload_called});
+        std::atomic<bool> overload_called{false};
+        tt::sync_wait(
+            custom_sender{start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
@@ -84,12 +84,12 @@ int hpx_main()
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        tt::sync_wait(custom_sender{
-            start_called, connect_called, tag_invoke_overload_called});
+        std::atomic<bool> overload_called{false};
+        tt::sync_wait(
+            custom_sender{start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {

@@ -31,12 +31,12 @@ int hpx_main()
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        tt::sync_wait_with_variant(custom_sender{
-            start_called, connect_called, tag_invoke_overload_called});
+        std::atomic<bool> overload_called{false};
+        tt::sync_wait_with_variant(
+            custom_sender{start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
     // sync_wait_with_variant can accept single value senders :
     // assume currently have one tuple
@@ -148,23 +148,23 @@ int hpx_main()
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
         tt::sync_wait_with_variant(custom_sender_multi_tuple{
-            start_called, connect_called, tag_invoke_overload_called, true});
+            start_called, connect_called, overload_called, true});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
         tt::sync_wait_with_variant(custom_sender_multi_tuple{
-            start_called, connect_called, tag_invoke_overload_called, false});
+            start_called, connect_called, overload_called, false});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
@@ -223,12 +223,12 @@ int hpx_main()
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        tt::sync_wait_with_variant(custom_sender{
-            start_called, connect_called, tag_invoke_overload_called});
+        std::atomic<bool> overload_called{false};
+        tt::sync_wait_with_variant(
+            custom_sender{start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
