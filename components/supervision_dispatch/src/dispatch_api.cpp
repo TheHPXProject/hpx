@@ -6,7 +6,9 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/actions.hpp>
 #include <hpx/modules/async_combinators.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/futures.hpp>
@@ -90,7 +92,8 @@ namespace {
         // settles (whether it succeeds, throws, or rolls back). Concurrent
         // callers observing state == initializing attach to this shared_future
         // instead of starting a second, redundant init sequence.
-        hpx::shared_future<void> in_flight_init_;
+        hpx::shared_future<hpx::supervision::supervision_handle>
+            in_flight_init_;
 
         // Owned/guarded the same way sentinel_/registry_ already are.
         // failure_detection_task_ holds the running poll loop so finalize() can
@@ -137,6 +140,18 @@ namespace {
     {
         static dispatch_state state;
         return state;
+    }
+
+    // Builds a ready shared_future carrying a copy of the currently-active
+    // sentinel_/registry_ pair, taken under mtx_ so the read never observes a
+    // partially-constructed pair racing a concurrent init()/finalize()
+    // transition. Used by every "already active" return path in init().
+    hpx::shared_future<hpx::supervision::supervision_handle> make_active_handle(
+        dispatch_state& ds)
+    {
+        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+        return hpx::make_ready_future(
+            hpx::supervision::supervision_handle{ds.sentinel_, ds.registry_});
     }
 
     // Runs the actual initialization sequence. Only ever invoked by the caller
@@ -300,7 +315,7 @@ namespace {
     // Re-query and compare event_sequence_number before concluding genuine
     // silence. Callers reuse the returned seq instead of re-querying.
     silence_probe probe_peer_silence(
-        std::uint64_t const last_seq, hpx::supervision::shadow_id const& shadow)
+        std::uint64_t const last_seq, hpx::id_type const& locality)
     {
         // await_terminal only unblocks on a terminal event, so a timeout alone
         // does not distinguish "dead" from "alive but only publishing
@@ -308,7 +323,7 @@ namespace {
         // Re-query and compare event_sequence_number before concluding genuine
         // failure.
         hpx::error_code ec(hpx::throwmode::lightweight);
-        auto const recheck = hpx::supervision::query_state(shadow.get(), ec);
+        auto const recheck = hpx::supervision::query_state(locality, ec);
         if (ec || recheck.ec)
         {
             // Can't confirm liveness or death right now; don't fence on an
@@ -347,7 +362,7 @@ namespace {
             ++attempt)
         {
             auto const [seq, status] =
-                probe_peer_silence(last_seq, peer.shadow);
+                probe_peer_silence(last_seq, peer.peer_locality);
             if (status == silence_status::alive_or_unknown)
                 return false;
 
@@ -355,7 +370,7 @@ namespace {
 
             hpx::error_code ec2(hpx::throwmode::lightweight);
             hpx::supervision::await_terminal(hpx::launch::sync,
-                peer.shadow.get(), epoch, grace_interval, ec2);
+                peer.peer_locality, epoch, grace_interval, ec2);
 
             if (!ec2 || get_error(ec2) != hpx::error::future_cancelled)
             {
@@ -368,7 +383,7 @@ namespace {
 
         // Close the observation gap left by the loop above.
         auto const [final_seq, final_status] =
-            probe_peer_silence(last_seq, peer.shadow);
+            probe_peer_silence(last_seq, peer.peer_locality);
         return final_status == silence_status::still_silent;
     }
 
@@ -384,8 +399,7 @@ namespace {
         // genuinely unreachable - not just transiently slow - can be
         // distinguished from a one-off blip and eventually fenced, instead of
         // perpetually deferring judgment via continue/return.
-        std::unordered_map<hpx::supervision::shadow_id, peer_tracking>
-            query_failures;
+        std::unordered_map<hpx::id_type, peer_tracking> query_failures;
 
         // Outer loop: keep polling as long as we haven't been asked to stop and
         // the dispatcher is still in the "active" state. is_initialized()
@@ -420,12 +434,21 @@ namespace {
                 // peer_snapshot carries no epoch of its own
                 hpx::error_code ec(hpx::throwmode::lightweight);
                 auto const state =
-                    hpx::supervision::query_state(peer.shadow.get(), ec);
+                    hpx::supervision::query_state(peer.peer_locality, ec);
 
-                auto [it, _] = query_failures.try_emplace(peer.shadow,
+                auto [it, _] = query_failures.try_emplace(peer.peer_locality,
                     peer_tracking{.last_known_epoch = peer.join_epoch,
                         .consecutive_query_failures = 0});
                 auto& [last_known_epoch, failures] = it->second;
+
+                // A pre-existing tracking entry from an earlier join epoch
+                // (e.g. the peer left and rejoined) must not carry over its
+                // stale failure count or epoch.
+                if (last_known_epoch != peer.join_epoch)
+                {
+                    last_known_epoch = peer.join_epoch;
+                    failures = 0;
+                }
 
                 if (ec || state.ec)
                 {
@@ -436,10 +459,10 @@ namespace {
                     if (++failures >= max_consecutive_query_failures)
                     {
                         hpx::error_code ec1(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(peer.shadow.get(),
+                        hpx::supervision::publish_event(peer.peer_locality,
                             hpx::supervision::event::failed, last_known_epoch,
                             ec1);
-                        query_failures.erase(peer.shadow);
+                        query_failures.erase(peer.peer_locality);
                     }
                     continue;
                 }
@@ -468,13 +491,13 @@ namespace {
                         // Fence locally only, never touch the peer's own
                         // sentinel/registry.
                         hpx::error_code ec3(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(peer.shadow.get(),
+                        hpx::supervision::publish_event(peer.peer_locality,
                             hpx::supervision::event::failed, epoch, ec3);
                     }
                 };
 
                 checks.push_back(hpx::supervision::await_terminal(
-                    peer.shadow.get(), state.epoch, poll_timeout)
+                    peer.peer_locality, state.epoch, poll_timeout)
                         .then(hpx::launch::async, HPX_MOVE(cont)));
             }
 
@@ -507,8 +530,10 @@ namespace {
             for (auto it = query_failures.begin(); it != query_failures.end();
                 /**/)
             {
-                bool const still_present = std::ranges::any_of(peers,
-                    [&](auto const& p) { return p.shadow == it->first; });
+                bool const still_present =
+                    std::ranges::any_of(peers, [&](auto const& p) {
+                        return p.peer_locality == it->first;
+                    });
                 it = still_present ? std::next(it) : query_failures.erase(it);
             }
         }
@@ -562,7 +587,36 @@ namespace {
     }
 }    // namespace
 
+namespace hpx::supervision::detail {
+
+    // Free function (needs external linkage for the plain action wrapping it
+    // below) returning this locality's current dispatch-cycle epoch.
+    // dispatch_state is a private, file-local singleton with no component
+    // instance of its own to attach an action to, so this mirrors the
+    // hpx::detail::get_locality_name()/hpx_get_locality_name_action pattern HPX
+    // itself uses for other per-locality state queries that have no natural
+    // component to hang off of.
+    std::uint64_t current_epoch_impl()
+    {
+        return get_dispatch_state().epoch_.load(std::memory_order_acquire);
+    }
+}    // namespace hpx::supervision::detail
+
+HPX_PLAIN_ACTION(hpx::supervision::detail::current_epoch_impl,
+    supervision_dispatch_current_epoch_action)
+
 namespace hpx::supervision {
+
+    hpx::future<std::uint64_t> current_epoch(hpx::id_type const& locality)
+    {
+        return hpx::async<supervision_dispatch_current_epoch_action>(locality);
+    }
+
+    std::uint64_t current_epoch(hpx::launch::sync_policy,
+        hpx::id_type const& locality, hpx::error_code& ec)
+    {
+        return current_epoch(locality).get(ec);
+    }
 
     namespace testing {
 
@@ -620,10 +674,41 @@ namespace hpx::supervision {
             return get_dispatch_state().sweep_in_flight_.load(
                 std::memory_order_acquire);
         }
+
+        void stop_background_loops()
+        {
+            dispatch_state& ds = get_dispatch_state();
+
+            // Signal both loops to stop as early as possible, mirroring
+            // finalize()'s own teardown-start step.
+            ds.stop_failure_detection_.store(true, std::memory_order_release);
+            ds.stop_heartbeat_.store(true, std::memory_order_release);
+
+            // Join both tasks under the same lock discipline finalize() uses,
+            // but stop here: no event::completed publish, no name
+            // unregistration, no state_ reset - the sentinel's last published
+            // event is left stale on purpose.
+            hpx::future<void> local_heartbeat_task;
+            hpx::future<void> local_failure_detection_task;
+            {
+                std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                local_heartbeat_task = HPX_MOVE(ds.heartbeat_task_);
+                local_failure_detection_task =
+                    HPX_MOVE(ds.failure_detection_task_);
+            }
+            if (local_heartbeat_task.valid())
+            {
+                local_heartbeat_task.wait();
+            }
+            if (local_failure_detection_task.valid())
+            {
+                local_failure_detection_task.wait();
+            }
+        }
     }    // namespace testing
 
     ////////////////////////////////////////////////////////////////////////////
-    hpx::shared_future<void> init(
+    hpx::shared_future<supervision_handle> init(
         hpx::chrono::steady_duration const& discovery_timeout)
     {
         dispatch_state& ds = get_dispatch_state();
@@ -637,12 +722,14 @@ namespace hpx::supervision {
             hpx::future<void> f =
                 hpx::async(&run_init_sequence, discovery_timeout);
 
-            hpx::shared_future<void> sf =
-                f.then(hpx::launch::sync, [&ds](hpx::future<void>&& result) {
+            hpx::shared_future<supervision_handle> sf = f.then(
+                hpx::launch::sync,
+                [&ds](hpx::future<void>&& result) -> supervision_handle {
                     if (result.has_value())
                     {
                         std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.in_flight_init_ = shared_future<void>();
+                        ds.in_flight_init_ =
+                            shared_future<supervision_handle>();
 
                         ds.state_.store(dispatcher_lifecycle_state::active);
 
@@ -655,24 +742,26 @@ namespace hpx::supervision {
                             false, std::memory_order_release);
 
                         // Start the poll loops as the last step of the success
-                        // path - after discover_and_join() has returned, so the
+                        // path., after discover_and_join() has returned, so the
                         // loops never race initialization.
                         ds.failure_detection_task_ =
                             hpx::async(&failure_detection_loop);
 
                         ds.heartbeat_task_ = hpx::async(&heartbeat_loop);
+                        return supervision_handle{
+                            .sentinel_client = ds.sentinel_,
+                            .registry_client = ds.registry_};
                     }
-                    else
-                    {
-                        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.sentinel_ = hpx::supervision::sentinel();
-                        ds.registry_ = hpx::supervision::registry();
 
-                        ds.in_flight_init_ = shared_future<void>();
-                        ds.state_.store(
-                            dispatcher_lifecycle_state::uninitialized);
-                    }
+                    std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                    ds.sentinel_ = hpx::supervision::sentinel();
+                    ds.registry_ = hpx::supervision::registry();
+
+                    ds.in_flight_init_ = shared_future<supervision_handle>();
+                    ds.state_.store(dispatcher_lifecycle_state::uninitialized);
+
                     result.get();    // rethrow exception, if any
+                    return {};
                 });
 
             {
@@ -686,13 +775,14 @@ namespace hpx::supervision {
         switch (expected)
         {
         case dispatcher_lifecycle_state::active:
-            return hpx::make_ready_future();
+            return make_active_handle(ds);
 
         case dispatcher_lifecycle_state::finalizing:
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
-                hpx::error::invalid_status, "hpx::supervision::init",
-                "cannot initialize while a concurrent "
-                "finalize() is in progress"));
+            return hpx::make_exceptional_future<supervision_handle>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    "hpx::supervision::init",
+                    "cannot initialize while a concurrent finalize() is in "
+                    "progress"));
 
         case dispatcher_lifecycle_state::initializing:
         default:
@@ -719,7 +809,7 @@ namespace hpx::supervision {
                 auto const current = ds.state_.load(std::memory_order_acquire);
                 if (current == dispatcher_lifecycle_state::active)
                 {
-                    return hpx::make_ready_future();
+                    return make_active_handle(ds);
                 }
                 if (current != dispatcher_lifecycle_state::initializing)
                 {
@@ -728,17 +818,17 @@ namespace hpx::supervision {
                 hpx::this_thread::yield();
             }
 
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
-                hpx::error::invalid_status, "hpx::supervision::init",
-                "timed out attaching to a concurrent "
-                "init() call; retry"));
+            return hpx::make_exceptional_future<supervision_handle>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    hpx::throwmode::lightweight, "hpx::supervision::init",
+                    "timed out attaching to a concurrent init() call; retry"));
         }
     }
-
-    void init(hpx::launch::sync_policy,
+    ////////////////////////////////////////////////////////////////////////////
+    supervision_handle init(hpx::launch::sync_policy,
         hpx::chrono::steady_duration const& discovery_timeout)
     {
-        init(discovery_timeout).get();
+        return init(discovery_timeout).get();
     }
 
     void finalize()
@@ -792,7 +882,8 @@ namespace hpx::supervision {
 
             // Drop any settled handle from the completed init cycle so a later
             // cycle's attaching caller can never observe it.
-            ds.in_flight_init_ = hpx::shared_future<void>();
+            ds.in_flight_init_ =
+                hpx::shared_future<hpx::supervision::supervision_handle>();
         }
 
         HPX_ASSERT(local_sentinel);    // active implies sentinel_ was set
@@ -856,5 +947,67 @@ namespace hpx::supervision {
         dispatch_state const& ds = get_dispatch_state();
         return ds.state_.load(std::memory_order_acquire) ==
             dispatcher_lifecycle_state::active;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    hpx::future<lifecycle_state> query_state(supervision_handle const& handle)
+    {
+        if (!handle.sentinel_client)
+        {
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::query_state",
+                    "the given supervision_handle holds no sentinel client"));
+        }
+        return hpx::supervision::query_state(
+            hpx::find_here(), handle.sentinel_client.get_id());
+    }
+
+    lifecycle_state query_state(hpx::launch::sync_policy,
+        supervision_handle const& handle, hpx::error_code& ec)
+    {
+        return query_state(handle).get(ec);
+    }
+
+    hpx::future<lifecycle_state> query_state(
+        supervision_handle const&, discovered_peer const& peer)
+    {
+        if (!peer.sentinel_client)
+        {
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::query_state",
+                    "the given discovered_peer holds no sentinel client"));
+        }
+        return hpx::supervision::query_state(
+            peer.locality, peer.sentinel_client.get_id());
+    }
+
+    lifecycle_state query_state(hpx::launch::sync_policy,
+        supervision_handle const& handle, discovered_peer const& peer,
+        hpx::error_code& ec)
+    {
+        return query_state(handle, peer).get(ec);
+    }
+
+    hpx::future<publish_result> publish_event(supervision_handle const& handle,
+        event const ev, std::uint64_t const epoch)
+    {
+        if (!handle.sentinel_client)
+        {
+            return hpx::make_exceptional_future<publish_result>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::publish_event",
+                    "the given supervision_handle holds no sentinel client"));
+        }
+        return hpx::supervision::publish_event(
+            hpx::find_here(), handle.sentinel_client.get_id(), ev, epoch);
+    }
+
+    publish_result publish_event(hpx::launch::sync_policy,
+        supervision_handle const& handle, event const ev,
+        std::uint64_t const epoch, hpx::error_code& ec)
+    {
+        return publish_event(handle, ev, epoch).get(ec);
     }
 }    // namespace hpx::supervision

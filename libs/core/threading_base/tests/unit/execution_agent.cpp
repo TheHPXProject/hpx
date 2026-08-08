@@ -28,14 +28,19 @@ void test_sleep_predicate_true_at_deadline()
     std::atomic<bool> waiter_started{false};
 
     hpx::thread setter([&]() {
-        // Wait until the waiter thread has entered sleep_for and
-        // evaluated the predicate at least once before flipping flag.
+        auto const wait_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (!waiter_started.load(std::memory_order_acquire))
         {
+            if (std::chrono::steady_clock::now() > wait_deadline)
+            {
+                HPX_TEST(false && "timed out waiting for waiter_started");
+                return;
+            }
             hpx::this_thread::yield();
         }
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
-        flag.store(true);
+        flag.store(true);    // or the mutex+notify variant for the second test
     });
 
     constexpr auto sleep_duration = std::chrono::milliseconds(500);
@@ -80,14 +85,22 @@ void test_wait_for_notify_before_timeout()
     hpx::thread setter([&]() {
         // Ensure the waiter has already entered wait_for and is holding
         // the lock/checked the predicate once before setting flag.
+        auto const wait_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while (!waiter_started.load(std::memory_order_acquire))
         {
+            if (std::chrono::steady_clock::now() > wait_deadline)
+            {
+                HPX_TEST(false && "timed out waiting for waiter_started");
+                return;
+            }
             hpx::this_thread::yield();
         }
         hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-        std::lock_guard<hpx::mutex> l(mtx);
-        flag = true;
+        {
+            std::lock_guard<hpx::mutex> l(mtx);
+            flag = true;
+        }
         cv.notify_one();
     });
 

@@ -27,17 +27,18 @@ using server_type = hpx::components::component<test_server>;
 HPX_REGISTER_COMPONENT(server_type, test_server)
 
 // Verifies that after a single successful join(), snapshot_peers() reports
-// exactly that peer, with peer_sentinel/peer_locality/shadow matching what
-// join() recorded and returned. This is the basic contract the
-// failure-detection poller depends on: one join -> one visible entry.
+// exactly that peer, with peer_sentinel/peer_locality matching what join()
+// recorded and returned. This is the basic contract the failure-detection
+// poller depends on: one join -> one visible entry.
 void test_snapshot_peers_reports_joined_peer()
 {
     hpx::id_type const peer_locality = hpx::find_here();
     hpx::supervision::registry const r(peer_locality);
     hpx::supervision::sentinel const peer_sentinel(peer_locality);
 
-    // join() both creates the shadow and (per this task) now persists
-    // peer_locality into the entry so snapshot_peers() can report it.
+    // join() both seeds peer_locality's local supervision state and (per
+    // this task) now persists peer_locality into the entry so
+    // snapshot_peers() can report it.
     hpx::supervision::joined_peer const peer =
         r.join(hpx::launch::sync, peer_sentinel, peer_locality);
 
@@ -47,7 +48,7 @@ void test_snapshot_peers_reports_joined_peer()
     {
         HPX_TEST(snapshot[0].peer_sentinel == peer_sentinel.get_id());
         HPX_TEST(snapshot[0].peer_locality == peer_locality);
-        HPX_TEST(snapshot[0].shadow == peer.shadow);
+        HPX_TEST(snapshot[0].peer_locality == peer.target);
     }
 }
 

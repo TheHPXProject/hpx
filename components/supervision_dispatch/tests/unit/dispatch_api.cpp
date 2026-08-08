@@ -75,9 +75,8 @@ void test_concurrent_init_idempotency()
     // through hpx::async's scheduling.
     for (std::size_t i = 0; i != num_racers; ++i)
     {
-        results.push_back(hpx::async([]() {
-            return hpx::supervision::init(
-                hpx::launch::sync, test_discovery_timeout);
+        results.emplace_back(hpx::async([]() {
+            hpx::supervision::init(hpx::launch::sync, test_discovery_timeout);
         }));
     }
 

@@ -52,7 +52,9 @@ down with a single call to ``finalize()``:
    discover and join a not-yet-started sentinel.
 #. Registration of both symbol names.
 #. A single ``discover_and_join()`` pass that joins every peer registry
-   reachable within ``discovery_timeout``.
+   reachable within ``discovery_timeout``. Its result is a list of
+   ``discovered_peer``; peers that time out mid-pass are omitted from that
+   list entirely rather than leaving a gap in it.
 
 ``init()`` is idempotent: calling it while already active is a no-op, and
 concurrent callers attach to a single in-flight initialization rather than
@@ -596,7 +598,7 @@ handle a single error regardless of which side detected the fence:
     ----------------                         ---------------
     dispatch_work(action, target, epoch, args...)
       check_admission(target, epoch)   <-- reads local shadow (non-authoritative)
-        rejected -> exceptiona future, done (no dispatch sent)
+        rejected -> exceptional future, done (no dispatch sent)
         admitted -> hpx::async(fenced_action, hpx::colocated(target), ...)
                                           |
                                           v
@@ -782,6 +784,53 @@ Waiting on a dispatch outcome with a timeout
         // slow, unreachable, or the shadow state used for client-side
         // filtering may be stale.
     }
+
+Querying state and publishing events through a handle
+-----------------------------------------------------
+
+The handle returned by ``init()`` also doubles as the argument to a small
+family of convenience overloads of ``query_state()``/``publish_event()``
+that resolve locality and target automatically, instead of requiring the
+caller to extract ``handle.sentinel_client.get_id()`` and
+``hpx::find_here()`` manually:
+
+.. code-block:: c++
+
+    #include <hpx/supervision_dispatch.hpp>
+
+    hpx::supervision::supervision_handle const handle =
+        hpx::supervision::init(hpx::launch::sync);
+
+    // Recover the epoch init() started this handle's sentinel at, for use
+    // with dispatch_work()/publish_event() later on.
+    std::uint64_t const epoch =
+        hpx::supervision::query_state(hpx::launch::sync, handle).epoch;
+
+    // ... later, e.g. once this locality's own supervised work completes ...
+    hpx::supervision::publish_event(
+        hpx::launch::sync, handle, hpx::supervision::event::completed, epoch);
+
+Querying a peer's state after joining it follows the same pattern, using a
+``discovered_peer`` in place of an explicit locality/target pair:
+
+.. code-block:: c++
+
+    for (auto const& peer :
+        hpx::supervision::discover_and_join(handle.registry_client))
+    {
+        hpx::supervision::lifecycle_state const peer_state =
+            hpx::supervision::query_state(hpx::launch::sync, handle, peer);
+        // `handle` is only needed here for overload resolution; `peer`
+        // alone carries the locality/target this call actually queries.
+    }
+
+There is no peer-publishing overload: a locality only ever publishes
+lifecycle events for the sentinel it owns, never on behalf of a peer's.
+
+A worked example combining this with a supervised worker loop - covering
+when to publish ``started``/``running``/a terminal event for a worker's own
+sentinel, and how a supervisor queries peer worker state through the handle
+above - is available in ``components/supervision_dispatch/examples/plain_worker.cpp``.
 
 See :ref:`modules_supervision` for the full semantics of ``check_admission``,
 ``dispatch_outcome``, and the individual lifecycle events referenced above.

@@ -658,18 +658,18 @@ namespace hpx::supervision::server {
             std::uint64_t const current_ep =
                 had_state_before ? it->second.epoch : 0;
 
-            if (epoch < current_ep)
+            if (!had_state_before || epoch > current_ep)
             {
-                // stale/out-of-order publication for an epoch that has already
-                // been superseded: reject without mutating state or notifying
-                // observers
-                return publish_result::stale_epoch;
-            }
-
-            if (epoch > current_ep)
-            {
-                // reject an illegal epoch opening before any waiter state is
-                // touched, so a rejected 'publish' leaves waiters_ untouched
+                // Either target has no prior states_ entry at all - in which
+                // case current_ep's default of 0 is just a bookkeeping
+                // placeholder, not a claim that epoch 0 is already open, so any
+                // epoch (including a legitimate first-ever epoch of 0) must
+                // open a new epoch here rather than being routed into
+                // apply_current_epoch_locked() below - or the caller is
+                // genuinely advancing past the current epoch.
+                //
+                // Reject an illegal epoch opening before any waiter state is
+                // touched, so a rejected 'publish' leaves waiters_ untouched.
                 if (!is_valid_transition(event::unknown, ev))
                 {
                     l.unlock();
@@ -686,8 +686,12 @@ namespace hpx::supervision::server {
                 notification = HPX_MOVE(result.notification);
                 to_resolve = HPX_MOVE(result.to_resolve);
             }
-            else
+            else if (epoch == current_ep)
             {
+                // had_state_before is guaranteed true here: the branch above
+                // covers the !had_state_before case unconditionally. Re-publish
+                // within an already-open epoch on a target that has a real
+                // prior state.
                 auto result = apply_current_epoch_locked(l, target, ev, epoch);
                 if (!result)
                 {
@@ -696,6 +700,13 @@ namespace hpx::supervision::server {
 
                 notification = HPX_MOVE(result->notification);
                 to_resolve = HPX_MOVE(result->to_resolve);
+            }
+            else    // epoch < current_ep
+            {
+                // stale/out-of-order publication for an epoch that has already
+                // been superseded: reject without mutating state or notifying
+                // observers
+                return publish_result::stale_epoch;
             }
 
             // Record the target's original activation time for
@@ -1499,6 +1510,8 @@ namespace hpx::supervision::server {
     {
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
+            hpx::util::ignore_while_checking<std::unique_lock<hpx::spinlock>>
+                il(&l);
 
             // Remove the matching entry from activity_observers_, if any; a
             // handle returned by register_observer() (found in agents_) or one

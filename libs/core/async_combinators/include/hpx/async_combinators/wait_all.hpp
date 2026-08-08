@@ -340,6 +340,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -512,10 +513,10 @@ namespace hpx::detail {
                     }
 
                     // check whether the current future is exceptional
-                    if (!has_exceptional_results_ &&
-                        next_future_data->has_exception())
+                    if (next_future_data->has_exception())
                     {
-                        has_exceptional_results_ = true;
+                        has_exceptional_results_.store(
+                            true, std::memory_order_release);
                     }
                 }
             }
@@ -573,10 +574,10 @@ namespace hpx::detail {
                 }
 
                 // check whether the current future is exceptional
-                if (!has_exceptional_results_ &&
-                    next_future_data->has_exception())
+                if (next_future_data->has_exception())
                 {
-                    has_exceptional_results_ = true;
+                    has_exceptional_results_.store(
+                        true, std::memory_order_release);
                 }
             }
 
@@ -630,14 +631,14 @@ namespace hpx::detail {
 
             // return whether at least one of the futures has become
             // exceptional
-            return has_exceptional_results_;
+            return has_exceptional_results_.load(std::memory_order_acquire);
         }
 
         /// Returns whether at least one of the awaited futures completed with
         /// an exception.
         bool has_exceptional_results() const noexcept
         {
-            return has_exceptional_results_;
+            return has_exceptional_results_.load(std::memory_order_acquire);
         }
 
         /// Extension point allowing derived frames to abort waiting early
@@ -650,7 +651,7 @@ namespace hpx::detail {
 
     private:
         Tuple t_;
-        bool has_exceptional_results_ = false;
+        std::atomic<bool> has_exceptional_results_ = false;
     };
 }    // namespace hpx::detail
 
