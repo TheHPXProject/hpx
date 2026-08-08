@@ -4,6 +4,10 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+/// \file spmd_block.hpp
+/// \page hpx::lcos::spmd_block, hpx::lcos::define_spmd_block
+/// \headerfile hpx/collectives.hpp
+
 #pragma once
 
 #include <hpx/config.hpp>

@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file scatter.hpp
+/// \page hpx::collectives::scatter_from, hpx::collectives::scatter_to
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

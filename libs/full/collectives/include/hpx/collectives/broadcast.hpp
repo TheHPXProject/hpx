@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file broadcast.hpp
+/// \page hpx::collectives::broadcast_to, hpx::collectives::broadcast_from
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

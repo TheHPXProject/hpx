@@ -5,6 +5,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file create_communicator.hpp
+/// \page hpx::collectives::channel_communicator
+/// \page hpx::collectives::create_channel_communicator
+/// \page hpx::collectives::get, hpx::collectives::set
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file all_reduce.hpp
+/// \page hpx::collectives::all_reduce
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

@@ -5,6 +5,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file inclusive_scan.hpp
+/// \page hpx::collectives::inclusive_scan
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

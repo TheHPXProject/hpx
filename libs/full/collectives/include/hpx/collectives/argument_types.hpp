@@ -5,6 +5,12 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file argument_types.hpp
+/// \page hpx::collectives::num_sites_arg, hpx::collectives::this_site_arg
+/// \page hpx::collectives::that_site_arg, hpx::collectives::generation_arg
+/// \page hpx::collectives::root_site_arg, hpx::collectives::tag_arg
+/// \page hpx::collectives::arity_arg
+/// \page hpx::collectives::flat_fallback_threshold_arg
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file all_gather.hpp
+/// \page hpx::collectives::all_gather
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

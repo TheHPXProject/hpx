@@ -6,6 +6,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file broadcast_direct.hpp
+/// \page hpx::lcos::broadcast, hpx::lcos::broadcast_post
+/// \page hpx::lcos::broadcast_with_index
+/// \page hpx::lcos::broadcast_post_with_index
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

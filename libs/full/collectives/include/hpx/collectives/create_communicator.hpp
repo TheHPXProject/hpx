@@ -6,6 +6,14 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file create_communicator.hpp
+/// \page hpx::collectives::communicator
+/// \page hpx::collectives::create_communicator
+/// \page hpx::collectives::create_local_communicator
+/// \page hpx::collectives::create_hierarchical_communicator
+/// \page hpx::collectives::communicator::set_info
+/// \page hpx::collectives::communicator::get_info
+/// \page hpx::collectives::communicator::is_root
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
