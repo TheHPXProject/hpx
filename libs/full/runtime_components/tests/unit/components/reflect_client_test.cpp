@@ -95,6 +95,20 @@ int main()
         HPX_TEST_EQ(f3.get(), std::int32_t(42));
     }
 
+    // Test sync overload: c.member(hpx::launch::sync, args) -> R directly
+    for (hpx::id_type const& loc : localities)
+    {
+        auto c = hpx::components::make_client<reflect_test_server>(loc);
+
+        // Sync increment -- returns int directly, no .get() needed
+        std::int32_t r1 = c.increment(hpx::launch::sync, std::int32_t(41));
+        HPX_TEST_EQ(r1, std::int32_t(42));
+
+        // Sync identity -- returns id_type directly
+        hpx::id_type r2 = c.identity(hpx::launch::sync);
+        HPX_TEST_EQ(r2, loc);
+    }
+
     return hpx::util::report_errors();
 }
 #endif    // !HPX_COMPUTE_DEVICE_CODE && HPX_HAVE_CXX26_REFLECTION
