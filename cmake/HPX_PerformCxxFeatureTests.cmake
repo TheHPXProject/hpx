@@ -122,6 +122,9 @@ function(hpx_perform_cxx_feature_tests)
   )
 
   hpx_check_for_cxx26_reflection(DEFINITIONS HPX_HAVE_CXX26_REFLECTION)
+  hpx_check_for_cxx26_reflection_annotations(
+    DEFINITIONS HPX_HAVE_CXX26_REFLECTION_ANNOTATIONS
+  )
 
   hpx_check_for_cxx26_contracts(DEFINITIONS HPX_HAVE_CXX26_CONTRACTS)
 

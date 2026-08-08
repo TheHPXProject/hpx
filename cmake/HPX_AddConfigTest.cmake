@@ -560,6 +560,14 @@ function(hpx_check_for_cxx26_contracts)
 endfunction()
 
 # ##############################################################################
+function(hpx_check_for_cxx26_reflection_annotations)
+  add_hpx_config_test(
+    HPX_WITH_CXX26_REFLECTION_ANNOTATIONS
+    SOURCE cmake/tests/cxx26_reflection_annotations.cpp
+    FILE ${ARGN}
+  )
+endfunction()
+
 function(hpx_check_for_cxx26_reflection)
   add_hpx_config_test(
     HPX_WITH_CXX26_REFLECTION
