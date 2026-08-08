@@ -126,6 +126,28 @@ namespace hpx::parallel::detail {
             HPX_ASSERT(part_size == 1);
             HPX_UNUSED(part_size);
 
+            // Sequence 1 is empty, so there is nothing to partition over
+            // (step is 0 and every chunk would be skipped below). Let the
+            // first chunk run the set-operation across all of sequence 2:
+            // this is the result for set_union/set_symmetric_difference and
+            // a no-op for the other set operations.
+            if (len1 == 0)
+            {
+                if (curr_chunk != chunks.get())
+                {
+                    return;
+                }
+
+                curr_chunk->start = combiner(0, 0);
+                auto buffer_dest = buffer.get() + curr_chunk->start;
+                auto op_result = setop(
+                    first1, first1, first2, first2 + len2, buffer_dest, f);
+                curr_chunk->first1 = op_result.in1 - first1;
+                curr_chunk->first2 = op_result.in2 - first2;
+                curr_chunk->len = op_result.out - buffer_dest;
+                return;
+            }
+
             // find start in sequence 1
             std::size_t start1 = (curr_chunk - chunks.get()) * step;
             std::size_t end1 =

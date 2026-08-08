@@ -267,38 +267,48 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename Iter1, typename Sent1,
                 typename Iter2, typename Sent2, typename Iter3, typename F,
                 typename Proj1, typename Proj2>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_in_out_result<Iter1, Iter2, Iter3>>
-            parallel(ExPolicy&& policy, Iter1 first1, Sent1 last1, Iter2 first2,
-                Sent2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
+            static decltype(auto) parallel(ExPolicy&& policy, Iter1 first1,
+                Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest, F&& f,
+                Proj1&& proj1, Proj2&& proj2)
             {
                 using difference_type1 =
                     typename std::iterator_traits<Iter1>::difference_type;
                 using difference_type2 =
                     typename std::iterator_traits<Iter2>::difference_type;
 
-                using result_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
-
-                if (first1 == last1)
+                // Fast early exits for the general executors. They are skipped
+                // on the S/R path so decltype(auto) deduces a single return
+                // type (the sender); set_operation handles both empty ranges
+                // itself.
+                if constexpr (!hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
                 {
-                    // clang-format off
-                    return util::detail::convert_to_result(
-                        detail::copy<util::in_out_result<Iter2, Iter3>>().call(
-                            HPX_FORWARD(ExPolicy, policy), first2, last2, dest),
-                        [first1](util::in_out_result<Iter2, Iter3> const& p)
-                            -> result_type { return {first1, p.in, p.out}; });
-                    // clang-format on
-                }
+                    using result_type =
+                        util::in_in_out_result<Iter1, Iter2, Iter3>;
 
-                if (first2 == last2)
-                {
-                    // clang-format off
-                    return util::detail::convert_to_result(
-                        detail::copy<util::in_out_result<Iter1, Iter3>>().call(
-                            HPX_FORWARD(ExPolicy, policy), first1, last1, dest),
-                        [first2](util::in_out_result<Iter1, Iter3> const& p)
-                            -> result_type { return {p.in, first2, p.out}; });
-                    // clang-format on
+                    if (first1 == last1)
+                    {
+                        return util::detail::convert_to_result(
+                            detail::copy<util::in_out_result<Iter2, Iter3>>()
+                                .call(HPX_FORWARD(ExPolicy, policy), first2,
+                                    last2, dest),
+                            [first1](util::in_out_result<Iter2, Iter3> const& p)
+                                -> result_type {
+                                return {first1, p.in, p.out};
+                            });
+                    }
+
+                    if (first2 == last2)
+                    {
+                        return util::detail::convert_to_result(
+                            detail::copy<util::in_out_result<Iter1, Iter3>>()
+                                .call(HPX_FORWARD(ExPolicy, policy), first1,
+                                    last1, dest),
+                            [first2](util::in_out_result<Iter1, Iter3> const& p)
+                                -> result_type {
+                                return {p.in, first2, p.out};
+                            });
+                    }
                 }
 
                 using buffer_type = typename set_operations_buffer<Iter3>::type;
@@ -349,10 +359,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            FwdIter3>
-        invoke_default(ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1,
-            FwdIter2 first2, FwdIter2 last2, FwdIter3 dest, Pred op = Pred())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, FwdIter3 dest,
+            Pred op = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
