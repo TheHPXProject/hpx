@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_local.hpp>

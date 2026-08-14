@@ -184,12 +184,20 @@ namespace hpx::mpi::experimental {
             detail::future_data_ptr data =
                 new detail::future_data(detail::future_data::init_no_addref{});
 
-            // invoke the call to MPI_Ixxx, ignore the returned result for now
-            [[maybe_unused]] int result =
-                f(HPX_FORWARD(Ts, ts)..., &data->request_);
+            // invoke the call to MPI_Ixxx
+            int result = f(HPX_FORWARD(Ts, ts)..., &data->request_);
 
-            // Add callback after the request has been filled
-            data->add_callback();
+            if (result == MPI_SUCCESS)
+            {
+                // Add callback after the request has been filled
+                data->add_callback();
+            }
+            else
+            {
+                // Set exception immediately if MPI call failed
+                data->set_exception(
+                    std::make_exception_ptr(mpi_exception(result)));
+            }
 
             // return a future bound to the shared state
             using traits::future_access;

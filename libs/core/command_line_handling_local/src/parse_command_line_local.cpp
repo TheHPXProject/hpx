@@ -270,8 +270,8 @@ namespace hpx::local::detail {
             util::commandline_error_mode const mode = error_mode &
                 ~util::commandline_error_mode::report_missing_config_file;
 
-            std::vector<std::string> options =
-                read_config_file_options(filename.string(), mode);
+            std::vector<std::string> options = read_config_file_options(
+                hpx::filesystem::to_string(filename), mode);
 
             if (handle_config_file_options(
                     options, desc_cfgfile, vm, ini, mode))
@@ -560,7 +560,8 @@ namespace hpx::local::detail {
                 "on the number of total cores in the system)")
             ("hpx:queuing", value<argument_string>(),
                 "the queue scheduling policy to use, options are "
-                "'local', 'local-priority-fifo','local-priority-lifo', "
+                "'local', 'local-priority-fifo', 'local-priority-fifo-double', "
+                "'local-priority-lifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
                 "'static-priority', 'local-workrequesting-fifo',"
                 "'local-workrequesting-lifo', and 'local-workrequesting-mc' "

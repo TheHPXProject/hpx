@@ -201,6 +201,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/unseq/loop.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -303,7 +304,7 @@ namespace hpx::parallel {
             static util::in_out_result<InIter1, FwdIter2> sequential(
                 ExPolicy&& policy, InIter1 first, Sent last, FwdIter2 dest)
             {
-                std::size_t n = std::distance(first, last);
+                std::size_t n = detail::distance(first, last);
                 return hpx::parallel::util::uninit_copy_n(
                     HPX_FORWARD(ExPolicy, policy), first, n, dest);
             }
@@ -409,7 +410,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_copy_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_copy_t>
+      : hpx::detail::tag_dispatch<uninitialized_copy_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_copy_t>>
     {
         template <typename InIter, typename FwdIter>
         // clang-format off
@@ -418,8 +420,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::uninitialized_copy_t, InIter first, InIter last, FwdIter dest)
+        static FwdIter invoke_default(InIter first, InIter last, FwdIter dest)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -440,7 +441,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_copy_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -458,7 +459,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_copy_n
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_copy_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_copy_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_copy_n_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_copy_n_t>>
     {
         template <typename InIter, typename Size, typename FwdIter>
         // clang-format off
@@ -468,8 +470,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::uninitialized_copy_n_t, InIter first, Size count, FwdIter dest)
+        static FwdIter invoke_default(InIter first, Size count, FwdIter dest)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -497,7 +498,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter2> &&
                 std::is_integral_v<Size>)
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_copy_n_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, Size count, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,

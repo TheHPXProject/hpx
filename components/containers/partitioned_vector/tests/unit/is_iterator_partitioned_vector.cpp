@@ -12,8 +12,8 @@
 #include <hpx/components/containers/partitioned_vector/partitioned_vector.hpp>
 #endif
 
-#include <vector>
 #include <iterator>
+#include <vector>
 
 void is_iterator()
 {

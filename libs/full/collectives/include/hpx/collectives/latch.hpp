@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,9 +11,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/collectives/detail/latch.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
+
+#include <hpx/collectives/detail/latch.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -28,7 +29,7 @@ namespace hpx::distributed {
     /// This latch can be invoked in a distributed application.
     ///
     /// For a local only latch \see hpx::latch.
-    class HPX_EXPORT latch
+    HPX_CXX_EXPORT class HPX_EXPORT latch
       : public components::client_base<latch, hpx::lcos::server::latch>
     {
         typedef components::client_base<latch, hpx::lcos::server::latch>

@@ -2204,3 +2204,150 @@ root locality. In more detail:
 
   - The `get()` member function of the `overall_result` future is used to wait for the remote
     reduction operation to complete. This is done to ensure synchronization among localities.
+
+.. _reflection_action_migration:
+
+Migrating to C++26 reflection-based actions
+============================================
+
+Starting with HPX 2.0, C++26 static reflection (P2996) can be used to define
+distributed actions without the verbose macro boilerplate previously required.
+This section describes how to migrate existing action definitions to the new
+reflection-based API when building with ``HPX_WITH_CXX26_REFLECTION=ON``.
+
+Build requirements
+------------------
+
+Reflection-based actions require a C++26-capable compiler with reflection
+support enabled:
+
+- GCC 16.0.1 trunk or later (``stellargroup/gcc_trunk_build_env:1``)
+  with ``-freflection -std=c++26``
+- Clang 22 with P2996 support (``stellargroup/clang_p2996_build_env:1``)
+  with ``-freflection-latest -stdlib=libc++``
+
+Reflection support is auto-detected by HPX's CMake build system via
+``hpx_check_for_cxx26_reflection()`` in
+``cmake/HPX_PerformCxxFeatureTests.cmake``. No manual flag is required
+when using a supported compiler — ``HPX_HAVE_CXX26_REFLECTION`` is set
+automatically.
+
+Existing code requires no changes
+----------------------------------
+
+The most important point: **existing code using** ``HPX_PLAIN_ACTION``,
+``HPX_DEFINE_COMPONENT_ACTION``, and related macros requires zero source
+changes. When ``HPX_WITH_CXX26_REFLECTION=ON``, these macros automatically
+use the reflection-based implementation internally. No
+``HPX_REGISTER_ACTION`` calls are needed — registration is automatic.
+
+.. code-block:: c++
+
+    // This works unchanged with or without reflection enabled.
+    // When HPX_WITH_CXX26_REFLECTION=ON, it automatically uses
+    // reflect_action<^^some_function> internally.
+    HPX_PLAIN_ACTION(some_function, some_action)
+
+Explicit migration: plain actions
+----------------------------------
+
+For new code or explicit migration, use ``HPX_ACTION`` or
+``reflect_action`` directly:
+
+.. code-block:: c++
+
+    // Before: three-step macro sequence
+    HPX_PLAIN_ACTION(app::compute, compute_action)
+    HPX_REGISTER_ACTION_DECLARATION(compute_action)
+    HPX_REGISTER_ACTION(compute_action)
+
+    // After: single line, no registration required
+    HPX_ACTION(app::compute, compute_action)
+
+    // Or equivalently, using the template directly:
+    using compute_action = hpx::actions::reflect_action<^^app::compute>;
+
+Explicit migration: component actions
+--------------------------------------
+
+.. code-block:: c++
+
+    // Before: three-step macro sequence
+    HPX_DEFINE_COMPONENT_ACTION(server, compute, compute_action)
+    HPX_REGISTER_ACTION_DECLARATION(compute_action)
+    HPX_REGISTER_ACTION(compute_action)
+
+    // After: single line
+    HPX_COMPONENT_ACTION(server, compute, compute_action)
+
+    // Or equivalently:
+    using compute_action =
+        hpx::actions::reflect_component_action<^^server::compute>;
+
+Explicit migration: direct plain actions
+----------------------------------------
+
+.. code-block:: c++
+
+    // Before: three-step macro sequence
+    HPX_PLAIN_DIRECT_ACTION(app::compute, compute_action)
+    HPX_REGISTER_ACTION_DECLARATION(compute_action)
+    HPX_REGISTER_ACTION(compute_action)
+
+    // After: single line
+    HPX_DIRECT_ACTION(app::compute, compute_action)
+
+    // Or equivalently, using the template directly:
+    using compute_action =
+        hpx::actions::reflect_direct_action<^^app::compute>;
+
+Explicit migration: direct component actions
+---------------------------------------------
+
+Direct actions execute without spawning a new HPX thread — locally they
+run inline on the calling thread, and remotely on the target locality's
+existing HPX thread. The reflection-based API preserves this behavior:
+
+.. code-block:: c++
+
+    // Before: three-step macro sequence
+    HPX_DEFINE_COMPONENT_DIRECT_ACTION(server, compute, compute_action)
+    HPX_REGISTER_ACTION_DECLARATION(compute_action)
+    HPX_REGISTER_ACTION(compute_action)
+
+    // After: single line
+    HPX_COMPONENT_DIRECT_ACTION(server, compute, compute_action)
+
+    // Or equivalently, using the template directly:
+    using compute_action =
+        hpx::actions::reflect_component_direct_action<^^server::compute>;
+
+Overloaded functions
+--------------------
+
+Reflection cannot disambiguate overloaded functions. If your action
+function is overloaded, keep the existing ``HPX_PLAIN_ACTION`` macro:
+
+.. code-block:: c++
+
+    // Not supported with reflection (ambiguous):
+    // using my_action = hpx::actions::reflect_action<^^overloaded_func>;
+
+    // Use the existing macro instead:
+    HPX_PLAIN_ACTION(static_cast<int(*)(int)>(overloaded_func), my_action)
+
+Properties available at compile time
+--------------------------------------
+
+Reflection-based action types expose additional compile-time properties:
+
+.. code-block:: c++
+
+    using my_action = hpx::actions::reflect_action<^^app::compute>;
+
+    // Number of parameters
+    static_assert(my_action::arity == 2);
+
+    // Function pointer type and value
+    using fptr = my_action::func_ptr_type;
+    constexpr auto fp = my_action::func_ptr;

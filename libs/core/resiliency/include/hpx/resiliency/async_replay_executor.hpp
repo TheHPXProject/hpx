@@ -19,7 +19,6 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -127,7 +126,7 @@ namespace hpx::resiliency::experimental {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Pred, typename F, typename Tuple>
+        template <typename Pred, typename F, typename Tuple>
         struct async_replay_executor_helper<void, Pred, F, Tuple>
           : std::enable_shared_from_this<
                 async_replay_executor_helper<void, Pred, F, Tuple>>
@@ -214,14 +213,24 @@ namespace hpx::resiliency::experimental {
         }
     }    // namespace detail
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function f. Verify the result of those
-    // invocations using the given predicate pred. Repeat launching on error
-    // exactly n times (except if abort_replay_exception is thrown).
+    /// \brief ADL hook for async_replay_validate CPO with executor.
+    ///
+    /// Asynchronously launches \a f on \a exec, validating results with
+    /// \a pred. Repeats on error up to \a n times (aborts on
+    /// abort_replay_exception).
+    ///
+    /// \param tag   CPO tag (async_replay_validate_t).
+    /// \param exec  Executor to run \a f on.
+    /// \param n     Maximum number of retry attempts.
+    /// \param pred  Predicate validating each invocation result.
+    /// \param f     Callable to invoke asynchronously.
+    /// \param ts    Arguments forwarded to \a f.
+    ///
+    /// \returns future with the first valid result of \a f.
     HPX_CXX_CORE_EXPORT template <typename Executor, typename Pred, typename F,
         typename... Ts>
         requires(one_way_executor<Executor> || two_way_executor<Executor>)
-    decltype(auto) tag_invoke(async_replay_validate_t, Executor&& exec,
+    decltype(auto) hpx_invoke(async_replay_validate_t, Executor&& exec,
         std::size_t n, Pred&& pred, F&& f, Ts&&... ts)
     {
         using result_type =
@@ -233,12 +242,21 @@ namespace hpx::resiliency::experimental {
         return helper->call(HPX_FORWARD(Executor, exec), n);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function f. Repeat launching on error exactly
-    // n times (except if abort_replay_exception is thrown).
+    /// \brief ADL hook for async_replay CPO with executor.
+    ///
+    /// Asynchronously launches \a f on \a exec, repeating on error up to
+    /// \a n times (aborts on abort_replay_exception).
+    ///
+    /// \param tag   CPO tag (async_replay_t).
+    /// \param exec  Executor to run \a f on.
+    /// \param n     Maximum number of retry attempts.
+    /// \param f     Callable to invoke asynchronously.
+    /// \param ts    Arguments forwarded to \a f.
+    ///
+    /// \returns future with the first successful result of \a f.
     HPX_CXX_CORE_EXPORT template <typename Executor, typename F, typename... Ts>
         requires(one_way_executor<Executor> || two_way_executor<Executor>)
-    decltype(auto) tag_invoke(
+    decltype(auto) hpx_invoke(
         async_replay_t, Executor&& exec, std::size_t n, F&& f, Ts&&... ts)
     {
         using result_type =

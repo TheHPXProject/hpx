@@ -11,10 +11,9 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCEL_COALESCING)
 #include <hpx/assert.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/threading_base.hpp>
-
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
+#include <hpx/modules/threading_base.hpp>
 
 #include <cstddef>
 #include <cstdint>

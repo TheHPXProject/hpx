@@ -9,14 +9,14 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/post.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/components/iostreams/manipulators.hpp>
-#include <hpx/components/iostreams/server/output_stream.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/iostream.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/components/iostreams/manipulators.hpp>
+#include <hpx/components/iostreams/server/output_stream.hpp>
 
 #include <atomic>
 #include <cstdint>

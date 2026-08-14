@@ -21,7 +21,7 @@
 #include "test_utils.hpp"
 
 ////////////////////////////////////////////////////////////////////////////
-int seed = std::random_device{}();
+int seed = static_cast<int>(std::random_device{}());
 std::mt19937 gen(seed);
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
@@ -53,7 +53,7 @@ void test_lexicographical_compare_sender(
                 std::begin(d), std::end(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
 
-        bool res = hpx::get<0>(*snd_result);
+        bool res = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!res);
     }
@@ -65,7 +65,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(d), std::end(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(result);
     }
@@ -77,7 +77,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(d), std::begin(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!result);
     }
@@ -89,7 +89,7 @@ void test_lexicographical_compare_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(d), std::begin(d)) |
             hpx::lexicographical_compare(ex_policy.on(exec)));
-        bool result = hpx::get<0>(*snd_result);
+        bool result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(!result);
     }
@@ -117,7 +117,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     lexicographical_compare_sender_test<std::forward_iterator_tag>();
     lexicographical_compare_sender_test<std::random_access_iterator_tag>();

@@ -42,7 +42,7 @@ General changes
   just forward to the currently existing simple component facilities. The
   examples have been converted to only use those two classes.
 * Added integration with the `CircleCI
-  <https://circleci.com/gh/STEllAR-GROUP/hpx>`__ hosted continuous integration
+  <https://circleci.com/gh/TheHPXProject/hpx>`__ hosted continuous integration
   service. This gives us constant and immediate feedback on the health of our
   master branch.
 * The compiler configuration subsystem in the build system has been

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,10 +6,11 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/async_distributed/continuation2_impl.hpp>
 #include <hpx/async_distributed/continuation_impl.hpp>
 #include <hpx/async_distributed/set_lco_value_continuation.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 
 #include <type_traits>
@@ -17,39 +18,38 @@
 
 namespace hpx {
 
-    inline hpx::actions::set_lco_value_continuation make_continuation()
+    HPX_CXX_EXPORT inline hpx::actions::set_lco_value_continuation
+    make_continuation()
     {
         return {};
     }
 
-    template <typename Cont>
-    inline hpx::actions::continuation_impl<typename std::decay<Cont>::type>
-    make_continuation(Cont&& cont)
+    HPX_CXX_EXPORT template <typename Cont>
+    hpx::actions::continuation_impl<std::decay_t<Cont>> make_continuation(
+        Cont&& cont)
     {
-        using cont_type = typename std::decay<Cont>::type;
+        using cont_type = std::decay_t<Cont>;
         return hpx::actions::continuation_impl<cont_type>(
             HPX_FORWARD(Cont, cont),
             naming::get_id_from_locality_id(agas::get_locality_id()));
     }
 
-    template <typename Cont>
-    inline hpx::actions::continuation_impl<typename std::decay<Cont>::type>
+    HPX_CXX_EXPORT template <typename Cont>
+    inline hpx::actions::continuation_impl<std::decay_t<Cont>>
     make_continuation(Cont&& f, hpx::id_type const& target)
     {
-        using cont_type = typename std::decay<Cont>::type;
+        using cont_type = std::decay_t<Cont>;
         return hpx::actions::continuation_impl<cont_type>(
             HPX_FORWARD(Cont, f), target);
     }
 
-    template <typename Cont, typename F>
-    inline typename std::enable_if<
-        !std::is_same<typename std::decay<F>::type, hpx::id_type>::value,
-        hpx::actions::continuation2_impl<typename std::decay<Cont>::type,
-            typename std::decay<F>::type>>::type
+    HPX_CXX_EXPORT template <typename Cont, typename F>
+        requires(!std::is_same_v<std::decay_t<F>, hpx::id_type>)
+    hpx::actions::continuation2_impl<std::decay_t<Cont>, std::decay_t<F>>
     make_continuation(Cont&& cont, F&& f)
     {
-        using cont_type = typename std::decay<Cont>::type;
-        using function_type = typename std::decay<F>::type;
+        using cont_type = std::decay_t<Cont>;
+        using function_type = std::decay_t<F>;
 
         return hpx::actions::continuation2_impl<cont_type, function_type>(
             HPX_FORWARD(Cont, cont),
@@ -57,13 +57,12 @@ namespace hpx {
             HPX_FORWARD(F, f));
     }
 
-    template <typename Cont, typename F>
-    inline hpx::actions::continuation2_impl<typename std::decay<Cont>::type,
-        typename std::decay<F>::type>
+    HPX_CXX_EXPORT template <typename Cont, typename F>
+    hpx::actions::continuation2_impl<std::decay_t<Cont>, std::decay_t<F>>
     make_continuation(Cont&& cont, hpx::id_type const& target, F&& f)
     {
-        using cont_type = typename std::decay<Cont>::type;
-        using function_type = typename std::decay<F>::type;
+        using cont_type = std::decay_t<Cont>;
+        using function_type = std::decay_t<F>;
 
         return hpx::actions::continuation2_impl<cont_type, function_type>(
             HPX_FORWARD(Cont, cont), target, HPX_FORWARD(F, f));

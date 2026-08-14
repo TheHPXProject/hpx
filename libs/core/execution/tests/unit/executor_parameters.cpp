@@ -171,23 +171,17 @@ struct timer_hooks_parameters
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        timer_hooks_parameters const&, Executor&&)
+    void mark_begin_execution(Executor&&) const
     {
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_of_scheduling_t,
-        timer_hooks_parameters const&, Executor&&)
+    void mark_end_of_scheduling(Executor&&) const
     {
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        timer_hooks_parameters const&, Executor&&)
+    void mark_end_execution(Executor&&) const
     {
     }
 

@@ -21,6 +21,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <atomic>
@@ -487,6 +488,14 @@ namespace hpx::lcos::detail {
             // alive as long as the future
             this->base_type::runs_child_.reset();
 
+            // --- CAUSAL TRACING SIGNAL --------------------------------------
+            // Emitted after the CAS sets state to `value` (so any newly-woken
+            // consumer observes a ready future) and before notify_one() (so
+            // the producer message precedes the consumer wake in Tracy).
+            // The `this` pointer is the stable future_data correlation key.
+            hpx::tracing::future_fulfilled(this);
+            // ---------------------------------------------------------------
+
             // 26111: Caller failing to release lock 'this->mtx_'
             // 26115: Failing to release lock 'this->mtx_'
             // 26800: Use of a moved from object 'l'
@@ -568,6 +577,14 @@ namespace hpx::lcos::detail {
             // reset runs_child_ thread id to avoid keeping the thread
             // alive as long as the future
             this->base_type::runs_child_.reset();
+
+            // --- CAUSAL TRACING SIGNAL --------------------------------------
+            // Mirrors the set_value() placement: after state is set to
+            // `exception` (atomic CAS), before notify_one() wakes consumers.
+            // Emits a bright-red Tracy message so exception propagation paths
+            // are visually distinct from value-fulfillment paths.
+            hpx::tracing::future_exception_set(this);
+            // ---------------------------------------------------------------
 
             // 26111: Caller failing to release lock 'this->mtx_'
             // 26115: Failing to release lock 'this->mtx_'
@@ -1125,7 +1142,7 @@ namespace hpx::lcos::detail {
     };
 }    // namespace hpx::lcos::detail
 
-HPX_CXX_CORE_EXPORT template <typename R, typename Allocator>
+template <typename R, typename Allocator>
 struct hpx::traits::detail::shared_state_allocator<
     hpx::lcos::detail::future_data<R>, Allocator>
 {

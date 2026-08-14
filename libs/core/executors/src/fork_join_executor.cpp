@@ -6,7 +6,9 @@
 
 #include <hpx/executors/fork_join_executor.hpp>
 
+#include <cstdint>
 #include <ostream>
+#include <type_traits>
 
 namespace hpx::execution::experimental {
 
@@ -27,9 +29,9 @@ namespace hpx::execution::experimental {
         }
 
         os << " ("
-           << static_cast<
+           << static_cast<std::uint16_t>(static_cast<
                   std::underlying_type_t<fork_join_executor::loop_schedule>>(
-                  schedule)
+                  schedule))
            << ")";
 
         return os;

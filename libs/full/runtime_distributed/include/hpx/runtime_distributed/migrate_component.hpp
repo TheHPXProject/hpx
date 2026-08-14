@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,21 +9,22 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_distributed/async.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/components_base/traits/is_component.hpp>
-#include <hpx/distribution_policies/target_distribution_policy.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/distribution_policies.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
 #include <hpx/runtime_distributed/server/migrate_component.hpp>
 
 #include <type_traits>
 
-namespace hpx { namespace components {
+namespace hpx::components {
 
     /// Migrate the given component to the specified target locality
     ///
@@ -45,15 +46,10 @@ namespace hpx { namespace components {
     /// \returns A future representing the global id of the migrated
     ///          component instance. This should be the same as \a migrate_to.
     ///
-    template <typename Component, typename DistPolicy>
-#if defined(DOXYGEN)
-    future<hpx::id_type>
-#else
-    std::enable_if_t<traits::is_component_v<Component> &&
-            traits::is_distribution_policy_v<DistPolicy>,
-        future<hpx::id_type>>
-#endif
-    migrate(hpx::id_type const& to_migrate,
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
+        requires(traits::is_component_v<Component> &&
+            traits::is_distribution_policy_v<DistPolicy>)
+    future<hpx::id_type> migrate(hpx::id_type const& to_migrate,
         [[maybe_unused]] DistPolicy const& policy)
     {
 #if defined(HPX_HAVE_NETWORKING)
@@ -86,14 +82,10 @@ namespace hpx { namespace components {
     /// \returns A future representing the global id of the migrated
     ///          component instance. This should be the same as \a migrate_to.
     ///
-    template <typename Derived, typename Stub, typename Data,
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data,
         typename DistPolicy>
-#if defined(DOXYGEN)
-    Derived
-#else
-    std::enable_if_t<traits::is_distribution_policy_v<DistPolicy>, Derived>
-#endif
-    migrate(client_base<Derived, Stub, Data> const& to_migrate,
+        requires(traits::is_distribution_policy_v<DistPolicy>)
+    Derived migrate(client_base<Derived, Stub, Data> const& to_migrate,
         DistPolicy const& policy)
     {
         using component_type =
@@ -103,14 +95,10 @@ namespace hpx { namespace components {
 
     /// \cond NODETAIL
     // overload to be used for polymorphic objects
-    template <typename Component, typename Derived, typename Stub,
-        typename Data, typename DistPolicy>
-#if defined(DOXYGEN)
-    Derived
-#else
-    std::enable_if_t<traits::is_distribution_policy_v<DistPolicy>, Derived>
-#endif
-    migrate(client_base<Derived, Stub, Data> const& to_migrate,
+    HPX_CXX_EXPORT template <typename Component, typename Derived,
+        typename Stub, typename Data, typename DistPolicy>
+        requires(traits::is_distribution_policy_v<DistPolicy>)
+    Derived migrate(client_base<Derived, Stub, Data> const& to_migrate,
         DistPolicy const& policy)
     {
         return Derived(migrate<Component>(to_migrate.get_id(), policy));
@@ -134,13 +122,10 @@ namespace hpx { namespace components {
     /// \returns A future representing the global id of the migrated
     ///          component instance. This should be the same as \a migrate_to.
     ///
-    template <typename Component>
-#if defined(DOXYGEN)
-    future<hpx::id_type>
-#else
-    std::enable_if_t<traits::is_component_v<Component>, future<hpx::id_type>>
-#endif
-    migrate(hpx::id_type const& to_migrate, hpx::id_type const& target_locality)
+    HPX_CXX_EXPORT template <typename Component>
+        requires(traits::is_component_v<Component>)
+    future<hpx::id_type> migrate(
+        hpx::id_type const& to_migrate, hpx::id_type const& target_locality)
     {
         return migrate<Component>(to_migrate, hpx::target(target_locality));
     }
@@ -163,7 +148,7 @@ namespace hpx { namespace components {
     /// \returns A client side representation of representing of the migrated
     ///          component instance. This should be the same as \a migrate_to.
     ///
-    template <typename Derived, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub, typename Data>
     Derived migrate(client_base<Derived, Stub, Data> const& to_migrate,
         hpx::id_type const& target_locality)
     {
@@ -175,8 +160,8 @@ namespace hpx { namespace components {
 
     /// \cond NODETAIL
     // overload to be used for polymorphic objects
-    template <typename Component, typename Derived, typename Stub,
-        typename Data>
+    HPX_CXX_EXPORT template <typename Component, typename Derived,
+        typename Stub, typename Data>
     Derived migrate(client_base<Derived, Stub, Data> const& to_migrate,
         hpx::id_type const& target_locality)
     {
@@ -184,5 +169,6 @@ namespace hpx { namespace components {
             migrate<Component>(to_migrate.get_id(), target_locality));
     }
     /// \endcond
-}}    // namespace hpx::components
+}    // namespace hpx::components
+
 #endif

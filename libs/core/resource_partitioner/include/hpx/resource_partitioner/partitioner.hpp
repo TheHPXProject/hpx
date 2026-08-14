@@ -132,8 +132,9 @@ namespace hpx::resource {
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
-        inline ::hpx::resource::partitioner make_partitioner(
-            resource::partitioner_mode rpmode, hpx::util::section const& rtcfg,
+        HPX_CXX_CORE_EXPORT inline ::hpx::resource::partitioner
+        make_partitioner(resource::partitioner_mode rpmode,
+            hpx::util::section const& rtcfg,
             hpx::threads::policies::detail::affinity_data const& affinity_data);
     }
 
@@ -219,7 +220,7 @@ namespace hpx::resource {
 
     namespace detail {
 
-        ::hpx::resource::partitioner make_partitioner(
+        HPX_CXX_CORE_EXPORT ::hpx::resource::partitioner make_partitioner(
             resource::partitioner_mode const rpmode,
             hpx::util::section const& rtcfg,
             hpx::threads::policies::detail::affinity_data const& affinity_data)

@@ -9,6 +9,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
@@ -114,7 +115,8 @@ void test2()
     std::vector<rng> Vin, Vout;
     for (std::uint32_t i = 0; i < 9; ++i)
     {
-        Vin.emplace_back(VA.begin() + (i * 10), VA.begin() + ((i + 1) * 10));
+        Vin.emplace_back(VA.begin() + (static_cast<std::ptrdiff_t>(i * 10)),
+            VA.begin() + (static_cast<std::ptrdiff_t>((i + 1) * 10)));
     }
     compare comp;
     merge_level4(RB, Vin, Vout, comp);
@@ -189,7 +191,8 @@ void test4()
     std::vector<range<xk*>> Vout;
     for (std::uint32_t i = 0; i < 9; ++i)
     {
-        Vin.emplace_back(VA.begin() + (i * 10), VA.begin() + ((i + 1) * 10));
+        Vin.emplace_back(VA.begin() + (static_cast<std::ptrdiff_t>(i * 10)),
+            VA.begin() + (static_cast<std::ptrdiff_t>((i + 1) * 10)));
     }
     compare comp;
     uninit_merge_level4(RB, Vin, Vout, comp);
@@ -224,7 +227,8 @@ void test5()
     std::vector<rng> Vin, Vout;
     for (std::uint32_t i = 0; i < 10; ++i)
     {
-        Vin.emplace_back(X.begin() + (i * 10), X.begin() + ((i + 1) * 10));
+        Vin.emplace_back(X.begin() + (static_cast<std::ptrdiff_t>(i * 10)),
+            X.begin() + (static_cast<std::ptrdiff_t>((i + 1) * 10)));
     }
     rng RX(merge_vector4(Rin, Rout, Vin, Vout, comp));
     HPX_TEST(RX.size() == 100);
@@ -257,7 +261,8 @@ void test6()
     std::vector<rng> Vin, Vout;
     for (std::uint32_t i = 0; i < 16; ++i)
     {
-        Vin.emplace_back(VA.begin() + (i * 10), VA.begin() + ((i + 1) * 10));
+        Vin.emplace_back(VA.begin() + (static_cast<std::ptrdiff_t>(i * 10)),
+            VA.begin() + (static_cast<std::ptrdiff_t>((i + 1) * 10)));
     }
     rng RA(VA.begin(), VA.end());
     rng RB(VB.begin(), VB.end());

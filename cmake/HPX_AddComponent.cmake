@@ -322,6 +322,11 @@ function(add_hpx_component name)
     endif()
   endif()
 
+  if(HPX_WITH_CXX_MODULES AND MSVC)
+    # ignore warnings about exported symbols being imported
+    set(${name}_LINK_FLAGS "${${name}_LINK_FLAGS} /ignore:4217 /ignore:4286")
+  endif()
+
   hpx_setup_target(
     ${name}_component
     TYPE COMPONENT

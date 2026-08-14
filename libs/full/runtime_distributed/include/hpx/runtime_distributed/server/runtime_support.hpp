@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011 Bryce Lelbach
 //  Copyright (c) 2011-2017 Thomas Heller
 //
@@ -9,24 +9,23 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/actions_base/traits/action_does_termination_detection.hpp>
-#include <hpx/agas/agas_fwd.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/create_component.hpp>
-#include <hpx/components_base/traits/is_component.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/plugin.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/program_options.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/performance_counters/counters.hpp>
-#include <hpx/plugin_factories/plugin_factory_base.hpp>
-#include <hpx/runtime_components/components_fwd.hpp>
+
 #include <hpx/runtime_distributed/find_here.hpp>
 
 #include <atomic>
@@ -49,7 +48,7 @@
 namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
-    class runtime_support
+    HPX_CXX_EXPORT class runtime_support
     {
     private:
         using plugin_map_mutex_type = hpx::spinlock;
@@ -58,15 +57,13 @@ namespace hpx::components::server {
         {
             plugin_factory(
                 std::shared_ptr<plugins::plugin_factory_base> const& f,
-                hpx::util::plugin::dll const& d, bool enabled)
+                bool enabled)
               : first(f)
-              , second(d)
               , isenabled(enabled)
             {
             }
 
             std::shared_ptr<plugins::plugin_factory_base> first;
-            hpx::util::plugin::dll const& second;
             bool isenabled;
         };
         using plugin_factory_type = plugin_factory;
@@ -321,6 +318,11 @@ namespace hpx::components::server {
             hpx::program_options::options_description& options,
             std::set<std::string>& startup_handled);
 #endif
+
+        bool load_plugin_static(util::section& ini, std::string const& instance,
+            std::string const& plugin, bool isenabled,
+            hpx::program_options::options_description& options,
+            std::set<std::string>& startup_handled);
 
         // the name says it all
         std::size_t dijkstra_termination_detection(
@@ -609,7 +611,7 @@ HPX_REGISTER_ACTION_DECLARATION(
 
 namespace hpx::components::server {
 
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     struct create_component_action
       : ::hpx::actions::action<naming::gid_type (runtime_support::*)(Ts...),
             &runtime_support::create_component<Component, Ts...>,
@@ -625,7 +627,7 @@ namespace hpx::components::server {
     {
     };
 
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     struct create_component_direct_action
       : ::hpx::actions::direct_action<naming::gid_type (runtime_support::*)(
                                           Ts...),
@@ -643,7 +645,7 @@ namespace hpx::components::server {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <bool WithCount, typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
     struct bulk_create_component_action
       : ::hpx::actions::action<std::vector<naming::gid_type> (
                                    runtime_support::*)(std::size_t, Ts...),
@@ -662,7 +664,7 @@ namespace hpx::components::server {
     {
     };
 
-    template <bool WithCount, typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
     struct bulk_create_component_direct_action
       : ::hpx::actions::direct_action<std::vector<naming::gid_type> (
                                           runtime_support::*)(
@@ -684,7 +686,7 @@ namespace hpx::components::server {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     struct copy_create_component_action
       : ::hpx::actions::action<naming::gid_type (runtime_support::*)(
                                    std::shared_ptr<Component> const&, bool),
@@ -692,7 +694,8 @@ namespace hpx::components::server {
             copy_create_component_action<Component>>
     {
     };
-    template <typename Component>
+
+    HPX_CXX_EXPORT template <typename Component>
     struct migrate_component_here_action
       : ::hpx::actions::action<naming::gid_type (runtime_support::*)(
                                    std::shared_ptr<Component> const&,
@@ -705,21 +708,24 @@ namespace hpx::components::server {
 
 ///////////////////////////////////////////////////////////////////////////
 // Termination detection does not make this locality black
+namespace hpx::traits {
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE) && defined(HPX_HAVE_NETWORKING)
-template <>
-struct hpx::traits::action_does_termination_detection<
-    hpx::components::server::runtime_support::dijkstra_termination_action>
-{
-    static constexpr bool call() noexcept
+    template <>
+    struct action_does_termination_detection<
+        hpx::components::server::runtime_support::dijkstra_termination_action>
     {
-        return true;
-    }
-};
+        static constexpr bool call() noexcept
+        {
+            return true;
+        }
+    };
 #endif
 
-// runtime_support is a (hand-rolled) component
-template <>
-struct hpx::traits::is_component<hpx::components::server::runtime_support>
-  : std::true_type
-{
-};
+    // runtime_support is a (hand-rolled) component
+    template <>
+    struct is_component<hpx::components::server::runtime_support>
+      : std::true_type
+    {
+    };
+}    // namespace hpx::traits

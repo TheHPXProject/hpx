@@ -80,7 +80,7 @@ namespace hpx::components::process::posix::initializers {
 
     inline run_exe_ run_exe(filesystem::path const& p)
     {
-        return run_exe_(p.string());
+        return run_exe_(hpx::filesystem::to_string(p));
     }
 
 }    // namespace hpx::components::process::posix::initializers

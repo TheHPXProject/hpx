@@ -16,12 +16,14 @@ int process_data(int const x) HPX_PRE(x >= 0)
 {
     // Internal contract check that always fails
     HPX_CONTRACT_ASSERT(false);
+
+    // The test should fail even in cases where the contracts are being ignored.
     return x + 1;
 }
 
 int main()
 {
-    // This should trigger CONTRACT_ASSERT failure
+    // This should trigger CONTRACT_ASSERT failure.
     [[maybe_unused]] int result = process_data(5);
     return 0;
 }

@@ -1,4 +1,4 @@
-//  Copyright (c) 2014-2024 Hartmut Kaiser
+//  Copyright (c) 2014-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,21 +9,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_colocated/async_colocated_callback.hpp>
-#include <hpx/async_colocated/post_colocated_callback_fwd.hpp>
-#include <hpx/async_colocated/post_colocated_fwd.hpp>
-#include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/async_distributed/detail/post.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/runtime_components/create_component_helpers.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -36,7 +31,7 @@ namespace hpx::components {
     /// This class specifies the parameters for a distribution policy to use
     /// for creating a given number of items on the locality where a given
     /// object is currently placed.
-    struct colocating_distribution_policy
+    HPX_CXX_EXPORT struct colocating_distribution_policy
     {
         /// Default-construct a new instance of a \a colocating_distribution_policy.
         /// This policy will represent the local locality.
@@ -66,6 +61,30 @@ namespace hpx::components {
             return colocating_distribution_policy(client.get_id());
         }
 
+    private:
+        // Returns the direct-dispatch target id when colocation resolution can
+        // be short-circuited (empty policy, id_ already a locality address, or
+        // a non-migratable component); returns an empty id_type() otherwise, in
+        // which case the *_colocated_* family must be used with id_ directly.
+        [[nodiscard]] hpx::id_type resolve_direct_target() const
+        {
+            if (!id_)
+            {
+                return naming::get_id_from_locality_id(agas::get_locality_id());
+            }
+            if (naming::is_locality(id_))
+            {
+                return id_;
+            }
+            if (!naming::detail::is_migratable(id_.get_gid()))
+            {
+                return naming::get_id_from_locality_id(
+                    naming::get_locality_id_from_id(id_));
+            }
+            return hpx::id_type();    // signal: use colocated dispatch
+        }
+
+    public:
         /// Create one object on the locality of the object this distribution
         /// policy instance is associated with
         ///
@@ -81,18 +100,10 @@ namespace hpx::components {
         template <typename Component, typename... Ts>
         hpx::future<hpx::id_type> create(Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
                 return create_async<Component>(
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return create_async<Component>(
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    HPX_FORWARD(Ts, vs)...);
+                    HPX_MOVE(id), HPX_FORWARD(Ts, vs)...);
             }
             return create_colocated_async<Component>(
                 id_, HPX_FORWARD(Ts, vs)...);
@@ -120,26 +131,10 @@ namespace hpx::components {
         hpx::future<std::vector<bulk_locality_result>> bulk_create(
             std::size_t count, Ts&&... vs) const
         {
-            hpx::id_type id;
+            hpx::id_type id = resolve_direct_target();
             hpx::future<std::vector<hpx::id_type>> f;
-            if (!id_)
+            if (id)
             {
-                id = naming::get_id_from_locality_id(agas::get_locality_id());
-                if constexpr (WithCount)
-                {
-                    f = bulk_create_async<WithCount, Component>(
-                        id, count, 0, HPX_FORWARD(Ts, vs)...);
-                }
-                else
-                {
-                    f = bulk_create_async<WithCount, Component>(
-                        id, count, HPX_FORWARD(Ts, vs)...);
-                }
-            }
-            else if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                id = naming::get_id_from_locality_id(
-                    naming::get_locality_id_from_id(id_));
                 if constexpr (WithCount)
                 {
                     f = bulk_create_async<WithCount, Component>(
@@ -190,18 +185,10 @@ namespace hpx::components {
         typename async_result<Action>::type async(
             launch policy, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
-                return hpx::detail::async_impl<Action>(policy,
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::async_impl<Action>(policy,
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    HPX_FORWARD(Ts, vs)...);
+                return hpx::detail::async_impl<Action>(
+                    policy, HPX_MOVE(id), HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::async_colocated<Action>(
                 id_, HPX_FORWARD(Ts, vs)...);
@@ -214,17 +201,9 @@ namespace hpx::components {
         typename async_result<Action>::type async_cb(
             launch policy, Callback&& cb, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
-                return hpx::detail::async_cb_impl<Action>(policy,
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::async_cb_impl<Action>(policy,
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
+                return hpx::detail::async_cb_impl<Action>(policy, HPX_MOVE(id),
                     HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::async_colocated_cb<Action>(
@@ -237,20 +216,11 @@ namespace hpx::components {
         template <typename Action, typename Continuation, typename... Ts>
         bool apply(Continuation&& c, launch policy, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target())
             {
                 return hpx::detail::post_impl<Action>(
-                    HPX_FORWARD(Continuation, c),
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    policy, HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::post_impl<Action>(
-                    HPX_FORWARD(Continuation, c),
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    policy, HPX_FORWARD(Ts, vs)...);
+                    HPX_FORWARD(Continuation, c), HPX_MOVE(id), policy,
+                    HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::post_colocated<Action>(
                 HPX_FORWARD(Continuation, c), id_, HPX_FORWARD(Ts, vs)...);
@@ -259,18 +229,10 @@ namespace hpx::components {
         template <typename Action, typename... Ts>
         bool apply(launch policy, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
                 return hpx::detail::post_impl<Action>(
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    policy, HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::post_impl<Action>(
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    policy, HPX_FORWARD(Ts, vs)...);
+                    HPX_MOVE(id), policy, HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::post_colocated<Action>(
                 id_, HPX_FORWARD(Ts, vs)...);
@@ -284,20 +246,11 @@ namespace hpx::components {
         bool apply_cb(
             Continuation&& c, launch policy, Callback&& cb, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
                 return hpx::detail::post_cb_impl<Action>(
-                    HPX_FORWARD(Continuation, c),
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    policy, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::post_cb_impl<Action>(
-                    HPX_FORWARD(Continuation, c),
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    policy, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
+                    HPX_FORWARD(Continuation, c), HPX_MOVE(id), policy,
+                    HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::post_colocated_cb<Action>(
                 HPX_FORWARD(Continuation, c), id_, HPX_FORWARD(Callback, cb),
@@ -307,18 +260,10 @@ namespace hpx::components {
         template <typename Action, typename Callback, typename... Ts>
         bool apply_cb(launch policy, Callback&& cb, Ts&&... vs) const
         {
-            if (!id_)
+            if (hpx::id_type id = resolve_direct_target(); id)
             {
-                return hpx::detail::post_cb_impl<Action>(
-                    naming::get_id_from_locality_id(agas::get_locality_id()),
-                    policy, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
-            }
-            if (!naming::detail::is_migratable(id_.get_gid()))
-            {
-                return hpx::detail::post_cb_impl<Action>(
-                    naming::get_id_from_locality_id(
-                        naming::get_locality_id_from_id(id_)),
-                    policy, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
+                return hpx::detail::post_cb_impl<Action>(HPX_MOVE(id), policy,
+                    HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
             }
             return hpx::detail::post_colocated_cb<Action>(
                 id_, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
@@ -369,14 +314,15 @@ namespace hpx::components {
     /// A predefined instance of the co-locating \a distribution_policy. It
     /// will represent the local locality and will place all items to create
     /// here.
-    static colocating_distribution_policy const colocated{};
+    HPX_CXX_EXPORT HPX_EXPORT extern colocating_distribution_policy const
+        colocated;
 }    // namespace hpx::components
 
 /// \cond NOINTERNAL
 namespace hpx {
 
-    using hpx::components::colocated;
-    using hpx::components::colocating_distribution_policy;
+    HPX_CXX_EXPORT using hpx::components::colocated;
+    HPX_CXX_EXPORT using hpx::components::colocating_distribution_policy;
 
     template <>
     struct traits::is_distribution_policy<

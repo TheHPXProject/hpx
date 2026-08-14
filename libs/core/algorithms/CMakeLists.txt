@@ -46,6 +46,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/search.hpp
     hpx/parallel/algorithms/detail/set_operation.hpp
     hpx/parallel/algorithms/detail/spin_sort.hpp
+    hpx/parallel/algorithms/detail/tag_dispatch.hpp
     hpx/parallel/algorithms/detail/transfer.hpp
     hpx/parallel/algorithms/detail/upper_lower_bound.hpp
     hpx/parallel/algorithms/ends_with.hpp
@@ -54,6 +55,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/fill.hpp
     hpx/parallel/algorithms/find.hpp
     hpx/parallel/algorithms/for_each.hpp
+    hpx/parallel/algorithms/for_each_index.hpp
     hpx/parallel/algorithms/for_loop.hpp
     hpx/parallel/algorithms/for_loop_induction.hpp
     hpx/parallel/algorithms/for_loop_reduction.hpp
@@ -240,6 +242,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/mismatch.hpp
       hpx/parallel/datapar/reduce.hpp
       hpx/parallel/datapar/replace.hpp
+      hpx/parallel/datapar/search.hpp
       hpx/parallel/datapar/transfer.hpp
       hpx/parallel/datapar/transform_loop.hpp
       hpx/parallel/datapar/zip_iterator.hpp
@@ -259,10 +262,6 @@ set(algorithms_compat_headers
 
 set(algorithms_sources handle_exception_termination_handler.cpp task_group.cpp)
 
-if(HPX_TRACY_WITH_TRACY)
-  set(additional_dependencies hpx_tracy)
-endif()
-
 include(HPX_AddModule)
 add_hpx_module(
   core algorithms
@@ -270,8 +269,10 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   HEADERS ${algorithms_headers}
   COMPAT_HEADERS ${algorithms_compat_headers}
-  ADD_TO_GLOBAL_HEADER "hpx/parallel/util/detail/chunk_size_iterator.hpp"
-                       "hpx/parallel/util/detail/handle_remote_exceptions.hpp"
+  ADD_TO_GLOBAL_HEADER
+    "hpx/parallel/util/detail/chunk_size.hpp"
+    "hpx/parallel/util/detail/chunk_size_iterator.hpp"
+    "hpx/parallel/util/detail/handle_remote_exceptions.hpp"
   SOURCES ${algorithms_sources}
   MODULE_DEPENDENCIES
     hpx_async_base
@@ -280,6 +281,7 @@ add_hpx_module(
     hpx_concepts
     hpx_concurrency
     hpx_config
+    hpx_contracts
     hpx_coroutines
     hpx_datastructures
     hpx_errors
@@ -289,7 +291,6 @@ add_hpx_module(
     hpx_functional
     hpx_futures
     hpx_iterator_support
-    hpx_itt_notify
     hpx_lcos_local
     hpx_memory
     hpx_pack_traversal
@@ -298,8 +299,8 @@ add_hpx_module(
     hpx_synchronization
     hpx_tag_invoke
     hpx_threading_base
+    hpx_tracing
     hpx_type_support
     hpx_util
-    ${additional_dependencies}
   CMAKE_SUBDIRS examples tests
 )

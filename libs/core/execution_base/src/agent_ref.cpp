@@ -1,4 +1,5 @@
 //  Copyright (c) 2019 Thomas Heller
+//  Copyright (c) 2023-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +10,7 @@
 #include <hpx/execution_base/this_thread.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/lock_registration.hpp>
 
 #include <cstddef>
@@ -56,20 +58,20 @@ namespace hpx::execution_base {
         impl_->abort(desc);
     }
 
-    void agent_ref::sleep_for(
+    threads::thread_restart_state agent_ref::sleep_for(
         hpx::chrono::steady_duration const& sleep_duration,
-        char const* desc) const
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc) const
     {
         HPX_ASSERT(*this == hpx::execution_base::this_thread::agent());
-        impl_->sleep_for(sleep_duration, desc);
+        return impl_->sleep_for(sleep_duration, HPX_MOVE(wait_cond), desc);
     }
 
-    void agent_ref::sleep_until(
+    threads::thread_restart_state agent_ref::sleep_until(
         hpx::chrono::steady_time_point const& sleep_time,
-        char const* desc) const
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc) const
     {
         HPX_ASSERT(*this == hpx::execution_base::this_thread::agent());
-        impl_->sleep_until(sleep_time, desc);
+        return impl_->sleep_until(sleep_time, HPX_MOVE(wait_cond), desc);
     }
 
     std::ostream& operator<<(std::ostream& os, agent_ref const& a)

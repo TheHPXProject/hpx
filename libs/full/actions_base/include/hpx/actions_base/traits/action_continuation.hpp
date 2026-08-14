@@ -6,9 +6,11 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 namespace hpx::actions {
 
-    template <typename Result, typename RemoteResult = Result>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult = Result>
     struct typed_continuation;
 }    // namespace hpx::actions
 
@@ -16,7 +18,7 @@ namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
     // Trait to determine the continuation type for an action
-    template <typename Action, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Action, typename Enable = void>
     struct action_continuation
     {
         using type =
@@ -24,6 +26,6 @@ namespace hpx::traits {
                 typename Action::remote_result_type>;
     };
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     using action_continuation_t = typename action_continuation<Action>::type;
 }    // namespace hpx::traits

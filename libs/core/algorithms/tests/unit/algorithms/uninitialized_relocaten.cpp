@@ -10,204 +10,12 @@
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/type_support.hpp>
 
-#include <atomic>
-#include <random>
-#include <set>
-#include <utility>
+#include "uninitialized_relocate_test_utils.hpp"
 
-constexpr int N = 500;    // number of objects to construct
-constexpr int M = 200;    // number of objects to relocate
-constexpr int K = 100;    // number of objects to relocate before throwing
+#include <cstddef>
+#include <type_traits>
 
-static_assert(N > M);
-static_assert(M > K);
-
-using hpx::experimental::is_trivially_relocatable_v;
 using hpx::experimental::uninitialized_relocate_n;
-
-std::mutex m;
-
-template <typename F>
-void simple_mutex_operation(F&& f)
-{
-    std::lock_guard<std::mutex> lk(m);
-    f();
-}
-
-// enum for the different types of objects
-enum relocation_category
-{
-    trivially_relocatable,
-    non_trivially_relocatable,
-    non_trivially_relocatable_throwing
-};
-
-template <relocation_category c, bool overlapping_test = false>
-struct counted_struct
-{
-    static std::set<counted_struct<c, overlapping_test>*> made;
-    static std::atomic<int> moved;
-    static std::atomic<int> destroyed;
-    int data;
-
-    explicit counted_struct(int data)
-      : data(data)
-    {
-        // Check that we are not constructing an object on top of another
-        simple_mutex_operation([&]() {
-            HPX_TEST(!made.count(this));
-            made.insert(this);
-        });
-    }
-
-    counted_struct(counted_struct&& other) noexcept(
-        c != non_trivially_relocatable_throwing)
-      : data(other.data)
-    {
-        if constexpr (c == non_trivially_relocatable_throwing)
-        {
-            if (moved++ == K - 1)
-            {
-                throw 42;
-            }
-        }
-        else
-        {
-            moved++;
-        }
-
-        // Check that we are not constructing an object on top of another
-        simple_mutex_operation([&]() {
-            // Unless we are testing overlapping relocation
-            // we should not be move-constructing an object on top of another
-            if constexpr (!overlapping_test)
-            {
-                HPX_TEST(!made.count(this));
-            }
-            made.insert(this);
-        });
-    }
-
-    ~counted_struct()
-    {
-        destroyed++;
-
-        // Check that the object was constructed
-        // and not already destroyed
-        simple_mutex_operation([&]() {
-            HPX_TEST(made.count(this));
-            made.erase(this);
-        });
-    }
-
-    // making sure the address is never directly accessed
-    friend void operator&(counted_struct) = delete;
-};
-
-template <relocation_category c, bool overlapping_test>
-std::set<counted_struct<c, overlapping_test>*>
-    counted_struct<c, overlapping_test>::made;
-
-template <relocation_category c, bool overlapping_test>
-std::atomic<int> counted_struct<c, overlapping_test>::moved = 0;
-
-template <relocation_category c, bool overlapping_test>
-std::atomic<int> counted_struct<c, overlapping_test>::destroyed = 0;
-
-// Non overlapping relocation testing mechanisms
-using trivially_relocatable_struct = counted_struct<trivially_relocatable>;
-HPX_DECLARE_TRIVIALLY_RELOCATABLE(trivially_relocatable_struct);
-
-using non_trivially_relocatable_struct =
-    counted_struct<non_trivially_relocatable>;
-
-using non_trivially_relocatable_struct_throwing =
-    counted_struct<non_trivially_relocatable_throwing>;
-
-// Overlapping relocation testing mechanisms
-using trivially_relocatable_struct_overlapping =
-    counted_struct<trivially_relocatable, true>;
-HPX_DECLARE_TRIVIALLY_RELOCATABLE(trivially_relocatable_struct_overlapping);
-
-using non_trivially_relocatable_struct_overlapping =
-    counted_struct<non_trivially_relocatable, true>;
-
-using non_trivially_relocatable_struct_throwing_overlapping =
-    counted_struct<non_trivially_relocatable_throwing, true>;
-
-// Check that the correct types are trivially relocatable
-static_assert(is_trivially_relocatable_v<trivially_relocatable_struct>);
-static_assert(
-    is_trivially_relocatable_v<trivially_relocatable_struct_overlapping>);
-
-static_assert(!is_trivially_relocatable_v<non_trivially_relocatable_struct>);
-static_assert(
-    !is_trivially_relocatable_v<non_trivially_relocatable_struct_overlapping>);
-
-static_assert(
-    !is_trivially_relocatable_v<non_trivially_relocatable_struct_throwing>);
-static_assert(!is_trivially_relocatable_v<
-    non_trivially_relocatable_struct_throwing_overlapping>);
-
-void clear()
-{
-    // Reset for the next test
-    trivially_relocatable_struct::moved = 0;
-    trivially_relocatable_struct::destroyed = 0;
-    trivially_relocatable_struct::made.clear();
-
-    trivially_relocatable_struct_overlapping::moved = 0;
-    trivially_relocatable_struct_overlapping::destroyed = 0;
-    trivially_relocatable_struct_overlapping::made.clear();
-
-    non_trivially_relocatable_struct::moved = 0;
-    non_trivially_relocatable_struct::destroyed = 0;
-    non_trivially_relocatable_struct::made.clear();
-
-    non_trivially_relocatable_struct_overlapping::moved = 0;
-    non_trivially_relocatable_struct_overlapping::destroyed = 0;
-    non_trivially_relocatable_struct_overlapping::made.clear();
-
-    non_trivially_relocatable_struct_throwing::moved = 0;
-    non_trivially_relocatable_struct_throwing::destroyed = 0;
-    non_trivially_relocatable_struct_throwing::made.clear();
-
-    non_trivially_relocatable_struct_throwing_overlapping::moved = 0;
-    non_trivially_relocatable_struct_throwing_overlapping::destroyed = 0;
-    non_trivially_relocatable_struct_throwing_overlapping::made.clear();
-}
-
-template <typename T>
-std::pair<T*, T*> setup()
-{
-    clear();
-
-    void* mem1 = std::malloc(N * sizeof(T));
-    void* mem2 = std::malloc(N * sizeof(T));
-
-    HPX_TEST(mem1 && mem2);
-
-    T* ptr1 = static_cast<T*>(mem1);
-    T* ptr2 = static_cast<T*>(mem2);
-
-    HPX_TEST(T::made.size() == 0);
-    HPX_TEST(T::moved == 0);
-    HPX_TEST(T::destroyed == 0);
-
-    for (int i = 0; i < N; i++)
-    {
-        hpx::construct_at(ptr1 + i, i);
-    }
-
-    // fill ptr2 with 0 after M
-    std::fill(static_cast<std::byte*>(mem2) + M * sizeof(T),
-        static_cast<std::byte*>(mem2) + N * sizeof(T), std::byte{0});
-
-    // N objects constructed
-    HPX_TEST(T::made.size() == N);
-
-    return {ptr1, ptr2};
-}
 
 template <typename Ex>
 void test()
@@ -375,7 +183,7 @@ void test_overlapping()
     static_assert(M + offset <= N);
 
     {    // Overlapping trivially-relocatable
-        auto [ptr, ___] = setup<trivially_relocatable_struct_overlapping>();
+        auto ptr = setup_single<trivially_relocatable_struct_overlapping>();
 
         // Destroy the objects that will be overwritten for bookkeeping
         std::destroy(ptr, ptr + offset);
@@ -421,7 +229,7 @@ void test_overlapping()
         std::free(ptr);
     }
     {    // Overlapping non-trivially relocatable
-        auto [ptr, ___] = setup<non_trivially_relocatable_struct_overlapping>();
+        auto ptr = setup_single<non_trivially_relocatable_struct_overlapping>();
 
         // Destroy the objects that will be overwritten for bookkeeping purposes
         std::destroy(ptr, ptr + offset);
@@ -458,8 +266,8 @@ void test_overlapping()
         std::free(ptr);
     }
     {    // Overlapping non-trivially relocatable throwing
-        auto [ptr, ___] =
-            setup<non_trivially_relocatable_struct_throwing_overlapping>();
+        auto ptr = setup_single<
+            non_trivially_relocatable_struct_throwing_overlapping>();
 
         // Destroy the objects that will be overwritten for bookkeeping purposes
         std::destroy(ptr, ptr + offset);
@@ -492,6 +300,10 @@ void test_overlapping()
             non_trivially_relocatable_struct_throwing_overlapping::destroyed ==
             K - 1 + M + offset);
 
+        // All objects in the relocation range are cleaned up after exception
+        HPX_TEST(non_trivially_relocatable_struct_throwing_overlapping::made
+                     .size() == static_cast<std::size_t>(N - M - offset));
+
         // The objects in the end of ptr1 are still valid
         for (int i = M + offset; i < N; i++)
         {
@@ -511,6 +323,72 @@ void test_overlapping()
     return;
 }
 
+// Right-overlap test: dest > first, dest < first + count
+// This is the scenario that Issue #1 failed to detect - the parallel path
+// would run on overlapping ranges, causing inter-chunk data races.
+// Only trivially relocatable types are tested because sequential forward
+// relocation with right-overlap is only correct via memmove (buffer_memcpy_tag).
+template <typename Ex>
+void test_right_overlapping()
+{
+    constexpr int offset = 4;
+
+    static_assert(M + offset <= N);
+
+    {    // Right-overlapping trivially-relocatable
+        auto ptr = setup_single<trivially_relocatable_struct_overlapping>();
+
+        // Destroy the objects in [M, M + offset) that will be overwritten
+        // by the destination tail extending beyond the source range
+        std::destroy(ptr + M, ptr + M + offset);
+        HPX_TEST(trivially_relocatable_struct_overlapping::destroyed == offset);
+
+        // relocate M objects `offset` positions forward (right-overlap)
+        // source: [ptr, ptr + M), dest: [ptr + offset, ptr + M + offset)
+        uninitialized_relocate_n(Ex{}, ptr, M, ptr + offset);
+
+        // Bookkeeping: remove old positions, add new positions
+        for (int i = 0; i < M; i++)
+        {
+            trivially_relocatable_struct_overlapping::made.erase(ptr + i);
+        }
+        for (int i = 0; i < M; i++)
+        {
+            trivially_relocatable_struct_overlapping::made.insert(
+                ptr + offset + i);
+        }
+
+        // No move constructor or destructor should be called
+        // because the objects are trivially relocatable
+        HPX_TEST(trivially_relocatable_struct_overlapping::moved == 0);
+        HPX_TEST(trivially_relocatable_struct_overlapping::destroyed == offset);
+
+        // Objects relocated forward by offset
+        for (int i = 0; i < M; i++)
+        {
+            HPX_TEST(ptr[offset + i].data == i);
+        }
+
+        // Objects after destination not touched
+        for (int i = M + offset; i < N; i++)
+        {
+            HPX_TEST(ptr[i].data == i);
+        }
+
+        // Destroy objects within their lifetime
+        // from our perspective objects in the range [0, offset) are destroyed
+        std::destroy(ptr + offset, ptr + M + offset);
+        std::destroy(ptr + M + offset, ptr + N);
+
+        HPX_TEST(trivially_relocatable_struct_overlapping::made.empty());
+
+        std::free(ptr);
+    }
+    clear();
+
+    return;
+}
+
 int hpx_main()
 {
     test<hpx::execution::sequenced_policy>();
@@ -518,6 +396,9 @@ int hpx_main()
 
     test_overlapping<hpx::execution::sequenced_policy>();
     test_overlapping<hpx::execution::parallel_policy>();
+
+    test_right_overlapping<hpx::execution::sequenced_policy>();
+    test_right_overlapping<hpx::execution::parallel_policy>();
 
     return hpx::local::finalize();
 }

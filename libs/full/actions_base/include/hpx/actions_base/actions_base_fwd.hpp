@@ -19,8 +19,7 @@ namespace hpx::actions {
     ///////////////////////////////////////////////////////////////////////////
     /// The type of the action defines whether this action will be executed
     /// directly or by an HPX-threads
-    enum class action_flavor
-    {
+    HPX_CXX_EXPORT enum class action_flavor : std::uint8_t {
         plain_action = 0,    ///< The action will be executed by a newly created
                              ///< thread
         direct_action = 1    ///< The action needs to be executed directly
@@ -29,11 +28,11 @@ namespace hpx::actions {
     /// The \a base_action class is an abstract class used as the base class
     /// for all action types. It's main purpose is to allow polymorphic
     /// serialization of action instances through a unique_ptr.
-    struct HPX_EXPORT base_action;
+    HPX_CXX_EXPORT struct HPX_EXPORT base_action;
 
     namespace detail {
 
-        HPX_EXPORT std::uint32_t get_action_id_from_name(
+        HPX_CXX_EXPORT HPX_EXPORT std::uint32_t get_action_id_from_name(
             char const* action_name);
     }    // namespace detail
 

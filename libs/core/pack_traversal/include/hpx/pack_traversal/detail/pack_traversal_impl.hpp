@@ -9,7 +9,6 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 #include <hpx/pack_traversal/detail/container_category.hpp>
@@ -340,7 +339,7 @@ namespace hpx::util::detail {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T, typename E>
+        template <typename T, typename E>
         struct has_push_back<T, E,
             std::void_t<decltype(std::declval<T>().push_back(
                 std::declval<E>()))>> : std::true_type

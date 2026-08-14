@@ -7,5 +7,4 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/components_base.hpp>

@@ -71,7 +71,6 @@ void test_find_if(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == iterator(test_index));
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_find_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
@@ -97,14 +96,13 @@ void test_find_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
                           [](auto v) { return v == int(1); }) |
             hpx::find_if(ex_policy.on(exec)));
 
-    iterator index = hpx::get<0>(*snd_result);
+    iterator index = hpx::get<0>(snd_result.value());
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
 
     HPX_TEST(index == iterator(test_index));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_if_async(ExPolicy&& p, IteratorTag)
@@ -124,10 +122,7 @@ void test_find_if_async(ExPolicy&& p, IteratorTag)
     //create iterator at position of value to be found
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
-    auto res = f.get();
-    std::cout << "Expected : " << *(iterator(test_index)) << " Got : " << *res
-              << std::endl;
-    HPX_TEST(res == iterator(test_index));
+    HPX_TEST(f.get() == iterator(test_index));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -310,4 +305,78 @@ void test_find_if_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
     HPX_TEST(caught_bad_alloc);
     HPX_TEST(returned_from_algorithm);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Cross-policy consistency tests for hpx::find_if
+//
+// Verifies that seq, par, and par_unseq always return the same iterator for
+// identical input data and predicate. Covers the same 7 canonical edge cases
+// as test_find_cross_policy to maintain a consistent regression harness.
+template <typename IteratorTag>
+void test_find_if_cross_policy(IteratorTag)
+{
+    using namespace hpx::execution;
+
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    auto check_policy = [&](std::vector<int>& c, int target,
+                            char const* scenario) {
+        auto pred = [target](int v) { return v == target; };
+        auto r_seq =
+            hpx::find_if(seq, iterator(c.begin()), iterator(c.end()), pred);
+        auto r_par =
+            hpx::find_if(par, iterator(c.begin()), iterator(c.end()), pred);
+        auto r_par_u = hpx::find_if(
+            par_unseq, iterator(c.begin()), iterator(c.end()), pred);
+        HPX_TEST_MSG(r_seq == r_par, scenario);
+        HPX_TEST_MSG(r_seq == r_par_u, scenario);
+    };
+
+    // 1. Empty range
+    {
+        std::vector<int> c;
+        check_policy(c, 42, "find_if: empty range");
+    }
+
+    // 2. Single element, predicate matches
+    {
+        std::vector<int> c = {42};
+        check_policy(c, 42, "find_if: single element, match");
+    }
+
+    // 3. Single element, predicate never matches
+    {
+        std::vector<int> c = {1};
+        check_policy(c, 99, "find_if: single element, no match");
+    }
+
+    // 4. Match at position 0
+    {
+        std::vector<int> c(1013, 5);
+        c[0] = 7;
+        check_policy(c, 7, "find_if: match at index 0");
+    }
+
+    // 5. Match at last position
+    {
+        std::vector<int> c(1013, 5);
+        c[1012] = 7;
+        check_policy(c, 7, "find_if: match at last index");
+    }
+
+    // 6. No match - all policies must return end()
+    {
+        std::vector<int> c(1013, 5);
+        check_policy(c, 99, "find_if: no match, must return end");
+    }
+
+    // 7. Multiple matches - all policies must return the FIRST occurrence
+    {
+        std::vector<int> c(1013, 5);
+        c[100] = 7;
+        c[700] = 7;
+        check_policy(c, 7, "find_if: multiple matches, return first");
+    }
 }

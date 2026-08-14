@@ -26,7 +26,10 @@ int hpx_main()
         hpx::execution::experimental::adapt_sharing_mode(hpx::execution::par,
             hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
-    hpx::experimental::for_loop(policy, 0, 100, [&](int) {
+    auto p = hpx::execution::experimental::create_rebound_policy(
+        policy, hpx::execution::to_hierarchical_spawning(policy.executor()));
+
+    hpx::experimental::for_loop(p, 0, 100, [&](int) {
         std::lock_guard<hpx::spinlock> l(mtx);
         thread_ids.insert(hpx::this_thread::get_id());
     });
@@ -35,7 +38,7 @@ int hpx_main()
 
     thread_ids.clear();
 
-    hpx::experimental::for_loop_n(policy, 0, 100, [&](int) {
+    hpx::experimental::for_loop_n(p, 0, 100, [&](int) {
         std::lock_guard<hpx::spinlock> l(mtx);
         thread_ids.insert(hpx::this_thread::get_id());
     });

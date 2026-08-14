@@ -192,6 +192,7 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -199,9 +200,9 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
@@ -496,7 +497,6 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
-                    // NOLINT(bugprone-empty-catch)
                     util::detail::handle_local_exceptions<ExPolicy>::call(
                         std::current_exception(), errors);
                 }
@@ -554,9 +554,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::make_heap
     HPX_CXX_CORE_EXPORT inline constexpr struct make_heap_t final
-      : hpx::detail::tag_parallel_algorithm<make_heap_t>
+      : hpx::detail::tag_dispatch<make_heap_t,
+            hpx::detail::tag_parallel_algorithm<make_heap_t>>
     {
-    private:
         template <typename ExPolicy, typename RndIter, typename Comp>
         // clang-format off
             requires (
@@ -568,9 +568,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(make_heap_t, ExPolicy&& policy, RndIter first,
-            RndIter last, Comp comp)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, RndIter first, RndIter last,
+            Comp comp) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -588,9 +588,9 @@ namespace hpx {
             hpx::traits::is_iterator_v<RndIter>
         )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(
-            make_heap_t, ExPolicy&& policy, RndIter first, RndIter last)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, RndIter first, RndIter last)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -614,8 +614,8 @@ namespace hpx {
             >
         )
         // clang-format on
-        friend void tag_fallback_invoke(
-            make_heap_t, RndIter first, RndIter last, Comp comp)
+        static void invoke_default(RndIter first, RndIter last, Comp comp)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -627,8 +627,8 @@ namespace hpx {
 
         template <typename RndIter>
             requires(hpx::traits::is_iterator_v<RndIter>)
-        friend void tag_fallback_invoke(
-            make_heap_t, RndIter first, RndIter last)
+        static void invoke_default(RndIter first, RndIter last)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");

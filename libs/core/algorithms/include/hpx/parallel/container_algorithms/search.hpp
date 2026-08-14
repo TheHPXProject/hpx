@@ -692,6 +692,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <cstddef>
@@ -703,9 +704,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct search_t final
-      : hpx::detail::tag_parallel_algorithm<search_t>
+      : hpx::detail::tag_dispatch<search_t,
+            hpx::detail::tag_parallel_algorithm<search_t>>
     {
-    private:
         template <typename FwdIter, typename Sent, typename FwdIter2,
             typename Sent2, typename Pred = hpx::ranges::equal_to,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -724,8 +725,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::search_t, FwdIter first,
-            Sent last, FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
+        static FwdIter invoke_default(FwdIter first, Sent last,
+            FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             return hpx::parallel::detail::search<FwdIter, Sent>().call(
@@ -753,10 +754,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
-        tag_fallback_invoke(hpx::ranges::search_t, ExPolicy&& policy,
-            FwdIter first, Sent last, FwdIter2 s_first, Sent2 s_last,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
+            FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             return hpx::parallel::detail::search<FwdIter, Sent>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, s_first, s_last,
@@ -779,9 +780,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng1> tag_fallback_invoke(
-            hpx::ranges::search_t, Rng1&& rng1, Rng2&& rng2, Pred op = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static std::ranges::iterator_t<Rng1> invoke_default(Rng1&& rng1,
+            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             using fwditer_type = std::ranges::iterator_t<Rng1>;
             using sent_type = std::ranges::sentinel_t<Rng1>;
@@ -809,11 +810,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng1>>
-        tag_fallback_invoke(hpx::ranges::search_t, ExPolicy&& policy,
-            Rng1&& rng1, Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using fwditer_type = std::ranges::iterator_t<Rng1>;
             using sent_type = std::ranges::sentinel_t<Rng1>;
@@ -827,9 +827,9 @@ namespace hpx::ranges {
     } search{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct search_n_t final
-      : hpx::detail::tag_parallel_algorithm<search_n_t>
+      : hpx::detail::tag_dispatch<search_n_t,
+            hpx::detail::tag_parallel_algorithm<search_n_t>>
     {
-    private:
         template <typename FwdIter, typename FwdIter2, typename Sent2,
             typename Pred = hpx::ranges::equal_to,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -847,9 +847,9 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::search_n_t,
-            FwdIter first, std::size_t count, FwdIter2 s_first, Sent2 s_last,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static FwdIter invoke_default(FwdIter first, std::size_t count,
+            FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
                 hpx::execution::seq, first, count, s_first, s_last,
@@ -874,11 +874,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::search_n_t, ExPolicy&& policy,
-            FwdIter first, std::size_t count, FwdIter2 s_first, Sent2 s_last,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, FwdIter first, std::size_t count,
+            FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, count, s_first, s_last,
@@ -901,10 +901,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng1> tag_fallback_invoke(
-            hpx::ranges::search_n_t, Rng1&& rng1, std::size_t count,
-            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static std::ranges::iterator_t<Rng1> invoke_default(Rng1&& rng1,
+            std::size_t count, Rng2&& rng2, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using fwditer_type = std::ranges::iterator_t<Rng1>;
             using sent_type = std::ranges::sentinel_t<Rng1>;
@@ -932,11 +931,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng1>>
-        tag_fallback_invoke(hpx::ranges::search_n_t, ExPolicy&& policy,
-            Rng1&& rng1, std::size_t count, Rng2&& rng2, Pred op = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, std::size_t count,
+            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             using fwditer_type = std::ranges::iterator_t<Rng1>;
             using sent_type = std::ranges::sentinel_t<Rng1>;

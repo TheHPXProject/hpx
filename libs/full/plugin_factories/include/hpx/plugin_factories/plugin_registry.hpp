@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,10 +10,9 @@
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/prefix.hpp>
-#include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/string_util.hpp>
-
+#include <hpx/plugin_factories/macros.hpp>
 #include <hpx/plugin_factories/unique_plugin_name.hpp>
 
 #include <algorithm>
@@ -25,13 +24,14 @@
 namespace hpx::plugins {
 
     ///////////////////////////////////////////////////////////////////////////
-    /// The \a plugin_registry provides a minimal implementation of a
-    /// plugin's registry. If no additional functionality is required this
-    /// type can be used to implement the full set of minimally required
-    /// functions to be exposed by a plugin's registry instance.
+    /// The \a plugin_registry provides a minimal implementation of a plugin's
+    /// registry. If no additional functionality is required this type can be
+    /// used to implement the full set of minimally required functions to be
+    /// exposed by a plugin's registry instance.
     ///
-    /// \tparam Plugin   The plugin type this registry should be responsible for.
-    template <typename Plugin, char const* const Name,
+    /// \tparam Plugin   The plugin type this registry should be responsible
+    ///                  for.
+    HPX_CXX_EXPORT template <typename Plugin, char const* const Name,
         char const* const Section, char const* const Suffix>
     struct plugin_registry : plugin_registry_base
     {
@@ -67,41 +67,3 @@ namespace hpx::plugins {
         }
     };
 }    // namespace hpx::plugins
-
-///////////////////////////////////////////////////////////////////////////////
-/// This macro is used create and to register a minimal plugin registry with
-/// Hpx.Plugin.
-#define HPX_REGISTER_PLUGIN_REGISTRY(...)                                      \
-    HPX_REGISTER_PLUGIN_REGISTRY_(__VA_ARGS__)                                 \
-    /**/
-
-#define HPX_REGISTER_PLUGIN_REGISTRY_(...)                                     \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_PLUGIN_REGISTRY_,                    \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_PLUGIN_REGISTRY_2(PluginType, pluginname)                 \
-    HPX_REGISTER_PLUGIN_REGISTRY_5(                                            \
-        PluginType, pluginname, HPX_PLUGIN_NAME, "hpx", "hpx")                 \
-    /**/
-#define HPX_REGISTER_PLUGIN_REGISTRY_4(                                        \
-    PluginType, pluginname, pluginsection, pluginsuffix)                       \
-    HPX_REGISTER_PLUGIN_REGISTRY_5(                                            \
-        PluginType, pluginname, HPX_PLUGIN_NAME, pluginsection, pluginsuffix)  \
-    /**/
-#define HPX_REGISTER_PLUGIN_REGISTRY_5(                                        \
-    PluginType, pluginname, pluginstring, pluginsection, pluginsuffix)         \
-    constexpr char __##pluginname##_string[] = HPX_PP_STRINGIZE(pluginstring); \
-    constexpr char __##pluginname##_section[] = pluginsection;                 \
-    constexpr char __##pluginname##_suffix[] = pluginsuffix;                   \
-    using __##pluginname##_plugin_registry_type =                              \
-        hpx::plugins::plugin_registry<PluginType, __##pluginname##_string,     \
-            __##pluginname##_section, __##pluginname##_suffix>;                \
-    HPX_REGISTER_PLUGIN_BASE_REGISTRY(                                         \
-        __##pluginname##_plugin_registry_type, pluginname)                     \
-    HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
-        __##pluginname##_plugin_registry_type, pluginname)                     \
-    template struct hpx::plugins::plugin_registry<PluginType,                  \
-        __##pluginname##_string, __##pluginname##_section,                     \
-        __##pluginname##_suffix>;                                              \
-    /**/

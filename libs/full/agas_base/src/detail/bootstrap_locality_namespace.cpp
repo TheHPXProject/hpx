@@ -7,20 +7,20 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 
 #include <hpx/agas_base/detail/bootstrap_locality_namespace.hpp>
 #include <hpx/agas_base/server/locality_namespace.hpp>
-#include <hpx/assert.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/modules/naming_base.hpp>
-#include <hpx/modules/parcelset_base.hpp>
 
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
+namespace hpx::agas::detail {
 
     bootstrap_locality_namespace::bootstrap_locality_namespace(
         server::primary_namespace* primary)
@@ -113,4 +113,4 @@ namespace hpx { namespace agas { namespace detail {
     {
         server_.unregister_server_instance(ec);
     }
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail

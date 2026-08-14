@@ -7,10 +7,10 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
+#include <hpx/modules/parcelset.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelports/init_all_parcelports.hpp>
 #include <hpx/parcelports/static_parcelports.hpp>
-#include <hpx/parcelset/init_parcelports.hpp>
-#include <hpx/plugin_factories/parcelport_factory_base.hpp>
 
 #include <vector>
 

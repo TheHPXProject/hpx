@@ -134,8 +134,6 @@ void test_unique(ExPolicy policy, DataType)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    using hpx::get;
-
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
     std::generate(std::begin(c), std::end(c), random_fill(0, 6));
@@ -156,8 +154,6 @@ void test_unique_async(ExPolicy policy, DataType)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    using hpx::get;
-
     std::size_t const size = 10007;
     std::vector<DataType> c(size), d;
     std::generate(std::begin(c), std::end(c), random_fill(0, 6));
@@ -165,6 +161,118 @@ void test_unique_async(ExPolicy policy, DataType)
 
     auto f = hpx::ranges::unique(policy, c);
     auto result = f.get();
+    auto solution = std::unique(std::begin(d), std::end(d));
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename DataType, typename Pred, typename Proj>
+void test_unique_proj(DataType, Pred pred, Proj proj)
+{
+    std::size_t const size = 10007;
+    std::vector<DataType> c(size), d;
+    std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+    d = c;
+
+    auto result = hpx::ranges::unique(c, pred, proj);
+    auto solution = std::unique(
+        std::begin(d), std::end(d), [pred, proj](auto const& a, auto const& b) {
+            return pred(proj(a), proj(b));
+        });
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename ExPolicy, typename DataType, typename Pred, typename Proj>
+void test_unique_proj(ExPolicy policy, DataType, Pred pred, Proj proj)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    std::size_t const size = 10007;
+    std::vector<DataType> c(size), d;
+    std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+    d = c;
+
+    auto result = hpx::ranges::unique(policy, c, pred, proj);
+    auto solution = std::unique(
+        std::begin(d), std::end(d), [pred, proj](auto const& a, auto const& b) {
+            return pred(proj(a), proj(b));
+        });
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename ExPolicy, typename DataType, typename Pred, typename Proj>
+void test_unique_proj_async(ExPolicy policy, DataType, Pred pred, Proj proj)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    std::size_t const size = 10007;
+    std::vector<DataType> c(size), d;
+    std::generate(std::begin(c), std::end(c), random_fill(0, 6));
+    d = c;
+
+    auto f = hpx::ranges::unique(policy, c, pred, proj);
+    auto result = f.get();
+    auto solution = std::unique(
+        std::begin(d), std::end(d), [pred, proj](auto const& a, auto const& b) {
+            return pred(proj(a), proj(b));
+        });
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename DataType>
+void test_unique_sentinel(DataType)
+{
+    using test_vector = test::test_sentinel_container<std::vector<DataType>,
+        std::forward_iterator_tag>;
+
+    std::size_t const size = 10007;
+    test_vector c(size);
+    std::vector<DataType> d;
+    std::generate(std::begin(c.base()), std::end(c.base()), random_fill(0, 6));
+    d = c.base();
+
+    auto result = hpx::ranges::unique(c);
+    auto solution = std::unique(std::begin(d), std::end(d));
+
+    bool equality =
+        test::equal(std::begin(c), result.begin(), std::begin(d), solution);
+
+    HPX_TEST(equality);
+}
+
+template <typename ExPolicy, typename DataType>
+void test_unique_sentinel(ExPolicy policy, DataType)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using test_vector = test::test_sentinel_container<std::vector<DataType>,
+        std::forward_iterator_tag>;
+
+    std::size_t const size = 10007;
+    test_vector c(size);
+    std::vector<DataType> d;
+    std::generate(std::begin(c.base()), std::end(c.base()), random_fill(0, 6));
+    d = c.base();
+
+    auto result = hpx::ranges::unique(policy, c);
     auto solution = std::unique(std::begin(d), std::end(d));
 
     bool equality =
@@ -188,8 +296,38 @@ void test_unique()
     test_unique(par, DataType());
     test_unique(par_unseq, DataType());
 
+    test_unique_sentinel(DataType());
+    test_unique_sentinel(seq, DataType());
+    test_unique_sentinel(par, DataType());
+    test_unique_sentinel(par_unseq, DataType());
+
     test_unique_async(seq(task), DataType());
     test_unique_async(par(task), DataType());
+
+    test_unique_proj(
+        DataType(), [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
+    test_unique_proj(
+        seq, DataType(),
+        [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
+    test_unique_proj(
+        par, DataType(),
+        [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
+    test_unique_proj(
+        par_unseq, DataType(),
+        [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
+
+    test_unique_proj_async(
+        seq(task), DataType(),
+        [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
+    test_unique_proj_async(
+        par(task), DataType(),
+        [](auto const& a, auto const& b) -> bool { return a == b; },
+        [](auto const& val) { return val; });
 }
 
 void test_unique()

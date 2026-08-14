@@ -20,7 +20,6 @@
 
 #include "test_utils.hpp"
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_fill_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -48,7 +47,6 @@ void test_uninitialized_fill_sender(
     });
     HPX_TEST_EQ(count, c.size());
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_fill_sender_test()
@@ -64,7 +62,6 @@ void uninitialized_fill_sender_test()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_fill_exception_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -86,7 +83,6 @@ void test_uninitialized_fill_exception_sender(
     test::count_instances::instance_count.store(0);
 
     bool caught_exception = false;
-    bool returned_from_algorithm = false;
     try
     {
         tt::sync_wait(
@@ -113,7 +109,6 @@ void test_uninitialized_fill_exception_sender(
     HPX_TEST(caught_exception);
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_fill_exception_sender_test()
@@ -130,7 +125,6 @@ void uninitialized_fill_exception_sender_test()
         hpx::launch::async, par_unseq(task), IteratorTag());
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_uninitialized_fill_bad_alloc_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -177,7 +171,6 @@ void test_uninitialized_fill_bad_alloc_sender(
     HPX_TEST(caught_bad_alloc);
     HPX_TEST_EQ(test::count_instances::instance_count.load(), std::size_t(0));
 }
-#endif
 
 template <typename IteratorTag>
 void uninitialized_fill_bad_alloc_sender_test()

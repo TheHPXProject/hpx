@@ -10,8 +10,8 @@
 #include <hpx/modules/plugin.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelport_tcp/connection_handler.hpp>
-#include <hpx/plugin_factories/parcelport_factory.hpp>
 
 // Inject additional configuration data into the factory registry for this type.
 // This information ends up in the system wide configuration database under the

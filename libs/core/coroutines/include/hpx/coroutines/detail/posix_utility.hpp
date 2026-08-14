@@ -122,7 +122,7 @@ namespace hpx::threads::coroutines::detail::posix {
 
             void** stack = static_cast<void**>(real_stack) +
                 (EXEC_PAGESIZE / sizeof(void*));
-            return static_cast<void*>(stack);
+            return reinterpret_cast<void*>(stack);
         }
         return real_stack;
 #else
@@ -165,7 +165,7 @@ namespace hpx::threads::coroutines::detail::posix {
         {
             void** real_stack =
                 static_cast<void**>(stack) - (EXEC_PAGESIZE / sizeof(void*));
-            ::munmap(static_cast<void*>(real_stack), size + EXEC_PAGESIZE);
+            ::munmap(reinterpret_cast<void*>(real_stack), size + EXEC_PAGESIZE);
         }
         else
         {

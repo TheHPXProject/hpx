@@ -18,26 +18,40 @@
 
 namespace hpx::util::detail {
 
+    inline bool yield_k(unsigned const k) noexcept
+    {
+        if (k < 4)    //-V112
+        {
+            // do nothing
+        }
+        else if (k < 16)
+        {
+            HPX_SMT_PAUSE;
+        }
+        return false;
+    }
+
+    HPX_CORE_EXPORT bool yield_k_backoff(unsigned k) noexcept;
+
     /// Lockable spinlock class
-    HPX_CXX_CORE_EXPORT struct spinlock
+    HPX_CXX_CORE_EXPORT template <bool Backoff>
+    struct spinlock_impl
     {
     private:
         std::atomic<bool> m;
 
-        HPX_CORE_EXPORT static void yield_k(unsigned) noexcept;
-
     public:
-        constexpr spinlock() noexcept
+        constexpr spinlock_impl() noexcept
           : m(false)
         {
         }
 
-        spinlock(spinlock const&) = delete;
-        spinlock(spinlock&&) = delete;
-        spinlock& operator=(spinlock const&) = delete;
-        spinlock& operator=(spinlock&&) = delete;
+        spinlock_impl(spinlock_impl const&) = delete;
+        spinlock_impl(spinlock_impl&&) = delete;
+        spinlock_impl& operator=(spinlock_impl const&) = delete;
+        spinlock_impl& operator=(spinlock_impl&&) = delete;
 
-        ~spinlock() = default;
+        ~spinlock_impl() = default;
 
         HPX_FORCEINLINE bool try_lock() noexcept
         {
@@ -55,7 +69,14 @@ namespace hpx::util::detail {
             unsigned k = 0;
             while (!try_lock())
             {
-                yield_k(k++);
+                if constexpr (Backoff)
+                {
+                    yield_k_backoff(k++);
+                }
+                else
+                {
+                    yield_k(k++ & 0xff);
+                }
             }
         }
 
@@ -64,4 +85,10 @@ namespace hpx::util::detail {
             m.store(false, std::memory_order_release);
         }
     };
+
+    /// \brief \c spinlock is a type of lock that causes a thread attempting to
+    ///        obtain it to check for its availability while waiting in a loop
+    ///        continuously.
+    HPX_CXX_CORE_EXPORT using spinlock = spinlock_impl<true>;
+    HPX_CXX_CORE_EXPORT using spinlock_no_backoff = spinlock_impl<false>;
 }    // namespace hpx::util::detail

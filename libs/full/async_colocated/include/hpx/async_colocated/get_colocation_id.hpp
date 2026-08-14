@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -36,7 +36,7 @@ namespace hpx {
     ///           hpx::exception.
     ///
     /// \see    \a hpx::get_colocation_id()
-    HPX_EXPORT hpx::id_type get_colocation_id(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::id_type get_colocation_id(
         launch::sync_policy, hpx::id_type const& id, error_code& ec = throws);
 
     /// \brief Asynchronously return the id of the locality where the object
@@ -45,6 +45,6 @@ namespace hpx {
     /// \param id [in] The id of the object to locate.
     ///
     /// \see    \a hpx::get_colocation_id(launch::sync_policy)
-    HPX_EXPORT hpx::future<hpx::id_type> get_colocation_id(
+    HPX_CXX_EXPORT HPX_EXPORT hpx::future<hpx::id_type> get_colocation_id(
         hpx::id_type const& id);
 }    // namespace hpx

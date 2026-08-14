@@ -1,4 +1,4 @@
-//  Copyright (c) 2015-2022 Hartmut Kaiser
+//  Copyright (c) 2015-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -48,7 +48,7 @@ namespace hpx {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
-        explicit latch(std::ptrdiff_t count)
+        explicit latch(std::ptrdiff_t const count)
           : counter_(count)
           , notified_(count == 0)
         {
@@ -89,11 +89,14 @@ namespace hpx {
         ///
         /// \throws Nothing.
         ///
-        void count_down(std::ptrdiff_t update)
+        void count_down(std::ptrdiff_t const update)
         {
             HPX_ASSERT(update >= 0);
 
-            std::ptrdiff_t const new_count = (counter_ -= update);
+            // Explicit atomic RMW for clearer memory-order intent.
+            std::ptrdiff_t const new_count =
+                counter_.fetch_sub(update, std::memory_order_acq_rel) - update;
+
             HPX_ASSERT(new_count >= 0);
 
             // 26111: Caller failing to release lock 'this->mtx_.data_'
@@ -108,18 +111,8 @@ namespace hpx {
                 std::unique_lock l(mtx_.data_);
                 notified_ = true;
 
-                // Note: we use notify_one repeatedly instead of notify_all as we
-                // know that our implementation of condition_variable::notify_one
-                // relinquishes the lock before resuming the waiting thread
-                // that avoids suspension of this thread when it tries to
-                // re-lock the mutex while exiting from condition_variable::wait
-                while (cond_.data_.notify_one(
-                    HPX_MOVE(l), threads::thread_priority::boost))
-                {
-                    l = std::unique_lock(mtx_.data_);
-                }
+                notify_waiters(HPX_MOVE(l));
             }
-
 #if defined(HPX_MSVC)
 #pragma warning(pop)
 #endif
@@ -148,14 +141,15 @@ namespace hpx {
 #endif
 
             std::unique_lock l(mtx_.data_);
-            if (counter_.load(std::memory_order_relaxed) > 0 || !notified_)
+
+            // Robust predicate loop.
+            while (counter_.load(std::memory_order_acquire) > 0 || !notified_)
             {
                 cond_.data_.wait(l, "hpx::latch::wait");
-
-                HPX_ASSERT_LOCKED(
-                    l, counter_.load(std::memory_order_relaxed) == 0);
-                HPX_ASSERT_LOCKED(l, notified_);
             }
+
+            HPX_ASSERT_LOCKED(l, counter_.load(std::memory_order_relaxed) == 0);
+            HPX_ASSERT_LOCKED(l, notified_);
 
 #if defined(HPX_MSVC)
 #pragma warning(pop)
@@ -172,7 +166,7 @@ namespace hpx {
             std::unique_lock l(mtx_.data_);
 
             std::ptrdiff_t const old_count =
-                counter_.fetch_sub(update, std::memory_order_relaxed);
+                counter_.fetch_sub(update, std::memory_order_acq_rel);
             HPX_ASSERT_LOCKED(l, old_count >= update);
 
             // 26110: Caller failing to hold lock 'this->mtx_.data_'
@@ -183,10 +177,14 @@ namespace hpx {
 #pragma warning(push)
 #pragma warning(disable : 26110 26111 26115 26117)
 #endif
-
             if (old_count > update)
             {
-                cond_.data_.wait(l, "hpx::latch::arrive_and_wait");
+                // Robust predicate loop.
+                while (
+                    counter_.load(std::memory_order_acquire) > 0 || !notified_)
+                {
+                    cond_.data_.wait(l, "hpx::latch::arrive_and_wait");
+                }
 
                 HPX_ASSERT_LOCKED(
                     l, counter_.load(std::memory_order_relaxed) == 0);
@@ -195,25 +193,26 @@ namespace hpx {
             else
             {
                 notified_ = true;
-
-                // Note: we use notify_one repeatedly instead of notify_all as we
-                // know that our implementation of condition_variable::notify_one
-                // relinquishes the lock before resuming the waiting thread
-                // which avoids suspension of this thread when it tries to
-                // re-lock the mutex while exiting from condition_variable::wait
-                while (cond_.data_.notify_one(
-                    HPX_MOVE(l), threads::thread_priority::boost))
-                {
-                    l = std::unique_lock(mtx_.data_);
-                }
+                notify_waiters(HPX_MOVE(l));
             }
-
-#if defined(HPX_MSVC)
-#pragma warning(pop)
-#endif
         }
 
     protected:
+        // Factor the 'final thread' wake logic to avoid duplication.
+        void notify_waiters(std::unique_lock<mutex_type>&& l) const
+        {
+            // Note: we use notify_one repeatedly instead of notify_all as we
+            // know that our implementation of condition_variable::notify_one
+            // relinquishes the lock before resuming the waiting thread
+            // that avoids suspension of this thread when it tries to
+            // re-lock the mutex while exiting from condition_variable::wait
+            while (cond_.data_.notify_one(
+                HPX_MOVE(l), threads::thread_priority::boost))
+            {
+                l = std::unique_lock(mtx_.data_);
+            }
+        }
+
         mutable util::cache_line_data<mutex_type> mtx_;
         mutable util::cache_line_data<
             hpx::lcos::local::detail::condition_variable>
@@ -254,7 +253,7 @@ namespace hpx::lcos::local {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
-        explicit latch(std::ptrdiff_t count)
+        explicit latch(std::ptrdiff_t const count)
           : hpx::latch(count)
         {
         }
@@ -317,7 +316,7 @@ namespace hpx::lcos::local {
         ///
         /// \throws Nothing.
         ///
-        void count_up(std::ptrdiff_t n)
+        void count_up(std::ptrdiff_t const n)
         {
             HPX_ASSERT(n >= 0);
 
@@ -333,7 +332,7 @@ namespace hpx::lcos::local {
         /// Requires:  n >= 0.
         ///
         /// \throws Nothing.
-        void reset(std::ptrdiff_t n)
+        void reset(std::ptrdiff_t const n)
         {
             HPX_ASSERT(n >= 0);
 
@@ -353,7 +352,7 @@ namespace hpx::lcos::local {
         ///             count_up(n);
         /// Returns: true if the latch was reset
         bool reset_if_needed_and_count_up(
-            std::ptrdiff_t n, std::ptrdiff_t count)
+            std::ptrdiff_t const n, std::ptrdiff_t const count)
         {
             HPX_ASSERT(n >= 0);
             HPX_ASSERT(count >= 0);

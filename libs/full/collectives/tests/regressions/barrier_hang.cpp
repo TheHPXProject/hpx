@@ -50,8 +50,13 @@ std::size_t bulk_test(
     hint.sharing_mode(hpx::threads::thread_sharing_hint::do_not_share_function |
         hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
+    auto policy =
+        hpx::execution::experimental::create_rebound_policy(hpx::execution::par,
+            hpx::execution::to_hierarchical_spawning(
+                hpx::execution::par.executor()));
+
     hpx::parallel::execution::bulk_sync_execute(
-        hpx::execution::experimental::with_hint(hpx::execution::par, hint),
+        hpx::execution::experimental::with_hint(policy, hint),
         spmd_block_helper{name, num_images},
         hpx::util::counting_shape(offset, offset + images_per_locality));
 

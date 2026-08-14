@@ -21,6 +21,10 @@ env:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     permissions:
@@ -29,11 +33,11 @@ jobs:
       actions: read             # only required for a private repository by github/codeql-action/upload-sarif
                                 # to get the Action run status
     name: Analyze
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Configure CMake
         shell: bash
@@ -60,7 +64,7 @@ jobs:
 
       # Upload SARIF file to GitHub Code Scanning Alerts
       - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: ${{ steps.run-analysis.outputs.sarif }}
 

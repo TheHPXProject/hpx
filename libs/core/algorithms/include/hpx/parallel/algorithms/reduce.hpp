@@ -364,6 +364,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/reduce.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -444,9 +445,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::reduce
     HPX_CXX_CORE_EXPORT inline constexpr struct reduce_t final
-      : hpx::detail::tag_parallel_algorithm<reduce_t>
+      : hpx::detail::tag_dispatch<reduce_t,
+            hpx::detail::tag_parallel_algorithm<reduce_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F,
             typename T = typename std::iterator_traits<FwdIter>::value_type>
         // clang-format off
@@ -455,8 +456,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend auto tag_fallback_invoke(hpx::reduce_t, ExPolicy&& policy,
-            FwdIter first, FwdIter last, T init, F f)
+        static auto invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, T init, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -474,8 +475,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend auto tag_fallback_invoke(hpx::reduce_t, ExPolicy&& policy,
-            FwdIter first, FwdIter last, T init)
+        static auto invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, T init)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -492,8 +493,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend auto tag_fallback_invoke(
-            hpx::reduce_t, ExPolicy&& policy, FwdIter first, FwdIter last)
+        static auto invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -513,8 +514,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend T tag_fallback_invoke(
-            hpx::reduce_t, InIter first, InIter last, T init, F f)
+        static T invoke_default(InIter first, InIter last, T init, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -530,8 +530,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend T tag_fallback_invoke(
-            hpx::reduce_t, InIter first, InIter last, T init)
+        static T invoke_default(InIter first, InIter last, T init)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -546,8 +545,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend typename std::iterator_traits<InIter>::value_type
-        tag_fallback_invoke(hpx::reduce_t, InIter first, InIter last)
+        static typename std::iterator_traits<InIter>::value_type invoke_default(
+            InIter first, InIter last)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");

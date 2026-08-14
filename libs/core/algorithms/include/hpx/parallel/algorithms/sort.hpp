@@ -152,6 +152,7 @@ namespace hpx {
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
@@ -162,6 +163,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/is_sorted.hpp>
 #include <hpx/parallel/algorithms/detail/pivot.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
@@ -211,42 +213,34 @@ namespace hpx::parallel {
             // pivot selections
             pivot9(first, last, comp);
 
-            using reference =
-                typename std::iterator_traits<RandomIt>::reference;
+            using value_type =
+                typename std::iterator_traits<RandomIt>::value_type;
 
-            reference val = *first;
+            value_type val = *first;
             RandomIt c_first = first + 1, c_last = last - 1;
 
-            while (comp(*c_first, val))
+            while (c_first < last && comp(*c_first, val))
             {
                 ++c_first;
             }
-            while (comp(val, *c_last))
+            while (c_last > first && comp(val, *c_last))
             {
                 --c_last;
             }
             while (c_first < c_last)
             {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                 std::ranges::iter_swap(c_first++, c_last--);
-#else
-                std::iter_swap(c_first++, c_last--);
-#endif
-                while (comp(*c_first, val))
+                while (c_first < last && comp(*c_first, val))
                 {
                     ++c_first;
                 }
-                while (comp(val, *c_last))
+                while (c_last > first && comp(val, *c_last))
                 {
                     --c_last;
                 }
             }
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
             std::ranges::iter_swap(first, c_last);
-#else
-            std::iter_swap(first, c_last);
-#endif
 
             // spawn tasks for each sub section
             hpx::future<RandomIt> left = execution::async_execute(
@@ -258,6 +252,7 @@ namespace hpx::parallel {
                 policy, c_first, last, comp, chunk_size);
 
             return hpx::dataflow(
+                policy.executor(),
                 [last](hpx::future<RandomIt>&& leftf,
                     hpx::future<RandomIt>&& rightf) -> RandomIt {
                     if (leftf.has_exception() || rightf.has_exception())
@@ -386,7 +381,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::sort
     HPX_CXX_CORE_EXPORT inline constexpr struct sort_t final
-      : hpx::detail::tag_parallel_algorithm<sort_t>
+      : hpx::detail::tag_dispatch<sort_t,
+            hpx::detail::tag_parallel_algorithm<sort_t>>
     {
         template <typename RandomIt,
             typename Comp = hpx::parallel::detail::less>
@@ -399,8 +395,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend void tag_fallback_invoke(
-            hpx::sort_t, RandomIt first, RandomIt last, Comp comp = Comp())
+        static void invoke_default(RandomIt first, RandomIt last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
@@ -421,9 +417,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::sort_t, ExPolicy&& policy, RandomIt first,
-            RandomIt last, Comp comp = Comp())
+        static parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, RandomIt first, RandomIt last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");

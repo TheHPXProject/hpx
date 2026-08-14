@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_select_direct_execution.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -15,29 +15,31 @@
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     void call_async(threads::thread_init_data&& data,
         hpx::id_type const& target, naming::address::address_type lva,
         naming::address::component_type comptype,
         threads::thread_priority priority, Ts&&... vs);
 
-    template <typename Action, typename Continuation, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename... Ts>
     void call_async(threads::thread_init_data&& data, Continuation&& cont,
         hpx::id_type const& target, naming::address::address_type lva,
         naming::address::component_type comptype,
         threads::thread_priority priority, Ts&&... vs);
 
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     HPX_FORCEINLINE void call_sync(naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs);
 
-    template <typename Action, typename Continuation, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Continuation,
+        typename... Ts>
     HPX_FORCEINLINE void call_sync(Continuation&& cont,
         naming::address::address_type lva,
         naming::address::component_type comptype, Ts&&... vs);
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action,
+    HPX_CXX_EXPORT template <typename Action,
         bool DirectExecute = Action::direct_execution::value>
     struct post_helper;
 }    // namespace hpx::detail

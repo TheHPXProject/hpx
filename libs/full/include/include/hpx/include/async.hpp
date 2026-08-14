@@ -9,8 +9,5 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/async_local.hpp>
 
-#include <hpx/async_colocated/async_colocated.hpp>
-#include <hpx/async_colocated/async_colocated_callback.hpp>
-#include <hpx/async_distributed/async.hpp>
-#include <hpx/async_distributed/async_callback.hpp>
-#include <hpx/async_distributed/async_continue_callback.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>

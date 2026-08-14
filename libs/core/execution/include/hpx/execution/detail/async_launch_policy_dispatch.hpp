@@ -12,7 +12,6 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
 
 #include <exception>
@@ -133,6 +132,43 @@ namespace hpx::detail {
                 hpx::annotated_function(
                     HPX_FORWARD(F, f), desc.get_description()),
                 HPX_FORWARD(Ts, ts)...);
+        }
+    };
+
+    template <>
+    struct async_launch_policy_dispatch<hpx::launch::task_policy>
+    {
+        template <typename Policy, typename F, typename... Ts>
+        HPX_FORCEINLINE static std::enable_if_t<
+            traits::detail::is_deferred_invocable_v<F, Ts...>,
+            hpx::future<util::detail::invoke_deferred_result_t<F, Ts...>>>
+        call(Policy policy, hpx::threads::thread_description const& desc,
+            threads::thread_pool_base* pool, F&& f, Ts&&... ts)
+        {
+            HPX_ASSERT(pool);
+
+            using result_type =
+                util::detail::invoke_deferred_result_t<F, Ts...>;
+
+            // explicitly disable inline execution for this launch policy
+            auto hint = policy.hint();
+            hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+            policy.set_hint(hint);
+
+            lcos::local::futures_factory<result_type()> p(
+                util::deferred_call(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
+
+            if (threads::thread_id_ref_type tid =
+                    p.post(pool, desc.get_description(), HPX_MOVE(policy)))
+            {
+                // keep thread alive, if needed
+                auto result = p.get_future();
+                traits::detail::get_shared_state(result)->set_on_completed(
+                    [tid = HPX_MOVE(tid)]() { (void) tid; });
+                return result;
+            }
+
+            return p.get_future();
         }
     };
 
@@ -307,7 +343,7 @@ namespace hpx::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Action>
+    template <typename Action>
     struct async_launch_policy_dispatch<Action,
         std::enable_if_t<!traits::is_action_v<Action>>>
     {
@@ -318,10 +354,17 @@ namespace hpx::detail {
         call(launch policy, hpx::threads::thread_description const& desc,
             threads::thread_pool_base* pool, F&& f, Ts&&... ts)
         {
+            // launch::async is the default launch policy, check first
             if (policy == launch::async)
             {
                 return async_launch_policy_dispatch<
                     hpx::launch::async_policy>::call(HPX_MOVE(policy), desc,
+                    pool, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            }
+            if (policy == launch::task)
+            {
+                return async_launch_policy_dispatch<
+                    hpx::launch::task_policy>::call(HPX_MOVE(policy), desc,
                     pool, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
             }
             if (policy == launch::sync)

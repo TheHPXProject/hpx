@@ -67,7 +67,7 @@ struct toupper_symmetric_filter_impl
             static_cast<std::ptrdiff_t>(buf_.size()) -
                 (buf_.eptr() - buf_.data()));
         while (count-- > 0)
-            *buf_.eptr()++ = std::toupper(*src_begin++);
+            *buf_.eptr()++ = static_cast<char>(std::toupper(*src_begin++));
     }
 
     void write(char*& dest_begin, char* dest_end)

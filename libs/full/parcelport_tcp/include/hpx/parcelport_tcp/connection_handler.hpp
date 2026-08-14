@@ -13,10 +13,10 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_TCP)
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcelport_tcp/locality.hpp>
 #include <hpx/parcelport_tcp/sender.hpp>
-#include <hpx/parcelset/parcelport_impl.hpp>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #include <winsock2.h>

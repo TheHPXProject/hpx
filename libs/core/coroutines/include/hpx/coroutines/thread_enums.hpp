@@ -24,6 +24,34 @@ namespace hpx::threads {
     ///
     /// The \a thread_schedule_state enumerator encodes the current state of a
     /// \a thread instance
+    ///
+    /// \b Task \b Lifecycle \b State \b Transitions:
+    /// \code
+    /// stateDiagram-v2
+    ///     %% Creation Phase
+    ///     [*] --> Staged : task_staged
+    ///     [*] --> Pending : task_created
+    ///     [*] --> Suspended : task_created
+    ///     Staged --> Pending : task_created
+    ///
+    ///     %% Execution Loop
+    ///     Pending --> Active : task_executing
+    ///     Active --> Pending : task_yielded
+    ///
+    ///     %% Sleep / Wake Cycle
+    ///     Active --> Suspended : task_suspended
+    ///     Suspended --> Pending : task_resumed
+    ///
+    ///     %% Termination Paths
+    ///     Active --> Terminated : task_completed
+    ///     Active --> Deleted : task_completed (Inline fast-path)
+    ///     Pending --> Terminated : task_completed (Aborted)
+    ///     Suspended --> Terminated : task_completed (Aborted)
+    ///
+    ///     %% Cleanup (Destruction / Recycling)
+    ///     Terminated --> Deleted : task_deleted
+    ///     Deleted --> [*]
+    /// \endcode
     HPX_CXX_CORE_EXPORT enum class thread_schedule_state : std::int8_t
     {
         unknown = 0,
@@ -436,7 +464,7 @@ namespace hpx::threads {
         {
             return static_cast<thread_placement_hint>(placement_mode_bits);
         }
-        void placement_mode(thread_placement_hint bits) noexcept
+        constexpr void placement_mode(thread_placement_hint bits) noexcept
         {
             placement_mode_bits = static_cast<std::uint8_t>(bits);
         }
@@ -446,7 +474,7 @@ namespace hpx::threads {
         {
             return static_cast<thread_sharing_hint>(sharing_mode_bits);
         }
-        void sharing_mode(thread_sharing_hint bits) noexcept
+        constexpr void sharing_mode(thread_sharing_hint bits) noexcept
         {
             sharing_mode_bits = static_cast<std::uint8_t>(bits);
         }
@@ -456,9 +484,15 @@ namespace hpx::threads {
         {
             return static_cast<thread_execution_hint>(runs_as_child_mode_bits);
         }
-        void runs_as_child_mode(thread_execution_hint bits) noexcept
+        constexpr void runs_as_child_mode(thread_execution_hint bits) noexcept
         {
             runs_as_child_mode_bits = static_cast<std::uint8_t>(bits);
+        }
+
+        constexpr void schedule_hint(std::int16_t core) noexcept
+        {
+            mode = thread_schedule_hint_mode::thread;
+            hint = core;
         }
 
         /// The hint associated with the mode. The interpretation of this hint

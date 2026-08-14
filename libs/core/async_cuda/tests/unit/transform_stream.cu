@@ -18,6 +18,7 @@
 #include <atomic>
 #include <cstddef>
 #include <iostream>
+#include <type_traits>
 #include <utility>
 
 __global__ void dummy_kernel() {}
@@ -115,6 +116,21 @@ int hpx_main()
     namespace ex = ::hpx::execution::experimental;
     namespace tt = hpx::this_thread::experimental;
 
+    {
+        auto s = ex::schedule(ex::thread_pool_scheduler{});
+        using sender_type = decltype(s);
+        using original_scheduler_type =
+            std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+                ex::get_env(std::declval<sender_type&>())))>;
+
+        auto transformed = cu::transform_stream(std::move(s), dummy{});
+        using scheduler_type =
+            std::decay_t<decltype(ex::get_completion_scheduler<ex::set_value_t>(
+                ex::get_env(transformed)))>;
+
+        static_assert(std::is_same_v<scheduler_type, original_scheduler_type>);
+    }
+
     cu::enable_user_polling p;
 
     // Only stream transform
@@ -124,7 +140,8 @@ int hpx_main()
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
         // NOTE: transform_stream calls triggers the receiver on a plain
         // std::thread. We explicitly change the context back to an hpx::thread.
-        tt::sync_wait(ex::transfer(std::move(s2), ex::thread_pool_scheduler{}));
+        tt::sync_wait(
+            ex::continues_on(std::move(s2), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(0));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(1));
         HPX_TEST_EQ(dummy::host_int_calls.load(), std::size_t(0));
@@ -139,7 +156,8 @@ int hpx_main()
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
         auto s3 = cu::transform_stream(std::move(s2), dummy{});
         auto s4 = cu::transform_stream(std::move(s3), dummy{});
-        tt::sync_wait(ex::transfer(std::move(s4), ex::thread_pool_scheduler{}));
+        tt::sync_wait(
+            ex::continues_on(std::move(s4), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(0));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(3));
         HPX_TEST_EQ(dummy::host_int_calls.load(), std::size_t(0));
@@ -153,10 +171,11 @@ int hpx_main()
         dummy::reset_counts();
         auto s1 = ex::just();
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
-        auto s3 = ex::transfer(std::move(s2), ex::thread_pool_scheduler{});
+        auto s3 = ex::continues_on(std::move(s2), ex::thread_pool_scheduler{});
         auto s4 = ex::then(std::move(s3), dummy{});
         auto s5 = cu::transform_stream(std::move(s4), dummy{});
-        tt::sync_wait(ex::transfer(std::move(s5), ex::thread_pool_scheduler{}));
+        tt::sync_wait(
+            ex::continues_on(std::move(s5), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(1));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(2));
         HPX_TEST_EQ(dummy::host_int_calls.load(), std::size_t(0));
@@ -170,7 +189,7 @@ int hpx_main()
         auto s1 = ex::schedule(ex::thread_pool_scheduler{});
         auto s2 = ex::then(std::move(s1), dummy{});
         auto s3 = cu::transform_stream(std::move(s2), dummy{});
-        auto s4 = ex::transfer(std::move(s3), ex::thread_pool_scheduler{});
+        auto s4 = ex::continues_on(std::move(s3), ex::thread_pool_scheduler{});
         auto s5 = ex::then(std::move(s4), dummy{});
         tt::sync_wait(std::move(s5));
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(2));
@@ -186,8 +205,8 @@ int hpx_main()
         dummy::reset_counts();
         auto s1 = ex::just(1);
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
-        auto result = tt::sync_wait(ex::transfer(std::move(s2),
-            ex::thread_pool_scheduler{}));
+        auto result = tt::sync_wait(
+            ex::continues_on(std::move(s2), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(hpx::get<0>(*result), 2.0);
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(0));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(0));
@@ -203,8 +222,8 @@ int hpx_main()
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
         auto s3 = cu::transform_stream(std::move(s2), dummy{});
         auto s4 = cu::transform_stream(std::move(s3), dummy{});
-        auto result = tt::sync_wait(ex::transfer(std::move(s4),
-            ex::thread_pool_scheduler{}));
+        auto result = tt::sync_wait(
+            ex::continues_on(std::move(s4), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(hpx::get<0>(*result), 4.0);
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(0));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(0));
@@ -219,11 +238,11 @@ int hpx_main()
         dummy::reset_counts();
         auto s1 = ex::just(1);
         auto s2 = cu::transform_stream(std::move(s1), dummy{});
-        auto s3 = ex::transfer(std::move(s2), ex::thread_pool_scheduler{});
+        auto s3 = ex::continues_on(std::move(s2), ex::thread_pool_scheduler{});
         auto s4 = ex::then(std::move(s3), dummy{});
         auto s5 = cu::transform_stream(std::move(s4), dummy{});
-        auto result = tt::sync_wait(ex::transfer(std::move(s5),
-            ex::thread_pool_scheduler{}));
+        auto result = tt::sync_wait(
+            ex::continues_on(std::move(s5), ex::thread_pool_scheduler{}));
         HPX_TEST_EQ(hpx::get<0>(*result), 4.0);
         HPX_TEST_EQ(dummy::host_void_calls.load(), std::size_t(0));
         HPX_TEST_EQ(dummy::stream_void_calls.load(), std::size_t(0));
@@ -236,10 +255,10 @@ int hpx_main()
     {
         dummy::reset_counts();
         auto s1 = ex::just(1);
-        auto s2 = ex::transfer(std::move(s1), ex::thread_pool_scheduler{});
+        auto s2 = ex::continues_on(std::move(s1), ex::thread_pool_scheduler{});
         auto s3 = ex::then(std::move(s2), dummy{});
         auto s4 = cu::transform_stream(std::move(s3), dummy{});
-        auto s5 = ex::transfer(std::move(s4), ex::thread_pool_scheduler{});
+        auto s5 = ex::continues_on(std::move(s4), ex::thread_pool_scheduler{});
         auto s6 = ex::then(std::move(s5), dummy{});
         auto result = tt::sync_wait(std::move(s6));
         HPX_TEST_EQ(hpx::get<0>(*result), 4.0);
@@ -253,11 +272,11 @@ int hpx_main()
 
     {
         dummy::reset_counts();
-        auto s1 = ex::transfer_just(ex::thread_pool_scheduler{}, 1);
+        auto s1 = ex::just(1) | ex::continues_on(ex::thread_pool_scheduler{});
         auto s2 = ex::then(std::move(s1), dummy{});
         auto s3 = cu::transform_stream(std::move(s2), dummy{});
         auto s4 = cu::transform_stream(std::move(s3), dummy{});
-        auto s5 = ex::transfer(std::move(s4), ex::thread_pool_scheduler{});
+        auto s5 = ex::continues_on(std::move(s4), ex::thread_pool_scheduler{});
         auto s6 = ex::then(std::move(s5), dummy{});
         auto result = tt::sync_wait(std::move(s6));
         HPX_TEST_EQ(hpx::get<0>(*result), 5.0);
@@ -279,8 +298,7 @@ int hpx_main()
 
         auto s = ex::just(p, &p_h, sizeof(type), cudaMemcpyHostToDevice) |
             cu::transform_stream(cuda_memcpy_async{}) |
-            ex::then(&cu::check_cuda_error) |
-            ex::then([p] { return p; }) |
+            ex::then(&cu::check_cuda_error) | ex::then([p] { return p; }) |
             cu::transform_stream(increment{}) |
             cu::transform_stream(increment{}) |
             cu::transform_stream(increment{});
@@ -290,8 +308,7 @@ int hpx_main()
             cu::transform_stream(cuda_memcpy_async{}) |
             ex::then(&cu::check_cuda_error) |
             ex::then([&p_h] { HPX_TEST_EQ(p_h, 3); }) |
-            ex::transfer(ex::thread_pool_scheduler{}));
-
+            ex::continues_on(ex::thread_pool_scheduler{}));
 
         cu::check_cuda_error(cudaFree(p));
     }

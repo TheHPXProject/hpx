@@ -8,12 +8,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_priority.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/agas/addressing_service.hpp>
-#include <hpx/agas_base/detail/bootstrap_component_namespace.hpp>
-#include <hpx/agas_base/detail/bootstrap_locality_namespace.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -25,6 +22,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/naming.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
@@ -32,7 +30,8 @@
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
-#include <hpx/naming/split_gid.hpp>
+
+#include <hpx/agas/addressing_service.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -287,13 +286,9 @@ namespace hpx::agas {
             endpoints = locality_ns_->resolve_locality(gid);
             if (endpoints.empty())
             {
-                std::string const str = hpx::util::format(
-                    "couldn't resolve the given target locality ({})", gid);
-
-                l.unlock();
-
                 HPX_THROWS_IF(ec, hpx::error::bad_parameter,
-                    "addressing_service::resolve_locality", str);
+                    "addressing_service::resolve_locality",
+                    "couldn't resolve the given target locality ({})", gid);
 
                 static parcelset::endpoints_type const empty_endpoints;
                 return empty_endpoints;
@@ -1471,10 +1466,9 @@ namespace hpx::agas {
         {
             // reschedule this call as an HPX thread
             threads::thread_init_data data(
-                threads::make_thread_function_nullary(
-                    [HPX_CXX20_CAPTURE_THIS(=)]() -> void {
-                        return decref(raw, credit, throws);
-                    }),
+                threads::make_thread_function_nullary([=, this]() -> void {
+                    return decref(raw, credit, throws);
+                }),
                 "addressing_service::decref", threads::thread_priority::normal,
                 threads::thread_schedule_hint(),
                 threads::thread_stacksize::default_,
@@ -1563,6 +1557,7 @@ namespace hpx::agas {
         naming::gid_type& mutable_gid = const_cast<hpx::id_type&>(id).get_gid();
         naming::gid_type const new_gid =
             naming::detail::split_gid_if_needed(hpx::launch::sync, mutable_gid);
+
         std::int64_t const new_credit =
             naming::detail::get_credit_from_gid(new_gid);
 
@@ -1588,6 +1583,7 @@ namespace hpx::agas {
         naming::gid_type& mutable_gid = const_cast<hpx::id_type&>(id).get_gid();
         naming::gid_type const new_gid =
             naming::detail::split_gid_if_needed(hpx::launch::sync, mutable_gid);
+
         std::int64_t new_credit = naming::detail::get_credit_from_gid(new_gid);
 
         future<bool> f = symbol_ns_.bind_async(name, new_gid);
@@ -1728,10 +1724,9 @@ namespace hpx::agas {
             }
 
             threads::thread_init_data data(
-                threads::make_thread_function_nullary(
-                    [HPX_CXX20_CAPTURE_THIS(=)]() -> void {
-                        return update_cache_entry(id, g, throws);
-                    }),
+                threads::make_thread_function_nullary([=, this]() -> void {
+                    return update_cache_entry(id, g, throws);
+                }),
                 "addressing_service::update_cache_entry",
                 threads::thread_priority::normal,
                 threads::thread_schedule_hint(),
@@ -2022,6 +2017,43 @@ namespace hpx::agas {
         primary_ns_.register_server_instance(locality_id);
         component_ns_->register_server_instance(locality_id);
         symbol_ns_.register_server_instance(locality_id);
+    }
+
+    void addressing_service::unregister_server_instances(hpx::error_code& ec)
+    {
+        // unregister root server
+        hpx::error_code first_ec;
+
+        hpx::error_code local_ec;
+        symbol_ns_.unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        component_ns_->unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        primary_ns_.unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        local_ec = hpx::error_code();
+        locality_ns_->unregister_server_instance(local_ec);
+        if (local_ec && !first_ec)
+            first_ec = local_ec;
+
+        if (first_ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::internal_server_error,
+                "addressing_service::unregister_server_instances",
+                first_ec.message());
+        }
+        else if (&ec != &hpx::throws)
+        {
+            ec = hpx::make_success_code();
+        }
     }
 
     void addressing_service::garbage_collect_non_blocking(error_code& ec)

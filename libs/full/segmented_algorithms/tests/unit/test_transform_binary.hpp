@@ -13,6 +13,7 @@
 #include <hpx/include/partitioned_vector_predef.hpp>
 
 #include <cstddef>
+#include <iterator>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -167,6 +168,74 @@ void transform_binary_tests(std::vector<hpx::id_type>& localities)
             hpx::execution::seq(hpx::execution::task), v, w, x, V(1));
         test_transform_binary_async(
             hpx::execution::par(hpx::execution::task), v, w, x, V(1));
+    }
+
+    // subrange regression test in a single segment (sit == send path)
+    {
+        constexpr std::size_t n = 16;
+        constexpr std::size_t first_offset = 3;
+        constexpr std::size_t range_size = 8;
+        constexpr std::size_t second_offset = 3;
+        constexpr std::size_t dest_offset = 2;
+
+        hpx::partitioned_vector<T> v(n, hpx::container_layout(1));
+        hpx::partitioned_vector<U> w(n, hpx::container_layout(1));
+        hpx::partitioned_vector<V> x(n, V(-1), hpx::container_layout(1));
+
+        auto itv = v.begin();
+        auto itw = w.begin();
+        for (std::size_t i = 0; i < n; ++i, ++itv, ++itw)
+        {
+            *itv = T(i);
+            *itw = U(i + 1);
+        }
+
+        auto first1 = v.begin();
+        std::advance(first1, first_offset);
+        auto last1 = first1;
+        std::advance(last1, range_size);
+        auto first2 = w.begin();
+        std::advance(first2, second_offset);
+        auto dest = x.begin();
+        std::advance(dest, dest_offset);
+
+        auto verify_subrange_result = [&]() {
+            std::vector<V> expected(n, V(-1));
+            for (std::size_t i = 0; i < range_size; ++i)
+            {
+                expected[dest_offset + i] =
+                    V(T(first_offset + i) + U(second_offset + 1 + i));
+            }
+
+            std::size_t idx = 0;
+            for (auto it = x.begin(); it != x.end(); ++it, ++idx)
+            {
+                HPX_TEST_EQ(*it, expected[idx]);
+            }
+            HPX_TEST_EQ(idx, n);
+        };
+
+        hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        hpx::transform(
+            hpx::execution::seq, first1, last1, first2, dest, add<V>());
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        hpx::transform(
+            hpx::execution::par, first1, last1, first2, dest, add<V>());
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        hpx::transform(hpx::execution::seq(hpx::execution::task), first1, last1,
+            first2, dest, add<V>())
+            .get();
+        verify_subrange_result();
+
+        hpx::fill(hpx::execution::seq, x.begin(), x.end(), V(-1));
+        hpx::transform(hpx::execution::par(hpx::execution::task), first1, last1,
+            first2, dest, add<V>())
+            .get();
+        verify_subrange_result();
     }
 }
 #endif

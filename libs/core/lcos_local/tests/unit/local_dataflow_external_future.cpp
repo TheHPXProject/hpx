@@ -37,8 +37,7 @@ struct external_future_executor
     // type calculation of it. dataflow_finalize has to set the same type to
     // the future state.
     template <typename F, typename... Ts>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::async_execute_t,
-        external_future_executor const&, F&& f, Ts&&... ts)
+    decltype(auto) async_execute(F&& f, Ts&&... ts) const
     {
         if constexpr (std::is_void_v<hpx::util::invoke_result_t<F, Ts...>>)
         {
@@ -112,8 +111,7 @@ struct external_future_additional_argument_executor
     // type calculation of it. dataflow_finalize has to set the same type to the
     // future state.
     template <typename F, typename... Ts>
-    friend decltype(auto) tag_invoke(hpx::parallel::execution::async_execute_t,
-        external_future_additional_argument_executor const&, F&& f, Ts&&... ts)
+    decltype(auto) async_execute(F&& f, Ts&&... ts) const
     {
         if constexpr (std::is_void_v<hpx::util::invoke_result_t<F,
                           additional_argument, Ts...>>)

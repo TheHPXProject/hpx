@@ -2,7 +2,7 @@
 '''
 Copyright (c) 2019-2020 ETH Zurich
 Copyright (c) 2018      Thomas Heller
-Copyright (c) 2022-2023 Hartmut Kaiser
+Copyright (c) 2022-2026 Hartmut Kaiser
 
 SPDX-License-Identifier: BSL-1.0
 Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -245,8 +245,17 @@ hpx_info("")
 hpx_info("  Configuring libhpx{"_" + lib_name if lib_name != "full" else ""} modules:")
 
 foreach(module ${{_hpx_{lib_name}_modules}})
-  add_subdirectory(${{module}})
+  # the parcelports module is handled explicitly after all other modules have
+  # been processed (see HPX_ParcelPorts.cmake)
+  if(NOT (${{module}} STREQUAL "parcelports"))
+    add_subdirectory(${{module}})
+  endif()
 endforeach()
+
+set(_hpx_full_modules
+    ${{_hpx_{lib_name}_modules}}
+    PARENT_SCOPE
+)
 '''
 
 f = open(os.path.join(cwd, lib_name, 'CMakeLists.txt'), 'w')

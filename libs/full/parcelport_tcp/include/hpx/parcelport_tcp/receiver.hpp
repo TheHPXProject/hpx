@@ -18,12 +18,10 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/timing.hpp>
-
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/parcelport_tcp/connection_handler.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
-#include <hpx/parcelset/parcelport_connection.hpp>
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
 #include <winsock2.h>

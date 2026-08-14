@@ -9,8 +9,12 @@
 
 #include <hpx/config.hpp>
 
+#if !defined(HPX_HAVE_CXX26_REFLECTION)
+
 namespace hpx::serialization {
 
     HPX_CXX_CORE_EXPORT template <typename Archive, typename T>
     void serialize_struct(Archive& ar, T& t, unsigned int const);
 }    // namespace hpx::serialization
+
+#endif

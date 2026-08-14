@@ -10,6 +10,7 @@ set(tests
     future
     future_ref
     future_then
+    future_monadic_operations
     local_promise_allocator
     local_use_allocator
     make_future

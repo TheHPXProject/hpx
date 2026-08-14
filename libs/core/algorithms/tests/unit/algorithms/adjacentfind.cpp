@@ -76,6 +76,15 @@ void adjacent_find_bad_alloc_test()
     test_adjacent_find_bad_alloc<std::forward_iterator_tag>();
 }
 
+////////////////////////////////////////////////////////////////////////////
+void adjacent_find_edge_case_test()
+{
+    using namespace hpx::execution;
+    test_adjacent_find_edge_cases(seq);
+    test_adjacent_find_edge_cases(par);
+    test_adjacent_find_edge_cases(par_unseq);
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -87,6 +96,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     adjacent_find_test();
     adjacent_find_exception_test();
     adjacent_find_bad_alloc_test();
+    adjacent_find_edge_case_test();
     return hpx::local::finalize();
 }
 

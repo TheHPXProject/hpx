@@ -104,7 +104,8 @@ namespace hpx::execution::experimental {
         constexpr decltype(auto) operator()(
             ExPolicy&& policy, Executor&& exec) const
         {
-            using parameters_type = std::decay_t<ExPolicy>::parameters_type;
+            using parameters_type =
+                extract_executor_parameters_t<std::decay_t<ExPolicy>>;
             using rebound_type =
                 rebind_executor_t<ExPolicy, Executor, parameters_type>;
 

@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests schedule_last schedule_hint_none_stale_queue_6978)
+set(tests lockfree_fifo_double_backend schedule_last
+          schedule_hint_none_stale_queue_6978
+)
 
 # ##############################################################################
 foreach(test ${tests})

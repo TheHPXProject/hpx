@@ -204,6 +204,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -237,7 +238,8 @@ namespace hpx::parallel {
                 util::loop_with_cleanup_n(
                     first, count, dest,
                     [](InIter1 it, InIter2 dest) -> void {
-                        hpx::construct_at(std::addressof(*dest), HPX_MOVE(*it));
+                        hpx::construct_at(
+                            std::addressof(*dest), std::ranges::iter_move(it));
                     },
                     [](InIter2 dest) -> void {
                         std::destroy_at(std::addressof(*dest));
@@ -323,7 +325,7 @@ namespace hpx::parallel {
             {
                 return hpx::parallel::util::uninit_move_n(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    std::distance(first, last), dest);
+                    hpx::parallel::detail::distance(first, last), dest);
             }
 
             template <typename ExPolicy, typename Iter, typename Sent,
@@ -333,7 +335,7 @@ namespace hpx::parallel {
             {
                 return parallel_uninitialized_move_n(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), dest);
+                    hpx::parallel::detail::distance(first, last), dest);
             }
         };
         /// \endcond
@@ -360,8 +362,10 @@ namespace hpx::parallel {
                 ExPolicy&& policy, InIter1 first, Sent1 last, FwdIter2 dest,
                 Sent2 last_d)
             {
-                std::size_t const dist1 = detail::distance(first, last);
-                std::size_t const dist2 = detail::distance(dest, last_d);
+                std::size_t const dist1 =
+                    hpx::parallel::detail::distance(first, last);
+                std::size_t const dist2 =
+                    hpx::parallel::detail::distance(dest, last_d);
                 std::size_t dist = dist1 <= dist2 ? dist1 : dist2;
 
                 return hpx::parallel::util::uninit_move_n(
@@ -373,8 +377,10 @@ namespace hpx::parallel {
             static decltype(auto) parallel(ExPolicy&& policy, Iter first,
                 Sent1 last, FwdIter2 dest, Sent2 last_d)
             {
-                std::size_t const dist1 = detail::distance(first, last);
-                std::size_t const dist2 = detail::distance(dest, last_d);
+                std::size_t const dist1 =
+                    hpx::parallel::detail::distance(first, last);
+                std::size_t const dist2 =
+                    hpx::parallel::detail::distance(dest, last_d);
                 std::size_t dist = dist1 <= dist2 ? dist1 : dist2;
 
                 return parallel_uninitialized_move_n(
@@ -424,7 +430,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_move
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_move_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_move_t>
+      : hpx::detail::tag_dispatch<uninitialized_move_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_move_t>>
     {
         template <typename InIter, typename FwdIter>
         // clang-format off
@@ -433,8 +440,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::uninitialized_move_t, InIter first, InIter last, FwdIter dest)
+        static FwdIter invoke_default(InIter first, InIter last, FwdIter dest)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -455,7 +461,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_move_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -473,7 +479,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_move_n
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_move_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_move_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_move_n_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_move_n_t>>
     {
         template <typename InIter, typename Size, typename FwdIter>
         // clang-format off
@@ -481,8 +488,8 @@ namespace hpx {
                 std::forward_iterator<FwdIter> &&
                 std::is_integral_v<Size>)
         // clang-format on
-        friend std::pair<InIter, FwdIter> tag_fallback_invoke(
-            hpx::uninitialized_move_n_t, InIter first, Size count, FwdIter dest)
+        static std::pair<InIter, FwdIter> invoke_default(
+            InIter first, Size count, FwdIter dest)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -512,7 +519,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_move_n_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, Size count, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,

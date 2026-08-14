@@ -11,8 +11,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/threading/thread.hpp>
 
 #include <concepts>

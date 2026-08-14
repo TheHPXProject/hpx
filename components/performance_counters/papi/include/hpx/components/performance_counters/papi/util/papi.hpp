@@ -13,8 +13,8 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/program_options.hpp>
-#include <hpx/performance_counters/counters.hpp>
 
 #include <cstdint>
 #include <cstring>

@@ -96,16 +96,8 @@
     HPX_ASSERT_(false,                                                         \
         "This code is meant to be unreachable. If you are seeing this error "  \
         "message it means that you have found a bug in HPX. Please report it " \
-        "on the issue tracker: https://github.com/STEllAR-GROUP/hpx/issues."); \
+        "on the issue tracker: https://github.com/TheHPXProject/hpx/issues."); \
     std::terminate()
 
-#if defined(HPX_HAVE_CXX20_SOURCE_LOCATION)
 #define HPX_CURRENT_SOURCE_LOCATION() std::source_location::current()
-#else
-#define HPX_CURRENT_SOURCE_LOCATION()                                          \
-    ::hpx::source_location                                                     \
-    {                                                                          \
-        __FILE__, static_cast<std::uint_least32_t>(__LINE__), __func__         \
-    }
-#endif
 #endif

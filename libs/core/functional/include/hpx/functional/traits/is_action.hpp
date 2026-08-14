@@ -19,7 +19,7 @@ namespace hpx::traits {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Action>
+        template <typename Action>
         struct is_action_impl<Action, std::void_t<typename Action::action_tag>>
           : std::true_type
         {

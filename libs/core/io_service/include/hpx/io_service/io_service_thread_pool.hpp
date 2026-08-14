@@ -7,8 +7,9 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/io_service/io_service_pool_fwd.hpp>
 #include <hpx/modules/threading_base.hpp>
+
+#include <hpx/io_service/io_service_pool_fwd.hpp>
 
 #include <cstddef>
 #include <exception>

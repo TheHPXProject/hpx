@@ -99,25 +99,18 @@ void test_one(std::vector<int> a)
     auto fun_conv = [](int foo) { return foo - 3; };
     auto policy = hpx::execution::par;
 
-    Iter f_inc_add =
+    [[maybe_unused]] Iter f_inc_add =
         hpx::inclusive_scan(policy, a.begin(), a.end(), b.begin(), fun_add, 10);
-    Iter f_inc_mult = hpx::inclusive_scan(
+    [[maybe_unused]] Iter f_inc_mult = hpx::inclusive_scan(
         policy, a.begin(), a.end(), c.begin(), fun_mult, 10);
-    Iter f_exc_add =
+    [[maybe_unused]] Iter f_exc_add =
         hpx::exclusive_scan(policy, a.begin(), a.end(), d.begin(), 10, fun_add);
-    Iter f_exc_mult = hpx::exclusive_scan(
+    [[maybe_unused]] Iter f_exc_mult = hpx::exclusive_scan(
         policy, a.begin(), a.end(), e.begin(), 10, fun_mult);
-    Iter f_transform_inc = hpx::transform_inclusive_scan(
+    [[maybe_unused]] Iter f_transform_inc = hpx::transform_inclusive_scan(
         policy, a.begin(), a.end(), f.begin(), fun_add, fun_conv, 10);
-    Iter f_transform_exc = hpx::transform_exclusive_scan(
+    [[maybe_unused]] Iter f_transform_exc = hpx::transform_exclusive_scan(
         policy, a.begin(), a.end(), g.begin(), 10, fun_add, fun_conv);
-
-    HPX_UNUSED(f_inc_add);
-    HPX_UNUSED(f_inc_mult);
-    HPX_UNUSED(f_exc_add);
-    HPX_UNUSED(f_exc_mult);
-    HPX_UNUSED(f_transform_inc);
-    HPX_UNUSED(f_transform_exc);
 
     hpx::parallel::detail::sequential_inclusive_scan(
         a.begin(), a.end(), b_ans.begin(), 10, fun_add);

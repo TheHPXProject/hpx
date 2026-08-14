@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -14,10 +14,10 @@
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components {
+namespace hpx::components {
 
-    HPX_EXPORT void console_logging(
+    HPX_CXX_EXPORT HPX_EXPORT void console_logging(
         logging_destination dest, std::size_t level, std::string const& msg);
-    HPX_EXPORT void cleanup_logging();
-    HPX_EXPORT void activate_logging();
-}}    // namespace hpx::components
+    HPX_CXX_EXPORT HPX_EXPORT void cleanup_logging();
+    HPX_CXX_EXPORT HPX_EXPORT void activate_logging();
+}    // namespace hpx::components

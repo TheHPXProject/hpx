@@ -433,6 +433,101 @@ void rotate_bad_alloc_test()
     test_rotate_bad_alloc<std::forward_iterator_tag>();
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Return-iterator tests for hpx::rotate
+template <typename ExPolicy>
+void test_rotate_return_iterator(ExPolicy&& policy)
+{
+    static_assert(hpx::is_execution_policy_v<std::decay_t<ExPolicy>>,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    // new_first == first: no-op, returns last
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(c.begin(), c.end(), std::size_t(1));
+        auto result = hpx::rotate(policy, c.begin(), c.begin(), c.end());
+        HPX_TEST(result == c.end());
+    }
+
+    // new_first == last: no-op, returns first
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(c.begin(), c.end(), std::size_t(1));
+        auto result = hpx::rotate(policy, c.begin(), c.end(), c.end());
+        HPX_TEST_EQ(std::distance(c.begin(), result), 0);
+    }
+
+    // normal case: returns first + (last - new_first)
+    {
+        std::vector<std::size_t> c(100);
+        std::iota(c.begin(), c.end(), std::size_t(1));
+        auto new_first = c.begin() + 25;
+        auto result = hpx::rotate(policy, c.begin(), new_first, c.end());
+        HPX_TEST_EQ(std::distance(c.begin(), result), 75);
+    }
+
+    // single element, rotate by 0
+    {
+        std::vector<std::size_t> c = {42};
+        auto result = hpx::rotate(policy, c.begin(), c.begin(), c.end());
+        HPX_TEST(result == c.end());
+    }
+
+    // empty range
+    {
+        std::vector<std::size_t> empty;
+        auto result =
+            hpx::rotate(policy, empty.begin(), empty.begin(), empty.end());
+        HPX_TEST(result == empty.end());
+    }
+}
+
+// Cross-policy consistency: seq, par, par_unseq must all return the SAME iterator
+void test_rotate_cross_policy()
+{
+    using namespace hpx::execution;
+
+    auto verify_consistency = [](std::vector<std::size_t> c,
+                                  std::size_t mid_pos) {
+        std::vector<std::size_t> c_par = c;
+        std::vector<std::size_t> c_pu = c;
+
+        auto mid_s = c.begin() + static_cast<std::ptrdiff_t>(mid_pos);
+        auto mid_p = c_par.begin() + static_cast<std::ptrdiff_t>(mid_pos);
+        auto mid_pu = c_pu.begin() + static_cast<std::ptrdiff_t>(mid_pos);
+
+        auto rs = hpx::rotate(seq, c.begin(), mid_s, c.end());
+        auto rp = hpx::rotate(par, c_par.begin(), mid_p, c_par.end());
+        auto ru = hpx::rotate(par_unseq, c_pu.begin(), mid_pu, c_pu.end());
+
+        auto ds = std::distance(c.begin(), rs);
+        auto dp = std::distance(c_par.begin(), rp);
+        auto du = std::distance(c_pu.begin(), ru);
+
+        HPX_TEST_EQ(ds, dp);
+        HPX_TEST_EQ(ds, du);
+    };
+
+    std::vector<std::size_t> base(50);
+    std::iota(base.begin(), base.end(), std::size_t(1));
+
+    verify_consistency(base, 0);     // new_first == first
+    verify_consistency(base, 50);    // new_first == last
+    verify_consistency(base, 25);    // n = dist/2
+    verify_consistency(base, 1);     // n = 1
+    verify_consistency(base, 49);    // n = dist-1
+}
+
+void rotate_return_iterator_test()
+{
+    using namespace hpx::execution;
+    test_rotate_return_iterator(seq);
+    test_rotate_return_iterator(par);
+    test_rotate_return_iterator(par_unseq);
+
+    test_rotate_cross_policy();
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -445,6 +540,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     rotate_test();
     rotate_exception_test();
     rotate_bad_alloc_test();
+    rotate_return_iterator_test();
     return hpx::local::finalize();
 }
 

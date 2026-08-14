@@ -16,6 +16,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
+
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
 #include <hpx/schedulers/thread_queue.hpp>
 
@@ -205,7 +206,7 @@ namespace hpx::threads::policies {
     // from.
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
-        typename StagedQueuing = lockfree_fifo,
+        typename StagedQueuing = concurrentqueue_fifo,
         typename TerminatedQueuing =
             default_local_workrequesting_scheduler_terminated_queue>
     class local_workrequesting_scheduler final : public scheduler_base
@@ -689,8 +690,8 @@ namespace hpx::threads::policies {
 
             num_thread = select_active_pu(num_thread);
 
-            data.schedulehint.mode = thread_schedule_hint_mode::thread;
-            data.schedulehint.hint = static_cast<std::int16_t>(num_thread);
+            data.schedulehint.schedule_hint(
+                static_cast<std::int16_t>(num_thread));
 
             // now create the thread
             switch (data.priority)
@@ -1070,8 +1071,7 @@ namespace hpx::threads::policies {
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "local_workrequesting_scheduler::schedule_thread",
-                    "unknown thread priority value "
-                    "(thread_priority::unknown)");
+                    "unknown thread priority value (thread_priority::unknown)");
             }
             }
         }
@@ -1141,10 +1141,8 @@ namespace hpx::threads::policies {
             case thread_priority::unknown:
             {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                    "local_workrequesting_scheduler::schedule_thread_"
-                    "last",
-                    "unknown thread priority value "
-                    "(thread_priority::unknown)");
+                    "local_workrequesting_scheduler::schedule_thread_last",
+                    "unknown thread priority value (thread_priority::unknown)");
             }
             }
         }

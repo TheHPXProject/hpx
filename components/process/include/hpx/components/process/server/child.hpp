@@ -7,11 +7,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/server/component_base.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include <hpx/components/process/export_definitions.hpp>
 #include <hpx/components/process/util/child.hpp>
@@ -22,14 +21,14 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace components { namespace process { namespace server {
+namespace hpx::components::process::server {
 
     ///////////////////////////////////////////////////////////////////////////
     class HPX_PROCESS_EXPORT child : public component_base<child>
     {
     public:
         template <typename... Ts>
-        child(Ts&&... ts)
+        explicit child(Ts&&... ts)
           : child_(process::util::execute(HPX_FORWARD(Ts, ts)...))
         {
         }
@@ -43,7 +42,7 @@ namespace hpx { namespace components { namespace process { namespace server {
     private:
         process::util::child child_;
     };
-}}}}    // namespace hpx::components::process::server
+}    // namespace hpx::components::process::server
 
 #include <hpx/config/warnings_suffix.hpp>
 

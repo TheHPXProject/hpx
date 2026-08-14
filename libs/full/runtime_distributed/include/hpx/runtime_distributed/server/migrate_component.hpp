@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,12 +7,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/components/get_ptr.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/traits/component_supports_migration.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/runtime_distributed/find_here.hpp>
+
 #include <hpx/runtime_distributed/stubs/runtime_support.hpp>
 
 #include <cstdint>
@@ -159,7 +159,7 @@ namespace hpx::components::server {
         }
     }    // namespace detail
 
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     future<id_type> migrate_component(id_type const& to_migrate,
         naming::address const& addr, DistPolicy const& policy)
     {
@@ -190,7 +190,7 @@ namespace hpx::components::server {
             ptr, to_migrate, policy);
     }
 
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     struct migrate_component_action
       : ::hpx::actions::action<future<id_type> (*)(id_type const&,
                                    naming::address const&, DistPolicy const&),
@@ -204,7 +204,7 @@ namespace hpx::components::server {
     //
     // This is executed on the locality responsible for managing the address
     // resolution for the given object.
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     future<id_type> trigger_migrate_component(id_type const& to_migrate,
         DistPolicy const& policy, hpx::id_type const& id,
         naming::address const& addr)
@@ -263,7 +263,7 @@ namespace hpx::components::server {
             });
     }
 
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     struct trigger_migrate_component_action
       : ::hpx::actions::action<future<id_type> (*)(id_type const&,
                                    DistPolicy const&, hpx::id_type const&,
@@ -278,7 +278,7 @@ namespace hpx::components::server {
     //
     // This is executed on the locality where the object to migrate is
     // currently located.
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     future<id_type> perform_migrate_component(
         id_type const& to_migrate, DistPolicy const& policy)
     {
@@ -347,7 +347,7 @@ namespace hpx::components::server {
             .then(launch::sync, HPX_MOVE(start_migration_op));
     }
 
-    template <typename Component, typename DistPolicy>
+    HPX_CXX_EXPORT template <typename Component, typename DistPolicy>
     struct perform_migrate_component_action
       : ::hpx::actions::action<future<id_type> (*)(
                                    id_type const&, DistPolicy const&),

@@ -17,15 +17,15 @@
 /// classes are asynchronous API which return the futures.
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components/client_base.hpp>
-#include <hpx/components_base/server/component_base.hpp>
-#include <hpx/components_base/server/locking_hook.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/concepts.hpp>
 #include <hpx/modules/preprocessor.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_fwd.hpp>
 

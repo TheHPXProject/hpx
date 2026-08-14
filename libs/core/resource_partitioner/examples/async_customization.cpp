@@ -74,15 +74,14 @@ struct test_async_executor
         }
     };
 
-private:
+public:
     // --------------------------------------------------------------------
     // async execute specialized for simple arguments typical
     // of a normal async call with arbitrary arguments
     // --------------------------------------------------------------------
     template <typename F, typename... Ts>
-    friend future<util::invoke_result_t<F, Ts...>> tag_invoke(
-        hpx::parallel::execution::async_execute_t,
-        test_async_executor const& exec, F&& f, Ts&&... ts)
+    future<util::invoke_result_t<F, Ts...>> async_execute(
+        F&& f, Ts&&... ts) const
     {
         using result_type = util::detail::invoke_deferred_result_t<F, Ts...>;
 
@@ -95,7 +94,7 @@ private:
                   << print_type<result_type>() << "\n";
 
         // forward the task execution on to the real internal executor
-        return hpx::parallel::execution::async_execute(exec.executor_,
+        return hpx::parallel::execution::async_execute(executor_,
             hpx::annotated_function(std::forward<F>(f), "custom"),
             std::forward<Ts>(ts)...);
     }
@@ -107,9 +106,7 @@ private:
     template <typename F, typename Future, typename... Ts,
         typename = std::enable_if_t<
             traits::is_future_v<std::remove_reference_t<Future>>>>
-    friend auto tag_invoke(hpx::parallel::execution::then_execute_t,
-        test_async_executor const& exec, F&& f, Future&& predecessor,
-        Ts&&... ts)
+    auto then_execute(F&& f, Future&& predecessor, Ts&&... ts) const
         -> future<util::detail::invoke_deferred_result_t<F, Future, Ts...>>
     {
         using result_type =
@@ -129,7 +126,7 @@ private:
         std::cout << "then_execute : Result       : "
                   << print_type<result_type>() << "\n";
 
-        return hpx::parallel::execution::then_execute(exec.executor_,
+        return hpx::parallel::execution::then_execute(executor_,
             std::forward<F>(f), std::forward<Future>(predecessor),
             std::forward<Ts>(ts)...);
     }
@@ -145,9 +142,9 @@ private:
             OuterFuture<hpx::tuple<InnerFutures...>>>::value>,
         typename = std::enable_if_t<
             is_tuple_of_futures<hpx::tuple<InnerFutures...>>::value>>
-    friend auto tag_invoke(hpx::parallel::execution::then_execute_t,
-        test_async_executor const& exec, F&& f,
-        OuterFuture<hpx::tuple<InnerFutures...>>&& predecessor, Ts&&... ts)
+    auto then_execute(
+        F&& f,
+        OuterFuture<hpx::tuple<InnerFutures...>>&& predecessor, Ts&&... ts) const
             -> future<util::detail::invoke_deferred_result_t<F,
                         OuterFuture<hpx::tuple<InnerFutures...>>, Ts...>>
     // clang-format on
@@ -181,7 +178,7 @@ private:
             unwrapped_futures_tuple);
 
         // forward the task execution on to the real internal executor
-        return hpx::parallel::execution::then_execute(exec.executor_,
+        return hpx::parallel::execution::then_execute(executor_,
             hpx::annotated_function(std::forward<F>(f), "custom then"),
             std::forward<OuterFuture<hpx::tuple<InnerFutures...>>>(predecessor),
             std::forward<Ts>(ts)...);
@@ -195,9 +192,7 @@ private:
     template <typename F, typename... InnerFutures,
         typename = std::enable_if_t<
             traits::is_future_tuple_v<hpx::tuple<InnerFutures...>>>>
-    friend auto tag_invoke(hpx::parallel::execution::async_execute_t,
-        test_async_executor const& exec, F&& f,
-        hpx::tuple<InnerFutures...>&& predecessor)
+    auto async_execute(F&& f, hpx::tuple<InnerFutures...>&& predecessor) const
         -> future<util::detail::invoke_deferred_result_t<F,
             hpx::tuple<InnerFutures...>>>
     {
@@ -226,7 +221,7 @@ private:
             unwrapped_futures_tuple);
 
         // forward the task execution on to the real internal executor
-        return hpx::parallel::execution::async_execute(exec.executor_,
+        return hpx::parallel::execution::async_execute(executor_,
             hpx::annotated_function(std::forward<F>(f), "custom async"),
             std::forward<hpx::tuple<InnerFutures...>>(predecessor));
     }

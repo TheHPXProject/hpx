@@ -25,7 +25,7 @@ namespace hpx::traits {
     };
 
     // For global (and static) functions we return the function address itself
-    HPX_CXX_CORE_EXPORT template <typename R, typename... Ts>
+    template <typename R, typename... Ts>
     struct get_function_address<R (*)(Ts...)>
     {
         static std::size_t call(R (*f)(Ts...)) noexcept
@@ -50,7 +50,7 @@ namespace hpx::traits {
     //         corresponding to the function.
     //
     // clang-format off
-    HPX_CXX_CORE_EXPORT template <typename R, typename Obj, typename... Ts>
+    template <typename R, typename Obj, typename... Ts>
     struct get_function_address<R (Obj::*)(Ts...)>
     {
         static std::size_t call(R (Obj::*f)(Ts...)) noexcept
@@ -83,7 +83,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename R, typename Obj, typename... Ts>
+    template <typename R, typename Obj, typename... Ts>
     struct get_function_address<R (Obj::*)(Ts...) const>
     {
         static std::size_t call(R (Obj::*f)(Ts...) const) noexcept

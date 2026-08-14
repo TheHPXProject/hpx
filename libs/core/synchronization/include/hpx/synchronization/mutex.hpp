@@ -16,11 +16,9 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/synchronization/detail/condition_variable.hpp>
 #include <hpx/synchronization/spinlock.hpp>
-#if defined(HPX_HAVE_MODULE_TRACY)
-#include <hpx/modules/tracy.hpp>
-#endif
 
 namespace hpx::threads {
 
@@ -89,7 +87,7 @@ namespace hpx {
         ///
         /// \param description description of the \a mutex.
         ///
-#if HPX_HAVE_ITTNOTIFY != 0 || defined(HPX_HAVE_MODULE_TRACY)
+#if defined(HPX_HAVE_TRACING)
         HPX_CORE_EXPORT mutex(char const* const description = "");
 #else
         HPX_HOST_DEVICE_CONSTEXPR mutex(char const* const = "") noexcept
@@ -245,9 +243,7 @@ namespace hpx {
         mutable mutex_type mtx_;
         threads::thread_id_type owner_id_;
         hpx::lcos::local::detail::condition_variable cond_;
-#if defined(HPX_HAVE_MODULE_TRACY)
-        hpx::tracy::lock_data context_;
-#endif
+        HPX_NO_UNIQUE_ADDRESS hpx::tracing::lock_context context_;
         /// \endcond NOPROTECTED
     };
 

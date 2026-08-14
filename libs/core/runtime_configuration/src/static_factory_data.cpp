@@ -137,4 +137,55 @@ namespace hpx::components {
         f = it->second;
         return true;
     }
+
+    ///////////////////////////////////////////////////////////////////////////
+    std::vector<static_factory_load_data_type>& get_static_plugin_module_data()
+    {
+        static std::vector<static_factory_load_data_type>
+            global_plugin_module_init_data;
+        return global_plugin_module_init_data;
+    }
+
+    void init_registry_plugin_module(
+        static_factory_load_data_type const& data)    //-V835
+    {
+        if (get_initial_static_loading())
+        {
+            get_static_plugin_module_data().push_back(data);
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    static std::map<std::string, util::plugin::get_plugins_list_type>&
+    get_static_plugin_factory_data()
+    {
+        static std::map<std::string, util::plugin::get_plugins_list_type>
+            global_plugin_factory_init_data;
+        return global_plugin_factory_init_data;
+    }
+
+    void init_registry_plugin_factory(
+        static_factory_load_data_type const& data)    //-V835
+    {
+        if (get_initial_static_loading())
+        {
+            get_static_plugin_factory_data().emplace(
+                data.name, data.get_factory);
+        }
+    }
+
+    bool get_static_plugin_factory(
+        std::string const& instance, util::plugin::get_plugins_list_type& f)
+    {
+        using map_type =
+            std::map<std::string, util::plugin::get_plugins_list_type>;
+
+        map_type const& m = get_static_plugin_factory_data();
+        auto const it = m.find(instance);
+        if (it == m.end())
+            return false;
+
+        f = it->second;
+        return true;
+    }
 }    // namespace hpx::components

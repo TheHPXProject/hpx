@@ -1,5 +1,5 @@
 //  Copyright (c) 2015 Anton Bikineev
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -23,7 +23,7 @@
 
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename Key, typename Value>
+    template <typename Key, typename Value>
     struct is_bitwise_serializable<std::pair<Key, Value>>
       : std::integral_constant<bool,
             is_bitwise_serializable_v<std::remove_const_t<Key>> &&
@@ -31,7 +31,7 @@ namespace hpx::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Key, typename Value>
+    template <typename Key, typename Value>
     struct is_not_bitwise_serializable<std::pair<Key, Value>>
       : std::integral_constant<bool,
             !is_bitwise_serializable_v<std::pair<Key, Value>>>
@@ -66,7 +66,8 @@ namespace hpx::serialization {
             HPX_ASSERT(
                 !(ar.disable_array_optimization() || ar.endianess_differs()));
 #endif
-            load_binary(ar, &t, sizeof(std::pair<Key, Value>));
+            load_binary(ar, detail::array_of_fundamental_type_v<std::byte>, &t,
+                sizeof(std::pair<Key, Value>));
         }
         else
         {
@@ -98,7 +99,8 @@ namespace hpx::serialization {
             HPX_ASSERT(
                 !(ar.disable_array_optimization() || ar.endianess_differs()));
 #endif
-            save_binary(ar, &t, sizeof(std::pair<Key, Value>));
+            save_binary(ar, detail::array_of_fundamental_type_v<std::byte>, &t,
+                sizeof(std::pair<Key, Value>));
         }
         else
         {

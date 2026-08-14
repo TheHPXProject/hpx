@@ -10,6 +10,7 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_work.hpp>
 #include <hpx/threading_base/register_thread.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
@@ -262,6 +263,7 @@ namespace hpx::threads::detail {
         } while (true);
 
         thread_schedule_state const previous_state_val = previous_state.state();
+
         if (!(previous_state_val == thread_schedule_state::pending ||
                 previous_state_val == thread_schedule_state::pending_boost) &&
             (new_state == thread_schedule_state::pending ||

@@ -12,7 +12,7 @@ set(plugin_headers
     hpx/plugin/concrete_factory.hpp
     hpx/plugin/config.hpp
     hpx/plugin/dll.hpp
-    hpx/plugin/export_plugin.hpp
+    hpx/plugin/macros.hpp
     hpx/plugin/plugin_factory.hpp
     hpx/plugin/plugin_wrapper.hpp
     hpx/plugin/virtual_constructor.hpp
@@ -21,7 +21,7 @@ set(plugin_headers
     hpx/plugin/traits/plugin_config_data.hpp
 )
 
-set(plugin_macro_headers hpx/plugin/export_plugin.hpp)
+set(plugin_macro_headers hpx/plugin/macros.hpp)
 
 # Default location is $HPX_ROOT/libs/plugin/include_compatibility
 # cmake-format: off

@@ -6,11 +6,11 @@
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/collectives/spmd_block.hpp>
-#include <hpx/components/containers/coarray/coarray.hpp>
 #include <hpx/hpx_main.hpp>
-
+#include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
+
+#include <hpx/components/containers/coarray/coarray.hpp>
 
 #include <cstddef>
 #include <string>

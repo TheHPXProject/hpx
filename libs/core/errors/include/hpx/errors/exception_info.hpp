@@ -21,6 +21,8 @@
 #undef exception_info
 #endif
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -159,7 +161,7 @@ namespace hpx {
         };
 
         HPX_CXX_CORE_EXPORT template <typename E>
-        struct exception_with_info
+        struct HPX_ALWAYS_EXPORT exception_with_info
           : E
           , exception_with_info_base
         {
@@ -252,3 +254,5 @@ namespace hpx {
             detail::access_exception(ec), HPX_FORWARD(F, f));
     }
 }    // namespace hpx
+
+#include <hpx/config/warnings_suffix.hpp>

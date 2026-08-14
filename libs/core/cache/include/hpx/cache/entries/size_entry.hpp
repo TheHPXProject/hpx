@@ -10,6 +10,7 @@
 #include <hpx/cache/entries/entry.hpp>
 
 #include <cstddef>
+#include <type_traits>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util::cache::entries {

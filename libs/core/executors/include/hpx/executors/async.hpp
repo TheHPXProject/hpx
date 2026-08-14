@@ -21,7 +21,7 @@ namespace hpx::detail {
     HPX_CXX_CORE_EXPORT template <typename Func, typename Enable = void>
     struct async_dispatch_launch_policy_helper;
 
-    HPX_CXX_CORE_EXPORT template <typename Func>
+    template <typename Func>
     struct async_dispatch_launch_policy_helper<Func,
         std::enable_if_t<!traits::is_action_v<Func>>>
     {
@@ -38,7 +38,7 @@ namespace hpx::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Policy>
+    template <typename Policy>
     struct async_dispatch<Policy,
         std::enable_if_t<traits::is_launch_policy_v<Policy>>>
     {
@@ -60,7 +60,8 @@ namespace hpx::detail {
     };
 
     // Launch the given function or function object asynchronously and return a
-    // future allowing to synchronize with the returned result.
+    // future allowing to synchronize with the returned result. Enable inline
+    // execution by default (uses launch::async).
     HPX_CXX_CORE_EXPORT template <typename Func, typename Enable>
     struct async_dispatch
     {
@@ -80,7 +81,7 @@ namespace hpx::detail {
     //
     // parallel::execution::executor
     // threads::executor
-    HPX_CXX_CORE_EXPORT template <typename Executor>
+    template <typename Executor>
     struct async_dispatch<Executor,
         std::enable_if_t<traits::is_one_way_executor_v<Executor> ||
             traits::is_two_way_executor_v<Executor>>>

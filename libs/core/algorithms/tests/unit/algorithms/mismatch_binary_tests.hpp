@@ -483,7 +483,6 @@ void test_mismatch_binary_bad_alloc_async(ExPolicy&& p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_mismatch_binary1_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -513,7 +512,7 @@ void test_mismatch_binary1_sender(
         auto snd_result =
             tt::sync_wait(ex::just(begin1, end1, std::begin(c2), std::end(c2)) |
                 hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -529,7 +528,7 @@ void test_mismatch_binary1_sender(
         auto snd_result =
             tt::sync_wait(ex::just(begin1, end1, std::begin(c2), std::end(c2)) |
                 hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -568,7 +567,7 @@ void test_mismatch_binary2_sender(
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2),
                                             std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -584,7 +583,7 @@ void test_mismatch_binary2_sender(
         auto snd_result = tt::sync_wait(ex::just(begin1, end1, std::begin(c2),
                                             std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST_EQ(
@@ -600,11 +599,10 @@ void test_mismatch_binary2_sender(
             ex::just(iterator(std::begin(c1)), iterator(std::begin(c1)),
                 std::begin(c2), std::end(c2), std::equal_to<>()) |
             hpx::mismatch(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         // verify values
         HPX_TEST(result.first.base() == std::begin(c1));
         HPX_TEST(result.second == std::begin(c2));
     }
 }
-#endif

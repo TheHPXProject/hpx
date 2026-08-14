@@ -1,10 +1,11 @@
-# Copyright (c) 2019 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
+    and_gate
     channel_local
     local_dataflow
     local_dataflow_small_vector
@@ -16,6 +17,7 @@ set(tests
     split_future
 )
 
+set(and_gate_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_dataflow_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_dataflow_external_future_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_dataflow_executor_PARAMETERS THREADS_PER_LOCALITY 4)

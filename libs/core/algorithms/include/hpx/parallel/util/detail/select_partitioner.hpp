@@ -23,8 +23,7 @@ namespace hpx::parallel::util::detail {
         using apply = Partitioner<ExPolicy, Args...>;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy,
-        template <typename...> class Partitioner,
+    template <typename ExPolicy, template <typename...> class Partitioner,
         template <typename...> class TaskPartitioner>
     struct select_partitioner<ExPolicy, Partitioner, TaskPartitioner,
         std::enable_if_t<hpx::is_async_execution_policy_v<ExPolicy> &&

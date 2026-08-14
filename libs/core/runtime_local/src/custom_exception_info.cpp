@@ -284,12 +284,12 @@ namespace hpx::detail {
     }
 
     hpx::exception_info construct_exception_info(std::string const& func,
-        std::string const& file, long line, std::string const& back_trace,
-        std::uint32_t node, std::string const& hostname, std::int64_t pid,
-        std::size_t shepherd, std::size_t thread_id,
-        std::string const& thread_name, std::string const& env,
-        std::string const& config, std::string const& state_name,
-        std::string const& auxinfo)
+        std::string const& file, std::int64_t line,
+        std::string const& back_trace, std::uint32_t node,
+        std::string const& hostname, std::int64_t pid, std::size_t shepherd,
+        std::size_t thread_id, std::string const& thread_name,
+        std::string const& env, std::string const& config,
+        std::string const& state_name, std::string const& auxinfo)
     {
         return hpx::exception_info().set(
             hpx::detail::throw_stacktrace(back_trace),
@@ -299,8 +299,8 @@ namespace hpx::detail {
             hpx::detail::throw_thread_id(thread_id),
             hpx::detail::throw_thread_name(thread_name),
             hpx::detail::throw_function(func), hpx::detail::throw_file(file),
-            hpx::detail::throw_line(line), hpx::detail::throw_env(env),
-            hpx::detail::throw_config(config),
+            hpx::detail::throw_line(static_cast<long>(line)),
+            hpx::detail::throw_env(env), hpx::detail::throw_config(config),
             hpx::detail::throw_state(state_name),
             hpx::detail::throw_auxinfo(auxinfo));
     }

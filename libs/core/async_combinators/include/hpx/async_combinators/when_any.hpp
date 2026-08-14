@@ -128,7 +128,6 @@ namespace hpx {
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 
@@ -373,14 +372,12 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_any_t final
-      : hpx::functional::tag<when_any_t>
     {
-    private:
         template <typename Range,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_future_range_v<Range>>>
-        friend hpx::future<hpx::when_any_result<std::decay_t<Range>>>
-        tag_invoke(when_any_t, Range&& values)
+        hpx::future<hpx::when_any_result<std::decay_t<Range>>> operator()(
+            Range&& values) const
         {
             using result_type = std::decay_t<Range>;
 
@@ -401,8 +398,7 @@ namespace hpx {
         template <typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_any_t, Iterator begin, Iterator end)
+        decltype(auto) operator()(Iterator begin, Iterator end) const
         {
             using value_type =
                 hpx::lcos::detail::future_iterator_traits_t<Iterator>;
@@ -412,10 +408,10 @@ namespace hpx {
                 values, begin, end);
 
             std::move(begin, end, std::back_inserter(values));
-            return tag_invoke(when_any_t{}, HPX_MOVE(values));
+            return (*this)(HPX_MOVE(values));
         }
 
-        friend auto tag_invoke(when_any_t)
+        auto operator()() const
         {
             return hpx::make_ready_future(hpx::when_any_result<hpx::tuple<>>());
         }
@@ -424,7 +420,7 @@ namespace hpx {
         template <typename T, typename... Ts,
             typename Enable = std::enable_if_t<!(
                 hpx::traits::is_future_range_v<T> && sizeof...(Ts) == 0)>>
-        friend auto tag_invoke(when_any_t, T&& t, Ts&&... ts)
+        auto operator()(T&& t, Ts&&... ts) const
         {
             using result_type = hpx::tuple<hpx::traits::acquire_future_t<T>,
                 hpx::traits::acquire_future_t<Ts>...>;
@@ -450,14 +446,11 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_any_n_t final
-      : hpx::functional::tag<when_any_n_t>
     {
-    private:
         template <typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_any_n_t, Iterator begin, std::size_t count)
+        decltype(auto) operator()(Iterator begin, std::size_t count) const
         {
             using value_type =
                 hpx::lcos::detail::future_iterator_traits_t<Iterator>;

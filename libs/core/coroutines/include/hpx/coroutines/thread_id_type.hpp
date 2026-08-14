@@ -1,5 +1,5 @@
 //  Copyright (c) 2018 Thomas Heller
-//  Copyright (c) 2019-2025 Hartmut Kaiser
+//  Copyright (c) 2019-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -32,8 +32,8 @@ namespace hpx::threads {
     public:
         constexpr thread_id() noexcept = default;
 
-        thread_id(thread_id const&) = default;
-        thread_id& operator=(thread_id const&) = default;
+        thread_id(thread_id const&) noexcept = default;
+        thread_id& operator=(thread_id const&) noexcept = default;
 
         ~thread_id() = default;
 
@@ -52,11 +52,11 @@ namespace hpx::threads {
             return *this;
         }
 
-        explicit constexpr thread_id(thread_id_repr thrd) noexcept
+        explicit constexpr thread_id(thread_id_repr const thrd) noexcept
           : thrd_(thrd)
         {
         }
-        constexpr thread_id& operator=(thread_id_repr rhs) noexcept
+        constexpr thread_id& operator=(thread_id_repr const rhs) noexcept
         {
             thrd_ = rhs;
             return *this;
@@ -164,7 +164,7 @@ namespace hpx::threads {
             // created thread will be held alive by the variable returned from
             // the creation function;
             explicit constexpr thread_data_reference_counting(
-                thread_id_addref addref = thread_id_addref::yes) noexcept
+                thread_id_addref const addref = thread_id_addref::yes) noexcept
               : count_(addref == thread_id_addref::yes ? 1 : 0)
             {
             }
@@ -232,7 +232,7 @@ namespace hpx::threads {
         using thread_repr = detail::thread_data_reference_counting;
 
         explicit thread_id_ref(thread_repr* thrd,
-            thread_id_addref addref = thread_id_addref::yes) noexcept
+            thread_id_addref const addref = thread_id_addref::yes) noexcept
           : thrd_(thrd, addref == thread_id_addref::yes)
         {
         }
@@ -248,8 +248,8 @@ namespace hpx::threads {
         {
         }
 
-        thread_id_ref(thread_id&& noref) noexcept
-          : thrd_(static_cast<thread_repr*>(noref.get()))
+        thread_id_ref(thread_id&& noref, bool const add_ref = true) noexcept
+          : thrd_(static_cast<thread_repr*>(noref.get()), add_ref)
         {
             noref.reset();
         }
@@ -296,7 +296,7 @@ namespace hpx::threads {
             thrd_.reset();
         }
 
-        void reset(thread_repr* thrd, bool add_ref = true) noexcept
+        void reset(thread_repr* thrd, bool const add_ref = true) noexcept
         {
             thrd_.reset(thrd, add_ref);
         }
@@ -384,6 +384,52 @@ namespace hpx::threads {
 #else
     HPX_CXX_CORE_EXPORT inline constexpr thread_id const invalid_thread_id;
 #endif
+
+    // This data type allows to optionally keep the provided thread_id alive
+    HPX_CXX_CORE_EXPORT struct keep_alive_thread_id
+    {
+        explicit keep_alive_thread_id(
+            hpx::threads::thread_id id, bool const add_ref) noexcept
+          : add_ref(add_ref)
+          , id(HPX_MOVE(id), add_ref)
+        {
+        }
+
+        keep_alive_thread_id(keep_alive_thread_id const& other) = delete;
+        keep_alive_thread_id(keep_alive_thread_id&& other) = default;
+
+        keep_alive_thread_id& operator=(
+            keep_alive_thread_id const& other) = delete;
+
+        keep_alive_thread_id& operator=(keep_alive_thread_id&& other) noexcept
+        {
+            if (this != &other)
+            {
+                detach_if_needed();
+                add_ref = other.add_ref;
+                id = HPX_MOVE(other.id);
+            }
+            return *this;
+        }
+
+        ~keep_alive_thread_id()
+        {
+            detach_if_needed();
+        }
+
+        void detach_if_needed() noexcept
+        {
+            // prevent for the reference count to be decremented if it was
+            // not incremented in the constructor
+            if (!add_ref)
+            {
+                [[maybe_unused]] auto* p = id.get().detach();
+            }
+        }
+
+        bool add_ref;
+        hpx::threads::thread_id_ref id;
+    };
 }    // namespace hpx::threads
 
 namespace std {

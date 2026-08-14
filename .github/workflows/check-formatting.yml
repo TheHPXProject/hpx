@@ -14,13 +14,17 @@ on:
       - 'release**'
   workflow_dispatch:   
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   clang-format:
     runs-on: ubuntu-latest
     container: stellargroup/build_env:17
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Clang Format
       shell: bash
@@ -58,7 +62,7 @@ jobs:
     container: stellargroup/build_env:17
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     
     - name: CMake Format
       shell: bash
@@ -89,7 +93,7 @@ jobs:
     container: stellargroup/build_env:17
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0 # Ensure full history for proper diff
     

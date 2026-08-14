@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //  Copyright (c)      2011 Thomas Heller
 //
@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/type_support.hpp>
 
 namespace hpx::traits {
@@ -30,12 +31,12 @@ namespace hpx::traits {
     }    // namespace detail
     /// \endcond
 
-    template <typename Result>
+    HPX_CXX_EXPORT template <typename Result>
     struct action_remote_result
       : detail::action_remote_result_customization_point<Result>
     {
     };
 
-    template <typename Result>
+    HPX_CXX_EXPORT template <typename Result>
     using action_remote_result_t = typename action_remote_result<Result>::type;
 }    // namespace hpx::traits

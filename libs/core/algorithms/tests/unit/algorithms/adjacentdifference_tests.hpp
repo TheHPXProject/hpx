@@ -71,7 +71,6 @@ void test_adjacent_difference_direct(Policy l, ExPolicy policy)
     HPX_TEST(std::end(d) == it);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename Policy, typename ExPolicy>
 void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
 {
@@ -93,7 +92,8 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
         auto snd_result =
             tt::sync_wait(ex::just(std::begin(c), std::end(c), std::begin(d)) |
                 hpx::adjacent_difference(policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        HPX_TEST(snd_result.has_value());
+        auto result = hpx::get<0>(snd_result.value());
 
         std::adjacent_difference(std::begin(c), std::end(c), std::begin(d_ans));
 
@@ -107,7 +107,8 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
         auto snd_result = tt::sync_wait(
             ex::just(std::begin(c), std::begin(c), std::begin(d)) |
             hpx::adjacent_difference(policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        HPX_TEST(snd_result.has_value());
+        auto result = hpx::get<0>(snd_result.value());
 
         std::adjacent_difference(
             std::begin(c), std::begin(c), std::begin(d_ans));
@@ -122,7 +123,8 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
         auto snd_result = tt::sync_wait(
             ex::just(std::begin(c), ++std::begin(c), std::begin(d)) |
             hpx::adjacent_difference(policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        HPX_TEST(snd_result.has_value());
+        auto result = hpx::get<0>(snd_result.value());
 
         std::adjacent_difference(
             std::begin(c), ++std::begin(c), std::begin(d_ans));
@@ -132,7 +134,6 @@ void test_adjacent_difference_sender(Policy l, ExPolicy&& policy)
         HPX_TEST(++std::begin(d) == result);
     }
 }
-#endif
 
 template <typename ExPolicy>
 void test_adjacent_difference_async(ExPolicy&& p)
@@ -180,6 +181,7 @@ void test_adjacent_difference_async_direct(Policy l, ExPolicy&& p)
     HPX_TEST(std::equal(std::begin(d), std::end(d), std::begin(d_ans),
         [](auto lhs, auto rhs) { return lhs == rhs; }));
 
+    HPX_TEST(result.has_value());
     HPX_TEST(std::end(d) == hpx::get<0>(*result));
 }
 

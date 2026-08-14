@@ -84,7 +84,7 @@ namespace hpx::util {
             sizeof(Data))];
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Data>
+    template <typename Data>
     struct cache_aligned_data<Data, false>
     {
         constexpr cache_aligned_data() noexcept(
@@ -133,7 +133,7 @@ namespace hpx::util {
             sizeof(Data))];
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Data>
+    template <typename Data>
     struct cache_aligned_data_derived<Data, false> : Data
     {
         constexpr cache_aligned_data_derived() noexcept(

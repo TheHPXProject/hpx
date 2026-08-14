@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2021 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,16 +7,15 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/component_base.hpp>
-#include <hpx/components_base/traits/is_component.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/preprocessor.hpp>
+
+#include <hpx/lcos_distributed/macros.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -24,15 +23,15 @@
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace lcos { namespace server {
+namespace hpx::lcos::server {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T,
+    HPX_CXX_EXPORT template <typename T,
         typename RemoteType = traits::promise_remote_result_t<T>>
     class channel;
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename T, typename RemoteType>
+    HPX_CXX_EXPORT template <typename T, typename RemoteType>
     class channel
       : public lcos::base_lco_with_value<T, RemoteType,
             traits::detail::component_tag>
@@ -117,60 +116,4 @@ namespace hpx { namespace lcos { namespace server {
     private:
         lcos::local::channel<result_type> channel_;
     };
-}}}    // namespace hpx::lcos::server
-
-#define HPX_REGISTER_CHANNEL_DECLARATION(...)                                  \
-    HPX_REGISTER_CHANNEL_DECLARATION_(__VA_ARGS__)                             \
-/**/
-#define HPX_REGISTER_CHANNEL_DECLARATION_(...)                                 \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_REGISTER_CHANNEL_DECLARATION_,                \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_REGISTER_CHANNEL_DECLARATION_1(type)                               \
-    HPX_REGISTER_CHANNEL_DECLARATION_2(type, type)                             \
-/**/
-#define HPX_REGISTER_CHANNEL_DECLARATION_2(type, name)                         \
-    using HPX_PP_CAT(__channel_, HPX_PP_CAT(type, name)) =                     \
-        ::hpx::lcos::server::channel<type>;                                    \
-    HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::get_generation_action,               \
-        HPX_PP_CAT(__channel_get_generation_action, HPX_PP_CAT(type, name)))   \
-    HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::set_generation_action,               \
-        HPX_PP_CAT(__channel_set_generation_action, HPX_PP_CAT(type, name)))   \
-    HPX_REGISTER_ACTION_DECLARATION(                                           \
-        hpx::lcos::server::channel<type>::close_action,                        \
-        HPX_PP_CAT(__channel_close_action, HPX_PP_CAT(type, name)))            \
-    /**/
-
-#define HPX_REGISTER_CHANNEL(...)                                              \
-    HPX_REGISTER_CHANNEL_(__VA_ARGS__)                                         \
-/**/
-#define HPX_REGISTER_CHANNEL_(...)                                             \
-    HPX_PP_EXPAND(HPX_PP_CAT(                                                  \
-        HPX_REGISTER_CHANNEL_, HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))        \
-    /**/
-
-#define HPX_REGISTER_CHANNEL_1(type)                                           \
-    HPX_REGISTER_CHANNEL_2(type, type)                                         \
-/**/
-#define HPX_REGISTER_CHANNEL_2(type, name)                                     \
-    using HPX_PP_CAT(__channel_, HPX_PP_CAT(type, name)) =                     \
-        ::hpx::lcos::server::channel<type>;                                    \
-    using HPX_PP_CAT(__channel_component_, name) =                             \
-        ::hpx::components::component<HPX_PP_CAT(                               \
-            __channel_, HPX_PP_CAT(type, name))>;                              \
-    HPX_REGISTER_DERIVED_COMPONENT_FACTORY(                                    \
-        HPX_PP_CAT(__channel_component_, name),                                \
-        HPX_PP_CAT(__channel_component_, name),                                \
-        HPX_PP_STRINGIZE(HPX_PP_CAT(__base_lco_with_value_channel_, name)))    \
-    HPX_REGISTER_ACTION(                                                       \
-        hpx::lcos::server::channel<type>::get_generation_action,               \
-        HPX_PP_CAT(__channel_get_generation_action, HPX_PP_CAT(type, name)))   \
-    HPX_REGISTER_ACTION(                                                       \
-        hpx::lcos::server::channel<type>::set_generation_action,               \
-        HPX_PP_CAT(__channel_set_generation_action, HPX_PP_CAT(type, name)))   \
-    HPX_REGISTER_ACTION(hpx::lcos::server::channel<type>::close_action,        \
-        HPX_PP_CAT(__channel_close_action, HPX_PP_CAT(type, name)))            \
-    /**/
+}    // namespace hpx::lcos::server

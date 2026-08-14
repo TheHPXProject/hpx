@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach, Katelyn Kufahl
 //  Copyright (c) 2008-2009 Chirag Dekate, Anshul Tandon
 //  Copyright (c) 2015 Patricia Grubel
@@ -13,14 +13,15 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#ifdef HPX_HAVE_THREAD_QUEUE_WAITTIME
+#include <hpx/modules/schedulers.hpp>
+#endif
 #include <hpx/modules/threadmanager.hpp>
+
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/manage_counter_type.hpp>
 #include <hpx/performance_counters/threadmanager_counter_types.hpp>
-#ifdef HPX_HAVE_THREAD_QUEUE_WAITTIME
-#include <hpx/modules/schedulers.hpp>
-#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -639,8 +640,8 @@ namespace hpx::performance_counters {
             {"/threads/count/stolen-from-pending",
                 counter_type::monotonically_increasing,
                 "returns the overall number of pending HPX-threads stolen by "
-                "neighboring"
-                "schedulers from &tm scheduler for the referenced locality",
+                "neighboring schedulers from &tm scheduler for the referenced "
+                "locality",
                 HPX_PERFORMANCE_COUNTER_V1,
                 hpx::bind_front(&detail::locality_pool_thread_counter_creator,
                     &tm, &threads::threadmanager::get_num_stolen_from_pending,
@@ -649,8 +650,8 @@ namespace hpx::performance_counters {
             {"/threads/count/stolen-from-staged",
                 counter_type::monotonically_increasing,
                 "returns the overall number of task descriptions stolen by "
-                "neighboring"
-                "schedulers from tm scheduler for the referenced locality",
+                "neighboring schedulers from tm scheduler for the referenced "
+                "locality",
                 HPX_PERFORMANCE_COUNTER_V1,
                 hpx::bind_front(&detail::locality_pool_thread_counter_creator,
                     &tm, &threads::threadmanager::get_num_stolen_from_staged,
@@ -659,8 +660,7 @@ namespace hpx::performance_counters {
             {"/threads/count/stolen-to-pending",
                 counter_type::monotonically_increasing,
                 "returns the overall number of pending HPX-threads stolen from "
-                "neighboring"
-                "schedulers for the referenced locality",
+                "neighboring schedulers for the referenced locality",
                 HPX_PERFORMANCE_COUNTER_V1,
                 hpx::bind_front(&detail::locality_pool_thread_counter_creator,
                     &tm, &threads::threadmanager::get_num_stolen_to_pending,
@@ -669,8 +669,7 @@ namespace hpx::performance_counters {
             {"/threads/count/stolen-to-staged",
                 counter_type::monotonically_increasing,
                 "returns the overall number of task descriptions stolen from "
-                "neighboring"
-                "schedulers for the referenced locality",
+                "neighboring schedulers for the referenced locality",
                 HPX_PERFORMANCE_COUNTER_V1,
                 hpx::bind_front(&detail::locality_pool_thread_counter_creator,
                     &tm, &threads::threadmanager::get_num_stolen_to_staged,

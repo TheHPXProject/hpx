@@ -352,7 +352,6 @@ void test_transform_binary2_bad_alloc_async(ExPolicy p, IteratorTag)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_transform_binary2_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -381,7 +380,7 @@ void test_transform_binary2_sender(
         tt::sync_wait(ex::just(iterator(std::begin(c1)), iterator(std::end(c1)),
                           std::begin(c2), std::end(c2), std::begin(d1), add()) |
             hpx::ranges::transform(ex_policy.on(exec)));
-    auto result = hpx::get<0>(*snd_result);
+    auto result = hpx::get<0>(snd_result.value());
 
     HPX_TEST(result.in1 == iterator(std::end(c1)));
     HPX_TEST(result.in2 == std::end(c2));
@@ -401,4 +400,3 @@ void test_transform_binary2_sender(
         }));
     HPX_TEST_EQ(count, d2.size());
 }
-#endif

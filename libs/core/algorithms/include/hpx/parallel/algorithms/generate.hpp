@@ -210,6 +210,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/generate.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/partitioner.hpp>
@@ -310,10 +311,10 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::generate
-    HPX_CXX_CORE_EXPORT inline constexpr struct generate_t
-      : hpx::detail::tag_parallel_algorithm<generate_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct generate_t final
+      : hpx::detail::tag_dispatch<generate_t,
+            hpx::detail::tag_parallel_algorithm<generate_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
             requires (
@@ -321,8 +322,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            generate_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -337,8 +338,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend void tag_fallback_invoke(
-            generate_t, FwdIter first, FwdIter last, F f)
+        static void invoke_default(FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -350,10 +350,10 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::generate_n
-    HPX_CXX_CORE_EXPORT inline constexpr struct generate_n_t
-      : hpx::detail::tag_parallel_algorithm<generate_n_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct generate_n_t final
+      : hpx::detail::tag_dispatch<generate_n_t,
+            hpx::detail::tag_parallel_algorithm<generate_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Size,
             typename F>
         // clang-format off
@@ -363,8 +363,8 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            generate_n_t, ExPolicy&& policy, FwdIter first, Size count, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, Size count, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -397,8 +397,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            generate_n_t, FwdIter first, Size count, F&& f)
+        static FwdIter invoke_default(FwdIter first, Size count, F&& f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");

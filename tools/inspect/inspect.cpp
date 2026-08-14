@@ -17,7 +17,7 @@
 
 //  See http://www.boost.org/tools/inspect/ for more information.
 
-const char* hpx_no_inspect = "hpx-"
+char const* hpx_no_inspect = "hpx-"
                              "no-inspect";
 
 //  Directories with a file name of the hpx_no_inspect value are not inspected.
@@ -35,6 +35,7 @@ const char* hpx_no_inspect = "hpx-"
 #include <limits>
 #include <list>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -93,6 +94,13 @@ using namespace boost::inspect;
 
 namespace {
     fs::path search_root = fs::initial_path();
+    fs::path search_root_git = search_root;
+    std::string search_root_commit;
+    std::string search_root_blob_prefix;
+
+    std::set<std::string> scanned_commits;
+    std::set<std::string> scanned_commit_urls;
+    bool scanned_unknown_commit = false;
 
     class inspector_element
     {
@@ -123,7 +131,7 @@ namespace {
         string msg;
         std::size_t line_number;
 
-        bool operator<(const error_msg& rhs) const
+        bool operator<(error_msg const& rhs) const
         {
             if (library < rhs.library)
                 return true;
@@ -149,7 +157,7 @@ namespace {
         int error_count;
         string library;
 
-        bool operator<(const lib_error_count& rhs) const
+        bool operator<(lib_error_count const& rhs) const
         {
             return error_count > rhs.error_count;
         }
@@ -157,6 +165,173 @@ namespace {
 
     typedef std::vector<lib_error_count> lib_error_count_vector;
     lib_error_count_vector libs;
+
+    std::string trim(std::string const& value)
+    {
+        std::string whitespace = " \t\r\n";
+        std::string::size_type begin = value.find_first_not_of(whitespace);
+        if (begin == std::string::npos)
+        {
+            return "";
+        }
+
+        std::string::size_type end = value.find_last_not_of(whitespace);
+        return value.substr(begin, end - begin + 1);
+    }
+
+    std::string quote_for_shell(std::string const& value)
+    {
+        std::string quoted = "\"";
+        for (char c : value)
+        {
+            if (c == '"' || c == '\\')
+            {
+                quoted += '\\';
+            }
+            quoted += c;
+        }
+        quoted += '"';
+        return quoted;
+    }
+
+    std::string run_command(std::string const& command)
+    {
+        std::string output;
+        FILE* fp = POPEN(command.c_str(), "r");
+        if (fp == nullptr)
+        {
+            return output;
+        }
+
+        char line[256];
+        while (fgets(line, sizeof(line), fp) != nullptr)
+        {
+            output += line;
+        }
+        PCLOSE(fp);
+        return trim(output);
+    }
+
+    std::string git_stderr_redirect()
+    {
+#if defined(_WIN32)
+        return " 2>NUL";
+#else
+        return " 2>/dev/null";
+#endif
+    }
+
+    std::string run_git_command(
+        fs::path const& root, std::string const& arguments)
+    {
+        return run_command("git -C " + quote_for_shell(root.string()) + " " +
+            arguments + git_stderr_redirect());
+    }
+
+    std::string normalize_github_url(std::string remote_url)
+    {
+        remote_url = trim(remote_url);
+        if (remote_url.empty())
+        {
+            return "";
+        }
+
+        if (remote_url.size() > 4 &&
+            remote_url.substr(remote_url.size() - 4) == ".git")
+        {
+            remote_url.erase(remote_url.size() - 4);
+        }
+
+        std::string const git_ssh_prefix = "git@github.com:";
+        if (remote_url.compare(0, git_ssh_prefix.size(), git_ssh_prefix) == 0)
+        {
+            return "https://github.com/" +
+                remote_url.substr(git_ssh_prefix.size());
+        }
+
+        std::string const ssh_prefix = "ssh://git@github.com/";
+        if (remote_url.compare(0, ssh_prefix.size(), ssh_prefix) == 0)
+        {
+            return "https://github.com/" + remote_url.substr(ssh_prefix.size());
+        }
+
+        std::string const git_prefix = "git://github.com/";
+        if (remote_url.compare(0, git_prefix.size(), git_prefix) == 0)
+        {
+            return "https://github.com/" + remote_url.substr(git_prefix.size());
+        }
+
+        std::string const http_prefix = "http://github.com/";
+        if (remote_url.compare(0, http_prefix.size(), http_prefix) == 0)
+        {
+            return "https://github.com/" +
+                remote_url.substr(http_prefix.size());
+        }
+
+        std::string const https_prefix = "https://github.com/";
+        if (remote_url.compare(0, https_prefix.size(), https_prefix) == 0)
+        {
+            return remote_url;
+        }
+
+        return "";
+    }
+
+    void set_search_root_git_info(fs::path const& root)
+    {
+        search_root_git = root;
+        search_root_commit.clear();
+        search_root_blob_prefix.clear();
+
+        std::string git_root =
+            run_git_command(root, "rev-parse --show-toplevel");
+        if (git_root.empty())
+        {
+            scanned_unknown_commit = true;
+            return;
+        }
+
+        search_root_git = fs::path(git_root);
+        search_root_commit = run_git_command(root, "rev-parse HEAD");
+
+        if (search_root_commit.empty())
+        {
+            scanned_unknown_commit = true;
+            return;
+        }
+
+        scanned_commits.insert(search_root_commit);
+
+        std::string repo_url = normalize_github_url(
+            run_git_command(root, "config --get remote.origin.url"));
+        if (!repo_url.empty())
+        {
+            scanned_commit_urls.insert(
+                repo_url + "/commit/" + search_root_commit);
+            search_root_blob_prefix = repo_url + "/blob/" + search_root_commit;
+        }
+    }
+
+    std::string report_commit_label()
+    {
+        if (scanned_unknown_commit || scanned_commits.size() != 1)
+        {
+            return scanned_commits.empty() ? "unknown" : "multiple";
+        }
+
+        return *scanned_commits.begin();
+    }
+
+    std::string report_commit_url()
+    {
+        if (scanned_unknown_commit || scanned_commits.size() != 1 ||
+            scanned_commit_urls.size() != 1)
+        {
+            return "";
+        }
+
+        return *scanned_commit_urls.begin();
+    }
 
     //  run subversion to get revisions info  ------------------------------------//
     //
@@ -251,9 +426,9 @@ namespace {
 
     //  visit_predicate (determines which directories are visited)  --------------//
 
-    typedef bool (*pred_type)(const path&);
+    typedef bool (*pred_type)(path const&);
 
-    bool visit_predicate(const path& pth)
+    bool visit_predicate(path const& pth)
     {
         string local(boost::inspect::relative_to(pth, search_root_path()));
         string leaf(pth.filename().string());
@@ -273,10 +448,10 @@ namespace {
 
     //  library_from_content  ----------------------------------------------------//
 
-    string library_from_content(const string& content)
+    string library_from_content(string const& content)
     {
-        const string unknown_library("unknown");
-        const string lib_root("www.boost.org/libs/");
+        string const unknown_library("unknown");
+        string const lib_root("www.boost.org/libs/");
         string::size_type pos(content.find(lib_root));
 
         string lib = unknown_library;
@@ -286,7 +461,7 @@ namespace {
             pos += lib_root.length();
 
             // space and...
-            const char delims[] = " /\n\r\t";
+            char const delims[] = " /\n\r\t";
 
             string::size_type n = content.find_first_of(string(delims), pos);
             if (n != string::npos)
@@ -299,7 +474,7 @@ namespace {
     //  find_signature  ----------------------------------------------------------//
 
     bool find_signature(
-        const path& file_path, const boost::inspect::string_set& signatures)
+        path const& file_path, boost::inspect::string_set const& signatures)
     {
         string name(file_path.filename().string());
         if (signatures.find(name) == signatures.end())
@@ -314,7 +489,7 @@ namespace {
 
     //  load_content  ------------------------------------------------------------//
 
-    void load_content(const path& file_path, string& target)
+    void load_content(path const& file_path, string& target)
     {
         target = "";
 
@@ -332,12 +507,12 @@ namespace {
 
     //  check  -------------------------------------------------------------------//
 
-    void check_(const string& lib, const path& pth, const string& content,
-        const inspector_list& insp_list)
+    void check_(string const& lib, path const& pth, string const& content,
+        inspector_list const& insp_list)
     {
         // invoke each inspector
         for (inspector_list::const_iterator itr = insp_list.begin();
-             itr != insp_list.end(); ++itr)
+            itr != insp_list.end(); ++itr)
         {
             // always call two-argument form
             itr->inspector->inspect(lib, pth);
@@ -353,7 +528,7 @@ namespace {
 
     template <class DirectoryIterator>
     void visit_all(
-        const string& lib, const path& dir_path, const inspector_list& insps)
+        string const& lib, path const& dir_path, inspector_list const& insps)
     {
         static DirectoryIterator end_itr;
         ++directory_count;
@@ -398,7 +573,7 @@ namespace {
     //  display_summary_helper  --------------------------------------------------//
 
     void display_summary_helper(
-        std::ostream& out, const string& current_library, int err_count)
+        std::ostream& out, string const& current_library, int err_count)
     {
         if (display_format == display_text)
         {
@@ -430,7 +605,7 @@ namespace {
         string current_library(msgs.begin()->library);
         int err_count = 0;
         for (error_msg_vector::iterator itr(msgs.begin()); itr != msgs.end();
-             ++itr)
+            ++itr)
         {
             if (current_library != itr->library)
             {
@@ -457,7 +632,7 @@ namespace {
             // display error messages with group indication
             error_msg current;
             for (error_msg_vector::iterator itr(msgs.begin());
-                 itr != msgs.end(); ++itr)
+                itr != msgs.end(); ++itr)
             {
                 if (current.library != itr->library)
                 {
@@ -491,7 +666,7 @@ namespace {
                     current.rel_path != itr->rel_path ||
                     current.msg != itr->msg)
                 {
-                    const string m = itr->msg;
+                    string const m = itr->msg;
 
                     if (display_full == display_mode)
                         out << "    " << m << '\n';
@@ -511,7 +686,7 @@ namespace {
             bool first_sep = true;
             bool first = true;
             for (error_msg_vector::iterator itr(msgs.begin());
-                 itr != msgs.end(); ++itr)
+                itr != msgs.end(); ++itr)
             {
                 if (current.library != itr->library)
                 {
@@ -546,7 +721,7 @@ namespace {
                     if (itr->line_number)
                     {
                         string line = std::to_string(itr->line_number);
-                        const path& full_path = itr->library;
+                        path const& full_path = itr->library;
                         string link = linelink(full_path, line);
                         out << sep << itr->msg << "(line " << link << ") ";
                         //Since the brackets are not used in inspect besides for formatting
@@ -649,7 +824,7 @@ namespace {
     //       out << "</blockquote>\n";
     //   }
 
-    const char* doctype_declaration()
+    char const* doctype_declaration()
     {
         return "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\"\n"
                "\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">";
@@ -671,7 +846,7 @@ namespace boost { namespace inspect {
 
     //  line_break  --------------------------------------------------------------//
 
-    const char* line_break()
+    char const* line_break()
     {
         return display_format ? "\n" : "<br>\n";
     }
@@ -683,15 +858,30 @@ namespace boost { namespace inspect {
         return search_root;
     }
 
+    path search_root_git_path()
+    {
+        return search_root_git;
+    }
+
+    std::string search_root_git_commit()
+    {
+        return search_root_commit;
+    }
+
+    std::string search_root_git_blob_prefix()
+    {
+        return search_root_blob_prefix;
+    }
+
     //  register_signature  ------------------------------------------------------//
 
-    void inspector::register_signature(const string& signature)
+    void inspector::register_signature(string const& signature)
     {
         m_signatures.insert(signature);
         content_signatures.insert(signature);
     }
 
-    void inspector::register_skip_signature(const string& signature)
+    void inspector::register_skip_signature(string const& signature)
     {
         m_skip_signatures.insert(signature);
         skip_content_signatures.insert(signature);
@@ -699,8 +889,8 @@ namespace boost { namespace inspect {
 
     //  error  -------------------------------------------------------------------//
 
-    void inspector::error(const string& library_name, const path& full_path,
-        const string& msg, std::size_t line_number)
+    void inspector::error(string const& library_name, path const& full_path,
+        string const& msg, std::size_t line_number)
     {
         ++error_count;
         error_msg err_msg;
@@ -794,7 +984,7 @@ namespace boost { namespace inspect {
     //  impute_library  ----------------------------------------------------------//
 
     // may return an empty string [gps]
-    string impute_library(const path& full_dir_path)
+    string impute_library(path const& full_dir_path)
     {
         path relative(relative_to(full_dir_path, search_root_path()));
         if (relative.empty())
@@ -918,10 +1108,10 @@ int cpp_main(int argc_param, char* argv_param[])
 
     variables_map vm;
     parsed_options opts(command_line_parser(argc_param, argv_param)
-                            .options(cmdline)
-                            .positional(pd)
-                            .style(command_line_style::unix_style)
-                            .run());
+            .options(cmdline)
+            .positional(pd)
+            .style(command_line_style::unix_style)
+            .run());
     store(opts, vm);
     notify(vm);
 
@@ -1058,13 +1248,14 @@ int cpp_main(int argc_param, char* argv_param[])
     for (auto const& search_root : search_roots)
     {
         ::search_root = search_root;
+        set_search_root_git_info(search_root);
         visit_all<fs::directory_iterator>(
             search_root.filename().string(), search_root, inspectors);
     }
 
     // close
     for (inspector_list::iterator itr = inspectors.begin();
-         itr != inspectors.end(); ++itr)
+        itr != inspectors.end(); ++itr)
     {
         itr->inspector->close();
     }
@@ -1092,13 +1283,18 @@ void print_output(std::ostream& out, inspector_list const& inspectors)
 {
     string run_date("n/a");
     boost::time_string(run_date);
+    std::string commit = report_commit_label();
+    std::string commit_url = report_commit_url();
 
     if (display_format == display_text)
     {
-        out << "HPX Inspection Report\nRun Date: " << run_date << "\nCommit: "
-            << "<a href = \"https://github.com/STEllAR-GROUP/hpx/commit/"
-            << HPX_HAVE_GIT_COMMIT << "\">"
-            << std::string(HPX_HAVE_GIT_COMMIT, 10) << "</a>\n\n";
+        out << "HPX Inspection Report\nRun Date: " << run_date
+            << "\nCommit: " << commit;
+        if (!commit_url.empty())
+        {
+            out << " (" << commit_url << ")";
+        }
+        out << "\n\n";
 
         out << "Totals:\n"
             << "  " << file_count << " files scanned\n"
@@ -1123,23 +1319,29 @@ void print_output(std::ostream& out, inspector_list const& inspectors)
                "<table>\n"
                "<tr>\n"
                "<td>"
-               "<a href = \"https://github.com/STEllAR-GROUP/hpx\">"
-               "<img src=\"https://stellar-group.org/files/stellar100.png\""
-               " alt=\"STE||AR logo\" />"
+               "<a href = \"https://github.com/TheHPXProject/hpx\">"
+               "<img "
+               "src=\"https://docs.hpx.dev/branches/master/html/_static/"
+               "favicon.png\""
+               " alt=\"HPX logo\" width=\"100\" height=\"100\" />"
                "</a>\n"
                "</td>\n"
                "<td>\n"
                "<h1>HPX Inspection Report</h1>\n"
                "<b>Run Date:</b> "
-            << run_date
-            << "<br>\n"
-               //"&nbsp;&nbsp;/ " << validator_link( "validate me" ) << " /\n"
-               "<b>Commit:</b> "
-            << "<a href = \"https://github.com/STEllAR-GROUP/hpx/commit/"
-            << HPX_HAVE_GIT_COMMIT << "\">"
-            << std::string(HPX_HAVE_GIT_COMMIT, 10)
-            << "</a>\n"
-               "</td>\n"
+            << run_date << "<br>\n";
+        // "&nbsp;&nbsp;/ " << validator_link( "validate me" ) << " /\n"
+        out << "<b>Commit:</b> ";
+        if (!commit_url.empty())
+        {
+            out << "<a href = \"" << commit_url << "\">"
+                << std::string(commit, 0, 10) << "</a>\n";
+        }
+        else
+        {
+            out << commit << '\n';
+        }
+        out << "</td>\n"
                "</tr>\n"
                "</table>\n"
 
@@ -1148,12 +1350,6 @@ void print_output(std::ostream& out, inspector_list const& inspectors)
                "HPX inspect tool is based on the "
                "<a href=\"http://www.boost.org/tools/inspect/\">"
                "Boost.Inspect</a> tool.</p>\n";
-
-        // FIXME: Extract latest GIT commit hash here
-        //     out
-        //       << "<p>The files checked were from "
-        //       << info( search_root_path() )
-        //       << ".</p>\n";
 
         out << "<h2>Totals</h2>\n"
             << file_count << " files scanned<br>\n"
@@ -1164,7 +1360,7 @@ void print_output(std::ostream& out, inspector_list const& inspectors)
     string inspector_keys;
 
     for (inspector_list::const_iterator itr = inspectors.begin();
-         itr != inspectors.end(); ++itr)
+        itr != inspectors.end(); ++itr)
     {
         inspector_keys += static_cast<string>("  ") + itr->inspector->name() +
             ' ' + itr->inspector->desc() + line_break();

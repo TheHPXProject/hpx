@@ -1,4 +1,4 @@
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,14 +10,10 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
-
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
-#include <hpx/parcelset/detail/message_handler_interface_functions.hpp>
-#include <hpx/parcelset/message_handler_fwd.hpp>
-#include <hpx/parcelset/parcel.hpp>
-#include <hpx/parcelset/parcelhandler.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
 #include <hpx/runtime_distributed.hpp>
+
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
 
 #include <cstddef>
@@ -139,7 +135,7 @@ namespace hpx::parcelset {
     }    // namespace detail::impl
 
     // initialize locality interface function pointers in parcelset modules
-    HPX_CXX_EXPORT struct HPX_EXPORT locality_interface_functions
+    struct HPX_EXPORT locality_interface_functions
     {
         locality_interface_functions()
         {

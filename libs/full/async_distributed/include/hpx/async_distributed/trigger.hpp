@@ -9,16 +9,17 @@
 
 #include <hpx/config.hpp>
 #include <hpx/async_distributed/continuation_fwd.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <exception>
 #include <utility>
 
-namespace hpx { namespace actions {
+namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Result, typename RemoteResult, typename F,
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult, typename F,
         typename... Ts>
     void trigger(typed_continuation<Result, RemoteResult>&& cont, F&& f,
         Ts&&... vs) noexcept
@@ -36,7 +37,7 @@ namespace hpx { namespace actions {
     }
 
     // Overload when return type is "void" aka util::unused_type
-    template <typename Result, typename F, typename... Ts>
+    HPX_CXX_EXPORT template <typename Result, typename F, typename... Ts>
     void trigger(typed_continuation<Result, util::unused_type>&& cont, F&& f,
         Ts&&... vs) noexcept
     {
@@ -51,4 +52,4 @@ namespace hpx { namespace actions {
             cont.trigger_error(std::current_exception());
         }
     }
-}}    // namespace hpx::actions
+}    // namespace hpx::actions

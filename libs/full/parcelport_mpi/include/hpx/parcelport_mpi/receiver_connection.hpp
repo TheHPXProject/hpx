@@ -13,9 +13,8 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)
 #include <hpx/assert.hpp>
 #include <hpx/modules/mpi_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_mpi/header.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
-#include <hpx/parcelset/parcel_buffer.hpp>
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS)
 #include <hpx/modules/timing.hpp>
 #endif

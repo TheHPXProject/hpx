@@ -1,4 +1,5 @@
 //  Copyright (c) 2011 Bryce Lelbach
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,19 +8,20 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/agas_fwd.hpp>
-#include <hpx/agas_base/server/component_namespace.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
+
+#include <hpx/agas_base/agas_fwd.hpp>
+#include <hpx/agas_base/server/component_namespace.hpp>
 
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
-    struct component_namespace
+    HPX_CXX_EXPORT struct component_namespace
     {
         virtual ~component_namespace() = default;
 
@@ -55,5 +57,4 @@ namespace hpx { namespace agas {
             return nullptr;
         }
     };
-
-}}    // namespace hpx::agas
+}    // namespace hpx::agas

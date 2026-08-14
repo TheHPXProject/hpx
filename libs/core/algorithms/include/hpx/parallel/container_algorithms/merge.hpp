@@ -670,6 +670,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/merge.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -688,9 +689,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::merge
     HPX_CXX_CORE_EXPORT inline constexpr struct merge_t final
-      : hpx::detail::tag_parallel_algorithm<merge_t>
+      : hpx::detail::tag_dispatch<merge_t,
+            hpx::detail::tag_parallel_algorithm<merge_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng1, typename Rng2,
             typename Iter3, typename Comp = hpx::ranges::less,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -708,12 +709,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             hpx::ranges::merge_result<std::ranges::iterator_t<Rng1>,
                 std::ranges::iterator_t<Rng2>, Iter3>>
-        tag_fallback_invoke(merge_t, ExPolicy&& policy, Rng1&& rng1,
-            Rng2&& rng2, Iter3 dest, Comp comp = Comp(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2, Iter3 dest,
+            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -753,11 +753,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             hpx::ranges::merge_result<Iter1, Iter2, Iter3>>
-        tag_fallback_invoke(merge_t, ExPolicy&& policy, Iter1 first1,
-            Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest,
-            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Iter1 first1, Sent1 last1,
+            Iter2 first2, Sent2 last2, Iter3 dest, Comp comp = Comp(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::random_access_iterator<Iter1>,
                 "Required at least random access iterator.");
@@ -790,10 +790,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::ranges::merge_result<std::ranges::iterator_t<Rng1>,
+        static hpx::ranges::merge_result<std::ranges::iterator_t<Rng1>,
             std::ranges::iterator_t<Rng2>, Iter3>
-        tag_fallback_invoke(merge_t, Rng1&& rng1, Rng2&& rng2, Iter3 dest,
-            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(Rng1&& rng1, Rng2&& rng2, Iter3 dest, Comp comp = Comp(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -832,10 +832,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::ranges::merge_result<Iter1, Iter2, Iter3>
-        tag_fallback_invoke(merge_t, Iter1 first1, Sent1 last1, Iter2 first2,
-            Sent2 last2, Iter3 dest, Comp comp = Comp(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static hpx::ranges::merge_result<Iter1, Iter2, Iter3> invoke_default(
+            Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest,
+            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::random_access_iterator<Iter1>,
                 "Required at least random access iterator.");
@@ -855,9 +854,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::inplace_merge
     HPX_CXX_CORE_EXPORT inline constexpr struct inplace_merge_t final
-      : hpx::detail::tag_parallel_algorithm<inplace_merge_t>
+      : hpx::detail::tag_dispatch<inplace_merge_t,
+            hpx::detail::tag_parallel_algorithm<inplace_merge_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng, typename Iter,
             typename Comp = hpx::ranges::less, typename Proj = hpx::identity>
         // clang-format off
@@ -873,9 +872,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(inplace_merge_t, ExPolicy&& policy, Rng&& rng,
-            Iter middle, Comp comp = Comp(), Proj proj = Proj())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Rng&& rng, Iter middle,
+            Comp comp = Comp(), Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -902,9 +901,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(inplace_merge_t, ExPolicy&& policy, Iter first,
-            Iter middle, Sent last, Comp comp = Comp(), Proj proj = Proj())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Iter first, Iter middle, Sent last,
+            Comp comp = Comp(), Proj proj = Proj())
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Required at least random access iterator.");
@@ -929,8 +928,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend Iter tag_fallback_invoke(inplace_merge_t, Rng&& rng, Iter middle,
-            Comp comp = Comp(), Proj proj = Proj())
+        static Iter invoke_default(
+            Rng&& rng, Iter middle, Comp comp = Comp(), Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -957,8 +956,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend Iter tag_fallback_invoke(inplace_merge_t, Iter first,
-            Iter middle, Sent last, Comp comp = Comp(), Proj proj = Proj())
+        static Iter invoke_default(Iter first, Iter middle, Sent last,
+            Comp comp = Comp(), Proj proj = Proj())
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Required at least random access iterator.");

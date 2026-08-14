@@ -25,7 +25,7 @@ namespace hpx::resource {
     namespace detail {
 
         class HPX_CORE_EXPORT partitioner;
-        void HPX_CORE_EXPORT delete_partitioner();
+        HPX_CXX_CORE_EXPORT void HPX_CORE_EXPORT delete_partitioner();
     }    // namespace detail
 
     /// May be used anywhere in code and returns a reference to the single,
@@ -95,6 +95,7 @@ namespace hpx::resource {
         unspecified = -1,
         local = 0,
         local_priority_fifo = 1,
+        local_priority_fifo_double = 11,
         local_priority_lifo = 2,
         static_ = 3,
         static_priority = 4,
@@ -140,4 +141,9 @@ namespace hpx::resource {
         scheduling_policy::shared_priority;
 
 #undef HPX_SCHEDULING_POLICY_UNSCOPED_ENUM_DEPRECATION_MSG
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT char const* get_scheduler_name(
+        scheduling_policy policy);
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT scheduling_policy get_scheduling_policy(
+        char const* scheduler_name);
 }    // namespace hpx::resource

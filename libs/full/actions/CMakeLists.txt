@@ -16,12 +16,15 @@ set(actions_headers
     hpx/actions/actions_fwd.hpp
     hpx/actions/base_action.hpp
     hpx/actions/invoke_function.hpp
+    hpx/actions/macros.hpp
     hpx/actions/post_helper_fwd.hpp
     hpx/actions/post_helper.hpp
     hpx/actions/register_action.hpp
     hpx/actions/transfer_base_action.hpp
     hpx/actions/transfer_action.hpp
 )
+
+set(actions_macro_headers hpx/actions/macros.hpp)
 
 # Default location is $HPX_ROOT/libs/actions/include_compatibility
 # cmake-format: off
@@ -43,8 +46,10 @@ include(HPX_AddModule)
 add_hpx_module(
   full actions
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${actions_sources}
   HEADERS ${actions_headers}
+  MACRO_HEADERS ${actions_macro_headers}
   COMPAT_HEADERS ${actions_compat_headers}
   MODULE_DEPENDENCIES hpx_actions_base hpx_components_base hpx_naming_base
                       hpx_parcelset_base

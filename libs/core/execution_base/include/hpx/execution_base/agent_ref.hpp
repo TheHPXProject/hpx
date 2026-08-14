@@ -1,5 +1,5 @@
 //  Copyright (c) 2019 Thomas Heller
-//  Copyright (c) 2023 Hartmut Kaiser
+//  Copyright (c) 2023-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/coroutines.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/timing.hpp>
 
 #include <chrono>
@@ -58,20 +59,25 @@ namespace hpx::execution_base {
             char const* desc = "hpx::execution_base::agent_ref::abort") const;
 
         template <typename Rep, typename Period>
-        void sleep_for(std::chrono::duration<Rep, Period> const& sleep_duration,
+        threads::thread_restart_state sleep_for(
+            std::chrono::duration<Rep, Period> const& sleep_duration,
+            hpx::move_only_function<bool()>&& wait_cond,
             char const* desc =
                 "hpx::execution_base::agent_ref::sleep_for") const
         {
-            sleep_for(hpx::chrono::steady_duration{sleep_duration}, desc);
+            return sleep_for(hpx::chrono::steady_duration{sleep_duration},
+                HPX_MOVE(wait_cond), desc);
         }
 
         template <typename Clock, typename Duration>
-        void sleep_until(
+        threads::thread_restart_state sleep_until(
             std::chrono::time_point<Clock, Duration> const& sleep_time,
+            hpx::move_only_function<bool()>&& wait_cond,
             char const* desc =
                 "hpx::execution_base::agent_ref::sleep_until") const
         {
-            sleep_until(hpx::chrono::steady_time_point{sleep_time}, desc);
+            return sleep_until(hpx::chrono::steady_time_point{sleep_time},
+                HPX_MOVE(wait_cond), desc);
         }
 
         [[nodiscard]] agent_base& ref() const noexcept
@@ -87,9 +93,13 @@ namespace hpx::execution_base {
     private:
         agent_base* impl_ = nullptr;
 
-        void sleep_for(hpx::chrono::steady_duration const& sleep_duration,
+        threads::thread_restart_state sleep_for(
+            hpx::chrono::steady_duration const& sleep_duration,
+            hpx::move_only_function<bool()>&& wait_cond,
             char const* desc) const;
-        void sleep_until(hpx::chrono::steady_time_point const& sleep_time,
+        threads::thread_restart_state sleep_until(
+            hpx::chrono::steady_time_point const& sleep_time,
+            hpx::move_only_function<bool()>&& wait_cond,
             char const* desc) const;
 
         friend constexpr bool operator==(

@@ -10,17 +10,18 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/serialization.hpp>
 
 #include <cstdint>
 #include <iosfwd>
 
 namespace hpx::agas {
 
-    struct gva
+    HPX_CXX_EXPORT struct gva
     {
         using component_type = std::int32_t;
         using lva_type = void*;
@@ -129,5 +130,6 @@ namespace hpx::agas {
         HPX_SERIALIZATION_SPLIT_MEMBER()
     };
 
-    HPX_EXPORT std::ostream& operator<<(std::ostream& os, gva const& addr);
+    HPX_CXX_EXPORT HPX_EXPORT std::ostream& operator<<(
+        std::ostream& os, gva const& addr);
 }    // namespace hpx::agas

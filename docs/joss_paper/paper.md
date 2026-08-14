@@ -1,4 +1,4 @@
-﻿---
+---
 title: 'HPX - The C++ Standard Library for Parallelism and Concurrency'
 tags:
  - concurrency
@@ -20,7 +20,7 @@ authors:
  - name: Parsa Amini
    orcid: 0000-0002-6439-8404
    affiliation: "1"
- - name: Agustín Berge
+ - name: Agust�n Berge
    affiliation: "6"
  - name: John Biddiscombe
    orcid: 0000-0002-6552-2833
@@ -363,7 +363,7 @@ int main()
 ```
 
 Please report any bugs or feature requests on the
-[HPX GitHub page](https://github.com/STEllAR-GROUP/hpx).
+[HPX GitHub page](https://github.com/TheHPXProject/hpx).
 
 # Acknowledgments
 

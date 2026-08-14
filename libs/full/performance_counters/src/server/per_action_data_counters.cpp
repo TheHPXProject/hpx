@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2025 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,6 +11,7 @@
     defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
+
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/per_action_data_counter_discoverer.hpp>
@@ -20,7 +21,7 @@
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
     // Discoverer function for per-action parcel data counters
@@ -118,6 +119,6 @@ namespace hpx { namespace performance_counters {
         return per_action_data_counter_creator(
             info, per_action_data_counter_registry::instance(), f, ec);
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters
 
 #endif

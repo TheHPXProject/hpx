@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,15 +15,16 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace components {
+namespace hpx::components {
 
     ///////////////////////////////////////////////////////////////////////////
     /// The \a runtime_support class is the client side representation of a
     /// \a server#runtime_support component
-    class HPX_EXPORT runtime_support : public stubs::runtime_support
+    HPX_CXX_EXPORT class HPX_EXPORT runtime_support
+      : public stubs::runtime_support
     {
     private:
-        typedef stubs::runtime_support base_type;
+        using base_type = stubs::runtime_support;
 
     public:
         /// Create a client side representation for the existing
@@ -151,15 +152,17 @@ namespace hpx { namespace components {
     private:
         hpx::id_type gid_;
     };
-}}    // namespace hpx::components
+}    // namespace hpx::components
 
 ///////////////////////////////////////////////////////////////////////////////
 // initialize runtime interface function wrappers
 namespace hpx::agas {
-    struct runtime_components_init_interface_functions&
+
+    HPX_CXX_EXPORT struct runtime_components_init_interface_functions&
     runtime_components_init();
 }
 
 namespace hpx::components {
-    struct counter_interface_functions& counter_init();
+
+    HPX_CXX_EXPORT struct counter_interface_functions& counter_init();
 }    // namespace hpx::components

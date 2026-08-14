@@ -62,10 +62,10 @@ namespace hpx::util {
             if (nullptr != file_suffix)
                 inipath /= fs::path(file_suffix);
 
-            if (handle_ini_file(ini, inipath.string()))
+            if (handle_ini_file(ini, hpx::filesystem::to_string(inipath)))
             {
                 LBT_(info).format("loaded configuration (${{{}}}): {}", env_var,
-                    inipath.string());
+                    hpx::filesystem::to_string(inipath));
                 return true;
             }
         }
@@ -111,7 +111,8 @@ namespace hpx::util {
 
         // look in the current directory first
         {
-            std::string cwd = fs::current_path().string() + "/.hpx.ini";
+            std::string cwd =
+                hpx::filesystem::to_string(fs::current_path()) + "/.hpx.ini";
             bool result2 = handle_ini_file(ini, cwd);
             if (result2)
             {
@@ -202,9 +203,9 @@ namespace hpx::util {
                     // read and merge the ini file into the main ini hierarchy
                     try
                     {
-                        ini.merge(p.string());
-                        LBT_(info).format(
-                            "loaded configuration: {}", p.string());
+                        ini.merge(hpx::filesystem::to_string(p));
+                        LBT_(info).format("loaded configuration: {}",
+                            hpx::filesystem::to_string(p));
                     }
                     // NOLINTNEXTLINE(bugprone-empty-catch)
                     catch (hpx::exception const& /*e*/)
@@ -275,6 +276,80 @@ namespace hpx::util {
         // incorporate all information from this module's
         // registry into our internal ini object
         ini.parse("<component registry>", ini_data, false, false);
+        return registries;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // iterate over all statically registered plugin modules and construct
+    // default ini settings. Mirrors load_component_factory_static above, but
+    // targets plugin_registry_base and injects `static = 1` into every
+    // generated [hpx.plugins.*] section.
+    std::vector<std::shared_ptr<plugins::plugin_registry_base>>
+    load_plugin_factory_static(util::section& ini, std::string const& name,
+        hpx::util::plugin::get_plugins_list_type const get_factory,
+        error_code& ec)
+    {
+        hpx::util::plugin::static_plugin_factory<
+            plugins::plugin_registry_base> const pf(get_factory);
+        std::vector<std::shared_ptr<plugins::plugin_registry_base>> registries;
+
+        std::vector<std::string> names;
+        pf.get_names(names, ec);
+        if (ec)
+            return registries;
+
+        std::vector<std::string> ini_data;
+        if (names.empty())
+        {
+            // module exports no plugin registries - nothing to inject
+            return registries;
+        }
+
+        registries.reserve(names.size());
+        for (std::string const& s : names)
+        {
+            std::shared_ptr<plugins::plugin_registry_base> registry(
+                pf.create(s, ec));
+            if (ec)
+                continue;
+
+            registry->get_plugin_info(ini_data);
+            registries.push_back(HPX_MOVE(registry));
+        }
+
+        // Inject `static = 1` into every [hpx.plugins.*] section the
+        // registries just emitted. plugin_registry_base::get_plugin_info
+        // doesn't know about static linking, so we mark the sections here
+        // before handing them to the ini parser. Without this, load_plugins
+        // would fall through to the dynamic branch and throw.
+        std::vector<std::string> marked;
+        marked.reserve(ini_data.size() + names.size());
+        bool in_plugin_section = false;
+        bool static_line_pending = false;
+        auto flush_static_line = [&]() {
+            if (static_line_pending)
+            {
+                marked.emplace_back("static = 1");
+                static_line_pending = false;
+            }
+        };
+        for (std::string const& line : ini_data)
+        {
+            std::string trimmed = line;
+            hpx::string_util::trim(trimmed);
+            if (!trimmed.empty() && trimmed.front() == '[')
+            {
+                flush_static_line();
+                in_plugin_section = trimmed.rfind("[hpx.plugins.", 0) == 0;
+                if (in_plugin_section)
+                    static_line_pending = true;
+            }
+            marked.push_back(line);
+        }
+        flush_static_line();
+
+        ini.parse("<plugin registry>", marked, false, false);
+        (void) name;    // retained for parity with component loader
         return registries;
     }
 
@@ -441,7 +516,8 @@ namespace hpx::util {
 
                 // make sure every module name is loaded exactly once, the
                 // first occurrence of a module name is used
-                std::string basename = canonical_curr.filename().string();
+                std::string basename =
+                    hpx::filesystem::to_string(canonical_curr.filename());
                 std::pair<std::map<std::string, fs::path>::iterator, bool> p =
                     basenames.emplace(basename, canonical_curr);
 
@@ -453,8 +529,8 @@ namespace hpx::util {
                 {
                     LRT_(warning).format(
                         "skipping module {} ({}): ignored because of: {}",
-                        basename, canonical_curr.string(),
-                        p.first->second.string());
+                        basename, hpx::filesystem::to_string(canonical_curr),
+                        hpx::filesystem::to_string(p.first->second));
                 }
             }
         }
@@ -474,36 +550,39 @@ namespace hpx::util {
 
         for (auto const& p : libdata)
         {
-            LRT_(info).format("attempting to load: {}", p.first.string());
+            LRT_(info).format(
+                "attempting to load: {}", hpx::filesystem::to_string(p.first));
 
             // get the handle of the library
             error_code ec(throwmode::lightweight);
-            hpx::util::plugin::dll d(p.first.string(), p.second);
+            hpx::util::plugin::dll d(
+                hpx::filesystem::to_string(p.first), p.second);
             d.load_library(ec);
             if (ec)
             {
                 LRT_(info).format("skipping (load_library failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
                 continue;
             }
 
             bool must_keep_loaded = false;
 
             // get the component factory
-            std::string curr_fullname(p.first.parent_path().string());
+            std::string curr_fullname(
+                hpx::filesystem::to_string(p.first.parent_path()));
             load_component_factory(
                 d, ini, curr_fullname, component_registries, p.second, ec);
             if (ec)
             {
                 LRT_(info).format(
                     "skipping (load_component_factory failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
                 ec = error_code(throwmode::lightweight);    // reinit ec
             }
             else
             {
-                LRT_(debug).format(
-                    "load_component_factory succeeded: {}", p.first.string());
+                LRT_(debug).format("load_component_factory succeeded: {}",
+                    hpx::filesystem::to_string(p.first));
                 must_keep_loaded = true;
             }
 
@@ -515,12 +594,12 @@ namespace hpx::util {
             {
                 LRT_(info).format(
                     "skipping (load_plugin_factory failed): {}: {}",
-                    p.first.string(), get_error_what(ec));
+                    hpx::filesystem::to_string(p.first), get_error_what(ec));
             }
             else
             {
-                LRT_(debug).format(
-                    "load_plugin_factory succeeded: {}", p.first.string());
+                LRT_(debug).format("load_plugin_factory succeeded: {}",
+                    hpx::filesystem::to_string(p.first));
 
                 std::copy(tmp_regs.begin(), tmp_regs.end(),
                     std::back_inserter(plugin_registries));

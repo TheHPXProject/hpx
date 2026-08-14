@@ -1,4 +1,4 @@
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,10 +12,10 @@
 
 #include <hpx/modules/runtime_configuration.hpp>
 
-namespace hpx { namespace detail {
+namespace hpx::detail {
 
     HPX_EXPORT int pre_main(runtime_mode);
     HPX_EXPORT void post_main();
-}}    // namespace hpx::detail
+}    // namespace hpx::detail
 
 #endif

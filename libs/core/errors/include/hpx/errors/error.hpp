@@ -140,8 +140,19 @@ namespace hpx {
         migration_needs_retry = 56,    ///< migration failed because of global
                                        ///< race, retry
 
+        stale_state = 57,    ///< The queried state may be stale, e.g. because
+                             ///< no state has been recorded yet or a
+                             ///< preceding notification has not yet been
+                             ///< delivered
+
+        target_fenced = 58,    ///< A dispatch was deliberately and correctly
+                               ///< refused because the target had already
+                               ///< latched a terminal lifecycle event; this
+                               ///< is a final rejection, not a staleness
+                               ///< signal, and should not be retried
+
         /// \cond NOINTERNAL
-        last_error = 57,
+        last_error = 59,
 
         system_error_flag = 0x4000L,
 

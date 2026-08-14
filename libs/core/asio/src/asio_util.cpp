@@ -11,10 +11,12 @@
 // hpxinspect:nodeprecatedname:boost::system::system_error
 
 #include <hpx/config.hpp>
-#include <hpx/asio/asio_util.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
+
+#include <hpx/asio/asio_util.hpp>
+#include <hpx/asio/tcp_util.hpp>
 
 #include <asio/io_context.hpp>
 #include <asio/ip/address_v4.hpp>

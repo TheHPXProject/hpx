@@ -10,12 +10,10 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCEL_COALESCING)
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/preprocessor.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
-#include <hpx/modules/statistics.hpp>
 #include <hpx/modules/synchronization.hpp>
 
-#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/parcel_coalescing/message_buffer.hpp>
 
 #include <cstddef>
@@ -30,6 +28,15 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::plugins::parcel {
 
+    namespace detail {
+
+        struct histogram_collector_base
+        {
+            virtual ~histogram_collector_base() {}
+            virtual void add_value(std::int64_t value) = 0;
+        };
+    }    // namespace detail
+
     struct HPX_LIBRARY_EXPORT coalescing_message_handler
       : parcelset::policies::message_handler
     {
@@ -40,14 +47,15 @@ namespace hpx::plugins::parcel {
             parcelset::policies::message_handler::write_handler_type;
 
         coalescing_message_handler(char const* action_name,
-            parcelset::parcelport* pp, std::size_t num = std::size_t(-1),
-            std::size_t interval = std::size_t(-1));
+            parcelset::parcelport* pp,
+            std::size_t num = static_cast<std::size_t>(-1),
+            std::size_t interval = static_cast<std::size_t>(-1));
 
         void put_parcel(parcelset::locality const& dest, parcelset::parcel p,
-            write_handler_type f);
+            write_handler_type f) override;
 
         bool flush(parcelset::policies::message_handler::flush_mode mode,
-            bool stop_buffering = false);
+            bool stop_buffering = false) override;
 
         void flush_terminate();
 
@@ -98,11 +106,7 @@ namespace hpx::plugins::parcel {
         std::int64_t last_parcel_time_;
 
         // collects percentiles
-        using histogram_collector_type =
-            boost::accumulators::accumulator_set<double,
-                boost::accumulators::features<hpx::util::tag::histogram>>;
-
-        std::unique_ptr<histogram_collector_type> time_between_parcels_;
+        std::unique_ptr<detail::histogram_collector_base> time_between_parcels_;
         std::int64_t histogram_min_boundary_;
         std::int64_t histogram_max_boundary_;
         std::int64_t histogram_num_buckets_;

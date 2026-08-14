@@ -7,7 +7,7 @@
 // Regression test for:
 //   shared_priority_queue_scheduler: possible stale (domain_num, q_index)
 //   after select_active_pu() in schedule_thread() `none` path
-//   https://github.com/STEllAR-GROUP/hpx/issues/6978
+//   https://github.com/TheHPXProject/hpx/issues/6978
 
 #include <hpx/chrono.hpp>
 #include <hpx/future.hpp>

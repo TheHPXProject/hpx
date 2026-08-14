@@ -130,7 +130,7 @@ namespace hpx::util::detail::any {
     };
 
     ////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Char, typename Copyable>
+    template <typename Char, typename Copyable>
     struct fxn_ptr_table<void, void, Char, Copyable>
       : fxn_ptr_table<void, void, void, Copyable>
     {
@@ -158,27 +158,28 @@ namespace hpx::util::detail::any {
         struct streaming_base;
 
     // no streaming support
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct streaming_base<T, std::true_type, void, std::true_type>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct streaming_base<T, std::true_type, void, std::false_type>
     {
     };
-    HPX_CXX_CORE_EXPORT template <typename T>
+
+    template <typename T>
     struct streaming_base<T, std::false_type, void, std::true_type>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct streaming_base<T, std::false_type, void, std::false_type>
     {
     };
 
     // streaming support is enabled
-    HPX_CXX_CORE_EXPORT template <typename T, typename Char>
+    template <typename T, typename Char>
     struct streaming_base<T, std::true_type, Char, std::true_type>
     {
         template <typename Char_>
@@ -198,7 +199,7 @@ namespace hpx::util::detail::any {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T, typename Char>
+    template <typename T, typename Char>
     struct streaming_base<T, std::false_type, Char, std::true_type>
     {
         template <typename Char_>
@@ -218,7 +219,7 @@ namespace hpx::util::detail::any {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T, typename Small, typename Char>
+    template <typename T, typename Small, typename Char>
     struct streaming_base<T, Small, Char, std::false_type>
     {
         template <typename Char_>
@@ -459,7 +460,7 @@ namespace hpx::util::detail::any {
         typename Vtable, typename Char, typename Copyable>
     struct fxn_ptr;
 
-    HPX_CXX_CORE_EXPORT template <typename Vtable>
+    template <typename Vtable>
     struct fxn_ptr<void, void, Vtable, void, std::true_type>
       : fxn_ptr_table<void, void, void, std::true_type>
     {
@@ -482,7 +483,7 @@ namespace hpx::util::detail::any {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Vtable, typename Char>
+    template <typename Vtable, typename Char>
     struct fxn_ptr<void, void, Vtable, Char, std::true_type>
       : fxn_ptr_table<void, void, Char, std::true_type>
     {
@@ -507,7 +508,7 @@ namespace hpx::util::detail::any {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Vtable>
+    template <typename Vtable>
     struct fxn_ptr<void, void, Vtable, void, std::false_type>
       : fxn_ptr_table<void, void, void, std::false_type>
     {
@@ -528,7 +529,7 @@ namespace hpx::util::detail::any {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Vtable, typename Char>
+    template <typename Vtable, typename Char>
     struct fxn_ptr<void, void, Vtable, Char, std::false_type>
       : fxn_ptr_table<void, void, Char, std::false_type>
     {
@@ -835,7 +836,7 @@ namespace hpx::util {
 
     ////////////////////////////////////////////////////////////////////////////
     // specialization for hpx::any supporting streaming
-    HPX_CXX_CORE_EXPORT template <typename Char>    // default is char
+    template <typename Char>    // default is char
     class basic_any<void, void, Char, std::true_type>
     {
     public:
@@ -1189,7 +1190,7 @@ namespace hpx::util {
     };
 
     // specialization for unique_any supporting streaming
-    HPX_CXX_CORE_EXPORT template <typename Char>    // default is char
+    template <typename Char>    // default is char
     class basic_any<void, void, Char, std::false_type>
     {
     public:

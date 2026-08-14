@@ -130,7 +130,7 @@ void test_local_use()
     for (std::uint32_t site = 0; site != num_sites; ++site)
     {
         sites.push_back(hpx::async([=]() {
-            auto const all_reduce_direct_client =
+            auto const all_to_all_direct_client =
                 create_local_communicator(all_to_all_direct_basename,
                     num_sites_arg(num_sites), this_site_arg(site));
 
@@ -138,18 +138,18 @@ void test_local_use()
 
             for (std::uint32_t i = 0; i != 10 * ITERATIONS; ++i)
             {
-                // test functionality based on immediate local result value
-                auto value = site;
+                std::vector<std::uint32_t> values(num_sites);
+                std::fill(values.begin(), values.end(), site + i);
 
-                std::vector<std::uint32_t> r =
-                    all_gather(hpx::launch::sync, all_reduce_direct_client,
-                        value, this_site_arg(value), generation_arg(i + 1));
+                std::vector<std::uint32_t> r = all_to_all(hpx::launch::sync,
+                    all_to_all_direct_client, std::move(values),
+                    this_site_arg(site), generation_arg(i + 1));
 
                 HPX_TEST_EQ(r.size(), num_sites);
 
                 for (std::size_t j = 0; j != r.size(); ++j)
                 {
-                    HPX_TEST_EQ(r[j], j);
+                    HPX_TEST_EQ(r[j], j + i);
                 }
             }
 

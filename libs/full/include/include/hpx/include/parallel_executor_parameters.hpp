@@ -6,6 +6,5 @@
 
 #pragma once
 
-#include <hpx/modules/execution.hpp>
-
+#include <hpx/config.hpp>
 #include <hpx/modules/execution.hpp>

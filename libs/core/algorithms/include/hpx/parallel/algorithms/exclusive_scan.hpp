@@ -292,10 +292,10 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -409,8 +409,8 @@ namespace hpx::parallel {
                     *dst++ = val;
 
                     // MSVC 2015 fails if op is captured by reference
-                    util::loop_n<std::decay_t<ExPolicy>>(dst, part_size - 1,
-                        [=, &val](FwdIter2 it) mutable -> void {
+                    util::const_loop_n<std::decay_t<ExPolicy>>(dst,
+                        part_size - 1, [=, &val](FwdIter2 it) mutable -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
                 };
@@ -459,7 +459,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::exclusive_scan
     HPX_CXX_CORE_EXPORT inline constexpr struct exclusive_scan_t final
-      : hpx::detail::tag_parallel_algorithm<exclusive_scan_t>
+      : hpx::detail::tag_dispatch<exclusive_scan_t,
+            hpx::detail::tag_parallel_algorithm<exclusive_scan_t>>
     {
         template <typename InIter, typename OutIter,
             typename T = typename std::iterator_traits<InIter>::value_type>
@@ -469,8 +470,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<OutIter>
             )
         // clang-format on
-        friend OutIter tag_fallback_invoke(hpx::exclusive_scan_t, InIter first,
-            InIter last, OutIter dest, T init)
+        static OutIter invoke_default(
+            InIter first, InIter last, OutIter dest, T init)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -495,10 +496,9 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
-        tag_fallback_invoke(hpx::exclusive_scan_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest, T init)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -526,8 +526,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend OutIter tag_fallback_invoke(hpx::exclusive_scan_t, InIter first,
-            InIter last, OutIter dest, T init, Op op)
+        static OutIter invoke_default(
+            InIter first, InIter last, OutIter dest, T init, Op op)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -557,10 +557,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
-        tag_fallback_invoke(hpx::exclusive_scan_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest, T init, Op op)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest, T init, Op op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

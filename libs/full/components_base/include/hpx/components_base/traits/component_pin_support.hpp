@@ -1,4 +1,4 @@
-//  Copyright (c) 2018-2024 Hartmut Kaiser
+//  Copyright (c) 2018-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -69,7 +69,7 @@ namespace hpx::traits {
         };
     }    // namespace detail
 
-    template <typename Component, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Component, typename Enable = void>
     struct component_pin_support
     {
         static constexpr bool pin(Component* p) noexcept

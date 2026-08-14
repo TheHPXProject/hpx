@@ -468,6 +468,8 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
@@ -478,14 +480,13 @@ namespace hpx {
 #include <hpx/parallel/util/transfer.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
 
-#include <memory>
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iterator>
 #include <list>
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -587,7 +588,8 @@ namespace hpx::parallel {
 
                         // for some library implementations std::rotate
                         // does not return the new middle point
-                        std::advance(first_it, std::distance(mid, last_it));
+                        std::advance(first_it,
+                            hpx::parallel::detail::distance(mid, last_it));
                         return first_it;
                     },
                     HPX_MOVE(left), HPX_MOVE(right));
@@ -608,12 +610,12 @@ namespace hpx::parallel {
             {
                 if (HPX_INVOKE(f, HPX_INVOKE(proj, *first)))
                 {
-                    *next = HPX_MOVE(*first);
+                    *next = std::ranges::iter_move(first);
                     ++next;
                 }
                 else
                 {
-                    false_values.emplace_back(HPX_MOVE(*first));
+                    false_values.emplace_back(std::ranges::iter_move(first));
                 }
 
                 ++first;
@@ -737,11 +739,7 @@ namespace hpx::parallel {
                 if (first == last)
                     break;
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                 std::ranges::iter_swap(first++, last);
-#else
-                std::iter_swap(first++, last);
-#endif
             }
 
             return first;
@@ -765,11 +763,7 @@ namespace hpx::parallel {
             {
                 if (HPX_INVOKE(pred, HPX_INVOKE(proj, *it)))
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first++, it);
-#else
-                    std::iter_swap(first++, it);
-#endif
                 }
             }
 
@@ -836,7 +830,7 @@ namespace hpx::parallel {
                     RandIter first, RandIter last, std::size_t block_size)
                   : first_(first)
                   , left_(0)
-                  , right_(std::distance(first, last))
+                  , right_(hpx::parallel::detail::distance(first, last))
                   , block_size_(block_size)
                 {
                 }
@@ -917,7 +911,8 @@ namespace hpx::parallel {
                 block_manager(
                     FwdIter first, FwdIter last, std::size_t block_size)
                   : boundary_(first)
-                  , blocks_((std::distance(first, last) + block_size - 1) /
+                  , blocks_((hpx::parallel::detail::distance(first, last) +
+                                block_size - 1) /
                         block_size)
                 {
                     left_ = 0;
@@ -1007,11 +1002,7 @@ namespace hpx::parallel {
             {
                 while (first != last)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first++, dest++);
-#else
-                    std::iter_swap(first++, dest++);
-#endif
                 }
                 return dest;
             }
@@ -1049,12 +1040,8 @@ namespace hpx::parallel {
                     if (right_block.empty())
                         return left_block;
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(
                         left_block.first++, right_block.first++);
-#else
-                    std::iter_swap(left_block.first++, right_block.first++);
-#endif
                 }
             }
 
@@ -1113,12 +1100,8 @@ namespace hpx::parallel {
                     if (right_iter->empty() || right_iter->block_no < 0)
                         break;
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(
                         left_iter->first++, right_iter->first++);
-#else
-                    std::iter_swap(left_iter->first++, right_iter->first++);
-#endif
                 }
 
                 if (left_iter < right_iter ||
@@ -1197,23 +1180,24 @@ namespace hpx::parallel {
 
                 for (std::size_t i = 0; i < counts.size(); ++i)
                 {
-                    counts[i] = std::distance(
+                    counts[i] = hpx::parallel::detail::distance(
                         remaining_blocks[i].first, remaining_blocks[i].last);
                     count_sum += counts[i];
                 }
 
-                remaining_block_indexes[0] =
-                    std::distance(first, remaining_blocks[0].first);
+                remaining_block_indexes[0] = hpx::parallel::detail::distance(
+                    first, remaining_blocks[0].first);
                 for (std::size_t i = 1; i < remaining_block_indexes.size(); ++i)
                 {
                     remaining_block_indexes[i] =
                         remaining_block_indexes[i - 1] + counts[i - 1] +
-                        std::distance(remaining_blocks[i - 1].last,
+                        hpx::parallel::detail::distance(
+                            remaining_blocks[i - 1].last,
                             remaining_blocks[i].first);
                 }
 
                 std::size_t const boundary_end_index =
-                    std::distance(first, boundary);
+                    hpx::parallel::detail::distance(first, boundary);
                 std::size_t boundary_begin_index =
                     boundary_end_index - count_sum;
 
@@ -1298,7 +1282,8 @@ namespace hpx::parallel {
                 std::size_t const cores =
                     hpx::execution::experimental::processing_units_count(
                         policy.parameters(), policy.executor(),
-                        hpx::chrono::null_duration, std::distance(first, last));
+                        hpx::chrono::null_duration,
+                        hpx::parallel::detail::distance(first, last));
 
                 // TODO: Find better block size.
                 constexpr std::size_t block_size =
@@ -1387,7 +1372,7 @@ namespace hpx::parallel {
         }
 
         HPX_CXX_CORE_EXPORT template <typename FwdIter>
-        struct partition : public algorithm<partition<FwdIter>, FwdIter>
+        struct partition : algorithm<partition<FwdIter>, FwdIter>
         {
             constexpr partition() noexcept
               : algorithm<partition, FwdIter>("partition")
@@ -1395,7 +1380,7 @@ namespace hpx::parallel {
             }
 
             template <typename ExPolicy, typename Sent, typename Pred,
-                typename Proj = hpx::identity>
+                typename Proj>
             static constexpr FwdIter sequential(
                 ExPolicy, FwdIter first, Sent last, Pred&& pred, Proj&& proj)
             {
@@ -1405,7 +1390,7 @@ namespace hpx::parallel {
             }
 
             template <typename ExPolicy, typename Sent, typename Pred,
-                typename Proj = hpx::identity>
+                typename Proj>
             static util::detail::algorithm_result_t<ExPolicy, FwdIter> parallel(
                 ExPolicy&& policy, FwdIter first, Sent last, Pred&& pred,
                 Proj&& proj)
@@ -1460,8 +1445,7 @@ namespace hpx::parallel {
         }
 
         HPX_CXX_CORE_EXPORT template <typename IterTuple>
-        struct partition_copy
-          : public algorithm<partition_copy<IterTuple>, IterTuple>
+        struct partition_copy : algorithm<partition_copy<IterTuple>, IterTuple>
         {
             constexpr partition_copy() noexcept
               : algorithm<partition_copy, IterTuple>("partition_copy")
@@ -1524,7 +1508,8 @@ namespace hpx::parallel {
                     std::size_t true_count = 0;
 
                     // MSVC complains if pred or proj is captured by ref below
-                    util::loop_n<std::decay_t<ExPolicy>>(part_begin, part_size,
+                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
+                        part_size,
                         [pred, proj, &true_count](
                             zip_iterator it) mutable -> void {
                             bool f = hpx::invoke(
@@ -1556,7 +1541,8 @@ namespace hpx::parallel {
                     std::advance(dest_true, count_true);
                     std::advance(dest_false, count_false);
 
-                    util::loop_n<std::decay_t<ExPolicy>>(part_begin, part_size,
+                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
+                        part_size,
                         [&dest_true, &dest_false](zip_iterator it) mutable {
                             if (get<1>(*it))
                                 *dest_true++ = get<0>(*it);
@@ -1644,7 +1630,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::stable_partition
     HPX_CXX_CORE_EXPORT inline constexpr struct stable_partition_t final
-      : hpx::detail::tag_parallel_algorithm<stable_partition_t>
+      : hpx::detail::tag_dispatch<stable_partition_t,
+            hpx::detail::tag_parallel_algorithm<stable_partition_t>>
     {
         template <typename BidirIter, typename F>
         // clang-format off
@@ -1653,8 +1640,7 @@ namespace hpx {
                 hpx::is_invocable_v<F, hpx::traits::iter_value_t<BidirIter>>
         )
         // clang-format on
-        friend BidirIter tag_fallback_invoke(
-            hpx::stable_partition_t, BidirIter first, BidirIter last, F f)
+        static BidirIter invoke_default(BidirIter first, BidirIter last, F f)
         {
             static_assert(std::bidirectional_iterator<BidirIter>,
                 "Requires at least bidirectional iterator.");
@@ -1672,9 +1658,8 @@ namespace hpx {
                 hpx::is_invocable_v<F, hpx::traits::iter_value_t<BidirIter>>
         )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, BidirIter>
-        tag_fallback_invoke(hpx::stable_partition_t, ExPolicy&& policy,
-            BidirIter first, BidirIter last, F f)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, BidirIter>
+        invoke_default(ExPolicy&& policy, BidirIter first, BidirIter last, F f)
         {
             static_assert(std::bidirectional_iterator<BidirIter>,
                 "Requires at least bidirectional iterator.");
@@ -1692,7 +1677,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::partition
     HPX_CXX_CORE_EXPORT inline constexpr struct partition_t final
-      : hpx::detail::tag_parallel_algorithm<partition_t>
+      : hpx::detail::tag_dispatch<partition_t,
+            hpx::detail::tag_parallel_algorithm<partition_t>>
     {
         template <typename FwdIter, typename Pred>
         // clang-format off
@@ -1701,8 +1687,7 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::partition_t, FwdIter first, FwdIter last, Pred pred)
+        static FwdIter invoke_default(FwdIter first, FwdIter last, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -1720,9 +1705,9 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
-        tag_fallback_invoke(hpx::partition_t, ExPolicy&& policy, FwdIter first,
-            FwdIter last, Pred pred)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
+        invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -1736,7 +1721,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::partition_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct partition_copy_t final
-      : hpx::detail::tag_parallel_algorithm<partition_copy_t>
+      : hpx::detail::tag_dispatch<partition_copy_t,
+            hpx::detail::tag_parallel_algorithm<partition_copy_t>>
     {
         template <typename FwdIter1, typename FwdIter2, typename FwdIter3,
             typename Pred>
@@ -1748,9 +1734,8 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter1>>
             )
         // clang-format on
-        friend std::pair<FwdIter2, FwdIter3> tag_fallback_invoke(
-            hpx::partition_copy_t, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest_true, FwdIter3 dest_false, Pred pred)
+        static std::pair<FwdIter2, FwdIter3> invoke_default(FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest_true, FwdIter3 dest_false, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -1778,11 +1763,10 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter1>>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             std::pair<FwdIter2, FwdIter3>>
-        tag_fallback_invoke(hpx::partition_copy_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest_true,
-            FwdIter3 dest_false, Pred pred)
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest_true, FwdIter3 dest_false, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");

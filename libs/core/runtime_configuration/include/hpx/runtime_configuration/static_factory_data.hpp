@@ -47,4 +47,21 @@ namespace hpx::components {
         std::string const& instance, util::plugin::get_plugins_list_type& f);
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void init_registry_startup_shutdown(
         static_factory_load_data_type const&);
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Static plugin registries. Mirrors the component side above but keeps
+    // plugin bookkeeping in its own maps so load_plugins_static can iterate
+    // only plugin modules (component loaders instantiate
+    // static_plugin_factory<component_registry_base>, which would cast
+    // incorrectly if plugin entries lived in the component maps).
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT
+        std::vector<static_factory_load_data_type>&
+        get_static_plugin_module_data();
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void init_registry_plugin_module(
+        static_factory_load_data_type const&);
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool get_static_plugin_factory(
+        std::string const& instance, util::plugin::get_plugins_list_type& f);
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void init_registry_plugin_factory(
+        static_factory_load_data_type const&);
 }    // namespace hpx::components

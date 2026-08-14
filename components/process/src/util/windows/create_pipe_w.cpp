@@ -3,7 +3,7 @@
 // Copyright (c) 2009 Boris Schaeling
 // Copyright (c) 2010 Felipe Tanus, Boris Schaeling
 // Copyright (c) 2011, 2012 Jeff Flinn, Boris Schaeling
-// Copyright (c) 2016-2025 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,7 +18,8 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace components { namespace process { namespace windows {
+namespace hpx::components::process::windows {
+
     pipe create_pipe()
     {
         HANDLE handles[2];
@@ -44,7 +45,7 @@ namespace hpx { namespace components { namespace process { namespace windows {
         }
         return make_pipe(handles[0], handles[1]);
     }
-}}}}    // namespace hpx::components::process::windows
+}    // namespace hpx::components::process::windows
 
 #include <hpx/config/warnings_suffix.hpp>
 

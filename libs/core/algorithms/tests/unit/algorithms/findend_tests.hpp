@@ -30,6 +30,38 @@ std::mt19937 gen(seed);
 std::uniform_int_distribution<> dis(3, 102);
 std::uniform_int_distribution<> dist(7, 106);
 
+/// Shared by \a test_find_end1_sender (main case) and \a test_find_end2_sender.
+/// Keeps \c sync_wait formatting consistent so GCC + libstdexec deduce the
+/// completion type reliably (same pattern as the first block in
+/// test_find_end1_sender).
+template <typename IteratorTag, typename LnPolicy, typename ExPolicy>
+void find_end_sender_pipe_compare(std::vector<int> const& c, int const* hf,
+    int const* hl, LnPolicy ln_policy, ExPolicy&& ex_policy)
+{
+    static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
+        "hpx::is_async_execution_policy_v<ExPolicy>");
+
+    using base_iterator = std::vector<int>::const_iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    namespace ex = hpx::execution::experimental;
+    namespace tt = hpx::this_thread::experimental;
+    using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
+
+    auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
+
+    auto snd_result = tt::sync_wait(
+        ex::just(iterator(std::begin(c)), iterator(std::end(c)), hf, hl) |
+        hpx::find_end(HPX_FORWARD(ExPolicy, ex_policy).on(exec)));
+
+    iterator index = hpx::get<0>(snd_result.value());
+
+    iterator test_index =
+        std::find_end(iterator(std::begin(c)), iterator(std::end(c)), hf, hl);
+
+    HPX_TEST(index == test_index);
+}
+
 template <typename IteratorTag>
 void test_find_end1(IteratorTag)
 {
@@ -81,7 +113,6 @@ void test_find_end1(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == test_index);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_find_end1_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -105,21 +136,10 @@ void test_find_end1_sender(
 
     int h[] = {1, 2};
 
+    find_end_sender_pipe_compare<IteratorTag>(
+        c, std::begin(h), std::end(h), ln_policy, ex_policy);
+
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
-
-    {
-        auto snd_result = tt::sync_wait(
-            ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-                std::begin(h), std::end(h)) |
-            hpx::find_end(ex_policy.on(exec)));
-
-        iterator index = hpx::get<0>(*snd_result);
-
-        iterator test_index = std::find_end(iterator(std::begin(c)),
-            iterator(std::end(c)), std::begin(h), std::end(h));
-
-        HPX_TEST(index == test_index);
-    }
 
     {
         // edge case: first2 == end2
@@ -128,7 +148,7 @@ void test_find_end1_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(h), std::begin(h)) |
             hpx::find_end(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(iterator(std::end(c)) == result);
     }
@@ -140,12 +160,11 @@ void test_find_end1_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(h), std::end(h)) |
             hpx::find_end(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST(iterator(std::begin(c)) == result);
     }
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_end1_async(ExPolicy&& p, IteratorTag)
@@ -227,20 +246,12 @@ void test_find_end2(ExPolicy&& policy, IteratorTag)
     HPX_TEST(index == test_index);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_find_end2_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
     static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
         "hpx::is_async_execution_policy_v<ExPolicy>");
-
-    using base_iterator = std::vector<int>::iterator;
-    using iterator = test::test_iterator<base_iterator, IteratorTag>;
-
-    namespace ex = hpx::execution::experimental;
-    namespace tt = hpx::this_thread::experimental;
-    using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
 
     std::vector<int> c(10007);
     // fill vector with random values about 2
@@ -253,20 +264,9 @@ void test_find_end2_sender(
 
     int h[] = {1, 2};
 
-    auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
-
-    auto snd_result =
-        tt::sync_wait(ex::just(iterator(std::begin(c)), iterator(std::end(c)),
-                          std::begin(h), std::end(h)) |
-            hpx::find_end(ex_policy.on(exec)));
-    iterator index = hpx::get<0>(*snd_result);
-
-    iterator test_index = std::find_end(iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h));
-
-    HPX_TEST(index == test_index);
+    find_end_sender_pipe_compare<IteratorTag>(c, std::begin(h), std::end(h),
+        ln_policy, HPX_FORWARD(ExPolicy, ex_policy));
 }
-#endif
 
 template <typename ExPolicy, typename IteratorTag>
 void test_find_end2_async(ExPolicy&& p, IteratorTag)

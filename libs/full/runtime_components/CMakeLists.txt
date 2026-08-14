@@ -19,11 +19,14 @@ set(runtime_components_headers
     hpx/runtime_components/create_component_helpers.hpp
     hpx/runtime_components/derived_component_factory.hpp
     hpx/runtime_components/distributed_metadata_base.hpp
+    hpx/runtime_components/macros.hpp
     hpx/runtime_components/new.hpp
     hpx/runtime_components/server/console_error_sink.hpp
     hpx/runtime_components/server/console_error_sink_singleton.hpp
     hpx/runtime_components/server/console_logging.hpp
 )
+
+set(runtime_components_macro_headers hpx/runtime_components/macros.hpp)
 
 # cmake-format: off
 set(runtime_components_compat_headers
@@ -46,6 +49,13 @@ set(runtime_components_compat_headers
 )
 # cmake-format: on
 
+if(HPX_WITH_CXX26_REFLECTION)
+  list(APPEND runtime_components_headers
+       hpx/runtime_components/reflect_client.hpp
+       hpx/runtime_components/reflect_client_macros.hpp
+  )
+endif()
+
 set(runtime_components_sources
     component_registry.cpp console_error_sink.cpp console_logging.cpp
     server/console_error_sink_server.cpp
@@ -56,7 +66,9 @@ include(HPX_AddModule)
 add_hpx_module(
   full runtime_components
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   HEADERS ${runtime_components_headers}
+  MACRO_HEADERS ${runtime_components_macro_headers}
   SOURCES ${runtime_components_sources}
   COMPAT_HEADERS ${runtime_components_compat_headers}
   DEPENDENCIES hpx_core

@@ -1,6 +1,6 @@
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
 PackageName: HPX
-PackageOriginator: The STE||AR Group (https://stellar-group.org/)
-PackageHomePage: https://github.com/STEllAR-GROUP/hpx
+PackageOriginator: The HPX Project (https://hpx.dev/)
+PackageHomePage: https://github.com/TheHPXProject/hpx
 PackageLicenseDeclared: BSL-1.0

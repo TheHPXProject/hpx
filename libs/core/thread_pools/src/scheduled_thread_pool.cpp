@@ -24,6 +24,9 @@ template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
 template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
     hpx::threads::policies::local_priority_queue_scheduler<std::mutex,
         hpx::threads::policies::lockfree_fifo>>;
+template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
+    hpx::threads::policies::local_priority_queue_scheduler<std::mutex,
+        hpx::threads::policies::lockfree_fifo_double>>;
 
 template class HPX_CORE_EXPORT hpx::threads::detail::scheduled_thread_pool<
     hpx::threads::policies::static_priority_queue_scheduler<>>;

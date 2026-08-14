@@ -81,6 +81,19 @@ void find_bad_alloc_test()
     test_find_bad_alloc<std::forward_iterator_tag>();
 }
 
+////////////////////////////////////////////////////////////////////////////
+template <typename IteratorTag>
+void test_find_cross_policy()
+{
+    test_find_cross_policy(IteratorTag());
+}
+
+void find_cross_policy_test()
+{
+    test_find_cross_policy<std::random_access_iterator_tag>();
+    test_find_cross_policy<std::forward_iterator_tag>();
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -92,6 +105,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     find_test();
     find_exception_test();
     find_bad_alloc_test();
+    find_cross_policy_test();
     return hpx::local::finalize();
 }
 

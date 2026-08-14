@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,20 +11,19 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 #include <utility>
 
-namespace hpx { namespace actions {
+namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Cont, typename F>
+    HPX_CXX_EXPORT template <typename Cont, typename F>
     struct continuation2_impl
     {
     private:
-        using cont_type = typename std::decay<Cont>::type;
-        using function_type = typename std::decay<F>::type;
+        using cont_type = std::decay_t<Cont>;
+        using function_type = std::decay_t<F>;
 
     public:
         continuation2_impl() = default;
@@ -40,9 +39,8 @@ namespace hpx { namespace actions {
         virtual ~continuation2_impl() = default;
 
         template <typename T>
-        typename util::invoke_result<function_type, hpx::id_type,
-            typename util::invoke_result<cont_type, hpx::id_type,
-                T>::type>::type
+        util::invoke_result_t<function_type, hpx::id_type,
+            util::invoke_result_t<cont_type, hpx::id_type, T>>
         operator()(hpx::id_type const& lco, T&& t) const
         {
             using hpx::placeholders::_2;
@@ -52,9 +50,8 @@ namespace hpx { namespace actions {
             // Unfortunately we need to default construct the return value,
             // this possibly imposes an additional restriction of return types.
             using result_type =
-                typename util::invoke_result<function_type, hpx::id_type,
-                    typename util::invoke_result<cont_type, hpx::id_type,
-                        T>::type>::type;
+                util::invoke_result_t<function_type, hpx::id_type,
+                    util::invoke_result_t<cont_type, hpx::id_type, T>>;
             return result_type();
         }
 
@@ -75,4 +72,4 @@ namespace hpx { namespace actions {
         function_type f_;
         // set_value action  (default: set_lco_value_continuation)
     };
-}}    // namespace hpx::actions
+}    // namespace hpx::actions

@@ -37,9 +37,7 @@ inline std::mt19937 gen(seed);
 struct disable_stealing_parameter
 {
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_begin_execution_t,
-        disable_stealing_parameter, Executor&&)
+    void mark_begin_execution(Executor&&)
     {
         hpx::threads::add_remove_scheduler_mode(
             hpx::threads::policies::scheduler_mode::enable_stealing,
@@ -47,18 +45,14 @@ struct disable_stealing_parameter
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_of_scheduling_t,
-        disable_stealing_parameter, Executor&&)
+    void mark_end_of_scheduling(Executor&&)
     {
         hpx::threads::remove_scheduler_mode(
             hpx::threads::policies::scheduler_mode::enable_stealing);
     }
 
     template <typename Executor>
-    friend void tag_override_invoke(
-        hpx::execution::experimental::mark_end_execution_t,
-        disable_stealing_parameter, Executor&&)
+    void mark_end_execution(Executor&&)
     {
         hpx::threads::add_remove_scheduler_mode(
             hpx::threads::policies::scheduler_mode::enable_idle_backoff,

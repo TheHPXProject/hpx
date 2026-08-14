@@ -1,0 +1,75 @@
+# Copyright (c) 2026 Arpit Khandelwal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Cancel Workflows
+
+on:
+  pull_request_target:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+jobs:
+  cancel-all:
+    # Trigger if label 'cancel-ci' is added OR if a comment contains '/cancel-ci'
+    if: |
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'cancel-ci') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/cancel-ci'))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Authorize and Extract PR Number
+        id: context
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          AUTHOR_ASSOC: ${{ github.event.comment.author_association }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          PR_AUTHOR_ID: ${{ github.event.issue.user.id }}
+        run: |
+          if [ "$EVENT_NAME" == "issue_comment" ]; then
+            # Authorize: Maintainers (OWNER, MEMBER, COLLABORATOR) or PR Author
+            if [[ "$AUTHOR_ASSOC" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]] || [ "$COMMENT_USER_ID" == "$PR_AUTHOR_ID" ]; then
+              echo "User authorized."
+            else
+              echo "Error: Unauthorized user attempted to cancel CI."
+              exit 1
+            fi
+            echo "pr_number=${{ github.event.issue.number }}" >> "$GITHUB_OUTPUT"
+          else
+            # Labels addition is already restricted by GitHub to those with write access
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cancel Workflow Runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.context.outputs.pr_number }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          echo "Cancelling runs for PR #$PR_NUMBER..."
+
+          # Get all runs for the PR that are NOT completed, excluding this current run
+          RUN_IDS=$(gh run list --pr "$PR_NUMBER" --limit 200 --json databaseId,status --jq '.[] | select(.status != "completed" and .databaseId != (env.CURRENT_RUN_ID | tonumber)) | .databaseId')
+
+          if [ -z "$RUN_IDS" ]; then
+            echo "No active runs found to cancel."
+          else
+            echo "Found the following run IDs to cancel:"
+            echo "$RUN_IDS"
+            for ID in $RUN_IDS; do
+              echo "Cancelling run $ID..."
+              gh run cancel "$ID" || echo "Failed to cancel run $ID (it might have already finished)"
+            done
+          fi
+
+          # Remove label if triggered by label
+          if [ "${{ github.event_name }}" == "pull_request_target" ]; then
+            echo "Removing 'cancel-ci' label..."
+            gh pr edit "$PR_NUMBER" --remove-label "cancel-ci" || echo "Failed to remove label"
+          fi

@@ -105,7 +105,7 @@ add_hpx_module(
     hpx_datastructures
     hpx_debugging
     hpx_errors
-    hpx_itt_notify
+    hpx_tracing
     hpx_preprocessor
     hpx_serialization
     hpx_tag_invoke

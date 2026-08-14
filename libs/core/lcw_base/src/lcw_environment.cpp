@@ -187,7 +187,7 @@ namespace hpx { namespace util {
         LCT_init();
         // initialize the log context
 #ifdef HPX_HAVE_PARCELPORT_LCW_LOG
-        const char* const log_levels[] = {"none", "profile", "debug"};
+        char const* const log_levels[] = {"none", "profile", "debug"};
         log_ctx = LCT_log_ctx_alloc(log_levels,
             sizeof(log_levels) / sizeof(log_levels[0]), 0, "hpx_lcw",
             getenv("HPX_LCW_LOG_OUTFILE"), getenv("HPX_LCW_LOG_LEVEL"),

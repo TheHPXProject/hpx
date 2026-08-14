@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -6,21 +6,20 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/basic_action.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/runtime_local.hpp>
+
 #include <hpx/runtime_components/server/console_error_sink.hpp>
 #include <hpx/runtime_components/server/console_error_sink_singleton.hpp>
 
 #include <exception>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // implementation of this console error sink
@@ -29,7 +28,7 @@ namespace hpx { namespace components { namespace server {
         // dispatch this error to registered functions
         get_error_dispatcher()(hpx::diagnostic_information(e));
     }
-}}}    // namespace hpx::components::server
+}    // namespace hpx::components::server
 
 ///////////////////////////////////////////////////////////////////////////////
 // This must be in global namespace

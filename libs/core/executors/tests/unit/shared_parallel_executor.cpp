@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2025 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,7 +9,6 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <algorithm>
 #include <cstdlib>
 #include <iterator>
 #include <numeric>
@@ -21,23 +20,24 @@
 ///////////////////////////////////////////////////////////////////////////////
 struct shared_parallel_executor
 {
-private:
     template <typename F, typename... Ts>
-    friend hpx::shared_future<hpx::util::invoke_result_t<F, Ts...>> tag_invoke(
-        hpx::parallel::execution::async_execute_t,
-        shared_parallel_executor const&, F&& f, Ts&&... ts)
+    hpx::shared_future<hpx::util::invoke_result_t<F, Ts...>> async_execute(
+        F&& f, Ts&&... ts) const
     {
-        return hpx::async(std::forward<F>(f), std::forward<Ts>(ts)...);
+        auto policy = hpx::launch::async;
+        auto hint = policy.hint();
+        hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+        policy.set_hint(hint);
+
+        return hpx::async(policy, std::forward<F>(f), std::forward<Ts>(ts)...);
     }
 };
 
-namespace hpx::execution::experimental {
-
-    template <>
-    struct is_two_way_executor<shared_parallel_executor> : std::true_type
-    {
-    };
-}    // namespace hpx::execution::experimental
+template <>
+struct hpx::execution::experimental::is_two_way_executor<
+    shared_parallel_executor> : std::true_type
+{
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 hpx::thread::id test(int passed_through)
@@ -61,14 +61,14 @@ void test_async()
 
     executor exec;
 
-    hpx::shared_future<hpx::thread::id> fut =
+    hpx::shared_future<hpx::thread::id> const fut =
         hpx::parallel::execution::async_execute(exec, &test, 42);
 
     HPX_TEST_NEQ(fut.get(), hpx::this_thread::get_id());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-void bulk_test(int, hpx::thread::id tid, int passed_through)    //-V813
+void bulk_test(int, hpx::thread::id const& tid, int passed_through)    //-V813
 {
     HPX_TEST_NEQ(tid, hpx::this_thread::get_id());
     HPX_TEST_EQ(passed_through, 42);
@@ -134,7 +134,7 @@ void test_async_void()
     using executor = shared_parallel_executor;
 
     executor exec;
-    hpx::shared_future<void> fut =
+    hpx::shared_future<void> const fut =
         hpx::parallel::execution::async_execute(exec, &void_test, 42);
     fut.get();
 }
@@ -155,7 +155,7 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    // By default this test should run on all available cores
+    // By default, this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
 
     // Initialize and run HPX

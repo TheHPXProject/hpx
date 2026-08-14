@@ -228,6 +228,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/adjacent_difference.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -349,12 +350,12 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::adjacent_difference
     HPX_CXX_CORE_EXPORT inline constexpr struct adjacent_difference_t final
-      : hpx::detail::tag_parallel_algorithm<adjacent_difference_t>
+      : hpx::detail::tag_dispatch<adjacent_difference_t,
+            hpx::detail::tag_parallel_algorithm<adjacent_difference_t>>
     {
-    private:
         template <std::input_iterator FwdIter1,
             std::output_iterator<hpx::traits::iter_value_t<FwdIter1>> FwdIter2>
-        friend FwdIter2 tag_fallback_invoke(hpx::adjacent_difference_t,
+        static FwdIter2 invoke_default(
             FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return hpx::parallel::detail::adjacent_difference<FwdIter2>().call(
@@ -364,7 +365,7 @@ namespace hpx {
 
         template <hpx::execution_policy ExPolicy,
             std::forward_iterator FwdIter1, std::forward_iterator FwdIter2>
-        friend decltype(auto) tag_fallback_invoke(hpx::adjacent_difference_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return hpx::parallel::detail::adjacent_difference<FwdIter2>().call(
@@ -375,7 +376,7 @@ namespace hpx {
         template <std::input_iterator FwdIter1,
             std::output_iterator<hpx::traits::iter_value_t<FwdIter1>> FwdIter2,
             typename Op>
-        friend FwdIter2 tag_fallback_invoke(hpx::adjacent_difference_t,
+        static FwdIter2 invoke_default(
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, Op op)
         {
             return hpx::parallel::detail::adjacent_difference<FwdIter2>().call(
@@ -386,9 +387,8 @@ namespace hpx {
         template <hpx::execution_policy ExPolicy,
             std::forward_iterator FwdIter1, std::forward_iterator FwdIter2,
             typename Op>
-        friend decltype(auto) tag_fallback_invoke(hpx::adjacent_difference_t,
-            ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest,
-            Op op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Op op)
         {
             return hpx::parallel::detail::adjacent_difference<FwdIter2>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, dest, HPX_MOVE(op));

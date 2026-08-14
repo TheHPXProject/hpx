@@ -284,12 +284,12 @@ namespace hpx::parallel::util {
         {
             if (cmp(*rbx.begin(), *rx2.begin()))
             {
-                *rx1.begin() = HPX_MOVE(*rbx.begin());
+                *rx1.begin() = std::ranges::iter_move(rbx.begin());
                 rbx = range<Iter2, Sent2>(rbx.begin() + 1, rbx.end());
             }
             else
             {
-                *rx1.begin() = HPX_MOVE(*rx2.begin());
+                *rx1.begin() = std::ranges::iter_move(rx2.begin());
                 rx2 = range<Iter2, Sent2>(rx2.begin() + 1, rx2.end());
             }
             rx1 = range<Iter1, Sent1>(rx1.begin() + 1, rx1.end());

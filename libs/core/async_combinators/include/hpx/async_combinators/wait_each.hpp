@@ -6,8 +6,8 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file lcos/wait_each.hpp
-/// \page hpx::wait_each
+/// \file wait_each.hpp
+/// \page hpx::wait_each, hpx::wait_each_nothrow, hpx::wait_each_n, hpx::wait_each_n_nothrow
 /// \headerfile hpx/future.hpp
 
 #pragma once
@@ -122,7 +122,6 @@ namespace hpx {
 #include <hpx/async_combinators/when_each.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -135,19 +134,15 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct wait_each_nothrow_t final
-      : hpx::functional::tag<wait_each_nothrow_t>
     {
-    private:
         template <typename F, typename Future>
-        friend void tag_invoke(
-            wait_each_nothrow_t, F&& f, std::vector<Future>& values)
+        void operator()(F&& f, std::vector<Future>& values) const
         {
             hpx::when_each(HPX_FORWARD(F, f), values).wait();
         }
 
         template <typename F, typename Future>
-        friend void tag_invoke(
-            wait_each_nothrow_t, F&& f, std::vector<Future>&& values)
+        void operator()(F&& f, std::vector<Future>&& values) const
         {
             hpx::when_each(HPX_FORWARD(F, f), HPX_MOVE(values)).wait();
         }
@@ -155,14 +150,13 @@ namespace hpx {
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend void tag_invoke(
-            wait_each_nothrow_t, F&& f, Iterator begin, Iterator end)
+        void operator()(F&& f, Iterator begin, Iterator end) const
         {
             hpx::when_each(HPX_FORWARD(F, f), begin, end).wait();
         }
 
         template <typename F>
-        friend void tag_invoke(wait_each_nothrow_t, F&& f)
+        void operator()(F&& f) const
         {
             hpx::when_each(HPX_FORWARD(F, f)).wait();
         }
@@ -171,7 +165,7 @@ namespace hpx {
             typename Enable =
                 std::enable_if_t<!traits::is_future_v<std::decay_t<F>> &&
                     util::all_of_v<traits::is_future<Ts>...>>>
-        friend void tag_invoke(wait_each_nothrow_t, F&& f, Ts&&... ts)
+        void operator()(F&& f, Ts&&... ts) const
         {
             hpx::when_each(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...).wait();
         }
@@ -179,11 +173,9 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct wait_each_t final
-      : hpx::functional::tag<wait_each_t>
     {
-    private:
         template <typename F, typename Future>
-        friend void tag_invoke(wait_each_t, F&& f, std::vector<Future>& values)
+        void operator()(F&& f, std::vector<Future>& values) const
         {
             auto result = hpx::when_each(HPX_FORWARD(F, f), values);
             result.wait();
@@ -191,7 +183,7 @@ namespace hpx {
         }
 
         template <typename F, typename Future>
-        friend void tag_invoke(wait_each_t, F&& f, std::vector<Future>&& values)
+        void operator()(F&& f, std::vector<Future>&& values) const
         {
             auto result = hpx::when_each(HPX_FORWARD(F, f), HPX_MOVE(values));
             result.wait();
@@ -201,7 +193,7 @@ namespace hpx {
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend void tag_invoke(wait_each_t, F&& f, Iterator begin, Iterator end)
+        void operator()(F&& f, Iterator begin, Iterator end) const
         {
             auto result = hpx::when_each(HPX_FORWARD(F, f), begin, end);
             result.wait();
@@ -209,7 +201,7 @@ namespace hpx {
         }
 
         template <typename F>
-        friend void tag_invoke(wait_each_t, F&& f)
+        void operator()(F&& f) const
         {
             auto result = hpx::when_each(HPX_FORWARD(F, f));
             result.wait();
@@ -220,7 +212,7 @@ namespace hpx {
             typename Enable =
                 std::enable_if_t<!traits::is_future_v<std::decay_t<F>> &&
                     util::all_of_v<traits::is_future<Ts>...>>>
-        friend void tag_invoke(wait_each_t, F&& f, Ts&&... ts)
+        void operator()(F&& f, Ts&&... ts) const
         {
             auto result =
                 hpx::when_each(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
@@ -231,14 +223,11 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct wait_each_n_nothrow_t final
-      : hpx::functional::tag<wait_each_n_nothrow_t>
     {
-    private:
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend void tag_invoke(
-            wait_each_n_nothrow_t, F&& f, Iterator begin, std::size_t count)
+        void operator()(F&& f, Iterator begin, std::size_t count) const
         {
             hpx::when_each_n(HPX_FORWARD(F, f), begin, count).wait();
         }
@@ -246,14 +235,11 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct wait_each_n_t final
-      : hpx::functional::tag<wait_each_n_t>
     {
-    private:
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend void tag_invoke(
-            wait_each_n_t, F&& f, Iterator begin, std::size_t count)
+        void operator()(F&& f, Iterator begin, std::size_t count) const
         {
             auto result = hpx::when_each_n(HPX_FORWARD(F, f), begin, count);
             result.wait();

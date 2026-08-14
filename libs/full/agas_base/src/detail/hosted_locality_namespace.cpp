@@ -9,8 +9,6 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
-#include <hpx/agas_base/detail/hosted_locality_namespace.hpp>
-#include <hpx/agas_base/server/locality_namespace.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/naming_base.hpp>
@@ -18,12 +16,15 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <hpx/agas_base/detail/hosted_locality_namespace.hpp>
+#include <hpx/agas_base/server/locality_namespace.hpp>
+
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
+namespace hpx::agas::detail {
 
     hosted_locality_namespace::hosted_locality_namespace(naming::address addr)
       : gid_(naming::gid_type(agas::locality_ns_msb, agas::locality_ns_lsb),
@@ -155,6 +156,6 @@ namespace hpx { namespace agas { namespace detail {
         return hpx::make_ready_future(std::uint32_t{});
 #endif
     }
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail
 
 #endif

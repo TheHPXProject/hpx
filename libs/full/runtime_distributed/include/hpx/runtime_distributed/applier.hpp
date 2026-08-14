@@ -1,5 +1,5 @@
 //  Copyright (c) 2007-2008 Anshul Tandon
-//  Copyright (c) 2007-2012 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -9,14 +9,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/runtime_distributed/applier_fwd.hpp>    // this needs to go first
-
 #include <hpx/assert.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/threadmanager.hpp>
-#include <hpx/parcelset/parcel.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
+
+#include <hpx/runtime_distributed/applier_fwd.hpp>    // this needs to go first
 
 #include <cstddef>
 #include <cstdint>
@@ -24,15 +23,19 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace applier {
+namespace hpx::applier {
+
     /// The \a applier class is used to decide whether a particular action
     /// has to be issued on a local or a remote resource. If the target
     /// component is local a new \a thread will be created, if the target is
     /// remote a parcel will be sent.
-    class HPX_EXPORT applier
+    HPX_CXX_EXPORT class HPX_EXPORT applier
     {
     public:
-        HPX_NON_COPYABLE(applier);
+        applier(applier const&) = delete;
+        applier(applier&&) = delete;
+        applier& operator=(applier const&) = delete;
+        applier& operator=(applier&&) = delete;
 
     public:
         // constructor
@@ -154,6 +157,6 @@ namespace hpx { namespace applier {
         threads::threadmanager* thread_manager_;
         hpx::id_type runtime_support_id_;
     };
-}}    // namespace hpx::applier
+}    // namespace hpx::applier
 
 #include <hpx/config/warnings_suffix.hpp>

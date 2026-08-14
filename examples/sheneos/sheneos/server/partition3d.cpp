@@ -49,7 +49,7 @@ namespace sheneos { namespace server {
         if (dim.offset_ + dim.count_ < dim.size_ - 2)
         {
             dim_[d].count_ += 2;
-            ++count;
+            count += 2;
         }
 
         // Read the full data range.

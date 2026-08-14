@@ -18,7 +18,6 @@
 
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -97,29 +96,45 @@ namespace hpx::resiliency::experimental {
         }
     }    // namespace detail
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function \a f exactly \a n times. Verify the
-    // result of those invocations using the given predicate \a pred. Run all
-    // the valid results against a user provided voting function. Return the
-    // valid output.
+    /// \brief ADL hook for async_replicate_vote_validate CPO.
+    ///
+    /// Asynchronously launches \a f exactly \a n times, validates results
+    /// with \a pred, then runs valid results through \a vote.
+    ///
+    /// \param tag   CPO tag (async_replicate_vote_validate_t).
+    /// \param n     Number of replicated invocations.
+    /// \param vote  Voting function selecting among valid results.
+    /// \param pred  Predicate validating each invocation result.
+    /// \param f     Callable to invoke asynchronously.
+    /// \param ts    Arguments forwarded to \a f.
+    ///
+    /// \returns future with the voted-upon result.
     HPX_CXX_CORE_EXPORT template <typename Vote, typename Pred, typename F,
         typename... Ts>
     hpx::future<hpx::util::detail::invoke_deferred_result_t<F, Ts...>>
-    tag_invoke(async_replicate_vote_validate_t, std::size_t n, Vote&& vote,
+    hpx_invoke(async_replicate_vote_validate_t, std::size_t n, Vote&& vote,
         Pred&& pred, F&& f, Ts&&... ts)
     {
         return detail::async_replicate_vote_validate(n, HPX_FORWARD(Vote, vote),
             HPX_FORWARD(Pred, pred), HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function \a f exactly \a n times. Verify the
-    // result of those invocations using the given predicate \a pred. Run all
-    // the valid results against a user provided voting function. Return the
-    // valid output.
+    /// \brief ADL hook for async_replicate_vote CPO.
+    ///
+    /// Asynchronously launches \a f exactly \a n times, runs valid
+    /// results through \a vote. Validation uses the default exception
+    /// check.
+    ///
+    /// \param tag   CPO tag (async_replicate_vote_t).
+    /// \param n     Number of replicated invocations.
+    /// \param vote  Voting function selecting among valid results.
+    /// \param f     Callable to invoke asynchronously.
+    /// \param ts    Arguments forwarded to \a f.
+    ///
+    /// \returns future with the voted-upon result.
     HPX_CXX_CORE_EXPORT template <typename Vote, typename F, typename... Ts>
     hpx::future<hpx::util::detail::invoke_deferred_result_t<F, Ts...>>
-    tag_invoke(
+    hpx_invoke(
         async_replicate_vote_t, std::size_t n, Vote&& vote, F&& f, Ts&&... ts)
     {
         return detail::async_replicate_vote_validate(n, HPX_FORWARD(Vote, vote),
@@ -127,13 +142,21 @@ namespace hpx::resiliency::experimental {
             HPX_FORWARD(Ts, ts)...);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function \a f exactly \a n times. Verify the
-    // result of those invocations using the given predicate \a pred. Return the
-    // first valid result.
+    /// \brief ADL hook for async_replicate_validate CPO.
+    ///
+    /// Asynchronously launches \a f exactly \a n times, validates results
+    /// with \a pred. Returns the first valid result.
+    ///
+    /// \param tag   CPO tag (async_replicate_validate_t).
+    /// \param n     Number of replicated invocations.
+    /// \param pred  Predicate validating each invocation result.
+    /// \param f     Callable to invoke asynchronously.
+    /// \param ts    Arguments forwarded to \a f.
+    ///
+    /// \returns future with the first valid result.
     HPX_CXX_CORE_EXPORT template <typename Pred, typename F, typename... Ts>
     hpx::future<hpx::util::detail::invoke_deferred_result_t<F, Ts...>>
-    tag_invoke(async_replicate_validate_t, std::size_t n, Pred&& pred, F&& f,
+    hpx_invoke(async_replicate_validate_t, std::size_t n, Pred&& pred, F&& f,
         Ts&&... ts)
     {
         return detail::async_replicate_vote_validate(n,
@@ -141,13 +164,20 @@ namespace hpx::resiliency::experimental {
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given function \a f exactly \a n times. Verify the
-    // result of those invocations by checking for exception. Return the first
-    // valid result.
+    /// \brief ADL hook for async_replicate CPO.
+    ///
+    /// Asynchronously launches \a f exactly \a n times. Validates by
+    /// checking for exceptions. Returns the first valid result.
+    ///
+    /// \param tag  CPO tag (async_replicate_t).
+    /// \param n    Number of replicated invocations.
+    /// \param f    Callable to invoke asynchronously.
+    /// \param ts   Arguments forwarded to \a f.
+    ///
+    /// \returns future with the first non-throwing result.
     HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
     hpx::future<hpx::util::detail::invoke_deferred_result_t<F, Ts...>>
-    tag_invoke(async_replicate_t, std::size_t n, F&& f, Ts&&... ts)
+    hpx_invoke(async_replicate_t, std::size_t n, F&& f, Ts&&... ts)
     {
         return detail::async_replicate_vote_validate(n,
             detail::replicate_voter{}, detail::replicate_validator{},

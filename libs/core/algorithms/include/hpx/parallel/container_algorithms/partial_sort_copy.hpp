@@ -335,6 +335,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/partial_sort_copy.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -352,9 +353,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::partial_sort_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct partial_sort_copy_t final
-      : hpx::detail::tag_parallel_algorithm<partial_sort_copy_t>
+      : hpx::detail::tag_dispatch<partial_sort_copy_t,
+            hpx::detail::tag_parallel_algorithm<partial_sort_copy_t>>
     {
-    private:
         template <typename InIter, typename Sent1, typename RandIter,
             typename Sent2, typename Comp = ranges::less,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -373,10 +374,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend partial_sort_copy_result<InIter, RandIter> tag_fallback_invoke(
-            hpx::ranges::partial_sort_copy_t, InIter first, Sent1 last,
-            RandIter r_first, Sent2 r_last, Comp comp = Comp(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static partial_sort_copy_result<InIter, RandIter> invoke_default(
+            InIter first, Sent1 last, RandIter r_first, Sent2 r_last,
+            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(
                 std::input_iterator<InIter>, "Requires an input iterator.");
@@ -410,11 +410,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             partial_sort_copy_result<FwdIter, RandIter>>
-        tag_fallback_invoke(hpx::ranges::partial_sort_copy_t, ExPolicy&& policy,
-            FwdIter first, Sent1 last, RandIter r_first, Sent2 r_last,
-            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent1 last,
+            RandIter r_first, Sent2 r_last, Comp comp = Comp(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(
                 std::forward_iterator<FwdIter>, "Requires a forward iterator.");
@@ -444,11 +444,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend partial_sort_copy_result<std::ranges::iterator_t<Rng1>,
+        static partial_sort_copy_result<std::ranges::iterator_t<Rng1>,
             std::ranges::iterator_t<Rng2>>
-        tag_fallback_invoke(hpx::ranges::partial_sort_copy_t, Rng1&& rng1,
-            Rng2&& rng2, Comp comp = Comp(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        invoke_default(Rng1&& rng1, Rng2&& rng2, Comp comp = Comp(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;
@@ -485,12 +484,11 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             partial_sort_copy_result<std::ranges::iterator_t<Rng1>,
                 std::ranges::iterator_t<Rng2>>>
-        tag_fallback_invoke(hpx::ranges::partial_sort_copy_t, ExPolicy&& policy,
-            Rng1&& rng1, Rng2&& rng2, Comp comp = Comp(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;

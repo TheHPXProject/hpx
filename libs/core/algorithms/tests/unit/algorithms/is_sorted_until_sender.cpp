@@ -49,7 +49,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(*snd_result);
+        iterator until = hpx::get<0>(snd_result.value());
 
         HPX_TEST(until == iterator(std::end(c)));
     }
@@ -60,7 +60,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(*snd_result);
+        iterator until = hpx::get<0>(snd_result.value());
 
         HPX_TEST(until == iterator(std::begin(c)));
     }
@@ -71,7 +71,7 @@ void test_is_sorted_until_sender(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_sorted_until(ex_policy.on(exec)));
 
-        iterator until = hpx::get<0>(*snd_result);
+        iterator until = hpx::get<0>(snd_result.value());
 
         HPX_TEST(until == iterator(++std::begin(c)));
     }
@@ -96,7 +96,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     is_sorted_until_sender_test<std::forward_iterator_tag>();
     is_sorted_until_sender_test<std::random_access_iterator_tag>();

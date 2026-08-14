@@ -8,7 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/executors.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
 #include <algorithm>
@@ -26,12 +26,11 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT struct sequential_generate_t
-      : hpx::functional::detail::tag_fallback<sequential_generate_t>
+      : hpx::detail::tag_dispatch<sequential_generate_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename Sent, typename F>
-        friend constexpr Iter tag_fallback_invoke(
-            sequential_generate_t, ExPolicy&&, Iter first, Sent last, F&& f)
+        static constexpr Iter invoke_default(
+            ExPolicy&&, Iter first, Sent last, F&& f)
         {
             return sequential_generate_helper(first, last, HPX_FORWARD(F, f));
         }
@@ -60,11 +59,10 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT struct sequential_generate_n_t
-      : hpx::functional::detail::tag_fallback<sequential_generate_n_t>
+      : hpx::detail::tag_dispatch<sequential_generate_n_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename F>
-        friend constexpr Iter tag_fallback_invoke(sequential_generate_n_t,
+        static constexpr Iter invoke_default(
             ExPolicy&&, Iter first, std::size_t count, F&& f)
         {
             return sequential_generate_n_helper(

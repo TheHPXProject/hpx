@@ -74,13 +74,18 @@ void print_results(double w_M)
 
     std::uint64_t const os_thread_count = hpx::get_os_thread_count();
 
-    double w_T = iterations * payload * os_thread_count * 1e-6;
+    double w_T = static_cast<double>(iterations) *
+        static_cast<double>(payload) * static_cast<double>(os_thread_count) *
+        1e-6;
     //     double E = w_T/w_M;
     double O = w_M - w_T;
 
     hpx::util::format_to(cout, "{} {} {} {} {} {:.14g}", payload,
         os_thread_count, contexts, iterations, seed,
-        (O / (2 * iterations * os_thread_count)) * 1e9);
+        (O /
+            (2.0 * static_cast<double>(iterations) *
+                static_cast<double>(os_thread_count))) *
+            1e9);
 
     cout << "\n";
 }
@@ -130,14 +135,14 @@ double perform_2n_iterations()
     // Warmup
     for (std::uint64_t i = 0; i < iterations; ++i)
     {
-        (*coroutines[indices[i]])(wait_signaled);
+        (*coroutines[indices[i]])(hpx::threads::thread_restart_state::signaled);
     }
 
     hpx::chrono::high_resolution_timer t;
 
     for (std::uint64_t i = 0; i < iterations; ++i)
     {
-        (*coroutines[indices[i]])(wait_signaled);
+        (*coroutines[indices[i]])(hpx::threads::thread_restart_state::signaled);
     }
 
     double elapsed = t.elapsed();

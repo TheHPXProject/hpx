@@ -12,8 +12,8 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx.hpp>
 
-#include <hpx/components_base/stub_base.hpp>
 #include <hpx/include/async.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include "../server/simple_refcnt_checker.hpp"
 

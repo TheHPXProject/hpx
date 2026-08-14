@@ -44,8 +44,12 @@ add_library(
 )
 
 set_target_properties(hpx_wrap PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(hpx_wrap PRIVATE hpx_full)
-target_link_libraries(hpx_wrap PRIVATE hpx_init)
+if(HPX_WITH_DISTRIBUTED_RUNTIME)
+  target_link_libraries(hpx_wrap PRIVATE hpx_full)
+  target_link_libraries(hpx_wrap PRIVATE hpx_init)
+else()
+  target_link_libraries(hpx_wrap PRIVATE hpx_core)
+endif()
 target_link_libraries(hpx_wrap PRIVATE hpx_private_flags)
 target_compile_definitions(hpx_wrap PRIVATE HPX_LIBRARY_EXPORTS)
 target_include_directories(
@@ -102,8 +106,12 @@ if(NOT MSVC)
                          ${config_header}
   )
   set_target_properties(hpx_auto_wrap PROPERTIES POSITION_INDEPENDENT_CODE ON)
-  target_link_libraries(hpx_auto_wrap PRIVATE hpx_full)
-  target_link_libraries(hpx_auto_wrap PRIVATE hpx_init)
+  if(HPX_WITH_DISTRIBUTED_RUNTIME)
+    target_link_libraries(hpx_auto_wrap PRIVATE hpx_full)
+    target_link_libraries(hpx_auto_wrap PRIVATE hpx_init)
+  else()
+    target_link_libraries(hpx_auto_wrap PRIVATE hpx_core)
+  endif()
   target_link_libraries(hpx_auto_wrap PRIVATE hpx_private_flags)
   target_compile_definitions(
     hpx_auto_wrap PRIVATE HPX_LIBRARY_EXPORTS HPX_AUTO_WRAP_MAIN_ACTIVATE

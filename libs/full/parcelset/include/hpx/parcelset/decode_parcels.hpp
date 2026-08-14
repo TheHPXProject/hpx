@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2021 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -18,7 +18,7 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/timing.hpp>
 
-#include <hpx/components_base/agas_interface.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 
 #if ASIO_HAS_BOOST_THROW_EXCEPTION != 0
@@ -37,7 +37,7 @@
 namespace hpx::parcelset {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Buffer>
+    HPX_CXX_EXPORT template <typename Buffer>
     std::vector<serialization::serialization_chunk> decode_chunks(
         Buffer& buffer)
     {
@@ -123,7 +123,7 @@ namespace hpx::parcelset {
         return chunks;
     }
 
-    template <typename Buffer>
+    HPX_CXX_EXPORT template <typename Buffer>
     std::vector<serialization::serialization_chunk> decode_chunks_zero_copy(
         Buffer& buffer)
     {
@@ -210,7 +210,7 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    inline void handle_received_parcels(
+    HPX_CXX_EXPORT inline void handle_received_parcels(
         std::vector<parcelset::parcel>&& deferred_parcels,
         std::size_t num_thread = -1)
     {
@@ -262,7 +262,7 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_message_with_chunks(
         serialization::input_archive& archive, [[maybe_unused]] Parcelport& pp,
         [[maybe_unused]] Buffer& buffer, std::size_t parcel_count,
@@ -414,7 +414,7 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_message_with_chunks(
         [[maybe_unused]] Parcelport& pp, Buffer buffer,
         std::size_t parcel_count,
@@ -430,7 +430,7 @@ namespace hpx::parcelset {
             archive, pp, buffer, parcel_count, num_thread);
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_message(Parcelport& pp, Buffer buffer,
         std::size_t parcel_count, std::size_t num_thread = -1)
     {
@@ -440,14 +440,14 @@ namespace hpx::parcelset {
             pp, HPX_MOVE(buffer), parcel_count, chunks, num_thread);
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_parcel(
         Parcelport& parcelport, Buffer buffer, std::size_t num_thread = -1)
     {
         return decode_message(parcelport, HPX_MOVE(buffer), 1, num_thread);
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_parcels(
         Parcelport& parcelport, Buffer buffer, std::size_t num_thread = -1)
     {
@@ -455,7 +455,7 @@ namespace hpx::parcelset {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_message_with_chunks_zero_copy(
         [[maybe_unused]] Parcelport& pp, Buffer& buffer,
         std::size_t parcel_count,
@@ -475,7 +475,7 @@ namespace hpx::parcelset {
             archive, pp, buffer, parcel_count, num_thread);
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_message_zero_copy(Parcelport& pp,
         Buffer& buffer, std::size_t parcel_count, std::size_t num_thread = -1)
     {
@@ -490,14 +490,14 @@ namespace hpx::parcelset {
         return parcels;
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_parcel_zero_copy(
         Parcelport& parcelport, Buffer& buffer, std::size_t num_thread = -1)
     {
         return decode_message_zero_copy(parcelport, buffer, 1, num_thread);
     }
 
-    template <typename Parcelport, typename Buffer>
+    HPX_CXX_EXPORT template <typename Parcelport, typename Buffer>
     std::vector<parcelset::parcel> decode_parcels_zero_copy(
         Parcelport& parcelport, Buffer& buffer, std::size_t num_thread = -1)
     {

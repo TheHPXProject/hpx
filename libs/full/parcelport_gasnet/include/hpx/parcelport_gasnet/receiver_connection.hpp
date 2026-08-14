@@ -15,9 +15,8 @@
 #include <hpx/modules/gasnet_base.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_gasnet/header.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
-#include <hpx/parcelset/parcel_buffer.hpp>
 
 #include <cstddef>
 #include <cstdint>

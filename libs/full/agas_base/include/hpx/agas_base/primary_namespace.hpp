@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2016 Thomas Heller
-//  Copyright (c) 2022 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,12 +10,13 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/agas_fwd.hpp>
-#include <hpx/agas_base/gva.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/agas_base/agas_fwd.hpp>
+#include <hpx/agas_base/gva.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -25,9 +26,9 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
-    struct HPX_EXPORT primary_namespace
+    HPX_CXX_EXPORT struct HPX_EXPORT primary_namespace
     {
         typedef hpx::tuple<naming::gid_type, gva, naming::gid_type>
             resolved_type;
@@ -101,7 +102,6 @@ namespace hpx { namespace agas {
     private:
         std::unique_ptr<server::primary_namespace> server_;
     };
-
-}}    // namespace hpx::agas
+}    // namespace hpx::agas
 
 #include <hpx/config/warnings_suffix.hpp>

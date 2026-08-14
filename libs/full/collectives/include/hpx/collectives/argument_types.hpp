@@ -1,21 +1,44 @@
-//  Copyright (c) 2021-2025 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file argument_types.hpp
+/// \page hpx::collectives::num_sites_arg, hpx::collectives::this_site_arg
+/// \page hpx::collectives::that_site_arg, hpx::collectives::generation_arg
+/// \page hpx::collectives::root_site_arg, hpx::collectives::tag_arg
+/// \page hpx::collectives::arity_arg
+/// \page hpx::collectives::flat_fallback_threshold_arg
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
 #include <hpx/config.hpp>
 
 #include <cstddef>
+#include <cstdint>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::collectives {
 
     namespace detail {
+
+        // The number of gate generations a single collective call consumes on a
+        // communicator. A hierarchical collective that touches a communicator
+        // only once per user call but has to stay in lock-step with collectives
+        // that touch it twice uses double_step, advancing the gate by two in a
+        // single step. This is an internal knob: the public collective API does
+        // not expose it, it is threaded only through the detail entry points the
+        // hierarchical overloads call. HPX serialization handles scoped enums
+        // natively (they are stored as their underlying integral type), so no
+        // explicit serialize function is required when a generation_mode crosses
+        // the wire as a collective action argument.
+        enum class generation_mode : std::uint8_t
+        {
+            single_step = 1,
+            double_step = 2
+        };
 
         template <typename Tag,
             std::size_t Default = static_cast<std::size_t>(-1)>
@@ -54,31 +77,72 @@ namespace hpx::collectives {
         struct root_site_tag;
         struct tag_tag;
         struct arity_tag;
+        struct flat_fallback_threshold_tag;
+        struct pairwise_threshold_tag;
     }    // namespace detail
 
     /// The number of participating sites (default: all localities)
-    using num_sites_arg = detail::argument_type<detail::num_sites_tag>;
+    HPX_CXX_EXPORT using num_sites_arg =
+        detail::argument_type<detail::num_sites_tag>;
 
     /// The local end of the communication channel
-    using this_site_arg = detail::argument_type<detail::this_site_tag>;
+    HPX_CXX_EXPORT using this_site_arg =
+        detail::argument_type<detail::this_site_tag>;
 
     /// The opposite end of the communication channel
-    using that_site_arg = detail::argument_type<detail::that_site_tag>;
+    HPX_CXX_EXPORT using that_site_arg =
+        detail::argument_type<detail::that_site_tag>;
 
     /// The generational counter identifying the sequence number of the
-    /// operation performed on the given base name. It needs to be supplied
-    /// only if the operation on the given base name has to be performed
-    /// more than once. It must be a positive number greater than zero.
-    using generation_arg = detail::argument_type<detail::generation_tag>;
+    /// operation performed on the given base name. It needs to be supplied only
+    /// if the operation on the given base name has to be performed more than
+    /// once. It must be a positive number greater than zero. On any given
+    /// communicator instance, operations that pass an explicit generation may
+    /// not follow operations that used the default: the internal counter's
+    /// position is no longer reliably known to the caller. The reverse
+    /// transition, from explicit numbering back to the default, remains valid.
+    HPX_CXX_EXPORT using generation_arg =
+        detail::argument_type<detail::generation_tag>;
 
     /// The site that is responsible for creating the support object
     /// of the operation. It defaults to '0' (zero).
-    using root_site_arg = detail::argument_type<detail::root_site_tag, 0>;
+    HPX_CXX_EXPORT using root_site_arg =
+        detail::argument_type<detail::root_site_tag, 0>;
 
     /// The tag identifying the concrete operation
-    using tag_arg = detail::argument_type<detail::tag_tag, 0>;
+    HPX_CXX_EXPORT using tag_arg = detail::argument_type<detail::tag_tag, 0>;
 
     /// The number of children each of the communication nodes is connected
-    /// to (default: picked based on num_sites).
-    using arity_arg = detail::argument_type<detail::arity_tag, 2>;
+    /// to (default: 2).
+    HPX_CXX_EXPORT using arity_arg =
+        detail::argument_type<detail::arity_tag, 2>;
+
+    /// The site-count threshold below which a hierarchical_communicator
+    /// collapses to a single flat communicator spanning all sites. At small
+    /// site counts, flat collectives outperform hierarchical composition
+    /// because tree-walking overhead exceeds the synchronization-depth benefit.
+    /// Pass 0 to disable the fallback and always build a tree.
+    HPX_CXX_EXPORT using flat_fallback_threshold_arg =
+        detail::argument_type<detail::flat_fallback_threshold_tag, 16>;
+
+    /// The fixed row-size threshold, in bytes, at or above which all_to_all
+    /// exchanges rows directly between the participating sites instead of
+    /// routing every row through a single communicator site. Automatic
+    /// selection uses sizeof(T) for a trivially copyable row type T. Other row
+    /// types stay routed because inspecting local dynamic data could make sites
+    /// select different exchange paths. Every participating site must use the
+    /// same threshold.
+    ///
+    /// Pass 0 at every site to request direct exchange for a dynamically sized
+    /// row type, or to force it for a fixed-size type. Direct exchange still
+    /// requires at least three participating sites and an explicit generation
+    /// number. A call that does not meet those requirements stays routed.
+    /// Which path runs affects performance only, never the result.
+    ///
+    /// The 4096-byte default is the smallest tested payload for which direct
+    /// exchange won in every layout of a 16-node sweep across 16 to 128
+    /// localities. The crossover depends on the transport and topology, so
+    /// callers may override it.
+    HPX_CXX_EXPORT using pairwise_threshold_arg =
+        detail::argument_type<detail::pairwise_threshold_tag, 4096>;
 }    // namespace hpx::collectives

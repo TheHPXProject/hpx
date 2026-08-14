@@ -9,4 +9,5 @@
 int main()
 {
     HPX_ASSERT(false);
+    return 0;
 }

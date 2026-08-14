@@ -191,6 +191,7 @@ namespace hpx::threads {
         hpx::error_code& ec = hpx::throws);
 #else
 #if !defined(DOXYGEN)
+    // backtracing support
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT util::backtrace const*
     get_thread_backtrace(
         thread_id_type const& id, hpx::error_code& ec = hpx::throws);
@@ -335,19 +336,19 @@ namespace hpx::threads {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    /// Interrupt the current thread at this point if it was canceled. This
-    /// will throw a thread_interrupted exception, which will cancel the thread.
+    /// Interrupt the current thread at this point if it was canceled. This will
+    /// throw a thread_interrupted exception, which will cancel the thread.
     ///
     /// \param id         [in] The thread id of the thread which should be
     ///                   interrupted.
     /// \param ec         [in,out] this represents the error status on exit,
-    ///                   if this is pre-initialized to \a hpx#throws
-    ///                   the function will throw on error instead.
+    ///                   if this is pre-initialized to \a hpx#throws the
+    ///                   function will throw on error instead.
     ///
     /// \note             As long as \a ec is not pre-initialized to
     ///                   \a hpx#throws this function doesn't
-    ///                   throw but returns the result code using the
-    ///                   parameter \a ec. Otherwise, it throws an instance
+    ///                   throw but returns the result code using the parameter
+    ///                   \a ec. Otherwise, it throws an instance
     ///                   of hpx#exception.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void interruption_point(
         thread_id_type const& id, hpx::error_code& ec = hpx::throws);
@@ -431,6 +432,7 @@ namespace hpx::threads {
         std::size_t data, hpx::error_code& ec = hpx::throws);
 #endif
 
+    // Handle thread recursion count
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::size_t&
     get_continuation_recursion_count() noexcept;
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void

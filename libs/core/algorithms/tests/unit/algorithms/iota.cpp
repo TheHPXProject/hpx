@@ -39,7 +39,7 @@ void test_iota(IteratorTag)
 }
 
 template <typename ExPolicy, typename IteratorTag>
-    requires hpx::is_execution_policy_v<ExPolicy>
+    requires(hpx::is_execution_policy_v<ExPolicy>)
 void test_iota(ExPolicy policy, IteratorTag)
 {
     using base_iterator = std::vector<int>::iterator;
@@ -60,7 +60,7 @@ void test_iota(ExPolicy policy, IteratorTag)
 }
 
 template <typename ExPolicy, typename IteratorTag>
-    requires hpx::is_execution_policy_v<ExPolicy>
+    requires(hpx::is_execution_policy_v<ExPolicy>)
 void test_iota_async(ExPolicy policy, IteratorTag)
 {
     using base_iterator = std::vector<int>::iterator;

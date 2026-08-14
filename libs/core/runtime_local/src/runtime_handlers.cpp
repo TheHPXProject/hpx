@@ -80,12 +80,10 @@ namespace hpx::detail {
         std::abort();
     }
 
-#if defined(HPX_HAVE_APEX)
     bool enable_parent_task_handler()
     {
         return !hpx::is_networking_enabled();
     }
-#endif
 
     void test_failure_handler()
     {

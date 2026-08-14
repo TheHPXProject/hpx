@@ -249,7 +249,10 @@ namespace hpx::detail {
 
     inline bool is_of_lightweight_hpx_category(hpx::exception const& e) noexcept
     {
-        return e.get_error_code().category() == get_lightweight_hpx_category();
+        hpx::error_code const& code = e.get_error_code();
+        std::error_category const& category = code.category();
+        return category == get_lightweight_hpx_category() ||
+            category == get_lightweight_hpx_rethrow_category();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -388,7 +391,7 @@ namespace hpx {
         }
         catch (std::exception const& ex)
         {
-            return get_error_what(ex);
+            return ex.what();
         }
         catch (...)
         {
@@ -433,6 +436,33 @@ namespace hpx {
         catch (...)
         {
             return hpx::error::unknown_error;
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    std::pair<std::string, error> get_error_info(hpx::exception const& e)
+    {
+        return {e.what(), e.get_error()};
+    }
+
+    std::pair<std::string, error> get_error_info(std::exception_ptr const& e)
+    {
+        auto const error_code = get_error(e);
+        try
+        {
+            std::rethrow_exception(e);
+        }
+        catch (hpx::thread_interrupted const&)
+        {
+            return {"thread_interrupted", hpx::error::thread_cancelled};
+        }
+        catch (std::exception const& ex)
+        {
+            return {ex.what(), error_code};
+        }
+        catch (...)
+        {
+            return {"<unknown>", hpx::error::unknown_error};
         }
     }
 

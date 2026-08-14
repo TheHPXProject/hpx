@@ -15,7 +15,6 @@
 #include <hpx/config.hpp>
 #include <hpx/concurrency/cache_line_data.hpp>
 #include <hpx/modules/hashing.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/thread_support.hpp>
 
@@ -23,26 +22,12 @@
 
 namespace hpx::util {
 
-    namespace detail {
-#if HPX_HAVE_ITTNOTIFY != 0
-        template <typename Tag, std::size_t N>
-        struct itt_spinlock_init
-        {
-            itt_spinlock_init() noexcept;
-            ~itt_spinlock_init();
-        };
-#endif
-    }    // namespace detail
-
     HPX_CXX_CORE_EXPORT template <typename Tag,
         std::size_t N = HPX_HAVE_SPINLOCK_POOL_NUM>
     class spinlock_pool
     {
     private:
         static cache_aligned_data<detail::spinlock> pool_[N];
-#if HPX_HAVE_ITTNOTIFY != 0
-        static detail::itt_spinlock_init<Tag, N> init_;
-#endif
 
     public:
         static detail::spinlock& spinlock_for(void const* pv) noexcept
@@ -55,30 +40,4 @@ namespace hpx::util {
     template <typename Tag, std::size_t N>
     cache_aligned_data<detail::spinlock> spinlock_pool<Tag, N>::pool_[N];
 
-#if HPX_HAVE_ITTNOTIFY != 0
-    namespace detail {
-
-        template <typename Tag, std::size_t N>
-        itt_spinlock_init<Tag, N>::itt_spinlock_init() noexcept
-        {
-            for (int i = 0; i < N; ++i)
-            {
-                HPX_ITT_SYNC_CREATE((&spinlock_pool<Tag, N>::pool_[i].data_),
-                    "util::detail::spinlock", nullptr);
-            }
-        }
-
-        template <typename Tag, std::size_t N>
-        itt_spinlock_init<Tag, N>::~itt_spinlock_init()
-        {
-            for (int i = 0; i < N; ++i)
-            {
-                HPX_ITT_SYNC_DESTROY((&spinlock_pool<Tag, N>::pool_[i].data_));
-            }
-        }
-    }    // namespace detail
-
-    template <typename Tag, std::size_t N>
-    util::detail::itt_spinlock_init<Tag, N> spinlock_pool<Tag, N>::init_;
-#endif
 }    // namespace hpx::util

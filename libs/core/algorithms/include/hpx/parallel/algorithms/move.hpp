@@ -107,6 +107,7 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/transfer.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -185,7 +186,7 @@ namespace hpx::parallel {
             typename Enable = void>
         struct move;
 
-        HPX_CXX_CORE_EXPORT template <typename FwdIter1, typename FwdIter2>
+        template <typename FwdIter1, typename FwdIter2>
         struct move<FwdIter1, FwdIter2,
             std::enable_if_t<
                 iterators_are_segmented<FwdIter1, FwdIter2>::value>>
@@ -197,7 +198,7 @@ namespace hpx::parallel {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename FwdIter1, typename FwdIter2>
+        template <typename FwdIter1, typename FwdIter2>
         struct move<FwdIter1, FwdIter2,
             std::enable_if_t<
                 iterators_are_not_segmented<FwdIter1, FwdIter2>::value>>
@@ -213,9 +214,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::move
     HPX_CXX_CORE_EXPORT inline constexpr struct move_t
-      : hpx::detail::tag_parallel_algorithm<move_t>
+      : hpx::detail::tag_dispatch<move_t,
+            hpx::detail::tag_parallel_algorithm<move_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2>
         // clang-format off
             requires (
@@ -224,8 +225,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(move_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return hpx::parallel::util::get_second_element(
                 hpx::parallel::detail::transfer<
@@ -240,8 +241,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend constexpr FwdIter2 tag_fallback_invoke(
-            move_t, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
+        static constexpr FwdIter2 invoke_default(
+            FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return std::move(first, last, dest);
         }

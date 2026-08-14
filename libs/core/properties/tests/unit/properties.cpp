@@ -12,13 +12,27 @@ struct property1
     int v = 0;
 };
 
-inline constexpr struct with_property_t : hpx::functional::tag<with_property_t>
+inline constexpr struct with_property_t
 {
+    template <typename T, typename P>
+        requires requires(T const& t, P p) { t.apply_property(p); }
+    constexpr auto operator()(T const& t, P p) const
+        noexcept(noexcept(t.apply_property(p))) -> decltype(t.apply_property(p))
+    {
+        return t.apply_property(p);
+    }
 } with_property;
 
 struct type1
 {
     property1 p1{};
+
+    type1 apply_property(property1 p) const
+    {
+        auto tt = *this;
+        tt.p1 = p;
+        return tt;
+    }
 };
 
 struct type2
@@ -34,46 +48,17 @@ struct type3
 struct type4
 {
     property1 p1{};
+
+    type4 apply_property(property1 p) const
+    {
+        auto tt = *this;
+        tt.p1 = p;
+        return tt;
+    }
 };
-
-type1 tag_invoke(with_property_t, type1 const& t, property1 p)
-{
-    auto tt = t;
-    tt.p1 = p;
-    return tt;
-}
-
-type3 tag_invoke(
-    hpx::experimental::prefer_t, with_property_t, type3 const& t, property1 p)
-{
-    auto tt = t;
-    tt.p1 = p;
-    ++tt.p1.v;
-    return tt;
-}
-
-type4 tag_invoke(
-    hpx::experimental::prefer_t, with_property_t, type4 const& t, property1 p)
-{
-    auto tt = t;
-    tt.p1 = p;
-    ++tt.p1.v;
-    return tt;
-}
-
-type4 tag_invoke(with_property_t, type4 const& t, property1 p)
-{
-    auto tt = t;
-    tt.p1 = p;
-    return tt;
-}
 
 int main()
 {
-    // This property can be required, and thus also preferred
-    static_assert(hpx::is_invocable<with_property_t, type1, property1>::value,
-        "Should be invocable");
-
     type1 t1_1{};
 
     type1 t1_2 = with_property(t1_1, property1{1});
@@ -90,10 +75,6 @@ int main()
     HPX_TEST_EQ(t1_3.p1.v, 2);
     HPX_TEST_EQ(t1_4.p1.v, 3);
 
-    static_assert(hpx::is_invocable<hpx::experimental::prefer_t,
-                      with_property_t, type1, property1>::value,
-        "Should be invocable");
-
     type1 t1_5 = hpx::experimental::prefer(with_property, t1_4, property1{4});
     HPX_TEST_EQ(t1_4.p1.v, 3);
     HPX_TEST_EQ(t1_5.p1.v, 4);
@@ -107,14 +88,6 @@ int main()
     type1 t1_7 = hpx::experimental::prefer(with_property, t1_6, p1_4);
     HPX_TEST_EQ(t1_6.p1.v, 5);
     HPX_TEST_EQ(t1_7.p1.v, 6);
-
-    // This property cannot be required, but can be preferred
-    static_assert(!hpx::is_invocable<with_property_t, type2, property1>::value,
-        "Should not be invocable");
-
-    static_assert(hpx::is_invocable<hpx::experimental::prefer_t,
-                      with_property_t, type2, property1>::value,
-        "Should be invocable");
 
     type2 t2_1{};
 
@@ -132,56 +105,37 @@ int main()
     HPX_TEST_EQ(t2_3.p1.v, 0);
     HPX_TEST_EQ(t2_4.p1.v, 0);
 
-    // This property cannot be required, but can be preferred. The prefer
-    // functionality has been customized (it adds one to the passed property).
-    static_assert(!hpx::is_invocable<with_property_t, type3, property1>::value,
-        "Should not be invocable");
-
-    static_assert(hpx::is_invocable<hpx::experimental::prefer_t,
-                      with_property_t, type3, property1>::value,
-        "Should be invocable");
-
     type3 t3_1{};
 
     type3 t3_2 = hpx::experimental::prefer(with_property, t3_1, property1{7});
     HPX_TEST_EQ(t3_1.p1.v, 0);
-    HPX_TEST_EQ(t3_2.p1.v, 8);
+    HPX_TEST_EQ(t3_2.p1.v, 0);
 
     property1 p1_7{8};
     type3 t3_3 = hpx::experimental::prefer(with_property, t3_2, p1_7);
-    HPX_TEST_EQ(t3_2.p1.v, 8);
-    HPX_TEST_EQ(t3_3.p1.v, 9);
+    HPX_TEST_EQ(t3_2.p1.v, 0);
+    HPX_TEST_EQ(t3_3.p1.v, 0);
 
     property1 const p1_8{9};
     type3 t3_4 = hpx::experimental::prefer(with_property, t3_3, p1_8);
-    HPX_TEST_EQ(t3_3.p1.v, 9);
-    HPX_TEST_EQ(t3_4.p1.v, 10);
-
-    // This property can be required and preferred through a customization. The
-    // customization for prefer should take precedence over the require
-    // customization.
-    static_assert(hpx::is_invocable<with_property_t, type4, property1>::value,
-        "Should be invocable");
-
-    static_assert(hpx::is_invocable<hpx::experimental::prefer_t,
-                      with_property_t, type4, property1>::value,
-        "Should be invocable");
+    HPX_TEST_EQ(t3_3.p1.v, 0);
+    HPX_TEST_EQ(t3_4.p1.v, 0);
 
     type4 t4_1{};
 
     type4 t4_2 = hpx::experimental::prefer(with_property, t4_1, property1{10});
     HPX_TEST_EQ(t4_1.p1.v, 0);
-    HPX_TEST_EQ(t4_2.p1.v, 11);
+    HPX_TEST_EQ(t4_2.p1.v, 10);
 
     property1 p1_9{11};
     type4 t4_3 = hpx::experimental::prefer(with_property, t4_2, p1_9);
-    HPX_TEST_EQ(t4_2.p1.v, 11);
-    HPX_TEST_EQ(t4_3.p1.v, 12);
+    HPX_TEST_EQ(t4_2.p1.v, 10);
+    HPX_TEST_EQ(t4_3.p1.v, 11);
 
     property1 const p1_10{12};
     type4 t4_4 = hpx::experimental::prefer(with_property, t4_3, p1_10);
-    HPX_TEST_EQ(t4_3.p1.v, 12);
-    HPX_TEST_EQ(t4_4.p1.v, 13);
+    HPX_TEST_EQ(t4_3.p1.v, 11);
+    HPX_TEST_EQ(t4_4.p1.v, 12);
 
     return hpx::util::report_errors();
 }

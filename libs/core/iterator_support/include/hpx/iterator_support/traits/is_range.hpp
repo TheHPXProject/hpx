@@ -37,7 +37,7 @@ namespace hpx::traits {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename R>
+    template <typename R>
     struct range_traits<R, true>
       : std::iterator_traits<typename util::detail::iterator<R>::type>
     {

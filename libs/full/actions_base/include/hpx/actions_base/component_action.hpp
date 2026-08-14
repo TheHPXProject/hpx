@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +12,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/actions_base/basic_action.hpp>
+#include <hpx/actions_base/macros.hpp>
 #include <hpx/actions_base/traits/is_client.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/format.hpp>
@@ -71,9 +72,8 @@ namespace hpx::actions {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    //  Specialized generic non-const component action types allowing to hold
-    //  a different number of arguments
-    ///////////////////////////////////////////////////////////////////////////
+    //  Specialized generic non-const component action types allowing to hold an
+    //  arbitrary number of arguments
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...), typename Derived>
     struct action<R (Component::*)(Ps...), F, Derived>
@@ -103,13 +103,12 @@ namespace hpx::actions {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    //  Specialized generic const component action types allowing to hold a
-    //  different number of arguments
-    ///////////////////////////////////////////////////////////////////////////
+    //  Specialized generic const component action types allowing to hold an
+    //  arbitrary number of arguments
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const, typename Derived>
     struct action<R (Component::*)(Ps...) const, F, Derived>
-      : basic_action<Component const, R(Ps...),
+      : basic_action<Component, R(Ps...),
             detail::action_type_t<
                 action<R (Component::*)(Ps...) const, F, Derived>, Derived>>
     {
@@ -126,18 +125,17 @@ namespace hpx::actions {
         static R invoke(naming::address_type lva,
             naming::component_type comptype, Ts&&... vs)
         {
-            basic_action<Component const, R(Ps...),
+            basic_action<Component, R(Ps...),
                 derived_type>::increment_invocation_count();
 
-            return detail::component_invoke<Component const, R>(
+            return detail::component_invoke<Component, R>(
                 lva, comptype, F, HPX_FORWARD(Ts, vs)...);
         }
     };
 
     ///////////////////////////////////////////////////////////////////////////
     //  Specialized generic non-const noexcept component action types allowing
-    //  to hold a different number of arguments
-    ///////////////////////////////////////////////////////////////////////////
+    //  to hold an arbitrary number of arguments
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) noexcept, F, Derived>
@@ -168,11 +166,11 @@ namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
     //  Specialized generic const noexcept component action types allowing to
-    //  hold a different number of arguments
+    //  hold an arbitrary number of arguments
     template <typename Component, typename R, typename... Ps,
         R (Component::*F)(Ps...) const noexcept, typename Derived>
     struct action<R (Component::*)(Ps...) const noexcept, F, Derived>
-      : basic_action<Component const, R(Ps...),
+      : basic_action<Component, R(Ps...),
             detail::action_type_t<
                 action<R (Component::*)(Ps...) const noexcept, F, Derived>,
                 Derived>>
@@ -190,118 +188,14 @@ namespace hpx::actions {
         static R invoke(naming::address_type lva,
             naming::component_type comptype, Ts&&... vs)
         {
-            basic_action<Component const, R(Ps...),
+            basic_action<Component, R(Ps...),
                 derived_type>::increment_invocation_count();
 
-            return detail::component_invoke<Component const, R>(
+            return detail::component_invoke<Component, R>(
                 lva, comptype, F, HPX_FORWARD(Ts, vs)...);
         }
     };
     /// \endcond
 }    // namespace hpx::actions
-
-/// \def HPX_DEFINE_COMPONENT_ACTION(component, func, action_type)
-///
-/// \brief Registers a  member function of a component as an action type
-/// with HPX
-///
-/// The macro \a HPX_DEFINE_COMPONENT_ACTION can be used to register a
-/// member function of a component as an action type named \a action_type.
-///
-/// The parameter \a component is the type of the component exposing the
-/// member function \a func which should be associated with the newly defined
-/// action type. The parameter \p action_type is the name of the action type to
-/// register with HPX.
-///
-/// \par Example:
-///
-/// \code
-///       namespace app
-///       {
-///           // Define a simple component exposing one action 'print_greeting'
-///           class HPX_COMPONENT_EXPORT server
-///             : public hpx::components::component_base<server>
-///           {
-///               void print_greeting() const
-///               {
-///                   hpx::cout << "Hey, how are you?\n" << std::flush;
-///               }
-///
-///               // Component actions need to be declared, this also defines the
-///               // type 'print_greeting_action' representing the action.
-///               HPX_DEFINE_COMPONENT_ACTION(server, print_greeting,
-///                   print_greeting_action);
-///           };
-///       }
-/// \endcode
-///
-/// The first argument must provide the type name of the component the
-/// action is defined for.
-///
-/// The second argument must provide the member function name the action
-/// should wrap.
-///
-/// \note The macro \a HPX_DEFINE_COMPONENT_ACTION can be used with 2 or
-/// 3 arguments. The third argument is optional.
-///
-/// The default value for the third argument (the typename of the defined
-/// action) is derived from the name of the function (as passed as the second
-/// argument) by appending '_action'. The third argument can be omitted only
-/// if the second argument with an appended suffix '_action' resolves to a valid,
-/// unqualified C++ type name.
-///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_DEFINE_COMPONENT_ACTION(...)                            /**/
-#define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)        /**/
-#define HPX_DEFINE_COMPONENT_ACTION_2(component, func)              /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION(...)                     /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name) /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_2(component, func)       /**/
-#else
-#define HPX_DEFINE_COMPONENT_ACTION(...)                                       \
-    HPX_DEFINE_COMPONENT_ACTION_(__VA_ARGS__)                                  \
-    /**/
-
-/// \cond NOINTERNAL
-#define HPX_DEFINE_COMPONENT_ACTION_(...)                                      \
-    HPX_PP_EXPAND(HPX_PP_CAT(                                                  \
-        HPX_DEFINE_COMPONENT_ACTION_, HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__)) \
-    /**/
-
-#define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)                   \
-    struct name                                                                \
-      : hpx::actions::make_action_t<decltype(&component::func),                \
-            &component::func, name>                                            \
-    {                                                                          \
-    }; /**/
-#define HPX_DEFINE_COMPONENT_ACTION_2(component, func)                         \
-    HPX_DEFINE_COMPONENT_ACTION_3(component, func, HPX_PP_CAT(func, _action))  \
-    /**/
-/// \endcond
-
-/// \cond NOINTERNAL
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION(...)                                \
-    HPX_DEFINE_COMPONENT_DIRECT_ACTION_(__VA_ARGS__)                           \
-    /**/
-
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_(...)                               \
-    HPX_PP_EXPAND(HPX_PP_CAT(HPX_DEFINE_COMPONENT_DIRECT_ACTION_,              \
-        HPX_PP_NARGS(__VA_ARGS__))(__VA_ARGS__))                               \
-    /**/
-
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name)            \
-    struct name                                                                \
-      : hpx::actions::make_direct_action_t<decltype(&component::func),         \
-            &component::func, name>                                            \
-    {                                                                          \
-    };                                                                         \
-    /**/
-
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_2(component, func)                  \
-    HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(                                      \
-        component, func, HPX_PP_CAT(func, _action))                            \
-    /**/
-/// \endcond
-#endif
 
 #include <hpx/config/warnings_suffix.hpp>

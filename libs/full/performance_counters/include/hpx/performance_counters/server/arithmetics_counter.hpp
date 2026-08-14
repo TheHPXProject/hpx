@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,7 +7,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/server/component_base.hpp>
+#include <hpx/modules/components_base.hpp>
+
 #include <hpx/performance_counters/performance_counter_set.hpp>
 #include <hpx/performance_counters/server/base_performance_counter.hpp>
 
@@ -18,7 +19,8 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters { namespace server {
+namespace hpx::performance_counters::server {
+
     ///////////////////////////////////////////////////////////////////////////
     // This counter exposes the result of an arithmetic operation The counter
     // relies on querying two base counters.
@@ -55,6 +57,6 @@ namespace hpx { namespace performance_counters { namespace server {
         // base counters to be queried
         performance_counter_set counters_;
     };
-}}}    // namespace hpx::performance_counters::server
+}    // namespace hpx::performance_counters::server
 
 #include <hpx/config/warnings_suffix.hpp>

@@ -335,6 +335,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -344,6 +345,7 @@ namespace hpx {
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <type_traits>
 #include <utility>
@@ -390,8 +392,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
@@ -465,8 +466,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
@@ -539,8 +539,7 @@ namespace hpx::parallel {
                 }
 
                 using policy_type = std::decay_t<ExPolicy>;
-                using intermediate_result_t =
-                    std::conditional_t<has_scheduler_executor, char, bool>;
+                using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
@@ -580,9 +579,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::none_of
     HPX_CXX_CORE_EXPORT inline constexpr struct none_of_t final
-      : hpx::detail::tag_parallel_algorithm<none_of_t>
+      : hpx::detail::tag_dispatch<none_of_t,
+            hpx::detail::tag_parallel_algorithm<none_of_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
             requires (
@@ -590,8 +589,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            none_of_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -607,8 +606,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend bool tag_fallback_invoke(
-            none_of_t, InIter first, InIter last, F f)
+        static bool invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -621,9 +619,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::any_of
     HPX_CXX_CORE_EXPORT inline constexpr struct any_of_t final
-      : hpx::detail::tag_parallel_algorithm<any_of_t>
+      : hpx::detail::tag_dispatch<any_of_t,
+            hpx::detail::tag_parallel_algorithm<any_of_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
             requires (
@@ -631,8 +629,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            any_of_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -648,8 +646,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend bool tag_fallback_invoke(
-            any_of_t, InIter first, InIter last, F f)
+        static bool invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");
@@ -662,9 +659,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::all_of
     HPX_CXX_CORE_EXPORT inline constexpr struct all_of_t final
-      : hpx::detail::tag_parallel_algorithm<all_of_t>
+      : hpx::detail::tag_dispatch<all_of_t,
+            hpx::detail::tag_parallel_algorithm<all_of_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
             requires (
@@ -672,8 +669,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            all_of_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -689,8 +686,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend bool tag_fallback_invoke(
-            all_of_t, InIter first, InIter last, F f)
+        static bool invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Required at least input iterator.");

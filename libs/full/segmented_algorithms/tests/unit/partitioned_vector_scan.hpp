@@ -8,7 +8,9 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+#include <hpx/algorithm.hpp>
 #include <hpx/include/partitioned_vector.hpp>
 
 #include <type_traits>
@@ -124,4 +126,5 @@ void verify_values(
 
     HPX_TEST(final_result);
 }
+
 #endif

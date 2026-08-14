@@ -188,6 +188,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/copy.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/set_operation.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -260,10 +261,9 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename Iter1, typename Sent1,
                 typename Iter2, typename Sent2, typename Iter3, typename F,
                 typename Proj1, typename Proj2>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<Iter1, Iter3>>
-            parallel(ExPolicy&& policy, Iter1 first1, Sent1 last1, Iter2 first2,
-                Sent2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
+            static decltype(auto) parallel(ExPolicy&& policy, Iter1 first1,
+                Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest, F&& f,
+                Proj1&& proj1, Proj2&& proj2)
             {
                 using difference_type1 =
                     typename std::iterator_traits<Iter1>::difference_type;
@@ -271,19 +271,28 @@ namespace hpx::parallel {
                     typename std::iterator_traits<Iter2>::difference_type;
 
                 using result_type = util::in_out_result<Iter1, Iter3>;
-                using result =
-                    util::detail::algorithm_result<ExPolicy, result_type>;
 
-                if (first1 == last1)
+                // Fast early exits for the general executors. For the S/R path
+                // these are skipped (they would break sender pass-through);
+                // set_operation handles the edge cases there via its sentinel-
+                // initialized set_chunk_data.
+                if constexpr (!hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
                 {
-                    return result::get(
-                        result_type{HPX_MOVE(first1), HPX_MOVE(dest)});
-                }
+                    using result =
+                        util::detail::algorithm_result<ExPolicy, result_type>;
 
-                if (first2 == last2)
-                {
-                    return detail::copy<result_type>().call(
-                        HPX_FORWARD(ExPolicy, policy), first1, last1, dest);
+                    if (first1 == last1)
+                    {
+                        return result::get(
+                            result_type{HPX_MOVE(first1), HPX_MOVE(dest)});
+                    }
+
+                    if (first2 == last2)
+                    {
+                        return detail::copy<result_type>().call(
+                            HPX_FORWARD(ExPolicy, policy), first1, last1, dest);
+                    }
                 }
 
                 using buffer_type = typename set_operations_buffer<Iter3>::type;
@@ -325,9 +334,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::set_difference
     HPX_CXX_CORE_EXPORT inline constexpr struct set_difference_t final
-      : hpx::detail::tag_parallel_algorithm<set_difference_t>
+      : hpx::detail::tag_dispatch<set_difference_t,
+            hpx::detail::tag_parallel_algorithm<set_difference_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename FwdIter3, typename Pred = hpx::parallel::detail::less>
         // clang-format off
@@ -342,11 +351,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            FwdIter3>
-        tag_fallback_invoke(set_difference_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2,
-            FwdIter3 dest, Pred op = Pred())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, FwdIter3 dest,
+            Pred op = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -386,9 +393,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend FwdIter3 tag_fallback_invoke(set_difference_t, FwdIter1 first1,
-            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, FwdIter3 dest,
-            Pred op = Pred())
+        static FwdIter3 invoke_default(FwdIter1 first1, FwdIter1 last1,
+            FwdIter2 first2, FwdIter2 last2, FwdIter3 dest, Pred op = Pred())
         {
             static_assert(std::input_iterator<FwdIter1>,
                 "Requires at least input iterator.");

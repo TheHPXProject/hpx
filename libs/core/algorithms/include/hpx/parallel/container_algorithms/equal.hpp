@@ -361,6 +361,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/equal.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -374,9 +375,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::equal
     HPX_CXX_CORE_EXPORT inline constexpr struct equal_t final
-      : hpx::detail::tag_parallel_algorithm<equal_t>
+      : hpx::detail::tag_dispatch<equal_t,
+            hpx::detail::tag_parallel_algorithm<equal_t>>
     {
-    private:
         template <typename ExPolicy, typename Iter1, typename Sent1,
             typename Iter2, typename Sent2, typename Pred = equal_to,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
@@ -391,10 +392,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(equal_t, ExPolicy&& policy, Iter1 first1,
-            Sent1 last1, Iter2 first2, Sent2 last2, Pred op = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, Iter1 first1, Sent1 last1,
+            Iter2 first2, Sent2 last2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<Iter1>,
                 "Requires at least forward iterator.");
@@ -422,10 +423,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(equal_t, ExPolicy&& policy, Rng1&& rng1,
-            Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
-            Proj2 proj2 = Proj2())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng1>>,
                 "Requires at least forward iterator.");
@@ -453,8 +453,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(equal_t, Iter1 first1, Sent1 last1,
-            Iter2 first2, Sent2 last2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+        static bool invoke_default(Iter1 first1, Sent1 last1, Iter2 first2,
+            Sent2 last2, Pred op = Pred(), Proj1 proj1 = Proj1(),
             Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<Iter1>,
@@ -482,8 +482,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(equal_t, Rng1&& rng1, Rng2&& rng2,
-            Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static bool invoke_default(Rng1&& rng1, Rng2&& rng2, Pred op = Pred(),
+            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng1>>,
                 "Requires at least forward iterator.");

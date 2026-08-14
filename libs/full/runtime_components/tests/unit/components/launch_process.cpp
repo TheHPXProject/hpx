@@ -73,7 +73,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     // set up command line for launched executable
     std::vector<std::string> args;
-    args.push_back(exe.string());
+    args.push_back(hpx::filesystem::to_string(exe));
     args.push_back("--exit_code=42");
     args.push_back("--component=test_server");
     args.push_back("--set_message=accessed");
@@ -109,12 +109,13 @@ int hpx_main(hpx::program_options::variables_map& vm)
     env.push_back("HPX_ON_STARTUP_WAIT_ON_LATCH=launch_process");
 
     // launch test executable
-    process::child c =
-        process::execute(hpx::find_here(), process::run_exe(exe.string()),
-            process::set_args(args), process::set_env(env),
-            process::start_in_dir(base_dir.string()), process::throw_on_error(),
-            process::wait_on_latch("launch_process")    // same as above!
-        );
+    process::child c = process::execute(
+        hpx::find_here(), process::run_exe(hpx::filesystem::to_string(exe)),
+        process::set_args(args), process::set_env(env),
+        process::start_in_dir(hpx::filesystem::to_string(base_dir)),
+        process::throw_on_error(),
+        process::wait_on_latch("launch_process")    // same as above!
+    );
 
     {
         // now create an instance of the test_server component

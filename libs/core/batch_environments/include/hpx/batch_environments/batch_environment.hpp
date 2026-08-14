@@ -7,22 +7,39 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__)
-#include <winsock2.h>
-#endif
 
 #include <cstddef>
-#include <exception>    // needed for the asio header below
-#include <map>
+#include <memory>
 #include <string>
-#include <utility>
 #include <vector>
-
-#include <asio/ip/tcp.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::util {
+
+    namespace detail {
+
+        struct HPX_CORE_EXPORT batch_environment_base
+        {
+            virtual ~batch_environment_base() = default;
+
+            virtual std::string init_from_nodelist(
+                std::vector<std::string> const& nodes,
+                std::string const& agas_host, bool have_tcp) = 0;
+            virtual std::size_t retrieve_number_of_threads() const noexcept = 0;
+            virtual std::size_t retrieve_number_of_localities()
+                const noexcept = 0;
+            virtual std::size_t retrieve_node_number() const noexcept = 0;
+            virtual std::string host_name() const = 0;
+            virtual std::string host_name(
+                std::string const& def_hpx_name) const = 0;
+            virtual std::string agas_host_name(
+                std::string const& def_agas) const = 0;
+            virtual std::size_t agas_node() const noexcept = 0;
+            virtual bool found_batch_environment() const noexcept = 0;
+            virtual std::string get_batch_name() const = 0;
+        };
+    }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////
     // Try to retrieve default values from a batch environment
@@ -36,7 +53,7 @@ namespace hpx::util {
         // this function initializes the map of nodes from the given (space
         // separated) list of nodes
         std::string init_from_nodelist(std::vector<std::string> const& nodes,
-            std::string const& agas_host, bool have_tcp);
+            std::string const& agas_host, bool have_tcp) const;
 
         // The number of threads is either one (if no PBS information was
         // found), or it is the same as the number of times this node has been
@@ -70,20 +87,8 @@ namespace hpx::util {
         // Return a string containing the name of the batch system
         std::string get_batch_name() const;
 
-        std::string agas_node_;
-        std::size_t agas_node_num_;
-        std::size_t node_num_;
-        std::size_t num_threads_;
-        std::size_t num_localities_;
-        std::string batch_name_;
-        bool debug_;
-
-#if defined(HPX_HAVE_PARCELPORT_TCP)
-        using node_map_type = std::map<::asio::ip::tcp::endpoint,
-            std::pair<std::string, std::size_t>>;
-
-        node_map_type nodes_;
-#endif
+    private:
+        std::unique_ptr<detail::batch_environment_base> data_;
     };
 }    // namespace hpx::util
 

@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2021 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -246,10 +246,10 @@ namespace hpx::agas::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     // get action code from counter type
-    HPX_EXPORT namespace_action_code retrieve_action_code(
+    namespace_action_code retrieve_action_code(
         std::string const& name, error_code& ec = throws);
 
     // get service action code from counter type
-    HPX_EXPORT namespace_action_code retrieve_action_service_code(
+    namespace_action_code retrieve_action_service_code(
         std::string const& name, error_code& ec = throws);
 }    // namespace hpx::agas::detail

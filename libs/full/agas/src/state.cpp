@@ -9,7 +9,7 @@
 #include <hpx/agas/state.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     // return whether resolver client is in state described by st
     bool router_is(state st)
@@ -22,4 +22,4 @@ namespace hpx { namespace agas {
         }
         return (agas_client->get_status() == st);
     }
-}}    // namespace hpx::agas
+}    // namespace hpx::agas

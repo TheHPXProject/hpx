@@ -84,6 +84,19 @@ void verify_vector(hpx::partitioned_vector<T> const& v, T const& val,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+template <typename T>
+void verify_against_std(
+    hpx::partitioned_vector<T>& part_v, std::vector<T>& std_v)
+{
+    auto std_it = std_v.begin();
+    HPX_ASSERT(part_v.size() == std_v.size());
+    for (auto part_it = part_v.begin(); part_it != part_v.end();
+        part_it++, std_it++)
+    {
+        HPX_TEST_EQ(*part_it, *std_it);
+    }
+}
+///////////////////////////////////////////////////////////////////////////////
 template <typename T, typename DistPolicy, typename ExPolicy>
 void generate_algo_tests_with_policy(
     std::size_t size, DistPolicy const& policy, ExPolicy const& generate_policy)
@@ -98,6 +111,20 @@ void generate_algo_tests_with_policy(
     verify_values(c.begin() + 1, c.end() - 1, T(43));
     verify_values(c.begin(), c.begin() + 1, T(43), false);
     verify_values(c.end() - 1, c.end(), T(43), false);
+}
+
+template <typename T, typename DistPolicy, typename Count, typename ExPolicy>
+void generate_n_algo_tests_with_policy(std::size_t size, Count count,
+    DistPolicy const& policy, ExPolicy const& generate_policy)
+{
+    hpx::partitioned_vector<T> c(size, policy);
+    std::vector<T> l(size);
+    iota_vector(c, T(1234));
+    std::iota(l.begin(), l.end(), T(1234));
+
+    hpx::generate_n(generate_policy, c.begin(), count, gen<T>{});
+    std::generate_n(l.begin(), count, gen<T>{});
+    verify_against_std(c, l);
 }
 
 template <typename T, typename DistPolicy, typename ExPolicy>
@@ -121,6 +148,21 @@ void generate_algo_tests_with_policy_async(
     verify_values(c.begin(), c.begin() + 1, T(43), false);
     verify_values(c.end() - 1, c.end(), T(43), false);
 }
+template <typename T, typename DistPolicy, typename Count, typename ExPolicy>
+void generate_n_algo_tests_with_policy_async(std::size_t size, Count count,
+    DistPolicy const& policy, ExPolicy const& generate_policy)
+{
+    hpx::partitioned_vector<T> c(size, policy);
+    std::vector<T> l(size);
+    iota_vector(c, T(1234));
+    std::iota(l.begin(), l.end(), T(1234));
+
+    hpx::future<void> f =
+        hpx::generate_n(generate_policy, c.begin(), count, gen<T>{});
+    f.wait();
+    std::generate_n(l.begin(), count, gen<T>{});
+    verify_against_std(c, l);
+}
 
 template <typename T, typename DistPolicy>
 void generate_tests_with_policy(
@@ -134,6 +176,24 @@ void generate_tests_with_policy(
     //async
     generate_algo_tests_with_policy_async<T>(size, policy, seq(task));
     generate_algo_tests_with_policy_async<T>(size, policy, par(task));
+}
+
+template <typename T, typename DistPolicy>
+void generate_n_tests_with_policy(std::size_t size, std::size_t count_range,
+    std::size_t /* localities */, DistPolicy const& policy)
+{
+    using namespace hpx::execution;
+    for (std::size_t count = 0; count < count_range; count++)
+    {
+        generate_n_algo_tests_with_policy<T>(size, count, policy, seq);
+        generate_n_algo_tests_with_policy<T>(size, count, policy, par);
+
+        //async
+        generate_n_algo_tests_with_policy_async<T>(
+            size, count, policy, seq(task));
+        generate_n_algo_tests_with_policy_async<T>(
+            size, count, policy, par(task));
+    }
 }
 
 template <typename T>
@@ -150,11 +210,27 @@ void generate_tests()
         length, localities.size(), hpx::container_layout(localities));
 }
 
+template <typename T>
+void generate_n_tests()
+{
+    std::size_t const length = 12;
+    std::vector<hpx::id_type> localities = hpx::find_all_localities();
+
+    generate_n_tests_with_policy<T>(length, 8, 1, hpx::container_layout);
+    generate_n_tests_with_policy<T>(length, 8, 3, hpx::container_layout(3));
+    generate_n_tests_with_policy<T>(
+        length, 8, 3, hpx::container_layout(3, localities));
+    generate_n_tests_with_policy<T>(
+        length, 8, localities.size(), hpx::container_layout(localities));
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     generate_tests<double>();
     generate_tests<int>();
+    generate_n_tests<double>();
+    generate_n_tests<int>();
 
     return hpx::util::report_errors();
 }

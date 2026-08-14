@@ -547,6 +547,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/mismatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -762,10 +763,7 @@ namespace hpx::parallel {
 
                     difference_type mismatched =
                         static_cast<difference_type>(tok.get_data());
-                    if (mismatched != count)
-                        std::advance(first1, mismatched);
-                    else
-                        first1 = detail::advance_to_sentinel(first1, last1);
+                    std::advance(first1, mismatched);
 
                     std::advance(first2, mismatched);
                     return std::make_pair(first1, first2);
@@ -787,9 +785,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::mismatch
     HPX_CXX_CORE_EXPORT inline constexpr struct mismatch_t final
-      : hpx::detail::tag_parallel_algorithm<mismatch_t>
+      : hpx::detail::tag_dispatch<mismatch_t,
+            hpx::detail::tag_parallel_algorithm<mismatch_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename Pred>
         // clang-format off
@@ -803,9 +801,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(mismatch_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2,
-            Pred op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -827,8 +824,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(mismatch_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -856,8 +853,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(mismatch_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, Pred op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -878,8 +875,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(mismatch_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -903,9 +900,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend std::pair<FwdIter1, FwdIter2> tag_fallback_invoke(mismatch_t,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2,
-            Pred op)
+        static std::pair<FwdIter1, FwdIter2> invoke_default(FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -926,7 +922,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend std::pair<FwdIter1, FwdIter2> tag_fallback_invoke(mismatch_t,
+        static std::pair<FwdIter1, FwdIter2> invoke_default(
             FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -953,7 +949,7 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend std::pair<FwdIter1, FwdIter2> tag_fallback_invoke(mismatch_t,
+        static std::pair<FwdIter1, FwdIter2> invoke_default(
             FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -973,8 +969,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend std::pair<FwdIter1, FwdIter2> tag_fallback_invoke(
-            mismatch_t, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
+        static std::pair<FwdIter1, FwdIter2> invoke_default(
+            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

@@ -16,73 +16,73 @@
 
 namespace hpx::detail {
 
-    [[noreturn]] void throw_exception(error errcode, std::string const& msg,
-        std::string const& func, std::string const& file, long line)
+    [[noreturn]] void throw_exception(error const errcode,
+        std::string const& msg, std::string const& func,
+        std::string const& file, long const line, hpx::throwmode const mode)
     {
         filesystem::path const p(file);
-        hpx::detail::throw_exception(
-            hpx::exception(errcode, msg, hpx::throwmode::plain), func,
-            p.string(), line);
+        hpx::detail::throw_exception(hpx::exception(errcode, msg, mode), func,
+            hpx::filesystem::to_string(p), line);
     }
 
     [[noreturn]] void rethrow_exception(
-        exception const& e, std::string const& func)
+        exception const& e, std::string const& func, hpx::throwmode const mode)
     {
         hpx::detail::throw_exception(
-            hpx::exception(e.get_error(), e.what(), hpx::throwmode::rethrow),
-            func, hpx::get_error_file_name(e), hpx::get_error_line_number(e));
+            hpx::exception(e.get_error(), e.what(), mode), func,
+            hpx::get_error_file_name(e), hpx::get_error_line_number(e));
     }
 
-    std::exception_ptr get_exception(error errcode, std::string const& msg,
-        throwmode mode, std::string const& /* func */, std::string const& file,
-        long line, std::string const& auxinfo)
+    std::exception_ptr get_exception(error const errcode,
+        std::string const& msg, throwmode const mode,
+        std::string const& /* func */, std::string const& file, long const line,
+        std::string const& auxinfo)
     {
         filesystem::path const p(file);
         return hpx::detail::get_exception(hpx::exception(errcode, msg, mode),
-            p.string(), file, line, auxinfo);
+            hpx::filesystem::to_string(p), file, line, auxinfo);
     }
 
     std::exception_ptr get_exception(std::error_code const& ec,
         std::string const& /* msg */, throwmode /* mode */,
-        std::string const& func, std::string const& file, long line,
+        std::string const& func, std::string const& file, long const line,
         std::string const& auxinfo)
     {
         return hpx::detail::get_exception(
             hpx::exception(ec), func, file, line, auxinfo);
     }
 
-    void throws_if(hpx::error_code& ec, error errcode, std::string const& msg,
-        std::string const& func, std::string const& file, long line)
+    void throws_if(hpx::error_code& ec, error const errcode,
+        std::string const& msg, std::string const& func,
+        std::string const& file, long const line)
     {
         if (&ec == &hpx::throws)
         {
             hpx::detail::throw_exception(errcode, msg, func, file, line);
         }
-        else
-        {
-            ec = make_error_code(static_cast<hpx::error>(errcode), msg,
-                func.c_str(), file.c_str(), line,
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight :
-                    hpx::throwmode::plain);
-        }
+
+        ec = make_error_code(static_cast<hpx::error>(errcode), msg,
+            func.c_str(), file.c_str(), line,
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight :
+                hpx::throwmode::plain);
     }
 
-    void throws_bad_alloc_if(
-        hpx::error_code& ec, char const* func, char const* file, long line)
+    void throws_bad_alloc_if(hpx::error_code& ec, char const* func,
+        char const* file, long const line)
     {
         if (&ec == &hpx::throws)
         {
             throw hpx::bad_alloc_exception();
         }
-        else
-        {
-            ec = make_error_code(hpx::error::out_of_memory, "out of memory",
-                func, file, line,
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight :
-                    hpx::throwmode::plain);
-        }
+
+        ec = make_error_code(hpx::error::out_of_memory, "out of memory", func,
+            file, line,
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight :
+                hpx::throwmode::plain);
     }
 
     void rethrows_if(
@@ -92,15 +92,33 @@ namespace hpx::detail {
         {
             hpx::detail::rethrow_exception(e, func);
         }
-        else
+
+        ec = make_error_code(e.get_error(), e.what(), func.c_str(),
+            hpx::get_error_file_name(e).c_str(), hpx::get_error_line_number(e),
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+                hpx::throwmode::lightweight_rethrow :
+                hpx::throwmode::rethrow);
+    }
+
+    void rethrows_if(hpx::error_code& ec, std::exception_ptr const& e,
+        std::string const& func)
+    {
+        if (&ec == &hpx::throws)
         {
-            ec = make_error_code(e.get_error(), e.what(), func.c_str(),
-                hpx::get_error_file_name(e).c_str(),
-                hpx::get_error_line_number(e),
-                (ec.category() == hpx::get_lightweight_hpx_category()) ?
-                    hpx::throwmode::lightweight_rethrow :
-                    hpx::throwmode::rethrow);
+            std::rethrow_exception(e);
         }
+
+        auto const rethrow_mode =
+            (ec.category() == hpx::get_lightweight_hpx_category() ||
+                ec.category() == hpx::get_lightweight_hpx_rethrow_category()) ?
+            hpx::throwmode::lightweight_rethrow :
+            hpx::throwmode::rethrow;
+
+        auto&& [what, ecode] = hpx::get_error_info(e);
+        ec = make_error_code(ecode, what, func.c_str(),
+            hpx::get_error_file_name(e).c_str(), hpx::get_error_line_number(e),
+            rethrow_mode);
     }
 
     [[noreturn]] void throw_thread_interrupted_exception()

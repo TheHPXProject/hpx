@@ -123,10 +123,14 @@ namespace hpx::threads {
             hpx::util::get_entry_as<std::int64_t>(rtcfg_,
                 "hpx.thread_queue.max_terminated_threads",
                 HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS);
-        std::int64_t const init_threads_count =
+        std::uint64_t const init_threads_count =
             hpx::util::get_entry_as<std::int64_t>(rtcfg_,
                 "hpx.thread_queue.init_threads_count",
                 HPX_THREAD_QUEUE_INIT_THREADS_COUNT);
+        std::uint64_t const cached_threads_count =
+            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
+                "hpx.thread_queue.cached_threads_count",
+                HPX_THREAD_QUEUE_CACHED_THREADS_COUNT);
         double const max_idle_backoff_time = hpx::util::get_entry_as<double>(
             rtcfg_, "hpx.max_idle_backoff_time", HPX_IDLE_BACKOFF_TIME_MAX);
 
@@ -143,8 +147,8 @@ namespace hpx::threads {
             min_tasks_to_steal_pending, min_tasks_to_steal_staged,
             min_add_new_count, max_add_new_count, min_delete_count,
             max_delete_count, max_terminated_threads, init_threads_count,
-            max_idle_backoff_time, small_stacksize, medium_stacksize,
-            large_stacksize, huge_stacksize);
+            cached_threads_count, max_idle_backoff_time, small_stacksize,
+            medium_stacksize, large_stacksize, huge_stacksize);
     }
 
     void threadmanager::create_scheduler_user_defined(
@@ -214,6 +218,51 @@ namespace hpx::threads {
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
             num_high_priority_queues, thread_queue_init,
             "core-local_priority_queue_scheduler-fifo");
+
+        auto sched = std::make_unique<local_sched_type>(init);
+        auto const full_mask =
+            hpx::resource::get_partitioner().get_pool_pus_mask(
+                thread_pool_init.name_);
+
+        // set the default scheduler flags
+        sched->set_scheduler_mode(thread_pool_init.mode_, full_mask);
+
+        // conditionally set/unset this flag
+        sched->update_scheduler_mode(
+            policies::scheduler_mode::enable_stealing_numa, !numa_sensitive,
+            full_mask);
+
+        // instantiate the pool
+        std::unique_ptr<thread_pool_base> pool = std::make_unique<
+            hpx::threads::detail::scheduled_thread_pool<local_sched_type>>(
+            HPX_MOVE(sched), thread_pool_init);
+        pools_.push_back(HPX_MOVE(pool));
+    }
+
+    void threadmanager::create_scheduler_local_priority_fifo_double(
+        thread_pool_init_parameters const& thread_pool_init,
+        policies::thread_queue_init_parameters const& thread_queue_init,
+        std::size_t const numa_sensitive)
+    {
+        // set parameters for scheduler and pool instantiation and perform
+        // compatibility checks
+        std::size_t const num_high_priority_queues =
+            hpx::util::get_entry_as<std::size_t>(rtcfg_,
+                "hpx.thread_queue.high_priority_queues",
+                thread_pool_init.num_threads_);
+
+        detail::check_num_high_priority_queues(
+            thread_pool_init.num_threads_, num_high_priority_queues);
+
+        // instantiate the scheduler
+        using local_sched_type =
+            hpx::threads::policies::local_priority_queue_scheduler<std::mutex,
+                hpx::threads::policies::lockfree_fifo_double>;
+
+        local_sched_type::init_parameter_type init(
+            thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
+            num_high_priority_queues, thread_queue_init,
+            "core-local_priority_queue_scheduler-fifo_double");
 
         auto sched = std::make_unique<local_sched_type>(init);
         auto const full_mask =
@@ -806,6 +855,11 @@ namespace hpx::threads {
 
             case resource::scheduling_policy::local_priority_fifo:
                 create_scheduler_local_priority_fifo(
+                    thread_pool_init, thread_queue_init, numa_sensitive);
+                break;
+
+            case resource::scheduling_policy::local_priority_fifo_double:
+                create_scheduler_local_priority_fifo_double(
                     thread_pool_init, thread_queue_init, numa_sensitive);
                 break;
 

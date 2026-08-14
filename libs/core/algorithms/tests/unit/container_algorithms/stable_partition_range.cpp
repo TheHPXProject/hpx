@@ -219,6 +219,74 @@ void test_stable_partition_async(ExPolicy p, IteratorTag)
     HPX_TEST_EQ(count, d.size());
 }
 
+template <typename IteratorTag>
+void test_stable_partition_sentinel(IteratorTag)
+{
+    using test_vector = test::test_sentinel_container<std::vector<int>,
+        std::bidirectional_iterator_tag>;
+
+    test_vector c(10007);
+    std::vector<int> d(c.size());
+    std::iota(std::begin(c.base()), std::end(c.base()), std::rand());
+    std::copy(std::begin(c.base()), std::end(c.base()), std::begin(d));
+
+    int partition_at = std::rand();
+
+    auto result = hpx::ranges::stable_partition(c, less_than(partition_at));
+
+    auto partition_pt = std::find_if(std::begin(c.base()), std::end(c.base()),
+        great_equal_than(partition_at));
+    HPX_TEST(result.begin().base() == partition_pt);
+
+    // verify values
+    std::stable_partition(std::begin(d), std::end(d), less_than(partition_at));
+
+    std::size_t count = 0;
+    HPX_TEST(std::equal(std::begin(c.base()), std::end(c.base()), std::begin(d),
+        [&count](std::size_t v1, std::size_t v2) -> bool {
+            HPX_TEST_EQ(v1, v2);
+            ++count;
+            return v1 == v2;
+        }));
+    HPX_TEST_EQ(count, d.size());
+}
+
+template <typename ExPolicy, typename IteratorTag>
+void test_stable_partition_sentinel(ExPolicy policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    using test_vector = test::test_sentinel_container<std::vector<int>,
+        std::bidirectional_iterator_tag>;
+
+    test_vector c(10007);
+    std::vector<int> d(c.size());
+    std::iota(std::begin(c.base()), std::end(c.base()), std::rand());
+    std::copy(std::begin(c.base()), std::end(c.base()), std::begin(d));
+
+    int partition_at = std::rand();
+
+    auto result =
+        hpx::ranges::stable_partition(policy, c, less_than(partition_at));
+
+    auto partition_pt = std::find_if(std::begin(c.base()), std::end(c.base()),
+        great_equal_than(partition_at));
+    HPX_TEST(result.begin().base() == partition_pt);
+
+    // verify values
+    std::stable_partition(std::begin(d), std::end(d), less_than(partition_at));
+
+    std::size_t count = 0;
+    HPX_TEST(std::equal(std::begin(c.base()), std::end(c.base()), std::begin(d),
+        [&count](std::size_t v1, std::size_t v2) -> bool {
+            HPX_TEST_EQ(v1, v2);
+            ++count;
+            return v1 == v2;
+        }));
+    HPX_TEST_EQ(count, d.size());
+}
+
 template <typename DataType>
 void test_stable_partition()
 {
@@ -228,6 +296,11 @@ void test_stable_partition()
     test_stable_partition(seq, DataType());
     test_stable_partition(par, DataType());
     test_stable_partition(par_unseq, DataType());
+
+    test_stable_partition_sentinel(DataType());
+    test_stable_partition_sentinel(seq, DataType());
+    test_stable_partition_sentinel(par, DataType());
+    test_stable_partition_sentinel(par_unseq, DataType());
 
     test_stable_partition_async(seq(task), DataType());
     test_stable_partition_async(par(task), DataType());

@@ -15,16 +15,8 @@
 #include <hpx/actions/actions_fwd.hpp>
 #include <hpx/actions/base_action.hpp>
 #include <hpx/actions/register_action.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/detail/invocation_count_registry.hpp>
-#include <hpx/actions_base/traits/action_continuation.hpp>
-#include <hpx/actions_base/traits/action_does_termination_detection.hpp>
-#include <hpx/actions_base/traits/action_priority.hpp>
-#include <hpx/actions_base/traits/action_schedule_thread.hpp>
-#include <hpx/actions_base/traits/action_stacksize.hpp>
-#include <hpx/actions_base/traits/action_trigger_continuation_fwd.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/components_base/pinned_ptr.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/assert.hpp>
@@ -33,10 +25,6 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/util.hpp>
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-#include <hpx/modules/itt_notify.hpp>
-#endif
 
 #include <hpx/modules/parcelset_base.hpp>
 
@@ -99,14 +87,14 @@ namespace hpx::actions {
 
 namespace hpx {
 
-    template <std::size_t I, typename Args>
+    HPX_CXX_EXPORT template <std::size_t I, typename Args>
     constexpr HPX_HOST_DEVICE HPX_FORCEINLINE hpx::tuple_element_t<I, Args>&
     get(hpx::actions::detail::argument_holder<Args>& t)
     {
         return hpx::tuple_element<I, Args>::get(t.data());
     }
 
-    template <std::size_t I, typename Args>
+    HPX_CXX_EXPORT template <std::size_t I, typename Args>
     constexpr HPX_HOST_DEVICE HPX_FORCEINLINE
         hpx::tuple_element_t<I, Args> const&
         get(hpx::actions::detail::argument_holder<Args> const& t)
@@ -114,7 +102,7 @@ namespace hpx {
         return hpx::tuple_element<I, Args>::get(t.data());
     }
 
-    template <std::size_t I, typename Args>
+    HPX_CXX_EXPORT template <std::size_t I, typename Args>
     constexpr HPX_HOST_DEVICE HPX_FORCEINLINE hpx::tuple_element_t<I, Args>&&
     get(hpx::actions::detail::argument_holder<Args>&& t)
     {
@@ -122,7 +110,7 @@ namespace hpx {
             hpx::get<I>(t.data()));
     }
 
-    template <std::size_t I, typename Args>
+    HPX_CXX_EXPORT template <std::size_t I, typename Args>
     constexpr HPX_HOST_DEVICE HPX_FORCEINLINE
         hpx::tuple_element_t<I, Args> const&&
         get(hpx::actions::detail::argument_holder<Args> const&& t)
@@ -135,7 +123,7 @@ namespace hpx {
 namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     struct transfer_base_action : base_action_data
     {
         transfer_base_action(transfer_base_action const&) = delete;
@@ -223,16 +211,6 @@ namespace hpx::actions {
         {
             return detail::get_action_id<derived_type>();
         }
-
-#if defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0 &&                  \
-    !defined(HPX_HAVE_APEX)
-        /// The function \a get_action_name_itt returns the name of this action
-        /// as an ITT string_handle
-        util::itt::string_handle const& get_action_name_itt() const override
-        {
-            return detail::get_action_name_itt<derived_type>();
-        }
-#endif
 
         /// The function \a get_action_type returns whether this action needs
         /// to be executed in a new thread or directly.
@@ -337,7 +315,7 @@ namespace hpx::actions {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <std::size_t N, typename Action>
+    HPX_CXX_EXPORT template <std::size_t N, typename Action>
     constexpr hpx::tuple_element_t<N,
         typename transfer_action<Action>::arguments_type> const&
     get(transfer_base_action<Action> const& args)
@@ -348,10 +326,10 @@ namespace hpx::actions {
 
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
     defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
-#include <hpx/actions_base/detail/per_action_data_counter_registry.hpp>
+#include <hpx/modules/actions_base.hpp>
 
 /// \cond NOINTERNAL
-template <typename Action>
+HPX_CXX_EXPORT template <typename Action>
 void hpx::actions::detail::register_per_action_data_counter_types(
     hpx::actions::detail::per_action_data_counter_registry& registry)
 {

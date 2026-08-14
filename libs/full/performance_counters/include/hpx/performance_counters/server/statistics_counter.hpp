@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2015 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,10 +7,11 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/server/component_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/synchronization.hpp>
+
 #include <hpx/performance_counters/server/base_performance_counter.hpp>
 
 #include <cstddef>
@@ -21,7 +22,7 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace performance_counters { namespace server {
+namespace hpx::performance_counters::server {
 
     namespace detail {
 
@@ -103,6 +104,6 @@ namespace hpx { namespace performance_counters { namespace server {
         std::size_t parameter1_, parameter2_;
         bool reset_base_counter_;
     };
-}}}    // namespace hpx::performance_counters::server
+}    // namespace hpx::performance_counters::server
 
 #include <hpx/config/warnings_suffix.hpp>

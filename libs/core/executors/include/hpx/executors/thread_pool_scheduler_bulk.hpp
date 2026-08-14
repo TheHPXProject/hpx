@@ -8,36 +8,18 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#if defined(HPX_HAVE_STDEXEC)
-#include <hpx/execution_base/stdexec_forward.hpp>
-#endif
-
 #include <hpx/assert.hpp>
-#include <hpx/concepts/concepts.hpp>
-#include <hpx/concurrency/cache_line_data.hpp>
-#include <hpx/concurrency/detail/non_contiguous_index_queue.hpp>
-#include <hpx/coroutines/thread_enums.hpp>
-#include <hpx/datastructures/tuple.hpp>
-#include <hpx/datastructures/variant.hpp>
-#include <hpx/errors/exception.hpp>
-#include <hpx/errors/exception_list.hpp>
-#include <hpx/errors/try_catch_exception_ptr.hpp>
-#include <hpx/execution/algorithms/bulk.hpp>
-#include <hpx/execution/executors/execution_parameters.hpp>
-#include <hpx/execution_base/completion_scheduler.hpp>
-#include <hpx/execution_base/completion_signatures.hpp>
-#include <hpx/execution_base/receiver.hpp>
-#include <hpx/execution_base/sender.hpp>
 #include <hpx/executors/thread_pool_scheduler.hpp>
-#include <hpx/functional/bind_front.hpp>
-#include <hpx/functional/detail/tag_fallback_invoke.hpp>
-#include <hpx/functional/tag_invoke.hpp>
-#include <hpx/iterator_support/counting_iterator.hpp>
-#include <hpx/iterator_support/traits/is_iterator.hpp>
-#include <hpx/iterator_support/traits/is_range.hpp>
+#include <hpx/modules/concepts.hpp>
+#include <hpx/modules/concurrency.hpp>
+#include <hpx/modules/coroutines.hpp>
+#include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -49,6 +31,7 @@
 #include <cstdint>
 #include <exception>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -74,6 +57,40 @@ namespace hpx::execution::experimental::detail {
             chunk_size *= 2;
         }
         return static_cast<std::uint32_t>(chunk_size);
+    }
+
+    // For bulk_chunked: create exactly num_threads large chunks (one per worker).
+    // Unlike get_bulk_scheduler_chunk_size which creates ~8x more chunks per
+    // thread for fine-grained work stealing, this variant maximises spatial
+    // locality and minimises work-stealing queue overhead for the chunked case.
+    // Work stealing is still attempted but rarely needed for uniform workloads.
+    HPX_CXX_CORE_EXPORT constexpr std::uint32_t
+    get_bulk_scheduler_chunk_size_chunked(
+        std::uint32_t const num_threads, std::size_t const n) noexcept
+    {
+        if (num_threads == 0)
+            return static_cast<std::uint32_t>(n);
+        // ceiling division: ceil(n / num_threads) -> one chunk per worker thread
+        return static_cast<std::uint32_t>(
+            (n + static_cast<std::size_t>(num_threads) - 1) / num_threads);
+    }
+
+    /// Round a chunk up to a multiple of 16 when it is
+    /// smaller than size
+    HPX_CXX_CORE_EXPORT constexpr std::uint32_t align_chunk_for_vectorization(
+        std::uint32_t chunk, std::uint32_t const size) noexcept
+    {
+        constexpr std::uint32_t g = 16;
+        if (chunk == 0 || chunk >= size)
+            return chunk;
+        std::uint64_t c = chunk;
+        if (c % g != 0)
+        {
+            c = ((c + g - 1) / g) * g;
+        }
+        if (c > size)
+            c = size;
+        return static_cast<std::uint32_t>(c);
     }
 
     // For bulk_unchunked: f(index, ...)
@@ -156,19 +173,15 @@ namespace hpx::execution::experimental::detail {
         template <typename Ts>
         void do_work_chunk(Ts& ts, std::uint32_t const index) const
         {
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
-            static hpx::util::itt::event notify_event(
-                "set_value_loop_visitor::do_work_chunk(chunking)");
-
-            hpx::util::itt::mark_event e(notify_event);
-#endif
-
             using index_pack_type = hpx::detail::fused_index_pack_t<Ts>;
 
+            HPX_TRACING_MARK_EVENT(
+                "set_value_loop_visitor::do_work_chunk(chunking)");
+
             auto const i_begin =
-                static_cast<std::size_t>(index) * task_f->chunk_size;
-            auto const i_end =
-                (std::min) (i_begin + task_f->chunk_size, task_f->size);
+                static_cast<std::size_t>(index) * op_state->chunk_size;
+            auto const i_end = (std::min) (i_begin + op_state->chunk_size,
+                static_cast<std::size_t>(op_state->size));
 
             if constexpr (OperationState::is_chunked)
             {
@@ -178,14 +191,14 @@ namespace hpx::execution::experimental::detail {
             }
             else
             {
-                // bulk_unchunked: f(index, values...) for each element
-                // In unchunked case, chunk_size is 1
-                // so each chunk will only have one element.
-                // The regular bulk invocation will go through the is_chunked case.
+                // bulk_unchunked: one element call f(shape_index, values...) per i.
                 auto it = std::ranges::next(
                     hpx::util::begin(op_state->shape), i_begin);
-                bulk_scheduler_invoke_helper(
-                    index_pack_type{}, op_state->f, *it, ts);
+                for (auto i = i_begin; i < i_end; ++i, ++it)
+                {
+                    bulk_scheduler_invoke_helper(
+                        index_pack_type{}, op_state->f, *it, ts);
+                }
             }
         }
 
@@ -202,7 +215,7 @@ namespace hpx::execution::experimental::detail {
                 do_work_chunk(ts, *index);
             }
 
-            if (task_f->allow_stealing)
+            if (op_state->allow_stealing)
             {
                 // Then steal from the opposite end of the neighboring queues
                 static constexpr auto opposite_end =
@@ -235,7 +248,7 @@ namespace hpx::execution::experimental::detail {
         void operator()(Ts& ts) const
         {
             // schedule chunks from the end, if needed
-            if (task_f->reverse_placement)
+            if (op_state->reverse_placement)
             {
                 do_work<hpx::concurrency::detail::queue_end::right>(ts);
             }
@@ -276,11 +289,7 @@ namespace hpx::execution::experimental::detail {
     struct task_function
     {
         OperationState* const op_state;
-        std::size_t const size;
-        std::uint32_t const chunk_size;
         std::uint32_t const worker_thread;
-        bool reverse_placement;
-        bool allow_stealing;
 
         // Visit the values sent by the predecessor sender.
         void do_work() const
@@ -306,7 +315,8 @@ namespace hpx::execution::experimental::detail {
         // Otherwise, it will call set_value on the connected receiver.
         void finish() const
         {
-            if (--(op_state->tasks_remaining.data_) == 0)
+            if (op_state->tasks_remaining.data_.fetch_sub(
+                    1, std::memory_order_acq_rel) == 1)
             {
                 if (op_state->bad_alloc_thrown.load(std::memory_order_relaxed))
                 {
@@ -364,24 +374,31 @@ namespace hpx::execution::experimental::detail {
         typename Shape>
     struct bulk_receiver
     {
-#if defined(HPX_HAVE_STDEXEC)
         using receiver_concept = hpx::execution::experimental::receiver_t;
-#endif
         OperationState* op_state;
 
         template <typename E>
-        friend void tag_invoke(hpx::execution::experimental::set_error_t,
-            bulk_receiver&& r, E&& e) noexcept
+        void set_error(E&& e) & noexcept
         {
             hpx::execution::experimental::set_error(
-                HPX_MOVE(r.op_state->receiver), HPX_FORWARD(E, e));
+                HPX_MOVE(op_state->receiver), HPX_FORWARD(E, e));
         }
 
-        friend void tag_invoke(hpx::execution::experimental::set_stopped_t,
-            bulk_receiver&& r) noexcept
+        template <typename E>
+        void set_error(E&& e) && noexcept
+        {
+            static_cast<bulk_receiver&>(*this).set_error(HPX_FORWARD(E, e));
+        }
+
+        void set_stopped() & noexcept
         {
             hpx::execution::experimental::set_stopped(
-                HPX_MOVE(r.op_state->receiver));
+                HPX_MOVE(op_state->receiver));
+        }
+
+        void set_stopped() && noexcept
+        {
+            static_cast<bulk_receiver&>(*this).set_stopped();
         }
 
         // Initialize a queue for a worker thread.
@@ -448,8 +465,7 @@ namespace hpx::execution::experimental::detail {
                 hint.hint == -1)
             {
                 // apply hint if none was given
-                hint.mode = hpx::threads::thread_schedule_hint_mode::thread;
-                hint.hint = worker_thread + op_state->first_thread;
+                hint.schedule_hint(worker_thread + op_state->first_thread);
 
                 auto policy = hpx::execution::experimental::with_hint(
                     op_state->scheduler.policy(), hint);
@@ -500,31 +516,68 @@ namespace hpx::execution::experimental::detail {
                 return;
             }
 
-            // Calculate chunk size based on execution mode
+            // Calculate chunk size based on execution mode and sequential policy
             std::uint32_t chunk_size;
             std::uint32_t num_chunks;
-            if constexpr (OperationState::is_chunked)
+
+            // For sequential policy: single chunk covering entire range
+            if constexpr (!OperationState::is_parallel)
             {
-                chunk_size = get_bulk_scheduler_chunk_size(
+                if constexpr (OperationState::is_chunked)
+                {
+                    chunk_size = size;
+                    num_chunks = 1;
+                }
+                else
+                {
+                    chunk_size = 1;
+                    num_chunks = size;
+                }
+                op_state->num_worker_threads = 1;
+            }
+            else if constexpr (OperationState::is_chunked)
+            {
+                // One large chunk per worker thread: minimises queue overhead
+                // and maximises locality for memory-bound work.
+                chunk_size = get_bulk_scheduler_chunk_size_chunked(
                     op_state->num_worker_threads, size);
                 num_chunks = (size + chunk_size - 1) / chunk_size;
             }
             else
             {
-                chunk_size = 1;
-                num_chunks = size;
+                chunk_size = get_bulk_scheduler_chunk_size(
+                    op_state->num_worker_threads, size);
+                num_chunks = (size + chunk_size - 1) / chunk_size;
+            }
+
+            if constexpr (OperationState::is_unsequenced &&
+                OperationState::is_parallel)
+            {
+                chunk_size = align_chunk_for_vectorization(chunk_size, size);
+                num_chunks = (size + chunk_size - 1) / chunk_size;
             }
 
             // launch only as many tasks as we have chunks
             std::size_t const num_pus = op_state->num_worker_threads;
-            if (num_chunks <
+            if constexpr (!OperationState::is_parallel)
+            {
+                // Sequential: force single task execution
+                op_state->tasks_remaining.data_.store(
+                    1, std::memory_order_relaxed);
+                op_state->pu_mask = detail::limit_mask(op_state->pu_mask, 1);
+            }
+            else if (num_chunks <
                 static_cast<std::uint32_t>(op_state->num_worker_threads))
             {
                 op_state->num_worker_threads = num_chunks;
-                op_state->tasks_remaining.data_ = num_chunks;
+                op_state->tasks_remaining.data_.store(
+                    num_chunks, std::memory_order_relaxed);
                 op_state->pu_mask =
                     detail::limit_mask(op_state->pu_mask, num_chunks);
             }
+
+            op_state->size = size;
+            op_state->chunk_size = chunk_size;
 
             HPX_ASSERT(hpx::threads::count(op_state->pu_mask) ==
                 op_state->num_worker_threads);
@@ -576,10 +629,10 @@ namespace hpx::execution::experimental::detail {
                     rp.get_pu_num(local_worker_thread + op_state->first_thread);
             }
 
-            bool reverse_placement =
+            op_state->reverse_placement =
                 hint.placement_mode() == placement::depth_first_reverse ||
                 hint.placement_mode() == placement::breadth_first_reverse;
-            bool allow_stealing =
+            op_state->allow_stealing =
                 !hpx::threads::do_not_share_function(hint.sharing_mode());
 
             for (std::uint32_t pu = 0;
@@ -615,8 +668,7 @@ namespace hpx::execution::experimental::detail {
 
                 // Schedule task for this worker thread
                 do_work_task(
-                    task_function<OperationState>{op_state, size, chunk_size,
-                        worker_thread, reverse_placement, allow_stealing});
+                    task_function<OperationState>{op_state, worker_thread});
 
                 ++worker_thread;
             }
@@ -628,24 +680,39 @@ namespace hpx::execution::experimental::detail {
             // Handle the queue for the local thread.
             if (main_thread_ok)
             {
-                do_work_local(task_function<OperationState>{this->op_state,
-                    size, chunk_size, local_worker_thread, reverse_placement,
-                    allow_stealing});
+                do_work_local(task_function<OperationState>{
+                    this->op_state, local_worker_thread});
             }
         }
 
         template <typename... Ts>
-            requires(std::invocable<F, range_value_type,
-                std::add_lvalue_reference_t<Ts>...>)
-        friend void tag_invoke(hpx::execution::experimental::set_value_t,
-            bulk_receiver&& r, Ts&&... ts) noexcept
+            requires((OperationState::is_chunked &&
+                         std::invocable<F, range_value_type, range_value_type,
+                             std::add_lvalue_reference_t<Ts>...>) ||
+                (!OperationState::is_chunked &&
+                    std::invocable<F, range_value_type,
+                        std::add_lvalue_reference_t<Ts>...>) )
+        void set_value(Ts&&... ts) & noexcept
         {
             hpx::detail::try_catch_exception_ptr(
-                [&]() { r.execute(HPX_FORWARD(Ts, ts)...); },
+                [&]() { this->execute(HPX_FORWARD(Ts, ts)...); },
                 [&](std::exception_ptr ep) {
                     hpx::execution::experimental::set_error(
-                        HPX_MOVE(r.op_state->receiver), HPX_MOVE(ep));
+                        HPX_MOVE(op_state->receiver), HPX_MOVE(ep));
                 });
+        }
+
+        template <typename... Ts>
+            requires((OperationState::is_chunked &&
+                         std::invocable<F, range_value_type, range_value_type,
+                             std::add_lvalue_reference_t<Ts>...>) ||
+                (!OperationState::is_chunked &&
+                    std::invocable<F, range_value_type,
+                        std::add_lvalue_reference_t<Ts>...>) )
+        void set_value(Ts&&... ts) && noexcept
+        {
+            static_cast<bulk_receiver&>(*this).set_value(
+                HPX_FORWARD(Ts, ts)...);
         }
     };
 
@@ -666,7 +733,8 @@ namespace hpx::execution::experimental::detail {
     // threads.
     //
     HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Shape, typename F, bool IsChunked = false>
+        typename Shape, typename F, bool IsChunked, bool IsParallel,
+        bool IsUnsequenced>
     class thread_pool_bulk_sender
     {
     private:
@@ -678,9 +746,9 @@ namespace hpx::execution::experimental::detail {
 
     public:
         template <typename Sender_, typename Shape_, typename F_>
-        thread_pool_bulk_sender(
-            thread_pool_policy_scheduler<Policy>&& scheduler, Sender_&& sender,
-            Shape_&& shape, F_&& f, hpx::threads::mask_rvref_type pu_mask)
+        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy> scheduler,
+            Sender_&& sender, Shape_&& shape, F_&& f,
+            hpx::threads::mask_rvref_type pu_mask)
           : scheduler(HPX_MOVE(scheduler))
           , sender(HPX_FORWARD(Sender_, sender))
           , shape(HPX_FORWARD(Shape_, shape))
@@ -690,16 +758,18 @@ namespace hpx::execution::experimental::detail {
         }
 
         template <typename Sender_, typename Shape_, typename F_>
-        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy>&& sched,
+        thread_pool_bulk_sender(thread_pool_policy_scheduler<Policy> sched,
             Sender_&& sender, Shape_&& shape, F_&& f)
           : scheduler(HPX_MOVE(sched))
           , sender(HPX_FORWARD(Sender_, sender))
           , shape(HPX_FORWARD(Shape_, shape))
           , f(HPX_FORWARD(F_, f))
           , pu_mask(detail::full_mask(
-                hpx::execution::experimental::get_first_core(scheduler),
-                hpx::execution::experimental::processing_units_count(
-                    hpx::execution::experimental::null_parameters, scheduler,
+                this->scheduler.query(
+                    hpx::execution::experimental::get_first_core_t{}),
+                this->scheduler.query(
+                    hpx::execution::experimental::processing_units_count_t{},
+                    hpx::execution::experimental::null_parameters,
                     hpx::chrono::null_duration, 0)))
         {
         }
@@ -710,23 +780,48 @@ namespace hpx::execution::experimental::detail {
         thread_pool_bulk_sender& operator=(
             thread_pool_bulk_sender const&) = default;
 
-#if defined(HPX_HAVE_STDEXEC)
         using sender_concept = hpx::execution::experimental::sender_t;
 
-        template <typename Env>
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            thread_pool_bulk_sender const&, Env const&)
-            -> hpx::execution::experimental::transform_completion_signatures_of<
-                Sender, Env,
-                hpx::execution::experimental::completion_signatures<
-                    hpx::execution::experimental::set_error_t(
-                        std::exception_ptr)>>;
+        template <typename Self, typename Env>
+        static consteval auto get_completion_signatures() noexcept
+            -> decltype(hpx::execution::experimental::
+                    transform_completion_signatures(
+                        hpx::execution::experimental::
+                            completion_signatures_of_t<Sender, Env>{},
+                        hpx::execution::experimental::keep_completion<
+                            hpx::execution::experimental::set_value_t>{},
+                        hpx::execution::experimental::keep_completion<
+                            hpx::execution::experimental::set_error_t>{},
+                        hpx::execution::experimental::keep_completion<
+                            hpx::execution::experimental::set_stopped_t>{},
+                        hpx::execution::experimental::completion_signatures<
+                            hpx::execution::experimental::set_error_t(
+                                std::exception_ptr)>{}))
+        {
+            return {};
+        }
 
         struct env
         {
             std::decay_t<Sender> const& pred_snd;
             thread_pool_policy_scheduler<Policy> const& sch;
+
+            constexpr auto query(
+                hpx::execution::experimental::get_completion_scheduler_t<
+                    hpx::execution::experimental::set_value_t>) const noexcept
+            {
+                return sch;
+            }
+
+            template <typename CPO>
+                requires(meta::value<meta::one_of<CPO,
+                        hpx::execution::experimental::set_value_t>>)
+            friend constexpr auto query(
+                hpx::execution::experimental::get_completion_scheduler_t<CPO>,
+                env const& e, auto&&...) noexcept
+            {
+                return e.sch;
+            }
 
             template <typename CPO>
                 requires(meta::value<meta::one_of<CPO,
@@ -734,82 +829,47 @@ namespace hpx::execution::experimental::detail {
                              hpx::execution::experimental::set_stopped_t>> &&
                     hpx::execution::experimental::detail::
                         has_completion_scheduler_v<CPO, std::decay_t<Sender>>)
-            friend constexpr auto tag_invoke(
+            friend constexpr auto query(
                 hpx::execution::experimental::get_completion_scheduler_t<CPO>
                     tag,
-                env const& e) noexcept
+                env const& e, auto&&...) noexcept
             {
                 return tag(hpx::execution::experimental::get_env(e.pred_snd));
             }
 
-            friend constexpr auto tag_invoke(
-                hpx::execution::experimental::get_completion_scheduler_t<
-                    hpx::execution::experimental::set_value_t>,
-                env const& e) noexcept
+            // P3826R5: report the completion domain for this bulk sender
+            template <typename CPO>
+            auto query(
+                hpx::execution::experimental::get_completion_domain_t<CPO>)
+                const noexcept
             {
-                return e.sch;
+                return sch.query(
+                    hpx::execution::experimental::get_completion_domain_t<
+                        CPO>{});
+            }
+
+            // P2300 get_allocator query
+            constexpr auto query(
+                hpx::execution::experimental::get_allocator_t) const noexcept
+            {
+                return std::allocator<std::byte>{};
             }
         };
 
-        // It may be also be correct to forward the entire env of the
+        // It may also be correct to forward the entire env of the
         // pred. sender.
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_env_t,
-            thread_pool_bulk_sender const& s) noexcept
+        constexpr auto get_env() const noexcept
         {
-            return env{s.sender, s.scheduler};
+            return env{sender, scheduler};
         }
-#else
-        template <typename Env>
-        struct generate_completion_signatures
-        {
-            template <template <typename...> typename Tuple,
-                template <typename...> typename Variant>
-            using value_types = value_types_of_t<Sender, Env, Tuple, Variant>;
-
-            template <template <typename...> typename Variant>
-            using error_types = hpx::util::detail::unique_concat_t<
-                error_types_of_t<Sender, Env, Variant>,
-                Variant<std::exception_ptr>>;
-
-            static constexpr bool sends_stopped =
-                sends_stopped_of_v<Sender, Env>;
-        };
-
-        template <typename Env>
-        friend auto tag_invoke(
-            hpx::execution::experimental::get_completion_signatures_t,
-            thread_pool_bulk_sender const&, Env)
-            -> generate_completion_signatures<Env>;
-
-        template <typename CPO>
-            requires(
-                meta::value<
-                    meta::one_of<CPO, hpx::execution::experimental::set_error_t,
-                        hpx::execution::experimental::set_stopped_t>> &&
-                hpx::execution::experimental::detail::
-                    has_completion_scheduler_v<CPO, std::decay_t<Sender>>)
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_completion_scheduler_t<CPO> tag,
-            thread_pool_bulk_sender const& s)
-        {
-            return tag(s.sender);
-        }
-
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::get_completion_scheduler_t<
-                hpx::execution::experimental::set_value_t>,
-            thread_pool_bulk_sender const& s)
-        {
-            return s.scheduler;
-        }
-#endif
 
     private:
         template <typename Receiver>
         struct operation_state
         {
             static constexpr bool is_chunked = IsChunked;
+            static constexpr bool is_parallel = IsParallel;
+            static constexpr bool is_unsequenced = IsUnsequenced;
 
             using operation_state_type =
                 hpx::execution::experimental::connect_result_t<Sender,
@@ -819,10 +879,16 @@ namespace hpx::execution::experimental::detail {
             operation_state_type op_state;
             std::size_t first_thread;
             std::size_t num_worker_threads;
+            std::size_t size = 0;
+            std::uint32_t chunk_size = 0;
+            bool reverse_placement = false;
+            bool allow_stealing = false;
             hpx::threads::mask_type pu_mask;
+
             std::vector<hpx::util::cache_aligned_data<
                 hpx::concurrency::detail::non_contiguous_index_queue<>>>
                 queues;
+
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
@@ -838,19 +904,19 @@ namespace hpx::execution::experimental::detail {
 
             template <typename Scheduler_, typename Sender_, typename Shape_,
                 typename F_, typename Receiver_>
-            operation_state(Scheduler_&& scheduler, Sender_&& sender,
+            operation_state(Scheduler_&& scheduler_, Sender_&& sender,
                 Shape_&& shape, F_&& f, hpx::threads::mask_type pumask,
                 Receiver_&& receiver)
-              : scheduler(HPX_FORWARD(Scheduler_, scheduler))
+              : scheduler(HPX_FORWARD(Scheduler_, scheduler_))
               , op_state(hpx::execution::experimental::connect(
                     HPX_FORWARD(Sender_, sender),
                     bulk_receiver<operation_state, F, Shape>{this}))
-              , first_thread(
-                    hpx::execution::experimental::get_first_core(scheduler))
-              , num_worker_threads(
-                    hpx::execution::experimental::processing_units_count(
-                        hpx::execution::experimental::null_parameters,
-                        scheduler, hpx::chrono::null_duration, 0))
+              , first_thread(scheduler.query(
+                    hpx::execution::experimental::get_first_core_t{}))
+              , num_worker_threads(scheduler.query(
+                    hpx::execution::experimental::processing_units_count_t{},
+                    hpx::execution::experimental::null_parameters,
+                    hpx::chrono::null_duration, 0))
               , pu_mask(HPX_MOVE(pumask))
               , queues(num_worker_threads)
               , shape(HPX_FORWARD(Shape_, shape))
@@ -862,85 +928,37 @@ namespace hpx::execution::experimental::detail {
                 HPX_ASSERT(hpx::threads::count(pu_mask) == num_worker_threads);
             }
 
-            friend void tag_invoke(start_t, operation_state& os) noexcept
+            void start() & noexcept
             {
-                hpx::execution::experimental::start(os.op_state);
+                auto stop_token =
+                    stdexec::get_stop_token(stdexec::get_env(receiver));
+                if (stop_token.stop_requested())
+                {
+                    stdexec::set_stopped(HPX_MOVE(receiver));
+                    return;
+                }
+                hpx::execution::experimental::start(op_state);
             }
         };
 
     public:
         template <typename Receiver>
-        friend auto tag_invoke(
-            connect_t, thread_pool_bulk_sender&& s, Receiver&& receiver)
+        operation_state<std::decay_t<Receiver>> connect(Receiver&& receiver) &&
         {
-            return operation_state<std::decay_t<Receiver>>{
-                HPX_MOVE(s.scheduler), HPX_MOVE(s.sender), HPX_MOVE(s.shape),
-                HPX_MOVE(s.f), HPX_MOVE(s.pu_mask),
-                HPX_FORWARD(Receiver, receiver)};
+            return operation_state<std::decay_t<Receiver>>{HPX_MOVE(scheduler),
+                HPX_MOVE(sender), HPX_MOVE(shape), HPX_MOVE(f),
+                HPX_MOVE(pu_mask), HPX_FORWARD(Receiver, receiver)};
         }
 
         template <typename Receiver>
-        friend auto tag_invoke(
-            connect_t, thread_pool_bulk_sender& s, Receiver&& receiver)
+        operation_state<std::decay_t<Receiver>> connect(Receiver&& receiver) &
         {
-            return operation_state<std::decay_t<Receiver>>{s.scheduler,
-                s.sender, s.shape, s.f, s.pu_mask,
-                HPX_FORWARD(Receiver, receiver)};
+            return operation_state<std::decay_t<Receiver>>{scheduler, sender,
+                shape, f, pu_mask, HPX_FORWARD(Receiver, receiver)};
         }
     };
 }    // namespace hpx::execution::experimental::detail
 
-#if !defined(HPX_HAVE_STDEXEC)
-namespace hpx::execution::experimental {
-
-    HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Shape, typename F>
-        requires(!std::integral<Shape>)
-    constexpr auto tag_invoke(bulk_t,
-        thread_pool_policy_scheduler<Policy> scheduler, Sender&& sender,
-        Shape const& shape, F&& f)
-    {
-        if constexpr (std::is_same_v<Policy, launch::sync_policy>)
-        {
-            // fall back to non-bulk scheduling if sync execution was requested
-            return detail::bulk_sender<Sender, Shape, F>{
-                HPX_FORWARD(Sender, sender), shape, HPX_FORWARD(F, f)};
-        }
-        else
-        {
-            return detail::thread_pool_bulk_sender<Policy, Sender, Shape, F>{
-                HPX_MOVE(scheduler), HPX_FORWARD(Sender, sender), shape,
-                HPX_FORWARD(F, f)};
-        }
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename Policy, typename Sender,
-        typename Count, typename F>
-        requires(std::integral<Count>)
-    constexpr decltype(auto) tag_invoke(bulk_t,
-        thread_pool_policy_scheduler<Policy> scheduler, Sender&& sender,
-        Count const& count, F&& f)
-    {
-        if constexpr (std::is_same_v<Policy, launch::sync_policy>)
-        {
-            // fall back to non-bulk scheduling if sync execution was requested
-            return detail::bulk_sender<Sender, hpx::util::counting_shape<Count>,
-                F>{HPX_FORWARD(Sender, sender),
-                hpx::util::counting_shape(count), HPX_FORWARD(F, f)};
-        }
-        else
-        {
-            return detail::thread_pool_bulk_sender<Policy, Sender,
-                hpx::util::counting_shape<Count>, F>{HPX_MOVE(scheduler),
-                HPX_FORWARD(Sender, sender), hpx::util::counting_shape(count),
-                HPX_FORWARD(F, f)};
-        }
-    }
-}    // namespace hpx::execution::experimental
-#endif
-
-// Note: With stdexec integration, bulk operations are now customized
-// through the domain system in thread_pool_scheduler.hpp rather than
-// direct tag_invoke customizations. The thread_pool_domain<Policy>
-// intercepts stdexec::bulk_chunked_t operations and creates
-// thread_pool_bulk_sender instances for parallel execution.
+// Bulk operations are customized through the domain system in
+// thread_pool_scheduler.hpp. thread_pool_domain<Policy> intercepts bulk
+// operations and creates thread_pool_bulk_sender instances.

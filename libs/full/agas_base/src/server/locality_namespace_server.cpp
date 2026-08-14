@@ -7,18 +7,19 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas_base/server/locality_namespace.hpp>
-#include <hpx/agas_base/server/primary_namespace.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/naming.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/util.hpp>
-#include <hpx/naming/credit_handling.hpp>
+
+#include <hpx/agas_base/server/locality_namespace.hpp>
+#include <hpx/agas_base/server/primary_namespace.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -30,7 +31,7 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     naming::gid_type bootstrap_locality_namespace_gid()
     {
@@ -42,9 +43,9 @@ namespace hpx { namespace agas {
         return hpx::id_type(agas::locality_ns_msb, agas::locality_ns_lsb,
             hpx::id_type::management_type::unmanaged);
     }
-}}    // namespace hpx::agas
+}    // namespace hpx::agas
 
-namespace hpx { namespace agas { namespace server {
+namespace hpx::agas::server {
 
     void locality_namespace::register_server_instance(
         char const* servicename, error_code& ec)
@@ -498,4 +499,4 @@ namespace hpx { namespace agas { namespace server {
             ++num_threads_.count_;
         }
     }
-}}}    // namespace hpx::agas::server
+}    // namespace hpx::agas::server

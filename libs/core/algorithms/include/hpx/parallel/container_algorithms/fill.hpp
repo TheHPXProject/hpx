@@ -292,6 +292,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/fill.hpp>
 
 #include <cstddef>
@@ -305,9 +306,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::fill
     HPX_CXX_CORE_EXPORT inline constexpr struct fill_t final
-      : hpx::detail::tag_parallel_algorithm<fill_t>
+      : hpx::detail::tag_dispatch<fill_t,
+            hpx::detail::tag_parallel_algorithm<fill_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng,
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
@@ -317,10 +318,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             typename hpx::traits::range_traits<Rng>::iterator_type>
-        tag_fallback_invoke(
-            fill_t, ExPolicy&& policy, Rng&& rng, T const& value)
+        invoke_default(ExPolicy&& policy, Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -341,9 +341,8 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, Iter>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(
-            fill_t, ExPolicy&& policy, Iter first, Sent last, T const& value)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last, T const& value)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Requires at least forward iterator.");
@@ -356,8 +355,8 @@ namespace hpx::ranges {
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
             requires(std::ranges::range<Rng>)
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            fill_t, Rng&& rng, T const& value)
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -373,8 +372,7 @@ namespace hpx::ranges {
         template <typename Iter, typename Sent,
             typename T = typename std::iterator_traits<Iter>::value_type>
             requires(std::sentinel_for<Sent, Iter>)
-        friend Iter tag_fallback_invoke(
-            fill_t, Iter first, Sent last, T const& value)
+        static Iter invoke_default(Iter first, Sent last, T const& value)
         {
             static_assert(std::forward_iterator<Iter>,
                 "Requires at least forward iterator.");
@@ -387,9 +385,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::fill_n
     HPX_CXX_CORE_EXPORT inline constexpr struct fill_n_t final
-      : hpx::detail::tag_parallel_algorithm<fill_n_t>
+      : hpx::detail::tag_dispatch<fill_n_t,
+            hpx::detail::tag_parallel_algorithm<fill_n_t>>
     {
-    private:
         template <typename ExPolicy, typename Rng,
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
@@ -399,10 +397,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(
-            fill_n_t, ExPolicy&& policy, Rng&& rng, T const& value)
+        invoke_default(ExPolicy&& policy, Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -432,10 +429,10 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             FwdIter>::type
-        tag_fallback_invoke(fill_n_t, ExPolicy&& policy, FwdIter first,
-            Size count, T const& value)
+        invoke_default(
+            ExPolicy&& policy, FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -456,8 +453,8 @@ namespace hpx::ranges {
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
             requires(std::ranges::range<Rng>)
-        friend typename hpx::traits::range_traits<Rng>::iterator_type
-        tag_fallback_invoke(fill_n_t, Rng&& rng, T const& value)
+        static typename hpx::traits::range_traits<Rng>::iterator_type
+        invoke_default(Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -480,8 +477,7 @@ namespace hpx::ranges {
             typename T = typename std::iterator_traits<FwdIter>::value_type>
             requires(
                 hpx::traits::is_iterator_v<FwdIter> && std::is_integral_v<Size>)
-        friend FwdIter tag_fallback_invoke(
-            fill_n_t, FwdIter first, Size count, T const& value)
+        static FwdIter invoke_default(FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

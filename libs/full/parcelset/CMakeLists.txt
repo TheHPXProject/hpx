@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,6 +15,7 @@ set(parcelset_headers
     hpx/parcelset/detail/message_handler_interface_functions.hpp
     hpx/parcelset/encode_parcels.hpp
     hpx/parcelset/init_parcelports.hpp
+    hpx/parcelset/macros.hpp
     hpx/parcelset/message_handler_fwd.hpp
     hpx/parcelset/parcel.hpp
     hpx/parcelset/parcelhandler.hpp
@@ -23,6 +24,8 @@ set(parcelset_headers
     hpx/parcelset/parcelset_fwd.hpp
     hpx/parcelset/parcel_buffer.hpp
 )
+
+set(parcelset_macro_headers hpx/parcelset/macros.hpp)
 
 # cmake-format: off
 set(parcelset_compat_headers
@@ -56,8 +59,12 @@ include(HPX_AddModule)
 add_hpx_module(
   full parcelset
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${parcelset_sources}
   HEADERS ${parcelset_headers}
+  ADD_TO_GLOBAL_HEADER
+    "hpx/parcelset/detail/message_handler_interface_functions.hpp" ""
+  MACRO_HEADERS ${parcelset_macro_headers}
   COMPAT_HEADERS ${parcelset_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_parcelset_base hpx_plugin_factories

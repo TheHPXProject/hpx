@@ -418,8 +418,9 @@ namespace hpx {
                 // make sure the runtime system is not active yet
                 if (get_runtime_ptr() != nullptr)
                 {
-                    std::cerr << "hpx::init: can't initialize runtime system "
-                                 "more than once! Exiting...\n";
+                    std::cerr
+                        << "hpx::local::init: can't initialize runtime system "
+                           "more than once! Exiting...\n";
                     return -1;
                 }
                 return 0;
@@ -500,7 +501,8 @@ namespace hpx {
                     }
                     catch (hpx::exception const& e)
                     {
-                        std::cerr << "hpx::init: hpx::exception caught: "
+                        resource::detail::delete_partitioner();
+                        std::cerr << "hpx::local::init: hpx::exception caught: "
                                   << hpx::get_error_what(e) << "\n";
                         return -1;
                     }
@@ -523,6 +525,7 @@ namespace hpx {
                 }
                 catch (hpx::detail::command_line_error const& e)
                 {
+                    resource::detail::delete_partitioner();
                     std::cerr << "hpx::local::init: std::exception caught: "
                               << e.what() << "\n";
                     return -1;

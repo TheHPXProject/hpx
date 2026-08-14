@@ -9,7 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
 #include <type_traits>
@@ -19,14 +19,12 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_adjacent_difference_t
-      : hpx::functional::detail::tag_fallback<
-            sequential_adjacent_difference_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<sequential_adjacent_difference_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename Sent, typename OutIter, typename Op>
-        friend constexpr inline OutIter tag_fallback_invoke(
-            sequential_adjacent_difference_t<ExPolicy>, InIter first, Sent last,
-            OutIter dest, Op&& op)
+        static constexpr inline OutIter invoke_default(
+            InIter first, Sent last, OutIter dest, Op&& op)
         {
             if (first == last)
                 return dest;

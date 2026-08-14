@@ -9,8 +9,8 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
 #include <algorithm>
@@ -76,15 +76,13 @@ namespace hpx::parallel::util {
     }    // namespace detail
 
     HPX_CXX_CORE_EXPORT struct transform_loop_t final
-      : hpx::functional::detail::tag_fallback<transform_loop_t>
+      : hpx::detail::tag_dispatch<transform_loop_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename IterB, typename IterE,
             typename OutIter, typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-            tag_fallback_invoke(hpx::parallel::util::transform_loop_t,
-                ExPolicy&&, IterB it, IterE end, OutIter dest, F&& f)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr util::in_out_result<IterB, OutIter>
+            invoke_default(ExPolicy&&, IterB it, IterE end, OutIter dest, F&& f)
         {
             return detail::transform_loop<IterB>::call(
                 it, end, dest, HPX_FORWARD(F, f));
@@ -162,15 +160,13 @@ namespace hpx::parallel::util {
     }    // namespace detail
 
     HPX_CXX_CORE_EXPORT struct transform_loop_ind_t final
-      : hpx::functional::detail::tag_fallback<transform_loop_ind_t>
+      : hpx::detail::tag_dispatch<transform_loop_ind_t, hpx::detail::no_base>
     {
-    private:
         template <typename ExPolicy, typename IterB, typename IterE,
             typename OutIter, typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr util::in_out_result<IterB, OutIter>
-            tag_fallback_invoke(hpx::parallel::util::transform_loop_ind_t,
-                ExPolicy&&, IterB it, IterE end, OutIter dest, F&& f)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr util::in_out_result<IterB, OutIter>
+            invoke_default(ExPolicy&&, IterB it, IterE end, OutIter dest, F&& f)
         {
             return detail::transform_loop_ind<IterB>::call(
                 it, end, dest, HPX_FORWARD(F, f));
@@ -232,17 +228,15 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_binary_loop_t final
-      : hpx::functional::detail::tag_fallback<transform_binary_loop_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_binary_loop_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter1B, typename InIter1E, typename InIter2,
             typename OutIter, typename F>
-        friend HPX_HOST_DEVICE HPX_FORCEINLINE constexpr util::in_in_out_result<
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::in_in_out_result<
             InIter1B, InIter2, OutIter>
-        tag_fallback_invoke(
-            hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
-            InIter1B first1, InIter1E last1, InIter2 first2, OutIter dest,
-            F&& f)
+        invoke_default(InIter1B first1, InIter1E last1, InIter2 first2,
+            OutIter dest, F&& f)
         {
             return detail::transform_binary_loop<InIter1B, InIter2>::call(
                 first1, last1, first2, dest, HPX_FORWARD(F, f));
@@ -250,12 +244,10 @@ namespace hpx::parallel::util {
 
         template <typename InIter1B, typename InIter1E, typename InIter2B,
             typename InIter2E, typename OutIter, typename F>
-        friend HPX_HOST_DEVICE HPX_FORCEINLINE constexpr util::in_in_out_result<
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::in_in_out_result<
             InIter1B, InIter2B, OutIter>
-        tag_fallback_invoke(
-            hpx::parallel::util::transform_binary_loop_t<ExPolicy>,
-            InIter1B first1, InIter1E last1, InIter2B first2, InIter2E last2,
-            OutIter dest, F&& f)
+        invoke_default(InIter1B first1, InIter1E last1, InIter2B first2,
+            InIter2E last2, OutIter dest, F&& f)
         {
             return detail::transform_binary_loop<InIter1B, InIter2B>::call(
                 first1, last1, first2, last2, dest, HPX_FORWARD(F, f));
@@ -404,18 +396,15 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_binary_loop_ind_t final
-      : hpx::functional::detail::tag_fallback<
-            transform_binary_loop_ind_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_binary_loop_ind_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter1B, typename InIter1E, typename InIter2,
             typename OutIter, typename F>
-        friend HPX_HOST_DEVICE HPX_FORCEINLINE constexpr util::in_in_out_result<
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::in_in_out_result<
             InIter1B, InIter2, OutIter>
-        tag_fallback_invoke(
-            hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
-            InIter1B first1, InIter1E last1, InIter2 first2, OutIter dest,
-            F&& f)
+        invoke_default(InIter1B first1, InIter1E last1, InIter2 first2,
+            OutIter dest, F&& f)
         {
             return detail::transform_binary_loop_ind<InIter1B, InIter2>::call(
                 first1, last1, first2, dest, HPX_FORWARD(F, f));
@@ -423,12 +412,10 @@ namespace hpx::parallel::util {
 
         template <typename InIter1B, typename InIter1E, typename InIter2B,
             typename InIter2E, typename OutIter, typename F>
-        friend HPX_HOST_DEVICE HPX_FORCEINLINE constexpr util::in_in_out_result<
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr util::in_in_out_result<
             InIter1B, InIter2B, OutIter>
-        tag_fallback_invoke(
-            hpx::parallel::util::transform_binary_loop_ind_t<ExPolicy>,
-            InIter1B first1, InIter1E last1, InIter2B first2, InIter2E last2,
-            OutIter dest, F&& f)
+        invoke_default(InIter1B first1, InIter1E last1, InIter2B first2,
+            InIter2E last2, OutIter dest, F&& f)
         {
             return detail::transform_binary_loop_ind<InIter1B, InIter2B>::call(
                 first1, last1, first2, last2, dest, HPX_FORWARD(F, f));
@@ -543,15 +530,13 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_loop_n_t final
-      : hpx::functional::detail::tag_fallback<transform_loop_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_loop_n_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename Iter, typename OutIter, typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr std::pair<Iter, OutIter>
-            tag_fallback_invoke(
-                hpx::parallel::util::transform_loop_n_t<ExPolicy>, Iter it,
-                std::size_t count, OutIter dest, F&& f)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr std::pair<Iter, OutIter>
+            invoke_default(Iter it, std::size_t count, OutIter dest, F&& f)
         {
             using pred = std::bool_constant<std::random_access_iterator<Iter>>;
 
@@ -671,15 +656,13 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_loop_n_ind_t final
-      : hpx::functional::detail::tag_fallback<transform_loop_n_ind_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_loop_n_ind_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename Iter, typename OutIter, typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr std::pair<Iter, OutIter>
-            tag_fallback_invoke(
-                hpx::parallel::util::transform_loop_n_ind_t<ExPolicy>, Iter it,
-                std::size_t count, OutIter dest, F&& f)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr std::pair<Iter, OutIter>
+            invoke_default(Iter it, std::size_t count, OutIter dest, F&& f)
         {
             using pred = std::bool_constant<std::random_access_iterator<Iter>>;
 
@@ -741,18 +724,15 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_binary_loop_n_t final
-      : hpx::functional::detail::tag_fallback<
-            transform_binary_loop_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_binary_loop_n_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter1, typename InIter2, typename OutIter,
             typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr hpx::tuple<InIter1, InIter2, OutIter>
-            tag_fallback_invoke(
-                hpx::parallel::util::transform_binary_loop_n_t<ExPolicy>,
-                InIter1 first1, std::size_t count, InIter2 first2, OutIter dest,
-                F&& f)
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr hpx::tuple<InIter1,
+            InIter2, OutIter>
+        invoke_default(InIter1 first1, std::size_t count, InIter2 first2,
+            OutIter dest, F&& f)
         {
             return detail::transform_binary_loop_n<InIter1, InIter2>::call(
                 first1, count, first2, dest, HPX_FORWARD(F, f));
@@ -854,18 +834,15 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct transform_binary_loop_ind_n_t final
-      : hpx::functional::detail::tag_fallback<
-            transform_binary_loop_ind_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<transform_binary_loop_ind_n_t<ExPolicy>,
+            hpx::detail::no_base>
     {
-    private:
         template <typename InIter1, typename InIter2, typename OutIter,
             typename F>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr hpx::tuple<InIter1, InIter2, OutIter>
-            tag_fallback_invoke(
-                hpx::parallel::util::transform_binary_loop_ind_n_t<ExPolicy>,
-                InIter1 first1, std::size_t count, InIter2 first2, OutIter dest,
-                F&& f)
+        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr hpx::tuple<InIter1,
+            InIter2, OutIter>
+        invoke_default(InIter1 first1, std::size_t count, InIter2 first2,
+            OutIter dest, F&& f)
         {
             return detail::transform_binary_loop_ind_n<InIter1, InIter2>::call(
                 first1, count, first2, dest, HPX_FORWARD(F, f));

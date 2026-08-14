@@ -308,8 +308,8 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/inclusive_scan.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -447,7 +447,7 @@ namespace hpx::parallel {
                               T val) mutable -> void {
                     FwdIter2 dst = get<1>(part_begin.get_iterator_tuple());
 
-                    util::loop_n<std::decay_t<ExPolicy>>(
+                    util::const_loop_n<std::decay_t<ExPolicy>>(
                         dst, part_size, [&op, &val](FwdIter2 it) -> void {
                             *it = HPX_INVOKE(op, val, *it);
                         });
@@ -514,7 +514,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::transform_inclusive_scan
     HPX_CXX_CORE_EXPORT inline constexpr struct transform_inclusive_scan_t final
-      : hpx::detail::tag_parallel_algorithm<transform_inclusive_scan_t>
+      : hpx::detail::tag_dispatch<transform_inclusive_scan_t,
+            hpx::detail::tag_parallel_algorithm<transform_inclusive_scan_t>>
     {
         template <typename InIter, typename OutIter, typename BinOp,
             typename UnOp>
@@ -532,9 +533,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend OutIter tag_fallback_invoke(hpx::transform_inclusive_scan_t,
-            InIter first, InIter last, OutIter dest, BinOp binary_op,
-            UnOp unary_op)
+        static OutIter invoke_default(InIter first, InIter last, OutIter dest,
+            BinOp binary_op, UnOp unary_op)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -567,10 +567,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        tag_fallback_invoke(hpx::transform_inclusive_scan_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest, BinOp binary_op,
-            UnOp unary_op)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest, BinOp binary_op, UnOp unary_op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -603,9 +602,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend OutIter tag_fallback_invoke(hpx::transform_inclusive_scan_t,
-            InIter first, InIter last, OutIter dest, BinOp binary_op,
-            UnOp unary_op, T init)
+        static OutIter invoke_default(InIter first, InIter last, OutIter dest,
+            BinOp binary_op, UnOp unary_op, T init)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -640,10 +638,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        tag_fallback_invoke(hpx::transform_inclusive_scan_t, ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest, BinOp binary_op,
-            UnOp unary_op, T init)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest, BinOp binary_op, UnOp unary_op, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

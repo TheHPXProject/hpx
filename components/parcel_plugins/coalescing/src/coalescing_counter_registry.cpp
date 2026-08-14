@@ -9,9 +9,9 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCEL_COALESCING)
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/util.hpp>
+#include <hpx/modules/performance_counters.hpp>
 
 #include <hpx/parcel_coalescing/counter_registry.hpp>
-#include <hpx/performance_counters/registry.hpp>
 
 #include <cstdint>
 #include <mutex>

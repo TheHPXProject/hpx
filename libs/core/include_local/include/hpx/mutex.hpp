@@ -6,5 +6,6 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>

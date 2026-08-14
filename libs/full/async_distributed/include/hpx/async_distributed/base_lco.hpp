@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,16 +7,14 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/component_action.hpp>
 #include <hpx/async_distributed/lcos_fwd.hpp>
+#include <hpx/async_distributed/macros.hpp>
 #include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/get_lva.hpp>
-#include <hpx/components_base/server/managed_component_base.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
-#include <hpx/parcelset/coalescing_message_handler_registration.hpp>
+#include <hpx/modules/parcelset.hpp>
 
 #include <cstddef>
 #include <exception>
@@ -26,7 +24,7 @@ namespace hpx::lcos {
 
     /// The \a base_lco class is the common base class for all LCO's
     /// implementing a simple set_event action
-    class base_lco
+    HPX_CXX_EXPORT class base_lco
     {
     public:
         virtual void set_event() = 0;

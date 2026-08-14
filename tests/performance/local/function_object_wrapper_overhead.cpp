@@ -52,7 +52,8 @@ void run(F const& f, std::uint64_t local_iterations)
         f();
 
     double elapsed = t.elapsed();
-    std::cout << " walltime/iteration: " << ((elapsed / i) * 1e9) << " ns\n";
+    std::cout << " walltime/iteration: "
+              << ((elapsed / static_cast<double>(i)) * 1e9) << " ns\n";
 }
 
 int app_main(variables_map& vm)

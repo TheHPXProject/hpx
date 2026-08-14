@@ -52,13 +52,13 @@ hpx_setup_lcw()
 include(HPX_AddModule)
 add_hpx_module(
   full parcelport_lcw
-  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_GEN OFF
   SOURCES ${parcelport_lcw_sources}
   HEADERS ${parcelport_lcw_headers}
   COMPAT_HEADERS ${parcelport_lcw_compat_headers}
   DEPENDENCIES hpx_core hpx_dependencies_boost LCW::LCW LCI::LCT
   MODULE_DEPENDENCIES hpx_actions hpx_command_line_handling hpx_parcelset
-                      hpx_parcelset_base
+                      hpx_parcelset_base hpx_plugin_factories
   CMAKE_SUBDIRS examples tests
 )
 

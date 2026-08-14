@@ -27,6 +27,21 @@ constexpr int ITERATIONS = 100;
 constexpr int ITERATIONS = 1000;
 #endif
 
+struct move_only_plus
+{
+    move_only_plus() = default;
+    move_only_plus(move_only_plus const&) = delete;
+    move_only_plus(move_only_plus&&) = default;
+    move_only_plus& operator=(move_only_plus const&) = delete;
+    move_only_plus& operator=(move_only_plus&&) = default;
+
+    std::uint32_t operator()(
+        std::uint32_t lhs, std::uint32_t rhs) const noexcept
+    {
+        return lhs + rhs;
+    }
+};
+
 void test_one_shot_use()
 {
     std::uint32_t const here = hpx::get_locality_id();
@@ -131,9 +146,9 @@ void test_local_use(std::uint32_t num_sites)
                 // test functionality based on immediate local result value
                 auto value = site;
 
-                hpx::future<std::uint32_t> result =
-                    all_reduce(all_reduce_direct_client, value, std::plus<>{},
-                        this_site_arg(site), generation_arg(i + 1));
+                hpx::future<std::uint32_t> result = all_reduce(
+                    all_reduce_direct_client, value, move_only_plus{},
+                    this_site_arg(site), generation_arg(i + 1));
 
                 std::uint32_t sum = 0;
                 for (std::uint32_t j = 0; j != num_sites; ++j)

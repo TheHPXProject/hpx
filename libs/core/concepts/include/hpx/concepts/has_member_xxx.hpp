@@ -43,7 +43,7 @@
         {                                                                      \
         };                                                                     \
                                                                                \
-        Prefix template <typename T>                                           \
+        template <typename T>                                                  \
         struct impl<T,                                                         \
             Member_function_holder<&helper_composed<std::decay_t<T>>::Member>> \
           : std::false_type                                                    \
@@ -57,7 +57,7 @@
     {                                                                          \
     };                                                                         \
                                                                                \
-    Prefix template <typename T>                                               \
+    template <typename T>                                                      \
     struct HPX_PP_CAT(has_, Member)<T, std::enable_if_t<std::is_class_v<T>>>   \
       : HPX_PP_CAT(HPX_PP_CAT(has_, Member), _detail)::impl<T>                 \
     {                                                                          \

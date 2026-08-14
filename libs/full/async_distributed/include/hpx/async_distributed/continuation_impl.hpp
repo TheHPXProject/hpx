@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,21 +8,21 @@
 
 #include <hpx/async_distributed/detail/post.hpp>
 #include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 #include <utility>
 
-namespace hpx { namespace actions {
+namespace hpx::actions {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Cont>
+    HPX_CXX_EXPORT template <typename Cont>
     struct continuation_impl
     {
     private:
-        using cont_type = typename std::decay<Cont>::type;
+        using cont_type = std::decay_t<Cont>;
 
     public:
         continuation_impl() = default;
@@ -37,15 +37,15 @@ namespace hpx { namespace actions {
         virtual ~continuation_impl() = default;
 
         template <typename T>
-        typename util::invoke_result<cont_type, hpx::id_type, T>::type
-        operator()(hpx::id_type const& lco, T&& t) const
+        util::invoke_result_t<cont_type, hpx::id_type, T> operator()(
+            hpx::id_type const& lco, T&& t) const
         {
             hpx::post_c(cont_, lco, target_, HPX_FORWARD(T, t));
 
             // Unfortunately we need to default construct the return value,
             // this possibly imposes an additional restriction of return types.
             using result_type =
-                typename util::invoke_result<cont_type, hpx::id_type, T>::type;
+                util::invoke_result_t<cont_type, hpx::id_type, T>;
             return result_type();
         }
 
@@ -64,4 +64,4 @@ namespace hpx { namespace actions {
         cont_type cont_;
         hpx::id_type target_;
     };
-}}    // namespace hpx::actions
+}    // namespace hpx::actions

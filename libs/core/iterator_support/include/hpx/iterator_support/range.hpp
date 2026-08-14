@@ -182,7 +182,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
         inline constexpr bool has_size_v = false;
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         inline constexpr bool has_size_v<T,
             std::void_t<decltype(size(std::declval<T const&>()))>> = true;
 
@@ -203,7 +203,7 @@ namespace hpx::util {
         HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
         inline constexpr bool has_empty_v = false;
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         inline constexpr bool has_empty_v<T,
             std::void_t<decltype(empty(std::declval<T const&>()))>> = true;
 
@@ -235,7 +235,7 @@ namespace hpx::util {
             using type = Iter;
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct iterator<T, range_impl::fallback>
         {
         };
@@ -254,7 +254,7 @@ namespace hpx::util {
             using type = Iter;
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct sentinel<T, range_impl::fallback>
         {
         };
@@ -275,7 +275,7 @@ namespace hpx::util {
             using type = R;
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct subrange<T, range_impl::fallback>
         {
         };
@@ -294,7 +294,7 @@ namespace hpx::util {
             using type = R;
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct iterate<T, range_impl::fallback>
         {
         };
@@ -388,8 +388,10 @@ namespace hpx::util {
     }    // namespace range_adl
 
     HPX_CXX_CORE_EXPORT using namespace range_adl;
+
     namespace detail {
-        HPX_CXX_CORE_EXPORT template <typename T>
+
+        template <typename T>
         struct is_range_generator<T,
             std::enable_if_t<std::ranges::range<decltype(hpx::util::iterate(
                 std::declval<T&>()))>>> : std::true_type

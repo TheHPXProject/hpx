@@ -396,6 +396,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/make_heap.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -410,9 +411,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::make_heap
     HPX_CXX_CORE_EXPORT inline constexpr struct make_heap_t final
-      : hpx::detail::tag_parallel_algorithm<make_heap_t>
+      : hpx::detail::tag_dispatch<make_heap_t,
+            hpx::detail::tag_parallel_algorithm<make_heap_t>>
     {
-    private:
         template <typename ExPolicy, typename Iter, typename Sent,
             typename Comp, typename Proj = hpx::identity>
         // clang-format off
@@ -425,9 +426,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        tag_fallback_invoke(make_heap_t, ExPolicy&& policy, Iter first,
-            Sent last, Comp comp, Proj proj = Proj{})
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
+        invoke_default(ExPolicy&& policy, Iter first, Sent last, Comp comp,
+            Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Requires random access iterator.");
@@ -449,10 +450,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(make_heap_t, ExPolicy&& policy, Rng& rng, Comp comp,
-            Proj proj = Proj{})
+        invoke_default(
+            ExPolicy&& policy, Rng& rng, Comp comp, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -477,10 +478,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             Iter>::type
-        tag_fallback_invoke(make_heap_t, ExPolicy&& policy, Iter first,
-            Sent last, Proj proj = Proj{})
+        invoke_default(
+            ExPolicy&& policy, Iter first, Sent last, Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Requires random access iterator.");
@@ -507,10 +508,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(
-            make_heap_t, ExPolicy&& policy, Rng&& rng, Proj proj = Proj{})
+        invoke_default(ExPolicy&& policy, Rng&& rng, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -537,8 +537,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend Iter tag_fallback_invoke(
-            make_heap_t, Iter first, Sent last, Comp comp, Proj proj = Proj{})
+        static Iter invoke_default(
+            Iter first, Sent last, Comp comp, Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Requires random access iterator.");
@@ -559,8 +559,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            make_heap_t, Rng& rng, Comp comp, Proj proj = Proj{})
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng& rng, Comp comp, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 
@@ -584,8 +584,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend Iter tag_fallback_invoke(
-            make_heap_t, Iter first, Sent last, Proj proj = Proj{})
+        static Iter invoke_default(Iter first, Sent last, Proj proj = Proj{})
         {
             static_assert(std::random_access_iterator<Iter>,
                 "Requires random access iterator.");
@@ -611,8 +610,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            make_heap_t, Rng&& rng, Proj proj = Proj{})
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng&& rng, Proj proj = Proj{})
         {
             using iterator_type = std::ranges::iterator_t<Rng>;
 

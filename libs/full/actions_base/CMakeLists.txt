@@ -19,10 +19,12 @@ set(actions_base_headers
     hpx/actions_base/basic_action.hpp
     hpx/actions_base/basic_action_fwd.hpp
     hpx/actions_base/component_action.hpp
+    hpx/actions_base/reflect_action.hpp
     hpx/actions_base/detail/action_factory.hpp
     hpx/actions_base/detail/invocation_count_registry.hpp
     hpx/actions_base/detail/per_action_data_counter_registry.hpp
     hpx/actions_base/lambda_to_action.hpp
+    hpx/actions_base/macros.hpp
     hpx/actions_base/plain_action.hpp
     hpx/actions_base/preassigned_action_id.hpp
     hpx/actions_base/traits/action_continuation.hpp
@@ -42,6 +44,7 @@ set(actions_base_headers
     hpx/actions_base/traits/is_distribution_policy.hpp
     hpx/actions_base/traits/is_valid_action.hpp
 )
+set(actions_base_macro_headers hpx/actions_base/macros.hpp)
 
 # Default location is $HPX_ROOT/libs/actions_base/include_compatibility
 # cmake-format: off
@@ -83,11 +86,14 @@ set(actions_base_sources
 )
 
 include(HPX_AddModule)
+
 add_hpx_module(
   full actions_base
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${actions_base_sources}
   HEADERS ${actions_base_headers}
+  MACRO_HEADERS ${actions_base_macro_headers}
   COMPAT_HEADERS ${actions_base_compat_headers}
   MODULE_DEPENDENCIES hpx_components_base hpx_naming_base
   DEPENDENCIES hpx_core

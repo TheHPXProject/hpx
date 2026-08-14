@@ -11,6 +11,7 @@ set(tests
     resource_partitioner_info
     scheduler_binding_check
     scheduler_priority_check
+    scheduling_policy_wiring
     shutdown_suspended_pus
     suspend_disabled
     suspend_pool

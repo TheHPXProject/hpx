@@ -21,6 +21,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/type_support/identity.hpp>
@@ -346,9 +347,9 @@ namespace hpx {
 namespace hpx {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct search_t final
-      : hpx::detail::tag_parallel_algorithm<search_t>
+      : hpx::detail::tag_dispatch<search_t,
+            hpx::detail::tag_parallel_algorithm<search_t>>
     {
-    private:
         template <typename FwdIter, typename FwdIter2,
             typename Pred = parallel::detail::equal_to>
         // clang-format off
@@ -361,8 +362,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::search_t, FwdIter first,
-            FwdIter last, FwdIter2 s_first, FwdIter2 s_last, Pred op = Pred())
+        static FwdIter invoke_default(FwdIter first, FwdIter last,
+            FwdIter2 s_first, FwdIter2 s_last, Pred op = Pred())
         {
             return hpx::parallel::detail::search<FwdIter, FwdIter>().call(
                 hpx::execution::seq, first, last, s_first, s_last, HPX_MOVE(op),
@@ -382,9 +383,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::search_t,
-            ExPolicy&& policy, FwdIter first, FwdIter last, FwdIter2 s_first,
-            FwdIter2 s_last, Pred op = Pred())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            FwdIter last, FwdIter2 s_first, FwdIter2 s_last, Pred op = Pred())
         {
             return hpx::parallel::detail::search<FwdIter, FwdIter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, s_first, s_last,
@@ -397,8 +397,8 @@ namespace hpx {
             std::forward_iterator<FwdIter> &&
             std::is_invocable_v<Searcher&, FwdIter, FwdIter>)
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::search_t, FwdIter first, FwdIter last, Searcher&& searcher)
+        static FwdIter invoke_default(
+            FwdIter first, FwdIter last, Searcher&& searcher)
         {
             auto result = HPX_FORWARD(Searcher, searcher)(first, last);
             return result.first;
@@ -411,8 +411,8 @@ namespace hpx {
             std::forward_iterator<FwdIter> &&
             std::is_invocable_v<Searcher&, FwdIter, FwdIter>)
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::search_t, ExPolicy&&,
-            FwdIter first, FwdIter last, Searcher&& searcher)
+        static FwdIter invoke_default(
+            ExPolicy&&, FwdIter first, FwdIter last, Searcher&& searcher)
         {
             auto result = HPX_FORWARD(Searcher, searcher)(first, last);
             return result.first;
@@ -420,9 +420,9 @@ namespace hpx {
     } search{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct search_n_t final
-      : hpx::detail::tag_parallel_algorithm<search_n_t>
+      : hpx::detail::tag_dispatch<search_n_t,
+            hpx::detail::tag_parallel_algorithm<search_n_t>>
     {
-    private:
         template <typename FwdIter, typename Size, typename T,
             typename Pred = parallel::detail::equal_to,
             typename Proj = hpx::identity>
@@ -432,9 +432,8 @@ namespace hpx {
                 hpx::is_invocable_v<Pred,
                     typename std::iterator_traits<FwdIter>::value_type, T>)
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::search_n_t, FwdIter first,
-            FwdIter last, Size count, T const& value, Pred pred = Pred(),
-            Proj proj = Proj())
+        static FwdIter invoke_default(FwdIter first, FwdIter last, Size count,
+            T const& value, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
                 hpx::execution::seq, first, last, count, value, HPX_MOVE(pred),
@@ -451,11 +450,10 @@ namespace hpx {
                 hpx::is_invocable_v<Pred,
                     typename std::iterator_traits<FwdIter>::value_type, T>)
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
+        static typename parallel::util::detail::algorithm_result<ExPolicy,
             FwdIter>::type
-        tag_fallback_invoke(hpx::search_n_t, ExPolicy&& policy, FwdIter first,
-            FwdIter last, Size count, T const& value, Pred pred = Pred(),
-            Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, FwdIter last,
+            Size count, T const& value, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, count, value,

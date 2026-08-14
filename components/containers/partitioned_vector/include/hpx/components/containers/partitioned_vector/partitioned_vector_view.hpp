@@ -9,12 +9,13 @@
 #pragma once
 
 #include <hpx/assert.hpp>
-#include <hpx/collectives/spmd_block.hpp>
+#include <hpx/modules/async_base.hpp>
+#include <hpx/modules/collectives.hpp>
+#include <hpx/modules/type_support.hpp>
+
 #include <hpx/components/containers/partitioned_vector/partitioned_vector.hpp>
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_segmented_iterator.hpp>
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_view_iterator.hpp>
-#include <hpx/modules/async_base.hpp>
-#include <hpx/modules/type_support.hpp>
 
 #include <array>
 #include <cstddef>

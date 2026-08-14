@@ -17,6 +17,7 @@
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/threading_base.hpp>
 
@@ -206,6 +207,12 @@ namespace hpx::lcos::detail {
         template <bool Unwrap>
         void run_impl(traits::detail::shared_state_ptr_for_t<Future>&& f)
         {
+            hpx::tracing::continuation_run(f.get());
+            auto on_exit =
+                hpx::experimental::scope_exit([id = f.get()]() noexcept {
+                    hpx::tracing::continuation_finished(id);
+                });
+
             auto future = traits::future_access<std::decay_t<Future>>::create(
                 HPX_MOVE(f));
             if constexpr (Unwrap)
@@ -385,8 +392,7 @@ namespace hpx::lcos::detail {
     };
 }    // namespace hpx::lcos::detail
 
-HPX_CXX_CORE_EXPORT template <typename Future, typename F, typename ContResult,
-    typename Allocator>
+template <typename Future, typename F, typename ContResult, typename Allocator>
 struct hpx::traits::detail::shared_state_allocator<
     hpx::lcos::detail::continuation<Future, F, ContResult>, Allocator>
 {
@@ -526,7 +532,7 @@ namespace hpx::lcos::detail {
     };
 }    // namespace hpx::lcos::detail
 
-HPX_CXX_CORE_EXPORT template <typename ContResult, typename Allocator>
+template <typename ContResult, typename Allocator>
 struct hpx::traits::detail::shared_state_allocator<
     hpx::lcos::detail::unwrap_continuation<ContResult>, Allocator>
 {
@@ -581,7 +587,7 @@ namespace hpx::lcos::detail {
         Future&& future, error_code& ec)
     {
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         return unwrap_impl_alloc(
             allocator_type{}, HPX_FORWARD(Future, future), ec);

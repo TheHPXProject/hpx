@@ -336,14 +336,12 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_each_t final
-      : hpx::functional::tag<when_each_t>
     {
-    private:
         template <typename F, typename Future,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_future_v<Future>>>
-        friend decltype(auto) tag_invoke(
-            when_each_t, F&& func, std::vector<Future>& lazy_values)
+        decltype(auto) operator()(
+            F&& func, std::vector<Future>& lazy_values) const
         {
             using argument_type = hpx::tuple<std::vector<Future>>;
             using frame_type =
@@ -367,17 +365,15 @@ namespace hpx {
         }
 
         template <typename F, typename Future>
-        friend decltype(auto) tag_invoke(
-            when_each_t, F&& f, std::vector<Future>&& values)
+        decltype(auto) operator()(F&& f, std::vector<Future>&& values) const
         {
-            return tag_invoke(when_each_t{}, HPX_FORWARD(F, f), values);
+            return (*this)(HPX_FORWARD(F, f), values);
         }
 
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_each_t, F&& f, Iterator begin, Iterator end)
+        decltype(auto) operator()(F&& f, Iterator begin, Iterator end) const
         {
             using future_type =
                 lcos::detail::future_iterator_traits_t<Iterator>;
@@ -389,7 +385,7 @@ namespace hpx {
             std::transform(begin, end, std::back_inserter(values),
                 traits::acquire_future_disp());
 
-            return tag_invoke(when_each_t{}, HPX_FORWARD(F, f), values)
+            return (*this)(HPX_FORWARD(F, f), values)
                 .then(hpx::launch::sync,
                     [end = HPX_MOVE(end)](hpx::future<void> fut) -> Iterator {
                         fut.get();    // rethrow exceptions, if any
@@ -398,7 +394,7 @@ namespace hpx {
         }
 
         template <typename F>
-        friend decltype(auto) tag_invoke(when_each_t, F&&)
+        decltype(auto) operator()(F&&) const
         {
             return hpx::make_ready_future();
         }
@@ -407,7 +403,7 @@ namespace hpx {
             typename Enable =
                 std::enable_if_t<!hpx::traits::is_future_v<std::decay_t<F>> &&
                     hpx::util::all_of_v<hpx::traits::is_future<Ts>...>>>
-        friend decltype(auto) tag_invoke(when_each_t, F&& f, Ts&&... ts)
+        decltype(auto) operator()(F&& f, Ts&&... ts) const
         {
             using argument_type = hpx::tuple<traits::acquire_future_t<Ts>...>;
             using frame_type =
@@ -428,14 +424,12 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_each_n_t final
-      : hpx::functional::tag<when_each_n_t>
     {
-    private:
         template <typename F, typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_each_n_t, F&& f, Iterator begin, std::size_t count)
+        decltype(auto) operator()(
+            F&& f, Iterator begin, std::size_t count) const
         {
             using future_type =
                 lcos::detail::future_iterator_traits_t<Iterator>;

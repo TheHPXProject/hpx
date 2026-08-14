@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR)
+#include <hpx/executors/datapar/detail/execution_policy_mapping_members.hpp>
 #include <hpx/executors/datapar/execution_policy_fwd.hpp>
 #include <hpx/executors/datapar/execution_policy_mappings.hpp>
 #include <hpx/executors/execution_policy.hpp>
@@ -39,6 +40,8 @@ namespace hpx::execution {
         struct simd_task_policy_shim
           : execution_policy<simd_task_policy_shim, Executor, Parameters,
                 unsequenced_execution_tag>
+          , simd_async_policy_mappings<
+                simd_task_policy_shim<Executor, Parameters>>
         {
         private:
             using base_type = execution_policy<simd_task_policy_shim, Executor,
@@ -47,6 +50,9 @@ namespace hpx::execution {
         public:
             /// \cond NOINTERNAL
             constexpr simd_task_policy_shim() = default;
+#if defined(__NVCC__) || defined(__CUDACC__)
+            constexpr ~simd_task_policy_shim() {}
+#endif
 
             template <typename Executor_, typename Parameters_>
             constexpr simd_task_policy_shim(
@@ -106,6 +112,7 @@ namespace hpx::execution {
         struct simd_policy_shim
           : execution_policy<simd_policy_shim, Executor, Parameters,
                 unsequenced_execution_tag>
+          , simd_sync_policy_mappings<simd_policy_shim<Executor, Parameters>>
         {
         private:
             using base_type = execution_policy<simd_policy_shim, Executor,
@@ -114,6 +121,9 @@ namespace hpx::execution {
         public:
             /// \cond NOINTERNAL
             constexpr simd_policy_shim() = default;
+#if defined(__NVCC__) || defined(__CUDACC__)
+            constexpr ~simd_policy_shim() {}
+#endif
 
             template <typename Executor_, typename Parameters_>
             constexpr simd_policy_shim(Executor_&& exec, Parameters_&& params)
@@ -170,6 +180,8 @@ namespace hpx::execution {
         struct par_simd_task_policy_shim
           : execution_policy<par_simd_task_policy_shim, Executor, Parameters,
                 unsequenced_execution_tag>
+          , par_simd_async_policy_mappings<
+                par_simd_task_policy_shim<Executor, Parameters>>
         {
         private:
             using base_type = execution_policy<par_simd_task_policy_shim,
@@ -178,6 +190,9 @@ namespace hpx::execution {
         public:
             /// \cond NOINTERNAL
             constexpr par_simd_task_policy_shim() = default;
+#if defined(__NVCC__) || defined(__CUDACC__)
+            constexpr ~par_simd_task_policy_shim() {}
+#endif
 
             template <typename Executor_, typename Parameters_>
             constexpr par_simd_task_policy_shim(
@@ -236,6 +251,8 @@ namespace hpx::execution {
         struct par_simd_policy_shim
           : execution_policy<par_simd_policy_shim, Executor, Parameters,
                 unsequenced_execution_tag>
+          , par_simd_sync_policy_mappings<
+                par_simd_policy_shim<Executor, Parameters>>
         {
         private:
             using base_type = execution_policy<par_simd_policy_shim, Executor,
@@ -244,6 +261,9 @@ namespace hpx::execution {
         public:
             /// \cond NOINTERNAL
             constexpr par_simd_policy_shim() = default;
+#if defined(__NVCC__) || defined(__CUDACC__)
+            constexpr ~par_simd_policy_shim() {}
+#endif
 
             template <typename Executor_, typename Parameters_>
             constexpr par_simd_policy_shim(
@@ -283,12 +303,9 @@ namespace hpx::execution {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    /// Extension: The class par_simd_task_policy is an execution policy type
+    /// Extension: The class par_simd_policy is an execution policy type
     /// used as a unique type to disambiguate parallel algorithm overloading and
     /// indicate that a parallel algorithm's execution may be parallelized.
-    ///
-    /// The algorithm returns a future representing the result of the
-    /// corresponding algorithm when invoked with the parallel_policy.
     HPX_CXX_CORE_EXPORT using par_simd_policy =
         detail::par_simd_policy_shim<parallel_executor,
             hpx::traits::executor_parameters_type_t<parallel_executor>>;
@@ -298,172 +315,44 @@ namespace hpx::execution {
 
     namespace detail {
 
-        /// \cond NOINTERN
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_task_t tag,
-            simd_policy_shim<Executor, Parameters> const& policy)
-        {
-            return simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_par_t tag,
-            simd_policy_shim<Executor, Parameters> const& policy)
-        {
-            return par_simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_simd_t tag,
-            simd_policy_shim<Executor, Parameters> const& policy)
-        {
-            return sequenced_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_simd_t tag,
-            sequenced_policy_shim<Executor, Parameters> const& policy)
-        {
-            return simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_task_t tag,
-            simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_par_t tag,
-            simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return par_simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_simd_t tag,
-            simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return sequenced_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_simd_t tag,
-            sequenced_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
+        // to_simd() on non-datapar policy shims
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_task_t tag,
-            par_simd_policy_shim<Executor, Parameters> const& policy)
+        template <typename Executor, typename Parameters>
+        constexpr auto sequenced_policy_shim<Executor, Parameters>::to_simd()
+            const
         {
-            return par_simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
+            return map_execution_policy<simd_policy>(
+                *this, hpx::execution::experimental::to_simd);
         }
 
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_par_t tag,
-            par_simd_policy_shim<Executor, Parameters> const& policy)
+        template <typename Executor, typename Parameters>
+        constexpr auto
+        sequenced_task_policy_shim<Executor, Parameters>::to_simd() const
         {
-            return simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
+            return map_execution_policy<simd_task_policy>(
+                *this, hpx::execution::experimental::to_simd);
         }
 
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_simd_t tag,
-            par_simd_policy_shim<Executor, Parameters> const& policy)
+        template <typename Executor, typename Parameters>
+        constexpr auto parallel_policy_shim<Executor, Parameters>::to_simd()
+            const
         {
-            return parallel_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
+            return map_execution_policy<par_simd_policy>(
+                *this, hpx::execution::experimental::to_simd);
         }
 
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_simd_t tag,
-            parallel_policy_shim<Executor, Parameters> const& policy)
+        template <typename Executor, typename Parameters>
+        constexpr auto
+        parallel_task_policy_shim<Executor, Parameters>::to_simd() const
         {
-            return par_simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
+            return map_execution_policy<par_simd_task_policy>(
+                *this, hpx::execution::experimental::to_simd);
         }
-
-        ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_task_t tag,
-            par_simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return par_simd_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_par_t tag,
-            par_simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_non_simd_t tag,
-            par_simd_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return parallel_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
-        constexpr decltype(auto) tag_invoke(
-            hpx::execution::experimental::to_simd_t tag,
-            parallel_task_policy_shim<Executor, Parameters> const& policy)
-        {
-            return par_simd_task_policy()
-                .on(hpx::experimental::prefer(tag, policy.executor()))
-                .with(policy.parameters());
-        }
-        /// \endcond
     }    // namespace detail
 }    // namespace hpx::execution
+
+#include <hpx/executors/datapar/detail/execution_policy_mapping_members_impl.hpp>
 
 namespace hpx::detail {
 
@@ -471,28 +360,28 @@ namespace hpx::detail {
     // extensions
 
     /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_execution_policy<
         hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_execution_policy<
         hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_execution_policy<
         hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_execution_policy<
         hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
@@ -502,14 +391,14 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_sequenced_execution_policy<
         hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_sequenced_execution_policy<
         hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
@@ -519,14 +408,14 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_async_execution_policy<
         hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_async_execution_policy<
         hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
@@ -536,14 +425,14 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_parallel_execution_policy<
         hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_parallel_execution_policy<
         hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
@@ -553,28 +442,28 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     /// \cond NOINTERNAL
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_vectorpack_execution_policy<
         hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_vectorpack_execution_policy<
         hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_vectorpack_execution_policy<
         hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
       : std::true_type
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+    template <typename Executor, typename Parameters>
     struct is_vectorpack_execution_policy<
         hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
       : std::true_type

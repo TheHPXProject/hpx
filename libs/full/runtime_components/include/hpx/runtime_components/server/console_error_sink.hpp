@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,23 +7,24 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 
 #include <exception>
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
     // console logging happens here
-    void console_error_sink(std::exception_ptr const&);
+    HPX_CXX_EXPORT void console_error_sink(std::exception_ptr const&);
 
-    HPX_DEFINE_PLAIN_ACTION(console_error_sink, console_error_sink_action);
-}}}    // namespace hpx::components::server
+    HPX_DEFINE_PLAIN_ACTION(
+        HPX_CXX_EXPORT, console_error_sink, console_error_sink_action);
+}    // namespace hpx::components::server
 
 HPX_ACTION_HAS_CRITICAL_PRIORITY(
     hpx::components::server::console_error_sink_action)

@@ -10,10 +10,12 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/timing.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/scheduler_state.hpp>
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/set_thread_state_timed.hpp>
+#include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_description.hpp>
 #include <hpx/threading_base/thread_helpers.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
@@ -100,6 +102,9 @@ namespace hpx::threads {
 
     void interrupt_thread(thread_id_type const& id, bool flag, error_code& ec)
     {
+        // Copy id as the original `id` may get reset by the caller
+        // asynchronously.
+        auto const keep_alive = id;
         if (HPX_UNLIKELY(!id))
         {
             HPX_THROWS_IF(ec, hpx::error::null_thread_id,
@@ -114,7 +119,7 @@ namespace hpx::threads {
 
         // Set thread state to pending. If the thread is currently active we do
         // not retry. The thread will either exit or hit an interruption_point.
-        set_thread_state(id, thread_schedule_state::pending,
+        set_thread_state(keep_alive, thread_schedule_state::pending,
             thread_restart_state::abort, thread_priority::normal, false, ec);
     }
 
@@ -131,7 +136,8 @@ namespace hpx::threads {
         if (&ec != &throws)
             ec = make_success_code();
 
-        get_thread_id_data(id)->interruption_point();    // notify thread
+        // notify thread
+        get_thread_id_data(id)->interruption_point();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -427,6 +433,15 @@ namespace hpx::threads {
 
 namespace hpx::this_thread {
 
+    namespace {
+        char const* get_suspend_reason(
+            threads::thread_description const& description) noexcept
+        {
+            return threads::thread_data::get_safe_description(
+                description, "this_thread::suspend");
+        }
+    }    // namespace
+
     // The function 'suspend' will return control to the thread manager
     // (suspends the current thread). It sets the new state of this thread to
     // the thread state passed as the parameter.
@@ -441,13 +456,38 @@ namespace hpx::this_thread {
         // let the thread manager do other things while waiting
         threads::thread_self& self = threads::get_self();
 
-        // keep alive
-        threads::thread_id_ref_type id = self.get_outer_thread_id();
+        threads::thread_id_type id = self.get_outer_thread_id();
+        if (HPX_UNLIKELY(!id))
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (invalid thread data)", id,
+                threads::get_thread_description(id));
+            return threads::thread_restart_state::unknown;
+        }
+
+        auto const* thrd_data = get_thread_id_data(id);
+        if (HPX_UNLIKELY(thrd_data == nullptr))
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (invalid thread data)", id,
+                threads::get_thread_description(id));
+            return threads::thread_restart_state::unknown;
+        }
+
+        // keep the thread alive if it's not a background thread (background
+        // thread are being kept alive by the scheduler)
+        hpx::threads::keep_alive_thread_id kept_alive(
+            id, !thrd_data->is_background());
 
         // handle interruption, if needed
-        threads::interruption_point(id.noref(), ec);
+        threads::interruption_point(id, ec);
         if (ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (interrupt failed)", id,
+                threads::get_thread_description(id));
             return threads::thread_restart_state::unknown;
+        }
 
         threads::thread_restart_state statex;
 
@@ -462,8 +502,7 @@ namespace hpx::this_thread {
                 });
 #endif
 #ifdef HPX_HAVE_THREAD_DESCRIPTION
-            threads::detail::reset_lco_description desc(
-                id.noref(), description, ec);
+            threads::detail::reset_lco_description desc(id, description, ec);
 #endif
 #ifdef HPX_HAVE_THREAD_BACKTRACE_ON_SUSPENSION
             threads::detail::reset_backtrace bt(id, ec);
@@ -471,11 +510,24 @@ namespace hpx::this_thread {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
+            hpx::tracing::fiber_suspend_region tracy_suspend(
+                get_suspend_reason(description));
+
+            if (state == threads::thread_schedule_state::pending ||
+                state == threads::thread_schedule_state::pending_boost)
+            {
+                hpx::tracing::task_yielded(id);
+            }
+            else if (state == threads::thread_schedule_state::suspended)
+            {
+                hpx::tracing::task_suspended(id, description);
+            }
+
             // We might need to dispatch 'nextid' to it's correct scheduler only
             // if our current scheduler is the same, we should yield to the id
             if (nextid &&
                 get_thread_id_data(nextid)->get_scheduler_base() !=
-                    get_thread_id_data(id)->get_scheduler_base())
+                    thrd_data->get_scheduler_base())
             {
                 auto* scheduler =
                     get_thread_id_data(nextid)->get_scheduler_base();
@@ -490,19 +542,29 @@ namespace hpx::this_thread {
                 statex = self.yield(
                     threads::thread_result_type(state, HPX_MOVE(nextid)));
             }
+
+            if (state == threads::thread_schedule_state::suspended)
+            {
+                hpx::tracing::task_resumed(id, statex);
+            }
         }
 
         // handle interruption, if needed
-        threads::interruption_point(id.noref(), ec);
+        threads::interruption_point(id, ec);
         if (ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (interrupt failed)", id,
+                threads::get_thread_description(id));
             return threads::thread_restart_state::unknown;
+        }
 
         // handle interrupt and abort
         if (statex == threads::thread_restart_state::abort)
         {
             HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
-                "thread({}, {}) aborted (yield returned wait_abort)",
-                id.noref(), threads::get_thread_description(id.noref()));
+                "thread({}, {}) aborted (yield returned wait_abort)", id,
+                threads::get_thread_description(id));
         }
 
         if (&ec != &throws)
@@ -521,12 +583,38 @@ namespace hpx::this_thread {
         threads::thread_self& self = threads::get_self();
 
         // keep alive
-        threads::thread_id_ref_type id = self.get_outer_thread_id();
+        threads::thread_id_type id = self.get_outer_thread_id();
+        if (HPX_UNLIKELY(!id))
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (invalid thread data)", id,
+                threads::get_thread_description(id));
+            return threads::thread_restart_state::unknown;
+        }
+
+        auto const* thrd_data = get_thread_id_data(id);
+        if (HPX_UNLIKELY(thrd_data == nullptr))
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (invalid thread data)", id,
+                threads::get_thread_description(id));
+            return threads::thread_restart_state::unknown;
+        }
+
+        // keep the thread alive if it's not a background thread (background
+        // thread are being kept alive by the scheduler)
+        hpx::threads::keep_alive_thread_id kept_alive(
+            id, !thrd_data->is_background());
 
         // handle interruption, if needed
-        threads::interruption_point(id.noref(), ec);
+        threads::interruption_point(id, ec);
         if (ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (interrupt failed)", id,
+                threads::get_thread_description(id));
             return threads::thread_restart_state::unknown;
+        }
 
         // let the thread manager do other things while waiting
         threads::thread_restart_state statex;
@@ -542,8 +630,7 @@ namespace hpx::this_thread {
                 });
 #endif
 #ifdef HPX_HAVE_THREAD_DESCRIPTION
-            threads::detail::reset_lco_description desc(
-                id.noref(), description, ec);
+            threads::detail::reset_lco_description desc(id, description, ec);
 #endif
 #ifdef HPX_HAVE_THREAD_BACKTRACE_ON_SUSPENSION
             threads::detail::reset_backtrace bt(id, ec);
@@ -551,20 +638,25 @@ namespace hpx::this_thread {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
+            hpx::tracing::fiber_suspend_region tracy_suspend(
+                get_suspend_reason(description));
+
             std::atomic<bool> timer_started(false);
             threads::thread_id_ref_type const timer_id =
-                threads::set_thread_state(id.noref(), abs_time, &timer_started,
+                threads::set_thread_state(id, abs_time, &timer_started,
                     threads::thread_schedule_state::pending,
                     threads::thread_restart_state::timeout,
                     threads::thread_priority::boost, true, ec);
             if (ec)
                 return threads::thread_restart_state::unknown;
 
+            hpx::tracing::task_suspended(id, description);
+
             // We might need to dispatch 'nextid' to it's correct scheduler only
             // if our current scheduler is the same, we should yield to the id
             if (nextid &&
                 get_thread_id_data(nextid)->get_scheduler_base() !=
-                    get_thread_id_data(id)->get_scheduler_base())
+                    thrd_data->get_scheduler_base())
             {
                 auto* scheduler =
                     get_thread_id_data(nextid)->get_scheduler_base();
@@ -581,6 +673,8 @@ namespace hpx::this_thread {
                     threads::thread_schedule_state::suspended,
                     HPX_MOVE(nextid)));
             }
+
+            hpx::tracing::task_resumed(id, statex);
 
             if (statex != threads::thread_restart_state::timeout)
             {
@@ -599,16 +693,21 @@ namespace hpx::this_thread {
         }
 
         // handle interruption, if needed
-        threads::interruption_point(id.noref(), ec);
+        threads::interruption_point(id, ec);
         if (ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend",
+                "thread({}, {}) aborted (interrupt failed)", id,
+                threads::get_thread_description(id));
             return threads::thread_restart_state::unknown;
+        }
 
         // handle interrupt and abort
         if (statex == threads::thread_restart_state::abort)
         {
             HPX_THROWS_IF(ec, hpx::error::yield_aborted, "suspend_at",
-                "thread({}, {}) aborted (yield returned wait_abort)",
-                id.noref(), threads::get_thread_description(id.noref()));
+                "thread({}, {}) aborted (yield returned wait_abort)", id,
+                threads::get_thread_description(id));
         }
 
         if (&ec != &throws)
@@ -644,6 +743,7 @@ namespace hpx::this_thread {
         {
             HPX_THROW_BAD_ALLOC("has_sufficient_stack_space");
         }
+
         bool const sufficient_stack_space =
             static_cast<std::size_t>(remaining_stack) >= space_needed;
 

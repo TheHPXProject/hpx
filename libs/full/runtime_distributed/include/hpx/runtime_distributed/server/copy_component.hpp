@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,11 +7,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/components/get_ptr.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
-#include <hpx/runtime_components/components_fwd.hpp>
+#include <hpx/modules/runtime_components.hpp>
+
 #include <hpx/runtime_distributed/stubs/runtime_support.hpp>
 
 #include <memory>
@@ -21,6 +22,7 @@ namespace hpx::components::server {
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Copy given component to the specified target locality
     namespace detail {
+
         // If we know that the new component has to be created local to the old
         // one, we can avoid doing serialization.
         template <typename Component>
@@ -61,7 +63,7 @@ namespace hpx::components::server {
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     hpx::id_type copy_component_here(hpx::id_type const& to_copy)
     {
         std::shared_ptr<Component> sp =
@@ -69,7 +71,7 @@ namespace hpx::components::server {
         return detail::copy_component_here_postproc(HPX_MOVE(sp));
     }
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     future<hpx::id_type> copy_component(
         hpx::id_type const& to_copy, hpx::id_type const& target_locality)
     {
@@ -81,7 +83,7 @@ namespace hpx::components::server {
             });
     }
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     struct copy_component_action_here
       : ::hpx::actions::action<hpx::id_type (*)(hpx::id_type const&),
             &copy_component_here<Component>,
@@ -89,7 +91,7 @@ namespace hpx::components::server {
     {
     };
 
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     struct copy_component_action
       : ::hpx::actions::action<future<hpx::id_type> (*)(
                                    hpx::id_type const&, hpx::id_type const&),

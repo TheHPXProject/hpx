@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,9 +9,9 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/invoke_function.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/async_distributed/async.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
@@ -60,7 +60,7 @@ namespace hpx::execution::experimental {
     ///          \a hpx::traits::is_distribution_policy_v<DistPolicy> must
     ///         evaluate to true.
     ///
-    template <typename DistPolicy>
+    HPX_CXX_EXPORT template <typename DistPolicy>
     class distribution_policy_executor
     {
         /// \cond NOINTERNAL
@@ -70,48 +70,43 @@ namespace hpx::execution::experimental {
 
         // post implementations
         template <typename F, typename... Ts>
-        std::enable_if_t<!hpx::traits::is_action_v<F>> post_impl(
-            F&& f, Ts&&... ts) const
+        void post_impl(F&& f, Ts&&... ts) const
         {
-            using action_type =
-                components::server::invoke_function_action<std::decay_t<F>,
-                    std::decay_t<Ts>...>;
+            if constexpr (!hpx::traits::is_action_v<F>)
+            {
+                using action_type =
+                    components::server::invoke_function_action<std::decay_t<F>,
+                        std::decay_t<Ts>...>;
 
-            policy_.template apply<action_type>(
-                threads::thread_priority::default_, HPX_FORWARD(F, f),
-                HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename Action, typename... Ts>
-        std::enable_if_t<hpx::traits::is_action_v<Action>> post_impl(
-            Action&&, Ts&&... ts) const
-        {
-            policy_.template apply<Action>(
-                threads::thread_priority::default_, HPX_FORWARD(Ts, ts)...);
+                policy_.template apply<action_type>(
+                    threads::thread_priority::default_, HPX_FORWARD(F, f),
+                    HPX_FORWARD(Ts, ts)...);
+            }
+            else
+            {
+                policy_.template apply<std::decay_t<F>>(
+                    threads::thread_priority::default_, HPX_FORWARD(Ts, ts)...);
+            }
         }
 
         // async_execute implementations
         template <typename F, typename... Ts>
-        std::enable_if_t<!hpx::traits::is_action_v<F>,
-            hpx::future<
-                detail::distribution_policy_execute_result_t<F, Ts&&...>>>
-        async_execute_impl(F&& f, Ts&&... ts) const
+        decltype(auto) async_execute_impl(F&& f, Ts&&... ts) const
         {
-            using action_type =
-                components::server::invoke_function_action<std::decay_t<F>,
-                    std::decay_t<Ts>...>;
+            if constexpr (!hpx::traits::is_action_v<F>)
+            {
+                using action_type =
+                    components::server::invoke_function_action<std::decay_t<F>,
+                        std::decay_t<Ts>...>;
 
-            return policy_.template async<action_type>(
-                launch::async, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename Action, typename... Ts>
-        std::enable_if_t<hpx::traits::is_action_v<Action>,
-            hpx::future<typename Action::local_result_type>>
-        async_execute_impl(Action&&, Ts&&... ts) const
-        {
-            return policy_.template async<Action>(
-                launch::async, HPX_FORWARD(Ts, ts)...);
+                return policy_.template async<action_type>(
+                    launch::async, HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            }
+            else
+            {
+                return policy_.template async<std::decay_t<F>>(
+                    launch::async, HPX_FORWARD(Ts, ts)...);
+            }
         }
         /// \endcond
 
@@ -121,9 +116,9 @@ namespace hpx::execution::experimental {
         ///
         /// \param policy   The distribution_policy to create an executor from
         ///
-        template <typename DistPolicy_,
-            typename Enable = std::enable_if_t<!std::is_same_v<
-                distribution_policy_executor, std::decay_t<DistPolicy_>>>>
+        template <typename DistPolicy_>
+            requires(!std::is_same_v<distribution_policy_executor,
+                std::decay_t<DistPolicy_>>)
         explicit distribution_policy_executor(DistPolicy_&& policy)
           : policy_(HPX_FORWARD(DistPolicy_, policy))
         {
@@ -152,30 +147,24 @@ namespace hpx::execution::experimental {
         /// \cond NOINTERNAL
         using execution_category = hpx::execution::parallel_execution_tag;
 
-    private:
+        // Executor interface - member functions (not tag_invoke)
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            return exec.post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.async_execute_impl(
+            return async_execute_impl(
                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            distribution_policy_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return exec
-                .async_execute_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)
+            return async_execute_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)
                 .get();
         }
         /// \endcond
@@ -185,7 +174,7 @@ namespace hpx::execution::experimental {
     };
 
     // clang-format off
-    template <typename DistPolicy>
+    HPX_CXX_EXPORT template <typename DistPolicy>
     distribution_policy_executor(DistPolicy&&)
         -> distribution_policy_executor<std::decay_t<DistPolicy>>;
     // clang-format on
@@ -209,6 +198,18 @@ namespace hpx::execution::experimental {
     }
 
     /// \cond NOINTERNAL
+    template <typename DistPolicy>
+    struct is_never_blocking_one_way_executor<
+        distribution_policy_executor<DistPolicy>> : std::true_type
+    {
+    };
+
+    template <typename DistPolicy>
+    struct is_one_way_executor<distribution_policy_executor<DistPolicy>>
+      : std::true_type
+    {
+    };
+
     template <typename DistPolicy>
     struct is_two_way_executor<distribution_policy_executor<DistPolicy>>
       : std::true_type

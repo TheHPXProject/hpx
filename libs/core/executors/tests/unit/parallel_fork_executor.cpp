@@ -90,7 +90,8 @@ void test_bulk_sync()
     auto hint = hpx::execution::experimental::get_hint(exec);
     hint.sharing_mode(hpx::threads::thread_sharing_hint::do_not_share_function |
         hpx::threads::thread_sharing_hint::do_not_combine_tasks);
-    auto no_sharing_exec = hpx::execution::experimental::with_hint(exec, hint);
+    auto no_sharing_exec = hpx::execution::to_hierarchical_spawning(
+        hpx::execution::experimental::with_hint(exec, hint));
 
     hpx::parallel::execution::bulk_sync_execute(
         no_sharing_exec, hpx::bind(&bulk_test, _1, tid, _2), v, 42);

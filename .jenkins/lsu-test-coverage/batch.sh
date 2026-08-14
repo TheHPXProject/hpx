@@ -13,7 +13,7 @@ build_dir="${src_dir}/build/"
 
 rm -rf "${build_dir}"
 
-source ${src_dir}/.jenkins/lsu-test-coverage/env-${configuration_name}.sh
+source "${src_dir}/.jenkins/lsu-test-coverage/env-${configuration_name}.sh"
 
 ulimit -l unlimited
 
@@ -21,8 +21,8 @@ set +e
 
 # Configure
 cmake \
-    -S ${src_dir}   \
-    -B ${build_dir} \
+    -S "${src_dir}"   \
+    -B "${build_dir}" \
      -G "Ninja" \
     -DCMAKE_BUILD_TYPE=Debug \
     -DHPX_WITH_CXX_STANDARD=20 \
@@ -37,10 +37,10 @@ cmake \
 
 
 # Build
-cmake --build ${build_dir} --target tests examples
+cmake --build "${build_dir}" --target tests examples
 
 # Run tests
-ctest --test-dir ${build_dir} --output-on-failure
+ctest --test-dir "${build_dir}" --output-on-failure
 ctest_status=$?
 
 

@@ -245,9 +245,11 @@ namespace hpx {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
@@ -327,7 +329,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
+        template <typename ExPolicy, typename F>
         struct for_each_iteration<ExPolicy, F, hpx::identity>
         {
             using execution_policy_type = std::decay_t<ExPolicy>;
@@ -543,17 +545,16 @@ namespace hpx {
     //       disabled for other, possibly external specializations.
     //
     HPX_CXX_CORE_EXPORT inline constexpr struct for_each_t final
-      : hpx::detail::tag_parallel_algorithm<for_each_t>
+      : hpx::detail::tag_dispatch<for_each_t,
+            hpx::detail::tag_parallel_algorithm<for_each_t>>
     {
-    private:
         template <typename InIter, typename F>
         // clang-format off
             requires (
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend F tag_fallback_invoke(
-            hpx::for_each_t, InIter first, InIter last, F f)
+        static F invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -574,7 +575,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::for_each_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -589,9 +590,9 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct for_each_n_t final
-      : hpx::detail::tag_parallel_algorithm<for_each_n_t>
+      : hpx::detail::tag_dispatch<for_each_n_t,
+            hpx::detail::tag_parallel_algorithm<for_each_n_t>>
     {
-    private:
         template <typename InIter, typename Size, typename F>
         // clang-format off
             requires (
@@ -599,8 +600,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend InIter tag_fallback_invoke(
-            hpx::for_each_n_t, InIter first, Size count, F f)
+        static InIter invoke_default(InIter first, Size count, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -625,7 +625,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::for_each_n_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, Size count, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -684,20 +684,20 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             parallel::detail::for_each_iteration<ExPolicy, F, Proj> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
+
 }    // namespace hpx::traits
+
 #endif
 
 #endif

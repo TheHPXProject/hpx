@@ -425,10 +425,10 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/reduce.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -593,9 +593,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::transform_reduce
     HPX_CXX_CORE_EXPORT inline constexpr struct transform_reduce_t final
-      : hpx::detail::tag_parallel_algorithm<transform_reduce_t>
+      : hpx::detail::tag_dispatch<transform_reduce_t,
+            hpx::detail::tag_parallel_algorithm<transform_reduce_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename T,
             typename Reduce, typename Convert>
         // clang-format off
@@ -612,9 +612,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(transform_reduce_t,
-            ExPolicy&& policy, FwdIter first, FwdIter last, T init,
-            Reduce red_op, Convert conv_op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            FwdIter last, T init, Reduce red_op, Convert conv_op)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -639,8 +638,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, InIter first,
-            InIter last, T init, Reduce red_op, Convert conv_op)
+        static T invoke_default(
+            InIter first, InIter last, T init, Reduce red_op, Convert conv_op)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -659,9 +658,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(transform_reduce_t,
-            ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2,
-            T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -681,8 +679,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter2>
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, InIter1 first1,
-            InIter1 last1, InIter2 first2, T init)
+        static T invoke_default(
+            InIter1 first1, InIter1 last1, InIter2 first2, T init)
         {
             static_assert(std::input_iterator<InIter1>,
                 "Requires at least input iterator.");
@@ -715,9 +713,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(transform_reduce_t,
-            ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2,
-            T init, Reduce red_op, Convert conv_op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, T init, Reduce red_op,
+            Convert conv_op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -748,9 +746,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend T tag_fallback_invoke(transform_reduce_t, InIter1 first1,
-            InIter1 last1, InIter2 first2, T init, Reduce red_op,
-            Convert conv_op)
+        static T invoke_default(InIter1 first1, InIter1 last1, InIter2 first2,
+            T init, Reduce red_op, Convert conv_op)
         {
             static_assert(std::input_iterator<InIter1>,
                 "Requires at least input iterator.");

@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,7 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/compute/host.hpp>
+#include <hpx/modules/compute.hpp>
 #include <hpx/modules/compute_local.hpp>
 
 #if defined(HPX_HAVE_CUDA) || defined(HPX_HAVE_HIP)

@@ -12,8 +12,8 @@
 #include <hpx/config.hpp>
 
 #include <hpx/condition_variable.hpp>
-#include <hpx/init.hpp>
-#include <hpx/manage_runtime.hpp>
+#include <hpx/hpx_init_params.hpp>
+#include <hpx/modules/init_runtime.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/mutex.hpp>
 #include <hpx/thread.hpp>

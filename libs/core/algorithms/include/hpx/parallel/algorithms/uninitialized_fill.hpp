@@ -173,6 +173,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -289,17 +290,19 @@ namespace hpx::parallel {
             {
             }
 
-            template <typename ExPolicy, typename Sent, typename T>
-            static Iter sequential(
-                ExPolicy&& policy, Iter first, Sent last, T const& value)
+            template <typename ExPolicy, typename FwdIter, typename Sent,
+                typename T>
+            static FwdIter sequential(
+                ExPolicy&& policy, FwdIter first, Sent last, T const& value)
             {
                 return sequential_uninitialized_fill(
                     HPX_FORWARD(ExPolicy, policy), first, last, value);
             }
 
-            template <typename ExPolicy, typename Sent, typename T>
+            template <typename ExPolicy, typename FwdIter, typename Sent,
+                typename T>
             static decltype(auto) parallel(
-                ExPolicy&& policy, Iter first, Sent last, T const& value)
+                ExPolicy&& policy, FwdIter first, Sent last, T const& value)
             {
                 bool const has_scheduler_executor =
                     hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
@@ -309,7 +312,7 @@ namespace hpx::parallel {
                     if (first == last)
                     {
                         return util::detail::algorithm_result<ExPolicy,
-                            Iter>::get(HPX_MOVE(first));
+                            FwdIter>::get(HPX_MOVE(first));
                     }
                 }
 
@@ -335,16 +338,16 @@ namespace hpx::parallel {
             {
             }
 
-            template <typename ExPolicy, typename T>
-            static Iter sequential(ExPolicy&& policy, Iter first,
+            template <typename ExPolicy, typename FwdIter, typename T>
+            static FwdIter sequential(ExPolicy&& policy, FwdIter first,
                 std::size_t count, T const& value)
             {
                 return sequential_uninitialized_fill_n(
                     HPX_FORWARD(ExPolicy, policy), first, count, value);
             }
 
-            template <typename ExPolicy, typename T>
-            static decltype(auto) parallel(ExPolicy&& policy, Iter first,
+            template <typename ExPolicy, typename FwdIter, typename T>
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter first,
                 std::size_t count, T const& value)
             {
                 return parallel_uninitialized_fill_n(
@@ -360,7 +363,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_fill
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_fill_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_fill_t>
+      : hpx::detail::tag_dispatch<uninitialized_fill_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_fill_t>>
     {
         template <typename FwdIter, typename T>
         // clang-format off
@@ -368,8 +372,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend void tag_fallback_invoke(hpx::uninitialized_fill_t,
-            FwdIter first, FwdIter last, T const& value)
+        static void invoke_default(FwdIter first, FwdIter last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -385,7 +388,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_fill_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -405,7 +408,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::uninitialized_fill_n
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_fill_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_fill_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_fill_n_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_fill_n_t>>
     {
         template <typename FwdIter, typename Size, typename T>
         // clang-format off
@@ -414,8 +418,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::uninitialized_fill_n_t,
-            FwdIter first, Size count, T const& value)
+        static FwdIter invoke_default(FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -440,7 +443,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::uninitialized_fill_n_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,

@@ -182,7 +182,7 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename... Args>
-    <unspecified> for_loop(
+    auto for_loop(
         ExPolicy&& policy, std::decay_t<I> first, I last, Args&&... args);
 
     /// The for_loop_strided implements loop functionality over a range
@@ -366,8 +366,8 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename S, typename... Args>
-    <unspecified> for_loop_strided(ExPolicy&& policy, std::decay_t<I> first,
-        I last, S stride, Args&&... args);
+    auto for_loop_strided(ExPolicy&& policy, std::decay_t<I> first, I last,
+        S stride, Args&&... args);
 
     /// The for_loop_n implements loop functionality over a range specified by
     /// integral or iterator bounds. For the iterator case, these algorithms
@@ -541,8 +541,7 @@ namespace hpx { namespace experimental {
     ///           otherwise.
     ///
     template <typename ExPolicy, typename I, typename Size, typename... Args>
-    <unspecified> for_loop_n(
-        ExPolicy&& policy, I first, Size size, Args&&... args);
+    auto for_loop_n(ExPolicy&& policy, I first, Size size, Args&&... args);
 
     /// The for_loop_n_strided implements loop functionality over a range
     /// specified by integral or iterator bounds. For the iterator case, these
@@ -729,7 +728,7 @@ namespace hpx { namespace experimental {
     ///
     template <typename ExPolicy, typename I, typename Size, typename S,
         typename... Args>
-    <unspecified> for_loop_n_strided(
+    auto for_loop_n_strided(
         ExPolicy&& policy, I first, Size size, S stride, Args&&... args);
 }}    // namespace hpx::experimental
 
@@ -742,10 +741,11 @@ namespace hpx { namespace experimental {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_loop_induction.hpp>
 #include <hpx/parallel/algorithms/for_loop_reduction.hpp>
 #include <hpx/parallel/util/adapt_sharing_mode.hpp>
@@ -811,8 +811,7 @@ namespace hpx::parallel {
             typename S = void, typename Tuple = hpx::tuple<>>
         struct part_iterations;
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
-            typename... Ts>
+        template <typename ExPolicy, typename F, typename S, typename... Ts>
         struct part_iterations<ExPolicy, F, S, hpx::tuple<Ts...>>
         {
             using fun_type = std::decay_t<F>;
@@ -915,7 +914,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S>
+        template <typename ExPolicy, typename F, typename S>
         struct part_iterations<ExPolicy, F, S, hpx::tuple<>>
         {
             using fun_type = std::decay_t<F>;
@@ -953,7 +952,7 @@ namespace hpx::parallel {
                 B part_begin, std::size_t part_steps)
             {
                 HPX_ASSERT(stride_ == 1);
-                parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                     part_begin, part_steps, f_);
             }
 
@@ -1016,8 +1015,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-            typename... Ts>
+        template <typename ExPolicy, typename F, typename... Ts>
         struct part_iterations<ExPolicy, F, void, hpx::tuple<Ts...>>
         {
             using fun_type = std::decay_t<F>;
@@ -1079,7 +1077,7 @@ namespace hpx::parallel {
                     detail::init_iteration(
                         args_, pack, part_index, current_thread);
 
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_steps, [&](auto it) {
                             detail::invoke_iteration(
                                 args_, pack, f_, it, current_thread);
@@ -1097,7 +1095,7 @@ namespace hpx::parallel {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
+        template <typename ExPolicy, typename F>
         struct part_iterations<ExPolicy, F, void, hpx::tuple<>>
         {
             using fun_type = std::decay_t<F>;
@@ -1139,7 +1137,7 @@ namespace hpx::parallel {
                 {
                     static_assert(hpx::traits::is_iterator_v<IterOrR> ||
                         std::is_integral_v<IterOrR>);
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_steps, f_);
                 }
             }
@@ -1217,11 +1215,10 @@ namespace hpx::parallel {
                     if constexpr (hpx::is_async_execution_policy_v<ExPolicy> ||
                         is_scheduler_policy)
                     {
-                        return util::detail::algorithm_result<ExPolicy>::get(
-                            util::partitioner<ExPolicy>::call(
-                                HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
-                                part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
-                                hpx::util::empty_function{}));
+                        return util::call_with_algorithm_result<ExPolicy>(
+                            HPX_FORWARD(ExPolicy, policy), iter_or_r, size,
+                            part_iterations<ExPolicy, F>{HPX_FORWARD(F, f)},
+                            hpx::util::empty_function{});
                     }
                     else
                     {
@@ -1285,7 +1282,7 @@ namespace hpx::parallel {
             {
                 if (stride == 1)
                 {
-                    parallel::util::loop_n<std::decay_t<ExPolicy>>(
+                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         first, count, HPX_FORWARD(F, f));
                 }
                 else if (stride > 0)
@@ -1653,9 +1650,9 @@ namespace hpx::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct for_loop_t final
-      : hpx::detail::tag_parallel_algorithm<for_loop_t>
+      : hpx::detail::tag_dispatch<for_loop_t,
+            hpx::detail::tag_parallel_algorithm<for_loop_t>>
     {
-    private:
         template <typename ExPolicy, typename I, typename... Args>
         // clang-format off
         requires(
@@ -1663,7 +1660,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::experimental::for_loop_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, std::decay_t<I> first, I last, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
@@ -1678,7 +1675,7 @@ namespace hpx::experimental {
 
         template <typename I, typename... Args>
             requires(hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
-        friend void tag_fallback_invoke(hpx::experimental::for_loop_t,
+        static void invoke_default(
             std::decay_t<I> first, I last, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
@@ -1693,9 +1690,9 @@ namespace hpx::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct for_loop_strided_t final
-      : hpx::detail::tag_parallel_algorithm<for_loop_strided_t>
+      : hpx::detail::tag_dispatch<for_loop_strided_t,
+            hpx::detail::tag_parallel_algorithm<for_loop_strided_t>>
     {
-    private:
         template <typename ExPolicy, typename I, typename S, typename... Args>
         // clang-format off
         requires (
@@ -1704,10 +1701,9 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::experimental::for_loop_strided_t,
-            ExPolicy&& policy, std::decay_t<I> first, I last, S stride,
-            Args&&... args)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, std::decay_t<I> first, I last,
+            S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_strided must be called with at least a function "
@@ -1727,7 +1723,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend void tag_fallback_invoke(hpx::experimental::for_loop_strided_t,
+        static void invoke_default(
             std::decay_t<I> first, I last, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
@@ -1743,9 +1739,9 @@ namespace hpx::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct for_loop_n_t final
-      : hpx::detail::tag_parallel_algorithm<for_loop_n_t>
+      : hpx::detail::tag_dispatch<for_loop_n_t,
+            hpx::detail::tag_parallel_algorithm<for_loop_n_t>>
     {
-    private:
         template <typename ExPolicy, typename I, typename Size,
             typename... Args>
         // clang-format off
@@ -1755,9 +1751,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::experimental::for_loop_n_t, ExPolicy&& policy,
-            I first, Size size, Args&&... args)
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, I first, Size size, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_n must be called with at least a function object");
@@ -1776,8 +1771,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend void tag_fallback_invoke(
-            hpx::experimental::for_loop_n_t, I first, Size size, Args&&... args)
+        static void invoke_default(I first, Size size, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_n must be called with at least a function object");
@@ -1791,9 +1785,9 @@ namespace hpx::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct for_loop_n_strided_t final
-      : hpx::detail::tag_parallel_algorithm<for_loop_n_strided_t>
+      : hpx::detail::tag_dispatch<for_loop_n_strided_t,
+            hpx::detail::tag_parallel_algorithm<for_loop_n_strided_t>>
     {
-    private:
         template <typename ExPolicy, typename I, typename Size, typename S,
             typename... Args>
         // clang-format off
@@ -1804,8 +1798,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::experimental::for_loop_n_strided_t,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(
             ExPolicy&& policy, I first, Size size, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
@@ -1827,8 +1821,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        friend void tag_fallback_invoke(hpx::experimental::for_loop_n_strided_t,
-            I first, Size size, S stride, Args&&... args)
+        static void invoke_default(I first, Size size, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_n_strided must be called with at least a function "
@@ -1871,20 +1864,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
         typename Tuple>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {
-        static util::itt::string_handle call(
+        static hpx::tracing::annotation_handle call(
             hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
 }    // namespace hpx::traits
 #endif
 #endif

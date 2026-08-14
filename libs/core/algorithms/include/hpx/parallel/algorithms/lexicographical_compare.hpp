@@ -167,6 +167,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/mismatch.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -325,7 +326,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::lexicographical_compare
     HPX_CXX_CORE_EXPORT inline constexpr struct lexicographical_compare_t final
-      : hpx::detail::tag_parallel_algorithm<lexicographical_compare_t>
+      : hpx::detail::tag_dispatch<lexicographical_compare_t,
+            hpx::detail::tag_parallel_algorithm<lexicographical_compare_t>>
     {
         template <typename InIter1, typename InIter2,
             typename Pred = hpx::parallel::detail::less>
@@ -339,9 +341,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::lexicographical_compare_t,
-            InIter1 first1, InIter1 last1, InIter2 first2, InIter2 last2,
-            Pred pred = Pred())
+        static bool invoke_default(InIter1 first1, InIter1 last1,
+            InIter2 first2, InIter2 last2, Pred pred = Pred())
         {
             static_assert(std::input_iterator<InIter1>,
                 "Requires at least input iterator.");
@@ -366,8 +367,7 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            hpx::lexicographical_compare_t, ExPolicy&& policy, FwdIter1 first1,
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
             FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, Pred pred = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,

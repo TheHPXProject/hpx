@@ -13,6 +13,7 @@
 #include <hpx/compute_local/traits/allocator_traits.hpp>
 #include <hpx/modules/iterator_support.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <type_traits>
@@ -40,7 +41,8 @@ namespace hpx::compute::detail {
         using target_type =
             typename traits::allocator_traits<Allocator>::target_type;
 
-        // disable use of brackets_proxy in iterator_facade
+        // disable use of brackets_proxy in iterator_facade to ensure C++20
+        // random_access_iterator concept is satisfied
         using use_brackets_proxy = std::false_type;
 
         HPX_HOST_DEVICE iterator() noexcept
@@ -58,7 +60,14 @@ namespace hpx::compute::detail {
         {
         }
 
-    public:
+        template <typename U>
+            requires(std::same_as<T, U const>)
+        HPX_HOST_DEVICE iterator(iterator<U, Allocator> const& other) noexcept
+          : base_type(other.base())
+          , target_(&other.target())
+        {
+        }
+
         HPX_HOST_DEVICE iterator(iterator const& other) noexcept
           : base_type(other)
           , target_(other.target_)
@@ -83,13 +92,4 @@ namespace hpx::compute::detail {
         target_type const* target_;
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T, typename Allocator>
-    struct reverse_iterator
-    {
-    };
-
-    HPX_CXX_CORE_EXPORT template <typename T, typename Allocator>
-    struct const_reverse_iterator
-    {
-    };
 }    // namespace hpx::compute::detail

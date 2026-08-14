@@ -6,28 +6,78 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <hpx/modules/asio.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/type_support.hpp>
+
 #include <hpx/batch_environments/batch_environment.hpp>
 #include <hpx/batch_environments/detail/alps_environment.hpp>
 #include <hpx/batch_environments/detail/flux_environment.hpp>
 #include <hpx/batch_environments/detail/pbs_environment.hpp>
 #include <hpx/batch_environments/detail/pjm_environment.hpp>
 #include <hpx/batch_environments/detail/slurm_environment.hpp>
-#include <hpx/modules/asio.hpp>
-#include <hpx/modules/errors.hpp>
-#include <hpx/modules/type_support.hpp>
+
+#include <hpx/asio/asio_util.hpp>
 
 #include <asio/io_context.hpp>
 #include <asio/ip/host_name.hpp>
+#include <asio/ip/tcp.hpp>
 
 #include <cstddef>
 #include <iostream>
+#include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx::util {
+namespace hpx::util::detail { namespace {
+
+    struct batch_environment final : batch_environment_base
+    {
+        explicit batch_environment(std::vector<std::string>& nodelist,
+            bool have_mpi = false, bool debug = false, bool enable = true);
+
+        ~batch_environment() override = default;
+
+        std::string init_from_nodelist(std::vector<std::string> const& nodes,
+            std::string const& agas_host, bool have_tcp) override;
+
+        std::size_t retrieve_number_of_threads() const noexcept override;
+
+        std::size_t retrieve_number_of_localities() const noexcept override;
+
+        std::size_t retrieve_node_number() const noexcept override;
+
+        std::string host_name() const override;
+
+        std::string host_name(std::string const& def_hpx_name) const override;
+
+        std::string agas_host_name(std::string const& def_agas) const override;
+
+        std::size_t agas_node() const noexcept override;
+
+        bool found_batch_environment() const noexcept override;
+
+        std::string get_batch_name() const override;
+
+        std::string agas_node_;
+        std::size_t agas_node_num_;
+        std::size_t node_num_;
+        std::size_t num_threads_;
+        std::size_t num_localities_;
+        std::string batch_name_;
+        bool debug_;
+
+#if defined(HPX_HAVE_PARCELPORT_TCP)
+        using node_map_type = std::map<::asio::ip::tcp::endpoint,
+            std::pair<std::string, std::size_t>>;
+
+        node_map_type nodes_;
+#endif
+    };
 
     batch_environment::batch_environment(std::vector<std::string>& nodelist,
         bool have_mpi, bool debug, bool enable)
@@ -295,6 +345,88 @@ namespace hpx::util {
     {
         return batch_name_;
     }
+}}    // namespace hpx::util::detail
+
+namespace hpx::util {
+
+    batch_environment::batch_environment(std::vector<std::string>& nodelist,
+        bool have_mpi, bool debug, bool enable)
+      : data_(std::make_unique<detail::batch_environment>(
+            nodelist, have_mpi, debug, enable))
+    {
+    }
+
+    // this function initializes the map of nodes from the given (space
+    // separated) list of nodes
+    std::string batch_environment::init_from_nodelist(
+        std::vector<std::string> const& nodes, std::string const& agas_host,
+        bool have_tcp) const
+    {
+        return data_->init_from_nodelist(nodes, agas_host, have_tcp);
+    }
+
+    // The number of threads is either one (if no PBS information was
+    // found), or it is the same as the number of times this node has been
+    // listed in the node file.
+    std::size_t batch_environment::retrieve_number_of_threads() const noexcept
+    {
+        return data_->retrieve_number_of_threads();
+    }
+
+    // The number of localities is either one (if no PBS information was
+    // found), or it is the same as the number of distinct node names listed
+    // in the node file.
+    std::size_t batch_environment::retrieve_number_of_localities()
+        const noexcept
+    {
+        return data_->retrieve_number_of_localities();
+    }
+
+    // Try to retrieve the node number from the PBS environment
+    std::size_t batch_environment::retrieve_node_number() const noexcept
+    {
+        return data_->retrieve_node_number();
+    }
+
+    std::string batch_environment::host_name() const
+    {
+        return data_->host_name();
+    }
+
+    std::string batch_environment::host_name(
+        std::string const& def_hpx_name) const
+    {
+        return data_->host_name(def_hpx_name);
+    }
+
+    // We either select the first host listed in the node file or a given
+    // host name to host the AGAS server.
+    std::string batch_environment::agas_host_name(
+        std::string const& def_agas) const
+    {
+        return data_->agas_host_name(def_agas);
+    }
+
+    // The AGAS node number represents the number of the node which has been
+    // selected as the AGAS host.
+    std::size_t batch_environment::agas_node() const noexcept
+    {
+        return data_->agas_node();
+    }
+
+    // The function will analyze the current environment and return true if
+    // it finds sufficient information to deduce its running as a batch job.
+    bool batch_environment::found_batch_environment() const noexcept
+    {
+        return data_->found_batch_environment();
+    }
+
+    // Return a string containing the name of the batch system
+    std::string batch_environment::get_batch_name() const
+    {
+        return data_->get_batch_name();
+    }
+
 }    // namespace hpx::util
 
 #include <hpx/config/warnings_suffix.hpp>

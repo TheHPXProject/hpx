@@ -9,15 +9,14 @@
 
 #include <hpx/config.hpp>
 #include <hpx/actions/actions_fwd.hpp>
-#include <hpx/actions_base/actions_base_support.hpp>
-#include <hpx/actions_base/detail/action_factory.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/actions_base.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
 
 namespace hpx::actions::detail {
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     struct register_action
     {
         register_action(register_action const&) = delete;

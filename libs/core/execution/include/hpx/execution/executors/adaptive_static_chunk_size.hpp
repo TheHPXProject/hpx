@@ -55,21 +55,19 @@ namespace hpx::execution::experimental {
 
         /// \cond NOINTERNAL
         template <typename Executor>
-        friend std::size_t tag_override_invoke(
-            hpx::execution::experimental::get_chunk_size_t,
-            adaptive_static_chunk_size const& this_, Executor& exec,
+        std::size_t get_chunk_size(Executor&& exec,
             hpx::chrono::steady_duration const&, std::size_t const cores,
-            std::size_t const input_size)
+            std::size_t const input_size) const
         {
             // Make sure the internal round-robin counter of the executor is
             // reset
             hpx::execution::experimental::reset_thread_distribution(
-                this_, exec);
+                *this, exec);
 
             // use the given chunk size if given
-            if (this_.chunk_size_ != 0)
+            if (chunk_size_ != 0)
             {
-                return this_.chunk_size_;
+                return chunk_size_;
             }
 
             if (cores == 1)

@@ -1,0 +1,83 @@
+# Copyright (c) 2026 The STE||AR Group
+# Copyright (c) 2026 Vansh Dobhal
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Linux CI (ITTNotify, Debug)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: stellargroup/build_env:17
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Install ITTNotify (ittapi)
+      shell: bash
+      run: |
+          git clone https://github.com/intel/ittapi.git
+          cmake -S ittapi -B ittapi/build -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=$PWD/ittapi/install \
+              -DITT_API_REFERENCE_COLLECTOR=ON
+          cmake --build ittapi/build --target install
+    - name: Configure
+      shell: bash
+      env:
+        AMPLIFIER_ROOT: ${{ github.workspace }}/ittapi/install
+      run: |
+          cmake \
+              . \
+              -Bbuild \
+              -GNinja \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
+              -DHPX_WITH_EXAMPLES=ON \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+              -DHPX_WITH_VERIFY_LOCKS=ON \
+              -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+              -DHPX_WITH_ITTNOTIFY=ON
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --target all
+          cmake --build build --target examples
+    - name: Test
+      shell: bash
+      run: |
+          export INTEL_LIBITTNOTIFY64="${GITHUB_WORKSPACE}/ittapi/build/bin/libittnotify_refcol.so"
+          export INTEL_LIBITTNOTIFY_LOG_DIR="${GITHUB_WORKSPACE}/itt_logs"
+          # Enable ITT bindings at runtime so the ref-collector is loaded
+          export HPX_HAVE_ITTNOTIFY=1
+          mkdir -p $INTEL_LIBITTNOTIFY_LOG_DIR
+          cd build
+          ctest \
+            --output-on-failure \
+            --tests-regex tests.examples.itt_notify \
+            -j1
+    - name: Verify ITT API usage
+      shell: bash
+      run: |
+          LOG_DIR="${GITHUB_WORKSPACE}/itt_logs"
+          # Fallback to /tmp if custom dir wasn't picked up
+          if ! ls ${LOG_DIR}/libittnotify_refcol_*.log 1>/dev/null 2>&1; then
+            LOG_DIR="/tmp"
+          fi
+          
+          echo "=== ITT ref-collector log contents (from ${LOG_DIR}) ==="
+          cat ${LOG_DIR}/libittnotify_refcol_*.log
+          grep -q "__itt_domain_create" ${LOG_DIR}/libittnotify_refcol_*.log
+          grep -q "__itt_task_begin" ${LOG_DIR}/libittnotify_refcol_*.log
+          echo "ITT API verification passed."

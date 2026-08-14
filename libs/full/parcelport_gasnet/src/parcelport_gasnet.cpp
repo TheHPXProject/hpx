@@ -22,12 +22,18 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/parcelport_gasnet/locality.hpp>
 #include <hpx/parcelport_gasnet/receiver.hpp>
 #include <hpx/parcelport_gasnet/sender.hpp>
-#include <hpx/parcelset/parcelport_impl.hpp>
-#include <hpx/plugin_factories/parcelport_factory.hpp>
+
+#include <asio/io_context.hpp>
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
 
 #include <atomic>
 #include <cstddef>
@@ -147,8 +153,8 @@ namespace hpx::parcelset {
                         io_service_pool_.get_io_service(static_cast<int>(i)),
                         hpx::bind(&parcelport::io_service_work, this));
 #else
-                    io_service_pool_.get_io_service(int(i)).post(
-                        hpx::bind(&parcelport::io_service_work, this));
+                    io_service_pool_.get_io_service(static_cast<int>(i))
+                        .post(hpx::bind(&parcelport::io_service_work, this));
 #endif
                 }
                 return true;

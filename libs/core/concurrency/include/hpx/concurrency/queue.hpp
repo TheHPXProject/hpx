@@ -1,5 +1,5 @@
 //  Copyright (C) 2008-2013 Tim Blechmann
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -36,7 +36,7 @@ namespace hpx::lockfree {
      *    hpx::lockfree::fixed_sized<false> \n Can be used to completely
      *    disable dynamic memory allocations during push in order to ensure
      *    lockfree behavior. \n If the data structure is configured as
-     *    fixed-sized, the internal nodes are stored inside an array and they
+     *    fixed-sized, the internal nodes are stored inside an array, and they
      *    are addressed by array indexing. This limits the possible size of the
      *    queue to the number of elements that can be addressed by the index
      *    type (usually 2**16-2), but on platforms that lack double-width
@@ -296,13 +296,13 @@ namespace hpx::lockfree {
          *
          * \return true, if the queue is empty, false otherwise
          * \note The result is only accurate, if no other thread modifies the
-         *       queue. Therefore it is rarely practical to use this value in
+         *       queue. Therefore, it is rarely practical to use this value in
          *       program logic.
          */
         [[nodiscard]] bool empty() const noexcept
         {
-            return pool.get_handle(head_.load()) ==
-                pool.get_handle(tail_.load());
+            return pool.get_handle(head_.load(std::memory_order_acquire)) ==
+                pool.get_handle(tail_.load(std::memory_order_acquire));
         }
 
         /**

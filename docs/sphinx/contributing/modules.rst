@@ -14,7 +14,7 @@ Module structure
 This section explains the structure of an |hpx| module.
 
 The tool `create_library_skeleton.py
-<https://github.com/STEllAR-GROUP/hpx/blob/master/libs/create_module_skeleton.py>`_
+<https://github.com/TheHPXProject/hpx/blob/master/libs/create_module_skeleton.py>`_
 can be used to generate a basic skeleton. To create a library skeleton, run the
 tool in the ``libs`` subdirectory with the module name as an argument:
 

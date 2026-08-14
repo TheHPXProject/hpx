@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <exception>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -109,12 +110,12 @@ namespace hpx {
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT hpx::exception_info
         construct_exception_info(std::string const& func,
-            std::string const& file, long line, std::string const& back_trace,
-            std::uint32_t node, std::string const& hostname, std::int64_t pid,
-            std::size_t shepherd, std::size_t thread_id,
-            std::string const& thread_name, std::string const& env,
-            std::string const& config, std::string const& state_name,
-            std::string const& auxinfo);
+            std::string const& file, std::int64_t line,
+            std::string const& back_trace, std::uint32_t node,
+            std::string const& hostname, std::int64_t pid, std::size_t shepherd,
+            std::size_t thread_id, std::string const& thread_name,
+            std::string const& env, std::string const& config,
+            std::string const& state_name, std::string const& auxinfo);
 
         HPX_CXX_CORE_EXPORT template <typename Exception>
         HPX_CORE_EXPORT std::exception_ptr construct_exception(

@@ -15,28 +15,28 @@
 #include <exception>
 #include <utility>
 
-namespace hpx { namespace applier {
+namespace hpx::applier {
 
-    template <typename Arg0>
+    HPX_CXX_EXPORT template <typename Arg0>
     inline void trigger(hpx::id_type const& k, Arg0&& arg0)
     {
         set_lco_value(k, HPX_FORWARD(Arg0, arg0));
     }
 
-    inline void trigger(hpx::id_type const& k)
+    HPX_CXX_EXPORT inline void trigger(hpx::id_type const& k)
     {
         trigger_lco_event(k);
     }
 
-    inline void trigger_error(
+    HPX_CXX_EXPORT inline void trigger_error(
         hpx::id_type const& k, std::exception_ptr const& e)
     {
         set_lco_error(k, e);
     }
 
-    inline void trigger_error(hpx::id_type const& k, std::exception_ptr&& e)
+    HPX_CXX_EXPORT inline void trigger_error(
+        hpx::id_type const& k, std::exception_ptr&& e)
     {
         set_lco_error(k, e);
     }
-
-}}    // namespace hpx::applier
+}    // namespace hpx::applier

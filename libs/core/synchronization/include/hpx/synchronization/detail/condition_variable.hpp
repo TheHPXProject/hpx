@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2013-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -12,6 +12,7 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/synchronization/spinlock.hpp>
@@ -113,6 +114,22 @@ namespace hpx::lcos::local::detail {
             std::unique_lock<mutex_type>& lock,
             hpx::chrono::steady_time_point const& abs_time,
             char const* description, error_code& ec = throws);
+
+        HPX_CORE_EXPORT threads::thread_restart_state wait_until(
+            std::unique_lock<mutex_type>& lock,
+            hpx::chrono::steady_time_point const& abs_time,
+            hpx::move_only_function<bool()>&& wait_cond,
+            char const* description, error_code& ec = throws);
+
+        threads::thread_restart_state wait_until(
+            std::unique_lock<mutex_type>& lock,
+            hpx::chrono::steady_time_point const& abs_time,
+            hpx::move_only_function<bool()>&& wait_cond,
+            error_code& ec = throws)
+        {
+            return wait_until(lock, abs_time, HPX_MOVE(wait_cond),
+                "condition_variable::wait_until", ec);
+        }
 
         threads::thread_restart_state wait_until(
             std::unique_lock<mutex_type>& lock,

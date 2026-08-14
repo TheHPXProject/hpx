@@ -320,6 +320,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/transfer.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
@@ -439,7 +440,7 @@ namespace hpx::parallel {
             typename Enable = void>
         struct copy_iter;
 
-        HPX_CXX_CORE_EXPORT template <typename FwdIter1, typename FwdIter2>
+        template <typename FwdIter1, typename FwdIter2>
         struct copy_iter<FwdIter1, FwdIter2,
             std::enable_if_t<
                 iterators_are_segmented<FwdIter1, FwdIter2>::value>>
@@ -451,7 +452,7 @@ namespace hpx::parallel {
         {
         };
 
-        HPX_CXX_CORE_EXPORT template <typename FwdIter1, typename FwdIter2>
+        template <typename FwdIter1, typename FwdIter2>
         struct copy_iter<FwdIter1, FwdIter2,
             std::enable_if_t<
                 iterators_are_not_segmented<FwdIter1, FwdIter2>::value>>
@@ -590,7 +591,8 @@ namespace hpx::parallel {
                     // below makes gcc generate errors
 
                     // MSVC complains if proj is captured by ref below
-                    util::loop_n<std::decay_t<ExPolicy>>(part_begin, part_size,
+                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
+                        part_size,
                         [&pred, proj, &curr](zip_iterator it) mutable -> void {
                             bool f = hpx::invoke(
                                 pred, hpx::invoke(proj, get<0>(*it)));
@@ -606,20 +608,21 @@ namespace hpx::parallel {
                               std::size_t part_size, std::size_t val) mutable {
                     HPX_UNUSED(flags);
                     std::advance(dest, val);
-                    util::loop_n<std::decay_t<ExPolicy>>(part_begin, part_size,
-                        [&dest](zip_iterator it) mutable {
+                    util::const_loop_n<std::decay_t<ExPolicy>>(part_begin,
+                        part_size, [&dest](zip_iterator it) mutable {
                             if (get<1>(*it))
                                 *dest++ = get<0>(*it);
                         });
                 };
 
-                auto f4 = [first, dest, flags](std::vector<std::size_t>&& items,
+                auto f4 = [first, count, dest, flags](
+                              std::vector<std::size_t>&& items,
                               std::vector<hpx::future<void>>&& data) mutable
                     -> util::in_out_result<FwdIter1, FwdIter3> {
                     HPX_UNUSED(flags);
 
                     auto dist = items.back();
-                    std::advance(first, dist);
+                    std::advance(first, count);
                     std::advance(dest, dist);
 
                     // make sure iterators embedded in function object that is
@@ -652,9 +655,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::copy
     HPX_CXX_CORE_EXPORT inline constexpr struct copy_t final
-      : hpx::detail::tag_parallel_algorithm<copy_t>
+      : hpx::detail::tag_dispatch<copy_t,
+            hpx::detail::tag_parallel_algorithm<copy_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2>
         // clang-format off
             requires (
@@ -663,7 +666,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::copy_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return parallel::util::get_second_element(
@@ -679,8 +682,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend FwdIter2 tag_fallback_invoke(
-            hpx::copy_t, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
+        static FwdIter2 invoke_default(
+            FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             return parallel::util::get_second_element(
                 parallel::detail::transfer<
@@ -692,9 +695,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::copy_n
     HPX_CXX_CORE_EXPORT inline constexpr struct copy_n_t final
-      : hpx::detail::tag_parallel_algorithm<copy_n_t>
+      : hpx::detail::tag_dispatch<copy_n_t,
+            hpx::detail::tag_parallel_algorithm<copy_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename Size,
             typename FwdIter2>
         // clang-format off
@@ -704,7 +707,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::copy_n_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, Size count, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -746,8 +749,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend FwdIter2 tag_fallback_invoke(
-            hpx::copy_n_t, FwdIter1 first, Size count, FwdIter2 dest)
+        static FwdIter2 invoke_default(
+            FwdIter1 first, Size count, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -774,9 +777,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::copy_if
     HPX_CXX_CORE_EXPORT inline constexpr struct copy_if_t final
-      : hpx::detail::tag_parallel_algorithm<copy_if_t>
+      : hpx::detail::tag_dispatch<copy_if_t,
+            hpx::detail::tag_parallel_algorithm<copy_if_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename Pred>
         // clang-format off
@@ -789,10 +792,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
-        tag_fallback_invoke(hpx::copy_if_t, ExPolicy&& policy, FwdIter1 first,
-            FwdIter1 last, FwdIter2 dest, Pred pred)
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
+        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
+            FwdIter2 dest, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
@@ -819,8 +821,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend FwdIter2 tag_fallback_invoke(hpx::copy_if_t, FwdIter1 first,
-            FwdIter1 last, FwdIter2 dest, Pred pred)
+        static FwdIter2 invoke_default(
+            FwdIter1 first, FwdIter1 last, FwdIter2 dest, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");

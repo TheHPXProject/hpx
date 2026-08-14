@@ -19,92 +19,58 @@
 
 namespace ex = hpx::execution::experimental;
 
-// This overload is only used to check dispatching. It is not a useful
-// implementation.
-void tag_invoke(ex::start_detached_t, custom_sender2 s)
-{
-    s.tag_invoke_overload_called = true;
-}
-
 int main()
 {
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        ex::start_detached(custom_sender{
-            start_called, connect_called, tag_invoke_overload_called});
+        std::atomic<bool> overload_called{false};
+        ex::start_detached(
+            custom_sender{start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
         ex::start_detached(custom_typed_sender<int>{
-            0, start_called, connect_called, tag_invoke_overload_called});
+            0, start_called, connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
         ex::start_detached(
             custom_typed_sender<custom_type_non_default_constructible>{
                 custom_type_non_default_constructible{0}, start_called,
-                connect_called, tag_invoke_overload_called});
+                connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     {
         std::atomic<bool> start_called{false};
         std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
         ex::start_detached(custom_typed_sender<
             custom_type_non_default_constructible_non_copyable>{
             custom_type_non_default_constructible_non_copyable{0}, start_called,
-            connect_called, tag_invoke_overload_called});
+            connect_called, overload_called});
         HPX_TEST(start_called);
         HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     // operator| overload
     {
-#if !defined(HPX_HAVE_STDEXEC)
-        // in P2300R8 start detached does not have an operator| as it is a
-        // sender consumer and not a sender adaptor, and only sender adaptors
-        // have operator| overloads
-
-        std::atomic<bool> start_called{false};
-        std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        custom_sender{
-            start_called, connect_called, tag_invoke_overload_called} |
-            ex::start_detached();
-        HPX_TEST(start_called);
-        HPX_TEST(connect_called);
-        HPX_TEST(!tag_invoke_overload_called);
-#endif
-    }
-
-    // tag_invoke overload
-    {
-        std::atomic<bool> start_called{false};
-        std::atomic<bool> connect_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        ex::start_detached(custom_sender2{custom_sender{
-            start_called, connect_called, tag_invoke_overload_called}});
-        HPX_TEST(!start_called);
-        HPX_TEST(!connect_called);
-        HPX_TEST(tag_invoke_overload_called);
     }
 
     return hpx::util::report_errors();

@@ -6,28 +6,29 @@
 
 #pragma once
 
-#include <hpx/hpx_init_params.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/program_options.hpp>
 
+/// \cond NOINTERNAL
 namespace hpx {
-    /// \cond NOINTERNAL
-    namespace detail {
 
-        HPX_EXPORT int run_or_start(
-            hpx::function<int(hpx::program_options::variables_map& vm)> const&
-                f,
-            int argc, char** argv, init_params const& params, bool blocking);
+    struct init_params;
+}
 
-        HPX_EXPORT int init_impl(
-            hpx::function<int(hpx::program_options::variables_map&)> const& f,
-            int argc, char** argv, init_params const& params,
-            char const* hpx_prefix, char** env);
+namespace hpx::detail {
 
-        HPX_EXPORT bool start_impl(
-            hpx::function<int(hpx::program_options::variables_map&)> const& f,
-            int argc, char** argv, init_params const& params,
-            char const* hpx_prefix, char** env);
-    }    // namespace detail
-    /// \endcond
-}    // namespace hpx
+    HPX_CXX_EXPORT HPX_EXPORT int run_or_start(
+        hpx::function<int(hpx::program_options::variables_map& vm)> const& f,
+        int argc, char** argv, init_params const& params, bool blocking);
+
+    HPX_CXX_EXPORT HPX_EXPORT int init_impl(
+        hpx::function<int(hpx::program_options::variables_map&)> const& f,
+        int argc, char** argv, init_params const& params,
+        char const* hpx_prefix, char** env);
+
+    HPX_CXX_EXPORT HPX_EXPORT bool start_impl(
+        hpx::function<int(hpx::program_options::variables_map&)> const& f,
+        int argc, char** argv, init_params const& params,
+        char const* hpx_prefix, char** env);
+}    // namespace hpx::detail
+/// \endcond

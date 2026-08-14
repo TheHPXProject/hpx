@@ -7,6 +7,10 @@
 function(add_hpx_test category name)
   set(options
       FAILURE_EXPECTED
+      FAILURE_EXPECTED_DEBUG
+      FAILURE_EXPECTED_RELEASE
+      FAILURE_EXPECTED_RELWITHDEBINFO
+      FAILURE_EXPECTED_MINSIZEREL
       RUN_SERIAL
       NO_PARCELPORT_TCP
       NO_PARCELPORT_MPI
@@ -21,6 +25,8 @@ function(add_hpx_test category name)
   cmake_parse_arguments(
     ${name} "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN}
   )
+
+  hpx_debug("add_hpx_test.${category}.${name}" "args: ${ARGN}")
 
   if(NOT ${name}_LOCALITIES)
     set(${name}_LOCALITIES 1)
@@ -49,8 +55,40 @@ function(add_hpx_test category name)
 
   set(expected "0")
 
+  # Guard against combining multiple FAILURE_EXPECTED* flags: only one should be
+  # set per test, otherwise the extra ones are silently ignored.
+  set(_failure_expected_flags_set 0)
+  foreach(_flag
+          FAILURE_EXPECTED FAILURE_EXPECTED_DEBUG FAILURE_EXPECTED_RELEASE
+          FAILURE_EXPECTED_RELWITHDEBINFO FAILURE_EXPECTED_MINSIZEREL
+  )
+    if(${name}_${_flag})
+      math(EXPR _failure_expected_flags_set
+           "${_failure_expected_flags_set} + 1"
+      )
+    endif()
+  endforeach()
+
+  if(_failure_expected_flags_set GREATER 1)
+    hpx_error(
+      "add_hpx_test(${name}): multiple FAILURE_EXPECTED* options set "
+      "simultaneously. Only one of FAILURE_EXPECTED, "
+      "FAILURE_EXPECTED_DEBUG, FAILURE_EXPECTED_RELEASE, "
+      "FAILURE_EXPECTED_RELWITHDEBINFO, or FAILURE_EXPECTED_MINSIZEREL "
+      "may be specified."
+    )
+  endif()
+
   if(${name}_FAILURE_EXPECTED)
     set(expected "1")
+  elseif(${name}_FAILURE_EXPECTED_DEBUG)
+    set(expected "$<CONFIG:Debug>")
+  elseif(${name}_FAILURE_EXPECTED_RELEASE)
+    set(expected "$<CONFIG:Release>")
+  elseif(${name}_FAILURE_EXPECTED_RELWITHDEBINFO)
+    set(expected "$<CONFIG:RelWithDebInfo>")
+  elseif(${name}_FAILURE_EXPECTED_MINSIZEREL)
+    set(expected "$<CONFIG:MinSizeRel>")
   endif()
 
   if(${name}_RUN_SERIAL)
@@ -126,6 +164,8 @@ function(add_hpx_test category name)
   else()
     set(${name}_LOCALITIES "1")
   endif()
+
+  hpx_debug("add_hpx_test.${category}.${name}" "cmd: ${cmd} ${args}")
 
   if(${name}_LOCALITIES STREQUAL "1")
     set(_full_name "${category}.${name}")

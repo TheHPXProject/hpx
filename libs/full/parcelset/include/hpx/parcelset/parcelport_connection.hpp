@@ -1,5 +1,5 @@
 //  Copyright (c) 2014 Thomas Heller
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -22,7 +22,7 @@
 
 namespace hpx::parcelset {
 
-    template <typename Connection>
+    HPX_CXX_EXPORT template <typename Connection>
     struct parcelport_connection : std::enable_shared_from_this<Connection>
     {
         using buffer_type = std::vector<char>;

@@ -1,4 +1,4 @@
-//  Copyright (c) 2015-2025 Hartmut Kaiser
+//  Copyright (c) 2015-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,6 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/actions_base/macros.hpp>
 #include <hpx/modules/hashing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -18,7 +19,7 @@
 
 namespace hpx::actions::detail {
 
-    class HPX_EXPORT invocation_count_registry
+    HPX_CXX_EXPORT class HPX_EXPORT invocation_count_registry
     {
     public:
         using get_invocation_count_type = std::int64_t (*)(bool);
@@ -63,17 +64,17 @@ namespace hpx::actions::detail {
         map_type map_;
     };
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     void register_local_action_invocation_count(
         invocation_count_registry& registry);
 
 #if defined(HPX_HAVE_NETWORKING)
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     void register_remote_action_invocation_count(
         invocation_count_registry& registry);
 #endif
 
-    template <typename Action>
+    HPX_CXX_EXPORT template <typename Action>
     struct register_action_invocation_count
     {
         register_action_invocation_count()
@@ -94,12 +95,5 @@ namespace hpx::actions::detail {
     register_action_invocation_count<Action>
         register_action_invocation_count<Action>::instance;
 }    // namespace hpx::actions::detail
-
-#define HPX_REGISTER_ACTION_INVOCATION_COUNT(Action)                           \
-    namespace hpx::actions::detail {                                           \
-        template register_action_invocation_count<Action>                      \
-            register_action_invocation_count<Action>::instance;                \
-    }                                                                          \
-    /**/
 
 #include <hpx/config/warnings_suffix.hpp>

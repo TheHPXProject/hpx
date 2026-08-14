@@ -10,9 +10,9 @@
 
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-#include <hpx/async_distributed/promise.hpp>
 #include <hpx/hpx.hpp>
 #include <hpx/include/client.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/threading_base.hpp>
 #ifdef HPX_HAVE_MODULE_LIKWID
 #include <hpx/modules/likwid.hpp>

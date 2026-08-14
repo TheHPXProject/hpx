@@ -78,10 +78,6 @@ namespace hpx::parallel::detail {
             first + 3 * chunk, first + 4 * chunk, first + 5 * chunk,
             first + 6 * chunk, first + 7 * chunk, last - 1, comp);
 
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
         std::ranges::iter_swap(first, itaux);
-#else
-        std::iter_swap(first, itaux);
-#endif
     }
 }    // namespace hpx::parallel::detail

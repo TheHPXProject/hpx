@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2021 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +9,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(plugin_factories_headers
     hpx/plugin_factories/binary_filter_factory.hpp
     hpx/plugin_factories/binary_filter_factory_base.hpp
+    hpx/plugin_factories/macros.hpp
     hpx/plugin_factories/message_handler_factory.hpp
     hpx/plugin_factories/message_handler_factory_base.hpp
     hpx/plugin_factories/parcelport_factory.hpp
@@ -17,6 +18,8 @@ set(plugin_factories_headers
     hpx/plugin_factories/plugin_registry.hpp
     hpx/plugin_factories/unique_plugin_name.hpp
 )
+
+set(plugin_factories_macro_headers hpx/plugin_factories/macros.hpp)
 
 # cmake-format: off
 set(plugin_factories_compat_headers
@@ -38,8 +41,10 @@ include(HPX_AddModule)
 add_hpx_module(
   full plugin_factories
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${plugin_factories_sources}
   HEADERS ${plugin_factories_headers}
+  MACRO_HEADERS ${plugin_factories_macro_headers}
   COMPAT_HEADERS ${plugin_factories_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_command_line_handling hpx_parcelset_base

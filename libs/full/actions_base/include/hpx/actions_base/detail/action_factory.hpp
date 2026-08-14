@@ -11,6 +11,7 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/actions_base/actions_base_fwd.hpp>
 #include <hpx/actions_base/actions_base_support.hpp>
+#include <hpx/actions_base/macros.hpp>
 #include <hpx/modules/preprocessor.hpp>
 
 #include <cstdint>
@@ -21,7 +22,7 @@
 
 namespace hpx::actions::detail {
 
-    struct action_registry
+    HPX_CXX_EXPORT struct action_registry
     {
         action_registry(action_registry const&) = delete;
         action_registry(action_registry&&) = delete;
@@ -62,10 +63,10 @@ namespace hpx::actions::detail {
         cache_t cache_;
     };
 
-    template <std::uint32_t Id>
+    HPX_CXX_EXPORT template <std::uint32_t Id>
     HPX_ALWAYS_EXPORT std::string get_action_name_id();
 
-    template <std::uint32_t Id>
+    HPX_CXX_EXPORT template <std::uint32_t Id>
     struct add_constant_entry
     {
         add_constant_entry(add_constant_entry const&) = delete;
@@ -89,20 +90,5 @@ namespace hpx::actions::detail {
             get_action_name_id<Id>(), Id);
     }
 }    // namespace hpx::actions::detail
-
-#define HPX_REGISTER_ACTION_FACTORY_ID(Name, Id)                               \
-    namespace hpx::actions::detail {                                           \
-        template <>                                                            \
-        HPX_ALWAYS_EXPORT std::string get_action_name_id<Id>()                 \
-        {                                                                      \
-            return HPX_PP_STRINGIZE(Name);                                     \
-        }                                                                      \
-        template add_constant_entry<Id> add_constant_entry<Id>::instance;      \
-    }                                                                          \
-    /**/
-
-#else
-
-#define HPX_REGISTER_ACTION_FACTORY_ID(Name, Id) /**/
 
 #endif

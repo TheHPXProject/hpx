@@ -198,7 +198,9 @@ namespace hpx { namespace ranges {
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/shift_right.hpp>
+#include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <iterator>
 #include <ranges>
@@ -208,9 +210,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct shift_right_t final
-      : hpx::functional::detail::tag_fallback<shift_right_t>
+      : hpx::detail::tag_dispatch<shift_right_t,
+            hpx::detail::tag_parallel_algorithm<shift_right_t>>
     {
-    private:
         template <typename FwdIter, typename Sent, typename Size>
         // clang-format off
             requires(
@@ -219,8 +221,7 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::ranges::shift_right_t, FwdIter first, Sent last, Size n)
+        static FwdIter invoke_default(FwdIter first, Sent last, Size n)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -239,10 +240,9 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::shift_right_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Size n)
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, Size n)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -258,8 +258,7 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            hpx::ranges::shift_right_t, Rng&& rng, Size n)
+        static std::ranges::iterator_t<Rng> invoke_default(Rng&& rng, Size n)
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Requires at least forward iterator.");
@@ -277,10 +276,9 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(
-            hpx::ranges::shift_right_t, ExPolicy&& policy, Rng&& rng, Size n)
+        invoke_default(ExPolicy&& policy, Rng&& rng, Size n)
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Requires at least forward iterator.");

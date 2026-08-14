@@ -1,4 +1,4 @@
-//  Copyright (c) 1998-2024 Hartmut Kaiser
+//  Copyright (c) 1998-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,13 +6,14 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/components_base/component_type.hpp>
 
 #include <cstddef>
 
 namespace hpx::util {
 
-    struct wrapper_heap_base
+    HPX_CXX_EXPORT struct wrapper_heap_base
     {
         struct heap_parameters
         {

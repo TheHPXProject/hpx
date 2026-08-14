@@ -6,6 +6,10 @@
 
 set(subdirs lcos osu)
 
+if(NOT HPX_WITH_NETWORKING)
+  return()
+endif()
+
 foreach(subdir ${subdirs})
   add_hpx_pseudo_target(tests.performance.modules.collectives.${subdir}_perf)
   add_subdirectory(${subdir})

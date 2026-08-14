@@ -57,7 +57,9 @@ namespace hpx::traits {
         struct acquire_shared_state_impl
         {
             static_assert(!traits::detail::is_future_or_future_range_v<T>,
-                "!is_future_or_future_range_v<T>");
+                "T is a future or future range and must be acquired "
+                "using the hpx::traits::acquire_shared_state<T> "
+                "specialization, not the default implementation.");
 
             using type = T;
 

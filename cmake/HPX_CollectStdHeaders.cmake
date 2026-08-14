@@ -105,6 +105,10 @@ set(STANDARD_LIBRARY_HEADERS
     "<cwctype>"
 )
 
+if(HPX_WITH_CXX26_REFLECTION)
+  list(APPEND STANDARD_LIBRARY_HEADERS "<meta>")
+endif()
+
 # Function to extract #includes from a file recursively
 function(hpx_extract_includes_from_file module)
 
@@ -134,11 +138,9 @@ function(hpx_extract_includes_from_file module)
   foreach(include ${includes})
     string(REGEX REPLACE "#include (<[^>]+>)" "\\1" filename ${include})
 
-    if(NOT filename MATCHES "\\.|/")
-      # Check if the include is a standard library header
-      if(${filename} IN_LIST STANDARD_LIBRARY_HEADERS)
-        list(APPEND found_includes ${filename})
-      endif()
+    if("${filename}" IN_LIST STANDARD_LIBRARY_HEADERS)
+      # Capture only headers explicitly listed in STANDARD_LIBRARY_HEADERS.
+      list(APPEND found_includes "${filename}")
     endif()
   endforeach()
 

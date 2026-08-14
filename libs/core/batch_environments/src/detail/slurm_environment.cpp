@@ -7,9 +7,10 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/batch_environments/detail/slurm_environment.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/string_util.hpp>
+
+#include <hpx/batch_environments/detail/slurm_environment.hpp>
 
 #include <boost/fusion/include/vector.hpp>
 #include <boost/optional.hpp>

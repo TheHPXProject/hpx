@@ -145,7 +145,7 @@ namespace hpx::parallel::util {
         {
             auto& r = vrange_input[pos[0]];
 
-            *it_dest++ = HPX_MOVE(*r.begin());
+            *it_dest++ = std::ranges::iter_move(r.begin());
             r = util::range<Iter2, Sent2>(r.begin() + 1, r.end());
 
             if (r.size() == 0)
@@ -289,7 +289,8 @@ namespace hpx::parallel::util {
         {
             auto& r = vrange_input[pos[0]];
 
-            util::construct_object(&*it_dest++, HPX_MOVE(*r.begin()));
+            util::construct_object(
+                &*it_dest++, std::ranges::iter_move(r.begin()));
             r = util::range<Iter, Sent>(r.begin() + 1, r.end());
 
             if (r.size() == 0)

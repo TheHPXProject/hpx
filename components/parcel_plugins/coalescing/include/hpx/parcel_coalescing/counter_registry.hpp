@@ -11,10 +11,9 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCEL_COALESCING)
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/hashing.hpp>
+#include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/type_support.hpp>
-
-#include <hpx/performance_counters/counters_fwd.hpp>
 
 #include <cstdint>
 #include <string>

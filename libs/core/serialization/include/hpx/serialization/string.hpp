@@ -1,5 +1,5 @@
 //  Copyright (c) 2014 Thomas Heller
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/serialization/basic_archive.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 
 #include <cstdint>
@@ -28,7 +29,8 @@ namespace hpx::serialization {
         if (s.size() < size)
             s.resize(size);
 
-        load_binary(ar, &s[0], size * sizeof(Char));
+        load_binary(ar, detail::array_of_fundamental_type_v<Char>, &s[0],
+            size * sizeof(Char));
     }
 
     // save string
@@ -39,6 +41,7 @@ namespace hpx::serialization {
     {
         std::uint64_t const size = s.size();
         ar << size;
-        save_binary(ar, s.data(), s.size() * sizeof(Char));
+        save_binary(ar, detail::array_of_fundamental_type_v<Char>, s.data(),
+            s.size() * sizeof(Char));
     }
 }    // namespace hpx::serialization

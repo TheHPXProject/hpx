@@ -799,6 +799,7 @@ namespace hpx::ranges {
 #include <hpx/algorithms/traits/projected_range.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/minmax.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -818,9 +819,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::min_element
     HPX_CXX_CORE_EXPORT inline constexpr struct min_element_t final
-      : hpx::detail::tag_parallel_algorithm<min_element_t>
+      : hpx::detail::tag_dispatch<min_element_t,
+            hpx::detail::tag_parallel_algorithm<min_element_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename F = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -836,7 +837,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::min_element_t,
+        static FwdIter invoke_default(
             FwdIter first, Sent last, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -859,9 +860,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            hpx::ranges::min_element_t, Rng&& rng, F f = F(),
-            Proj proj = Proj())
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -888,10 +888,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::min_element_t, ExPolicy&& policy,
-            FwdIter first, Sent last, F f = F(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, F f = F(),
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -916,10 +916,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::min_element_t, ExPolicy&& policy,
-            Rng&& rng, F f = F(), Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -934,9 +934,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::max_element
     HPX_CXX_CORE_EXPORT inline constexpr struct max_element_t final
-      : hpx::detail::tag_parallel_algorithm<max_element_t>
+      : hpx::detail::tag_dispatch<max_element_t,
+            hpx::detail::tag_parallel_algorithm<max_element_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename F = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -952,7 +952,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::max_element_t,
+        static FwdIter invoke_default(
             FwdIter first, Sent last, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -975,9 +975,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            hpx::ranges::max_element_t, Rng&& rng, F f = F(),
-            Proj proj = Proj())
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -1004,10 +1003,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::max_element_t, ExPolicy&& policy,
-            FwdIter first, Sent last, F f = F(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, F f = F(),
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -1032,10 +1031,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::max_element_t, ExPolicy&& policy,
-            Rng&& rng, F f = F(), Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -1050,9 +1049,9 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::minmax_element
     HPX_CXX_CORE_EXPORT inline constexpr struct minmax_element_t final
-      : hpx::detail::tag_parallel_algorithm<minmax_element_t>
+      : hpx::detail::tag_dispatch<minmax_element_t,
+            hpx::detail::tag_parallel_algorithm<minmax_element_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename F = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -1068,9 +1067,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend minmax_element_result<FwdIter> tag_fallback_invoke(
-            hpx::ranges::minmax_element_t, FwdIter first, Sent last, F f = F(),
-            Proj proj = Proj())
+        static minmax_element_result<FwdIter> invoke_default(
+            FwdIter first, Sent last, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -1092,9 +1090,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend minmax_element_result<std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::minmax_element_t, Rng&& rng, F f = F(),
-            Proj proj = Proj())
+        static minmax_element_result<std::ranges::iterator_t<Rng>>
+        invoke_default(Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");
@@ -1121,10 +1118,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             minmax_element_result<FwdIter>>
-        tag_fallback_invoke(hpx::ranges::minmax_element_t, ExPolicy&& policy,
-            FwdIter first, Sent last, F f = F(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, F f = F(),
+            Proj proj = Proj())
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -1149,10 +1146,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             minmax_element_result<std::ranges::iterator_t<Rng>>>
-        tag_fallback_invoke(hpx::ranges::minmax_element_t, ExPolicy&& policy,
-            Rng&& rng, F f = F(), Proj proj = Proj())
+        invoke_default(
+            ExPolicy&& policy, Rng&& rng, F f = F(), Proj proj = Proj())
         {
             static_assert(std::forward_iterator<std::ranges::iterator_t<Rng>>,
                 "Required at least forward iterator.");

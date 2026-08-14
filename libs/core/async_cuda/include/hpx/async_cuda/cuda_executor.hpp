@@ -1,6 +1,7 @@
 //  Copyright (c) 2020 John Biddiscombe
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2020 Teodor Nikolov
-//  Copyright (c) 2024-2025 Hartmut Kaiser
+//  Copyright (c) 2024-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -125,30 +126,27 @@ namespace hpx::cuda::experimental {
         // -------------------------------------------------------------------------
         // OneWay Execution
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         // -------------------------------------------------------------------------
         // TwoWay Execution
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cuda_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
     protected:
         // -------------------------------------------------------------------------
-        // launch a kernel on our stream and return without a future
-        // the return value is the value returned from the cuda call
-        // (typically this will be cudaError_t).
+        // launch a kernel on our stream without returning a future
+        // Errors are reported through check_cuda_error, typically via the
+        // CUDA call return value (for example cudaError_t).
         // Throws cuda_exception if the async launch fails.
         template <typename R, typename... Params, typename... Args>
-        void post(R (*cuda_function)(Params...), Args&&... args) const
+        void post_impl(R (*cuda_function)(Params...), Args&&... args) const
         {
             // make sure we run on the correct device
             check_cuda_error(cudaSetDevice(device_));
@@ -160,11 +158,11 @@ namespace hpx::cuda::experimental {
 
         // -------------------------------------------------------------------------
         // launch a kernel on our stream and return a future that will become ready
-        // when the task completes, this allows integregration of GPU kernels with
+        // when the task completes, this allows integration of GPU kernels with
         // hpx::futures and the tasking DAG.
         // Puts a cuda_exception in the future if the async launch fails.
         template <typename R, typename... Params, typename... Args>
-        hpx::future<void> async(
+        hpx::future<void> async_impl(
             R (*cuda_kernel)(Params...), Args&&... args) const
         {
             return hpx::detail::try_catch_exception_ptr(

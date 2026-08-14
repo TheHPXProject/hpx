@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -14,7 +14,7 @@
 namespace hpx::components {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename ServerComponent>
+    HPX_CXX_EXPORT template <typename ServerComponent>
     struct stub_base
     {
         using server_component_type = ServerComponent;

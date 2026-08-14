@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //  Copyright (c)      2011 Thomas Heller
 //
@@ -10,11 +10,12 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
+
 namespace hpx::actions {
 
     /// \cond NOINTERNAL
-    enum preassigned_action_id
-    {
+    HPX_CXX_EXPORT enum preassigned_action_id {
         register_worker_action_id = 0,
         notify_worker_action_id,
         allocate_action_id,
@@ -175,6 +176,24 @@ namespace hpx::actions {
 
         // typed continuations...
         typed_continuation_hpx_agas_response,
+
+        // supervision_manager
+        supervision_manager_publish_event_action_id,
+        supervision_manager_register_observer_action_id,
+        supervision_manager_unregister_observer_action_id,
+        supervision_manager_query_state_action_id,
+        supervision_manager_await_terminal_action_id,
+        supervision_manager_register_activity_observer_action_id,
+        supervision_manager_unregister_activity_observer_action_id,
+        supervision_manager_remove_target_action_id,
+
+        // supervision agent
+        supervision_invoke_if_active_action_id,
+        supervision_deactivate_and_wait_action_id,
+
+        // supervision activity agent
+        supervision_activity_invoke_if_active_action_id,
+        supervision_activity_deactivate_and_wait_action_id,
 
         last_action_id
     };

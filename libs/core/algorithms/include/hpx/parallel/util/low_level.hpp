@@ -13,6 +13,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -55,15 +56,15 @@ namespace hpx::parallel::util {
         }
 
         construct_object(std::addressof(*first), HPX_MOVE(val));
-
         Iter it1 = first, it2 = first + 1;
         while (it2 != last)
         {
             // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-            construct_object(std::addressof(*it2++), HPX_MOVE(*it1++));
+            construct_object(
+                std::addressof(*it2++), std::ranges::iter_move(it1++));
         }
 
-        val = HPX_MOVE(*(last - 1));
+        val = std::ranges::iter_move(last - 1);
     }
 
     // \brief create an object in the memory specified by ptr
@@ -90,7 +91,7 @@ namespace hpx::parallel::util {
         while (first != last)
         {
             // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-            *it_dest++ = HPX_MOVE(*first++);
+            *it_dest++ = std::ranges::iter_move(first++);
         }
         return it_dest;
     }
@@ -112,7 +113,7 @@ namespace hpx::parallel::util {
         while (first != last)
         {
             // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-            hpx::construct_at(ptr++, HPX_MOVE(*first++));
+            hpx::construct_at(ptr++, std::ranges::iter_move(first++));
         }
 
         return ptr;
@@ -155,11 +156,8 @@ namespace hpx::parallel::util {
 
         while (buf1 != end_buf1 && buf2 != end_buf2)
         {
-            *buf_out++ = !comp(*buf2, *buf1) ?
-                // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                HPX_MOVE(*buf1++) :
-                // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                HPX_MOVE(*buf2++);
+            *buf_out++ = !comp(*buf2, *buf1) ? std::ranges::iter_move(buf1++) :
+                                               std::ranges::iter_move(buf2++);
         }
         return buf1 == end_buf1 ? init_move(buf_out, buf2, end_buf2) :
                                   init_move(buf_out, buf1, end_buf1);
@@ -185,11 +183,8 @@ namespace hpx::parallel::util {
         while (first1 != last1 && first2 != last2)
         {
             construct(it_out++,
-                !comp(*first2, *first1) ?
-                    // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    HPX_MOVE(*first1++) :
-                    // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    HPX_MOVE(*first2++));
+                !comp(*first2, *first1) ? std::ranges::iter_move(first1++) :
+                                          std::ranges::iter_move(first2++));
         };
         return first1 == last1 ? uninit_move(it_out, first2, last2) :
                                  uninit_move(it_out, first1, last1);
@@ -220,11 +215,8 @@ namespace hpx::parallel::util {
 
         while (buf1 != end_buf1 && buf2 != end_buf2)
         {
-            *buf_out++ = !comp(*buf2, *buf1) ?
-                // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                HPX_MOVE(*buf1++) :
-                // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                HPX_MOVE(*buf2++);
+            *buf_out++ = !comp(*buf2, *buf1) ? std::ranges::iter_move(buf1++) :
+                                               std::ranges::iter_move(buf2++);
         }
         return buf2 == end_buf2 ? init_move(buf_out, buf1, end_buf1) : end_buf2;
     }
@@ -276,8 +268,7 @@ namespace hpx::parallel::util {
         {
             while (src1 != end_src1)
             {
-                // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                *src1++ = HPX_MOVE(*aux++);
+                *src1++ = std::ranges::iter_move(aux++);
             }
             init_move(src2_first, aux, end_aux);
         }

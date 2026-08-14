@@ -1,0 +1,91 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Documentation Deploy
+
+on:
+  workflow_run:
+    workflows: ["Documentation Build"]
+    types:
+      - completed
+    branches:
+      - master
+      - 'release**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  deploy-documentation:
+    runs-on: ubuntu-latest
+    container: stellargroup/build_env:17
+    if: >
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch'
+    permissions:
+      actions: read
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Download Documentation Artifacts
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        workflow: documentation-build.yml
+        commit: ${{ github.event.workflow_run.head_sha || github.sha }}
+        name: documentation-artifacts
+        path: /__w/hpx/hpx/build/share/hpx/docs
+
+    - name: Download Depreport Artifacts
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        workflow: depreport.yml
+        commit: ${{ github.event.workflow_run.head_sha || github.sha }}
+        name: hpx-depreport
+        path: /__w/hpx/hpx/build/share/hpx/docs/report
+
+    - name: Add GitHub to known hosts
+      shell: bash
+      run: |
+        mkdir -p /root/.ssh
+        chmod 700 /root/.ssh
+        ssh-keyscan -H github.com >> /root/.ssh/known_hosts
+
+    - name: Setup SSH deploy key
+      shell: bash
+      run: |
+        eval "$(ssh-agent -s)"
+        echo "${{ secrets.DOCS_DEPLOY_KEY }}" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+
+    - name: Configure Local Git
+      shell: bash
+      run: |
+        git config --global user.name "TheHPXBot"
+        git config --global user.email "hpxdude42@protonmail.com"
+        git config --global --add safe.directory /__w/hpx/hpx
+        git config --global --add safe.directory /__w/hpx/hpx/build/docs/gh-pages
+
+    - name: Push Documentation
+      shell: bash
+      run: |
+        mkdir -p /__w/hpx/hpx/build/docs
+        cd /__w/hpx/hpx/build/docs
+        cmake \
+          -DHPX_BINARY_DIR=/__w/hpx/hpx/build \
+          -DHPX_WITH_GIT_BRANCH=master \
+          -DHPX_WITH_DOCUMENTATION_OUTPUT_FORMATS="html singlehtml latexpdf" \
+          "-DGIT_REPOSITORY=git@github.com:TheHPXProject/hpx-docs.git;--branch;master" \
+          -P /__w/hpx/hpx/cmake/HPX_UpdateGitDocs.cmake
+
+    - name: Cleanup SSH agent
+      if: always()
+      shell: bash
+      run: ssh-agent -k

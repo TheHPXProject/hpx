@@ -14,8 +14,8 @@
 #include <hpx/assert.hpp>
 
 #include <hpx/modules/lcw_base.hpp>
+#include <hpx/modules/parcelset.hpp>
 #include <hpx/parcelport_lcw/sendrecv/receiver_connection_sendrecv.hpp>
-#include <hpx/parcelset/decode_parcels.hpp>
 
 #include <cstddef>
 #include <cstdint>

@@ -164,6 +164,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/fill.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -256,11 +257,11 @@ namespace hpx::parallel {
                     HPX_FORWARD(ExPolicy, policy), first, count, val);
             }
 
-            template <typename ExPolicy, typename T>
-            static decltype(auto) parallel(ExPolicy&& policy, FwdIter first,
+            template <typename ExPolicy, typename FwdIter_, typename T>
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter_ first,
                 std::size_t count, T const& val)
             {
-                return for_each_n<FwdIter>().call(
+                return for_each_n<FwdIter_>().call(
                     HPX_FORWARD(ExPolicy, policy), first, count,
                     [val](auto&& v) -> void { v = val; }, hpx::identity_v);
             }
@@ -274,17 +275,17 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::fill
     HPX_CXX_CORE_EXPORT inline constexpr struct fill_t final
-      : hpx::detail::tag_parallel_algorithm<fill_t>
+      : hpx::detail::tag_dispatch<fill_t,
+            hpx::detail::tag_parallel_algorithm<fill_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter,
             typename T = typename std::iterator_traits<FwdIter>::value_type>
         // clang-format off
             requires(hpx::is_execution_policy_v<ExPolicy> &&
                 hpx::traits::is_iterator_v<FwdIter>)
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(fill_t, ExPolicy&& policy,
-            FwdIter first, FwdIter last, T const& value)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -305,8 +306,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend void tag_fallback_invoke(
-            fill_t, FwdIter first, FwdIter last, T const& value)
+        static void invoke_default(FwdIter first, FwdIter last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -319,9 +319,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::fill_n
     HPX_CXX_CORE_EXPORT inline constexpr struct fill_n_t final
-      : hpx::detail::tag_parallel_algorithm<fill_n_t>
+      : hpx::detail::tag_dispatch<fill_n_t,
+            hpx::detail::tag_parallel_algorithm<fill_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Size,
             typename T = typename std::iterator_traits<FwdIter>::value_type>
         // clang-format off
@@ -330,8 +330,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(fill_n_t, ExPolicy&& policy,
-            FwdIter first, Size count, T const& value)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -365,8 +365,7 @@ namespace hpx {
                 std::forward_iterator<FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            fill_n_t, FwdIter first, Size count, T const& value)
+        static FwdIter invoke_default(FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

@@ -150,7 +150,7 @@ namespace hpx::lockfree::detail {
         template <bool Bounded>
         T* allocate_impl()
         {
-            tagged_node_ptr old_pool = pool_.load(std::memory_order_consume);
+            tagged_node_ptr old_pool = pool_.load(std::memory_order_acquire);
 
             for (;;)
             {
@@ -224,7 +224,7 @@ namespace hpx::lockfree::detail {
         void deallocate_impl(T* n) noexcept
         {
             void* node = n;
-            tagged_node_ptr old_pool = pool_.load(std::memory_order_consume);
+            tagged_node_ptr old_pool = pool_.load(std::memory_order_acquire);
             auto* new_pool_ptr = static_cast<freelist_node*>(node);
 
             for (;;)
@@ -543,7 +543,7 @@ namespace hpx::lockfree::detail {
     private:
         index_t allocate_impl()
         {
-            tagged_index old_pool = pool_.load(std::memory_order_consume);
+            tagged_index old_pool = pool_.load(std::memory_order_acquire);
 
             for (;;)
             {
@@ -565,7 +565,7 @@ namespace hpx::lockfree::detail {
 
         index_t allocate_impl_unsafe()
         {
-            tagged_index const old_pool = pool_.load(std::memory_order_consume);
+            tagged_index const old_pool = pool_.load(std::memory_order_acquire);
 
             index_t index = old_pool.get_index();
             if (index == null_handle())
@@ -599,7 +599,7 @@ namespace hpx::lockfree::detail {
         {
             freelist_node* new_pool_node =
                 reinterpret_cast<freelist_node*>(NodeStorage::nodes() + index);
-            tagged_index old_pool = pool_.load(std::memory_order_consume);
+            tagged_index old_pool = pool_.load(std::memory_order_acquire);
 
             for (;;)
             {
@@ -615,7 +615,7 @@ namespace hpx::lockfree::detail {
         {
             freelist_node* new_pool_node =
                 reinterpret_cast<freelist_node*>(NodeStorage::nodes() + index);
-            tagged_index const old_pool = pool_.load(std::memory_order_consume);
+            tagged_index const old_pool = pool_.load(std::memory_order_acquire);
 
             tagged_index const new_pool(index, old_pool.get_tag());
             new_pool_node->next.set_index(old_pool.get_index());

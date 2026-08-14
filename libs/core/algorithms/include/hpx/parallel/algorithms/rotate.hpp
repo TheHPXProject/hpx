@@ -195,6 +195,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/copy.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/rotate.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/reverse.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -453,7 +454,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::rotate
     HPX_CXX_CORE_EXPORT inline constexpr struct rotate_t final
-      : hpx::detail::tag_parallel_algorithm<rotate_t>
+      : hpx::detail::tag_dispatch<rotate_t,
+            hpx::detail::tag_parallel_algorithm<rotate_t>>
     {
         template <typename FwdIter>
         // clang-format off
@@ -461,13 +463,13 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::rotate_t, FwdIter first, FwdIter new_first, FwdIter last)
+        static FwdIter invoke_default(
+            FwdIter first, FwdIter new_first, FwdIter last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
 
-            return parallel::util::get_second_element(
+            return parallel::util::get_first_element(
                 hpx::parallel::detail::rotate<
                     hpx::parallel::util::in_out_result<FwdIter, FwdIter>>()
                     .call(hpx::execution::seq, first, new_first, last));
@@ -480,7 +482,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::rotate_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter new_first, FwdIter last)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -490,7 +492,7 @@ namespace hpx {
                 hpx::is_sequenced_execution_policy_v<ExPolicy> ||
                     !std::bidirectional_iterator<FwdIter>>;
 
-            return parallel::util::get_second_element(
+            return parallel::util::get_first_element(
                 hpx::parallel::detail::rotate<
                     hpx::parallel::util::in_out_result<FwdIter, FwdIter>>()
                     .call2(HPX_FORWARD(ExPolicy, policy), is_seq(), first,
@@ -501,7 +503,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::rotate_copy
     HPX_CXX_CORE_EXPORT inline constexpr struct rotate_copy_t final
-      : hpx::detail::tag_parallel_algorithm<rotate_copy_t>
+      : hpx::detail::tag_dispatch<rotate_copy_t,
+            hpx::detail::tag_parallel_algorithm<rotate_copy_t>>
     {
         template <typename FwdIter, typename OutIter>
         // clang-format off
@@ -510,8 +513,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<OutIter>
             )
         // clang-format on
-        friend OutIter tag_fallback_invoke(hpx::rotate_copy_t, FwdIter first,
-            FwdIter new_first, FwdIter last, OutIter dest_first)
+        static OutIter invoke_default(
+            FwdIter first, FwdIter new_first, FwdIter last, OutIter dest_first)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -534,9 +537,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::rotate_copy_t,
-            ExPolicy&& policy, FwdIter1 first, FwdIter1 new_first,
-            FwdIter1 last, FwdIter2 dest_first)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 new_first, FwdIter1 last, FwdIter2 dest_first)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

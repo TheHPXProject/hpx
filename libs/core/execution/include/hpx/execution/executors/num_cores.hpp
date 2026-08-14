@@ -42,17 +42,15 @@ namespace hpx::execution::experimental {
         /// \cond NOINTERNAL
         // discover the number of cores to use for parallelization
         template <typename Executor>
-        friend std::size_t tag_override_invoke(
-            hpx::execution::experimental::processing_units_count_t,
-            num_cores const& this_, Executor&& exec,
+        std::size_t processing_units_count(Executor&& exec,
             hpx::chrono::steady_duration const& duration =
                 hpx::chrono::null_duration,
-            std::size_t num_tasks = 0) noexcept
+            std::size_t num_tasks = 0) const noexcept
         {
             std::size_t const available_pus =
                 hpx::execution::experimental::processing_units_count(
                     exec, duration, num_tasks);
-            return (std::min) (this_.num_cores_, available_pus);
+            return (std::min) (num_cores_, available_pus);
         }
         /// \endcond
 

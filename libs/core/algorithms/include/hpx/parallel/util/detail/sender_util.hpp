@@ -41,7 +41,7 @@ namespace hpx::detail {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Tag, typename ExPolicy>
+    template <typename Tag, typename ExPolicy>
     struct is_bound_algorithm<bound_algorithm<Tag, ExPolicy>> : std::true_type
     {
     };
@@ -65,9 +65,22 @@ namespace hpx::detail {
             // returns senders, we don't need to wrap the algorithm in any
             // specific way as it directly integrates with the given
             // predecessor.
-            return hpx::execution::experimental::let_value(
-                HPX_FORWARD(Predecessor, predecessor),
-                bound_algorithm<Tag, ExPolicy>{HPX_FORWARD(ExPolicy, policy)});
+            //
+            // We chain the result through `continues_on(sched)` so that the
+            // resulting sender's environment exposes
+            // `get_completion_scheduler<set_value_t>` (and through it
+            // `get_completion_domain<set_value_t>` -> `thread_pool_domain`).
+            // Without this, `sync_wait` on the returned sender resolves the
+            // completion domain as `default_domain`, which uses stdexec's
+            // run_loop and OS-blocks the calling thread (deadlocking when
+            // called from an HPX worker, especially with --hpx:threads=1).
+            auto sched = policy.executor().sched();
+            return hpx::execution::experimental::continues_on(
+                hpx::execution::experimental::let_value(
+                    HPX_FORWARD(Predecessor, predecessor),
+                    bound_algorithm<Tag, ExPolicy>{
+                        HPX_FORWARD(ExPolicy, policy)}),
+                HPX_MOVE(sched));
         }
         else if constexpr (hpx::execution::detail::has_async_execution_policy_v<
                                ExPolicy>)
@@ -95,9 +108,9 @@ namespace hpx::detail {
         }
     }
 
-    // Helper base class for implementing parallel algorithm CPOs. See
-    // tag_fallback documentation for details. Compared to tag_fallback this
-    // adds several tag_fallback_invoke overloads that are generic for all
+    // Helper base class for implementing parallel algorithm CPOs, used as the
+    // `Base` of hpx::detail::tag_dispatch<Tag, Base> (see tag_dispatch.hpp).
+    // Provides several operator() overloads that are generic for all
     // parallel algorithms:
     //
     //   1. An overload taking a predecessor sender which sends all arguments
@@ -114,10 +127,14 @@ namespace hpx::detail {
     //      scheduler or a policy_aware_scheduler as its first argument (instead
     //      of the usual execution policy). These overloads use a scheduler
     //      based executor that is re-wrapped into an execution policy that is
-    //      then passed on to the underlying algorithm APIs.
+    //      then passed on to the underlying algorithm APIs. The
+    //      policy_aware_scheduler overload takes priority over the plain
+    //      scheduler overload (mirroring the former hpx_invoke >
+    //      algorithm default dispatch priority), enforced here via the
+    //      negated constraint on the plain scheduler overload.
     HPX_CXX_CORE_EXPORT template <typename Tag>
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
-    struct tag_parallel_algorithm : hpx::functional::detail::tag_fallback<Tag>
+    struct tag_parallel_algorithm
     {
         template <typename Sender, typename ExPolicy>
         // clang-format off
@@ -127,7 +144,7 @@ namespace hpx::detail {
                 hpx::execution::experimental::is_sender_v<Sender>
             )
         // clang-format on
-        friend auto tag_fallback_invoke(Tag, Sender&& sender, ExPolicy&& policy)
+        auto operator()(Sender&& sender, ExPolicy&& policy) const
         {
             return detail::then_with_bound_algorithm<Tag>(
                 HPX_FORWARD(Sender, sender), HPX_FORWARD(ExPolicy, policy));
@@ -135,45 +152,22 @@ namespace hpx::detail {
 
         template <typename ExPolicy>
             requires(hpx::is_execution_policy_v<ExPolicy>)
-        friend auto tag_fallback_invoke(Tag, ExPolicy&& policy)
+        auto operator()(ExPolicy&& policy) const
         {
             return hpx::execution::experimental::detail::partial_algorithm<Tag,
                 ExPolicy>{HPX_FORWARD(ExPolicy, policy)};
-        }
-
-        // Experimental support for P2500 (wg21.link/p2500)
-        //
-        // Wrap the given scheduler in an explicit_scheduler_executor and a
-        // matching execution policy. Forward call to algorithm by passing the
-        // resulting re-wrapped execution policy.
-        //
-        template <typename Scheduler, typename... Ts>
-            requires(hpx::execution::experimental::is_scheduler_v<Scheduler>)
-        friend auto tag_fallback_invoke(
-            Tag tag, Scheduler&& scheduler, Ts&&... ts)
-        {
-            using namespace hpx::execution::experimental;
-
-            explicit_scheduler_executor<std::decay_t<Scheduler>> exec(
-                HPX_FORWARD(Scheduler, scheduler));
-
-            return tag(
-                hpx::execution::par.on(HPX_MOVE(exec)), HPX_FORWARD(Ts, ts)...);
         }
 
         // Extract the scheduler and the execution policy from the given
         // policy_aware_scheduler, re-wrap those and forward the resulting
         // execution policy to the underlying algorithm.
         //
-
         // clang-format off
-        template <typename Scheduler, typename... Ts,
-            HPX_CONCEPT_REQUIRES_(
-                hpx::execution::experimental::is_policy_aware_scheduler_v<
-                    std::decay_t<Scheduler>>
-            )>
+        template <typename Scheduler, typename... Ts>
+            requires(hpx::execution::experimental::is_policy_aware_scheduler_v<
+                std::decay_t<Scheduler>>)
         // clang-format on
-        friend auto tag_invoke(Tag tag, Scheduler&& scheduler, Ts&&... ts)
+        auto operator()(Scheduler&& scheduler, Ts&&... ts) const
         {
             using namespace hpx::execution::experimental;
             using scheduler_type = std::decay_t<Scheduler>;
@@ -182,7 +176,30 @@ namespace hpx::detail {
             explicit_scheduler_executor<scheduler_type> exec(
                 HPX_FORWARD(Scheduler, scheduler));
 
-            return tag(policy.on(HPX_MOVE(exec)), HPX_FORWARD(Ts, ts)...);
+            return Tag{}(policy.on(HPX_MOVE(exec)), HPX_FORWARD(Ts, ts)...);
+        }
+
+        // Experimental support for P2500 (wg21.link/p2500)
+        //
+        // Wrap the given scheduler in an explicit_scheduler_executor and a
+        // matching execution policy. Forward call to algorithm by passing the
+        // resulting re-wrapped execution policy.
+        //
+        // clang-format off
+        template <typename Scheduler, typename... Ts>
+            requires(hpx::execution::experimental::is_scheduler_v<Scheduler> &&
+                !hpx::execution::experimental::is_policy_aware_scheduler_v<
+                    std::decay_t<Scheduler>>)
+        // clang-format on
+        auto operator()(Scheduler&& scheduler, Ts&&... ts) const
+        {
+            using namespace hpx::execution::experimental;
+
+            explicit_scheduler_executor<std::decay_t<Scheduler>> exec(
+                HPX_FORWARD(Scheduler, scheduler));
+
+            return Tag{}(
+                hpx::execution::par.on(HPX_MOVE(exec)), HPX_FORWARD(Ts, ts)...);
         }
     };
 }    // namespace hpx::detail

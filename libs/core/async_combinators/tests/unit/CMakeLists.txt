@@ -1,4 +1,4 @@
-# Copyright (c) 2007-2021 Hartmut Kaiser
+# Copyright (c) 2007-2026 Hartmut Kaiser
 # Copyright (c) 2011-2012 Bryce Adelstein-Lelbach
 #
 # SPDX-License-Identifier: BSL-1.0
@@ -8,6 +8,7 @@
 set(tests
     split_shared_future
     wait_all
+    wait_all_for
     wait_all_std_array
     wait_any
     wait_any_std_array

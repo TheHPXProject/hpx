@@ -1,5 +1,5 @@
 //  Copyright (c) 2017 Ajai V George
-//  Copyright (c) 2022-2024 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,6 +11,7 @@
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
+
 #include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/segmented_algorithms/traits/zip_iterator.hpp>
 
@@ -38,8 +39,8 @@ namespace hpx::parallel::detail {
         }
 
         template <typename ExPolicy, typename FwdIter, typename Reduce>
-        static typename util::detail::algorithm_result<ExPolicy, T>::type
-        parallel(ExPolicy&& policy, FwdIter first, FwdIter last, Reduce&& r)
+        static util::detail::algorithm_result_t<ExPolicy, T> parallel(
+            ExPolicy&& policy, FwdIter first, FwdIter last, Reduce&& r)
         {
             return util::partitioner<ExPolicy, T>::call(
                 HPX_FORWARD(ExPolicy, policy), first,
@@ -76,8 +77,8 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename FwdIter, typename Reduce,
             typename Convert>
-        static typename util::detail::algorithm_result<ExPolicy, T>::type
-        parallel(ExPolicy&& policy, FwdIter first, FwdIter last, Reduce&& r,
+        static util::detail::algorithm_result_t<ExPolicy, T> parallel(
+            ExPolicy&& policy, FwdIter first, FwdIter last, Reduce&& r,
             Convert&& conv)
         {
             return util::partitioner<ExPolicy, T>::call(
@@ -107,7 +108,7 @@ namespace hpx::parallel::detail {
     struct seg_transform_reduce_binary
       : algorithm<seg_transform_reduce_binary<T>, T>
     {
-        seg_transform_reduce_binary()
+        constexpr seg_transform_reduce_binary() noexcept
           : algorithm<seg_transform_reduce_binary, T>("transform_reduce_binary")
         {
         }
@@ -123,9 +124,9 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename Reduce, typename Convert>
-        static typename util::detail::algorithm_result<ExPolicy, T>::type
-        parallel(ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1,
-            FwdIter2 first2, Reduce&& r, Convert&& conv)
+        static util::detail::algorithm_result_t<ExPolicy, T> parallel(
+            ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2,
+            Reduce&& r, Convert&& conv)
         {
             using zip_iterator = hpx::util::zip_iterator<FwdIter1, FwdIter2>;
 

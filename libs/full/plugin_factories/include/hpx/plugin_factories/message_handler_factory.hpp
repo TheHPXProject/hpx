@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,9 +11,8 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/ini.hpp>
-#include <hpx/modules/preprocessor.hpp>
-
 #include <hpx/modules/parcelset_base.hpp>
+#include <hpx/plugin_factories/macros.hpp>
 #include <hpx/plugin_factories/message_handler_factory_base.hpp>
 #include <hpx/plugin_factories/plugin_registry.hpp>
 #include <hpx/plugin_factories/unique_plugin_name.hpp>
@@ -31,7 +30,7 @@ namespace hpx::plugins {
     ///
     /// \tparam MessageHandler The message handler type this factory should be
     ///                        responsible for.
-    template <typename MessageHandler>
+    HPX_CXX_EXPORT template <typename MessageHandler>
     struct message_handler_factory : message_handler_factory_base
     {
         /// \brief Construct a new factory instance
@@ -89,17 +88,5 @@ namespace hpx::plugins {
         bool isenabled_;
     };
 }    // namespace hpx::plugins
-
-///////////////////////////////////////////////////////////////////////////////
-/// This macro is used create and to register a minimal component factory with
-/// Hpx.Plugin.
-#define HPX_REGISTER_MESSAGE_HANDLER_FACTORY(MessageHandler, pluginname)       \
-    HPX_REGISTER_MESSAGE_HANDLER_FACTORY_BASE(                                 \
-        hpx::plugins::message_handler_factory<MessageHandler>, pluginname)     \
-    HPX_DEF_UNIQUE_PLUGIN_NAME(                                                \
-        hpx::plugins::message_handler_factory<MessageHandler>, pluginname)     \
-    template struct hpx::plugins::message_handler_factory<MessageHandler>;     \
-    HPX_REGISTER_PLUGIN_REGISTRY_2(MessageHandler, pluginname)                 \
-    /**/
 
 #endif

@@ -15,6 +15,7 @@ hpx_targets=(
     "stream_report_test")
 hpx_test_options=(
     "--hpx:ini=hpx.thread_queue.init_threads_count=100 \
+    --hpx:queuing=local-priority-fifo-double \
     --hpx:threads=4 --vector_size=104857 --work_delay=1 \
     --chunk_size=0 --test_count=200 --detailed_bench"
     "--hpx:ini=hpx.thread_queue.init_threads_count=100 \

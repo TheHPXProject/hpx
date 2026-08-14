@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,8 +7,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/components/client_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -26,7 +26,7 @@
 namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
-    struct HPX_EXPORT performance_counter
+    HPX_CXX_EXPORT struct HPX_EXPORT performance_counter
       : components::client_base<performance_counter,
             server::base_performance_counter>
     {
@@ -130,8 +130,8 @@ namespace hpx::performance_counters {
     };
 
     // Return all counters matching the given name (with optional wild cards).
-    HPX_EXPORT std::vector<performance_counter> discover_counters(
-        std::string const& name, error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_EXPORT std::vector<performance_counter>
+    discover_counters(std::string const& name, error_code& ec = throws);
 }    // namespace hpx::performance_counters
 
 #include <hpx/config/warnings_suffix.hpp>

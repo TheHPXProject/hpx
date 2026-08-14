@@ -6,8 +6,6 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/command_line_handling/command_line_handling.hpp>
-#include <hpx/command_line_handling/parse_command_line.hpp>
 #include <hpx/modules/asio.hpp>
 #include <hpx/modules/batch_environments.hpp>
 #include <hpx/modules/debugging.hpp>
@@ -34,6 +32,9 @@
 #include <hpx/modules/preprocessor.hpp>
 #endif
 #include <hpx/version.hpp>
+
+#include <hpx/command_line_handling/command_line_handling.hpp>
+#include <hpx/command_line_handling/parse_command_line.hpp>
 
 #include <algorithm>
 #include <cstddef>

@@ -57,8 +57,7 @@ int hpx_main()
     }
 
     // Make sure default construction works
-    hpx::execution::parallel_executor exec_default;
-    HPX_UNUSED(exec_default);
+    [[maybe_unused]] hpx::execution::parallel_executor exec_default;
 
     // setup executors for different task priorities on the pools
     // segfaults or exceptions in any of the following will cause

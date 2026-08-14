@@ -7,7 +7,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -32,14 +31,12 @@ namespace hpx::parallel::detail {
         return first;
     }
 
-    HPX_CXX_CORE_EXPORT struct sequential_iota_t
-      : hpx::functional::detail::tag_fallback<sequential_iota_t>
+    HPX_CXX_CORE_EXPORT struct sequential_iota_t final
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Sent,
             typename T>
-        friend constexpr FwdIter tag_fallback_invoke(
-            sequential_iota_t, ExPolicy&&, FwdIter first, Sent last, T& value)
+        HPX_HOST_DEVICE HPX_FORCEINLINE constexpr FwdIter operator()(
+            ExPolicy&&, FwdIter first, Sent last, T& value) const
         {
             return sequential_iota_helper(first, last, value);
         }
@@ -102,30 +99,25 @@ namespace hpx::parallel::detail {
             {
                 auto dist = hpx::parallel::detail::distance(first, last);
 
-                // clang-format off
                 auto f = [value](FwdIter part_begin, std::size_t part_size,
                              std::size_t global_index) {
                     T cur_value = value + global_index;
-                    return util::loop_n<std::decay_t<Expolicy>>(
-                        part_begin,
-                        part_size,
+                    return util::const_loop_n<std::decay_t<Expolicy>>(
+                        part_begin, part_size,
                         [&cur_value](FwdIter it) { *it = cur_value++; });
                 };
 
-                return util::partitioner<Expolicy, FwdIter, FwdIter>::call_with_index(
-                    HPX_FORWARD(Expolicy, policy),
-                    first,
-                    dist, 1,
-                    std::move(f),
+                return util::partitioner<Expolicy, FwdIter,
+                    FwdIter>::call_with_index(HPX_FORWARD(Expolicy, policy),
+                    first, dist, 1, std::move(f),
                     [last = first + dist](auto&&) { return last; });
-                // clang-format on
             }
             else
             {
                 return sequential_iota(
                     HPX_FORWARD(Expolicy, policy), first, last, value);
             }
-        };
+        }
     };
 
 }    // namespace hpx::parallel::detail

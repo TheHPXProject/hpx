@@ -14,6 +14,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <iterator>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -160,6 +161,65 @@ void transform_tests(std::vector<hpx::id_type>& localities)
             hpx::execution::seq(hpx::execution::task), v, w, U(1));
         test_transform_async(
             hpx::execution::par(hpx::execution::task), v, w, U(1));
+    }
+
+    // subrange regression test in a single segment (sit == send path)
+    {
+        constexpr std::size_t n = 16;
+        constexpr std::size_t first_offset = 3;
+        constexpr std::size_t range_size = 8;
+        constexpr std::size_t dest_offset = 2;
+
+        hpx::partitioned_vector<T> v(n, hpx::container_layout(1));
+        hpx::partitioned_vector<U> w(n, U(-1), hpx::container_layout(1));
+
+        auto it = v.begin();
+        for (T value = T(0); it != v.end(); ++it, value = T(value + 1))
+        {
+            *it = value;
+        }
+
+        auto first = v.begin();
+        std::advance(first, first_offset);
+        auto last = first;
+        std::advance(last, range_size);
+        auto dest = w.begin();
+        std::advance(dest, dest_offset);
+
+        auto verify_subrange_result = [&](U unchanged) {
+            std::vector<U> expected(n, unchanged);
+            for (std::size_t i = 0; i < range_size; ++i)
+            {
+                expected[dest_offset + i] = U(2 * T(first_offset + i));
+            }
+
+            std::size_t idx = 0;
+            for (auto wit = w.begin(); wit != w.end(); ++wit, ++idx)
+            {
+                HPX_TEST_EQ(*wit, expected[idx]);
+            }
+            HPX_TEST_EQ(idx, n);
+        };
+
+        hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+        hpx::transform(hpx::execution::seq, first, last, dest, pfo<U>());
+        verify_subrange_result(U(-1));
+
+        hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+        hpx::transform(hpx::execution::par, first, last, dest, pfo<U>());
+        verify_subrange_result(U(-1));
+
+        hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+        hpx::transform(hpx::execution::seq(hpx::execution::task), first, last,
+            dest, pfo<U>())
+            .get();
+        verify_subrange_result(U(-1));
+
+        hpx::fill(hpx::execution::seq, w.begin(), w.end(), U(-1));
+        hpx::transform(hpx::execution::par(hpx::execution::task), first, last,
+            dest, pfo<U>())
+            .get();
+        verify_subrange_result(U(-1));
     }
 }
 

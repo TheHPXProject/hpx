@@ -500,6 +500,7 @@ namespace hpx { namespace ranges {
 #include <hpx/algorithms/traits/projected_range.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/is_sorted.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -513,9 +514,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct is_sorted_t
-      : hpx::detail::tag_parallel_algorithm<is_sorted_t>
+      : hpx::detail::tag_dispatch<is_sorted_t,
+            hpx::detail::tag_parallel_algorithm<is_sorted_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename Pred = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -531,8 +532,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::is_sorted_t, FwdIter first,
-            Sent last, Pred pred = Pred(), Proj proj = Proj())
+        static bool invoke_default(
+            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted<FwdIter, Sent>().call(
                 hpx::execution::seq, first, last, HPX_MOVE(pred),
@@ -555,9 +556,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::is_sorted_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted<FwdIter, Sent>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(pred),
@@ -577,8 +578,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend bool tag_fallback_invoke(hpx::ranges::is_sorted_t, Rng&& rng,
-            Pred pred = Pred(), Proj proj = Proj())
+        static bool invoke_default(
+            Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted<
                 std::ranges::iterator_t<Rng>, std::ranges::iterator_t<Rng>>()
@@ -601,9 +602,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-        tag_fallback_invoke(hpx::ranges::is_sorted_t, ExPolicy&& policy,
-            Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+        invoke_default(ExPolicy&& policy, Rng&& rng, Pred pred = Pred(),
+            Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted<
                 std::ranges::iterator_t<Rng>, std::ranges::iterator_t<Rng>>()
@@ -613,9 +614,9 @@ namespace hpx::ranges {
     } is_sorted{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct is_sorted_until_t final
-      : hpx::detail::tag_parallel_algorithm<is_sorted_until_t>
+      : hpx::detail::tag_dispatch<is_sorted_until_t,
+            hpx::detail::tag_parallel_algorithm<is_sorted_until_t>>
     {
-    private:
         template <typename FwdIter, typename Sent,
             typename Pred = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -631,7 +632,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::is_sorted_until_t,
+        static FwdIter invoke_default(
             FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted_until<FwdIter, Sent>().call(
@@ -655,10 +656,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        tag_fallback_invoke(hpx::ranges::is_sorted_until_t, ExPolicy&& policy,
-            FwdIter first, Sent last, Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted_until<FwdIter, Sent>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(pred),
@@ -678,9 +679,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            hpx::ranges::is_sorted_until_t, Rng&& rng, Pred pred = Pred(),
-            Proj proj = Proj())
+        static std::ranges::iterator_t<Rng> invoke_default(
+            Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted_until<
                 std::ranges::iterator_t<Rng>, std::ranges::iterator_t<Rng>>()
@@ -703,10 +703,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::is_sorted_until_t, ExPolicy&& policy,
-            Rng&& rng, Pred pred = Pred(), Proj proj = Proj())
+        invoke_default(ExPolicy&& policy, Rng&& rng, Pred pred = Pred(),
+            Proj proj = Proj())
         {
             return hpx::parallel::detail::is_sorted_until<
                 std::ranges::iterator_t<Rng>, std::ranges::iterator_t<Rng>>()

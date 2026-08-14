@@ -48,7 +48,7 @@ void test_search_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(h), std::end(h)) |
             hpx::search(ex_policy.on(exec)));
-        iterator index = hpx::get<0>(*snd_result);
+        iterator index = hpx::get<0>(snd_result.value());
 
         base_iterator test_index =
             std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
@@ -63,7 +63,7 @@ void test_search_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::end(c)),
                 std::begin(h), std::begin(h)) |
             hpx::search(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto expected = std::search(iterator(std::begin(c)),
             iterator(std::end(c)), std::begin(h), std::begin(h));
@@ -79,7 +79,7 @@ void test_search_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(c)), iterator(std::begin(c)),
                 std::begin(h), std::begin(h)) |
             hpx::search(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto expected = std::search(iterator(std::begin(c)),
             iterator(std::begin(c)), std::begin(h), std::begin(h));
@@ -95,7 +95,7 @@ void test_search_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
             ex::just(iterator(std::begin(h)), iterator(std::end(h)),
                 std::begin(c), std::end(c)) |
             hpx::search(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         auto expected = std::search(iterator(std::begin(h)),
             iterator(std::end(h)), std::begin(c), std::end(c));

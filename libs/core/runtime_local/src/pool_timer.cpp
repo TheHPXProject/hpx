@@ -17,7 +17,6 @@
 
 #include <asio/basic_waitable_timer.hpp>
 
-#include <boost/parameter/aux_/preprocessor/nullptr.hpp>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -216,29 +215,56 @@ namespace hpx::util {
     {
     }
 
+    bool pool_timer::init(hpx::function<bool()> const& f,
+        hpx::function<void()> const& on_term, std::string const& description,
+        bool pre_shutdown)
+    {
+        if (timer_ == nullptr)
+        {
+            timer_ = std::make_shared<detail::pool_timer>(
+                f, on_term, description, pre_shutdown);
+            return true;
+        }
+        return false;
+    }
+
     pool_timer::~pool_timer()
     {
-        timer_->terminate();
+        if (timer_ != nullptr)
+            timer_->terminate();
     }
 
     bool pool_timer::start(
         hpx::chrono::steady_duration const& time_duration, bool evaluate) const
     {
-        return timer_->start(time_duration, evaluate);
+        if (timer_ != nullptr)
+            return timer_->start(time_duration, evaluate);
+        return false;
     }
 
     bool pool_timer::stop() const
     {
-        return timer_->stop();
+        if (timer_ != nullptr)
+            return timer_->stop();
+        return false;
     }
 
     bool pool_timer::is_started() const
     {
-        return timer_->is_started();
+        if (timer_ != nullptr)
+            return timer_->is_started();
+        return false;
     }
 
     bool pool_timer::is_terminated() const
     {
-        return timer_->is_terminated();
+        if (timer_ != nullptr)
+            return timer_->is_terminated();
+        return false;
+    }
+
+    bool pool_timer::is_valid() const
+    {
+        return timer_ != nullptr;
     }
 }    // namespace hpx::util

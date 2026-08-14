@@ -195,8 +195,8 @@ namespace hpx::util {
 
     namespace tag {
 
-        HPX_CXX_EXPORT using boost::accumulators::tag::histogram;
+        using boost::accumulators::tag::histogram;
     }
 
-    HPX_CXX_EXPORT using boost::accumulators::extract::histogram;
+    using boost::accumulators::extract::histogram;
 }    // namespace hpx::util

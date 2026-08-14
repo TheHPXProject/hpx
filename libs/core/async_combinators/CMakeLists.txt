@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,6 +10,7 @@ set(async_combinators_headers
     hpx/async_combinators/detail/throw_if_exceptional.hpp
     hpx/async_combinators/split_future.hpp
     hpx/async_combinators/wait_all.hpp
+    hpx/async_combinators/wait_all_for.hpp
     hpx/async_combinators/wait_any.hpp
     hpx/async_combinators/wait_each.hpp
     hpx/async_combinators/wait_some.hpp
@@ -56,6 +57,7 @@ add_hpx_module(
     hpx_preprocessor
     hpx_tag_invoke
     hpx_thread_support
+    hpx_timing
     hpx_type_support
     hpx_util
   CMAKE_SUBDIRS examples tests

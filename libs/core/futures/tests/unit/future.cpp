@@ -1,4 +1,4 @@
-//  Copyright (C) 2012-2017 Hartmut Kaiser
+//  Copyright (C) 2012-2026 Hartmut Kaiser
 //  (C) Copyright 2008-10 Anthony Williams
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -254,7 +254,7 @@ void test_invoking_a_packaged_task_twice_throws()
         HPX_TEST(false);
     }
     // retrieve the future so the destructor of packaged_task is happy.
-    // Otherwise an exception will be tried to set to future_data which
+    // Otherwise, an exception will be tried to set to future_data which
     // leads to another exception to the fact that the future has already been
     // set.
     pt.get_future().get();
@@ -457,28 +457,132 @@ void test_wait_callback_with_timed_wait()
     hpx::future<void> fv =
         fi.then(hpx::bind(&do_nothing_callback, std::ref(pi)));
 
-    int state = int(fv.wait_for(std::chrono::milliseconds(100)));
-    HPX_TEST_EQ(state, int(hpx::future_status::timeout));
+    int state = static_cast<int>(fv.wait_for(std::chrono::milliseconds(100)));
+    HPX_TEST_EQ(state, static_cast<int>(hpx::future_status::timeout));
     HPX_TEST_EQ(callback_called, 0U);
 
-    state = int(fv.wait_for(std::chrono::milliseconds(100)));
-    HPX_TEST_EQ(state, int(hpx::future_status::timeout));
-    state = int(fv.wait_for(std::chrono::milliseconds(100)));
-    HPX_TEST_EQ(state, int(hpx::future_status::timeout));
+    state = static_cast<int>(fv.wait_for(std::chrono::milliseconds(100)));
+    HPX_TEST_EQ(state, static_cast<int>(hpx::future_status::timeout));
+    state = static_cast<int>(fv.wait_for(std::chrono::milliseconds(100)));
+    HPX_TEST_EQ(state, static_cast<int>(hpx::future_status::timeout));
     HPX_TEST_EQ(callback_called, 0U);
 
     pi.set_value(42);
 
-    state = int(fv.wait_for(std::chrono::milliseconds(100)));
-    HPX_TEST_EQ(state, int(hpx::future_status::ready));
+    state = static_cast<int>(fv.wait_for(std::chrono::milliseconds(100)));
+    HPX_TEST_EQ(state, static_cast<int>(hpx::future_status::ready));
 
     HPX_TEST_EQ(callback_called, 1U);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_wait_for_returns_as_soon_as_value_is_set()
+{
+    hpx::promise<int> p;
+    hpx::future<int> f = p.get_future();
+
+    hpx::thread t([&p]() {
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(100));
+        p.set_value(42);
+    });
+
+    std::chrono::steady_clock::time_point const start =
+        std::chrono::steady_clock::now();
+    hpx::future_status const status = f.wait_for(std::chrono::seconds(2));
+    std::chrono::steady_clock::time_point const end =
+        std::chrono::steady_clock::now();
+
+    HPX_TEST_EQ(
+        static_cast<int>(status), static_cast<int>(hpx::future_status::ready));
+    HPX_TEST(end - start < std::chrono::milliseconds(1500));
+    HPX_TEST_EQ(f.get(), 42);
+
+    t.join();
+}
+
+void test_wait_until_returns_as_soon_as_value_is_set()
+{
+    hpx::promise<int> p;
+    hpx::future<int> f = p.get_future();
+
+    hpx::thread t([&p]() {
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(100));
+        p.set_value(42);
+    });
+
+    std::chrono::steady_clock::time_point const start =
+        std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point const abs_time =
+        start + std::chrono::seconds(2);
+    hpx::future_status const status = f.wait_until(abs_time);
+    std::chrono::steady_clock::time_point const end =
+        std::chrono::steady_clock::now();
+
+    HPX_TEST_EQ(
+        static_cast<int>(status), static_cast<int>(hpx::future_status::ready));
+    HPX_TEST(end - start < std::chrono::milliseconds(1500));
+    HPX_TEST_EQ(f.get(), 42);
+
+    t.join();
+}
+
+void test_wait_for_returns_as_soon_as_exception_is_set()
+{
+    hpx::promise<int> p;
+    hpx::future<int> f = p.get_future();
+
+    hpx::thread t([&p]() {
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(100));
+        p.set_exception(std::make_exception_ptr(my_exception()));
+    });
+
+    std::chrono::steady_clock::time_point const start =
+        std::chrono::steady_clock::now();
+    hpx::future_status const status = f.wait_for(std::chrono::seconds(10));
+    std::chrono::steady_clock::time_point const end =
+        std::chrono::steady_clock::now();
+
+    HPX_TEST_EQ(
+        static_cast<int>(status), static_cast<int>(hpx::future_status::ready));
+    HPX_TEST(end - start < std::chrono::seconds(5));
+
+    try
+    {
+        f.get();
+        HPX_TEST(false);
+    }
+    catch (my_exception)
+    {
+        HPX_TEST(true);
+    }
+
+    t.join();
+}
+
+void test_wait_for_times_out_when_never_set()
+{
+    hpx::promise<int> p;
+    hpx::future<int> const f = p.get_future();
+
+    std::chrono::steady_clock::time_point const start =
+        std::chrono::steady_clock::now();
+    hpx::future_status const status =
+        f.wait_for(std::chrono::milliseconds(200));
+    std::chrono::steady_clock::time_point const end =
+        std::chrono::steady_clock::now();
+
+    HPX_TEST_EQ(static_cast<int>(status),
+        static_cast<int>(hpx::future_status::timeout));
+    HPX_TEST(end - start >= std::chrono::milliseconds(150));
+
+    // fulfill the promise so the destructor of promise is happy.
+    p.set_value(0);
 }
 
 void test_packaged_task_can_be_moved()
 {
     hpx::packaged_task<int()> pt(make_int);
-    hpx::future<int> fi = pt.get_future();
+    hpx::future<int> const fi = pt.get_future();
     HPX_TEST(!fi.is_ready());
 
     hpx::packaged_task<int()> pt2(std::move(pt));
@@ -594,6 +698,10 @@ int hpx_main(variables_map&)
         test_future_for_string();
         test_wait_callback();
         test_wait_callback_with_timed_wait();
+        test_wait_for_returns_as_soon_as_value_is_set();
+        test_wait_until_returns_as_soon_as_value_is_set();
+        test_wait_for_returns_as_soon_as_exception_is_set();
+        test_wait_for_times_out_when_never_set();
         test_packaged_task_can_be_moved();
         test_destroying_a_promise_stores_broken_promise();
         test_destroying_a_packaged_task_stores_broken_task();

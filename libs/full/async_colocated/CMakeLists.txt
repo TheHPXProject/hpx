@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022 The STE||AR-Group
+# Copyright (c) 2019-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,6 +15,7 @@ set(async_colocated_headers
     hpx/async_colocated/async_colocated_callback.hpp
     hpx/async_colocated/async_colocated_fwd.hpp
     hpx/async_colocated/async_colocated.hpp
+    hpx/async_colocated/macros.hpp
     hpx/async_colocated/post_colocated_callback_fwd.hpp
     hpx/async_colocated/post_colocated_callback.hpp
     hpx/async_colocated/post_colocated_fwd.hpp
@@ -24,6 +25,8 @@ set(async_colocated_headers
     hpx/async_colocated/register_post_colocated.hpp
     hpx/async_colocated/server/destroy_component.hpp
 )
+
+set(async_colocated_macros_headers hpx/async_colocated/macros.hpp)
 
 # cmake-format: off
 set(async_colocated_compat_headers
@@ -48,8 +51,10 @@ include(HPX_AddModule)
 add_hpx_module(
   full async_colocated
   GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${async_colocated_sources}
   HEADERS ${async_colocated_headers}
+  MACRO_HEADERS ${async_colocated_macros_headers}
   COMPAT_HEADERS ${async_colocated_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES hpx_actions_base hpx_agas_base hpx_async_distributed

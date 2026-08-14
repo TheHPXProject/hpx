@@ -12,6 +12,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/filesystem.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <memory>
 #include <mutex>
@@ -279,7 +280,9 @@ namespace hpx::util::plugin {
             // Cast to the right type.
             dlerror();    // Clear the error state.
 
-            return std::make_pair(address, free_dll<SymbolType>(handle, mtx_));
+            return std::make_pair(address,
+                hpx::function<void(SymbolType)>(
+                    free_dll<SymbolType>(handle, mtx_)));
         }
 
         void keep_alive(error_code& ec = throws)
@@ -342,7 +345,7 @@ namespace hpx::util::plugin {
             result = directory;
             ::dlerror();    // Clear the error state.
 #else
-            result = path(dll_name).parent_path().string();
+            result = hpx::filesystem::to_string(path(dll_name).parent_path());
 #endif
 #elif defined(__APPLE__)
             // SO staticfloat's solution
@@ -362,7 +365,8 @@ namespace hpx::util::plugin {
                         if (((intptr_t) dll_handle & (-4)) ==
                             ((intptr_t) probe_handle & (-4)))
                         {
-                            result = path(image_name).parent_path().string();
+                            result = hpx::filesystem::to_string(
+                                path(image_name).parent_path());
                             break;
                         }
                     }

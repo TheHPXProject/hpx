@@ -20,6 +20,7 @@ set(tests
     in_place_stop_token
     in_place_stop_token_cb2
     latch_cpp20
+    latch_notification
     local_latch
     local_barrier
     local_barrier_count_up
@@ -45,6 +46,7 @@ set(counting_semaphore_PARAMETERS THREADS_PER_LOCALITY 4)
 set(counting_semaphore_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(latch_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
+set(latch_notification_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_barrier_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_latch_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_event_PARAMETERS THREADS_PER_LOCALITY 4)

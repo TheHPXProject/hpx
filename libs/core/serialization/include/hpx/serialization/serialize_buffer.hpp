@@ -33,7 +33,7 @@ namespace hpx::serialization {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct array_allocator<std::allocator<T>>
         {
             T* operator()(std::allocator<T>, std::size_t size) const
@@ -54,7 +54,7 @@ namespace hpx::serialization {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         struct array_deleter<std::allocator<T>>
         {
             void operator()(

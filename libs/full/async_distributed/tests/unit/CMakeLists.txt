@@ -34,6 +34,11 @@ set(tests
 set(async_continue_PARAMETERS LOCALITIES 2)
 set(async_continue_cb_PARAMETERS LOCALITIES 2)
 set(async_remote_PARAMETERS LOCALITIES 2)
+
+if(HPX_WITH_CXX26_REFLECTION)
+  set(tests ${tests} async_remote_reflect)
+  set(async_remote_reflect_PARAMETERS LOCALITIES 2)
+endif()
 set(async_remote_client_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_client_PARAMETERS LOCALITIES 2)

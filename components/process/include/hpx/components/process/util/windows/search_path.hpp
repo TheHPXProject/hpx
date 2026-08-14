@@ -3,7 +3,7 @@
 // Copyright (c) 2009 Boris Schaeling
 // Copyright (c) 2010 Felipe Tanus, Boris Schaeling
 // Copyright (c) 2011, 2012 Jeff Flinn, Boris Schaeling
-// Copyright (c) 2016 Hartmut Kaiser
+// Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,19 +14,21 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_WINDOWS)
-#include <hpx/components/process/export_definitions.hpp>
 #include <hpx/modules/errors.hpp>
+
+#include <hpx/components/process/export_definitions.hpp>
 
 #include <string>
 
-namespace hpx { namespace components { namespace process { namespace windows {
+namespace hpx::components::process::windows {
+
 #if defined(_UNICODE) || defined(UNICODE)
     HPX_PROCESS_EXPORT std::wstring search_path(
         const std::wstring& filename, std::wstring path = L"");
-#else
+#endif
+
     HPX_PROCESS_EXPORT std::string search_path(
         const std::string& filename, std::string path = "");
-#endif
-}}}}    // namespace hpx::components::process::windows
+}    // namespace hpx::components::process::windows
 
 #endif

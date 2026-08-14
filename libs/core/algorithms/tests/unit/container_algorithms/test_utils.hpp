@@ -151,6 +151,60 @@ namespace test {
         }
     };
 
+    template <typename BaseContainer, typename IteratorTag>
+    struct test_sentinel_container : BaseContainer
+    {
+        template <typename... Ts>
+        test_sentinel_container(Ts&&... ts)
+          : BaseContainer(std::forward<Ts>(ts)...)
+        {
+        }
+
+        BaseContainer& base()
+        {
+            return *this;
+        }
+        BaseContainer const& base() const
+        {
+            return *this;
+        }
+
+        typedef test_iterator<typename BaseContainer::iterator, IteratorTag>
+            iterator;
+        typedef test_iterator<typename BaseContainer::const_iterator,
+            IteratorTag>
+            const_iterator;
+
+        typedef sentinel_from_iterator<iterator> sentinel;
+        typedef sentinel_from_iterator<const_iterator> const_sentinel;
+
+        iterator begin()
+        {
+            return iterator(this->BaseContainer::begin());
+        }
+        const_iterator begin() const
+        {
+            return const_iterator(this->BaseContainer::begin());
+        }
+        const_iterator cbegin() const
+        {
+            return const_iterator(this->BaseContainer::cbegin());
+        }
+
+        sentinel end()
+        {
+            return sentinel(iterator(this->BaseContainer::end()));
+        }
+        const_sentinel end() const
+        {
+            return const_sentinel(const_iterator(this->BaseContainer::end()));
+        }
+        const_sentinel cend() const
+        {
+            return const_sentinel(const_iterator(this->BaseContainer::cend()));
+        }
+    };
+
     ///////////////////////////////////////////////////////////////////////////
     template <typename BaseIterator, typename IteratorTag>
     struct decorated_iterator

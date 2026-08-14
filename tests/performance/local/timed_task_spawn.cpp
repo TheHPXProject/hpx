@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <ctime>
 #include <functional>
@@ -434,7 +435,7 @@ int hpx_main(variables_map& vm)
                     hpx::string_util::is_any_of(","),
                     hpx::string_util::token_compress_mode::on);
 
-                HPX_TEST_EQ(entry.size(), 2);
+                HPX_TEST_EQ(entry.size(), static_cast<std::size_t>(2));
 
                 counter_shortnames.push_back(entry[0]);
                 counters.push_back(entry[1]);

@@ -273,7 +273,7 @@ the project through discussions, pull requests, documentation patches, etc.
   xaguilar, Andrew Kemp, Dylan Stark, Matthew Anderson, Jeremy Wilke, Jiazheng
   Yuan, CyberDrudge, david8dixon, Maxwell Reeser, Raffaele Solca, Marco
   Ippolito, Jules Penuchot, Weile Wei, Severin Strobl, Kor de Jong, albestro,
-  Jeff Trull, Yuri Victorovich, and Gregor Daiß who contributed to the general
+  Jeff Trull, Yuri Victorovich, and Gregor Daiss who contributed to the general
   improvement of |hpx|.
 
 |stellar_hpx_funding|_ lists current and past funding sources for |hpx|. Special thanks to

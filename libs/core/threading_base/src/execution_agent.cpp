@@ -1,5 +1,5 @@
 //  Copyright (c) 2019 Thomas Heller
-//  Copyright (c) 2020-2025 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,11 +13,13 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/execution_agent.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/set_thread_state.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #include <hpx/threading_base/thread_description.hpp>
+#include <hpx/threading_base/thread_helpers.hpp>
 #include <hpx/threading_base/thread_num_tss.hpp>
 
 #ifdef HPX_HAVE_THREAD_DESCRIPTION
@@ -35,6 +37,16 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+
+namespace {
+
+    // Below this remaining duration, the multi-hop suspend()/at_timer/
+    // wake_timer machinery (two extra HPX threads plus an ASIO timer
+    // round-trip) costs more than just spinning/yielding a few times and
+    // rechecking cond(). Tune independently of yield_k's iteration thresholds
+    // since this is a wall-clock cutoff, not a counter.
+    constexpr std::chrono::microseconds sleep_until_spin_threshold{10};
+}    // namespace
 
 namespace hpx::threads {
 
@@ -64,7 +76,7 @@ namespace hpx::threads {
         do_yield(desc, hpx::threads::thread_schedule_state::pending);
     }
 
-    bool execution_agent::yield_k(std::size_t k, char const* desc)
+    bool execution_agent::yield_k(std::size_t const k, char const* desc)
     {
         if (k < 4)    //-V112
         {
@@ -90,7 +102,7 @@ namespace hpx::threads {
     }
 
     void execution_agent::resume(
-        hpx::threads::thread_priority priority, char const* desc)
+        hpx::threads::thread_priority const priority, char const* desc)
     {
         do_resume(priority, desc, threads::thread_restart_state::signaled);
     }
@@ -106,42 +118,82 @@ namespace hpx::threads {
         do_yield(desc, threads::thread_schedule_state::suspended);
     }
 
-    void execution_agent::sleep_for(
-        hpx::chrono::steady_duration const& sleep_duration, char const* desc)
+    threads::thread_restart_state execution_agent::sleep_for(
+        hpx::chrono::steady_duration const& sleep_duration,
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc)
     {
-        sleep_until(sleep_duration.from_now(), desc);
+        return sleep_until(
+            sleep_duration.from_now(), HPX_MOVE(wait_cond), desc);
     }
 
-    void execution_agent::sleep_until(
-        hpx::chrono::steady_time_point const& sleep_time, char const* desc)
+    threads::thread_restart_state execution_agent::sleep_until(
+        hpx::chrono::steady_time_point const& sleep_time,
+        hpx::move_only_function<bool()>&& wait_cond, char const* desc)
     {
-        // Just yield until time has passed by...
-        auto now = std::chrono::steady_clock::now();
+        auto const cond = HPX_MOVE(wait_cond);
 
-        // Note: we yield at least once to allow for other threads to make
-        // progress in any case. We also use yield instead of yield_k for the
-        // same reason.
-        std::size_t k = 0;
-        do
+        // fast path: already satisfied, no need to suspend or spin at all
+        if (cond && cond())
         {
-            if (k < 32 || k & 1)    //-V112
+            return threads::thread_restart_state::signaled;
+        }
+
+        std::size_t k = 0;
+        for (;;)
+        {
+            auto const now = std::chrono::steady_clock::now();
+            if (now >= sleep_time.value())
             {
-                do_yield(
-                    desc, hpx::threads::thread_schedule_state::pending_boost);
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+                return threads::thread_restart_state::timeout;
             }
-            else
+
+            if (sleep_time.value() - now < sleep_until_spin_threshold)
             {
-                do_yield(desc, hpx::threads::thread_schedule_state::pending);
+                // sub-threshold tail: spin/yield via the existing backoff
+                // ladder instead of arming a scheduler timer for a remainder
+                // too short to make the round trip worthwhile
+                yield_k(k++, desc);
+
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+                continue;
             }
-            ++k;
-            now = std::chrono::steady_clock::now();
-        } while (now < sleep_time.value());
+
+            hpx::error_code ec(hpx::throwmode::lightweight);
+            threads::thread_restart_state const statex =
+                hpx::this_thread::suspend(sleep_time, desc, ec);
+            if (ec)
+            {
+                return threads::thread_restart_state::abort;
+            }
+
+            if (cond && cond())
+            {
+                return threads::thread_restart_state::signaled;
+            }
+
+            if (statex == threads::thread_restart_state::timeout)
+            {
+                return threads::thread_restart_state::timeout;
+            }
+
+            // woken early (e.g. condition_variable::notify_one's direct
+            // ctx.resume() -> set_thread_state), condition still false,
+            // deadline not yet reached - loop; next iteration re-evaluates
+            // remaining time and picks suspend() or the spin tail again
+        }
     }
 
     hpx::threads::thread_restart_state execution_agent::do_yield(
         char const* desc, threads::thread_schedule_state state)
     {
-        thread_id_ref_type id = self_.get_thread_id();    // keep alive
+        thread_id_type id = self_.get_outer_thread_id();
         if (HPX_UNLIKELY(!id))
         {
             HPX_THROW_EXCEPTION(hpx::error::null_thread_id,
@@ -162,6 +214,11 @@ namespace hpx::threads {
 
         thrd_data->interruption_point();
 
+        // keep the thread alive if it's not a background thread (background
+        // threads are being kept alive by the scheduler)
+        hpx::threads::keep_alive_thread_id kept_alive(
+            id, !thrd_data->is_background());
+
         if (thrd_data->get_priority() == thread_priority::bound)
         {
             auto const num_thread = hpx::get_local_worker_thread_num();
@@ -174,7 +231,7 @@ namespace hpx::threads {
         {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
             [[maybe_unused]] threads::detail::reset_lco_description reset_desc(
-                id.noref(), threads::thread_description(desc));
+                id, threads::thread_description(desc));
 #endif
 #if defined(HPX_HAVE_THREAD_BACKTRACE_ON_SUSPENSION)
             [[maybe_unused]] threads::detail::reset_backtrace reset_bt(id);
@@ -188,11 +245,29 @@ namespace hpx::threads {
 #ifdef HPX_HAVE_MODULE_LIKWID
             hpx::likwid::suspend_region region;
 #endif
+            // fiber_suspend_region operates only on the fiber zone stack
+            // (current_fiber_zone). It does NOT touch the OS-thread zone
+            // (current_region / stop_region), so there is no zone-stack
+            // conflict. The sequence is:
+            //   constructor: close running zone -> open grey "suspended" zone
+            //   self_.yield(): fiber parks, scheduler picks next task
+            //   destructor:  close "suspended" zone -> reopen running zone
+            hpx::tracing::fiber_suspend_region tracy_suspend(desc);
 
             HPX_ASSERT(thrd_data != nullptr &&
                 thrd_data->get_state().state() ==
                     thread_schedule_state::active);
             HPX_ASSERT(state != thread_schedule_state::active);
+
+            if (state == thread_schedule_state::pending ||
+                state == thread_schedule_state::pending_boost)
+            {
+                hpx::tracing::task_yielded(id);
+            }
+            else if (state == thread_schedule_state::suspended)
+            {
+                hpx::tracing::task_suspended(id, desc);
+            }
 
             // actual yield operation
             statex = self_.yield(
@@ -201,6 +276,11 @@ namespace hpx::threads {
             HPX_ASSERT(thrd_data != nullptr &&
                 thrd_data->get_state().state() ==
                     thread_schedule_state::active);
+
+            if (state == thread_schedule_state::suspended)
+            {
+                hpx::tracing::task_resumed(id, statex);
+            }
         }
 
         // handle interruption, if needed
@@ -217,8 +297,9 @@ namespace hpx::threads {
         return statex;
     }
 
-    void execution_agent::do_resume(hpx::threads::thread_priority priority,
-        char const* /* desc */, hpx::threads::thread_restart_state statex) const
+    void execution_agent::do_resume(
+        hpx::threads::thread_priority const priority, char const* /* desc */,
+        hpx::threads::thread_restart_state const statex) const
     {
         threads::detail::set_thread_state(self_.get_thread_id(),
             thread_schedule_state::pending, statex, priority,

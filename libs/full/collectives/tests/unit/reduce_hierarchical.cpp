@@ -1,4 +1,5 @@
 //  Copyright (c) 2019-2025 Hartmut Kaiser
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -36,7 +37,8 @@ void test_multiple_use(int arity = 2)
 
     auto const reduce_clients = create_hierarchical_communicator(
         reduce_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -81,7 +83,8 @@ void test_multiple_use_with_generation(int arity = 2)
 
     auto const reduce_clients = create_hierarchical_communicator(
         reduce_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity));
+        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -130,7 +133,8 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
         sites.push_back(hpx::async([=]() {
             auto const reduce_clients = create_hierarchical_communicator(
                 reduce_direct_basename, num_sites_arg(num_sites),
-                this_site_arg(site), arity_arg(arity));
+                this_site_arg(site), arity_arg(arity), generation_arg(),
+                root_site_arg(), flat_fallback_threshold_arg(0));
 
             hpx::chrono::high_resolution_timer const t;
 
@@ -164,13 +168,102 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
             if (site == 0)
             {
                 std::cout << "local timing (" << num_sites << "/" << arity
-                          << "): " << elapsed / (10 * ITERATIONS) << "[s]\n"
+                          << "): " << elapsed / ITERATIONS << "[s]\n"
                           << std::flush;
             }
         }));
     }
 
     hpx::wait_all(std::move(sites));
+}
+
+// Non-power-of-arity coverage. The hierarchical tree construction in
+// create_communicator.cpp handles uneven partitioning via the
+// division_steps + remainder logic and degenerate single-site leaves.
+// This test exercises site counts that are not clean multiples of the
+// arity, including cases where recursion produces size-1 subgroups.
+void test_non_power_of_arity()
+{
+    // arity=2 with site counts that force uneven splits and odd-sized
+    // subtrees at multiple levels of recursion.
+    for (std::uint32_t num_sites : {3u, 5u, 6u, 7u, 9u, 10u, 11u, 15u})
+    {
+        test_local_use(num_sites, 2);
+    }
+
+    // arity=4 with site counts not divisible by 4, exercising top-level
+    // partitioning into unequal subtrees.
+    for (std::uint32_t num_sites : {5u, 6u, 7u, 9u, 10u, 11u, 13u, 15u})
+    {
+        test_local_use(num_sites, 4);
+    }
+}
+
+// The hierarchical tree hardcodes site 0 as the root at every level, so
+// reduce_here (root-side) must reject any caller whose this_site matches a
+// non-root communicator, and reduce_there (non-root-side) must reject
+// site 0. Both rejections happen before any communication.
+void test_hierarchical_role_rejected()
+{
+    constexpr char const* basename =
+        "/test/reduce_hierarchical/role_rejections/";
+
+    auto const root_comms = create_hierarchical_communicator(basename,
+        num_sites_arg(2), this_site_arg(0), arity_arg(2), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
+    (void) root_comms.get(0).get_id();
+
+    auto const non_root_comms = create_hierarchical_communicator(basename,
+        num_sites_arg(2), this_site_arg(1), arity_arg(2), generation_arg(),
+        root_site_arg(), flat_fallback_threshold_arg(0));
+    (void) non_root_comms.get(0).get_id();
+
+    bool reduce_here_rejected = false;
+    try
+    {
+        reduce_here(hpx::launch::sync, non_root_comms, std::uint32_t(1),
+            std::plus<std::uint32_t>{}, this_site_arg(1), generation_arg(1));
+    }
+    catch (hpx::exception const& e)
+    {
+        reduce_here_rejected = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(reduce_here_rejected);
+
+    bool reduce_there_rejected = false;
+    try
+    {
+        reduce_there(root_comms, std::uint32_t(1), std::plus<std::uint32_t>{},
+            this_site_arg(0), generation_arg(1))
+            .get();
+    }
+    catch (hpx::exception const& e)
+    {
+        reduce_there_rejected = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(reduce_there_rejected);
+}
+
+// The flat basename overload of reduce_there requires this_site to differ
+// from root_site; the check runs synchronously before any communicator is
+// created, so this is safe to run on any locality count.
+void test_flat_basename_site_equals_root_rejected()
+{
+    bool rejected = false;
+    try
+    {
+        reduce_there(hpx::launch::sync,
+            "/test/reduce_hierarchical/flat_root_rejected/", std::uint32_t(1),
+            this_site_arg(), generation_arg(), root_site_arg(0));
+    }
+    catch (hpx::exception const& e)
+    {
+        rejected = true;
+        HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+    }
+    HPX_TEST(rejected);
 }
 
 int hpx_main()
@@ -201,6 +294,10 @@ int hpx_main()
                 }
             }
         }
+
+        test_non_power_of_arity();
+        test_hierarchical_role_rejected();
+        test_flat_basename_site_equals_root_rejected();
     }
 
     return hpx::finalize();

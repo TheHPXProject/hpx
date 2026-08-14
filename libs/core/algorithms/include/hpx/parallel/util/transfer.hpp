@@ -11,9 +11,9 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
@@ -138,7 +138,7 @@ namespace hpx::parallel::util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct copy_helper<hpx::traits::trivially_copyable_pointer_tag, Dummy>
         {
             template <typename InIter, typename Sent, typename OutIter>
@@ -201,7 +201,7 @@ namespace hpx::parallel::util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct copy_n_helper<hpx::traits::trivially_copyable_pointer_tag, Dummy>
         {
             template <typename InIter, typename OutIter>
@@ -215,14 +215,12 @@ namespace hpx::parallel::util {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct copy_n_t final
-      : hpx::functional::detail::tag_fallback<copy_n_t<ExPolicy>>
+      : hpx::detail::tag_dispatch<copy_n_t<ExPolicy>, hpx::detail::no_base>
     {
-    private:
         template <typename InIter, typename OutIter>
-        friend HPX_HOST_DEVICE
-            HPX_FORCEINLINE constexpr in_out_result<InIter, OutIter>
-            tag_fallback_invoke(hpx::parallel::util::copy_n_t<ExPolicy>,
-                InIter first, std::size_t count, OutIter dest)
+        HPX_HOST_DEVICE
+            HPX_FORCEINLINE static constexpr in_out_result<InIter, OutIter>
+            invoke_default(InIter first, std::size_t count, OutIter dest)
         {
             using category = hpx::traits::pointer_copy_category_t<
                 std::decay_t<
@@ -285,7 +283,7 @@ namespace hpx::parallel::util {
                 while (first != last)
                 {
                     // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    *dest++ = HPX_MOVE(*first++);
+                    *dest++ = std::ranges::iter_move(first++);
                 }
 
                 return in_out_result<InIter, OutIter>{
@@ -293,7 +291,7 @@ namespace hpx::parallel::util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct move_helper<hpx::traits::trivially_copyable_pointer_tag, Dummy>
         {
             template <typename InIter, typename Sent, typename OutIter>
@@ -335,24 +333,21 @@ namespace hpx::parallel::util {
                     (void) ++first, ++dest, i += 4)    //-V112
                 // clang-format on
                 {
-                    *dest = HPX_MOVE(*first);
-                    // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    *++dest = HPX_MOVE(*++first);
-                    // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    *++dest = HPX_MOVE(*++first);
-                    // NOLINTNEXTLINE(bugprone-macro-repeated-side-effects)
-                    *++dest = HPX_MOVE(*++first);
+                    *dest = std::ranges::iter_move(first);
+                    *++dest = std::ranges::iter_move(++first);
+                    *++dest = std::ranges::iter_move(++first);
+                    *++dest = std::ranges::iter_move(++first);
                 }
                 for (/**/; count < num; (void) ++first, ++dest, ++count)
                 {
-                    *dest = HPX_MOVE(*first);
+                    *dest = std::ranges::iter_move(first);
                 }
                 return in_out_result<InIter, OutIter>{
                     HPX_MOVE(first), HPX_MOVE(dest)};
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct move_n_helper<hpx::traits::trivially_copyable_pointer_tag, Dummy>
         {
             template <typename InIter, typename OutIter>
@@ -397,7 +392,7 @@ namespace hpx::parallel::util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct uninit_copy_n_helper<hpx::traits::trivially_copyable_pointer_tag,
             Dummy>
         {
@@ -448,8 +443,8 @@ namespace hpx::parallel::util {
                     ::hpx::parallel::util::loop_with_cleanup_n(
                         HPX_FORWARD(ExPolicy, policy), first, num, dest,
                         [](InIter it, OutIter current) -> void {
-                            hpx::construct_at(
-                                std::addressof(*current), HPX_MOVE(*it));
+                            hpx::construct_at(std::addressof(*current),
+                                std::ranges::iter_move(it));
                         },
                         [](OutIter it) -> void {
                             std::destroy_at(std::addressof(*it));
@@ -457,7 +452,7 @@ namespace hpx::parallel::util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Dummy>
+        template <typename Dummy>
         struct uninit_move_n_helper<hpx::traits::trivially_copyable_pointer_tag,
             Dummy>
         {

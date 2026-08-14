@@ -679,6 +679,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/reduce.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
@@ -694,7 +695,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::reduce
     HPX_CXX_CORE_EXPORT inline constexpr struct reduce_t final
-      : hpx::detail::tag_parallel_algorithm<reduce_t>
+      : hpx::detail::tag_dispatch<reduce_t,
+            hpx::detail::tag_parallel_algorithm<reduce_t>>
     {
         template <typename ExPolicy, typename FwdIter, typename Sent,
             typename F,
@@ -705,10 +707,9 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             T>::type
-        tag_fallback_invoke(hpx::ranges::reduce_t, ExPolicy&& policy,
-            FwdIter first, Sent last, T init, F f)
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, T init, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -727,10 +728,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             T>::type
-        tag_fallback_invoke(
-            hpx::ranges::reduce_t, ExPolicy&& policy, Rng&& rng, T init, F f)
+        invoke_default(ExPolicy&& policy, Rng&& rng, T init, F f)
         {
             static_assert(
                 std::forward_iterator<
@@ -750,10 +750,9 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             T>::type
-        tag_fallback_invoke(hpx::ranges::reduce_t, ExPolicy&& policy,
-            FwdIter first, Sent last, T init)
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last, T init)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -772,10 +771,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
+        static typename hpx::parallel::util::detail::algorithm_result<ExPolicy,
             T>::type
-        tag_fallback_invoke(
-            hpx::ranges::reduce_t, ExPolicy&& policy, Rng&& rng, T init)
+        invoke_default(ExPolicy&& policy, Rng&& rng, T init)
         {
             static_assert(
                 std::forward_iterator<
@@ -794,10 +792,9 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             typename std::iterator_traits<FwdIter>::value_type>
-        tag_fallback_invoke(
-            hpx::ranges::reduce_t, ExPolicy&& policy, FwdIter first, Sent last)
+        invoke_default(ExPolicy&& policy, FwdIter first, Sent last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -817,10 +814,10 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             typename std::iterator_traits<typename hpx::traits::range_traits<
                 Rng>::iterator_type>::value_type>
-        tag_fallback_invoke(hpx::ranges::reduce_t, ExPolicy&& policy, Rng&& rng)
+        invoke_default(ExPolicy&& policy, Rng&& rng)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -840,8 +837,7 @@ namespace hpx::ranges {
         template <typename FwdIter, typename Sent, typename F,
             typename T = typename std::iterator_traits<FwdIter>::value_type>
             requires(std::sentinel_for<Sent, FwdIter>)
-        friend T tag_fallback_invoke(
-            hpx::ranges::reduce_t, FwdIter first, Sent last, T init, F f)
+        static T invoke_default(FwdIter first, Sent last, T init, F f)
         {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");
@@ -854,8 +850,7 @@ namespace hpx::ranges {
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
             requires(std::ranges::range<Rng>)
-        friend T tag_fallback_invoke(
-            hpx::ranges::reduce_t, Rng&& rng, T init, F f)
+        static T invoke_default(Rng&& rng, T init, F f)
         {
             static_assert(
                 std::input_iterator<
@@ -870,8 +865,7 @@ namespace hpx::ranges {
         template <typename FwdIter, typename Sent,
             typename T = typename std::iterator_traits<FwdIter>::value_type>
             requires(std::sentinel_for<Sent, FwdIter>)
-        friend T tag_fallback_invoke(
-            hpx::ranges::reduce_t, FwdIter first, Sent last, T init)
+        static T invoke_default(FwdIter first, Sent last, T init)
         {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");
@@ -884,7 +878,7 @@ namespace hpx::ranges {
             typename T = typename std::iterator_traits<
                 std::ranges::iterator_t<Rng>>::value_type>
             requires(std::ranges::range<Rng>)
-        friend T tag_fallback_invoke(hpx::ranges::reduce_t, Rng&& rng, T init)
+        static T invoke_default(Rng&& rng, T init)
         {
             static_assert(
                 std::input_iterator<
@@ -898,8 +892,8 @@ namespace hpx::ranges {
 
         template <typename FwdIter, typename Sent>
             requires(std::sentinel_for<Sent, FwdIter>)
-        friend typename std::iterator_traits<FwdIter>::value_type
-        tag_fallback_invoke(hpx::ranges::reduce_t, FwdIter first, Sent last)
+        static typename std::iterator_traits<FwdIter>::value_type
+        invoke_default(FwdIter first, Sent last)
         {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");
@@ -914,9 +908,9 @@ namespace hpx::ranges {
 
         template <typename Rng>
             requires(std::ranges::range<Rng>)
-        friend typename std::iterator_traits<
+        static typename std::iterator_traits<
             typename hpx::traits::range_traits<Rng>::iterator_type>::value_type
-        tag_fallback_invoke(hpx::ranges::reduce_t, Rng&& rng)
+        invoke_default(Rng&& rng)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;

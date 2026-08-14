@@ -1,0 +1,84 @@
+# Copyright (c) 2026 Jatin Sharma
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Linux CI (Release, Godbolt Minimal)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: stellargroup/build_env:17
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Configure
+      shell: bash
+      run: |
+          cmake \
+              . \
+              -Bbuild \
+              -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_NETWORKING=OFF \
+              -DHPX_WITH_TESTS=OFF \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_DOCUMENTATION=OFF \
+              -DHPX_WITH_STATIC_LINKING=ON \
+              -DHPX_WITH_FETCH_ASIO=ON
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build
+    - name: Install
+      shell: bash
+      run: |
+        cmake --install build --prefix "$PWD/build/install"
+    - name: Build and run external smoke test
+      shell: bash
+      run: |
+        mkdir -p build/smoke
+        cat > build/smoke/CMakeLists.txt << 'EOF'
+        cmake_minimum_required(VERSION 3.18)
+        project(hpx_godbolt_minimal_smoketest CXX)
+
+        find_package(HPX REQUIRED)
+
+        add_executable(hello_world hello_world.cpp)
+        target_link_libraries(hello_world PRIVATE HPX::hpx)
+        EOF
+
+        cat > build/smoke/hello_world.cpp << 'EOF'
+        #include <hpx/init.hpp>
+
+        #include <iostream>
+
+        int hpx_main(int, char*[])
+        {
+          std::cout << "Hello World!\n";
+          return hpx::local::finalize();
+        }
+
+        int main(int argc, char* argv[])
+        {
+          return hpx::local::init(&hpx_main, argc, argv);
+        }
+        EOF
+
+        cmake \
+          -Sbuild/smoke \
+          -Bbuild/smoke/build \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH="$PWD/build/install"
+
+        cmake --build build/smoke/build
+        build/smoke/build/hello_world

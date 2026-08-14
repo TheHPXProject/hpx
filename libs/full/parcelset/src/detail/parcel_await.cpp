@@ -10,11 +10,11 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/lcos_local.hpp>
+#include <hpx/modules/naming.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/serialization.hpp>
 
-#include <hpx/actions/actions_fwd.hpp>
-#include <hpx/modules/parcelset_base.hpp>
-#include <hpx/naming/detail/preprocess_gid_types.hpp>
+#include <hpx/modules/actions.hpp>
 #include <hpx/parcelset/detail/parcel_await.hpp>
 #include <hpx/parcelset/parcelset_fwd.hpp>
 

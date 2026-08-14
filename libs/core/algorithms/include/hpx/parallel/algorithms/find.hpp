@@ -999,6 +999,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -1052,11 +1053,12 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
-                difference_type count = detail::distance(first, last);
+                difference_type count =
+                    hpx::parallel::detail::distance(first, last);
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
@@ -1074,7 +1076,7 @@ namespace hpx::parallel {
                         val, HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, count, first, last](
+                auto f2 = [tok, first](
                               auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
@@ -1085,14 +1087,7 @@ namespace hpx::parallel {
                     auto find_res =
                         static_cast<difference_type>(tok.get_data());
 
-                    if (find_res != count)
-                    {
-                        std::advance(first, find_res);
-                    }
-                    else
-                    {
-                        first = detail::advance_to_sentinel(first, last);
-                    }
+                    std::advance(first, find_res);
                     return first;
                 };
 
@@ -1142,11 +1137,12 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
-                difference_type count = detail::distance(first, last);
+                difference_type count =
+                    hpx::parallel::detail::distance(first, last);
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
@@ -1165,7 +1161,7 @@ namespace hpx::parallel {
                         tok, HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, count, first, last](
+                auto f2 = [tok, first](
                               auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
@@ -1176,14 +1172,7 @@ namespace hpx::parallel {
                     auto find_res =
                         static_cast<difference_type>(tok.get_data());
 
-                    if (find_res != count)
-                    {
-                        std::advance(first, find_res);
-                    }
-                    else
-                    {
-                        first = detail::advance_to_sentinel(first, last);
-                    }
+                    std::advance(first, find_res);
                     return first;
                 };
 
@@ -1232,11 +1221,12 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(HPX_MOVE(last));
+                        return result::get(HPX_MOVE(first));
                     }
                 }
 
-                difference_type count = detail::distance(first, last);
+                difference_type count =
+                    hpx::parallel::detail::distance(first, last);
 
                 decltype(auto) policy =
                     hpx::execution::experimental::adapt_placement_mode(
@@ -1255,7 +1245,7 @@ namespace hpx::parallel {
                         tok, HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, count, first, last](
+                auto f2 = [tok, first](
                               auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
@@ -1266,14 +1256,7 @@ namespace hpx::parallel {
                     auto find_res =
                         static_cast<difference_type>(tok.get_data());
 
-                    if (find_res != count)
-                    {
-                        std::advance(first, find_res);
-                    }
-                    else
-                    {
-                        first = detail::advance_to_sentinel(first, last);
-                    }
+                    std::advance(first, find_res);
                     return first;
                 };
 
@@ -1328,18 +1311,22 @@ namespace hpx::parallel {
                 {
                     if (first2 == last2)
                     {
-                        return result_type::get(HPX_MOVE(last1));
+                        return result_type::get(
+                            detail::advance_to_sentinel(first1, last1));
                     }
                 }
 
-                difference_type count = detail::distance(first1, last1);
-                difference_type diff = detail::distance(first2, last2);
+                difference_type count =
+                    hpx::parallel::detail::distance(first1, last1);
+                difference_type diff =
+                    hpx::parallel::detail::distance(first2, last2);
 
                 if constexpr (!has_scheduler_executor)
                 {
                     if (diff > count)
                     {
-                        return result_type::get(HPX_MOVE(last1));
+                        return result_type::get(
+                            detail::advance_to_sentinel(first1, last1));
                     }
                 }
 
@@ -1372,7 +1359,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
                 };
 
-                auto f2 = [tok, count, first1, last1](
+                auto f2 = [tok, first1, last1](
                               auto&&... data) mutable -> Iter1 {
                     static_assert(sizeof...(data) < 2);
 
@@ -1382,14 +1369,12 @@ namespace hpx::parallel {
 
                     difference_type find_end_res = tok.get_data();
 
-                    if (find_end_res >= 0 && find_end_res != count)
+                    if (find_end_res < 0)
                     {
-                        std::advance(first1, find_end_res);
+                        return advance_to_sentinel(first1, last1);
                     }
-                    else
-                    {
-                        first1 = last1;
-                    }
+
+                    std::advance(first1, find_end_res);
                     return first1;
                 };
 
@@ -1444,7 +1429,8 @@ namespace hpx::parallel {
                         return result::get(HPX_MOVE(last));
                 }
 
-                difference_type count = std::distance(first, last);
+                difference_type count =
+                    hpx::parallel::detail::distance(first, last);
 
                 if (s_first == s_last)
                 {
@@ -1477,7 +1463,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
                 };
 
-                auto f2 = [tok, count, first, last](
+                auto f2 = [tok, first](
                               auto&&... data) mutable -> FwdIter {
                     static_assert(sizeof...(data) < 2);
 
@@ -1487,14 +1473,7 @@ namespace hpx::parallel {
 
                     difference_type find_first_of_res = tok.get_data();
 
-                    if (find_first_of_res != count)
-                    {
-                        std::advance(first, find_first_of_res);
-                    }
-                    else
-                    {
-                        first = last;
-                    }
+                    std::advance(first, find_first_of_res);
 
                     return first;
                 };
@@ -1514,9 +1493,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find
     HPX_CXX_CORE_EXPORT inline constexpr struct find_t final
-      : hpx::detail::tag_parallel_algorithm<find_t>
+      : hpx::detail::tag_dispatch<find_t, hpx::detail::tag_parallel_algorithm<find_t>>
     {
-    private:
         template <typename InIter,
             typename T = typename std::iterator_traits<InIter>::value_type>
         // clang-format off
@@ -1524,8 +1502,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<InIter>
             )
         // clang-format on
-        friend constexpr InIter tag_fallback_invoke(
-            find_t, InIter first, InIter last, T const& val)
+        static constexpr InIter invoke_default(
+            InIter first, InIter last, T const& val)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -1542,8 +1520,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_t, ExPolicy&& policy,
-            FwdIter first, FwdIter last, T const& val)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, T const& val)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -1557,9 +1535,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_if
     HPX_CXX_CORE_EXPORT inline constexpr struct find_if_t final
-      : hpx::detail::tag_parallel_algorithm<find_if_t>
+      : hpx::detail::tag_dispatch<find_if_t,
+            hpx::detail::tag_parallel_algorithm<find_if_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
         requires (
@@ -1568,8 +1546,8 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            find_if_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -1586,8 +1564,7 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<InIter>>
         )
         // clang-format on
-        friend InIter tag_fallback_invoke(
-            find_if_t, InIter first, InIter last, F f)
+        static InIter invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -1600,9 +1577,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_if_not
     HPX_CXX_CORE_EXPORT inline constexpr struct find_if_not_t final
-      : hpx::detail::tag_parallel_algorithm<find_if_not_t>
+      : hpx::detail::tag_dispatch<find_if_not_t,
+            hpx::detail::tag_parallel_algorithm<find_if_not_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
         requires (
@@ -1611,8 +1588,8 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            find_if_not_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -1629,8 +1606,7 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            find_if_not_t, FwdIter first, FwdIter last, F f)
+        static FwdIter invoke_default(FwdIter first, FwdIter last, F f)
         {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");
@@ -1643,9 +1619,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_end
     HPX_CXX_CORE_EXPORT inline constexpr struct find_end_t final
-      : hpx::detail::tag_parallel_algorithm<find_end_t>
+      : hpx::detail::tag_dispatch<find_end_t,
+            hpx::detail::tag_parallel_algorithm<find_end_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename Pred>
         // clang-format off
@@ -1658,9 +1634,8 @@ namespace hpx {
             >
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_end_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2,
-            Pred op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1680,8 +1655,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<FwdIter2>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_end_t, ExPolicy&& policy,
-            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
+            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1704,8 +1679,8 @@ namespace hpx {
             >
         )
         // clang-format on
-        friend FwdIter1 tag_fallback_invoke(find_end_t, FwdIter1 first1,
-            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2, Pred op)
+        static FwdIter1 invoke_default(FwdIter1 first1, FwdIter1 last1,
+            FwdIter2 first2, FwdIter2 last2, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1724,8 +1699,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<FwdIter2>
         )
         // clang-format on
-        friend FwdIter1 tag_fallback_invoke(find_end_t, FwdIter1 first1,
-            FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
+        static FwdIter1 invoke_default(
+            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2, FwdIter2 last2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1742,9 +1717,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_first_of
     HPX_CXX_CORE_EXPORT inline constexpr struct find_first_of_t final
-      : hpx::detail::tag_parallel_algorithm<find_first_of_t>
+      : hpx::detail::tag_dispatch<find_first_of_t,
+            hpx::detail::tag_parallel_algorithm<find_first_of_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2,
             typename Pred>
         // clang-format off
@@ -1757,9 +1732,8 @@ namespace hpx {
             >
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_first_of_t,
-            ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 s_first,
-            FwdIter2 s_last, Pred op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 s_first, FwdIter2 s_last, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1779,9 +1753,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<FwdIter2>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_first_of_t,
-            ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 s_first,
-            FwdIter2 s_last)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 s_first, FwdIter2 s_last)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1804,8 +1777,8 @@ namespace hpx {
             >
         )
         // clang-format on
-        friend FwdIter1 tag_fallback_invoke(find_first_of_t, FwdIter1 first,
-            FwdIter1 last, FwdIter2 s_first, FwdIter2 s_last, Pred op)
+        static FwdIter1 invoke_default(FwdIter1 first, FwdIter1 last,
+            FwdIter2 s_first, FwdIter2 s_last, Pred op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1824,8 +1797,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<FwdIter2>
         )
         // clang-format on
-        friend FwdIter1 tag_fallback_invoke(find_first_of_t, FwdIter1 first,
-            FwdIter1 last, FwdIter2 s_first, FwdIter2 s_last)
+        static FwdIter1 invoke_default(
+            FwdIter1 first, FwdIter1 last, FwdIter2 s_first, FwdIter2 s_last)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1875,11 +1848,12 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
-            difference_type count = detail::distance(first, last);
+            difference_type count =
+                hpx::parallel::detail::distance(first, last);
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
@@ -1962,11 +1936,12 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
-            difference_type count = detail::distance(first, last);
+            difference_type count =
+                hpx::parallel::detail::distance(first, last);
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
@@ -2050,11 +2025,12 @@ namespace hpx::parallel::detail {
             {
                 if (first == last)
                 {
-                    return result::get(HPX_MOVE(last));
+                    return result::get(HPX_MOVE(first));
                 }
             }
 
-            difference_type count = detail::distance(first, last);
+            difference_type count =
+                hpx::parallel::detail::distance(first, last);
 
             decltype(auto) policy =
                 hpx::execution::experimental::adapt_placement_mode(
@@ -2108,9 +2084,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_last
     HPX_CXX_CORE_EXPORT inline constexpr struct find_last_t final
-      : hpx::detail::tag_parallel_algorithm<find_last_t>
+      : hpx::detail::tag_dispatch<find_last_t,
+            hpx::detail::tag_parallel_algorithm<find_last_t>>
     {
-    private:
         template <typename InIter,
             typename T = typename std::iterator_traits<InIter>::value_type>
         // clang-format off
@@ -2118,8 +2094,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<InIter>
         )
         // clang-format on
-        friend constexpr InIter tag_fallback_invoke(
-            find_last_t, InIter first, InIter last, T const& val)
+        static constexpr InIter invoke_default(
+            InIter first, InIter last, T const& val)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -2136,7 +2112,7 @@ namespace hpx {
             hpx::traits::is_iterator_v<FwdIter>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_last_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, T const& val)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -2151,9 +2127,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_last_if
     HPX_CXX_CORE_EXPORT inline constexpr struct find_last_if_t final
-      : hpx::detail::tag_parallel_algorithm<find_last_if_t>
+      : hpx::detail::tag_dispatch<find_last_if_t,
+            hpx::detail::tag_parallel_algorithm<find_last_if_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
         requires (
@@ -2162,8 +2138,8 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            find_last_if_t, ExPolicy&& policy, FwdIter first, FwdIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -2180,8 +2156,7 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<InIter>>
         )
         // clang-format on
-        friend InIter tag_fallback_invoke(
-            find_last_if_t, InIter first, InIter last, F f)
+        static InIter invoke_default(InIter first, InIter last, F f)
         {
             static_assert(std::input_iterator<InIter>,
                 "Requires at least input iterator.");
@@ -2194,9 +2169,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find_last_if_not
     HPX_CXX_CORE_EXPORT inline constexpr struct find_last_if_not_t final
-      : hpx::detail::tag_parallel_algorithm<find_last_if_not_t>
+      : hpx::detail::tag_dispatch<find_last_if_not_t,
+            hpx::detail::tag_parallel_algorithm<find_last_if_not_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename F>
         // clang-format off
         requires (
@@ -2205,7 +2180,7 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(find_last_if_not_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, F f)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -2223,8 +2198,7 @@ namespace hpx {
             hpx::is_invocable_v<F, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            find_last_if_not_t, FwdIter first, FwdIter last, F f)
+        static FwdIter invoke_default(FwdIter first, FwdIter last, F f)
         {
             static_assert(std::input_iterator<FwdIter>,
                 "Requires at least input iterator.");

@@ -10,7 +10,6 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/synchronization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <any>
@@ -85,7 +84,6 @@ struct default_awaiter_context
 // This is the context that is associated with basic_task's promise type
 // by default. It handles forwarding of stop requests from parent to child.
 struct default_task_context_impl
-  : hpx::functional::tag<default_task_context_impl>
 {
     hpx::experimental::in_place_stop_token stop_token_;
 
@@ -94,11 +92,10 @@ struct default_task_context_impl
     template <typename ParentPromise, typename T>
     friend struct default_awaiter_context;
 
-    friend auto tag_invoke(hpx::execution::experimental::get_stop_token_t,
-        default_task_context_impl const& self) noexcept
+    auto query(hpx::execution::experimental::get_stop_token_t) const noexcept
         -> hpx::experimental::in_place_stop_token
     {
-        return self.stop_token_;
+        return stop_token_;
     }
 
 public:
@@ -188,37 +185,37 @@ struct default_awaiter_context<ParentPromise,
 template <>
 struct default_awaiter_context<void>
 {
-    explicit default_awaiter_context(default_task_context_impl&, auto&) noexcept
-    {
-    }
-
-    template <typename ParentPromise,
-        typename =
-            std::enable_if_t<indirect_stop_token_provider<ParentPromise>>>
+    template <typename ParentPromise>
     explicit default_awaiter_context(
         default_task_context_impl& self, ParentPromise& parent)
     {
         // Register a callback that will request stop on this basic_task's
         // stop_source when stop is requested on the parent coroutine's stop
         // token.
-        using stop_token_t = hpx::execution::experimental::stop_token_of_t<
-            hpx::execution::experimental::env_of_t<ParentPromise>>;
-        using stop_callback_t =
-            typename stop_token_t::template callback_type<forward_stop_request>;
+        if constexpr (requires {
+                          hpx::execution::experimental::get_env(parent);
+                      })
+        {
+            using stop_token_t = hpx::execution::experimental::stop_token_of_t<
+                hpx::execution::experimental::env_of_t<ParentPromise>>;
+            using stop_callback_t =
+                typename stop_token_t::template callback_type<
+                    forward_stop_request>;
 
-        if constexpr (std::is_same_v<stop_token_t,
-                          hpx::experimental::in_place_stop_token>)
-        {
-            self.stop_token_ = hpx::execution::experimental::get_stop_token(
-                hpx::execution::experimental::get_env(parent));
-        }
-        else if (auto token = hpx::execution::experimental::get_stop_token(
-                     hpx::execution::experimental::get_env(parent));
-            token.stop_possible())
-        {
-            stop_callback_.emplace<stop_callback_t>(
-                std::move(token), forward_stop_request{stop_source_});
-            self.stop_token_ = stop_source_.get_token();
+            if constexpr (std::is_same_v<stop_token_t,
+                              hpx::experimental::in_place_stop_token>)
+            {
+                self.stop_token_ = hpx::execution::experimental::get_stop_token(
+                    hpx::execution::experimental::get_env(parent));
+            }
+            else if (auto token = hpx::execution::experimental::get_stop_token(
+                         hpx::execution::experimental::get_env(parent));
+                token.stop_possible())
+            {
+                stop_callback_.emplace<stop_callback_t>(
+                    std::move(token), forward_stop_request{stop_source_});
+                self.stop_token_ = stop_source_.get_token();
+            }
         }
     }
 
@@ -308,11 +305,7 @@ private:
         static hpx::coroutine_handle<> await_suspend(
             hpx::coroutine_handle<_promise> h) noexcept
         {
-#if defined(HPX_HAVE_STDEXEC)
             return h.promise().continuation().handle();
-#else
-            return h.promise().continuation();
-#endif
         }
         static void await_resume() noexcept {}
     };
@@ -340,10 +333,9 @@ private:
         }
         using context_t =
             typename Context::template promise_context_t<_promise>;
-        friend context_t tag_invoke(hpx::execution::experimental::get_env_t,
-            _promise const& self) noexcept
+        context_t get_env() const noexcept
         {
-            return self.context_;
+            return context_;
         }
         context_t context_;
     };
@@ -397,11 +389,9 @@ private:
 
     // Make this task awaitable within a particular context:
     template <typename ParentPromise>
-    friend task_awaitable<ParentPromise> tag_invoke(
-        hpx::execution::experimental::as_awaitable_t, basic_task&& self,
-        ParentPromise&) noexcept
+    task_awaitable<ParentPromise> as_awaitable(ParentPromise&) && noexcept
     {
-        return task_awaitable<ParentPromise>{std::exchange(self.coro_, {})};
+        return task_awaitable<ParentPromise>{std::exchange(coro_, {})};
     }
 
     // Make this task generally awaitable:
@@ -421,10 +411,13 @@ private:
         hpx::execution::experimental::set_stopped_t()>;
 
     // clang-format off
-    friend auto tag_invoke(
-        hpx::execution::experimental::get_completion_signatures_t,
-        const basic_task&, auto) -> std::conditional_t<std::is_void_v<T>,
-                                     task_traits_t<>, task_traits_t<T>>;
+    template <typename Self, typename... Env>
+    static auto get_completion_signatures(Self&&, Env&&...) noexcept
+        -> std::conditional_t<std::is_void_v<T>,
+                                     task_traits_t<>, task_traits_t<T>>
+    {
+        return {};
+    }
     // clang-format on
 
     explicit basic_task(hpx::coroutine_handle<promise_type> hcoro) noexcept

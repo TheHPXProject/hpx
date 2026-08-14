@@ -1,4 +1,4 @@
-# Copyright (c) 2007-2025 Hartmut Kaiser
+# Copyright (c) 2007-2026 Hartmut Kaiser
 # Copyright (c)      2011 Bryce Lelbach
 # Copyright (c)      2018 Nikunj Gupta
 # Copyright (c) 2020 The STE||AR-Group
@@ -11,6 +11,7 @@ include(HPX_Message)
 include(HPX_AddPseudoDependencies)
 include(HPX_AddPseudoTarget)
 include(HPX_CXXModules)
+include(HPX_ConfigureIfChanged)
 
 # ##############################################################################
 # gather headers and sources
@@ -412,8 +413,10 @@ foreach(lib ${HPX_LIBS})
       )
     endforeach()
 
-    configure_file(
-      "${HPX_SOURCE_DIR}/cmake/templates/hpx.ixx.in" ${lib_module_file} @ONLY
+    hpx_configure_if_changed(
+      INPUT "${HPX_SOURCE_DIR}/cmake/templates/hpx.ixx.in"
+      OUTPUT ${lib_module_file}
+      CONFIGURE_ARGS @ONLY
     )
 
     target_link_libraries(hpx INTERFACE hpx_${lib}_module_if)
@@ -433,10 +436,10 @@ foreach(lib ${HPX_LIBS})
     )
 
     # Clang emits DWARF-5 records while compiling the TracyClient library
-    if(HPX_TRACY_WITH_TRACY
+    if(HPX_WITH_TRACY
        AND (NOT MSVC)
-       AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID
-                                                     MATCHES "AppleClang")
+       AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+       AND (NOT (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang"))
     )
       target_link_options(hpx_${lib} PRIVATE "-fuse-ld=lld")
     endif()
@@ -448,9 +451,9 @@ foreach(lib ${HPX_LIBS})
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT runtime
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime
       FILE_SET hpx_${lib}_public_sources
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cxx
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}/${lib}
       CXX_MODULES_BMI
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cxx
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HPX_PACKAGE_NAME}/${lib}
           COMPONENT runtime
     )
     hpx_export_internal_targets(hpx_${lib}_module hpx_${lib}_module_if)
@@ -471,9 +474,11 @@ if(HPX_WITH_CXX_MODULES)
     set(cxx_standard_headers "${cxx_standard_headers}#include ${std_header}\n")
   endforeach()
 
-  configure_file(
-    "${HPX_SOURCE_DIR}/cmake/templates/std_headers.hpp.in"
-    "core/config/include/hpx/config/std_headers.hpp" @ONLY
+  hpx_configure_if_changed(
+    INPUT "${HPX_SOURCE_DIR}/cmake/templates/std_headers.hpp.in"
+    OUTPUT
+      "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/std_headers.hpp"
+    CONFIGURE_ARGS @ONLY
   )
 endif()
 
@@ -486,10 +491,11 @@ foreach(module ${HPX_ENABLED_MODULES})
   )
 endforeach()
 
-configure_file(
-  "${PROJECT_SOURCE_DIR}/cmake/templates/modules_enabled.hpp.in"
-  "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/modules_enabled.hpp"
-  @ONLY
+hpx_configure_if_changed(
+  INPUT "${PROJECT_SOURCE_DIR}/cmake/templates/modules_enabled.hpp.in"
+  OUTPUT
+    "${PROJECT_BINARY_DIR}/libs/core/config/include/hpx/config/modules_enabled.hpp"
+  CONFIGURE_ARGS @ONLY
 )
 
 if(MSVC AND HPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION)

@@ -23,7 +23,7 @@
     {                                                                          \
     };                                                                         \
                                                                                \
-    Prefix template <typename T>                                               \
+    template <typename T>                                                      \
     struct HPX_PP_CAT(has_, Name)<T, std::void_t<typename T::Name>>            \
       : std::true_type                                                         \
     {                                                                          \

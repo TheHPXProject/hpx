@@ -8,19 +8,17 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components/get_ptr.hpp>
-#include <hpx/distribution_policies/container_distribution_policy.hpp>
-#include <hpx/distribution_policies/explicit_container_distribution_policy.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
+#include <hpx/modules/distribution_policies.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
-#include <hpx/runtime_components/distributed_metadata_base.hpp>
-#include <hpx/runtime_components/new.hpp>
-#include <hpx/runtime_distributed/copy_component.hpp>
+#include <hpx/modules/runtime_components.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_component_impl.hpp>
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_decl.hpp>
@@ -101,7 +99,7 @@ namespace hpx {
             server::partitioned_vector_config_data>::get_action;
 
         return async(act(), id).then(
-            [HPX_CXX20_CAPTURE_THIS(=)](
+            [=, this](
                 future<server::partitioned_vector_config_data>&& f) -> void {
                 return get_data_helper(id, f.get());
             });
@@ -117,8 +115,7 @@ namespace hpx {
     {
         this->base_type::connect_to(HPX_MOVE(symbolic_name));
         return this->base_type::share().then(
-            [HPX_CXX20_CAPTURE_THIS(=)](
-                shared_future<id_type>&& f) -> hpx::future<void> {
+            [=, this](shared_future<id_type>&& f) -> hpx::future<void> {
                 return connect_to_helper(f.get());
             });
     }
@@ -166,10 +163,10 @@ namespace hpx {
     HPX_PARTITIONED_VECTOR_SPECIALIZATION_EXPORT
     partitioned_vector<T, Data>::partitioned_vector(future<id_type>&& f)
     {
-        f.share().then([HPX_CXX20_CAPTURE_THIS(=)](
-                           shared_future<id_type>&& fut) -> hpx::future<void> {
-            return connect_to_helper(fut.get());
-        });
+        f.share().then(
+            [=, this](shared_future<id_type>&& fut) -> hpx::future<void> {
+                return connect_to_helper(fut.get());
+            });
     }
 
     ///////////////////////////////////////////////////////////////////////////

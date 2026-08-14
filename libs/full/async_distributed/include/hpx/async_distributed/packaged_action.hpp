@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -8,24 +8,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/action_priority.hpp>
-#include <hpx/actions_base/traits/action_was_object_migrated.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/async_distributed/detail/post.hpp>
 #include <hpx/async_distributed/detail/post_callback.hpp>
 #include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
 #include <hpx/async_distributed/promise.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/traits/component_supports_migration.hpp>
-#include <hpx/components_base/traits/component_type_is_compatible.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/allocator_support.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/memory.hpp>
-
-#if defined(HPX_HAVE_NETWORKING)
-#include <asio/error.hpp>
-#endif
 
 #include <exception>
 #include <memory>
@@ -39,6 +31,8 @@ namespace hpx::lcos {
 #if defined(HPX_HAVE_NETWORKING)
     namespace detail {
 
+        HPX_CXX_EXPORT HPX_EXPORT bool is_asio_error(std::error_code const& ec);
+
         template <typename Result>
         struct parcel_write_handler
         {
@@ -51,15 +45,11 @@ namespace hpx::lcos {
                 // object
                 if (ec)
                 {
-                    if (hpx::tolerate_node_faults())
+                    if (hpx::tolerate_node_faults() && is_asio_error(ec))
                     {
-                        if (ec ==
-                            ::asio::error::make_error_code(
-                                ::asio::error::connection_reset))
-                        {
-                            return;
-                        }
+                        return;
                     }
+
                     std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
                         "packaged_action::parcel_write_handler",
                         parcelset::dump_parcel(p));
@@ -100,7 +90,7 @@ namespace hpx::lcos {
     /// sent back to the packaged_action using the LCO's set_event action
     ///
     /// A packaged_action is one of the simplest synchronization primitives
-    /// provided by HPX. It allows to synchronize on a eager evaluated remote
+    /// provided by HPX. It allows to synchronize on an eager evaluated remote
     /// operation returning a result of the type \a Result.
     ///
     /// \tparam Action   The template parameter \a Action defines the action
@@ -122,7 +112,8 @@ namespace hpx::lcos {
     ///                  continuation must return a value of a type convertible
     ///                  to the type as specified by the template parameter
     ///                  \a Result.
-    template <typename Action, typename Result, bool DirectExecute>
+    HPX_CXX_EXPORT template <typename Action, typename Result,
+        bool DirectExecute>
     class packaged_action;
 
     ///////////////////////////////////////////////////////////////////////////
@@ -132,8 +123,8 @@ namespace hpx::lcos {
             typename hpx::traits::extract_action<Action>::remote_result_type>
     {
     protected:
-        using action_type = typename hpx::traits::extract_action<Action>::type;
-        using remote_result_type = typename action_type::remote_result_type;
+        using action_type = hpx::traits::extract_action<Action>::type;
+        using remote_result_type = action_type::remote_result_type;
         using base_type = hpx::distributed::promise<Result, remote_result_type>;
 
         ///////////////////////////////////////////////////////////////////////
@@ -409,11 +400,11 @@ namespace hpx::lcos {
     class packaged_action<Action, Result, /*DirectExecute=*/true>
       : public packaged_action<Action, Result, /*DirectExecute=*/false>
     {
-        using action_type = typename packaged_action<Action, Result,
+        using action_type = packaged_action<Action, Result,
             /*DirectExecute=*/false>::action_type;
 
     public:
-        /// Construct a (non-functional) instance of an \a packaged_action. To
+        /// Construct a (non-functional) instance of a \a packaged_action. To
         /// use this instance its member function \a post needs to be directly
         /// called.
         packaged_action()
@@ -433,7 +424,7 @@ namespace hpx::lcos {
         void post(hpx::id_type const& id, Ts&&... vs)
         {
             using action_type = hpx::traits::extract_action_t<Action>;
-            using component_type = typename action_type::component_type;
+            using component_type = action_type::component_type;
 
             [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
             naming::address addr;
@@ -492,7 +483,7 @@ namespace hpx::lcos {
         void post(naming::address&& addr, hpx::id_type const& id, Ts&&... vs)
         {
             using action_type = hpx::traits::extract_action_t<Action>;
-            using component_type = typename action_type::component_type;
+            using component_type = action_type::component_type;
 
             if (addr &&
                 naming::get_locality_id_from_gid(addr.locality_) ==
@@ -532,7 +523,7 @@ namespace hpx::lcos {
         void post_cb(hpx::id_type const& id, Callback&& cb, Ts&&... vs)
         {
             using action_type = hpx::traits::extract_action_t<Action>;
-            using component_type = typename action_type::component_type;
+            using component_type = action_type::component_type;
 
             [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
             naming::address addr;
@@ -597,7 +588,7 @@ namespace hpx::lcos {
                 naming::get_locality_id_from_gid(addr.locality_) ==
                     agas::get_locality_id())
             {
-                using component_type = typename Action::component_type;
+                using component_type = Action::component_type;
                 HPX_ASSERT(
                     traits::component_type_is_compatible<component_type>::call(
                         addr));

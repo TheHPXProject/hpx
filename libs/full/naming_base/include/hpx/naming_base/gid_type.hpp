@@ -12,9 +12,9 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/itt_notify.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/serialization.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/naming_base/naming_base.hpp>
 
 #include <cstddef>
@@ -23,6 +23,7 @@
 #include <iosfwd>
 #include <mutex>
 #include <string>
+#include <type_traits>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -109,10 +110,10 @@ namespace hpx::naming {
             std::uint64_t msb_id, std::uint64_t lsb_id) noexcept;
         explicit inline gid_type(std::uint64_t msb_id, void* lsb_id) noexcept;
 
-        inline constexpr gid_type(gid_type const& rhs) noexcept;
-        inline constexpr gid_type(gid_type&& rhs) noexcept;
+        constexpr gid_type(gid_type const& rhs) noexcept;
+        constexpr gid_type(gid_type&& rhs) noexcept;
 
-        ~gid_type() = default;
+        constexpr ~gid_type() = default;
 
         gid_type& operator=(std::uint64_t const lsb_id) noexcept
         {
@@ -122,8 +123,8 @@ namespace hpx::naming {
             return *this;
         }
 
-        inline gid_type& operator=(gid_type const& rhs) noexcept;
-        inline gid_type& operator=(gid_type&& rhs) noexcept;
+        constexpr gid_type& operator=(gid_type const& rhs) noexcept;
+        constexpr gid_type& operator=(gid_type&& rhs) noexcept;
 
         explicit constexpr operator bool() const noexcept
         {
@@ -248,7 +249,7 @@ namespace hpx::naming {
         {
             id_lsb_ = lsb;
         }
-        inline void set_lsb(void* lsb) noexcept
+        void set_lsb(void* lsb) noexcept
         {
             id_lsb_ = reinterpret_cast<std::uint64_t>(lsb);
         }
@@ -260,7 +261,7 @@ namespace hpx::naming {
 
         void lock()
         {
-            HPX_ITT_SYNC_PREPARE(this);
+            hpx::tracing::detail::sync_prepare(this);
 
             while (!acquire_lock())
             {
@@ -270,32 +271,36 @@ namespace hpx::naming {
 
             util::register_lock(this);
 
-            HPX_ITT_SYNC_ACQUIRED(this);
+            hpx::tracing::detail::sync_acquired(this);
         }
 
         bool try_lock()
         {
-            HPX_ITT_SYNC_PREPARE(this);
+            hpx::tracing::detail::sync_prepare(this);
 
-            if (acquire_lock())
+            bool r = acquire_lock();
+            if (r)
+                hpx::tracing::detail::sync_acquired(this);
+            else
+                hpx::tracing::detail::sync_cancel(this);
+
+            if (r)
             {
-                HPX_ITT_SYNC_ACQUIRED(this);
                 util::register_lock(this);
                 return true;
             }
 
-            HPX_ITT_SYNC_CANCEL(this);
             return false;
         }
 
         void unlock()
         {
-            HPX_ITT_SYNC_RELEASING(this);
+            hpx::tracing::detail::sync_releasing(this);
 
             relinquish_lock();
             util::unregister_lock(this);
 
-            HPX_ITT_SYNC_RELEASED(this);
+            hpx::tracing::detail::sync_released(this);
         }
 
         constexpr mutex_type& get_mutex() const noexcept
@@ -605,10 +610,9 @@ namespace hpx::naming {
             return ret;
         }
 
-        HPX_CXX_EXPORT inline std::int64_t power2(
+        HPX_CXX_EXPORT constexpr std::int64_t power2(
             std::int16_t const log2credits) noexcept
         {
-            HPX_ASSERT(log2credits >= 0);
             return static_cast<std::int64_t>(1) << log2credits;
         }
 
@@ -650,7 +654,6 @@ namespace hpx::naming {
         HPX_CXX_EXPORT constexpr std::int16_t get_log2credit_from_gid(
             gid_type const& gid) noexcept
         {
-            HPX_ASSERT(has_credits(gid));
             return static_cast<std::int16_t>(
                 (gid.get_msb() >> gid_type::credit_shift) &
                 gid_type::credit_base_mask);
@@ -685,6 +688,7 @@ namespace hpx::naming {
             if (credits != 0)
             {
                 std::int16_t const log2credits = detail::log2(credits);
+                HPX_ASSERT(log2credits >= 0);
                 HPX_ASSERT(detail::power2(log2credits) == credits);
 
                 set_log2credit_for_gid(id, log2credits);
@@ -704,7 +708,7 @@ namespace hpx::naming {
         std::ostream& os, gid_type const& id);
 
     ///////////////////////////////////////////////////////////////////////////
-    inline constexpr gid_type::gid_type(
+    constexpr gid_type::gid_type(
         std::uint64_t const msb_id, std::uint64_t const lsb_id) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(msb_id))
       , id_lsb_(lsb_id)
@@ -717,20 +721,20 @@ namespace hpx::naming {
     {
     }
 
-    inline constexpr gid_type::gid_type(gid_type const& rhs) noexcept
+    constexpr gid_type::gid_type(gid_type const& rhs) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(rhs.get_msb()))
       , id_lsb_(rhs.get_lsb())
     {
     }
 
-    inline constexpr gid_type::gid_type(gid_type&& rhs) noexcept
+    constexpr gid_type::gid_type(gid_type&& rhs) noexcept
       : id_msb_(naming::detail::strip_lock_from_gid(rhs.get_msb()))
       , id_lsb_(rhs.get_lsb())
     {
         rhs.id_lsb_ = rhs.id_msb_ = 0;
     }
 
-    inline gid_type& gid_type::operator=(gid_type const& rhs) noexcept
+    constexpr gid_type& gid_type::operator=(gid_type const& rhs) noexcept
     {
         if (this != &rhs)
         {
@@ -740,7 +744,7 @@ namespace hpx::naming {
         }
         return *this;
     }
-    inline gid_type& gid_type::operator=(gid_type&& rhs) noexcept
+    constexpr gid_type& gid_type::operator=(gid_type&& rhs) noexcept
     {
         if (this != &rhs)
         {
@@ -761,7 +765,8 @@ namespace std {
     template <>
     struct hash<hpx::naming::gid_type>
     {
-        std::size_t operator()(::hpx::naming::gid_type const& gid) const
+        std::size_t operator()(
+            ::hpx::naming::gid_type const& gid) const noexcept
         {
             std::size_t const h1(std::hash<std::uint64_t>()(gid.get_lsb()));
             std::size_t const h2(std::hash<std::uint64_t>()(

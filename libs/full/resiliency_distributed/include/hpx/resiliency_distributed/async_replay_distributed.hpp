@@ -7,13 +7,12 @@
 #pragma once
 
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-
-#include <hpx/modules/resiliency.hpp>
-
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/async.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/resiliency.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -25,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-namespace hpx { namespace resiliency { namespace experimental {
+namespace hpx::resiliency::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -135,21 +134,28 @@ namespace hpx { namespace resiliency { namespace experimental {
         }
     }    // namespace detail
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given Action \a action on locality \a id.
-    // Repeat launching on error exactly \a n times (except if
-    // abort_replay_exception is thrown).
-    template <typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replay_t, std::vector<hpx::id_type> const& ids,
+    /// \brief ADL hook for distributed async_replay CPO.
+    ///
+    /// Asynchronously launches \a action on localities in \a ids,
+    /// replaying on the next locality on error (aborts on
+    /// abort_replay_exception).
+    ///
+    /// \param tag     CPO tag (async_replay_t).
+    /// \param ids     Target localities to try in order.
+    /// \param action  Action to invoke on each locality.
+    /// \param ts      Arguments forwarded to \a action.
+    ///
+    /// \returns future with the first successful result.
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
+    hpx::future<hpx::util::detail::invoke_deferred_result_t<Action,
+        hpx::id_type, Ts...>>
+    hpx_invoke(async_replay_t, std::vector<hpx::id_type> const& ids,
         Action&& action, Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
-        using result_type =
-            typename hpx::util::detail::invoke_deferred_result<Action,
-                hpx::id_type, Ts...>::type;
+        using result_type = hpx::util::detail::invoke_deferred_result_t<Action,
+            hpx::id_type, Ts...>;
 
         auto helper = detail::make_distributed_async_replay_helper<result_type>(
             detail::replay_validator{}, HPX_FORWARD(Action, action),
@@ -158,21 +164,29 @@ namespace hpx { namespace resiliency { namespace experimental {
         return helper->call(ids);
     }
 
-    ///////////////////////////////////////////////////////////////////////////
-    // Asynchronously launch given Action \a action on locality \a id.
-    // Repeat launching on error exactly \a n times (except if
-    // abort_replay_exception is thrown).
-    template <typename Pred, typename Action, typename... Ts>
-    hpx::future<typename hpx::util::detail::invoke_deferred_result<Action,
-        hpx::id_type, Ts...>::type>
-    tag_invoke(async_replay_validate_t, std::vector<hpx::id_type> const& ids,
+    /// \brief ADL hook for distributed async_replay_validate CPO.
+    ///
+    /// Asynchronously launches \a action on localities in \a ids,
+    /// validating results with \a pred. Replays on the next locality on
+    /// error (aborts on abort_replay_exception).
+    ///
+    /// \param tag     CPO tag (async_replay_validate_t).
+    /// \param ids     Target localities to try in order.
+    /// \param pred    Predicate validating each invocation result.
+    /// \param action  Action to invoke on each locality.
+    /// \param ts      Arguments forwarded to \a action.
+    ///
+    /// \returns future with the first valid result.
+    HPX_CXX_EXPORT template <typename Pred, typename Action, typename... Ts>
+    hpx::future<hpx::util::detail::invoke_deferred_result_t<Action,
+        hpx::id_type, Ts...>>
+    hpx_invoke(async_replay_validate_t, std::vector<hpx::id_type> const& ids,
         Pred&& pred, Action&& action, Ts&&... ts)
     {
         HPX_ASSERT(ids.size() > 0);
 
-        using result_type =
-            typename hpx::util::detail::invoke_deferred_result<Action,
-                hpx::id_type, Ts...>::type;
+        using result_type = hpx::util::detail::invoke_deferred_result_t<Action,
+            hpx::id_type, Ts...>;
 
         auto helper = detail::make_distributed_async_replay_helper<result_type>(
             HPX_FORWARD(Pred, pred), HPX_FORWARD(Action, action),
@@ -180,7 +194,6 @@ namespace hpx { namespace resiliency { namespace experimental {
 
         return helper->call(ids);
     }
-
-}}}    // namespace hpx::resiliency::experimental
+}    // namespace hpx::resiliency::experimental
 
 #endif

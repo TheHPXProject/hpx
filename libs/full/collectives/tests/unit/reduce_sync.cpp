@@ -229,7 +229,7 @@ void test_local_use()
             auto const elapsed = t.elapsed();
             if (site == 0)
             {
-                std::cout << "local timing: " << elapsed / (10 * ITERATIONS)
+                std::cout << "local timing: " << elapsed / ITERATIONS
                           << "[s]\n";
             }
         }));
@@ -282,7 +282,7 @@ void test_local_use_sync()
             auto const elapsed = t.elapsed();
             if (site == 0)
             {
-                std::cout << "local timing: " << elapsed / (10 * ITERATIONS)
+                std::cout << "local timing: " << elapsed / ITERATIONS
                           << "[s]\n";
             }
         }));

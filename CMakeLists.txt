@@ -114,8 +114,15 @@ hpx_force_out_of_tree_build(
   "This project requires an out-of-source-tree build. See README.rst. Clean your CMake cache and CMakeFiles if this message persists."
 )
 
-if(NOT HPX_CMAKE_LOGLEVEL)
-  set(HPX_CMAKE_LOGLEVEL "WARN")
+hpx_option(
+  HPX_WITH_GIT_HOOKS BOOL
+  "Enable git commit hooks for formatting checks on commit (default: OFF)." OFF
+  ADVANCED
+)
+
+if(HPX_WITH_GIT_HOOKS)
+  include(HPX_SetupGitHooks)
+  hpx_setup_git_hooks()
 endif()
 
 # print initial diagnostics
@@ -293,16 +300,18 @@ if(HPX_WITH_DOCUMENTATION)
 endif()
 
 if(WIN32)
-  set(HPX_WITH_PSEUDO_DEPENDENCIES
-      OFF
-      CACHE INTERNAL "" FORCE
-  )
+  set(HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT OFF)
 else()
-  set(HPX_WITH_PSEUDO_DEPENDENCIES
-      ON
-      CACHE INTERNAL "" FORCE
-  )
+  set(HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT ON)
 endif()
+
+hpx_option(
+  HPX_WITH_PSEUDO_DEPENDENCIES
+  BOOL
+  "Turn compiler warnings into errors (default: ${HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT})"
+  ${HPX_WITH_PSEUDO_DEPENDENCIES_DEFAULT}
+  ADVANCED
+)
 
 hpx_option(
   HPX_WITH_UNITY_BUILD BOOL
@@ -620,13 +629,6 @@ hpx_option(
 )
 
 # ## HPX STDEXEC configuration ##
-
-hpx_option(
-  HPX_WITH_STDEXEC BOOL
-  "Use STDEXEC executors instead of native HPX.(default: OFF)" OFF
-  CATEGORY "Executor"
-  ADVANCED
-)
 
 hpx_option(
   HPX_WITH_FETCH_STDEXEC BOOL "Use FetchContent to fetch STDEXEC.(default: ON)"
@@ -1023,6 +1025,18 @@ if(HPX_WITH_SPINLOCK_DEADLOCK_DETECTION)
   hpx_add_config_define(HPX_HAVE_SPINLOCK_DEADLOCK_DETECTION)
 endif()
 
+# Explicitly enable the supervision functionalities
+hpx_option(
+  HPX_WITH_SUPERVISION BOOL "Enable supervision functionalities. (default: OFF)"
+  OFF
+  CATEGORY "Modules"
+  ADVANCED
+)
+
+if(HPX_WITH_SUPERVISION)
+  hpx_add_config_define(HPX_HAVE_SUPERVISION)
+endif()
+
 # Profiling related build options
 hpx_option(
   HPX_WITH_APEX BOOL "Enable APEX instrumentation support." OFF
@@ -1073,7 +1087,7 @@ hpx_option(
   ADVANCED
 )
 
-set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-21-0")
+set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-30-2")
 if(HPX_WITH_HIP)
   # newer versions of Asio currently fail when compiled with HIPCC
   set(HPX_WITH_ASIO_TAG_DEFAULT "asio-1-16-0")
@@ -1159,7 +1173,7 @@ hpx_option(
 )
 
 hpx_option(
-  HPX_TRACY_WITH_TRACY BOOL "Enable Tracy instrumentation support." OFF
+  HPX_WITH_TRACY BOOL "Enable Tracy instrumentation support." OFF
   CATEGORY "Profiling"
 )
 
@@ -1213,6 +1227,8 @@ endif()
 if(HPX_WITH_APEX AND NOT HPX_WITH_DISTRIBUTED_RUNTIME)
   hpx_error("HPX_WITH_DISTRIBUTED_RUNTIME=OFF requires HPX_WITH_APEX=OFF")
 endif()
+
+include(HPX_SetupTracing)
 
 if(HPX_WITH_NETWORKING)
   hpx_add_config_define(HPX_HAVE_NETWORKING)
@@ -1549,6 +1565,15 @@ if(HPX_WITH_EXAMPLES_QTHREADS)
 endif()
 
 hpx_option(
+  HPX_WITH_EXAMPLES_TASKBENCH
+  BOOL
+  "Enable the task-bench example (fetched from upstream StanfordLegion/task-bench, default: OFF)."
+  OFF
+  CATEGORY "Build Targets"
+  ADVANCED
+)
+
+hpx_option(
   HPX_WITH_EXAMPLES_HDF5 BOOL
   "Enable examples requiring HDF5 support (default: OFF)." OFF
   CATEGORY "Build Targets"
@@ -1852,20 +1877,21 @@ if(MSVC)
 endif()
 
 # Setup platform specific compiler options and check for compatible compilers
+set(_compiler "${CMAKE_CXX_COMPILER_ID} V${CMAKE_CXX_COMPILER_VERSION}")
 if("${HPX_PLATFORM_UC}" STREQUAL "NATIVE")
-  hpx_info("Compiling with the native toolset")
+  hpx_info("Compiling with the native toolset: ${_compiler}")
 elseif("${HPX_PLATFORM_UC}" STREQUAL "ANDROID")
-  hpx_info("Compiling for Android devices")
+  hpx_info("Compiling for Android devices: ${_compiler}")
 elseif("${HPX_PLATFORM_UC}" STREQUAL "XEONPHI")
-  hpx_info("Compiling for Intel Xeon Phi devices")
+  hpx_info("Compiling for Intel Xeon Phi devices: ${_compiler}")
   if(NOT ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel"))
     hpx_error("HPX on the MIC can only be compiled with the Intel compiler.")
   endif()
 elseif("${HPX_PLATFORM_UC}" STREQUAL "BLUEGENEQ")
+  hpx_info("Compiling for BlueGene/Q: ${_compiler}")
   if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     hpx_error("HPX on the BG/Q can only be compiled with bgclang")
   endif()
-  hpx_info("Compiling for BlueGene/Q")
 endif()
 
 # ##############################################################################
@@ -1892,6 +1918,17 @@ hpx_option(
   "Enable the use of the [[no_unique_address]] attribute (default: ON)" ON
   ADVANCED
 )
+
+hpx_option(
+  HPX_WITH_CXX20_STD_EXECUTION_POLICES
+  BOOL
+  "Support using std execution policies for HPX parallel algorithms (default: ON)."
+  ON
+  ADVANCED
+)
+if(HPX_WITH_CXX20_STD_EXECUTION_POLICES)
+  hpx_add_config_define(HPX_HAVE_CXX20_STD_EXECUTION_POLICES)
+endif()
 
 # Need to include the CUDA setup before the config test to enable the CUDA
 # language
@@ -2053,6 +2090,13 @@ if(WIN32)
 
       # Make sure that __cplusplus is properly defined
       hpx_add_target_compile_option(-Zc:__cplusplus PUBLIC)
+
+      # stdexec requires the conforming MSVC preprocessor.
+      if(NOT (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang"
+              AND "x${CMAKE_CXX_SIMULATE_ID}" STREQUAL "xMSVC")
+      )
+        hpx_add_target_compile_option(-Zc:preprocessor PUBLIC)
+      endif()
 
       # Silence C++17 deprecation warnings
       hpx_add_config_cond_define(_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)

@@ -17,7 +17,7 @@
 
 namespace hpx::parallel::execution::detail {
 
-    void service_executor::post(
+    void service_executor::post_to_pool(
         hpx::util::io_service_pool* pool, hpx::function<void()>&& f)
     {
 #if ASIO_VERSION >= 103400

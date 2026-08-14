@@ -27,6 +27,11 @@
 #include <type_traits>
 #include <utility>
 
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 namespace ex = hpx::execution::experimental;
 
 int main()
@@ -36,28 +41,20 @@ int main()
         std::atomic<bool> set_value_called{false};
         std::atomic<bool> scheduler_schedule_called{false};
         std::atomic<bool> scheduler_execute_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
 
         auto sched = example_scheduler{scheduler_schedule_called,
-            scheduler_execute_called, tag_invoke_overload_called};
+            scheduler_execute_called, overload_called};
         auto s = ex::transfer_when_all(sched, ex::just(42));
         static_assert(ex::is_sender_v<decltype(s)>,
             "transfer_when_all must return a sender");
 
-#if defined(HPX_HAVE_STDEXEC)
-        auto csch =
-            ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(s));
-#else
-        auto csch = ex::get_completion_scheduler<ex::set_value_t>(s);
-#endif
-        HPX_TEST(sched == csch);
-
         auto f = [](int x) { HPX_TEST_EQ(x, 42); };
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
         auto os = ex::connect(std::move(s), std::move(r));
-        tag_invoke(ex::start, os);
+        ex::start(os);
         HPX_TEST(set_value_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
         HPX_TEST(scheduler_schedule_called);
         HPX_TEST(!scheduler_execute_called);
     }
@@ -66,22 +63,14 @@ int main()
         std::atomic<bool> set_value_called{false};
         std::atomic<bool> scheduler_schedule_called{false};
         std::atomic<bool> scheduler_execute_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
 
         auto sched = example_scheduler{scheduler_schedule_called,
-            scheduler_execute_called, tag_invoke_overload_called};
+            scheduler_execute_called, overload_called};
         auto s = ex::transfer_when_all(sched, ex::just(42),
             ex::just(std::string("hello")), ex::just(3.14));
         static_assert(ex::is_sender_v<decltype(s)>,
             "transfer_when_all must return a sender");
-
-#if defined(HPX_HAVE_STDEXEC)
-        auto csch =
-            ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(s));
-#else
-        auto csch = ex::get_completion_scheduler<ex::set_value_t>(s);
-#endif
-        HPX_TEST(sched == csch);
 
         auto f = [](int x, std::string y, double z) {
             HPX_TEST_EQ(x, 42);
@@ -92,7 +81,7 @@ int main()
         auto os = ex::connect(std::move(s), std::move(r));
         ex::start(os);
         HPX_TEST(set_value_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
         HPX_TEST(scheduler_schedule_called);
         HPX_TEST(!scheduler_execute_called);
     }
@@ -101,22 +90,14 @@ int main()
         std::atomic<bool> set_value_called{false};
         std::atomic<bool> scheduler_schedule_called{false};
         std::atomic<bool> scheduler_execute_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
 
         auto sched = example_scheduler{scheduler_schedule_called,
-            scheduler_execute_called, tag_invoke_overload_called};
+            scheduler_execute_called, overload_called};
         auto s = ex::transfer_when_all(
             sched, ex::just(), ex::just(std::string("hello")), ex::just(3.14));
         static_assert(ex::is_sender_v<decltype(s)>,
             "transfer_when_all must return a sender");
-
-#if defined(HPX_HAVE_STDEXEC)
-        auto csch =
-            ex::get_completion_scheduler<ex::set_value_t>(ex::get_env(s));
-#else
-        auto csch = ex::get_completion_scheduler<ex::set_value_t>(s);
-#endif
-        HPX_TEST(sched == csch);
 
         auto f = [](std::string y, double z) {
             HPX_TEST_EQ(y, std::string("hello"));
@@ -126,7 +107,7 @@ int main()
         auto os = ex::connect(std::move(s), std::move(r));
         ex::start(os);
         HPX_TEST(set_value_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
         HPX_TEST(scheduler_schedule_called);
         HPX_TEST(!scheduler_execute_called);
     }
@@ -136,10 +117,10 @@ int main()
         std::atomic<bool> set_error_called{false};
         std::atomic<bool> scheduler_schedule_called{false};
         std::atomic<bool> scheduler_execute_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
+        std::atomic<bool> overload_called{false};
 
         auto sched = example_scheduler{scheduler_schedule_called,
-            scheduler_execute_called, tag_invoke_overload_called};
+            scheduler_execute_called, overload_called};
         auto s = ex::transfer_when_all(sched, error_typed_sender<double>{});
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -147,17 +128,17 @@ int main()
         ex::start(os);
 
         HPX_TEST(set_error_called);
-        HPX_TEST(!tag_invoke_overload_called);
-#if defined(HPX_HAVE_STDEXEC)
+        HPX_TEST(!overload_called);
         HPX_TEST(scheduler_schedule_called);
-#else
-        HPX_TEST(!scheduler_schedule_called);
-#endif
         HPX_TEST(!scheduler_execute_called);
     }
 
     return hpx::util::report_errors();
 }
+
+#if defined(HPX_CLANG_VERSION)
+#pragma clang diagnostic pop
+#endif
 #else
 int main()
 {

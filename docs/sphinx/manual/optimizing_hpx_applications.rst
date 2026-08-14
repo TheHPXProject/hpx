@@ -297,6 +297,128 @@ While the options ``--hpx:list-counters`` and ``--hpx:list-counter-infos`` give
 a short list of all available counters, the full documentation for those can
 be found in the section :ref:`counters`.
 
+.. _hpx_top:
+
+HPX-Top
+-------
+
+**HPX-Top** is a real-time, terminal-based dashboard designed for monitoring the
+health and performance of distributed |hpx| applications. Inspired by tools like
+``htop`` and ``btop``, it provides a high-level overview of system utilization,
+network flow, and internal runtime metrics.
+
+.. figure:: ../_static/images/hpx_top.png
+   :alt: HPX-Top Dashboard Screenshot
+   :align: center
+   :width: 100%
+
+   HPX-Top Real-time Performance Dashboard
+
+Features
+~~~~~~~~
+
+* **Locality-Aware Monitoring**: Automatically detects and displays metrics for
+  all localities in a running distributed application.
+* **Thread Pool Utilization**: Visualizes real-time usage of worker threads with
+  instantaneous counts and historical sparkline graphs.
+* **Parcel Throughput**: Tracks incoming and outgoing parcels, helping to identify
+  network-bound bottlenecks or communication hotspots.
+* **AGAS Health Monitor**: Displays cache hit and miss rates for the Application
+  Global Address Space (AGAS), crucial for diagnosing naming service bottlenecks.
+
+Usage
+~~~~~
+
+HPX-Top is implemented as a Python script that acts as a wrapper around your |hpx|
+application. It automatically configures the necessary performance counters and
+output formats.
+
+The tool requires the ``rich`` Python library for rendering the terminal UI:
+
+.. code-block:: shell-session
+
+   $ pip install rich
+
+To monitor an |hpx| application, launch it through ``hpx-top.py``:
+
+.. code-block:: shell-session
+
+   $ python3 tools/hpx-top.py ./your_application --hpx:threads=4 [other HPX flags]
+
+You can also run HPX-Top in mock mode to explore the interface without a running
+|hpx| application:
+
+.. code-block:: shell-session
+
+   $ python3 tools/hpx-top.py --mock
+
+Technical Details
+~~~~~~~~~~~~~~~~~
+
+The tool leverages |hpx|'s built-in performance counter framework. It launches the
+target application with specific flags (``--hpx:print-counter-interval`` and
+``--hpx:print-counter-format=csv-short``) and parses the standard output in a
+non-blocking background thread to update the TUI.
+
+.. _hpx_stat_viewer:
+
+HPX Smart Telemetry (hpx_stat_viewer)
+-------------------------------------
+
+**HPX Smart Telemetry** (``hpx_stat_viewer.py``) is an intelligent, lightweight
+performance dashboard designed to identify performance anomalies in real-time.
+While ``hpx-top`` provides a broad system overview, ``hpx_stat_viewer`` focuses on
+deep-dive analysis of specific metrics with built-in heuristic alerting.
+
+.. figure:: ../_static/images/hpx_stat_viewer.png
+   :alt: HPX Smart Telemetry Dashboard Screenshot
+   :align: center
+   :width: 100%
+
+   HPX Smart Telemetry Dashboard with Anomaly Detection
+
+Features
+~~~~~~~~
+
+* **Heuristic Anomaly Detection**: Uses an Exponential Moving Average (EMA) to
+  monitor counter trends. It automatically flags sudden spikes (+150%) or drops
+  (-60%) with prominent visual alerts like ``[⚡ SPIKE]`` and ``[⚠️ DROP]``.
+* **Live History Sparklines**: Displays 10-tick historical trend graphs next to
+  every metric, helping developers distinguish between momentary noise and
+  persistent bottlenecks.
+* **Smart Filtering and Grouping**: Supports regex-based counter filtering and
+  automatically groups metrics by locality for large-scale distributed runs.
+* **Zero-Dependency Core**: Requires no external TUI libraries, making it highly
+  portable for various terminal environments.
+
+Usage
+~~~~~
+
+``hpx_stat_viewer.py`` reads HPX counter data from standard input in ``csv-short``
+transient format. This allows it to be used for both live monitoring and
+post-mortem analysis of log files.
+
+To monitor a live application with smart filtering:
+
+.. code-block:: shell-session
+
+   $ ./your_hpx_app --hpx:print-counter-interval=500 --hpx:print-counter-format=csv-short ... | \
+     python3 tools/hpx_stat_viewer.py --filter "threads|utilization"
+
+To replay an offline performance log for analysis:
+
+.. code-block:: shell-session
+
+   $ python3 tools/hpx_stat_viewer.py --replay your_hpx_counters.csv --speed 0.5
+
+Technical Details
+~~~~~~~~~~~~~~~~~
+
+The dashboard implements a thread-safe parser that handles HPX's CSV-short format.
+The anomaly detection engine uses a smoothing factor of 0.4 for its EMA calculations,
+balancing responsiveness with stability. It is officially integrated into the HPX installation
+rules under the ``tools`` component.
+
 A simple example
 ----------------
 
@@ -1377,7 +1499,8 @@ system and application performance.
        where:
 
        ``<cache_statistics>`` is one of the following: ``cache/insertions``,
-       ``cache/evictions``, ``cache/hits``, ``cache/misses``
+       ``cache/evictions``, ``cache/hits``, ``cache/misses``,
+       ``cache/reclaims``
 
        ``<connection_type>`` is one of the following: ``tcp``, ``mpi``
    * * Counter instance formatting
@@ -1392,6 +1515,81 @@ system and application performance.
        type on the given :term:`locality` (see ``<cache_statistics``, e.g.
        ``ache/insertions``, ``cache/evictions``, ``cache/hits``,
        ``cache/misses`` or``cache/reclaims``.
+
+       The performance counters for the connection type ``mpi`` are available
+       only if the compile time constant ``HPX_HAVE_PARCELPORT_MPI`` was defined
+       while compiling the |hpx| core library (which is not defined by default).
+       The corresponding cmake configuration constant is
+       ``HPX_WITH_PARCELPORT_MPI``.
+
+       Please see :ref:`cmake_variables` for more details.
+
+.. list-table:: :term:`Parcel` layer performance counter ``/parcelport/count/<connection_type>/cache-reservation-failures``
+   :widths: 20 80
+
+   * * Counter type
+     * ``/parcelport/count/<connection_type>/cache-reservation-failures``
+
+       where ``<connection_type>`` is one of the following: ``tcp``, ``mpi``
+   * * Counter instance formatting
+     * ``locality#*/total``
+
+       where ``*`` is the :term:`locality` id of the :term:`locality` the counter
+       should be queried for. The :term:`locality` id is a (zero based) number
+       identifying the :term:`locality`.
+   * * Description
+     * Returns the cumulative number of times ``get_or_reserve()`` returned
+       ``false`` because every connection slot in the connection cache was
+       already checked out (pool saturation). This is distinct from ordinary
+       cache misses, which occur whenever a new connection to a :term:`locality`
+       is first created and do not cause parcel deferral. A non-zero and
+       growing value of this counter means that outgoing parcels are being
+       silently queued until a connection is reclaimed; raising
+       ``hpx.max_connections`` or ``hpx.max_connections_per_locality`` in the
+       ini configuration will relieve the saturation.
+
+       When pool exhaustion is detected, |hpx| also emits a warning-level log
+       message (throttled to at most once every five seconds) of the form:
+       ``parcelport connection cache exhausted: N/M connections in use, K
+       deferred reservation(s) since last reset``.
+
+       The performance counters for the connection type ``mpi`` are available
+       only if the compile time constant ``HPX_HAVE_PARCELPORT_MPI`` was defined
+       while compiling the |hpx| core library (which is not defined by default).
+       The corresponding cmake configuration constant is
+       ``HPX_WITH_PARCELPORT_MPI``.
+
+       Please see :ref:`cmake_variables` for more details.
+
+.. list-table:: :term:`Parcel` layer performance counters ``/parcelport/count/<connection_type>/cache-connections`` and ``/parcelport/count/<connection_type>/cache-max-connections``
+   :widths: 20 80
+
+   * * Counter type
+     * ``/parcelport/count/<connection_type>/cache-connections``
+
+       ``/parcelport/count/<connection_type>/cache-max-connections``
+
+       where ``<connection_type>`` is one of the following: ``tcp``, ``mpi``
+   * * Counter instance formatting
+     * ``locality#*/total``
+
+       where ``*`` is the :term:`locality` id of the :term:`locality` the counter
+       should be queried for. The :term:`locality` id is a (zero based) number
+       identifying the :term:`locality`.
+   * * Description
+     * ``cache-connections`` returns the current number of connections tracked
+       by the connection cache for the given connection type on the given
+       :term:`locality`. This includes both connections that are currently
+       checked out and connections that are idle and available for reuse.
+
+       ``cache-max-connections`` returns the configured upper limit on the
+       total number of connections the cache is allowed to hold. This value is
+       fixed at startup and corresponds to the ``hpx.max_connections`` ini key.
+
+       Together these two counters give the pool utilisation ratio. If
+       ``cache-connections`` is consistently equal to ``cache-max-connections``
+       and ``cache-reservation-failures`` is increasing, the connection pool is
+       saturated and the limit should be raised.
 
        The performance counters for the connection type ``mpi`` are available
        only if the compile time constant ``HPX_HAVE_PARCELPORT_MPI`` was defined

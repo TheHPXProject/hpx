@@ -78,7 +78,7 @@ namespace hpx {
     ///          3. When the condition variable is notified, a timeout expires, or
     ///             a spurious wakeup occurs, the thread is awakened, and the
     ///             mutex is atomically reacquired. The thread should then check
-    ///             the condition and resume waiting if the wake up was spurious.
+    ///             the condition and resume waiting if the wake-up was spurious.
     ///          or
     ///          1. use the predicated overload of \a wait, \a wait_for, and
     ///          \a wait_until, which takes care of the three steps above.
@@ -343,6 +343,47 @@ namespace hpx {
                 cv_status::no_timeout;
         }
 
+    protected:
+        template <typename Mutex, typename Predicate>
+        cv_status wait_until_pred(std::unique_lock<Mutex>& lock,
+            hpx::chrono::steady_time_point const& abs_time, Predicate wait_cond,
+            error_code& ec = throws)
+        {
+            HPX_ASSERT_OWNS_LOCK(lock);
+
+            auto const data = data_;    // keep data alive
+
+            [[maybe_unused]] util::ignore_all_while_checking const ignore_lock;
+
+            std::unique_lock<mutex_type> l(data->mtx_);
+            unlock_guard<std::unique_lock<Mutex>> unlock(lock);
+
+            // The following ensures that the inner lock will be unlocked
+            // before the outer to avoid deadlock (fixes issue #3608)
+            std::lock_guard<std::unique_lock<mutex_type>> unlock_next(
+                l, std::adopt_lock);
+
+            threads::thread_restart_state const reason = data->cond_.wait_until(
+                l, abs_time,
+                [&, pred = HPX_MOVE(wait_cond)]() {
+                    // re-acquire the outer lock to make sure that the
+                    // user-supplied predicate is protected
+                    relock_guard<std::unique_lock<Mutex>> relock(unlock);
+                    return pred();
+                },
+                "condition_variable::wait_until_pred", ec);
+
+            if (ec)
+                return cv_status::error;
+
+            // if the timer has hit, the waiting period timed out
+            return (reason ==
+                       threads::thread_restart_state::timeout) ?    //-V110
+                cv_status::timeout :
+                cv_status::no_timeout;
+        }
+
+    public:
         ///
         /// \brief \a wait_until causes the current thread to block until the
         /// condition variable is notified, a specific time is reached, or a
@@ -398,8 +439,11 @@ namespace hpx {
 
             while (!pred())
             {
-                if (wait_until(lock, abs_time, ec) == cv_status::timeout)
+                if (wait_until_pred(lock, abs_time, pred, ec) ==
+                    cv_status::timeout)
+                {
                     return pred();
+                }
             }
             return true;
         }
@@ -688,7 +732,7 @@ namespace hpx {
         ///             \namedrequirement{BasicLockable} requirements, which
         ///             must be locked by the current thread
         /// \param ec   Used to hold error code value originated during the
-        ///             operation. Defaults to \a throws -- A special'throw on
+        ///             operation. Defaults to \a throws -- A special 'throw on
         ///             error' \a error_code.
         ///
         /// \returns \a wait returns \a void.
@@ -1179,7 +1223,15 @@ namespace hpx {
                         l, std::adopt_lock);
 
                     threads::thread_restart_state const reason =
-                        data->cond_.wait_until(l, abs_time, ec);
+                        data->cond_.wait_until(
+                            l, abs_time,
+                            [&]() {
+                                // re-acquire the outer lock to make sure that
+                                // the user-supplied predicate is protected
+                                relock_guard<Lock> relock(unlock);
+                                return pred();
+                            },
+                            "condition_variable::wait_until_stoken", ec);
 
                     if (ec)
                         return false;

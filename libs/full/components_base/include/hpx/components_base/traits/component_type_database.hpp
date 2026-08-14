@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,25 +12,21 @@
 
 namespace hpx::components {
 
-    using component_type = std::int32_t;
+    HPX_CXX_EXPORT using component_type = std::int32_t;
 }    // namespace hpx::components
 
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Component, typename Enable = void>
+    HPX_CXX_EXPORT template <typename Component, typename Enable = void>
     struct component_type_database
     {
-        static components::component_type value;
+        // components::component_invalid is defined as -1
+        inline static components::component_type value = -1;
 
         HPX_ALWAYS_EXPORT static components::component_type get() noexcept;
         HPX_ALWAYS_EXPORT static void set(components::component_type);
     };
-
-    // components::component_invalid;
-    template <typename Component, typename Enable>
-    components::component_type
-        component_type_database<Component, Enable>::value = -1;
 
     template <typename Component, typename Enable>
     struct component_type_database<Component const, Enable>

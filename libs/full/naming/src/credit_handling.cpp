@@ -7,10 +7,9 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/detail/agas_interface_functions.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/checkpoint_base.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/futures.hpp>
@@ -21,6 +20,7 @@
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/thread_support.hpp>
+
 #include <hpx/naming/credit_handling.hpp>
 #include <hpx/naming/detail/preprocess_gid_types.hpp>
 #include <hpx/naming/split_gid.hpp>
@@ -267,9 +267,10 @@ namespace hpx::naming {
                 // An early decref can't happen as the id_type with the new
                 // credit is guaranteed to arrive only after we incremented the
                 // credit successfully in agas.
-                HPX_ASSERT(get_log2credit_from_gid(gid) > 0);
+                HPX_ASSERT(has_credits(gid));
                 std::int16_t const src_log2credits =
                     get_log2credit_from_gid(gid);
+                HPX_ASSERT(src_log2credits > 0);
 
                 // Credit exhaustion - we need to get more.
                 if (src_log2credits == 1)
@@ -366,6 +367,7 @@ namespace hpx::naming {
         {
             HPX_ASSERT_OWNS_LOCK(l);
 
+            HPX_ASSERT(has_credits(id));
             std::int16_t const log2credits = get_log2credit_from_gid(id);
             HPX_ASSERT(log2credits > 0);
 

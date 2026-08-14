@@ -1,5 +1,5 @@
 //  Copyright (c) 2006, Giovanni P. Deretta
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  This code may be used under either of the following two licences:
 //
@@ -66,7 +66,6 @@ namespace hpx::threads::coroutines::detail {
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)
             finish_switch_fiber(nullptr, m_caller);
 #endif
-            std::exception_ptr tinfo;
             {
                 coroutine_self* old_self = coroutine_self::get_self();
                 coroutine_stackful_self self(this, old_self);
@@ -85,7 +84,7 @@ namespace hpx::threads::coroutines::detail {
                 catch (...)
                 {
                     status = context_exit_status::exited_abnormally;
-                    tinfo = std::current_exception();
+                    this->m_type_info = std::current_exception();
                 }
 
                 // Reset early as the destructors may still yield.
@@ -96,7 +95,7 @@ namespace hpx::threads::coroutines::detail {
                 this->bind_result(result_last);
             }
 
-            this->do_return(status, HPX_MOVE(tinfo));
+            this->do_return(status);
         } while (this->m_state == context_state::running);
 
         // should not get here, never
@@ -106,7 +105,7 @@ namespace hpx::threads::coroutines::detail {
     // execute the coroutine function directly in the context of the calling
     // thread
     coroutine_impl::result_type coroutine_impl::invoke_directly(
-        coroutine_impl::arg_type arg)
+        coroutine_impl::arg_type const arg)
     {
         using context_state = super_type::context_state;
         using context_exit_status = super_type::context_exit_status;

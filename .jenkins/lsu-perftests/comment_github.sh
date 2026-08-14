@@ -22,7 +22,7 @@ report=$(cat index.html | \
 curl \
   -X POST \
   -H "Authorization: token ${GITHUB_TOKEN}" \
-  https://api.github.com/repos/STEllAR-GROUP/hpx/issues/${ghprbPullId}/comments \
+  "https://api.github.com/repos/TheHPXProject/hpx/issues/${ghprbPullId}/comments" \
   -d "{\"body\": \"<details><summary>Performance test report</summary>${report}<\/details>\"}"
 
 popd

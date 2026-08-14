@@ -172,7 +172,7 @@ namespace hpx::util {
                     ~util::commandline_error_mode::report_missing_config_file;
                 std::vector<std::string> options =
                     hpx::local::detail::read_config_file_options(
-                        filename.string(), mode);
+                        hpx::filesystem::to_string(filename), mode);
 
                 if (handle_config_file_options(
                         options, desc_cfgfile, vm, ini, node, mode))

@@ -27,6 +27,21 @@ constexpr int ITERATIONS = 100;
 constexpr int ITERATIONS = 1000;
 #endif
 
+struct move_only_plus
+{
+    move_only_plus() = default;
+    move_only_plus(move_only_plus const&) = delete;
+    move_only_plus(move_only_plus&&) = default;
+    move_only_plus& operator=(move_only_plus const&) = delete;
+    move_only_plus& operator=(move_only_plus&&) = default;
+
+    std::uint32_t operator()(
+        std::uint32_t lhs, std::uint32_t rhs) const noexcept
+    {
+        return lhs + rhs;
+    }
+};
+
 void test_one_shot_use()
 {
     std::uint32_t const this_locality = hpx::get_locality_id();
@@ -164,9 +179,10 @@ void test_local_use(std::uint32_t num_sites)
                 auto value = site + i;
                 if (site == 0)
                 {
-                    hpx::future<std::uint32_t> overall_result = reduce_here(
-                        reduce_direct_client, std::move(value), std::plus<>{},
-                        generation_arg(i + 1), this_site_arg(site));
+                    hpx::future<std::uint32_t> overall_result =
+                        reduce_here(reduce_direct_client, std::move(value),
+                            move_only_plus{}, generation_arg(i + 1),
+                            this_site_arg(site));
 
                     std::uint32_t sum = 0;
                     for (std::uint32_t j = 0; j != num_sites; ++j)
@@ -187,7 +203,7 @@ void test_local_use(std::uint32_t num_sites)
             auto const elapsed = t.elapsed();
             if (site == 0)
             {
-                std::cout << "local timing: " << elapsed / (10 * ITERATIONS)
+                std::cout << "local timing: " << elapsed / ITERATIONS
                           << "[s]\n";
             }
         }));

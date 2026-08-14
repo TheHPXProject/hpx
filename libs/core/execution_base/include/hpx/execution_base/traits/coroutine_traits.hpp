@@ -23,8 +23,7 @@ namespace hpx::execution::experimental {
         HPX_CXX_CORE_EXPORT template <typename, template <typename...> typename>
         inline constexpr bool is_instance_of_ = false;
 
-        HPX_CXX_CORE_EXPORT template <typename... As,
-            template <typename...> typename T>
+        template <typename... As, template <typename...> typename T>
         inline constexpr bool is_instance_of_<T<As...>, T> = true;
 
         HPX_CXX_CORE_EXPORT template <typename T,
@@ -36,29 +35,27 @@ namespace hpx::execution::experimental {
             meta::value<meta::one_of<T, void, bool>> ||
             is_instance_of<T, hpx::coroutine_handle>;
 
-#if defined(HPX_HAVE_STDEXEC)
         // In P2300R7+ await ready also needs to be contextually convertible to bool.
         HPX_CXX_CORE_EXPORT template <typename, typename = void>
         inline constexpr bool has_await_ready_contextually_convertible_to_bool =
             false;
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         inline constexpr bool has_await_ready_contextually_convertible_to_bool<
             T, std::void_t<decltype(std::declval<T>().await_ready() ? 0 : 1)>> =
             true;
-#endif
 
         HPX_CXX_CORE_EXPORT template <typename, typename = void>
         inline constexpr bool has_await_ready = false;
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         inline constexpr bool has_await_ready<T,
             std::void_t<decltype(std::declval<T>().await_ready())>> = true;
 
         HPX_CXX_CORE_EXPORT template <typename, typename = void>
         inline constexpr bool has_await_resume = false;
 
-        HPX_CXX_CORE_EXPORT template <typename T>
+        template <typename T>
         inline constexpr bool has_await_resume<T,
             std::void_t<decltype(std::declval<T>().await_resume())>> = true;
 
@@ -79,22 +76,21 @@ namespace hpx::execution::experimental {
             typename = void>
         inline constexpr bool is_with_await_suspend_v = false;
 
-        HPX_CXX_CORE_EXPORT template <typename Awaiter, typename Promise>
+        template <typename Awaiter, typename Promise>
         inline constexpr bool is_with_await_suspend_v<Awaiter, Promise,
             std::enable_if_t<has_await_suspend_v<Awaiter> &&
                 (!std::is_same_v<Promise, void>)>> =
             is_await_suspend_result_v<Awaiter, Promise>;
 
-        HPX_CXX_CORE_EXPORT template <typename Awaiter, typename Promise>
+        template <typename Awaiter, typename Promise>
         inline constexpr bool is_with_await_suspend_v<Awaiter, Promise,
             std::enable_if_t<std::is_same_v<Promise, void>>> = true;
-#if defined(HPX_HAVE_STDEXEC)
+
         // In P2300R8 "T is bool" is a sufficient condition for T to be an
         // await suspend result type.
-        HPX_CXX_CORE_EXPORT template <typename Awaiter, typename Promise>
+        template <typename Awaiter, typename Promise>
         inline constexpr bool is_with_await_suspend_v<Awaiter, Promise,
             std::enable_if_t<std::is_same_v<Promise, bool>>> = true;
-#endif
 
     }    // namespace detail
 
@@ -115,11 +111,7 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT template <typename Awaiter, typename Promise = void>
     struct is_awaiter
       : std::integral_constant<bool,
-#if defined(HPX_HAVE_STDEXEC)
             detail::has_await_ready_contextually_convertible_to_bool<Awaiter> &&
-#else
-            detail::has_await_ready<Awaiter> &&
-#endif
                 detail::has_await_resume<Awaiter> &&
                 detail::is_with_await_suspend_v<Awaiter, Promise>>
     {
@@ -135,7 +127,7 @@ namespace hpx::execution::experimental {
 
         // different versions of clang-format disagree
         // clang-format off
-        HPX_CXX_CORE_EXPORT template <typename Awaitable>
+         template <typename Awaitable>
         inline constexpr bool has_member_operator_co_await_v<Awaitable,
             std::void_t<
                 decltype(std::declval<Awaitable>().operator co_await())>> =
@@ -145,7 +137,7 @@ namespace hpx::execution::experimental {
         HPX_CXX_CORE_EXPORT template <typename Awaitable, typename = void>
         inline constexpr bool has_free_operator_co_await_v = false;
 
-        HPX_CXX_CORE_EXPORT template <typename Awaitable>
+        template <typename Awaitable>
         inline constexpr bool has_free_operator_co_await_v<Awaitable,
             std::void_t<decltype(operator co_await(
                 std::declval<Awaitable>()))>> = true;

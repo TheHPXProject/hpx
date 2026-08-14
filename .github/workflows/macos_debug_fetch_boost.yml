@@ -8,12 +8,16 @@ name: macOS CI (Debug) with Boost Fetch
 
 on: [pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install dependencies
       run: |
           brew install --overwrite python-tk && \
@@ -33,12 +37,13 @@ jobs:
               -DHPX_WITH_TESTS=ON \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
-              -DHPX_WITH_TESTS_EXTERNAL_BUILD=Off
+              -DHPX_WITH_TESTS_EXTERNAL_BUILD=Off \
+              -DHPX_WITH_CONTRACTS_MODE=IGNORE
     - name: Build
       shell: bash
       run: |
           cmake --build build --target all
-          cmake --build build --target tests
+          cmake --build build --target tests -- -k 0
     - name: Test
       shell: bash
       run: |

@@ -9,10 +9,10 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/components/get_ptr.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/preprocessor.hpp>
-#include <hpx/runtime_components/component_factory.hpp>
+#include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/components/containers/partitioned_vector/partitioned_vector_decl.hpp>
 
@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 

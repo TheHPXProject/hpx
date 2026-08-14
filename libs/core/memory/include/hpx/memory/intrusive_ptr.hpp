@@ -351,7 +351,7 @@ namespace hpx {
 }    // namespace hpx
 
 // support hashing
-HPX_CXX_CORE_EXPORT template <typename T>
+template <typename T>
 struct std::hash<::hpx::intrusive_ptr<T>>
 {
     using result_type = std::size_t;

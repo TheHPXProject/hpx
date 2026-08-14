@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,9 +9,10 @@
 #if defined(HPX_HAVE_PARCELPORT_COUNTERS) &&                                   \
     defined(HPX_HAVE_PARCELPORT_ACTION_COUNTERS) &&                            \
     defined(HPX_HAVE_NETWORKING)
-#include <hpx/actions_base/detail/invocation_count_registry.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/util.hpp>
+
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/per_action_data_counter_discoverer.hpp>
@@ -21,7 +22,7 @@
 #include <string>
 #include <utility>
 
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
 
     bool per_action_counter_counter_discoverer(
         hpx::actions::detail::per_action_data_counter_registry const& registry,
@@ -149,6 +150,6 @@ namespace hpx { namespace performance_counters {
 
         return true;
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters
 
 #endif

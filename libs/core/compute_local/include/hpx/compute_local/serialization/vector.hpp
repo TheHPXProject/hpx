@@ -1,5 +1,5 @@
 //  Copyright (c) 2014 Thomas Heller
-//  Copyright (c) 2016-2024 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -26,9 +26,8 @@ namespace hpx::serialization {
             std::false_type)
         {
             // normal load ...
-            using value_type =
-                typename compute::vector<T, Allocator>::value_type;
-            using size_type = typename compute::vector<T, Allocator>::size_type;
+            using value_type = compute::vector<T, Allocator>::value_type;
+            using size_type = compute::vector<T, Allocator>::size_type;
 
             size_type size;
             value_type v;
@@ -60,9 +59,8 @@ namespace hpx::serialization {
                 !(ar.disable_array_optimization() || ar.endianess_differs()));
 #endif
             // bitwise load ...
-            using value_type =
-                typename compute::vector<T, Allocator>::value_type;
-            using size_type = typename compute::vector<T, Allocator>::size_type;
+            using value_type = compute::vector<T, Allocator>::value_type;
+            using size_type = compute::vector<T, Allocator>::size_type;
 
             size_type size;
             ar >> size;    //-V128
@@ -72,7 +70,8 @@ namespace hpx::serialization {
             }
 
             v.resize(size);
-            load_binary(ar, v.device_data(), v.size() * sizeof(value_type));
+            load_binary(ar, detail::array_of_fundamental_type_v<T>,
+                v.device_data(), v.size() * sizeof(value_type));
         }
     }    // namespace detail
 
@@ -121,9 +120,9 @@ namespace hpx::serialization {
                 !(ar.disable_array_optimization() || ar.endianess_differs()));
 #endif
             // bitwise save ...
-            using value_type =
-                typename compute::vector<T, Allocator>::value_type;
-            save_binary(ar, v.device_data(), v.size() * sizeof(value_type));
+            using value_type = compute::vector<T, Allocator>::value_type;
+            save_binary(ar, detail::array_of_fundamental_type_v<T>,
+                v.device_data(), v.size() * sizeof(value_type));
         }
     }    // namespace detail
 
@@ -131,8 +130,8 @@ namespace hpx::serialization {
     void serialize(
         output_archive& ar, compute::vector<T, Allocator> const& v, unsigned)
     {
-        using element_type = typename std::remove_const<
-            typename compute::vector<T, Allocator>::value_type>::type;
+        using element_type = std::remove_const_t<
+            typename compute::vector<T, Allocator>::value_type>;
 
         using use_optimized = std::integral_constant<bool,
             std::is_default_constructible_v<element_type> &&

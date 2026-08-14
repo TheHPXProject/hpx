@@ -12,8 +12,7 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)
 #include <hpx/assert.hpp>
-
-#include <hpx/parcelset/parcel_buffer.hpp>
+#include <hpx/modules/parcelset.hpp>
 
 #include <array>
 #include <cstddef>

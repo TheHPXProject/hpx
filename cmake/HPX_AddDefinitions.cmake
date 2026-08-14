@@ -1,10 +1,12 @@
-# Copyright (c) 2013-2024 Hartmut Kaiser
+# Copyright (c) 2013-2026 Hartmut Kaiser
 # Copyright (c) 2014 Thomas Heller
 # Copyright (c) 2016 John Biddiscombe
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+include(HPX_ConfigureIfChanged)
 
 function(hpx_add_config_define definition)
 
@@ -189,7 +191,7 @@ function(write_config_defines_file)
   # if the user has not specified a template, generate a proper header file
   if(NOT OPTION_TEMPLATE)
     set(PREAMBLE
-        "//  Copyright (c) 2019-2024 STE||AR Group\n"
+        "//  Copyright (c) 2019-@HPX_COPYRIGHT_YEAR@ STE||AR Group\n"
         "//\n"
         "//  SPDX-License-Identifier: BSL-1.0\n"
         "//  Distributed under the Boost Software License, Version 1.0. (See accompanying\n"
@@ -200,10 +202,22 @@ function(write_config_defines_file)
         "#pragma once\n"
     )
     file(WRITE ${TEMP_FILENAME} ${PREAMBLE} ${hpx_config_defines} "\n")
-    configure_file("${TEMP_FILENAME}" "${OPTION_FILENAME}" COPYONLY)
+    hpx_configure_if_changed(
+      INPUT "${TEMP_FILENAME}"
+      OUTPUT "${OPTION_FILENAME}"
+      CONFIGURE_ARGS @ONLY
+    )
   else()
-    configure_file("${OPTION_TEMPLATE}" "${TEMP_FILENAME}" @ONLY)
-    configure_file("${TEMP_FILENAME}" "${OPTION_FILENAME}" COPYONLY)
+    hpx_configure_if_changed(
+      INPUT "${OPTION_TEMPLATE}"
+      OUTPUT "${TEMP_FILENAME}"
+      CONFIGURE_ARGS @ONLY
+    )
+    hpx_configure_if_changed(
+      INPUT "${TEMP_FILENAME}"
+      OUTPUT "${OPTION_FILENAME}"
+      CONFIGURE_ARGS COPYONLY
+    )
   endif()
   file(REMOVE "${TEMP_FILENAME}")
 endfunction()

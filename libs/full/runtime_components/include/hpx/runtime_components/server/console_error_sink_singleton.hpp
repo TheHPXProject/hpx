@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -16,22 +16,25 @@
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
 
     ///////////////////////////////////////////////////////////////////////////
-    class console_error_dispatcher
+    HPX_CXX_EXPORT class console_error_dispatcher
     {
     public:
-        HPX_NON_COPYABLE(console_error_dispatcher);
+        console_error_dispatcher(console_error_dispatcher const&) = delete;
+        console_error_dispatcher(console_error_dispatcher&&) = delete;
+        console_error_dispatcher& operator=(
+            console_error_dispatcher const&) = delete;
+        console_error_dispatcher& operator=(
+            console_error_dispatcher&&) = delete;
 
     public:
-        typedef util::spinlock mutex_type;
-        typedef hpx::function<void(std::string const&)> sink_type;
+        using mutex_type = util::spinlock;
+        using sink_type = hpx::function<void(std::string const&)>;
 
-        console_error_dispatcher()
-          : mtx_()
-        {
-        }
+        console_error_dispatcher() = default;
+        ~console_error_dispatcher() = default;
 
         template <typename F>
         sink_type set_error_sink(F&& sink)
@@ -55,5 +58,5 @@ namespace hpx { namespace components { namespace server {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_EXPORT console_error_dispatcher& get_error_dispatcher();
-}}}    // namespace hpx::components::server
+    HPX_CXX_EXPORT HPX_EXPORT console_error_dispatcher& get_error_dispatcher();
+}    // namespace hpx::components::server

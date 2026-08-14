@@ -311,6 +311,61 @@ namespace hpx::threads {
         {
             thread_affinity_masks_.emplace_back(init_thread_affinity_mask(i));
         }
+
+        init_numa_node_distances();
+    }
+
+    void topology::init_numa_node_distances()
+    {
+        std::size_t num_nodes = get_number_of_numa_nodes();
+        if (num_nodes == 0)
+            num_nodes = 1;
+
+        // Initialise with ACPI SLIT defaults: local = 10, remote = 20.
+        // These are the standard baseline values used on systems that do not
+        // expose a distance matrix (single-socket VMs, MIC, etc.).
+        numa_node_distances_.assign(
+            num_nodes, std::vector<std::size_t>(num_nodes, 20u));
+        for (std::size_t i = 0; i < num_nodes; ++i)
+            numa_node_distances_[i][i] = 10u;
+
+#if HWLOC_API_VERSION >= 0x00020000
+        // hwloc 2.x: query the latency distance matrix for NUMA nodes.
+        unsigned nr = 1;
+        hwloc_distances_s* dist = nullptr;
+        {
+            std::unique_lock<mutex_type> lk(topo_mtx);
+            if (hwloc_distances_get_by_type(topo, HWLOC_OBJ_NUMANODE, &nr,
+                    &dist, HWLOC_DISTANCES_KIND_MEANS_LATENCY, 0) < 0)
+            {
+                dist = nullptr;
+            }
+        }
+        if (dist != nullptr)
+        {
+            for (unsigned i = 0; i < dist->nbobjs; ++i)
+            {
+                if (dist->objs[i] == nullptr)
+                    continue;
+                std::size_t const ni =
+                    static_cast<std::size_t>(dist->objs[i]->logical_index);
+                for (unsigned j = 0; j < dist->nbobjs; ++j)
+                {
+                    if (dist->objs[j] == nullptr)
+                        continue;
+                    std::size_t const nj =
+                        static_cast<std::size_t>(dist->objs[j]->logical_index);
+                    if (ni < num_nodes && nj < num_nodes)
+                    {
+                        numa_node_distances_[ni][nj] = static_cast<std::size_t>(
+                            dist->values[i * dist->nbobjs + j]);
+                    }
+                }
+            }
+            std::unique_lock<mutex_type> lk(topo_mtx);
+            hwloc_distances_release(topo, dist);
+        }
+#endif
     }
 
     void topology::write_to_log() const

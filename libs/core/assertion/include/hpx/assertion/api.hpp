@@ -22,6 +22,6 @@ namespace hpx::assertion {
     /// Set the assertion handler to be used within a program. If the handler has been
     /// set already once, the call to this function will be ignored.
     /// \note This function is not thread safe
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_assertion_handler(
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT assertion_handler set_assertion_handler(
         assertion_handler handler);
 }    // namespace hpx::assertion

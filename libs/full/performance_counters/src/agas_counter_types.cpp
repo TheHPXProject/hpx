@@ -1,4 +1,4 @@
-//  Copyright (c) 2011-2021 Hartmut Kaiser
+//  Copyright (c) 2011-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Parsa Amini
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -6,8 +6,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/functional.hpp>
+
 #include <hpx/performance_counters/agas_counter_types.hpp>
 #include <hpx/performance_counters/component_namespace_counters.hpp>
 #include <hpx/performance_counters/counter_creators.hpp>
@@ -18,7 +19,7 @@
 
 #include <cstdint>
 
-namespace hpx { namespace performance_counters {
+namespace hpx::performance_counters {
 
     /// Install performance counter types exposing properties from the local cache.
     void register_agas_counter_types(agas::addressing_service& client)
@@ -208,4 +209,4 @@ namespace hpx { namespace performance_counters {
         }
         agas::symbol_namespace_register_counter_types();
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

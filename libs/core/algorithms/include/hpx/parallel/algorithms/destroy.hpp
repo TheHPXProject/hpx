@@ -159,6 +159,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -209,7 +210,7 @@ namespace hpx::parallel {
             return util::foreach_partitioner<ExPolicy>::call(
                 HPX_FORWARD(ExPolicy, policy), first, count,
                 [](Iter first, std::size_t count, std::size_t) {
-                    return util::loop_n<std::decay_t<ExPolicy>>(
+                    return util::const_loop_n<std::decay_t<ExPolicy>>(
                         first, count, [](Iter it) -> void {
                             std::destroy_at(std::addressof(*it));
                         });
@@ -292,9 +293,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::destroy
     HPX_CXX_CORE_EXPORT inline constexpr struct destroy_t final
-      : hpx::detail::tag_parallel_algorithm<destroy_t>
+      : hpx::detail::tag_dispatch<destroy_t,
+            hpx::detail::tag_parallel_algorithm<destroy_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter>
         // clang-format off
             requires (
@@ -302,8 +303,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            destroy_t, ExPolicy&& policy, FwdIter first, FwdIter last)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, FwdIter last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -319,7 +320,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend void tag_fallback_invoke(destroy_t, FwdIter first, FwdIter last)
+        static void invoke_default(FwdIter first, FwdIter last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Required at least forward iterator.");
@@ -332,9 +333,9 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::destroy_n
     HPX_CXX_CORE_EXPORT inline constexpr struct destroy_n_t final
-      : hpx::detail::tag_parallel_algorithm<destroy_n_t>
+      : hpx::detail::tag_dispatch<destroy_n_t,
+            hpx::detail::tag_parallel_algorithm<destroy_n_t>>
     {
-    private:
         template <typename ExPolicy, typename FwdIter, typename Size>
         // clang-format off
             requires (
@@ -342,8 +343,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            destroy_n_t, ExPolicy&& policy, FwdIter first, Size count)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -375,8 +376,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            destroy_n_t, FwdIter first, Size count)
+        static FwdIter invoke_default(FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

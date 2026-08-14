@@ -1,5 +1,5 @@
 //  Copyright (c) 2006, Giovanni P. Deretta
-//  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  This code may be used under either of the following two licences:
 //
@@ -359,13 +359,11 @@ namespace hpx::threads::coroutines::detail {
         }
 
         // Nothrow.
-        void do_return(
-            context_exit_status status, std::exception_ptr&& info) noexcept
+        void do_return(context_exit_status status) noexcept
         {
             HPX_ASSERT(status != context_exit_status::not_exited);
             HPX_ASSERT(m_state == context_state::running);
 
-            m_type_info = HPX_MOVE(info);
             m_state = context_state::exited;
             m_exit_status = status;
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)

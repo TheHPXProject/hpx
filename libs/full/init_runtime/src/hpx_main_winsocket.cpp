@@ -1,24 +1,22 @@
-//  Copyright (c) 2016 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/hpx_main_winsocket.hpp>
 
 #if defined(HPX_WINDOWS)
+#include <hpx/init_runtime/detail/main_winsocket.hpp>
 
 #if !defined(WIN32)
 #define WIN32
 #endif
-// clang-format off
-#include <winsock2.h>
-#include <windows.h>
 #include <asio/detail/winsock_init.hpp>
 // clang-format on
 
-namespace hpx { namespace detail {
+namespace hpx::detail {
+
     // Make sure the Winsocket library is explicitly initialized before main
     // is executed.
     struct winsocket_init_helper
@@ -36,6 +34,6 @@ namespace hpx { namespace detail {
     {
         winsocket_init_helper::init();
     }
-}}    // namespace hpx::detail
+}    // namespace hpx::detail
 
 #endif

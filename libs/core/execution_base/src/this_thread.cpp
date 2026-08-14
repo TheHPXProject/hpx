@@ -1,6 +1,6 @@
 //  Copyright (c) 2013-2019 Thomas Heller
 //  Copyright (c) 2008 Peter Dimov
-//  Copyright (c) 2018-2025 Hartmut Kaiser
+//  Copyright (c) 2018-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,8 +14,11 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/timing.hpp>
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -24,10 +27,7 @@
 #include <thread>
 #include <utility>
 
-#if defined(HPX_WINDOWS)
-#include <ctime>
-#include <windows.h>
-#else
+#if !defined(HPX_WINDOWS)
 #ifndef _AIX
 #include <sched.h>
 #else
@@ -37,76 +37,16 @@ extern "C" int sched_yield(void);
 #include <time.h>
 #endif
 
+namespace {
+    // Upper bound on how long any single sleep_for/sleep_until increment blocks
+    // before re-checking wait_cond(). Keeps the fallback agent reasonably
+    // responsive without spinning.
+    constexpr std::chrono::milliseconds default_agent_poll_interval{20};
+}    // namespace
+
 namespace hpx::execution_base {
 
     namespace {
-
-#if defined(HPX_WINDOWS)
-        // Number of performance counter increments per nanosecond, or zero if
-        // it could not be determined.
-        struct ticks_per_nanosecond
-        {
-            ticks_per_nanosecond()
-            {
-                LARGE_INTEGER freq;
-                if (QueryPerformanceFrequency(&freq))
-                    ticks = static_cast<double>(freq.QuadPart) / 1e9;
-            }
-
-            double ticks = 0.0;
-        };
-        ticks_per_nanosecond ticks;
-
-        // our own (crude) implementation of nanosleep
-        int win_nanosleep(std::timespec const& delay)
-        {
-            if (delay.tv_nsec < 0 || delay.tv_nsec >= 999999999)
-            {
-                return -1;
-            }
-
-            // for small delays we busy-wait
-            if (delay.tv_sec == 0 && ticks.ticks != 0.0)
-            {
-                // compensate for fluctuations introduced by Sleep()
-                auto const sleep_for = delay.tv_nsec / 1000000 - 10;
-
-                // overall number of ticks to delay
-                auto const ticks_to_delay = static_cast<long>(
-                    static_cast<double>(delay.tv_nsec) * ticks.ticks);
-
-                LARGE_INTEGER counter;
-                if (QueryPerformanceCounter(&counter))
-                {
-                    // wait until the performance counter has reached this value
-                    auto const wait_until = counter.QuadPart + ticks_to_delay;
-
-                    // use Sleep() if appropriate
-                    if (sleep_for > 0)
-                    {
-                        Sleep(sleep_for);
-                    }
-
-                    // simply busy-wait for the remaining amount of time, don't
-                    // wait if delay is zero
-                    while (counter.QuadPart < wait_until &&
-                        QueryPerformanceCounter(&counter))
-                    {
-                    }
-                    return 0;
-                }
-            }
-
-            // Fallback and longer delays
-            Sleep(static_cast<long>(delay.tv_sec) * 1000 +
-                delay.tv_nsec / 1000000);
-
-            return 0;
-        }
-
-        constexpr std::timespec wait_0ns = {.tv_sec = 0, .tv_nsec = 0};
-        constexpr std::timespec wait_1000ns = {.tv_sec = 0, .tv_nsec = 1000};
-#endif
 
         ///////////////////////////////////////////////////////////////////////
         struct default_context final : execution_base::context_base
@@ -141,9 +81,13 @@ namespace hpx::execution_base {
             void resume(hpx::threads::thread_priority priority,
                 char const* desc) override;
             void abort(char const* desc) override;
-            void sleep_for(hpx::chrono::steady_duration const& sleep_duration,
+            threads::thread_restart_state sleep_for(
+                hpx::chrono::steady_duration const& sleep_duration,
+                hpx::move_only_function<bool()>&& wait_cond,
                 char const* desc) override;
-            void sleep_until(hpx::chrono::steady_time_point const& sleep_time,
+            threads::thread_restart_state sleep_until(
+                hpx::chrono::steady_time_point const& sleep_time,
+                hpx::move_only_function<bool()>&& wait_cond,
                 char const* desc) override;
 
         private:
@@ -167,52 +111,15 @@ namespace hpx::execution_base {
         void default_agent::yield(char const* /* desc */)
         {
 #if defined(HPX_WINDOWS)
-            win_nanosleep(wait_0ns);
+            hpx::util::win_nanosleep(hpx::util::wait_0ns);
 #else
             sched_yield();
 #endif
         }
 
-        bool default_agent::yield_k(std::size_t k, char const* /* desc */)
+        bool default_agent::yield_k(std::size_t const k, char const* /* desc */)
         {
-            if (k < 4)    //-V112
-            {
-                return false;
-            }
-            else if (k < 16)
-            {
-                HPX_SMT_PAUSE;
-                return false;
-            }
-            else if (k < 32 || k & 1)    //-V112
-            {
-#if defined(HPX_WINDOWS)
-                win_nanosleep(wait_0ns);
-                return true;
-#else
-                sched_yield();
-                return true;
-#endif
-            }
-            else
-            {
-#if defined(HPX_WINDOWS)
-                win_nanosleep(wait_1000ns);
-                return true;
-#else
-                // g++ -Wextra warns on {} or {0}
-                struct timespec rqtp = {0, 0};
-
-                // POSIX says that timespec has tv_sec and tv_nsec
-                // But it doesn't guarantee order or placement
-
-                rqtp.tv_sec = 0;
-                rqtp.tv_nsec = 1000;
-
-                nanosleep(&rqtp, nullptr);
-                return true;
-#endif
-            }
+            return hpx::util::detail::yield_k_backoff(static_cast<unsigned>(k));
         }
 
         void default_agent::suspend(char const* /* desc */)
@@ -262,18 +169,50 @@ namespace hpx::execution_base {
             suspend_cv_.notify_one();
         }
 
-        void default_agent::sleep_for(
+        threads::thread_restart_state default_agent::sleep_for(
             hpx::chrono::steady_duration const& sleep_duration,
-            char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* desc)
         {
-            std::this_thread::sleep_for(sleep_duration.value());
+            return sleep_until(
+                hpx::chrono::steady_time_point(
+                    std::chrono::steady_clock::now() + sleep_duration.value()),
+                HPX_MOVE(wait_cond), desc);
         }
 
-        void default_agent::sleep_until(
+        threads::thread_restart_state default_agent::sleep_until(
             hpx::chrono::steady_time_point const& sleep_time,
-            char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* /* desc */)
         {
-            std::this_thread::sleep_until(sleep_time.value());
+            auto const cond = HPX_MOVE(wait_cond);
+            auto const deadline = sleep_time.value();
+            while (true)
+            {
+                if (cond && cond())
+                {
+                    return threads::thread_restart_state::signaled;
+                }
+
+                auto const now = std::chrono::steady_clock::now();
+                if (now >= deadline)
+                {
+                    break;
+                }
+
+                auto const remaining = deadline - now;
+                std::this_thread::sleep_for((std::min) (remaining,
+                    std::chrono::duration_cast<
+                        std::remove_const_t<decltype(remaining)>>(
+                        default_agent_poll_interval)));
+            }
+
+            // final check right at/after the deadline, in case wait_cond became
+            // true during the last sleep increment
+            if (cond && cond())
+            {
+                return threads::thread_restart_state::signaled;
+            }
+
+            return threads::thread_restart_state::timeout;
         }
     }    // namespace
 

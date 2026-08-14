@@ -150,6 +150,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
@@ -161,6 +162,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/parallel_stable_sort.hpp>
 #include <hpx/parallel/algorithms/detail/spin_sort.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
@@ -271,7 +273,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::stable_sort
     HPX_CXX_CORE_EXPORT inline constexpr struct stable_sort_t final
-      : hpx::detail::tag_parallel_algorithm<stable_sort_t>
+      : hpx::detail::tag_dispatch<stable_sort_t,
+            hpx::detail::tag_parallel_algorithm<stable_sort_t>>
     {
         template <typename RandomIt,
             typename Comp = hpx::parallel::detail::less>
@@ -284,8 +287,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend void tag_fallback_invoke(hpx::stable_sort_t, RandomIt first,
-            RandomIt last, Comp comp = Comp())
+        static void invoke_default(RandomIt first, RandomIt last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
@@ -307,9 +310,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        friend hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        tag_fallback_invoke(hpx::stable_sort_t, ExPolicy&& policy,
-            RandomIt first, RandomIt last, Comp comp = Comp())
+        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
+        invoke_default(ExPolicy&& policy, RandomIt first, RandomIt last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");

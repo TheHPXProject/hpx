@@ -16,6 +16,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     detail::async_policy const launch::async =
         detail::async_policy{threads::thread_priority::default_};
+    detail::task_policy const launch::task =
+        detail::task_policy{threads::thread_priority::default_};
     detail::fork_policy const launch::fork =
         detail::fork_policy{threads::thread_priority::default_};
     detail::sync_policy const launch::sync = detail::sync_policy{};
@@ -48,6 +50,9 @@ namespace hpx {
             ar >> mode;
             hint_.sharing_mode(
                 static_cast<hpx::threads::thread_sharing_hint>(mode));
+            ar >> mode;
+            hint_.runs_as_child_mode(
+                static_cast<hpx::threads::thread_execution_hint>(mode));
         }
 
         void policy_holder_base::save(
@@ -57,7 +62,8 @@ namespace hpx {
             ar << priority_;
             ar << hint_.hint << hint_.mode
                << static_cast<std::uint8_t>(hint_.placement_mode())
-               << static_cast<std::uint8_t>(hint_.sharing_mode());
+               << static_cast<std::uint8_t>(hint_.sharing_mode())
+               << static_cast<std::uint8_t>(hint_.runs_as_child_mode());
         }
     }    // namespace detail
 }    // namespace hpx

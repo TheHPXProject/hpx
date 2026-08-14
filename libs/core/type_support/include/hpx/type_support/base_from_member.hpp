@@ -42,7 +42,7 @@ namespace hpx::util {
         {
         };
 
-        HPX_CXX_EXPORT template <typename T, typename U, typename... U2>
+        template <typename T, typename U, typename... U2>
         struct is_unrelated<T, U, U2...> : std::negation<is_related<T, U>>
         {
         };
@@ -64,16 +64,18 @@ namespace hpx::util {
         MemberType member;
 
         // no std::is_nothrow_constructible nor std::forward needed
+        // clang-format off
         template <typename... T>
             requires(detail::is_unrelated<base_from_member, T...>::value)
         explicit constexpr base_from_member(T&&... x) noexcept(
-            noexcept(::new(nullptr) MemberType(static_cast<T&&>(x)...)))
+            noexcept(::new (nullptr) MemberType(static_cast<T&&>(x)...)))
           : member(static_cast<T&&>(x)...)
         {
         }
+        // clang-format on
     };
 
-    HPX_CXX_EXPORT template <typename MemberType, int UniqueId>
+    template <typename MemberType, int UniqueId>
     class base_from_member<MemberType&, UniqueId>
     {
     protected:

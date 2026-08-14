@@ -11,6 +11,7 @@ include(HPX_Message)
 include(HPX_Option)
 include(HPX_PrintSummary)
 include(HPX_CXXModules)
+include(HPX_ConfigureIfChanged)
 
 function(add_hpx_module libname modulename)
   # Retrieve arguments
@@ -141,9 +142,11 @@ function(add_hpx_module libname modulename)
 
       list(GET compat_header 0 old_header)
       list(GET compat_header 1 new_header)
-      configure_file(
-        "${PROJECT_SOURCE_DIR}/cmake/templates/compatibility_header.hpp.in"
-        "${COMPAT_HEADER_ROOT}/${old_header}"
+      hpx_configure_if_changed(
+        INPUT
+          "${PROJECT_SOURCE_DIR}/cmake/templates/compatibility_header.hpp.in"
+        OUTPUT "${COMPAT_HEADER_ROOT}/${old_header}"
+        CONFIGURE_ARGS @ONLY
       )
       list(APPEND compat_headers "${COMPAT_HEADER_ROOT}/${old_header}")
       list(APPEND all_headers ${old_header})
@@ -215,9 +218,10 @@ function(add_hpx_module libname modulename)
       set(template_file "global_module_header.hpp.in")
     endif()
 
-    configure_file(
-      "${HPX_SOURCE_DIR}/cmake/templates/${template_file}" ${global_header}
-      @ONLY
+    hpx_configure_if_changed(
+      INPUT "${HPX_SOURCE_DIR}/cmake/templates/${template_file}"
+      OUTPUT "${global_header}"
+      CONFIGURE_ARGS @ONLY
     )
     set(generated_headers ${global_header})
 
@@ -289,9 +293,10 @@ function(add_hpx_module libname modulename)
     set(global_config_file
         ${CMAKE_CURRENT_BINARY_DIR}/include/hpx/config/version.hpp
     )
-    configure_file(
-      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/config_version.hpp.in"
-      "${global_config_file}" @ONLY
+    hpx_configure_if_changed(
+      INPUT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/config_version.hpp.in"
+      OUTPUT "${global_config_file}"
+      CONFIGURE_ARGS @ONLY
     )
     set(generated_headers ${generated_headers} ${global_config_file})
 
@@ -311,9 +316,10 @@ function(add_hpx_module libname modulename)
     set(cache_line_size_file
         ${CMAKE_CURRENT_BINARY_DIR}/include/hpx/config/cache_line_size.hpp
     )
-    configure_file(
-      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/cache_line_size.hpp.in"
-      "${cache_line_size_file}" @ONLY
+    hpx_configure_if_changed(
+      INPUT "${CMAKE_CURRENT_SOURCE_DIR}/cmake/templates/cache_line_size.hpp.in"
+      OUTPUT "${cache_line_size_file}"
+      CONFIGURE_ARGS @ONLY
     )
     set(generated_headers ${generated_headers} ${cache_line_size_file})
 
@@ -324,14 +330,18 @@ function(add_hpx_module libname modulename)
       set(std_header_file
           "${CMAKE_CURRENT_BINARY_DIR}/include/hpx/config/std_headers.hpp"
       )
-      file(WRITE ${std_header_file} "")
+      if(NOT EXISTS "${std_header_file}")
+        file(WRITE ${std_header_file} "")
+      endif()
       set(generated_headers ${generated_headers} ${std_header_file})
     endif()
 
     set(modules_enabled_file
         "${CMAKE_CURRENT_BINARY_DIR}/include/hpx/config/modules_enabled.hpp"
     )
-    file(WRITE ${modules_enabled_file} "")
+    if(NOT EXISTS "${modules_enabled_file}")
+      file(WRITE ${modules_enabled_file} "")
+    endif()
     set(generated_headers ${generated_headers} ${modules_enabled_file})
   endif()
 

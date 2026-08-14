@@ -7,9 +7,9 @@
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
-#include <hpx/actions_base/plain_action.hpp>
 #include <hpx/hpx_init.hpp>
 #include <hpx/include/runtime.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/resiliency.hpp>
 #include <hpx/modules/resiliency_distributed.hpp>

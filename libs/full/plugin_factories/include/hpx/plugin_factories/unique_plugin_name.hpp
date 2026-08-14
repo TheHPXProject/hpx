@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Lelbach
-//  Copyright (c) 2013-2024 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,28 +7,13 @@
 
 #pragma once
 
-#include <hpx/modules/preprocessor.hpp>
+#include <hpx/config.hpp>
 
 namespace hpx::plugins {
 
-    template <typename PluginType>
+    HPX_CXX_EXPORT template <typename PluginType>
     struct unique_plugin_name
     {
         static_assert(sizeof(PluginType) == 0, "plugin name is not defined");
     };
 }    // namespace hpx::plugins
-
-#define HPX_DEF_UNIQUE_PLUGIN_NAME(PluginType, name)                           \
-    namespace hpx::plugins {                                                   \
-        template <>                                                            \
-        struct unique_plugin_name<PluginType>                                  \
-        {                                                                      \
-            using type = char const*;                                          \
-                                                                               \
-            static constexpr type call(void) noexcept                          \
-            {                                                                  \
-                return HPX_PP_STRINGIZE(name);                                 \
-            }                                                                  \
-        };                                                                     \
-    }                                                                          \
-    /**/

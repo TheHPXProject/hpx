@@ -12,7 +12,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(async_headers
     hpx/async.hpp
-    hpx/modules/async_distributed.hpp
     hpx/async_distributed/async_callback_fwd.hpp
     hpx/async_distributed/async_callback.hpp
     hpx/async_distributed/async_continue_callback_fwd.hpp
@@ -43,6 +42,7 @@ set(async_headers
     hpx/async_distributed/detail/sync_implementations_fwd.hpp
     hpx/async_distributed/detail/sync_implementations.hpp
     hpx/async_distributed/detail/trigger.hpp
+    hpx/async_distributed/macros.hpp
     hpx/async_distributed/lcos_fwd.hpp
     hpx/async_distributed/packaged_action.hpp
     hpx/async_distributed/post.hpp
@@ -59,6 +59,8 @@ set(async_headers
     hpx/async_distributed/trigger_lco.hpp
     hpx/async_distributed/trigger_lco_fwd.hpp
 )
+
+set(async_macro_headers hpx/async_distributed/macros.hpp)
 
 # cmake-format: off
 set(async_compat_headers
@@ -112,6 +114,7 @@ set(async_sources
     base_lco_with_value_2.cpp
     base_lco_with_value_3.cpp
     continuation.cpp
+    packaged_action.cpp
     promise.cpp
     trigger_lco.cpp
 )
@@ -119,10 +122,23 @@ set(async_sources
 include(HPX_AddModule)
 add_hpx_module(
   full async_distributed
-  GLOBAL_HEADER_GEN OFF
+  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${async_sources}
   HEADERS ${async_headers}
+  MACRO_HEADERS ${async_macro_headers}
   COMPAT_HEADERS ${async_compat_headers}
+  ADD_TO_GLOBAL_HEADER
+    "hpx/async_distributed/detail/async_implementations.hpp"
+    "hpx/async_distributed/detail/async_unwrap_result_implementations.hpp"
+    "hpx/async_distributed/detail/post.hpp"
+    "hpx/async_distributed/detail/post_callback.hpp"
+    "hpx/async_distributed/detail/post_continue.hpp"
+    "hpx/async_distributed/detail/post_continue_callback.hpp"
+    "hpx/async_distributed/detail/post_implementations.hpp"
+    "hpx/async_distributed/detail/promice_base.hpp"
+    "hpx/async_distributed/detail/promice_lso.hpp"
+    "hpx/async_distributed/detail/sync_implementations.hpp"
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES
     hpx_actions

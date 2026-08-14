@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2020 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -7,14 +7,14 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/agas/addressing_service.hpp>
-#include <hpx/agas/agas_fwd.hpp>
-#include <hpx/agas_base/server/primary_namespace.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/format.hpp>
+#include <hpx/modules/agas.hpp>
+#include <hpx/modules/async_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/naming/credit_handling.hpp>
+#include <hpx/modules/naming.hpp>
+
 #include <hpx/performance_counters/agas_namespace_action_code.hpp>
 #include <hpx/performance_counters/counter_creators.hpp>
 #include <hpx/performance_counters/counters.hpp>
@@ -28,7 +28,7 @@
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace agas { namespace server {
+namespace hpx::agas::server {
 
     // register all performance counter types exposed by this component
     void primary_namespace_register_counter_types(error_code& ec)
@@ -73,7 +73,7 @@ namespace hpx { namespace agas { namespace server {
             performance_counters::install_counter_type(
                 agas::performance_counter_basename + name, type, help, creator,
                 &performance_counters::locality_counter_discoverer,
-                HPX_PERFORMANCE_COUNTER_V1,
+                performance_counters::HPX_PERFORMANCE_COUNTER_V1,
                 agas::detail::primary_namespace_services[i].uom_, ec);
             if (ec)
             {
@@ -120,7 +120,7 @@ namespace hpx { namespace agas { namespace server {
                     agas::detail::primary_namespace_services[i].name_,
                 type, help, creator,
                 &performance_counters::locality_counter_discoverer,
-                HPX_PERFORMANCE_COUNTER_V1,
+                performance_counters::HPX_PERFORMANCE_COUNTER_V1,
                 agas::detail::primary_namespace_services[i].uom_, ec);
             if (ec)
             {
@@ -321,9 +321,9 @@ namespace hpx { namespace agas { namespace server {
         }
         return naming::detail::strip_credits_from_gid(gid);
     }
-}}}    // namespace hpx::agas::server
+}    // namespace hpx::agas::server
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     // register performance counters for primary_namespace service
     void primary_namespace_register_counter_types(error_code& ec)
@@ -343,7 +343,7 @@ namespace hpx { namespace agas {
             naming::get_agas_client().get_local_primary_namespace_service(),
             name);
     }
-}}    // namespace hpx::agas
+}    // namespace hpx::agas
 
 HPX_REGISTER_ACTION_ID(hpx::agas::primary_namespace_statistics_counter_action,
     primary_namespace_statistics_counter_action,

@@ -1,14 +1,13 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/detail/agas_interface_functions.hpp>
-#include <hpx/performance_counters/detail/counter_interface_functions.hpp>
-#include <hpx/runtime_components/component_registry.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/performance_counters.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/runtime_distributed/runtime_support.hpp>
 
 #include <mutex>
@@ -19,7 +18,7 @@ HPX_REGISTER_REGISTRY_MODULE()
 
 #include <hpx/config/warnings_prefix.hpp>
 
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
 
     void runtime_support::add_pre_startup_function(startup_function_type f)
     {
@@ -56,9 +55,9 @@ namespace hpx { namespace components { namespace server {
             shutdown_functions_.push_back(HPX_MOVE(f));
         }
     }
-}}}    // namespace hpx::components::server
+}    // namespace hpx::components::server
 
-namespace hpx { namespace agas { namespace detail { namespace impl {
+namespace hpx::agas::detail::impl {
 
     /// \brief Invoke an asynchronous garbage collection step on the given target
     ///        locality.
@@ -92,9 +91,9 @@ namespace hpx { namespace agas { namespace detail { namespace impl {
             ec = make_error_code(e.get_error(), e.what());
         }
     }
-}}}}    // namespace hpx::agas::detail::impl
+}    // namespace hpx::agas::detail::impl
 
-namespace hpx { namespace agas {
+namespace hpx::agas {
 
     // initialize AGAS interface function pointers in components_base module
     struct HPX_EXPORT runtime_components_init_interface_functions
@@ -113,9 +112,9 @@ namespace hpx { namespace agas {
             runtime_components_init_;
         return runtime_components_init_;
     }
-}}    // namespace hpx::agas
+}    // namespace hpx::agas
 
-namespace hpx { namespace components {
+namespace hpx::components {
 
     // some compilers try to invoke this function, even if it's actually not
     // needed
@@ -142,4 +141,6 @@ namespace hpx { namespace components {
         static counter_interface_functions counter_init_;
         return counter_init_;
     }
-}}    // namespace hpx::components
+}    // namespace hpx::components
+
+#include <hpx/config/warnings_suffix.hpp>

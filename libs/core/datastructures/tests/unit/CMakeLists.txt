@@ -15,6 +15,7 @@ set(tests
     dynamic_bitset5
     flat_map
     flat_set
+    forward_list
     intrusive_list
     is_tuple_like
     serializable_any

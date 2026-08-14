@@ -73,19 +73,16 @@ namespace hpx::execution::experimental {
 
         // Estimate execution time for one iteration
         template <typename Executor, typename F>
-        friend auto tag_override_invoke(
-            hpx::execution::experimental::measure_iteration_t,
-            auto_chunk_size& this_, Executor&& exec, F&& f,
-            std::size_t const count)
+        auto measure_iteration(Executor&& exec, F&& f, std::size_t const count)
         {
             // by default use 1% of the iterations
-            if (this_.num_iters_for_timing_ == 0)
+            if (num_iters_for_timing_ == 0)
             {
-                this_.num_iters_for_timing_ = count / 100;
+                num_iters_for_timing_ = count / 100;
             }
 
             // perform measurements only if necessary
-            if (this_.num_iters_for_timing_ > 0)
+            if (num_iters_for_timing_ > 0)
             {
                 using hpx::chrono::high_resolution_clock;
                 std::uint64_t t = high_resolution_clock::now();
@@ -93,14 +90,12 @@ namespace hpx::execution::experimental {
                 // use executor to launch given function for measurements
                 std::size_t const test_chunk_size =
                     hpx::parallel::execution::sync_execute(
-                        HPX_FORWARD(Executor, exec), f,
-                        this_.num_iters_for_timing_);
+                        HPX_FORWARD(Executor, exec), f, num_iters_for_timing_);
 
                 if (test_chunk_size != 0)
                 {
                     t = (high_resolution_clock::now() - t) / test_chunk_size;
-                    if (t != 0 &&
-                        this_.min_time_ >= std::chrono::nanoseconds(t))
+                    if (t != 0 && min_time_ >= std::chrono::nanoseconds(t))
                     {
                         // return execution time for one iteration
                         return std::chrono::nanoseconds(t);
@@ -113,11 +108,9 @@ namespace hpx::execution::experimental {
 
         // Estimate a chunk size based on number of cores used.
         template <typename Executor>
-        friend std::size_t tag_override_invoke(
-            hpx::execution::experimental::get_chunk_size_t,
-            auto_chunk_size const& this_, Executor&&,
+        std::size_t get_chunk_size(Executor&&,
             hpx::chrono::steady_duration const& iteration_duration,
-            std::size_t const cores, std::size_t const count) noexcept
+            std::size_t const cores, std::size_t const count) const noexcept
         {
             // return chunk size which will create the required amount of work
             if (iteration_duration.value() !=
@@ -127,7 +120,7 @@ namespace hpx::execution::experimental {
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         iteration_duration.value());
                 return (std::min) (count,
-                    (std::size_t) (this_.min_time_.count() / ns.count()));
+                    (std::size_t) (min_time_.count() / ns.count()));
             }
             return (count + cores - 1) / cores;
         }

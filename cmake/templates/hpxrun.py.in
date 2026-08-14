@@ -23,7 +23,9 @@
 #   -- delimiter for additional arguments
 
 import sys, os, string, atexit
-import functools, signal
+import functools
+import signal
+import subprocess
 import traceback
 import time
 import threading
@@ -52,9 +54,26 @@ class ParamikoProc:
         if errs != '':
             print(errs)
 
-from optparse import OptionParser
+###############################################################################
+def _set_linux_pdeathsig(parent_pid):
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None)
+        PR_SET_PDEATHSIG = 1
+        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
 
-import subprocess
+        # The original parent may have died between fork() and the prctl()
+        # call above, in which case no signal would ever be delivered to us.
+        # Detect that race here and kill ourselves if it happened.
+        if os.getppid() != parent_pid:
+            os.kill(os.getpid(), signal.SIGKILL)
+
+    except Exception:
+        pass
+
+
+###############################################################################
+from optparse import OptionParser
 from subprocess import Popen
 
 # Our global list of processes we started
@@ -73,6 +92,11 @@ def subproc(cmd):
         if cmd[0] == "ssh":
             ssh_subproc(cmd)
             return
+
+    else:
+        kwargs['start_new_session'] = True
+        if sys.platform.startswith("linux"):
+            kwargs['preexec_fn'] = functools.partial(_set_linux_pdeathsig, os.getpid())
 
     # Support for running from inside a singularity container
     # on Linux systems
@@ -99,6 +123,7 @@ def subproc(cmd):
         signal.signal(signal.SIGBREAK, handler)
     else:
         signal.signal(signal.SIGTERM, handler)
+
 
 def ssh_subproc(cmd):
     global SSHClient, procs
@@ -189,18 +214,20 @@ def run_mpi(cmd, localities, verbose):
     if mpiexec == '':
         msg = 'mpiexec not available on this platform. '
         msg += 'Please rerun CMake with HPX_PARCELPORT_MPI=True.'
-        print(msg, sys.stderr)
+        print(msg, file=sys.stderr)
         sys.exit(1)
     exec_cmd = [mpiexec, '@MPIEXEC_NUMPROC_FLAG@', str(localities)] + cmd
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
 
+
 def run_gasnet(cmd, localities, verbose):
     os.environ['GASNET_PSHM_NODES'] = str(localities)
     os.environ['GASNET_QUIET'] = 'yes'
     os.environ['GASNET_ROUTE_OUTPUT'] = '0'
     run_mpi(cmd, localities, verbose)
+
 
 def run_gasnet_smp(cmd, localities, verbose):
     os.environ['GASNET_PSHM_NODES'] = str(localities)
@@ -210,6 +237,7 @@ def run_gasnet_smp(cmd, localities, verbose):
     # No launcher needed
     run_none(cmd, localities, nodes, verbose)
 
+
 # Run with srun
 # This is executing srun with the '-n' option set to the number of localities
 def run_srun(cmd, localities, verbose):
@@ -218,6 +246,7 @@ def run_srun(cmd, localities, verbose):
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
 
+
 # Run with jsrun
 # This is executing jsrun with the '-n' option set to the number of localities
 def run_jsrun(cmd, localities, verbose):
@@ -225,6 +254,7 @@ def run_jsrun(cmd, localities, verbose):
     if verbose:
         print('Executing command: ' + ' '.join(exec_cmd))
     subproc(exec_cmd)
+
 
 # Select the appropriate run function based on runwrapper
 def run(cmd, runwrapper, localities, nodes, verbose):
@@ -245,6 +275,7 @@ def run(cmd, runwrapper, localities, nodes, verbose):
     if runwrapper == 'jsrun':
         assert nodes is None, "nodes option only valid with tcp parcelport."
         run_jsrun(cmd, localities, verbose)
+
 
 # Building the command line. This function concatenates the different options
 def build_cmd(options, args):
@@ -280,36 +311,38 @@ def build_cmd(options, args):
 
     return cmd
 
+
 def check_options(parser, options, args):
     if 0 == len(args):
-        print('Error: You need to specify at least the application to start\n', sys.stderr)
+        print('Error: You need to specify at least the application to start\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
     if not os.path.exists(args[0]):
-        print('Executable ' + args[0] + ' does not exist', sys.stderr)
+        print('Executable ' + args[0] + ' does not exist', file=sys.stderr)
         sys.exit(1)
 
     if options.localities < 1:
-        print('Can not start less than one locality', sys.stderr)
+        print('Can not start less than one locality', file=sys.stderr)
         sys.exit(1)
 
     if options.threads < 1 and options.threads != -1 and options.threads != -2:
-        print('Can not start less than one thread per locality', sys.stderr)
+        print('Can not start less than one thread per locality', file=sys.stderr)
         sys.exit(1)
 
     check_valid_parcelport = (lambda x: x == 'mpi' or x == 'lci' or x == 'lcw' or x == 'gasnet' or x == 'tcp' or x == 'none');
     if not check_valid_parcelport(options.parcelport):
-        print('Error: Parcelport option not valid\n', sys.stderr)
+        print('Error: Parcelport option not valid\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
     check_valid_runwrapper = (lambda x:
             x == 'none' or x == 'mpi' or x == 'srun' or x =='jsrun' or x == 'gasnet' or x == 'gasnet-smp');
     if not check_valid_runwrapper(options.runwrapper):
-        print('Error: Runwrapper option not valid\n', sys.stderr)
+        print('Error: Runwrapper option not valid\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
+
 
 # Send a SIGTERM/SIGBRAK to proc and wait for it to terminate.
 def term(proc):
@@ -322,6 +355,7 @@ def term(proc):
         proc.terminate()
     proc.wait()
 
+
 # Stop the sub-process child if signum is SIGTERM. Then terminate.
 def cleanup(child, signum, frame):
     try:
@@ -332,6 +366,7 @@ def cleanup(child, signum, frame):
         traceback.print_exc()
     finally:
         sys.exit()
+
 
 if __name__ == '__main__':
 
@@ -445,7 +480,7 @@ Used by the tcp parcelport only.
             msg = 'Process 0 failed with an unexpected error '
             msg += 'code of ' + str(ret) + ' (expected ' + str(options.expected)
             msg += ')'
-            print(msg, sys.stderr)
+            print(msg, file=sys.stderr)
             sys.exit(1)
         sys.exit(0)
 

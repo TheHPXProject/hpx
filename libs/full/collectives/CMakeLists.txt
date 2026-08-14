@@ -12,6 +12,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Default location is $HPX_ROOT/libs/collectives/include
 set(collectives_headers
+    hpx/collectives.hpp
     hpx/collectives/all_gather.hpp
     hpx/collectives/all_reduce.hpp
     hpx/collectives/all_to_all.hpp
@@ -21,22 +22,28 @@ set(collectives_headers
     hpx/collectives/broadcast_direct.hpp
     hpx/collectives/channel_communicator.hpp
     hpx/collectives/create_communicator.hpp
-    hpx/collectives/detail/barrier_node.hpp
     hpx/collectives/detail/channel_communicator.hpp
     hpx/collectives/detail/communicator.hpp
+    hpx/collectives/detail/flattened_data.hpp
+    hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp
+    hpx/collectives/detail/hierarchical_helpers.hpp
+    hpx/collectives/detail/hierarchical_scan_helpers.hpp
     hpx/collectives/detail/latch.hpp
+    hpx/collectives/detail/pairwise_all_to_all_helpers.hpp
     hpx/collectives/exclusive_scan.hpp
     hpx/collectives/fold.hpp
     hpx/collectives/gather.hpp
     hpx/collectives/inclusive_scan.hpp
     hpx/collectives/latch.hpp
+    hpx/collectives/macros.hpp
     hpx/collectives/reduce.hpp
     hpx/collectives/reduce_direct.hpp
     hpx/collectives/scatter.hpp
     hpx/collectives/spmd_block.hpp
-    hpx/collectives/detail/barrier_node.hpp
     hpx/collectives/detail/latch.hpp
 )
+
+set(collectives_macros_headers hpx/collectives/macros.hpp)
 
 # Default location is $HPX_ROOT/libs/collectives/include_compatibility
 # cmake-format: off
@@ -61,8 +68,8 @@ set(collectives_sources
     broadcast.cpp
     channel_communicator.cpp
     create_communicator.cpp
-    detail/barrier_node.cpp
     detail/channel_communicator_server.cpp
+    detail/hierarchical_helpers.cpp
     exclusive_scan.cpp
     gather.cpp
     inclusive_scan.cpp
@@ -74,17 +81,30 @@ set(collectives_sources
 include(HPX_AddModule)
 add_hpx_module(
   full collectives
+  GLOBAL_HEADER_GEN ON
+  GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${collectives_sources}
   HEADERS ${collectives_headers}
+  MACRO_HEADERS ${collectives_macros_headers}
+  EXCLUDE_FROM_GLOBAL_HEADER "hpx/collectives.hpp"
+  ADD_TO_GLOBAL_HEADER
+    "hpx/collectives/detail/flattened_data.hpp"
+    "hpx/collectives/detail/hierarchical_all_to_all_helpers.hpp"
+    "hpx/collectives/detail/hierarchical_helpers.hpp"
+    "hpx/collectives/detail/hierarchical_scan_helpers.hpp"
+    "hpx/collectives/detail/pairwise_all_to_all_helpers.hpp"
   COMPAT_HEADERS ${collectives_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES
     hpx_actions
     hpx_actions_base
+    hpx_async_colocated
     hpx_async_distributed
     hpx_components
     hpx_components_base
     hpx_naming_base
+    hpx_performance_counters
+    hpx_runtime_components
     hpx_runtime_distributed
   CMAKE_SUBDIRS examples tests
 )

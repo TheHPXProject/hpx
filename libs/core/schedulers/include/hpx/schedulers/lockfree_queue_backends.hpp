@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 //  Copyright (c) 2012 Bryce Adelstein-Lelbach
-//  Copyright (c) 2019-2022 Hartmut Kaiser
+//  Copyright (c) 2019-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,6 +13,7 @@
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/concurrency.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
@@ -43,7 +44,7 @@ namespace hpx::threads::policies {
 
         static constexpr bool support_bulk_dequeue = false;
 
-        explicit lockfree_fifo_backend(size_type initial_size = 0,
+        explicit lockfree_fifo_backend(size_type const initial_size = 0,
             size_type /* num_thread */ = static_cast<size_type>(-1))
           : queue_(static_cast<std::size_t>(initial_size))
         {
@@ -94,6 +95,191 @@ namespace hpx::threads::policies {
         };
     };
 
+    // Dual-queue push-to-passive semantics, conditional (128-bit atomic)
+    // end-selection for pop, distinct steal=true vs. steal=false pop control
+    // flow (bounded retries + parity toggle), and empty() requiring both
+    // queues to be empty.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    struct lockfree_fifo_double_backend
+    {
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+        using container_type = hpx::lockfree::deque<T,
+            hpx::lockfree::caching_freelist_t, hpx::util::aligned_allocator<T>>;
+#else
+        using container_type =
+            hpx::lockfree::queue<T, hpx::util::aligned_allocator<T>>;
+#endif
+
+        using value_type = T;
+        using reference = T&;
+        using const_reference = T const&;
+        using rvalue_reference = T&&;
+        using size_type = std::uint64_t;
+
+        static constexpr bool support_bulk_dequeue = false;
+
+        explicit lockfree_fifo_double_backend(size_type const initial_size = 0,
+            size_type /* num_thread */ = static_cast<size_type>(-1))
+          : queues_(static_cast<std::size_t>(initial_size))
+        {
+        }
+
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+        bool push(const_reference val, bool /*other_end*/ = false)    //-V659
+        {
+            return current_passive().push_left(val);
+        }
+
+        bool push(rvalue_reference val, bool /*other_end*/ = false)    //-V659
+        {
+            return current_passive().push_left(HPX_MOVE(val));
+        }
+#else
+        bool push(const_reference val, bool /*other_end*/ = false)    //-V659
+        {
+            return current_passive().push(val);
+        }
+
+        bool push(rvalue_reference val, bool /*other_end*/ = false)    //-V659
+        {
+            return current_passive().push(HPX_MOVE(val));
+        }
+#endif
+
+        bool pop(reference val, bool const steal = true) noexcept
+        {
+            auto [active, passive] = indices(std::memory_order_acquire);
+
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+            if (steal)
+            {
+                return queues_[passive].pop_right(val) ||
+                    queues_[active].pop_left(val);
+            }
+
+            constexpr int max_retries = 4;
+            for (int i = 0; i < max_retries; ++i)
+            {
+                if (queues_[active].pop_right(val))
+                    return true;
+
+                HPX_SMT_PAUSE;
+            }
+
+            // Toggle parity (single-threaded exchanger, so no guard needed)
+            idx_.fetch_xor(1u, std::memory_order_acq_rel);
+
+            // After toggling parity, the newly-selected "active" is the other
+            // queue.
+            return queues_[passive].pop_right(val);
+#else
+            if (steal)
+            {
+                return queues_[passive].pop(val) || queues_[active].pop(val);
+            }
+
+            constexpr int max_retries = 4;
+            for (int i = 0; i < max_retries; ++i)
+            {
+                if (queues_[active].pop(val))
+                    return true;
+
+                HPX_SMT_PAUSE;
+            }
+
+            // Toggle parity (single-threaded exchanger, so no guard needed)
+            idx_.fetch_xor(1u, std::memory_order_acq_rel);
+
+            // After toggling parity, the newly-selected "active" is the other
+            // queue (the previously passive one).
+            return queues_[passive].pop(val);
+#endif
+        }
+
+        bool empty() const noexcept
+        {
+            auto [active, passive] = indices();
+            return queues_[active].empty() && queues_[passive].empty();
+        }
+
+    private:
+        static constexpr unsigned int active_index(
+            unsigned int const idx) noexcept
+        {
+            return (idx & 0x1) ? 0 : 1;
+        }
+
+        static constexpr unsigned int passive_index(
+            unsigned int const idx) noexcept
+        {
+            return (idx & 0x1) ? 1 : 0;
+        }
+
+        container_type& current_active(
+            std::memory_order const mo = std::memory_order_acquire) noexcept
+        {
+            return queues_[active_index(idx_.load(mo))];
+        }
+        container_type const& current_active(
+            std::memory_order const mo =
+                std::memory_order_acquire) const noexcept
+        {
+            return queues_[active_index(idx_.load(mo))];
+        }
+
+        container_type& current_passive(
+            std::memory_order const mo = std::memory_order_acquire) noexcept
+        {
+            return queues_[passive_index(idx_.load(mo))];
+        }
+        container_type const& current_passive(
+            std::memory_order const mo =
+                std::memory_order_acquire) const noexcept
+        {
+            return queues_[passive_index(idx_.load(mo))];
+        }
+
+        std::pair<unsigned int, unsigned int> indices(
+            std::memory_order const mo =
+                std::memory_order_relaxed) const noexcept
+        {
+            unsigned int const idx = idx_.load(mo);
+            return {active_index(idx), passive_index(idx)};
+        }
+
+        struct queues
+        {
+            explicit queues(std::size_t const initial_size)
+              : data{container_type(initial_size), container_type(initial_size)}
+            {
+            }
+
+            constexpr container_type& operator[](
+                unsigned int const idx) noexcept
+            {
+                return data[idx];
+            }
+            constexpr container_type const& operator[](
+                unsigned int const idx) const noexcept
+            {
+                return data[idx];
+            }
+
+            container_type data[2];
+        } queues_;
+
+        util::cache_aligned_data_derived<std::atomic<unsigned int>> idx_ = 0;
+    };
+
+    HPX_CXX_CORE_EXPORT struct lockfree_fifo_double
+    {
+        template <typename T>
+        struct apply
+        {
+            using type = lockfree_fifo_double_backend<T>;
+        };
+    };
+
     ////////////////////////////////////////////////////////////////////////////
     // MoodyCamel FIFO
     HPX_CXX_CORE_EXPORT template <typename T>
@@ -109,7 +295,7 @@ namespace hpx::threads::policies {
 
         static constexpr bool support_bulk_dequeue = true;
 
-        explicit moodycamel_fifo_backend(size_type initial_size = 0,
+        explicit moodycamel_fifo_backend(size_type const initial_size = 0,
             size_type /* num_thread */ = static_cast<size_type>(-1))
           : queue_(static_cast<std::size_t>(initial_size))
         {
@@ -157,7 +343,7 @@ namespace hpx::threads::policies {
         };
     };
 
-    // LIFO
+// LIFO
 #if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
     HPX_CXX_CORE_EXPORT struct lockfree_lifo;
 

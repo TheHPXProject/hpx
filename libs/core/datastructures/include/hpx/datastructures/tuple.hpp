@@ -197,12 +197,12 @@ namespace hpx {
 // Adapt hpx::tuple to be usable with structured binding contexts
 namespace std {
 
-    HPX_CXX_CORE_EXPORT template <typename... Ts>
+    template <typename... Ts>
     struct tuple_size<hpx::tuple<Ts...>> : hpx::tuple_size<hpx::tuple<Ts...>>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename... Ts>
+    template <std::size_t I, typename... Ts>
     struct tuple_element<I, hpx::tuple<Ts...>>
       : hpx::tuple_element<I, hpx::tuple<Ts...>>
     {
@@ -578,41 +578,41 @@ namespace hpx {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct tuple_size<T const> : tuple_size<T>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct tuple_size<T volatile> : tuple_size<T>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    template <typename T>
     struct tuple_size<T const volatile> : tuple_size<T>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename... Ts>
+    template <typename... Ts>
     struct tuple_size<tuple<Ts...>>
       : std::integral_constant<std::size_t, sizeof...(Ts)>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T0, typename T1>
+    template <typename T0, typename T1>
     struct tuple_size<std::pair<T0, T1>>
       : std::integral_constant<std::size_t, 2>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Type, std::size_t Size>
+    template <typename Type, std::size_t Size>
     struct tuple_size<std::array<Type, Size>>
       : std::integral_constant<std::size_t, Size>
     {
     };
 
 #if defined(HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE)
-    HPX_CXX_CORE_EXPORT template <typename... Ts>
+    template <typename... Ts>
     struct tuple_size<std::tuple<Ts...>> : std::tuple_size<std::tuple<Ts...>>
     {
     };
@@ -628,28 +628,28 @@ namespace hpx {
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename T>
+    template <std::size_t I, typename T>
     struct tuple_element<I, T const,
         std::void_t<typename tuple_element<I, T>::type>>
       : std::add_const<typename tuple_element<I, T>::type>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename T>
+    template <std::size_t I, typename T>
     struct tuple_element<I, T volatile,
         std::void_t<typename tuple_element<I, T>::type>>
       : std::add_volatile<typename tuple_element<I, T>::type>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename T>
+    template <std::size_t I, typename T>
     struct tuple_element<I, T const volatile,
         std::void_t<typename tuple_element<I, T>::type>>
       : std::add_cv<typename tuple_element<I, T>::type>
     {
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename... Ts>
+    template <std::size_t I, typename... Ts>
     struct tuple_element<I, tuple<Ts...>>
     {
         using type = typename util::at_index<I, Ts...>::type;
@@ -667,7 +667,7 @@ namespace hpx {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T0, typename T1>
+    template <typename T0, typename T1>
     struct tuple_element<0, std::pair<T0, T1>>
     {
         using type = T0;
@@ -685,7 +685,7 @@ namespace hpx {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename T0, typename T1>
+    template <typename T0, typename T1>
     struct tuple_element<1, std::pair<T0, T1>>
     {
         using type = T1;
@@ -703,8 +703,7 @@ namespace hpx {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename Type,
-        std::size_t Size>
+    template <std::size_t I, typename Type, std::size_t Size>
     struct tuple_element<I, std::array<Type, Size>>
     {
         using type = Type;
@@ -730,7 +729,7 @@ namespace hpx {
     };
 
 #if defined(HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE)
-    HPX_CXX_CORE_EXPORT template <std::size_t I, typename... Ts>
+    template <std::size_t I, typename... Ts>
     struct tuple_element<I, std::tuple<Ts...>>
     {
         using type = std::tuple_element_t<I, std::tuple<Ts...>>;

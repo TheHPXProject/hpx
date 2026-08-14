@@ -18,7 +18,9 @@ if(NOT HPX_WITH_FETCH_HWLOC)
   find_package(Hwloc)
   if(NOT Hwloc_FOUND)
     hpx_error(
-      "Hwloc could not be found, please specify Hwloc_ROOT to point to the correct location"
+      "Hwloc could not be found. Please either specify Hwloc_ROOT to point to the correct location, "
+      "install it using your system's package manager, or configure CMake with -DHPX_WITH_FETCH_HWLOC=ON "
+      "to download it automatically."
     )
   endif()
 else()

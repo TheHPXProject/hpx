@@ -27,8 +27,8 @@ trap "status_computation_and_artifacts_storage" EXIT
 src_dir="$(pwd)"
 build_dir="${src_dir}/build/${configuration_name}"
 
-mkdir -p ${build_dir}/tools
-cp -r ${src_dir}/tools/perftests_ci ${build_dir}/tools
+mkdir -p "${build_dir}/tools"
+cp -r "${src_dir}/tools/perftests_ci" "${build_dir}/tools"
 
 # Variables
 perftests_dir=${build_dir}/tools/perftests_ci
@@ -48,13 +48,13 @@ plot_errors=0
 wait
 
 # Build and Run the perftests
-source ${src_dir}/.jenkins/lsu-perftests/launch_perftests.sh
+source "${src_dir}/.jenkins/lsu-perftests/launch_perftests.sh"
 
 # Dummy ctest to upload the html report of the perftest
 set +e
 ctest \
     --verbose \
-    -S ${src_dir}/.jenkins/lsu-perftests/ctest.cmake \
+    -S "${src_dir}/.jenkins/lsu-perftests/ctest.cmake" \
     -DCTEST_BUILD_CONFIGURATION_NAME="${configuration_name}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
     -DCTEST_BINARY_DIRECTORY="${build_dir}"

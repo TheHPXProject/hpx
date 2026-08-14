@@ -20,7 +20,15 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* exclusive_scan_basename = "/test/exclusive_scan_sync/";
+constexpr char const* exclusive_scan_multiple_use_basename =
+    "/test/exclusive_scan_sync/multiple_use/";
+constexpr char const* exclusive_scan_explicit_generation_basename =
+    "/test/exclusive_scan_sync/explicit_generation/";
+constexpr char const* exclusive_scan_local_basename =
+    "/test/exclusive_scan_sync/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 100;
 #else
@@ -59,7 +67,7 @@ void test_multiple_use()
     HPX_TEST_LTE(static_cast<std::uint32_t>(2), num_localities);
 
     auto const exclusive_scan_client =
-        create_communicator(exclusive_scan_basename,
+        create_communicator(exclusive_scan_multiple_use_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     // test functionality based on immediate local result value
@@ -86,7 +94,7 @@ void test_multiple_use_with_generation()
     HPX_TEST_LTE(static_cast<std::uint32_t>(2), num_localities);
 
     auto const exclusive_scan_client =
-        create_communicator(exclusive_scan_basename,
+        create_communicator(exclusive_scan_explicit_generation_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     hpx::chrono::high_resolution_timer const t;
@@ -124,7 +132,7 @@ void test_local_use()
     {
         sites.push_back(hpx::async([=]() {
             auto const exclusive_scan_client =
-                create_communicator(exclusive_scan_basename,
+                create_communicator(exclusive_scan_local_basename,
                     num_sites_arg(num_sites), this_site_arg(site));
 
             hpx::chrono::high_resolution_timer const t;
@@ -154,7 +162,11 @@ void test_local_use()
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    hpx::wait_all(sites);
+    for (auto& site : sites)
+    {
+        site.get();
+    }
 }
 
 int hpx_main()

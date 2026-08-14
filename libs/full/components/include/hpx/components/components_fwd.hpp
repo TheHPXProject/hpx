@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2024 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,10 +6,12 @@
 
 #pragma once
 
-#include <hpx/components_base/components_base_fwd.hpp>
+#include <hpx/config.hpp>
+#include <hpx/modules/components_base.hpp>
 
 namespace hpx::components {
 
-    template <typename Derived, typename Stub, typename ClientData = void>
+    HPX_CXX_EXPORT template <typename Derived, typename Stub,
+        typename ClientData = void>
     class client_base;
 }    // namespace hpx::components

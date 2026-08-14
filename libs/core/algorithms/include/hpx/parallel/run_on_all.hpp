@@ -51,9 +51,6 @@ namespace hpx::experimental {
                         hpx::threads::thread_stacksize::default_, hint),
                     cores);
 
-            // ensure scheduling is done using the index_queue
-            exec.set_hierarchical_threshold(0);
-
             // Execute based on policy type
             if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
             {

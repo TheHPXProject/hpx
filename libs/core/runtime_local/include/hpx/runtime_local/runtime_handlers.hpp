@@ -21,9 +21,7 @@ namespace hpx::detail {
     HPX_CXX_CORE_EXPORT [[noreturn]] HPX_CORE_EXPORT void assertion_handler(
         hpx::source_location const& loc, char const* expr,
         std::string const& msg);
-#if defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool enable_parent_task_handler();
-#endif
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void test_failure_handler();
 #if defined(HPX_HAVE_VERIFY_LOCKS)
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void registered_locks_error_handler();

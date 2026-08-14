@@ -6,28 +6,28 @@
 
 #pragma once
 
-#include <hpx/actions_base/actions_base_fwd.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {
 
-    template <typename Action, typename Cont, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename Cont, typename... Ts>
     bool post_continue(Cont&& cont, hpx::id_type const& gid, Ts&&... vs);
 
-    template <typename Component, typename Signature, typename Derived,
-        typename Cont, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename Cont, typename... Ts>
     bool post_continue(
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         Cont&& cont, hpx::id_type const& gid, Ts&&... vs);
 
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Action, typename... Ts>
+    HPX_CXX_EXPORT template <typename Action, typename... Ts>
     bool post_continue(
         hpx::id_type const& cont, hpx::id_type const& gid, Ts&&... vs);
 
-    template <typename Component, typename Signature, typename Derived,
-        typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename Signature,
+        typename Derived, typename... Ts>
     bool post_continue(
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& cont, hpx::id_type const& gid, Ts&&... vs);

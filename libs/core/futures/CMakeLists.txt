@@ -12,9 +12,10 @@ set(futures_headers
     hpx/futures/detail/future_transforms.hpp
     hpx/futures/future.hpp
     hpx/futures/future_fwd.hpp
-    hpx/futures/futures_factory.hpp
     hpx/futures/future_or_value.hpp
+    hpx/futures/futures_factory.hpp
     hpx/futures/macros.hpp
+    hpx/futures/monadic_operations.hpp
     hpx/futures/packaged_continuation.hpp
     hpx/futures/packaged_task.hpp
     hpx/futures/promise.hpp
@@ -76,6 +77,7 @@ add_hpx_module(
     hpx_concepts
     hpx_concurrency
     hpx_config
+    hpx_contracts
     hpx_coroutines
     hpx_datastructures
     hpx_errors
@@ -91,6 +93,7 @@ add_hpx_module(
     hpx_timing
     hpx_threading_base
     hpx_thread_support
+    hpx_tracing
     hpx_type_support
     hpx_util
   CMAKE_SUBDIRS examples tests

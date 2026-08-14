@@ -7,19 +7,18 @@
 
 #include <hpx/config.hpp>
 
-#include <hpx/components/iostreams/ostream.hpp>
-#include <hpx/components/iostreams/standard_streams.hpp>
-
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/server/component.hpp>
-#include <hpx/components_base/server/create_component.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/runtime_distributed/runtime_fwd.hpp>
+#include <hpx/modules/logging.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
+
+#include <hpx/components/iostreams/ostream.hpp>
+#include <hpx/components/iostreams/standard_streams.hpp>
 
 #include <functional>
 #include <iostream>

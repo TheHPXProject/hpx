@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Bryce Adelstein-Lelbach
-//  Copyright (c) 2012-2024 Hartmut Kaiser
+//  Copyright (c) 2012-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,17 +8,16 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions/transfer_action.hpp>
-#include <hpx/actions_base/component_action.hpp>
-#include <hpx/agas_base/agas_fwd.hpp>
-#include <hpx/async_distributed/base_lco_with_value.hpp>
-#include <hpx/async_distributed/transfer_continuation_action.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/fixed_component_base.hpp>
+#include <hpx/modules/actions.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/synchronization.hpp>
+
+#include <hpx/agas_base/agas_fwd.hpp>
 
 #include <atomic>
 #include <cstdint>
@@ -32,17 +31,18 @@
 
 namespace hpx::agas {
 
-    HPX_EXPORT naming::gid_type bootstrap_component_namespace_gid();
-    HPX_EXPORT hpx::id_type bootstrap_component_namespace_id();
+    HPX_CXX_EXPORT HPX_EXPORT naming::gid_type
+    bootstrap_component_namespace_gid();
+    HPX_CXX_EXPORT HPX_EXPORT hpx::id_type bootstrap_component_namespace_id();
 }    // namespace hpx::agas
 
 namespace hpx::agas::server {
 
     // Base name used to register the component
-    static constexpr char const* const component_namespace_service_name =
-        "component/";
+    HPX_CXX_EXPORT inline constexpr char const* const
+        component_namespace_service_name = "component/";
 
-    struct HPX_EXPORT component_namespace
+    HPX_CXX_EXPORT struct HPX_EXPORT component_namespace
       : components::fixed_component_base<component_namespace>
     {
         using mutex_type = hpx::spinlock;
@@ -72,23 +72,19 @@ namespace hpx::agas::server {
         struct counter_data
         {
         public:
-            HPX_NON_COPYABLE(counter_data);
+            counter_data(counter_data const&) = delete;
+            counter_data(counter_data&&) = delete;
+            counter_data& operator=(counter_data const&) = delete;
+            counter_data& operator=(counter_data&&) = delete;
 
         public:
-            typedef hpx::spinlock mutex_type;
+            using mutex_type = hpx::spinlock;
 
             struct api_counter_data
             {
-                api_counter_data()
-                  : count_(0)
-                  , time_(0)
-                  , enabled_(false)
-                {
-                }
-
-                std::atomic<std::int64_t> count_;
-                std::atomic<std::int64_t> time_;
-                bool enabled_;
+                std::atomic<std::int64_t> count_ = 0;
+                std::atomic<std::int64_t> time_ = 0;
+                bool enabled_ = false;
             };
 
             counter_data() = default;

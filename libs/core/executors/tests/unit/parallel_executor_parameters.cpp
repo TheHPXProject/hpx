@@ -14,6 +14,16 @@
 #include <string>
 #include <vector>
 
+template <typename Executor>
+decltype(auto) disable_run_as_child(Executor&& exec)
+{
+    auto hint = hpx::execution::experimental::get_hint(exec);
+    hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+
+    return hpx::experimental::prefer(hpx::execution::experimental::with_hint,
+        HPX_FORWARD(Executor, exec), hint);
+}
+
 hpx::threads::thread_stacksize get_stacksize()
 {
     return hpx::threads::get_self_stacksize_enum();
@@ -33,8 +43,8 @@ void test_stacksize()
         HPX_TEST(hpx::execution::experimental::get_stacksize(exec) ==
             hpx::threads::thread_stacksize::default_);
 
-        auto newexec =
-            hpx::execution::experimental::with_stacksize(exec, stacksize);
+        auto newexec = disable_run_as_child(
+            hpx::execution::experimental::with_stacksize(exec, stacksize));
 
         HPX_TEST(hpx::execution::experimental::get_stacksize(exec) ==
             hpx::threads::thread_stacksize::default_);
@@ -64,8 +74,8 @@ void test_priority()
         HPX_TEST(hpx::execution::experimental::get_priority(exec) ==
             hpx::threads::thread_priority::default_);
 
-        auto newexec =
-            hpx::execution::experimental::with_priority(exec, priority);
+        auto newexec = disable_run_as_child(
+            hpx::execution::experimental::with_priority(exec, priority));
 
         HPX_TEST(hpx::execution::experimental::get_priority(exec) ==
             hpx::threads::thread_priority::default_);
@@ -84,23 +94,23 @@ void test_hint()
 
     auto orghint = hpx::execution::experimental::get_hint(exec);
     HPX_TEST(orghint.mode == hpx::threads::thread_schedule_hint_mode::none);
-    HPX_TEST(orghint.hint == std::int16_t(-1));
+    HPX_TEST(orghint.hint == static_cast<std::int16_t>(-1));
 
-    for (auto mode : {hpx::threads::thread_schedule_hint_mode::none,
+    for (auto const mode : {hpx::threads::thread_schedule_hint_mode::none,
              hpx::threads::thread_schedule_hint_mode::thread,
              hpx::threads::thread_schedule_hint_mode::numa})
     {
-        for (auto hint : {0, 1})
+        for (auto const hint : {0, 1})
         {
             hpx::threads::thread_schedule_hint newhint(
                 mode, static_cast<std::int16_t>(hint));
-            auto newexec =
-                hpx::execution::experimental::with_hint(exec, newhint);
+            auto newexec = disable_run_as_child(
+                hpx::execution::experimental::with_hint(exec, newhint));
 
             orghint = hpx::execution::experimental::get_hint(exec);
             HPX_TEST(
                 orghint.mode == hpx::threads::thread_schedule_hint_mode::none);
-            HPX_TEST(orghint.hint == std::int16_t(-1));
+            HPX_TEST(orghint.hint == static_cast<std::int16_t>(-1));
 
             newhint = hpx::execution::experimental::get_hint(newexec);
             HPX_TEST(newhint.mode == mode);
@@ -156,14 +166,15 @@ void test_num_cores()
     using executor = hpx::execution::parallel_executor;
 
     executor exec;
-    auto num_cores = hpx::execution::experimental::processing_units_count(exec);
+    auto const num_cores =
+        hpx::execution::experimental::processing_units_count(exec);
 
     auto newexec =
         hpx::execution::experimental::with_processing_units_count(exec, 2);
 
     HPX_TEST(num_cores ==
         hpx::execution::experimental::processing_units_count(exec));
-    HPX_TEST(std::size_t(2) ==
+    HPX_TEST(static_cast<std::size_t>(2) ==
         hpx::execution::experimental::processing_units_count(newexec));
 }
 
@@ -183,7 +194,7 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    // By default this test should run on all available cores
+    // By default, this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
 
     // Initialize and run HPX

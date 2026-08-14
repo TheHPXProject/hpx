@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2016      Thomas Heller
 //  Copyright (c) 2011      Bryce Adelstein-Lelbach
 //
@@ -57,7 +57,7 @@ namespace hpx::distributed {
     ///                  of a type convertible to the type as specified by the
     ///                  template parameter \a RemoteResult
     ///////////////////////////////////////////////////////////////////////////
-    template <typename Result, typename RemoteResult>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult>
     class promise
       : public lcos::detail::promise_base<Result, RemoteResult,
             lcos::detail::promise_data<Result>>
@@ -70,7 +70,7 @@ namespace hpx::distributed {
         promise() = default;
 
         /// \brief    constructs a promise object and a shared state. The
-        ///           constructor uses the allocator a to allocate the memory
+        ///           constructor uses the allocator \a to allocate the memory
         ///           for the shared state.
         template <typename Allocator>
         promise(std::allocator_arg_t, Allocator const& a)
@@ -157,7 +157,7 @@ namespace hpx::distributed {
         promise() = default;
 
         /// \brief     constructs a promise object and a shared state. The
-        ///            constructor uses the allocator a to allocate the memory
+        ///            constructor uses the allocator \a to allocate the memory
         ///            for the shared state.
         template <typename Allocator>
         promise(std::allocator_arg_t, Allocator const& a)
@@ -235,7 +235,7 @@ namespace hpx::distributed {
         using base_type::set_exception;
     };
 
-    template <typename Result, typename RemoteResult>
+    HPX_CXX_EXPORT template <typename Result, typename RemoteResult>
     void swap(promise<Result, RemoteResult>& x,
         promise<Result, RemoteResult>& y) noexcept
     {

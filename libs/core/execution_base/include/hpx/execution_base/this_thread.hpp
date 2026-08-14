@@ -1,5 +1,5 @@
 //  Copyright (c) 2019 Thomas Heller
-//  Copyright (c) 2022 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,7 +11,7 @@
 #include <hpx/execution_base/agent_base.hpp>
 #include <hpx/execution_base/agent_ref.hpp>
 #include <hpx/execution_base/sender.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -71,85 +71,34 @@ namespace hpx::execution_base {
         void sleep_for(std::chrono::duration<Rep, Period> const& sleep_duration,
             char const* desc = "hpx::execution_base::this_thread::sleep_for")
         {
-            agent().sleep_for(sleep_duration, desc);
+            agent().sleep_for(
+                sleep_duration, hpx::move_only_function<bool()>{}, desc);
         }
 
         HPX_CXX_CORE_EXPORT template <class Clock, class Duration>
         void sleep_until(
             std::chrono::time_point<Clock, Duration> const& sleep_time,
-            char const* desc = "hpx::execution_base::this_thread::sleep_for")
+            char const* desc = "hpx::execution_base::this_thread::sleep_until")
         {
-            agent().sleep_until(sleep_time, desc);
+            agent().sleep_until(
+                sleep_time, hpx::move_only_function<bool()>{}, desc);
         }
     }    // namespace this_thread
 }    // namespace hpx::execution_base
 
-#if defined(HPX_HAVE_STDEXEC)
-
-#include <hpx/modules/execution_base.hpp>
-
+#include <hpx/execution_base/stdexec_forward.hpp>
 namespace hpx::this_thread::experimental {
 
-    using namespace std::this_thread;
+    HPX_CXX_CORE_EXPORT using std::this_thread::get_id;
+    HPX_CXX_CORE_EXPORT using std::this_thread::sleep_for;
+    HPX_CXX_CORE_EXPORT using std::this_thread::sleep_until;
+    HPX_CXX_CORE_EXPORT using std::this_thread::yield;
+
     HPX_CXX_CORE_EXPORT using stdexec::execute_may_block_caller;
     HPX_CXX_CORE_EXPORT using stdexec::execute_may_block_caller_t;
 
     // this_thread::sync_wait is loaded in the sync_wait.hpp file.
 }    // namespace hpx::this_thread::experimental
-
-#else
-
-namespace hpx::this_thread::experimental {
-
-    // [exec.sched_queries.execute_may_block_caller]
-    //
-    // 1. `this_thread::execute_may_block_caller` is used to ask a scheduler s
-    // whether a call `execution::execute(s, f)` with any invocable f may block
-    // the thread where such a call occurs.
-    //
-    // 2. The name `this_thread::execute_may_block_caller` denotes a
-    // customization point object. For some subexpression s, let S be
-    // decltype((s)). If S does not satisfy `execution::scheduler`,
-    // `this_thread::execute_may_block_caller` is ill-formed. Otherwise,
-    // `this_thread::execute_may_block_caller(s)` is expression equivalent to:
-    //
-    //      1. `tag_invoke(this_thread::execute_may_block_caller, as_const(s))`,
-    //          if this expression is well-formed.
-    //
-    //          -- Mandates: The tag_invoke expression above is not
-    //                       potentially throwing and its type is bool.
-    //
-    //      2. Otherwise, true.
-    //
-    // 3. If `this_thread::execute_may_block_caller(s)` for some scheduler s
-    // returns false, no execution::execute(s, f) call with some invocable f
-    // shall block the calling thread.
-    namespace detail {
-
-        // apply this meta function to all tag_invoke variations
-        struct is_scheduler
-        {
-            template <typename EnableTag, typename... T>
-            using apply = hpx::execution::experimental::is_scheduler<T...>;
-        };
-    }    // namespace detail
-
-    HPX_CXX_CORE_EXPORT HPX_HOST_DEVICE_INLINE_CONSTEXPR_VARIABLE struct
-        execute_may_block_caller_t final
-      : hpx::functional::detail::tag_fallback_noexcept<
-            execute_may_block_caller_t, detail::is_scheduler>
-    {
-    private:
-        template <typename T>
-        friend constexpr HPX_FORCEINLINE bool tag_fallback_invoke(
-            execute_may_block_caller_t, T const&) noexcept
-        {
-            return true;
-        }
-    } execute_may_block_caller{};
-}    // namespace hpx::this_thread::experimental
-
-#endif
 
 namespace hpx::util {
 

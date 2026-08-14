@@ -20,7 +20,15 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* exclusive_scan_basename = "/test/exclusive_scan/";
+constexpr char const* exclusive_scan_multiple_use_basename =
+    "/test/exclusive_scan/multiple_use/";
+constexpr char const* exclusive_scan_explicit_generation_basename =
+    "/test/exclusive_scan/explicit_generation/";
+constexpr char const* exclusive_scan_local_basename =
+    "/test/exclusive_scan/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 100;
 #else
@@ -59,7 +67,7 @@ void test_multiple_use()
     HPX_TEST_LTE(static_cast<std::uint32_t>(2), num_localities);
 
     auto const exclusive_scan_client =
-        create_communicator(exclusive_scan_basename,
+        create_communicator(exclusive_scan_multiple_use_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     // test functionality based on immediate local result value
@@ -86,7 +94,7 @@ void test_multiple_use_with_generation()
     HPX_TEST_LTE(static_cast<std::uint32_t>(2), num_localities);
 
     auto const exclusive_scan_client =
-        create_communicator(exclusive_scan_basename,
+        create_communicator(exclusive_scan_explicit_generation_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     hpx::chrono::high_resolution_timer const t;
@@ -122,7 +130,7 @@ void test_local_use(std::uint32_t num_sites)
     {
         sites.push_back(hpx::async([=]() {
             auto const exclusive_scan_client =
-                create_communicator(exclusive_scan_basename,
+                create_communicator(exclusive_scan_local_basename,
                     num_sites_arg(num_sites), this_site_arg(site));
 
             hpx::chrono::high_resolution_timer const t;
@@ -152,7 +160,42 @@ void test_local_use(std::uint32_t num_sites)
         }));
     }
 
-    hpx::wait_all(std::move(sites));
+    hpx::wait_all(sites);
+}
+
+void test_init_type_conversion(std::uint32_t num_sites)
+{
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async([=]() {
+            std::string const basename = std::string(exclusive_scan_basename) +
+                "init_conversion/" + std::to_string(num_sites) + "/";
+
+            auto const exclusive_scan_client =
+                create_communicator(basename.c_str(), num_sites_arg(num_sites),
+                    this_site_arg(site));
+
+            auto add = [](double lhs, double rhs) { return lhs + rhs; };
+
+            double const result = exclusive_scan(exclusive_scan_client,
+                static_cast<double>(site) + 0.25, 1, add, this_site_arg(site),
+                generation_arg(1))
+                                      .get();
+
+            double expected = 1.0;
+            for (std::uint32_t j = 0; j != site; ++j)
+            {
+                expected += static_cast<double>(j) + 0.25;
+            }
+
+            HPX_TEST_EQ(result, expected);
+        }));
+    }
+
+    hpx::wait_all(sites);
 }
 
 int hpx_main()
@@ -170,6 +213,7 @@ int hpx_main()
     {
         test_local_use(1);
         test_local_use(10);
+        test_init_type_conversion(10);
     }
 
     return hpx::finalize();

@@ -62,7 +62,11 @@ if(NOT TARGET hpx_dependencies_boost)
     endif()
 
     if(NOT Boost_FOUND)
-      hpx_error("Could not find Boost. Please check your configuration.")
+      hpx_error(
+        "Boost could not be found. Please either specify Boost_ROOT to point to the correct location, "
+        "install it using your system's package manager, or configure CMake with -DHPX_WITH_FETCH_BOOST=ON "
+        "to download it automatically."
+      )
     endif()
 
     add_library(hpx_dependencies_boost INTERFACE IMPORTED)

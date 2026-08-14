@@ -1,4 +1,4 @@
-//  Copyright (c) 2014-2023 Hartmut Kaiser
+//  Copyright (c) 2014-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,14 +9,10 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/actions_base/traits/extract_action.hpp>
-#include <hpx/actions_base/traits/is_distribution_policy.hpp>
-#include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/async_distributed/detail/async_unwrap_result_implementations.hpp>
-#include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
-#include <hpx/async_distributed/detail/sync_implementations.hpp>
-#include <hpx/components/client_base.hpp>
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 
@@ -25,10 +21,10 @@
 
 namespace hpx::components {
 
-    /// This class is a distribution policy that can be using with actions that
+    /// This class is a distribution policy that can be used with actions that
     /// return futures. For those actions it is possible to apply certain
     /// optimizations if the action is invoked synchronously.
-    struct unwrapping_result_policy
+    HPX_CXX_EXPORT struct unwrapping_result_policy
     {
     public:
         explicit unwrapping_result_policy(id_type const& id)
@@ -126,7 +122,8 @@ namespace hpx::components {
 /// \cond NOINTERNAL
 namespace hpx {
 
-    using unwrap_result = hpx::components::unwrapping_result_policy;
+    HPX_CXX_EXPORT using unwrap_result =
+        hpx::components::unwrapping_result_policy;
 
     template <>
     struct traits::is_distribution_policy<components::unwrapping_result_policy>

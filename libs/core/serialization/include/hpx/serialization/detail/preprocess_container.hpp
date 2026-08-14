@@ -26,7 +26,7 @@ namespace hpx::serialization::detail {
         {
             return size_;
         }
-        void resize(std::size_t size) noexcept
+        void resize(std::size_t const size) noexcept
         {
             size_ = size;
         }
@@ -66,7 +66,7 @@ struct hpx::traits::serialization_access_data<
     }
 
     static void resize(hpx::serialization::detail::preprocess_container& cont,
-        std::size_t count) noexcept
+        std::size_t const count)
     {
         return cont.resize(cont.size() + count);
     }

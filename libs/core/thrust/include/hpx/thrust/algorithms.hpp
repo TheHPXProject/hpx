@@ -7,18 +7,35 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/thrust/detail/algorithm_map.hpp>
 #include <hpx/thrust/policy.hpp>
 
+#include <type_traits>
 #include <utility>
 
 namespace hpx::thrust {
 
+    /// \brief ADL hook dispatching HPX algorithm CPOs to Thrust backends.
+    ///
+    /// When a Thrust execution policy is passed to an HPX algorithm CPO,
+    /// this hook maps the call to the corresponding Thrust
+    /// implementation. Async policies wrap the result in a future.
+    ///
+    /// \tparam Tag           The algorithm CPO tag type.
+    /// \tparam ThrustPolicy  A Thrust execution policy satisfying
+    ///                       is_thrust_execution_policy.
+    /// \tparam Args          Arguments forwarded to the Thrust algorithm.
+    ///
+    /// \param tag     The algorithm CPO tag instance.
+    /// \param policy  Thrust execution policy controlling dispatch.
+    /// \param args    Arguments forwarded to the mapped algorithm.
+    ///
+    /// \returns The algorithm result, or a future thereof for async
+    ///   policies.
     template <typename Tag, typename ThrustPolicy, typename... Args>
         requires(is_thrust_execution_policy_v<std::decay_t<ThrustPolicy>> &&
             detail::is_algorithm_mapped<Tag, ThrustPolicy, Args...>)
-    decltype(auto) tag_invoke(Tag tag, ThrustPolicy&& policy, Args&&... args)
+    decltype(auto) hpx_invoke(Tag tag, ThrustPolicy&& policy, Args&&... args)
     {
         if constexpr (hpx::is_async_execution_policy_v<
                           std::decay_t<ThrustPolicy>>)

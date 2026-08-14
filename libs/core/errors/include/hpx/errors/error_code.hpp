@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -61,6 +61,9 @@ namespace hpx {
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::error_category const&
     get_lightweight_hpx_category() noexcept;
+
+    HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::error_category const&
+    get_lightweight_hpx_rethrow_category() noexcept;
 
     HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT std::error_category const&
     get_hpx_category(throwmode mode) noexcept;
@@ -237,6 +240,8 @@ namespace hpx {
             exception_ = std::exception_ptr();
         }
 
+        void assign(error e, std::string const& msg, throwmode mode);
+
         /// Copy constructor for error_code
         ///
         /// \note This function maintains the error category of the left hand
@@ -316,6 +321,9 @@ namespace hpx {
     {
         return error_code(mode);
     }
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT throwmode get_throwmode(
+        error_code const& ec);
 }    // namespace hpx
 
 #include <hpx/config/warnings_suffix.hpp>

@@ -21,7 +21,6 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/timing.hpp>
 
@@ -46,7 +45,7 @@ namespace hpx::lcos::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     // launch
-    HPX_CXX_CORE_EXPORT template <typename Future, typename Policy>
+    template <typename Future, typename Policy>
     struct future_then_dispatch<Future, Policy,
         std::enable_if_t<traits::is_launch_policy_v<Policy>>>
     {
@@ -60,7 +59,7 @@ namespace hpx::lcos::detail {
                 hpx::util::invoke_result_t<F, Future>;
 
             using allocator_type = hpx::util::thread_local_caching_allocator<
-                hpx::lockfree::variable_size_stack, char,
+                hpx::lockfree::variable_size_stack,
                 hpx::util::internal_allocator<>>;
 
             hpx::traits::detail::shared_state_ptr_t<result_type> p =
@@ -97,7 +96,7 @@ namespace hpx::lcos::detail {
     //
     // parallel executors v2
     // threads::executor
-    HPX_CXX_CORE_EXPORT template <typename Future, typename Executor>
+    template <typename Future, typename Executor>
     struct future_then_dispatch<Future, Executor,
         std::enable_if_t<traits::is_one_way_executor_v<Executor> ||
             traits::is_two_way_executor_v<Executor>>>
@@ -123,7 +122,7 @@ namespace hpx::lcos::detail {
     };
 
     // plain function, or function object
-    HPX_CXX_CORE_EXPORT template <typename Future, typename FD>
+    template <typename Future, typename FD>
     struct future_then_dispatch<Future, FD,
         std::enable_if_t<!traits::is_launch_policy_v<FD> &&
             !(traits::is_one_way_executor_v<FD> ||

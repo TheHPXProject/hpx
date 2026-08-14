@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <hpx/config.hpp>
 #include <hpx/algorithm.hpp>
 #include <hpx/any.hpp>
 #include <hpx/chrono.hpp>

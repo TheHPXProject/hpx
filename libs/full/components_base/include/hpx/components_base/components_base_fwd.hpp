@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -17,19 +17,19 @@
 namespace hpx::components {
 
     ///////////////////////////////////////////////////////////////////////
-    class pinned_ptr;
+    HPX_CXX_EXPORT class pinned_ptr;
 
     ///////////////////////////////////////////////////////////////////////
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     class fixed_component;
 
     /// The \a component class wraps around a given component type, adding
     /// additional type aliases and constructors. It inherits from the
     /// specified component type.
-    template <typename Component>
+    HPX_CXX_EXPORT template <typename Component>
     class component;
 
-    template <typename Component, typename Derived = void>
+    HPX_CXX_EXPORT template <typename Component, typename Derived = void>
     class managed_component;
 
     ///////////////////////////////////////////////////////////////////////
@@ -37,19 +37,19 @@ namespace hpx::components {
     /// common functionality needed by components, such as address and ID
     /// retrieval. The template parameter \a Component specifies the
     /// derived component type.
-    template <typename Component = void>
+    HPX_CXX_EXPORT template <typename Component = void>
     class component_base;
 
-    template <typename Component = void>
+    HPX_CXX_EXPORT template <typename Component = void>
     class fixed_component_base;
 
-    template <typename Component = void>
+    HPX_CXX_EXPORT template <typename Component = void>
     class abstract_component_base;
 
-    template <typename Component, typename Derived = void>
+    HPX_CXX_EXPORT template <typename Component, typename Derived = void>
     class abstract_managed_component_base;
 
-    template <typename Component, typename Wrapper = void,
+    HPX_CXX_EXPORT template <typename Component, typename Wrapper = void,
         typename CtorPolicy = traits::construct_without_back_ptr,
         typename DtorPolicy = traits::managed_object_controls_lifetime>
     class managed_component_base;

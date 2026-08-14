@@ -423,7 +423,6 @@ void test_sorted_bad_alloc_seq(IteratorTag)
     HPX_TEST(caught_bad_alloc);
 }
 
-#if defined(HPX_HAVE_STDEXEC)
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_is_sorted_sender(
     LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
@@ -449,7 +448,7 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(std::end(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(*snd_result);
+        bool is_ordered = hpx::get<0>(snd_result.value());
 
         HPX_TEST(is_ordered);
     }
@@ -460,7 +459,7 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(std::begin(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(*snd_result);
+        bool is_ordered = hpx::get<0>(snd_result.value());
 
         HPX_TEST(is_ordered);
     }
@@ -471,9 +470,8 @@ void test_is_sorted_sender(
             ex::just(iterator(std::begin(c)), iterator(++std::begin(c))) |
             hpx::is_sorted(ex_policy.on(exec)));
 
-        bool is_ordered = hpx::get<0>(*snd_result);
+        bool is_ordered = hpx::get<0>(snd_result.value());
 
         HPX_TEST(is_ordered);
     }
 }
-#endif

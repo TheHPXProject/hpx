@@ -1,4 +1,5 @@
 //  Copyright (c) 2022-2023 Hartmut Kaiser
+//  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,7 +12,6 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -30,14 +30,20 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-parallel (sequenced) execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_par_t final
-      : hpx::functional::detail::tag_fallback<to_non_par_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_par_t
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_par(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_non_par();
+        }
+
         // any non-parallel policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_non_par_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_non_par(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(!hpx::is_parallel_execution_policy_v<ExPolicy>,
                 "must not be a parallel execution policy");
@@ -51,14 +57,20 @@ namespace hpx::execution::experimental {
     };
 
     // Return the matching parallel execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_par_t final
-      : hpx::functional::detail::tag_fallback<to_par_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_par_t
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_par(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_par();
+        }
+
         // any parallel policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_par_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_par(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(hpx::is_parallel_execution_policy_v<ExPolicy>,
                 "must be a parallel execution policy");
@@ -74,13 +86,19 @@ namespace hpx::execution::experimental {
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-task (synchronous) execution policy
     HPX_CXX_CORE_EXPORT inline constexpr struct to_non_task_t
-      : hpx::functional::detail::tag_fallback<to_non_task_t>
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_task(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_non_task();
+        }
+
         // any non-task policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_non_task_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_non_task(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(!hpx::is_async_execution_policy_v<ExPolicy>,
                 "must not be an asynchronous (task) execution policy");
@@ -95,13 +113,19 @@ namespace hpx::execution::experimental {
 
     // Return the matching task (asynchronous) execution policy
     HPX_CXX_CORE_EXPORT inline constexpr struct to_task_t
-      : hpx::functional::detail::tag_fallback<to_task_t>
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_task(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_task();
+        }
+
         // any task policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_task_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_task(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
                 "must be an asynchronous (task) execution policy");
@@ -116,14 +140,20 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // Return the matching non-unsequenced execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_unseq_t final
-      : hpx::functional::detail::tag_fallback<to_non_unseq_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_non_unseq_t
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_non_unseq(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_non_unseq();
+        }
+
         // any non-unsequenced policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_non_unseq_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_non_unseq(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(!hpx::is_unsequenced_execution_policy_v<ExPolicy>,
                 "must not be an unsequenced execution policy");
@@ -137,14 +167,20 @@ namespace hpx::execution::experimental {
     };
 
     // Return the matching unsequenced execution policy
-    HPX_CXX_CORE_EXPORT inline constexpr struct to_unseq_t final
-      : hpx::functional::detail::tag_fallback<to_unseq_t>
+    HPX_CXX_CORE_EXPORT inline constexpr struct to_unseq_t
     {
-    private:
+        // Forward to member function if available
+        template <typename Target>
+            requires requires(Target const& t) { t.to_unseq(); }
+        constexpr decltype(auto) operator()(Target const& target) const
+        {
+            return target.to_unseq();
+        }
+
         // any unsequenced policy just returns itself
         template <execution_policy ExPolicy>
-        friend constexpr decltype(auto) tag_fallback_invoke(
-            to_unseq_t, ExPolicy&& policy) noexcept
+            requires(!requires(ExPolicy const& t) { t.to_unseq(); })
+        constexpr decltype(auto) operator()(ExPolicy&& policy) const noexcept
         {
             static_assert(hpx::is_unsequenced_execution_policy_v<ExPolicy>,
                 "must be an unsequenced execution policy");

@@ -48,7 +48,7 @@ set(concurrency_compat_headers
 # Default location is $HPX_ROOT/libs/concurrency/src
 set(concurrency_sources barrier.cpp)
 
-if(HPX_TRACY_WITH_TRACY)
+if(HPX_WITH_TRACY)
   set(additional_dependencies hpx_tracy)
 endif()
 
@@ -73,9 +73,9 @@ add_hpx_module(
     hpx_execution_base
     hpx_errors
     hpx_hashing
-    hpx_itt_notify
     hpx_lock_registration
     hpx_thread_support
+    hpx_tracing
     hpx_type_support
     hpx_version
     ${additional_dependencies}

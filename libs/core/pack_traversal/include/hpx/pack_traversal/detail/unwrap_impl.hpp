@@ -10,7 +10,6 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/pack_traversal/pack_traversal.hpp>
 
 #include <cstddef>

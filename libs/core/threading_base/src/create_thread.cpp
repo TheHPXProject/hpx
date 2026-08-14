@@ -8,6 +8,7 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/thread_data.hpp>
@@ -54,6 +55,7 @@ namespace hpx::threads::detail {
 
         thread_self const* self = get_self_ptr();
 
+        void const* parent_task_id = nullptr;
 #ifdef HPX_HAVE_THREAD_PARENT_REFERENCE
         if (nullptr == data.parent_id)
         {
@@ -61,8 +63,14 @@ namespace hpx::threads::detail {
             {
                 data.parent_id = get_thread_id_data(self->get_thread_id());
                 data.parent_phase = self->get_thread_phase();
+                parent_task_id = data.parent_id.get();
             }
         }
+        else
+        {
+            parent_task_id = data.parent_id.get();
+        }
+
         if (0 == data.parent_locality_id)
             data.parent_locality_id = detail::get_locality_id(hpx::throws);
 #endif
@@ -84,6 +92,14 @@ namespace hpx::threads::detail {
 
         if (data.priority == thread_priority::default_)
             data.priority = thread_priority::normal;
+
+#ifdef HPX_HAVE_THREAD_DESCRIPTION
+        hpx::tracing::task_staged(threads::thread_data::get_safe_description(
+                                      data.description, "thread"),
+            parent_task_id);
+#else
+        hpx::tracing::task_staged("thread", parent_task_id);
+#endif
 
         // create the new thread
         scheduler->create_thread(data, &id, ec);

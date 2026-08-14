@@ -324,8 +324,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::string const datafilename = vm["file"].as<std::string>();
 
     std::size_t const num_ye_points = vm["num-ye-points"].as<std::size_t>();
-    std::size_t const num_temp_points = vm["num-ye-points"].as<std::size_t>();
-    std::size_t const num_rho_points = vm["num-ye-points"].as<std::size_t>();
+    std::size_t const num_temp_points = vm["num-temp-points"].as<std::size_t>();
+    std::size_t const num_rho_points = vm["num-rho-points"].as<std::size_t>();
 
     std::size_t const num_partitions = vm["num-partitions"].as<std::size_t>();
 

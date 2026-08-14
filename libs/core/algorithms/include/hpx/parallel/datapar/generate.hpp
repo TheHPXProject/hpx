@@ -10,7 +10,7 @@
 
 #if defined(HPX_HAVE_DATAPAR)
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/tag_invoke.hpp>
+#include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/generate.hpp>
 #include <hpx/parallel/datapar/handle_local_exceptions.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
@@ -50,7 +50,7 @@ namespace hpx::parallel::detail {
                 *first++ = f.template operator()<value_type>();
             }
 
-            for (std::int64_t len_v = std::int64_t(len - (size + 1)); len_v > 0;
+            for (std::int64_t len_v = std::int64_t(len - size + 1); len_v > 0;
                 len_v -= size, len -= size)
             {
                 auto tmp = f.template operator()<V>();
@@ -87,7 +87,7 @@ namespace hpx::parallel::detail {
         HPX_HOST_DEVICE HPX_FORCEINLINE static Iter call(
             ExPolicy&&, Iter first, Sent last, F&& f)
         {
-            std::size_t count = std::distance(first, last);
+            std::size_t count = hpx::parallel::detail::distance(first, last);
             return datapar_generate_helper<Iter>::call(
                 first, count, HPX_FORWARD(F, f));
         }
@@ -98,7 +98,7 @@ namespace hpx::parallel::detail {
     HPX_HOST_DEVICE HPX_FORCEINLINE
         typename std::enable_if<hpx::is_vectorpack_execution_policy_v<ExPolicy>,
             Iter>::type
-        tag_invoke(sequential_generate_t, ExPolicy&& policy, Iter first,
+        hpx_invoke(sequential_generate_t, ExPolicy&& policy, Iter first,
             Sent last, F&& f)
     {
         return datapar_generate::call(
@@ -121,7 +121,7 @@ namespace hpx::parallel::detail {
     HPX_HOST_DEVICE HPX_FORCEINLINE
         typename std::enable_if<hpx::is_vectorpack_execution_policy_v<ExPolicy>,
             Iter>::type
-        tag_invoke(sequential_generate_n_t, ExPolicy&& policy, Iter first,
+        hpx_invoke(sequential_generate_n_t, ExPolicy&& policy, Iter first,
             std::size_t count, F&& f)
     {
         return datapar_generate_n::call(

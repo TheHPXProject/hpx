@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -41,7 +41,7 @@ namespace hpx {
     ///         This is important in order to reliably retrieve ids from a
     ///         name, even if the name was already registered.
     ///
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     std::vector<Client> find_all_from_basename(
         std::string base_name, std::size_t num_ids)
     {
@@ -49,7 +49,7 @@ namespace hpx {
             find_all_from_basename(HPX_MOVE(base_name), num_ids));
     }
 
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     std::vector<Client> find_all_from_basename(hpx::launch::sync_policy policy,
         std::string base_name, std::size_t num_ids)
     {
@@ -78,7 +78,7 @@ namespace hpx {
     ///         This is important in order to reliably retrieve ids from a
     ///         name, even if the name was already registered.
     ///
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     std::vector<Client> find_from_basename(
         std::string base_name, std::vector<std::size_t> const& ids)
     {
@@ -86,7 +86,7 @@ namespace hpx {
             find_from_basename(HPX_MOVE(base_name), ids));
     }
 
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     std::vector<Client> find_from_basename(hpx::launch::sync_policy policy,
         std::string base_name, std::vector<std::size_t> const& ids)
     {
@@ -115,14 +115,14 @@ namespace hpx {
     ///         This is important in order to reliably retrieve ids from a
     ///         name, even if the name was already registered.
     ///
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     Client find_from_basename(std::string base_name, std::size_t sequence_nr)
     {
         return components::make_client<Client>(
             find_from_basename(HPX_MOVE(base_name), sequence_nr));
     }
 
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     Client find_from_basename(hpx::launch::sync_policy policy,
         std::string base_name, std::size_t sequence_nr)
     {
@@ -154,7 +154,7 @@ namespace hpx {
     /// \note    The operation will fail if the given sequence number is not
     ///          unique.
     ///
-    template <typename Client, typename Stub, typename Data>
+    HPX_CXX_EXPORT template <typename Client, typename Stub, typename Data>
     hpx::future<bool> register_with_basename(std::string base_name,
         components::client_base<Client, Stub, Data>& client,
         std::size_t sequence_nr)
@@ -186,7 +186,7 @@ namespace hpx {
     /// \returns A future representing the result of the un-registration
     ///          operation itself.
     ///
-    template <typename Client>
+    HPX_CXX_EXPORT template <typename Client>
     Client unregister_with_basename(
         std::string base_name, std::size_t sequence_nr)
     {

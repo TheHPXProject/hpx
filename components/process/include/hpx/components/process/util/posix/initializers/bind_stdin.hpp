@@ -22,8 +22,7 @@ namespace hpx::components::process::posix::initializers {
     class bind_stdin : public initializer_base
     {
     public:
-        explicit bind_stdin(
-            hpx::iostream::file_descriptor_source const& source)
+        explicit bind_stdin(hpx::iostream::file_descriptor_source const& source)
           : source_(source)
         {
         }

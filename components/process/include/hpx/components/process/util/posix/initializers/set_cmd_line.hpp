@@ -17,7 +17,6 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/string_util.hpp>
 
-
 #include <memory>
 
 #include <cstddef>

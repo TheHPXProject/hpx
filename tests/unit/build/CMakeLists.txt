@@ -21,8 +21,9 @@ function(
   test_dir
 )
   set(build_dir "${CMAKE_CURRENT_BINARY_DIR}/${name}")
-  set(ADDITIONAL_CMAKE_OPTIONS -DUSING_INSTALL_DIR=${using_install_dir})
-  set(ADDITIONAL_CMAKE_OPTIONS -DSETUP_TYPE=${setup_type})
+  set(ADDITIONAL_CMAKE_OPTIONS -DUSING_INSTALL_DIR=${using_install_dir}
+                               -DSETUP_TYPE=${setup_type}
+  )
   if(CMAKE_TOOLCHAIN_FILE)
     set(ADDITIONAL_CMAKE_OPTIONS ${ADDITIONAL_CMAKE_OPTIONS}
                                  -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
@@ -55,6 +56,15 @@ function(
   if(HPX_WITH_CLANG_CUDA)
     set(cmake_cuda_compiler -DCMAKE_CUDA_COMPILER=${CMAKE_CUDA_COMPILER})
   endif()
+  if(HPX_WITH_CXX_MODULES)
+    set(ADDITIONAL_CMAKE_OPTIONS
+        ${ADDITIONAL_CMAKE_OPTIONS}
+        -DHPX_WITH_CXX_MODULES=ON
+        -DHPX_CMAKE_LOGLEVEL=Debug
+        -DCMAKE_CXX_EXTENSIONS=${CMAKE_CXX_EXTENSIONS}
+        -DCMAKE_CXX_STANDARD=${HPX_CXX_STANDARD}
+    )
+  endif()
   add_custom_target(
     ${name}
     COMMAND
@@ -63,10 +73,20 @@ function(
       -DHPX_DIR=${hpx_dir} -DBOOST_ROOT=${BOOST_ROOT}
       ${ADDITIONAL_CMAKE_OPTIONS} -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS_SAFE}
       -DCMAKE_BUILD_TYPE=${build_type} ${cmake_cuda_compiler} --test-command
-      "${CMAKE_CTEST_COMMAND}" --output-on-failure
+      "${CMAKE_CTEST_COMMAND}" --output-on-failure --verbose
     VERBATIM
   )
   add_dependencies(${name} hpx hpx_init hpx_wrap)
+
+  if(HPX_WITH_CXX_MODULES)
+    if(TARGET hpx_core_module)
+      add_dependencies(${name} hpx_core_module)
+    endif()
+    if(TARGET hpx_full_module)
+      add_dependencies(${name} hpx_full_module)
+    endif()
+  endif()
+
   if(HPX_WITH_DISTRIBUTED_RUNTIME)
     add_dependencies(${name} iostreams_component)
   endif()
@@ -90,7 +110,7 @@ function(create_pkgconfig_test name hpx_dir)
       "${PROJECT_SOURCE_DIR}/examples/hello_world_component/Makefile"
       SRC_DIR=${PROJECT_SOURCE_DIR}/examples/hello_world_component
       HPX_DIR=${hpx_dir} CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER}
-      CXX_FLAGS=${CMAKE_CXX_FLAGS_SAFE} PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
+      "CXX_FLAGS=${CMAKE_CXX_FLAGS_SAFE}" PKG_CONFIG=${PKG_CONFIG_EXECUTABLE}
       BUILD_TYPE=$<CONFIGURATION>
     VERBATIM
   )
@@ -188,7 +208,10 @@ foreach(build_type ${build_types})
 endforeach()
 add_hpx_pseudo_dependencies(tests.unit.build tests.unit.build.cmake)
 
-if(HPX_WITH_PKGCONFIG AND HPX_WITH_DISTRIBUTED_RUNTIME)
+if(HPX_WITH_PKGCONFIG
+   AND HPX_WITH_DISTRIBUTED_RUNTIME
+   AND NOT HPX_WITH_CXX_MODULES
+)
   find_package(PkgConfig)
   if(PKGCONFIG_FOUND)
     create_pkgconfig_test(

@@ -1,7 +1,7 @@
 //  (C) Copyright 2005 Matthias Troyer and Dave Abrahams
 //  Copyright (c) 2015 Anton Bikineev
 //  Copyright (c) 2015 Andreas Schaefer
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -80,12 +80,15 @@ namespace hpx::serialization {
                         ar.template try_get_extra_data<
                             detail::allow_zero_copy_receive>() != nullptr;
 
-                    ar.load_binary_chunk(m_t, m_element_count * sizeof(T),
-                        allow_zero_copy_receive);
+                    ar.load_binary_chunk(
+                        detail::array_of_fundamental_type_v<element_type>, m_t,
+                        m_element_count * sizeof(T), allow_zero_copy_receive);
                 }
                 else
                 {
-                    ar.save_binary_chunk(m_t, m_element_count * sizeof(T));
+                    ar.save_binary_chunk(
+                        detail::array_of_fundamental_type_v<element_type>, m_t,
+                        m_element_count * sizeof(T));
                 }
             }
             else

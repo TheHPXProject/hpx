@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,12 +9,13 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_NETWORKING)
+#include <hpx/modules/parcelset.hpp>
+
 #include <hpx/agas_base/agas_fwd.hpp>
-#include <hpx/parcelset/parcel.hpp>
 
 namespace hpx::agas::server {
 
-    extern HPX_EXPORT void (*route)(
+    HPX_CXX_EXPORT extern HPX_EXPORT void (*route)(
         primary_namespace& server, parcelset::parcel&& p);
 }    // namespace hpx::agas::server
 

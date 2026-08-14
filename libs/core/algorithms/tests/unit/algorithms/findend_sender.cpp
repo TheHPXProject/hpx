@@ -37,11 +37,11 @@ void find_end_sender_test2()
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    unsigned int seed = (unsigned int) std::time(nullptr);
     if (vm.count("seed"))
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
+    gen.seed(seed);
     std::srand(seed);
 
     find_end_sender_test1<std::forward_iterator_tag>();

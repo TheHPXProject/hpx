@@ -13,28 +13,20 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_LCW)
 
 #include <hpx/assert.hpp>
+#include <hpx/modules/command_line_handling.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/parcelset.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/plugin.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/util.hpp>
-
-#include <hpx/modules/command_line_handling.hpp>
-#include <hpx/modules/parcelset_base.hpp>
-
-#include <hpx/parcelset/parcelport_connection.hpp>
-#include <hpx/parcelset/parcelport_impl.hpp>
-#include <hpx/parcelset/parcelset_fwd.hpp>
-#include <hpx/plugin_factories/parcelport_factory.hpp>
-
-#include <hpx/parcelset/parcelport_connection.hpp>
-#include <hpx/parcelset_base/detail/gatherer.hpp>
-#include <hpx/parcelset_base/parcelport.hpp>
 
 #include <hpx/modules/lcw_base.hpp>
 #include <hpx/parcelport_lcw/header.hpp>

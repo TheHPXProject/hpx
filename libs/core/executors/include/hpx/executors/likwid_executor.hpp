@@ -73,103 +73,89 @@ namespace hpx::execution::experimental {
 
         // OneWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::sync_execute_t,
-            likwid_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) sync_execute(F&& f, Ts&&... ts) const
         {
-            return hpx::parallel::execution::sync_execute(exec.base_executor(),
-                hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
+            return hpx::parallel::execution::sync_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)},
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            likwid_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return hpx::parallel::execution::async_execute(exec.base_executor(),
-                hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
+            return hpx::parallel::execution::async_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)},
                 HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename F, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::then_execute_t,
-            likwid_executor const& exec, F&& f, Future&& predecessor,
-            Ts&&... ts)
+        decltype(auto) then_execute(
+            F&& f, Future&& predecessor, Ts&&... ts) const
         {
-            return hpx::parallel::execution::then_execute(exec.base_executor(),
-                hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
+            return hpx::parallel::execution::then_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)},
                 HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
         // NonBlockingOneWayExecutor (adapted) interface
         template <typename F, typename... Ts>
-        friend void tag_invoke(hpx::parallel::execution::post_t,
-            likwid_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            hpx::parallel::execution::post(exec.base_executor(),
-                hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
+            hpx::parallel::execution::post(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)},
                 HPX_FORWARD(Ts, ts)...);
         }
 
         // BulkOneWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_sync_execute_t,
-            likwid_executor const& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_sync_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return hpx::parallel::execution::bulk_sync_execute(
-                exec.base_executor(), hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
-                shape, HPX_FORWARD(Ts, ts)...);
+            return hpx::parallel::execution::bulk_sync_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)}, shape,
+                HPX_FORWARD(Ts, ts)...);
         }
 
         // BulkTwoWayExecutor interface
         template <typename F, typename S, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_async_execute_t,
-            likwid_executor const& exec, F&& f, S const& shape, Ts&&... ts)
+        decltype(auto) bulk_async_execute(
+            F&& f, S const& shape, Ts&&... ts) const
         {
-            return hpx::parallel::execution::bulk_async_execute(
-                exec.base_executor(), hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
-                shape, HPX_FORWARD(Ts, ts)...);
-        }
-
-        template <typename F, typename S, typename Future, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::bulk_then_execute_t,
-            likwid_executor const& exec, F&& f, S const& shape,
-            Future&& predecessor, Ts&&... ts)
-        {
-            return hpx::parallel::execution::bulk_then_execute(
-                exec.base_executor(), hook_wrapper<F>{exec, HPX_FORWARD(F, f)},
-                shape, HPX_FORWARD(Future, predecessor),
+            return hpx::parallel::execution::bulk_async_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)}, shape,
                 HPX_FORWARD(Ts, ts)...);
         }
 
-        friend constexpr auto tag_invoke(
-            hpx::execution::experimental::with_annotation_t,
-            likwid_executor const& exec, char const* name)
+        template <typename F, typename S, typename Future, typename... Ts>
+        decltype(auto) bulk_then_execute(
+            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
         {
-            auto exec_with_annotation = exec;
+            return hpx::parallel::execution::bulk_then_execute(base_executor(),
+                hook_wrapper<F>{*this, HPX_FORWARD(F, f)}, shape,
+                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
+        }
+
+        constexpr auto query(hpx::execution::experimental::with_annotation_t,
+            char const* name) const
+        {
+            auto exec_with_annotation = *this;
             exec_with_annotation.name_ = name;
             return exec_with_annotation;
         }
 
-        friend auto tag_invoke(hpx::execution::experimental::with_annotation_t,
-            likwid_executor const& exec, std::string name)
+        auto query(hpx::execution::experimental::with_annotation_t,
+            std::string name) const
         {
-            auto exec_with_annotation = exec;
+            auto exec_with_annotation = *this;
             exec_with_annotation.name_ = HPX_MOVE(name);
             return exec_with_annotation;
         }
 
-        friend constexpr char const* tag_invoke(
-            hpx::execution::experimental::get_annotation_t,
-            likwid_executor const& exec) noexcept
+        constexpr char const* query(
+            hpx::execution::experimental::get_annotation_t) const noexcept
         {
-            return exec.name_.c_str();
+            return name_.c_str();
         }
 
     private:

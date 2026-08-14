@@ -73,9 +73,6 @@ void print_results(variables_map& vm, double sum_, double mean_)
                 "## 3:WTIME_THR:Total Walltime/Thread [micro-seconds]\n";
     }
 
-    std::string const tasks_str = hpx::util::format("{},", tasks);
-    std::string const delay_str = hpx::util::format("{},", delay);
-
     hpx::util::format_to(
         cout, "{} {} {} {:.14g}\n", delay, tasks, threads, mean_);
 }

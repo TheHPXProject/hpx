@@ -19,6 +19,11 @@
 #include <boost/config.hpp>
 #include <boost/version.hpp>
 
+#if BOOST_VERSION < 107100
+// Please update your Boost installation (see www.boost.org for details).
+#error HPX cannot be compiled with a Boost version earlier than 1.71.0
+#endif
+
 #if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
     defined(HPX_HAVE_MODULE_MPI_BASE)
 #if defined(__clang__)
@@ -170,10 +175,9 @@ namespace hpx {
         constexpr char const* const copyright =
             "HPX - The C++ Standard Library for Parallelism and Concurrency\n"
             "(A general purpose parallel C++ runtime system for distributed "
-            "applications\n"
-            "of any scale).\n\n"
-            "Copyright (c) 2007-2026, The STE||AR Group,\n"
-            "http://stellar-group.org, email:hpx-users@stellar-group.org\n\n"
+            "applications\nof any scale).\n\n"
+            "Copyright (c) 2007-2026, HPX Project a Series of LF Projects, "
+            "LLC, (https://hpx.dev)\n\n"
             "Distributed under the Boost Software License, "
             "Version 1.0. (See accompanying\n"
             "file LICENSE_1_0.txt or copy at "

@@ -89,14 +89,14 @@ namespace hpx::parallel::detail {
 
             pos_dest = pos_src = pos_in_vector;
             Iter it_dest = std::next(first, pos_dest);
-            value_type Aux = HPX_MOVE(*it_dest);
+            value_type Aux = std::ranges::iter_move(it_dest);
 
             while ((pos_src = static_cast<std::size_t>(detail::distance(
                         first, v_iter[pos_dest]))) != pos_in_vector)
             {
                 v_iter[pos_dest] = it_dest;
                 Iter it_src = std::next(first, pos_src);
-                *it_dest = HPX_MOVE(*it_src);
+                *it_dest = std::ranges::iter_move(it_src);
                 it_dest = it_src;
                 pos_dest = pos_src;
             }

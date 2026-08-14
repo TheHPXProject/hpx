@@ -13,7 +13,6 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/memory.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/pack_traversal/detail/container_category.hpp>
 
@@ -229,8 +228,7 @@ namespace hpx::util::detail {
 
 namespace hpx::traits::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Visitor, typename... Args,
-        typename Allocator>
+    template <typename Visitor, typename... Args, typename Allocator>
     struct shared_state_allocator<
         util::detail::async_traversal_frame<Visitor, Args...>, Allocator>
     {

@@ -1,4 +1,5 @@
 //  Copyright (c) 2020 John Biddiscombe
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2020 Teodor Nikolov
 //  Copyright (c) 2024-2025 Hartmut Kaiser
 //
@@ -134,21 +135,18 @@ namespace hpx::cuda::experimental {
         // OneWay Execution
         // -------------------------------------------------------------------------
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(hpx::parallel::execution::post_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
+        void post(F&& f, Ts&&... ts) const
         {
-            return exec.post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            post_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
         // -------------------------------------------------------------------------
         // TwoWay Execution
         // -------------------------------------------------------------------------
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t,
-            cublas_executor const& exec, F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
-            return exec.async(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
+            return async_impl(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
     protected:
@@ -156,7 +154,7 @@ namespace hpx::cuda::experimental {
         // that you would use for a cublas call except the cublas handle which is omitted
         // as the wrapper will supply that for you
         template <typename R, typename... Params, typename... Args>
-        std::enable_if_t<std::is_same_v<cublasStatus_t, R>, R> post(
+        std::enable_if_t<std::is_same_v<cublasStatus_t, R>, R> post_impl(
             R (*cublas_function)(Params...), Args&&... args) const
         {
             // make sure we run on the correct device
@@ -177,10 +175,10 @@ namespace hpx::cuda::experimental {
         // forward a cuda function through to the cuda executor base class
         // (we permit the use of a cublas executor for cuda calls)
         template <typename R, typename... Params, typename... Args>
-        inline std::enable_if_t<std::is_same_v<cudaError_t, R>> post(
+        inline std::enable_if_t<std::is_same_v<cudaError_t, R>> post_impl(
             R (*cuda_function)(Params...), Args&&... args) const
         {
-            return cuda_executor::post(
+            return cuda_executor::post_impl(
                 cuda_function, HPX_FORWARD(Args, args)...);
         }
 
@@ -189,8 +187,8 @@ namespace hpx::cuda::experimental {
         // when the task completes, this allows integration of GPU kernels with
         // hpx::futures and the tasking DAG.
         template <typename R, typename... Params, typename... Args>
-        hpx::future<std::enable_if_t<std::is_same_v<cublasStatus_t, R>>> async(
-            R (*cublas_function)(Params...), Args&&... args) const
+        hpx::future<std::enable_if_t<std::is_same_v<cublasStatus_t, R>>>
+        async_impl(R (*cublas_function)(Params...), Args&&... args) const
         {
             return hpx::detail::try_catch_exception_ptr(
                 [&]() {
@@ -216,9 +214,9 @@ namespace hpx::cuda::experimental {
         // forward a cuda function through to the cuda executor base class
         template <typename R, typename... Params, typename... Args>
         inline hpx::future<std::enable_if_t<std::is_same_v<cudaError_t, R>>>
-        async(R (*cuda_function)(Params...), Args&&... args) const
+        async_impl(R (*cuda_function)(Params...), Args&&... args) const
         {
-            return cuda_executor::async(
+            return cuda_executor::async_impl(
                 cuda_function, HPX_FORWARD(Args, args)...);
         }
 

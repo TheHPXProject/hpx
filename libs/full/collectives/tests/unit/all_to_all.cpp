@@ -21,6 +21,8 @@
 using namespace hpx::collectives;
 
 constexpr char const* all_to_all_direct_basename = "/test/all_to_all_direct/";
+constexpr char const* all_to_all_validation_basename =
+    "/test/all_to_all_validation/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 100;
 #else
@@ -37,8 +39,7 @@ void test_one_shot_use()
     // test functionality based on immediate local result value
     for (int i = 0; i != ITERATIONS; ++i)
     {
-        std::vector<std::uint32_t> values(num_localities);
-        std::fill(values.begin(), values.end(), this_locality + i);
+        std::vector<std::uint32_t> values(num_localities, this_locality + i);
 
         hpx::future<std::vector<std::uint32_t>> overall_result =
             all_to_all(all_to_all_direct_basename, std::move(values),
@@ -69,8 +70,7 @@ void test_multiple_use()
     // test functionality based on immediate local result value
     for (int i = 0; i != ITERATIONS; ++i)
     {
-        std::vector<std::uint32_t> values(num_localities);
-        std::fill(values.begin(), values.end(), this_locality + i);
+        std::vector<std::uint32_t> values(num_localities, this_locality + i);
 
         hpx::future<std::vector<std::uint32_t>> overall_result =
             all_to_all(all_to_all_direct_client, std::move(values));
@@ -100,8 +100,7 @@ void test_multiple_use_with_generation()
 
     for (int i = 0; i != ITERATIONS; ++i)
     {
-        std::vector<std::uint32_t> values(num_localities);
-        std::fill(values.begin(), values.end(), this_locality + i);
+        std::vector<std::uint32_t> values(num_localities, this_locality + i);
 
         hpx::future<std::vector<std::uint32_t>> overall_result = all_to_all(
             all_to_all_direct_client, std::move(values), generation_arg(i + 1));
@@ -132,7 +131,7 @@ void test_local_use(std::uint32_t num_sites)
     for (std::uint32_t site = 0; site != num_sites; ++site)
     {
         sites.push_back(hpx::async([=]() {
-            auto const all_reduce_direct_client =
+            auto const all_to_all_direct_client =
                 create_local_communicator(all_to_all_direct_basename,
                     num_sites_arg(num_sites), this_site_arg(site));
 
@@ -140,19 +139,18 @@ void test_local_use(std::uint32_t num_sites)
 
             for (std::uint32_t i = 0; i != 10 * ITERATIONS; ++i)
             {
-                // test functionality based on immediate local result value
-                auto value = site;
+                std::vector<std::uint32_t> values(num_sites, site + i);
 
                 hpx::future<std::vector<std::uint32_t>> overall_result =
-                    all_gather(all_reduce_direct_client, value,
-                        this_site_arg(value), generation_arg(i + 1));
+                    all_to_all(all_to_all_direct_client, std::move(values),
+                        this_site_arg(site), generation_arg(i + 1));
 
                 std::vector<std::uint32_t> r = overall_result.get();
                 HPX_TEST_EQ(r.size(), num_sites);
 
                 for (std::size_t j = 0; j != r.size(); ++j)
                 {
-                    HPX_TEST_EQ(r[j], j);
+                    HPX_TEST_EQ(r[j], j + i);
                 }
             }
 
@@ -166,6 +164,78 @@ void test_local_use(std::uint32_t num_sites)
     }
 
     hpx::wait_all(std::move(sites));
+}
+
+void test_singleton_payload_validation()
+{
+    for (std::size_t size : {0u, 2u})
+    {
+        auto const all_to_all_direct_client =
+            create_local_communicator(all_to_all_validation_basename,
+                num_sites_arg(1), this_site_arg(0), generation_arg(size + 1));
+
+        bool caught_exception = false;
+        try
+        {
+            [[maybe_unused]] auto result = all_to_all(all_to_all_direct_client,
+                std::vector<std::uint32_t>(size), this_site_arg(0),
+                generation_arg(size + 1))
+                                               .get();
+        }
+        catch (hpx::exception const& e)
+        {
+            caught_exception = true;
+            HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+        }
+        HPX_TEST(caught_exception);
+    }
+}
+
+void test_local_use_undersized_payload(std::uint32_t num_sites)
+{
+    std::vector<hpx::future<std::vector<std::uint32_t>>> sites;
+    sites.reserve(num_sites);
+
+    constexpr std::size_t generation = 1;
+
+    // launch num_sites threads to represent different sites
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async([=]() {
+            auto const all_to_all_direct_client = create_local_communicator(
+                all_to_all_validation_basename, num_sites_arg(num_sites),
+                this_site_arg(site), generation_arg(generation));
+
+            std::vector<std::uint32_t> values(num_sites, site + 42);
+
+            // Intentionally provide malformed payload on one site and verify
+            // that this collective invocation fails deterministically.
+            if (site == 0)
+            {
+                values.pop_back();
+            }
+
+            return all_to_all(hpx::launch::sync, all_to_all_direct_client,
+                std::move(values), this_site_arg(site),
+                generation_arg(generation));
+        }));
+    }
+
+    for (auto& f : sites)
+    {
+        bool caught_exception = false;
+        try
+        {
+            [[maybe_unused]] auto result = f.get();
+        }
+        catch (hpx::exception const& e)
+        {
+            caught_exception = true;
+            HPX_TEST_EQ(e.get_error(), hpx::error::bad_parameter);
+        }
+
+        HPX_TEST(caught_exception);
+    }
 }
 
 int hpx_main()
@@ -183,6 +253,10 @@ int hpx_main()
     {
         test_local_use(1);
         test_local_use(10);
+
+        // Validate that malformed participant payload sizes are rejected.
+        test_local_use_undersized_payload(10);
+        test_singleton_payload_validation();
     }
 
     return hpx::finalize();

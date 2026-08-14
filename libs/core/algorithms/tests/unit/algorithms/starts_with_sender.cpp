@@ -59,7 +59,7 @@ void test_starts_with_sender(
                               iterator(std::begin(some_more_ints)),
                               iterator(std::end(some_more_ints))) |
                 hpx::starts_with(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST_EQ(result, true);
     }
@@ -73,7 +73,7 @@ void test_starts_with_sender(
                               iterator(std::begin(some_wrong_ints)),
                               iterator(std::end(some_wrong_ints))) |
                 hpx::starts_with(ex_policy.on(exec)));
-        auto result = hpx::get<0>(*snd_result);
+        auto result = hpx::get<0>(snd_result.value());
 
         HPX_TEST_EQ(result, false);
     }
@@ -97,7 +97,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     starts_with_sender_test<std::forward_iterator_tag>();
     starts_with_sender_test<std::random_access_iterator_tag>();

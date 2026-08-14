@@ -13,7 +13,6 @@
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/threading_base/thread_init_data.hpp>
 #include <hpx/threading_base/threading_base_fwd.hpp>
@@ -52,8 +51,7 @@ namespace hpx::threads {
             typename Is = util::index_pack<>, typename... Ts>
         struct thread_function_nullary;
 
-        HPX_CXX_CORE_EXPORT template <typename F, std::size_t... Is,
-            typename... Ts>
+        template <typename F, std::size_t... Is, typename... Ts>
         struct thread_function_nullary<F, util::index_pack<Is...>, Ts...>
         {
             HPX_NO_UNIQUE_ADDRESS F f;

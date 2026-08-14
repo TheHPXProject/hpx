@@ -1,4 +1,5 @@
 //  Copyright (c) 2016 Marcin Copik
+//  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2016-2025 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -16,7 +17,6 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/serialization.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -34,50 +34,47 @@ namespace hpx::execution::experimental::detail {
     ///////////////////////////////////////////////////////////////////////
     template <typename Property, template <typename> class CheckForProperty>
     struct get_parameters_property_t final
-      : hpx::functional::detail::tag_fallback<
-            get_parameters_property_t<Property, CheckForProperty>>
     {
     private:
-        using derived_property_t =
-            get_parameters_property_t<Property, CheckForProperty>;
-
         template <typename T>
         using check_for_property = CheckForProperty<std::decay_t<T>>;
 
+    public:
+        // Primary: Executor directly supports property (highest priority -
+        // mirrors old tag_invoke > tag_fallback_invoke semantics)
         template <typename Executor, typename Parameters>
-            requires(!hpx::traits::is_executor_parameters_v<Parameters> ||
-                !check_for_property<Parameters>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_fallback_invoke(
-            derived_property_t, Executor&& /*exec*/, Parameters&& /*params*/,
-            Property prop) noexcept
+            requires(hpx::traits::is_executor_any_v<Executor> &&
+                check_for_property<Executor>::value)
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& exec,
+            Parameters&& params, Property /*prop*/) const noexcept
         {
-            return std::make_pair(prop, prop);
+            return std::pair<Executor&&, Parameters&&>(
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(Parameters, params));
         }
 
         ///////////////////////////////////////////////////////////////////
-        // Parameters directly supports property
+        // Secondary: Parameters directly supports property (when executor
+        // doesn't)
         template <typename Executor, typename Parameters>
             requires(hpx::traits::is_executor_parameters_v<Parameters> &&
-                check_for_property<Parameters>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_fallback_invoke(
-            derived_property_t, Executor&& exec, Parameters&& params,
-            Property /*prop*/) noexcept
+                check_for_property<Parameters>::value &&
+                !check_for_property<Executor>::value)
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& exec,
+            Parameters&& params, Property /*prop*/) const noexcept
         {
             return std::pair<Parameters&&, Executor&&>(
                 HPX_FORWARD(Parameters, params), HPX_FORWARD(Executor, exec));
         }
 
-        ///////////////////////////////////////////////////////////////////
-        // Executor directly supports property
+        // Fallback: neither executor nor parameters support property
         template <typename Executor, typename Parameters>
-            requires(hpx::traits::is_executor_any_v<Executor> &&
-                check_for_property<Executor>::value)
-        friend HPX_FORCEINLINE constexpr decltype(auto) tag_invoke(
-            derived_property_t, Executor&& exec, Parameters&& params,
-            Property /*prop*/) noexcept
+            requires(!check_for_property<Executor>::value &&
+                (!hpx::traits::is_executor_parameters_v<Parameters> ||
+                    !check_for_property<Parameters>::value))
+        HPX_FORCEINLINE constexpr decltype(auto) operator()(Executor&& /*exec*/,
+            Parameters&& /*params*/, Property prop) const noexcept
         {
-            return std::pair<Executor&&, Parameters&&>(
-                HPX_FORWARD(Executor, exec), HPX_FORWARD(Parameters, params));
+            return std::make_pair(prop, prop);
         }
     };
 
@@ -547,6 +544,59 @@ namespace hpx::execution::experimental::detail {
 
     ///////////////////////////////////////////////////////////////////////
     // define member traits
+    HPX_HAS_MEMBER_XXX_TRAIT_DEF(mark_partition)
+
+    ///////////////////////////////////////////////////////////////////////
+    // default property implementation allowing to handle
+    // mark_partition
+    struct mark_partition_property
+    {
+        // default implementation
+        template <typename Target, typename... Args>
+        HPX_FORCEINLINE static constexpr void mark_partition(
+            Target, std::size_t, Args&&...) noexcept
+        {
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // Generate a type that is guaranteed to support
+    // mark_partition
+    using get_mark_partition_t =
+        get_parameters_property_t<mark_partition_property,
+            has_mark_partition_t>;
+
+    inline constexpr get_mark_partition_t get_mark_partition{};
+
+    ///////////////////////////////////////////////////////////////////////
+    // customization point for interface mark_partition()
+    template <typename Parameters, typename Executor_>
+    struct mark_partition_fn_helper<Parameters, Executor_,
+        std::enable_if_t<hpx::traits::is_executor_any_v<Executor_>>>
+    {
+        template <typename Executor, typename... Args>
+        HPX_FORCEINLINE static constexpr void call(Parameters& params,
+            Executor&& exec, std::size_t partition, Args&&... args)
+        {
+            auto get_prop = get_mark_partition(
+                HPX_FORWARD(Executor, exec), params, mark_partition_property{});
+
+            get_prop.first.mark_partition(
+                HPX_FORWARD(decltype(get_prop.second), get_prop.second),
+                partition, HPX_FORWARD(Args, args)...);
+        }
+
+        template <typename AnyParameters, typename Executor, typename... Args>
+        HPX_FORCEINLINE static constexpr void call(AnyParameters params,
+            Executor&& exec, std::size_t partition, Args&&... args)
+        {
+            call(static_cast<Parameters&>(params), HPX_FORWARD(Executor, exec),
+                partition, HPX_FORWARD(Args, args)...);
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////
+    // define member traits
     HPX_HAS_MEMBER_XXX_TRAIT_DEF(collect_execution_parameters)
 
     ///////////////////////////////////////////////////////////////////////
@@ -693,13 +743,13 @@ namespace hpx::execution::experimental::detail {
         std::enable_if_t<has_measure_iteration_v<T>>>
     {
         template <typename Executor, typename F>
-        HPX_FORCEINLINE std::size_t measure_iteration(Executor&& exec, F&& f,
-            std::size_t cores, std::size_t num_tasks) const
+        HPX_FORCEINLINE decltype(auto) measure_iteration(
+            Executor&& exec, F&& f, std::size_t num_tasks) const
         {
             auto& wrapped =
                 static_cast<unwrapper<Wrapper> const*>(this)->member_.get();
-            return wrapped.measure_iteration(HPX_FORWARD(Executor, exec),
-                HPX_FORWARD(F, f), cores, num_tasks);
+            return wrapped.measure_iteration(
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f), num_tasks);
         }
     };
 
@@ -762,6 +812,27 @@ namespace hpx::execution::experimental::detail {
 
     ///////////////////////////////////////////////////////////////////////
     template <typename T, typename Wrapper, typename Enable = void>
+    struct mark_partition_call_helper
+    {
+    };
+
+    template <typename T, typename Wrapper>
+    struct mark_partition_call_helper<T, Wrapper,
+        std::enable_if_t<has_mark_partition_v<T>>>
+    {
+        template <typename Executor, typename... Args>
+        HPX_FORCEINLINE void mark_partition(
+            Executor&& exec, std::size_t partition, Args&&... args)
+        {
+            auto& wrapped =
+                static_cast<unwrapper<Wrapper>*>(this)->member_.get();
+            wrapped.mark_partition(HPX_FORWARD(Executor, exec), partition,
+                HPX_FORWARD(Args, args)...);
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////
+    template <typename T, typename Wrapper, typename Enable = void>
     struct processing_units_count_call_helper
     {
     };
@@ -771,12 +842,14 @@ namespace hpx::execution::experimental::detail {
         std::enable_if_t<has_processing_units_count_v<T>>>
     {
         template <typename Executor>
-        HPX_FORCEINLINE std::size_t processing_units_count(
-            Executor&& exec) const
+        HPX_FORCEINLINE std::size_t processing_units_count(Executor&& exec,
+            hpx::chrono::steady_duration const& iteration_duration,
+            std::size_t num_tasks) const
         {
             auto& wrapped =
                 static_cast<unwrapper<Wrapper> const*>(this)->member_.get();
-            return wrapped.processing_units_count(HPX_FORWARD(Executor, exec));
+            return wrapped.processing_units_count(
+                HPX_FORWARD(Executor, exec), iteration_duration, num_tasks);
         }
     };
 
@@ -836,13 +909,14 @@ namespace hpx::execution::experimental::detail {
     ///////////////////////////////////////////////////////////////////////
     template <typename T>
     struct unwrapper<::std::reference_wrapper<T>>
-      : base_member_helper<std::reference_wrapper<T>>
+      : base_member_helper<::std::reference_wrapper<T>>
       , maximal_number_of_chunks_call_helper<T, std::reference_wrapper<T>>
       , get_chunk_size_call_helper<T, std::reference_wrapper<T>>
       , measure_iteration_call_helper<T, std::reference_wrapper<T>>
       , mark_begin_execution_call_helper<T, std::reference_wrapper<T>>
       , mark_end_of_scheduling_call_helper<T, std::reference_wrapper<T>>
       , mark_end_execution_call_helper<T, std::reference_wrapper<T>>
+      , mark_partition_call_helper<T, std::reference_wrapper<T>>
       , processing_units_count_call_helper<T, std::reference_wrapper<T>>
       , reset_thread_distribution_call_helper<T, std::reference_wrapper<T>>
       , collect_execution_parameters_call_helper<T, std::reference_wrapper<T>>
@@ -881,6 +955,7 @@ namespace hpx::execution::experimental::detail {
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(mark_begin_execution);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(mark_end_of_scheduling);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(mark_end_execution);
+        HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(mark_partition);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(processing_units_count);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(maximal_number_of_chunks);
         HPX_STATIC_ASSERT_ON_PARAMETERS_AMBIGUITY(reset_thread_distribution);
@@ -920,7 +995,7 @@ namespace hpx::execution::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     // specialize trait for the type-combiner
-    HPX_CXX_CORE_EXPORT template <typename... Parameters>
+    template <typename... Parameters>
     struct is_executor_parameters<detail::executor_parameters<Parameters...>>
       : hpx::util::all_of<hpx::traits::is_executor_parameters<Parameters>...>
     {
@@ -942,7 +1017,7 @@ namespace hpx::execution::experimental {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Param>
+    template <typename Param>
     struct executor_parameters_join<Param>
     {
         using type = Param;

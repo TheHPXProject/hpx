@@ -1,4 +1,4 @@
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -10,17 +10,20 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
-#include <hpx/performance_counters/counters.hpp>
 
-namespace hpx { namespace performance_counters {
+#include <hpx/performance_counters/counters.hpp>
+#include <hpx/performance_counters/detail/counter_interface_functions.hpp>
+
+namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_EXPORT hpx::future<id_type> create_performance_counter_async(
-        id_type target_id, counter_info const& info);
+        id_type const& target_id, counter_info const& info);
 
-    inline id_type create_performance_counter(
-        id_type target_id, counter_info const& info, error_code& ec = throws)
+    HPX_CXX_EXPORT inline id_type create_performance_counter(
+        id_type const& target_id, counter_info const& info,
+        error_code& ec = throws)
     {
         return create_performance_counter_async(target_id, info).get(ec);
     }
-}}    // namespace hpx::performance_counters
+}    // namespace hpx::performance_counters

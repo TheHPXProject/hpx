@@ -16,7 +16,7 @@ unpack it or clone the repository directly using ``git``:
 
 .. code-block:: shell-session
 
-    $ git clone https://github.com/STEllAR-GROUP/hpx.git
+    $ git clone https://github.com/TheHPXProject/hpx.git
 
 It is also recommended that you check out the latest stable tag:
 

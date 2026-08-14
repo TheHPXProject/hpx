@@ -4,7 +4,7 @@
 //  Link: http://www.research.ibm.com/people/m/michael/europar-2003.pdf
 //
 //  C++ implementation - Copyright (C) 2011 Bryce Lelbach
-//  Copyright (c) 2022-2025 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -62,7 +62,7 @@ namespace hpx::lockfree {
         using pointer = hpx::lockfree::detail::tagged_ptr<deque_node>;
         using atomic_pointer = std::atomic<pointer>;
 
-        using tag_t = typename pointer::tag_t;
+        using tag_t = pointer::tag_t;
 
         atomic_pointer left;
         atomic_pointer right;
@@ -104,10 +104,10 @@ namespace hpx::lockfree {
     struct deque_anchor    //-V690
     {
         using node = deque_node<T>;
-        using node_pointer = typename node::pointer;
-        using atomic_node_pointer = typename node::atomic_pointer;
+        using node_pointer = node::pointer;
+        using atomic_node_pointer = node::atomic_pointer;
 
-        using tag_t = typename node::tag_t;
+        using tag_t = node::tag_t;
 
         using anchor = deque_anchor<T>;
         using pair = tagged_ptr_pair<node, node>;
@@ -243,22 +243,25 @@ namespace hpx::lockfree {
     struct deque
     {
     public:
-        HPX_NON_COPYABLE(deque);
+        deque(deque const&) = delete;
+        deque(deque&&) = delete;
+        deque& operator=(deque const&) = delete;
+        deque& operator=(deque&&) = delete;
 
     public:
         using node = deque_node<T>;
 
-        using node_pointer = typename node::pointer;
-        using atomic_node_pointer = typename node::atomic_pointer;
+        using node_pointer = node::pointer;
+        using atomic_node_pointer = node::atomic_pointer;
 
-        using tag_t = typename node::tag_t;
+        using tag_t = node::tag_t;
 
         using anchor = deque_anchor<T>;
-        using anchor_pair = typename anchor::pair;
-        using atomic_anchor_pair = typename anchor::atomic_pair;
+        using anchor_pair = anchor::pair;
+        using atomic_anchor_pair = anchor::atomic_pair;
 
         using node_allocator =
-            typename std::allocator_traits<Alloc>::template rebind_alloc<node>;
+            std::allocator_traits<Alloc>::template rebind_alloc<node>;
 
         using pool =
             std::conditional_t<std::is_same_v<freelist_t, caching_freelist_t>,
@@ -270,7 +273,8 @@ namespace hpx::lockfree {
         pool pool_;
 
         static constexpr std::size_t padding_size =
-            hpx::threads::get_cache_line_size() - sizeof(anchor);    //-V103
+            hpx::threads::get_cache_line_size() -
+            (sizeof(anchor) + sizeof(pool));    //-V103
         char padding[padding_size];
 
         node* alloc_node(
@@ -415,13 +419,14 @@ namespace hpx::lockfree {
             }
         }
 
-        // Not thread-safe.
+        // Thread-safe and non-blocking.
         // Complexity: O(Processes)
-        // FIXME: Should we check both pointers here?
-        [[nodiscard]] bool empty() const noexcept
+        [[nodiscard]] bool empty(
+            std::memory_order mo = std::memory_order_relaxed) const noexcept
         {
-            return anchor_.lrs(std::memory_order_relaxed).get_left_ptr() ==
-                nullptr;
+            anchor_pair lrs = anchor_.lrs(mo);
+            return lrs.get_left_ptr() == nullptr &&
+                lrs.get_right_ptr() == nullptr;
         }
 
         // Thread-safe and non-blocking.
@@ -449,8 +454,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_left_ptr() == nullptr)
+                if (lrs.get_left_ptr() == nullptr &&
+                    lrs.get_right_ptr() == nullptr)
                 {
                     // If the deque is empty, we simply install a new anchor
                     // which points to the new node as both its leftmost and
@@ -506,8 +511,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_right_ptr() == nullptr)
+                if (lrs.get_right_ptr() == nullptr &&
+                    lrs.get_left_ptr() == nullptr)
                 {
                     // If the deque is empty, we simply install a new anchor
                     // which points to the new node as both its leftmost and
@@ -526,7 +531,7 @@ namespace hpx::lockfree {
                     n->left.store(node_pointer(lrs.get_right_ptr()));
 
                     // Now we want to make the anchor point to our new node as
-                    // the leftmost node. We change the state to lpush as the
+                    // the rightmost node. We change the state to rpush as the
                     // deque will become unstable if this operation succeeds.
                     anchor_pair new_anchor(lrs.get_left_ptr(), n,
                         deque_status_type::rpush, lrs.get_right_tag() + 1);
@@ -557,8 +562,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_left_ptr() == nullptr)
+                if (lrs.get_left_ptr() == nullptr &&
+                    lrs.get_right_ptr() == nullptr)
                     return false;
 
                 // Check if the deque has 1 element.
@@ -625,8 +630,8 @@ namespace hpx::lockfree {
                 anchor_pair lrs = anchor_.lrs(std::memory_order_relaxed);
 
                 // Check if the deque is empty.
-                // FIXME: Should we check both pointers here?
-                if (lrs.get_right_ptr() == nullptr)
+                if (lrs.get_right_ptr() == nullptr &&
+                    lrs.get_left_ptr() == nullptr)
                     return false;
 
                 // Check if the deque has 1 element.

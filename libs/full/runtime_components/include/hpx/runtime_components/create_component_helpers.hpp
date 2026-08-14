@@ -1,4 +1,4 @@
-//  Copyright (c) 2020-2024 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,8 +7,8 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_colocated/async_colocated_fwd.hpp>
-#include <hpx/async_distributed/detail/async_implementations_fwd.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/futures.hpp>
@@ -33,10 +33,10 @@ namespace hpx::components {
 
     ///////////////////////////////////////////////////////////////////////////
     /// Asynchronously create a new instance of a component
-    template <typename Component, typename... Ts>
-    future<hpx::id_type> create_async(hpx::id_type const& gid, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
+    future<hpx::id_type> create_async(hpx::id_type const& id, Ts&&... vs)
     {
-        if (!naming::is_locality(gid))
+        if (!naming::is_locality(id))
         {
             HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                 "stubs::runtime_support::create_component_async",
@@ -47,14 +47,14 @@ namespace hpx::components {
         using action_type =
             server::create_component_action<Component, std::decay_t<Ts>...>;
 
-        return hpx::async<action_type>(gid, HPX_FORWARD(Ts, vs)...);
+        return hpx::async<action_type>(id, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <bool WithCount, typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
     future<std::vector<hpx::id_type>> bulk_create_async(
-        hpx::id_type const& gid, std::size_t count, Ts&&... vs)
+        hpx::id_type const& id, std::size_t count, Ts&&... vs)
     {
-        if (!naming::is_locality(gid))
+        if (!naming::is_locality(id))
         {
             HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                 "stubs::runtime_support::bulk_create_component_async",
@@ -65,53 +65,53 @@ namespace hpx::components {
         using action_type = server::bulk_create_component_action<WithCount,
             Component, std::decay_t<Ts>...>;
 
-        return hpx::async<action_type>(gid, count, HPX_FORWARD(Ts, vs)...);
+        return hpx::async<action_type>(id, count, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Component, typename... Ts>
-    hpx::id_type create(hpx::id_type const& gid, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
+    hpx::id_type create(hpx::id_type const& id, Ts&&... vs)
     {
-        return create_async<Component>(gid, HPX_FORWARD(Ts, vs)...).get();
+        return create_async<Component>(id, HPX_FORWARD(Ts, vs)...).get();
     }
 
-    template <bool WithCount, typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
     std::vector<hpx::id_type> bulk_create(
-        hpx::id_type const& gid, std::size_t count, Ts&&... vs)
+        hpx::id_type const& id, std::size_t count, Ts&&... vs)
     {
         return bulk_create_async<WithCount, Component>(
-            gid, count, HPX_FORWARD(Ts, vs)...)
+            id, count, HPX_FORWARD(Ts, vs)...)
             .get();
     }
 
-    template <typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
     future<hpx::id_type> create_colocated_async(
-        hpx::id_type const& gid, Ts&&... vs)
+        hpx::id_type const& id, Ts&&... vs)
     {
         using action_type =
             server::create_component_action<Component, std::decay_t<Ts>...>;
 
         return hpx::detail::async_colocated<action_type>(
-            gid, HPX_FORWARD(Ts, vs)...);
+            id, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <typename Component, typename... Ts>
-    static hpx::id_type create_colocated(hpx::id_type const& gid, Ts&&... vs)
+    HPX_CXX_EXPORT template <typename Component, typename... Ts>
+    hpx::id_type create_colocated(hpx::id_type const& id, Ts&&... vs)
     {
-        return create_colocated_async(gid, HPX_FORWARD(Ts, vs)...).get();
+        return create_colocated_async(id, HPX_FORWARD(Ts, vs)...).get();
     }
 
-    template <bool WithCount, typename Component, typename... Ts>
-    static future<std::vector<hpx::id_type>> bulk_create_colocated_async(
-        hpx::id_type const& gid, std::size_t count, Ts&&... vs)
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
+    future<std::vector<hpx::id_type>> bulk_create_colocated_async(
+        hpx::id_type const& id, std::size_t count, Ts&&... vs)
     {
         using action_type = server::bulk_create_component_action<WithCount,
             Component, std::decay_t<Ts>...>;
 
         return hpx::detail::async_colocated<action_type>(
-            gid, count, HPX_FORWARD(Ts, vs)...);
+            id, count, HPX_FORWARD(Ts, vs)...);
     }
 
-    template <bool WithCount, typename Component, typename... Ts>
+    HPX_CXX_EXPORT template <bool WithCount, typename Component, typename... Ts>
     std::vector<hpx::id_type> bulk_create_colocated(
         hpx::id_type const& id, std::size_t count, Ts&&... vs)
     {

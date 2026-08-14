@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -16,7 +16,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::util::detail {
 
-    HPX_EXPORT void init_logging_full(runtime_configuration&);
+    HPX_CXX_EXPORT HPX_EXPORT void init_logging_full(runtime_configuration&);
 }    // namespace hpx::util::detail
 
 #endif

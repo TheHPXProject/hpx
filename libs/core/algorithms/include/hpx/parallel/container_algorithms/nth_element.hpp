@@ -296,6 +296,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/nth_element.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -310,9 +311,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct nth_element_t final
-      : hpx::detail::tag_parallel_algorithm<nth_element_t>
+      : hpx::detail::tag_dispatch<nth_element_t,
+            hpx::detail::tag_parallel_algorithm<nth_element_t>>
     {
-    private:
         template <typename RandomIt, typename Sent,
             typename Pred = hpx::parallel::detail::less,
             typename Proj = hpx::identity>
@@ -328,9 +329,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend RandomIt tag_fallback_invoke(hpx::ranges::nth_element_t,
-            RandomIt first, RandomIt nth, Sent last, Pred pred = Pred(),
-            Proj proj = Proj())
+        static RandomIt invoke_default(RandomIt first, RandomIt nth, Sent last,
+            Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random access iterator.");
@@ -356,10 +356,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, RandomIt>
-        tag_fallback_invoke(hpx::ranges::nth_element_t, ExPolicy&& policy,
-            RandomIt first, RandomIt nth, Sent last, Pred pred = Pred(),
-            Proj proj = Proj())
+        static parallel::util::detail::algorithm_result_t<ExPolicy, RandomIt>
+        invoke_default(ExPolicy&& policy, RandomIt first, RandomIt nth,
+            Sent last, Pred pred = Pred(), Proj proj = Proj())
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires at least random access iterator.");
@@ -382,8 +381,7 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend std::ranges::iterator_t<Rng> tag_fallback_invoke(
-            hpx::ranges::nth_element_t, Rng&& rng,
+        static std::ranges::iterator_t<Rng> invoke_default(Rng&& rng,
             std::ranges::iterator_t<Rng> nth, Pred pred = Pred(),
             Proj proj = Proj())
         {
@@ -412,10 +410,10 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng>>
-        tag_fallback_invoke(hpx::ranges::nth_element_t, ExPolicy&& policy,
-            Rng&& rng, std::ranges::iterator_t<Rng> nth, Pred pred = Pred(),
+        invoke_default(ExPolicy&& policy, Rng&& rng,
+            std::ranges::iterator_t<Rng> nth, Pred pred = Pred(),
             Proj proj = Proj())
         {
             using iterator_type = std::ranges::iterator_t<Rng>;

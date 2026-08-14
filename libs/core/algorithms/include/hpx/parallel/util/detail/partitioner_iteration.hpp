@@ -9,8 +9,10 @@
 #include <hpx/config.hpp>
 #include <hpx/datastructures/traits/is_tuple_like.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -34,14 +36,14 @@ namespace hpx::parallel::util::detail {
                 hpx::tuple_size<std::decay_t<T>>::value>;
 
             // NOLINTBEGIN(bugprone-use-after-move)
-            if constexpr (std::is_invocable_v<F, embedded_index_pack_type, T&&>)
+            if constexpr (std::invocable<F, embedded_index_pack_type, T&&>)
             {
                 return HPX_INVOKE_R(
                     Result, f_, embedded_index_pack_type{}, HPX_FORWARD(T, t));
             }
             else
             {
-                return (*this)(embedded_index_pack_type{}, t);
+                return (*this)(embedded_index_pack_type{}, HPX_FORWARD(T, t));
             }
             // NOLINTEND(bugprone-use-after-move)
         }
@@ -117,19 +119,18 @@ namespace hpx::traits {
         }
     };
 
-#if HPX_HAVE_ITTNOTIFY != 0 && !defined(HPX_HAVE_APEX)
     HPX_CXX_CORE_EXPORT template <typename Result, typename F>
-    struct get_function_annotation_itt<
+    struct get_function_annotation_tracing<
         parallel::util::detail::partitioner_iteration<Result, F>>
     {
-        [[nodiscard]] static util::itt::string_handle call(
+        [[nodiscard]] static hpx::tracing::annotation_handle call(
             parallel::util::detail::partitioner_iteration<Result, F> const&
                 f) noexcept
         {
-            return get_function_annotation_itt<std::decay_t<F>>::call(f.f_);
+            return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-#endif
+
 }    // namespace hpx::traits
 
 #endif

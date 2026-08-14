@@ -17,6 +17,7 @@
 #include <hpx/config.hpp>
 #include <hpx/iostream/categories.hpp>
 #include <hpx/iostream/positioning.hpp>
+#include <hpx/modules/filesystem.hpp>
 
 #include <cstdint>
 #include <filesystem>
@@ -90,7 +91,7 @@ namespace hpx::iostream {
                 std::ios_base::out)
         {
             init();
-            open(path.string(), mode);
+            open(hpx::filesystem::to_string(path), mode);
         }
 
         // Copy constructor

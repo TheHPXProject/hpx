@@ -55,7 +55,7 @@ void test_is_partitioned_sender(
                 [](std::size_t n) { return n % 2 == 0; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        bool parted = hpx::get<0>(*snd_result);
+        bool parted = hpx::get<0>(snd_result.value());
 
         HPX_TEST(parted);
     }
@@ -67,7 +67,7 @@ void test_is_partitioned_sender(
                 [](std::size_t) { return true; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        auto parted = hpx::get<0>(*snd_result);
+        auto parted = hpx::get<0>(snd_result.value());
 
         HPX_TEST(parted);
     }
@@ -79,7 +79,7 @@ void test_is_partitioned_sender(
                 [](std::size_t) { return true; }) |
             hpx::is_partitioned(ex_policy.on(exec)));
 
-        auto parted = hpx::get<0>(*snd_result);
+        auto parted = hpx::get<0>(snd_result.value());
 
         HPX_TEST(parted);
     }
@@ -104,7 +104,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    std::srand(seed);
+    gen.seed(seed);
 
     is_partitioned_sender_test<std::forward_iterator_tag>();
     is_partitioned_sender_test<std::random_access_iterator_tag>();

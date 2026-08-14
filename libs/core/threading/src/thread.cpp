@@ -17,7 +17,7 @@
 
 #include <cstddef>
 #include <exception>
-#include <functional>
+#include <memory>
 #include <mutex>
 #include <utility>
 
@@ -30,7 +30,7 @@ namespace hpx {
     namespace {
 
         thread_termination_handler_type thread_termination_handler;
-    }
+    }    // namespace
 
     void set_thread_termination_handler(thread_termination_handler_type f)
     {
@@ -103,7 +103,7 @@ namespace hpx {
 
         void run_thread_exit_callbacks()
         {
-            threads::thread_id_type id = threads::get_self_id();
+            threads::thread_id_type const id = threads::get_self_id();
             if (id == threads::invalid_thread_id)
             {
                 HPX_THROW_EXCEPTION(hpx::error::null_thread_id,
@@ -184,15 +184,6 @@ namespace hpx {
         }
     }
 
-    namespace {
-
-        void resume_thread(threads::thread_id_ref_type const& id)
-        {
-            threads::set_thread_state(
-                id.noref(), threads::thread_schedule_state::pending);
-        }
-    }    // namespace
-
     void thread::join()
     {
         std::unique_lock l(mtx_);
@@ -205,8 +196,7 @@ namespace hpx {
         }
 
         // keep ourselves alive while being suspended
-        threads::thread_id_ref_type this_id = threads::get_self_id();
-        if (this_id == id_)
+        if (threads::get_self_id() == id_)
         {
             l.unlock();
             HPX_THROW_EXCEPTION(hpx::error::thread_resource_error,
@@ -218,15 +208,33 @@ namespace hpx {
         // register callback function to be called when thread exits
         auto const id = id_;
 
-        detach_locked();    // invalidate this object
-
-        if (threads::add_thread_exit_callback(
-                id.noref(), hpx::bind_front(&resume_thread, HPX_MOVE(this_id))))
+        // Register callback before detaching. The condition variable and done
+        // flag are held in a shared state so that they stay alive for as long
+        // as either the exit callback or this function needs them, even if this
+        // function is unwound (e.g. by an interruption while waiting) before
+        // the callback has run.
+        struct join_state
         {
-            // wait for thread to be terminated
-            unlock_guard ul(l);
-            this_thread::suspend(
-                threads::thread_schedule_state::suspended, "thread::join");
+            hpx::lcos::local::detail::condition_variable cv;
+            bool done = false;
+        };
+        auto const state = std::make_shared<join_state>();
+
+        bool const added =
+            threads::add_thread_exit_callback(id.noref(), [this, state]() {
+                std::unique_lock lock(mtx_);
+                state->done = true;
+                state->cv.notify_one(HPX_MOVE(lock));
+            });
+
+        detach_locked();    // Now safe to detach
+
+        if (added)
+        {
+            while (!state->done)
+            {
+                state->cv.wait(l);
+            }
         }
     }
 
@@ -241,7 +249,7 @@ namespace hpx {
         return threads::get_thread_interruption_requested(native_handle());
     }
 
-    void thread::interrupt(thread::id id, bool const flag)
+    void thread::interrupt(thread::id const& id, bool const flag)
     {
         threads::interrupt_thread(id.id_, flag);
     }
@@ -374,7 +382,7 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     namespace this_thread {
 
-        void yield_to(thread::id id) noexcept
+        void yield_to(thread::id const& id) noexcept
         {
             this_thread::suspend(threads::thread_schedule_state::pending,
                 id.native_handle(), "this_thread::yield_to");
@@ -497,7 +505,8 @@ namespace hpx {
         }
 
         ///////////////////////////////////////////////////////////////////////
-        restore_interruption::restore_interruption(disable_interruption& d)
+        restore_interruption::restore_interruption(
+            disable_interruption const& d)
           : interruption_was_enabled_(d.interruption_was_enabled_)
         {
             if (!interruption_was_enabled_)

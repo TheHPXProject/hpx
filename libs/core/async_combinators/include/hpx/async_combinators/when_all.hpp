@@ -134,7 +134,6 @@ namespace hpx {
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/pack_traversal.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 
 #include <cstddef>
 #include <iterator>
@@ -221,7 +220,7 @@ namespace hpx::lcos::detail {
         using no_addref = typename frame_type::base_type::init_no_addref;
 
         using allocator_type = hpx::util::thread_local_caching_allocator<
-            hpx::lockfree::variable_size_stack, char,
+            hpx::lockfree::variable_size_stack,
             hpx::util::internal_allocator<>>;
         auto frame = hpx::util::traverse_pack_async_allocator(allocator_type{},
             hpx::util::async_traverse_in_place_tag<frame_type>{}, no_addref{},
@@ -236,13 +235,11 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_all_t final
-      : hpx::functional::tag<when_all_t>
     {
-    private:
         // different versions of clang-format disagree
         // clang-format off
         template <typename... Args>
-        friend auto tag_invoke(when_all_t, Args&&... args) -> decltype(
+        auto operator()(Args&&... args) const -> decltype(
             hpx::lcos::detail::when_all_impl(HPX_FORWARD(Args, args)...))
         // clang-format on
         {
@@ -252,8 +249,7 @@ namespace hpx {
         template <typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_all_t, Iterator begin, Iterator end)
+        decltype(auto) operator()(Iterator begin, Iterator end) const
         {
             using container_type = std::vector<
                 hpx::lcos::detail::future_iterator_traits_t<Iterator>>;
@@ -262,7 +258,7 @@ namespace hpx {
                     container_type>(begin, end));
         }
 
-        friend auto tag_invoke(when_all_t)
+        auto operator()() const
         {
             return hpx::make_ready_future(hpx::tuple<>());
         }
@@ -270,14 +266,11 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT inline constexpr struct when_all_n_t final
-      : hpx::functional::tag<when_all_n_t>
     {
-    private:
         template <typename Iterator,
             typename Enable =
                 std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
-        friend decltype(auto) tag_invoke(
-            when_all_n_t, Iterator begin, std::size_t count)
+        decltype(auto) operator()(Iterator begin, std::size_t count) const
         {
             using container_type = std::vector<
                 hpx::lcos::detail::future_iterator_traits_t<Iterator>>;

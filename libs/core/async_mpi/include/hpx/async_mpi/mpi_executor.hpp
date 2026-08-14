@@ -52,12 +52,10 @@ namespace hpx::mpi::experimental {
 
         // TwoWayExecutor interface
         template <typename F, typename... Ts>
-        friend decltype(auto) tag_invoke(
-            hpx::parallel::execution::async_execute_t, executor const& exec,
-            F&& f, Ts&&... ts)
+        decltype(auto) async_execute(F&& f, Ts&&... ts) const
         {
             return hpx::mpi::experimental::detail::async(
-                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)..., exec.communicator_);
+                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)..., communicator_);
         }
 
         std::size_t in_flight_estimate() const

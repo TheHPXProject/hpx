@@ -17,7 +17,6 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/threading_base.hpp>
 
 #include <exception>
@@ -37,7 +36,7 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT template <typename Sig>
     class packaged_task;
 
-    HPX_CXX_CORE_EXPORT template <typename R, typename... Ts>
+    template <typename R, typename... Ts>
     class packaged_task<R(Ts...)>
     {
         using function_type = hpx::move_only_function<R(Ts...)>;
@@ -151,7 +150,7 @@ namespace hpx {
 namespace std {    //-V1061
 
     // Requires: Allocator shall be an allocator (17.6.3.5)
-    HPX_CXX_CORE_EXPORT template <typename Sig, typename Allocator>
+    template <typename Sig, typename Allocator>
     struct uses_allocator<hpx::packaged_task<Sig>, Allocator> : std::true_type
     {
     };

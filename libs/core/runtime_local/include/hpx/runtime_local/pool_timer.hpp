@@ -39,12 +39,19 @@ namespace hpx::util {
 
         ~pool_timer();
 
+        // late initialization (after default constructor use)
+        bool init(hpx::function<bool()> const& f,
+            hpx::function<void()> const& on_term,
+            std::string const& description = "", bool pre_shutdown = true);
+
         bool start(hpx::chrono::steady_duration const& time_duration,
             bool evaluate = false) const;
         bool stop() const;
 
         [[nodiscard]] bool is_started() const;
         [[nodiscard]] bool is_terminated() const;
+
+        [[nodiscard]] bool is_valid() const;
 
     private:
         std::shared_ptr<detail::pool_timer> timer_;

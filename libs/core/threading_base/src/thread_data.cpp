@@ -1,6 +1,7 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2008-2009 Chirag Dekate, Anshul Tandon
 //  Copyright (c) 2011      Bryce Lelbach
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,17 +14,17 @@
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/thread_support.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/thread_data.hpp>
-#if defined(HPX_HAVE_APEX)
-#include <hpx/threading_base/external_timer.hpp>
-#endif
-#if defined(HPX_HAVE_MODULE_TRACY)
+#if defined(HPX_HAVE_TRACY)
 #include <hpx/modules/tracy.hpp>
 #endif
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -36,11 +37,11 @@ namespace hpx::threads {
         namespace {
 
             get_locality_id_type* get_locality_id_f = nullptr;
-        }
+        }    // namespace
 
         void set_get_locality_id(get_locality_id_type* f)
         {
-            get_locality_id_f = HPX_MOVE(f);
+            get_locality_id_f = f;
         }
 
         std::uint32_t get_locality_id(hpx::error_code& ec)
@@ -59,21 +60,19 @@ namespace hpx::threads {
         std::ptrdiff_t const stacksize, bool const is_stackless,
         thread_id_addref const addref)
       : detail::thread_data_reference_counting(addref)
-      , priority_(init_data.priority)
-      , requested_interrupt_(false)
-      , enabled_interrupt_(true)
-      , ran_exit_funcs_(false)
-      , is_stackless_(is_stackless)
       , runs_as_child_(init_data.schedulehint.runs_as_child_mode() ==
             hpx::threads::thread_execution_hint::run_as_child)
+      , state_(is_stackless ? state::is_stackless | state::enabled_interrupt :
+                              state::enabled_interrupt)
+      , stacksize_enum_(init_data.stacksize)
+      , stacksize_(init_data.stacksize == thread_stacksize::nostack ?
+                (std::numeric_limits<std::int32_t>::max)() :
+                static_cast<std::int32_t>(stacksize))
       , last_worker_thread_num_(
             init_data.schedulehint.mode == thread_schedule_hint_mode::thread ?
                 init_data.schedulehint.hint :
                 static_cast<std::uint16_t>(-1))
-      , stacksize_enum_(init_data.stacksize)
-      , stacksize_(stacksize_enum_ == thread_stacksize::nostack ?
-                (std::numeric_limits<std::int32_t>::max)() :
-                static_cast<std::int32_t>(stacksize))
+      , priority_(init_data.priority)
       , current_state_(thread_state(
             init_data.initial_state, thread_restart_state::signaled))
       , scheduler_base_(init_data.scheduler_base)
@@ -93,10 +92,11 @@ namespace hpx::threads {
         LTM_(debug).format(
             "thread::thread({}), description({})", this, get_description());
 
-        HPX_ASSERT(is_stackless_ ||
+        HPX_ASSERT(state_ & state::is_stackless ||
             stacksize <= (std::numeric_limits<std::int32_t>::max)());
         HPX_ASSERT(stacksize_enum_ != threads::thread_stacksize::current);
 
+        void const* parent_task_id = nullptr;
 #ifdef HPX_HAVE_THREAD_PARENT_REFERENCE
         // store the thread id of the parent thread, mainly for debugging
         // purposes
@@ -106,20 +106,24 @@ namespace hpx::threads {
             {
                 parent_thread_id_ = threads::get_self_id();
                 parent_thread_phase_ = self->get_thread_phase();
+                parent_task_id = parent_thread_id_.get();
             }
         }
         if (0 == parent_locality_id_)
             parent_locality_id_ = detail::get_locality_id(hpx::throws);
 #endif
-#if defined(HPX_HAVE_APEX)
         set_timer_data(init_data.timer_data);
+#if defined(HPX_HAVE_TRACY)
+        fiber_name_[0] = '\0';
 #endif
+        hpx::tracing::task_created(this, parent_task_id);
     }
 
     thread_data::~thread_data()
     {
         LTM_(debug).format("thread_data::~thread_data({})", this);
         free_thread_exit_callbacks();
+        hpx::tracing::task_deleted(this);
     }
 
     void thread_data::destroy_thread()
@@ -133,59 +137,90 @@ namespace hpx::threads {
 
     void thread_data::run_thread_exit_callbacks()
     {
-        std::unique_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::unique_lock<mutex_type> l(mtx_);
+
+        // run the exit functions in the order they have been added
+        exit_funcs_.reverse();
+
+        HPX_ASSERT(!(state_ & state::running_exit_funcs));
+
+        state_ |= state::running_exit_funcs;
+        auto on_exit = hpx::experimental::scope_exit([this] {
+            state_ |= state::ran_exit_funcs;
+            state_ &= ~state::running_exit_funcs;
+        });
 
         while (!exit_funcs_.empty())
         {
+            if (auto f = HPX_MOVE(exit_funcs_.front()); !f.empty())
             {
-                hpx::unlock_guard<std::unique_lock<hpx::util::detail::spinlock>>
-                    ul(l);
-                if (!exit_funcs_.front().empty())
-                    exit_funcs_.front()();
+                // Pop under lock to make sure that a recursive call to
+                // add_thread_exit_callback from inside f() or during the
+                // unlocked phase will not cause the wrong function to be
+                // popped.
+                exit_funcs_.pop_front();
+
+                hpx::unlock_guard<std::unique_lock<mutex_type>> ul(l);
+                f();
             }
-            exit_funcs_.pop_front();
+            else
+            {
+                exit_funcs_.pop_front();
+            }
         }
-        ran_exit_funcs_ = true;
     }
 
     bool thread_data::add_thread_exit_callback(hpx::function<void()> const& f)
     {
-        std::lock_guard<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
 
-        if (ran_exit_funcs_ ||
+        if (state_ & state::ran_exit_funcs ||
             get_state().state() == thread_schedule_state::terminated ||
             get_state().state() == thread_schedule_state::deleted)
         {
             return false;
         }
 
-        exit_funcs_.push_front(f);
+        if (state_ & state::running_exit_funcs)
+        {
+            // make sure new function ends up at the end of the list during the
+            // execution of the exit functions
+            exit_funcs_.push_back(f);
+        }
+        else
+        {
+            exit_funcs_.push_front(f);
+        }
 
         return true;
     }
 
     void thread_data::free_thread_exit_callbacks()
     {
-        std::scoped_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
 
         // Exit functions should have been executed.
-        HPX_ASSERT(exit_funcs_.empty() || ran_exit_funcs_);
+        HPX_ASSERT(exit_funcs_.empty() || state_ & state::ran_exit_funcs);
 
         exit_funcs_.clear();
     }
 
     bool thread_data::interruption_point(bool const throw_on_interrupt)
     {
-        // We do not protect enabled_interrupt_ and requested_interrupt_ from
-        // concurrent access here (which creates a benign data race) in order to
-        // avoid infinite recursion. This function is called by
-        // this_thread::suspend which causes problems if the lock would call
-        // suspend itself.
-        if (enabled_interrupt_ && requested_interrupt_)
+        std::unique_lock<mutex_type> l(mtx_);
+
+        if (state_ & state::enabled_interrupt &&
+            state_ & state::requested_interrupt)
         {
+            // now interrupt this thread
+            if (throw_on_interrupt)
+            {
+                // reset flag to avoid recursive exceptions
+                state_ &= ~state::requested_interrupt;
+            }
+
+            l.unlock();
+
             // Verify that there are no more registered locks for this
             // OS-thread. This will throw if there are still any locks held.
             util::force_error_on_lock();
@@ -193,7 +228,6 @@ namespace hpx::threads {
             // now interrupt this thread
             if (throw_on_interrupt)
             {
-                requested_interrupt_ = false;    // avoid recursive exceptions
                 throw hpx::thread_interrupted();
             }
 
@@ -209,11 +243,12 @@ namespace hpx::threads {
             this, get_description(), get_thread_phase());
 
         free_thread_exit_callbacks();
+        hpx::tracing::task_deleted(this);
 
         priority_ = init_data.priority;
-        requested_interrupt_ = false;
-        enabled_interrupt_ = true;
-        ran_exit_funcs_ = false;
+        state_ |= state::enabled_interrupt;
+        state_ &= ~(state::requested_interrupt | state::running_exit_funcs |
+            state::ran_exit_funcs | state::is_background);
 
         runs_as_child_.store(init_data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child,
@@ -255,9 +290,14 @@ namespace hpx::threads {
         backtrace_ = nullptr;
 #endif
 
+#if defined(HPX_HAVE_TRACY)
+        fiber_name_[0] = '\0';
+#endif
+
         LTM_(debug).format("thread::thread({}), description({}), rebind", this,
             get_description());
 
+        void const* parent_task_id = nullptr;
 #ifdef HPX_HAVE_THREAD_PARENT_REFERENCE
         // store the thread id of the parent thread, mainly for debugging
         // purposes
@@ -267,6 +307,7 @@ namespace hpx::threads {
             {
                 parent_thread_id_ = threads::get_self_id();
                 parent_thread_phase_ = self->get_thread_phase();
+                parent_task_id = parent_thread_id_.get();
             }
         }
         if (0 == parent_locality_id_)
@@ -274,49 +315,86 @@ namespace hpx::threads {
             parent_locality_id_ = detail::get_locality_id(hpx::throws);
         }
 #endif
-#if defined(HPX_HAVE_APEX)
         set_timer_data(init_data.timer_data);
-#endif
+
+        hpx::tracing::task_created(this, parent_task_id);
     }
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
     threads::thread_description thread_data::get_description() const
     {
-        std::scoped_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
         return description_;
     }
 
     threads::thread_description thread_data::set_description(
         threads::thread_description value)
     {
-        std::scoped_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
+
         std::swap(description_, value);
 
-#if defined(HPX_HAVE_MODULE_TRACY)
-        tracy::rename_region(description_.get_description());
-#endif
+        hpx::tracing::rename_region(description_.get_description());
 
         return value;
     }
 
     threads::thread_description thread_data::get_lco_description() const
     {
-        std::scoped_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
         return lco_description_;
     }
 
     threads::thread_description thread_data::set_lco_description(
         threads::thread_description value)
     {
-        std::scoped_lock<hpx::util::detail::spinlock> l(
-            spinlock_pool::spinlock_for(this));
+        std::scoped_lock<mutex_type> l(mtx_);
+
         std::swap(lco_description_, value);
         return value;
     }
 #endif
+
+    char const* thread_data::get_safe_description(
+        threads::thread_description const& description,
+        char const* fallback) noexcept
+    {
+#if defined(HPX_HAVE_THREAD_DESCRIPTION)
+        if (description.kind() ==
+            threads::thread_description::data_type::description)
+        {
+            char const* description_name = description.get_description();
+            if (description_name != nullptr && description_name[0] != '\0')
+            {
+                return description_name;
+            }
+        }
+#else
+        char const* description_name = description.get_description();
+        if (description_name != nullptr && description_name[0] != '\0')
+        {
+            return description_name;
+        }
+#endif
+        return fallback;
+    }
+
+    char const* thread_data::get_fiber_name() const noexcept
+    {
+#if defined(HPX_HAVE_TRACY)
+        if (fiber_name_[0] == '\0')
+        {
+            char const* name = get_safe_description(get_description(), "fiber");
+            // Use the HPX thread_id pointer as the unique numeric suffix
+            // so each HPX task gets its own fiber track in Tracy.
+            std::snprintf(fiber_name_, sizeof(fiber_name_), "%s_%p", name,
+                static_cast<void*>(get_thread_id().get()));
+        }
+        return fiber_name_;
+#else
+        return get_safe_description(get_description(), "fiber");
+#endif
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     thread_self& get_self()
@@ -337,7 +415,6 @@ namespace hpx::threads {
     }
 
     namespace detail {
-
         void set_self_ptr(thread_self* self) noexcept
         {
             thread_self::set_self(self);
@@ -374,16 +451,6 @@ namespace hpx::threads {
         if (thread_self const* self = get_self_ptr();
             HPX_LIKELY(nullptr != self))
         {
-            return self->get_thread_id();
-        }
-        return threads::invalid_thread_id;
-    }
-
-    thread_id_type get_outer_self_id() noexcept
-    {
-        if (thread_self const* self = get_self_ptr();
-            HPX_LIKELY(nullptr != self))
-        {
             return self->get_outer_thread_id();
         }
         return threads::invalid_thread_id;
@@ -394,7 +461,7 @@ namespace hpx::threads {
         if (thread_self const* self = get_self_ptr();
             HPX_LIKELY(nullptr != self))
         {
-            return get_thread_id_data(self->get_thread_id());
+            return get_thread_id_data(self->get_outer_thread_id());
         }
         return nullptr;
     }
@@ -473,32 +540,58 @@ namespace hpx::threads {
         if (thread_data const* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
-            return thrd_data->get_component_id();
+            return hpx::threads::thread_data::get_component_id();
         }
         return 0;
 #endif
     }
 
-#if defined(HPX_HAVE_APEX)
-    std::shared_ptr<hpx::util::external_timer::task_wrapper>
-    get_self_timer_data()
+    hpx::tracing::task_timer_data get_self_timer_data()
     {
-        if (thread_data* thrd_data = get_self_id_data();
+        if (thread_data const* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
             return thrd_data->get_timer_data();
         }
-        return nullptr;
+        return {};
     }
 
-    void set_self_timer_data(
-        std::shared_ptr<hpx::util::external_timer::task_wrapper> data)
+    void set_self_timer_data(hpx::tracing::task_timer_data data)
     {
         if (thread_data* thrd_data = get_self_id_data();
             HPX_LIKELY(nullptr != thrd_data))
         {
-            thrd_data->set_timer_data(data);
+            thrd_data->set_timer_data(HPX_MOVE(data));
         }
     }
+
+#if defined(HPX_HAVE_TRACY)
+    tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
+    {
+        return {thrdptr->get_description().get_description(),
+            thrdptr->get_thread_phase(), thrdptr->is_stackless()};
+    }
+
+    tracing::fiber_region_init_data get_fiber_region_init_data(
+        thread_data const* thrdptr)
+    {
+        return {thrdptr->get_description().get_description(),
+            thrdptr->get_fiber_name(), thrdptr->is_stackless()};
+    }
+#elif defined(HPX_HAVE_ITTNOTIFY) && HPX_HAVE_ITTNOTIFY != 0
+    tracing::region_init_data get_region_init_data(thread_data const* thrdptr)
+    {
+        threads::thread_description const desc = thrdptr->get_description();
+        if (desc.kind() == threads::thread_description::data_type::description)
+        {
+            return {desc.get_description(), thrdptr->get_thread_phase(),
+                thrdptr, thrdptr->is_stackless(), 0, false,
+                desc.get_description_tracing()};
+        }
+        return {"address", thrdptr->get_thread_phase(), thrdptr,
+            thrdptr->is_stackless(), desc.get_address(), true,
+            tracing::annotation_handle()};
+    }
 #endif
+
 }    // namespace hpx::threads

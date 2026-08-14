@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2013-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -8,6 +8,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/thread_support.hpp>
@@ -30,7 +31,7 @@ namespace hpx::lcos::local::detail {
     struct condition_variable::queue_entry
     {
         constexpr queue_entry(
-            hpx::execution_base::agent_ref ctx, void* q) noexcept
+            hpx::execution_base::agent_ref const ctx, void* q) noexcept
           : ctx_(ctx)
           , q_(q)
         {
@@ -38,6 +39,7 @@ namespace hpx::lcos::local::detail {
 
         hpx::execution_base::agent_ref ctx_;
         void* q_;
+        std::atomic<bool> was_reset_ = false;
 
         queue_entry* next = nullptr;
         queue_entry* prev = nullptr;
@@ -108,7 +110,8 @@ namespace hpx::lcos::local::detail {
     // Return false if no more threads are waiting (returns true if queue
     // is non-empty).
     bool condition_variable::notify_one(std::unique_lock<mutex_type>& lock,
-        threads::thread_priority priority, bool unlock, error_code& ec)
+        threads::thread_priority const priority, bool const unlock,
+        error_code& ec)
     {
         // Caller failing to hold lock 'lock' before calling function
 #if defined(HPX_MSVC)
@@ -120,10 +123,13 @@ namespace hpx::lcos::local::detail {
 
         if (!queue_.empty())
         {
-            auto const ctx = queue_.front()->ctx_;
+            auto* front = queue_.front();
+            auto const ctx = front->ctx_;
 
             // remove item from queue before error handling
-            queue_.front()->ctx_.reset();
+            front->ctx_.reset();
+            front->was_reset_.store(true, std::memory_order_relaxed);
+
             queue_.pop_front();
 
             if (HPX_UNLIKELY(!ctx))
@@ -159,7 +165,8 @@ namespace hpx::lcos::local::detail {
     }
 
     void condition_variable::notify_all(std::unique_lock<mutex_type>& lock,
-        threads::thread_priority priority, bool unlock, error_code& ec)
+        threads::thread_priority const priority, bool const unlock,
+        error_code& ec)
     {
         // Caller failing to hold lock 'lock' before calling function
 #if defined(HPX_MSVC)
@@ -182,10 +189,13 @@ namespace hpx::lcos::local::detail {
 
             do
             {
-                auto ctx = queue.front()->ctx_;
+                auto* front = queue.front();
+                auto ctx = front->ctx_;
 
                 // remove item from queue before error handling
-                queue.front()->ctx_.reset();
+                front->ctx_.reset();
+                front->was_reset_.store(true, std::memory_order_relaxed);
+
                 queue.pop_front();
 
                 if (HPX_UNLIKELY(!ctx))
@@ -225,7 +235,7 @@ namespace hpx::lcos::local::detail {
     }
 
     threads::thread_restart_state condition_variable::wait(
-        std::unique_lock<mutex_type>& lock, char const* /* description */,
+        std::unique_lock<mutex_type>& lock, char const* description,
         error_code& /* ec */)
     {
         HPX_ASSERT_OWNS_LOCK(lock);
@@ -239,7 +249,7 @@ namespace hpx::lcos::local::detail {
         {
             // suspend this thread
             unlock_guard<std::unique_lock<mutex_type>> ul(lock);
-            this_ctx.suspend();
+            this_ctx.suspend(description);
         }
 
         return f.ctx_ ? threads::thread_restart_state::timeout :
@@ -248,25 +258,38 @@ namespace hpx::lcos::local::detail {
 
     threads::thread_restart_state condition_variable::wait_until(
         std::unique_lock<mutex_type>& lock,
+        hpx::chrono::steady_time_point const& abs_time, char const* description,
+        error_code& ec)
+    {
+        return wait_until(
+            lock, abs_time, []() { return false; }, description, ec);
+    }
+
+    threads::thread_restart_state condition_variable::wait_until(
+        std::unique_lock<mutex_type>& lock,
         hpx::chrono::steady_time_point const& abs_time,
-        char const* /* description */, error_code& /* ec */)
+        hpx::move_only_function<bool()>&& wait_cond, char const* description,
+        error_code& /* ec */)
     {
         HPX_ASSERT_OWNS_LOCK(lock);
 
         // enqueue the request and block this thread
-        auto this_ctx = hpx::execution_base::this_thread::agent();
+        auto const this_ctx = hpx::execution_base::this_thread::agent();
         queue_entry f(this_ctx, &queue_);
         queue_.push_back(f);
 
         reset_queue_entry r(f);
-        {
-            // suspend this thread
-            unlock_guard<std::unique_lock<mutex_type>> ul(lock);
-            this_ctx.sleep_until(abs_time.value());
-        }
 
-        return f.ctx_ ? threads::thread_restart_state::timeout :
-                        threads::thread_restart_state::signaled;
+        // suspend this thread
+        unlock_guard<std::unique_lock<mutex_type>> ul(lock);
+        return this_ctx.sleep_until(
+            abs_time.value(),
+            [&, pred = HPX_MOVE(wait_cond)]() {
+                if (f.was_reset_.load(std::memory_order_relaxed))
+                    return true;
+                return pred();
+            },
+            description);
     }
 
     template <typename Mutex>
@@ -287,10 +310,13 @@ namespace hpx::lcos::local::detail {
 
             while (!queue.empty())
             {
-                auto ctx = queue.front()->ctx_;
+                auto* front = queue.front();
+                auto ctx = front->ctx_;
 
                 // remove item from queue before error handling
-                queue.front()->ctx_.reset();
+                front->ctx_.reset();
+                front->was_reset_.store(true, std::memory_order_relaxed);
+
                 queue.pop_front();
 
                 if (HPX_UNLIKELY(!ctx))

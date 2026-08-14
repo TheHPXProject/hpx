@@ -42,6 +42,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace hpx::string_util {
@@ -236,7 +237,7 @@ namespace hpx::string_util {
             }
         };
 
-        HPX_CXX_CORE_EXPORT template <typename Traits>
+        template <typename Traits>
         struct traits_extension_details<Traits, 1> : public Traits
         {
             using char_type = typename Traits::char_type;

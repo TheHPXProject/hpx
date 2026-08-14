@@ -1,11 +1,11 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file dataflow.hpp
-/// \page hpx::dataflow (distributed)
+/// \page hpx::dataflow_distributed hpx::dataflow (distributed)
 /// \headerfile hpx/async.hpp
 
 #pragma once
@@ -67,7 +67,7 @@ namespace hpx {
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace lcos { namespace detail {
+namespace hpx::lcos::detail {
 
     template <typename Policy, typename Action, typename Args>
     struct dataflow_return_impl</*IsAction=*/true, Policy, Action, Args>
@@ -106,11 +106,12 @@ namespace hpx { namespace lcos { namespace detail {
                 act,
             hpx::id_type const& id, Ts&&... ts)
         {
+            // Enable inline execution by default (uses launch::async).
             return dataflow_dispatch_impl<true, launch>::call(
                 alloc, launch::async, act, id, HPX_FORWARD(Ts, ts)...);
         }
     };
-}}}    // namespace hpx::lcos::detail
+}    // namespace hpx::lcos::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {

@@ -115,6 +115,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -147,7 +148,7 @@ namespace hpx::parallel {
                 HPX_FORWARD(ExPolicy, policy), zip_iterator(first1, first2), n,
                 [](reference t) -> void {
                     using hpx::get;
-                    std::swap(get<0>(t), get<1>(t));
+                    std::ranges::swap(get<0>(t), get<1>(t));
                 },
                 hpx::identity_v));
         }
@@ -167,11 +168,7 @@ namespace hpx::parallel {
             {
                 while (first1 != last1)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first1++, first2++);
-#else
-                    std::iter_swap(first1++, first2++);
-#endif
                 }
                 return first2;
             }
@@ -184,11 +181,7 @@ namespace hpx::parallel {
             {
                 while (first1 != last1 && first2 != last2)
                 {
-#if defined(HPX_HAVE_CXX20_STD_RANGES_ITER_SWAP)
                     std::ranges::iter_swap(first1++, first2++);
-#else
-                    std::iter_swap(first1++, first2++);
-#endif
                 }
                 return swap_ranges_result<FwdIter1, FwdIter2>{first1, first2};
             }
@@ -224,7 +217,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::swap_ranges
     HPX_CXX_CORE_EXPORT inline constexpr struct swap_ranges_t final
-      : hpx::detail::tag_parallel_algorithm<swap_ranges_t>
+      : hpx::detail::tag_dispatch<swap_ranges_t,
+            hpx::detail::tag_parallel_algorithm<swap_ranges_t>>
     {
         template <typename FwdIter1, typename FwdIter2>
         // clang-format off
@@ -233,8 +227,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend FwdIter2 tag_fallback_invoke(hpx::swap_ranges_t, FwdIter1 first1,
-            FwdIter1 last1, FwdIter2 first2)
+        static FwdIter2 invoke_default(
+            FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -253,7 +247,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(hpx::swap_ranges_t,
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first1, FwdIter1 last1, FwdIter2 first2)
         {
             static_assert(std::forward_iterator<FwdIter1>,

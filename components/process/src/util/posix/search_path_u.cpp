@@ -49,7 +49,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
             p /= filename;
             if (!::access(p.c_str(), X_OK))
             {
-                result = p.string();
+                result = hpx::filesystem::to_string(p);
                 break;
             }
         }

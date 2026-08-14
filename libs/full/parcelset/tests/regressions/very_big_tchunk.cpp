@@ -8,7 +8,7 @@
 #include <hpx/future.hpp>
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>
-#include <hpx/runtime_distributed/find_all_localities.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 
 class Data
 {

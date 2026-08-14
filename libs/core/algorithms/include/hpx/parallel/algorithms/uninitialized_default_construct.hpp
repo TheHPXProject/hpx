@@ -173,6 +173,7 @@ namespace hpx {
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -348,7 +349,9 @@ namespace hpx {
     // CPO for hpx::uninitialized_default_construct
     HPX_CXX_CORE_EXPORT inline constexpr struct
         uninitialized_default_construct_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_default_construct_t>
+      : hpx::detail::tag_dispatch<uninitialized_default_construct_t,
+            hpx::detail::tag_parallel_algorithm<
+                uninitialized_default_construct_t>>
     {
         template <typename FwdIter, typename Sent>
         // clang-format off
@@ -357,8 +360,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<Sent>
             )
         // clang-format on
-        friend void tag_fallback_invoke(
-            hpx::uninitialized_default_construct_t, FwdIter first, Sent last)
+        static void invoke_default(FwdIter first, Sent last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -375,9 +377,8 @@ namespace hpx {
                 hpx::traits::is_iterator_v<Sent>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            hpx::uninitialized_default_construct_t, ExPolicy&& policy,
-            FwdIter first, Sent last)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, Sent last)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -397,7 +398,9 @@ namespace hpx {
     // CPO for hpx::uninitialized_default_construct_n
     HPX_CXX_CORE_EXPORT inline constexpr struct
         uninitialized_default_construct_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_default_construct_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_default_construct_n_t,
+            hpx::detail::tag_parallel_algorithm<
+                uninitialized_default_construct_n_t>>
     {
         template <typename FwdIter, typename Size>
         // clang-format off
@@ -406,8 +409,7 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(
-            hpx::uninitialized_default_construct_n_t, FwdIter first, Size count)
+        static FwdIter invoke_default(FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -432,9 +434,8 @@ namespace hpx {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend decltype(auto) tag_fallback_invoke(
-            hpx::uninitialized_default_construct_n_t, ExPolicy&& policy,
-            FwdIter first, Size count)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, FwdIter first, Size count)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");

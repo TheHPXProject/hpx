@@ -11,9 +11,9 @@
 #include <hpx/include/parallel_fill.hpp>
 #include <hpx/include/partitioned_vector.hpp>
 
+#include <hpx/modules/naming.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/naming/detail/preprocess_gid_types.hpp>
 
 #include <cstddef>
 #include <numeric>

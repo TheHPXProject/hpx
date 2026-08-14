@@ -260,6 +260,7 @@ namespace hpx { namespace ranges {
 #include <hpx/config.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/uninitialized_fill.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -274,9 +275,9 @@ namespace hpx { namespace ranges {
 namespace hpx::ranges {
 
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_fill_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_fill_t>
+      : hpx::detail::tag_dispatch<uninitialized_fill_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_fill_t>>
     {
-    private:
         template <typename FwdIter, typename Sent, typename T>
         // clang-format off
             requires(
@@ -284,8 +285,7 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::uninitialized_fill_t,
-            FwdIter first, Sent last, T const& value)
+        static FwdIter invoke_default(FwdIter first, Sent last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -303,9 +303,9 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent, FwdIter>
             )
         // clang-format on
-        friend typename parallel::util::detail::algorithm_result<ExPolicy,
+        static typename parallel::util::detail::algorithm_result<ExPolicy,
             FwdIter>::type
-        tag_fallback_invoke(hpx::ranges::uninitialized_fill_t,
+        invoke_default(
             ExPolicy&& policy, FwdIter first, Sent last, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -317,9 +317,8 @@ namespace hpx::ranges {
 
         template <typename Rng, typename T>
             requires(std::ranges::range<Rng>)
-        friend typename hpx::traits::range_traits<Rng>::iterator_type
-        tag_fallback_invoke(
-            hpx::ranges::uninitialized_fill_t, Rng&& rng, T const& value)
+        static typename hpx::traits::range_traits<Rng>::iterator_type
+        invoke_default(Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -339,10 +338,9 @@ namespace hpx::ranges {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy,
+        static parallel::util::detail::algorithm_result_t<ExPolicy,
             typename hpx::traits::range_traits<Rng>::iterator_type>
-        tag_fallback_invoke(hpx::ranges::uninitialized_fill_t,
-            ExPolicy&& policy, Rng&& rng, T const& value)
+        invoke_default(ExPolicy&& policy, Rng&& rng, T const& value)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -357,9 +355,9 @@ namespace hpx::ranges {
     } uninitialized_fill{};
 
     HPX_CXX_CORE_EXPORT inline constexpr struct uninitialized_fill_n_t final
-      : hpx::detail::tag_parallel_algorithm<uninitialized_fill_n_t>
+      : hpx::detail::tag_dispatch<uninitialized_fill_n_t,
+            hpx::detail::tag_parallel_algorithm<uninitialized_fill_n_t>>
     {
-    private:
         template <typename FwdIter, typename Size, typename T>
         // clang-format off
             requires(
@@ -367,8 +365,7 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend FwdIter tag_fallback_invoke(hpx::ranges::uninitialized_fill_n_t,
-            FwdIter first, Size count, T const& value)
+        static FwdIter invoke_default(FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,
                 "Requires at least forward iterator.");
@@ -386,8 +383,8 @@ namespace hpx::ranges {
                 std::is_integral_v<Size>
             )
         // clang-format on
-        friend parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
-        tag_fallback_invoke(hpx::ranges::uninitialized_fill_n_t,
+        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
+        invoke_default(
             ExPolicy&& policy, FwdIter first, Size count, T const& value)
         {
             static_assert(std::forward_iterator<FwdIter>,

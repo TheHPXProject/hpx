@@ -67,4 +67,9 @@ a heading brings in the features listed under that heading.
 .. toctree::
    :maxdepth: 1
 
+   /components/supervision_dispatch/docs/index.rst
+
+.. toctree::
+   :maxdepth: 1
+
    api/full_api.rst

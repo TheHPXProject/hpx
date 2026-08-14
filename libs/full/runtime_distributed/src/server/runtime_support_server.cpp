@@ -6,17 +6,13 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
-
-#include <hpx/actions_base/plain_action.hpp>
-#include <hpx/agas/addressing_service.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/continuation.hpp>
-#include <hpx/components_base/agas_interface.hpp>
-#include <hpx/components_base/component_type.hpp>
-#include <hpx/components_base/server/create_component.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/agas.hpp>
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/command_line_handling.hpp>
+#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/filesystem.hpp>
@@ -24,20 +20,21 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/performance_counters.hpp>
+#include <hpx/modules/plugin_factories.hpp>
 #include <hpx/modules/prefix.hpp>
+#include <hpx/modules/runtime_components.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/string_util.hpp>
+#include <hpx/modules/supervision.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threadmanager.hpp>
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/performance_counters/counters.hpp>
-#include <hpx/plugin_factories/binary_filter_factory_base.hpp>
-#include <hpx/plugin_factories/message_handler_factory_base.hpp>
-#include <hpx/runtime_components/console_logging.hpp>
+
 #include <hpx/runtime_distributed.hpp>
 #include <hpx/runtime_distributed/find_localities.hpp>
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
@@ -119,12 +116,14 @@ HPX_DEFINE_GET_COMPONENT_TYPE_STATIC(hpx::components::server::runtime_support,
     to_int(hpx::components::component_enum_type::runtime_support))
 
 namespace hpx {
+
     // helper function to stop evaluating counters during shutdown
     void stop_evaluating_counters(bool terminate = false);
 }    // namespace hpx
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace hpx::components::server {
+
     ///////////////////////////////////////////////////////////////////////////
     runtime_support::runtime_support(hpx::util::runtime_configuration& cfg)
       : stop_called_(false)
@@ -188,7 +187,7 @@ namespace hpx { namespace components { namespace server {
 #endif
         std::abort();
     }
-}}}    // namespace hpx::components::server
+}    // namespace hpx::components::server
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx { namespace components { namespace server {
@@ -300,8 +299,10 @@ namespace hpx { namespace components { namespace server {
             }
 
             // We need the lock here to ensure the mutual exclusion of
-            // hpx::latch::count_down and and hpx::latch::~latch
-            std::lock_guard<dijkstra_mtx_type> l(dijkstra_mtx_);
+            // hpx::latch::count_down and hpx::latch::~latch
+            std::unique_lock<dijkstra_mtx_type> l(dijkstra_mtx_);
+            [[maybe_unused]] hpx::util::ignore_while_checking<
+                std::unique_lock<dijkstra_mtx_type>> il(&l);
             dijkstra_cond_->count_down(1);
             return;
         }
@@ -390,8 +391,10 @@ namespace hpx { namespace components { namespace server {
             } while (dijkstra_color_);
 
             // We need the lock here to ensure the mutual exclusion of
-            // hpx::latch::count_down and and hpx::latch::~latch
-            std::lock_guard<dijkstra_mtx_type> l(dijkstra_mtx_);
+            // hpx::latch::count_down and hpx::latch::~latch
+            std::unique_lock<dijkstra_mtx_type> l(dijkstra_mtx_);
+            [[maybe_unused]] hpx::util::ignore_while_checking<
+                std::unique_lock<dijkstra_mtx_type>> il(&l);
             dijkstra_cond_.reset();
         }
 
@@ -652,6 +655,13 @@ namespace hpx { namespace components { namespace server {
                 naming::gid_type const here = agas_client.get_local_locality();
 
                 // unregister fixed components
+#if defined(HPX_HAVE_SUPERVISION)
+                auto const& supervision_manager =
+                    supervision::get_supervision_manager();
+                supervision_manager.unregister_server_instance(ec);
+#endif
+                agas_client.unregister_server_instances(ec);
+
                 agas_client.unbind_local(
                     appl.get_runtime_support_raw_gid(), ec);
 
@@ -856,7 +866,7 @@ namespace hpx { namespace components { namespace server {
     // working around non-copy-ability of packaged_task
     struct indirect_packaged_task
     {
-        typedef hpx::packaged_task<void()> packaged_task_type;
+        using packaged_task_type = hpx::packaged_task<void()>;
 
         indirect_packaged_task()
           : pt(std::make_shared<packaged_task_type>([]() {}))
@@ -889,8 +899,8 @@ namespace hpx { namespace components { namespace server {
 
         std::vector<hpx::id_type> locality_ids = find_remote_localities();
 
-        typedef server::runtime_support::remove_from_connection_cache_action
-            action_type;
+        using action_type =
+            server::runtime_support::remove_from_connection_cache_action;
 
         std::vector<future<void>> callbacks;
         callbacks.reserve(locality_ids.size());
@@ -923,8 +933,8 @@ namespace hpx { namespace components { namespace server {
         if (rtd == nullptr)
             return;
 
-        typedef server::runtime_support::remove_from_connection_cache_action
-            action_type;
+        using action_type =
+            server::runtime_support::remove_from_connection_cache_action;
 
         action_type act;
         indirect_packaged_task ipt;
@@ -948,7 +958,7 @@ namespace hpx { namespace components { namespace server {
         char const* message_handler_type, char const* action, error_code& ec)
     {
         // locate the factory for the requested plugin type
-        typedef std::unique_lock<plugin_map_mutex_type> plugin_map_scoped_lock;
+        using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
         plugin_map_type::const_iterator it =
@@ -956,7 +966,8 @@ namespace hpx { namespace components { namespace server {
         if (it == plugins_.end() || !(*it).second.first)
         {
             l.unlock();
-            if (ec.category() != hpx::get_lightweight_hpx_category())
+            if (ec.category() != hpx::get_lightweight_hpx_category() &&
+                ec.category() != hpx::get_lightweight_hpx_rethrow_category())
             {
                 // we don't know anything about this component
                 HPX_THROWS_IF(ec, hpx::error::bad_plugin_type,
@@ -1010,7 +1021,7 @@ namespace hpx { namespace components { namespace server {
         std::size_t interval, error_code& ec)
     {
         // locate the factory for the requested plugin type
-        typedef std::unique_lock<plugin_map_mutex_type> plugin_map_scoped_lock;
+        using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
         plugin_map_type::const_iterator it =
@@ -1018,7 +1029,8 @@ namespace hpx { namespace components { namespace server {
         if (it == plugins_.end() || !(*it).second.first)
         {
             l.unlock();
-            if (ec.category() != hpx::get_lightweight_hpx_category())
+            if (ec.category() != hpx::get_lightweight_hpx_category() &&
+                ec.category() != hpx::get_lightweight_hpx_rethrow_category())
             {
                 // we don't know anything about this component
                 HPX_THROWS_IF(ec, hpx::error::bad_plugin_type,
@@ -1071,7 +1083,7 @@ namespace hpx { namespace components { namespace server {
         serialization::binary_filter* next_filter, error_code& ec)
     {
         // locate the factory for the requested plugin type
-        typedef std::unique_lock<plugin_map_mutex_type> plugin_map_scoped_lock;
+        using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
         plugin_map_type::const_iterator it = plugins_.find(binary_filter_type);
@@ -1143,12 +1155,12 @@ namespace hpx { namespace components { namespace server {
                     LRT_(warning).format(
                         "static loading failed: {}: {}: couldn't find factory "
                         "in global static factory map",
-                        lib.string(), instance);
+                        hpx::filesystem::to_string(lib), instance);
                     return false;
                 }
 
-                LRT_(info).format(
-                    "static loading succeeded: {}: {}", lib.string(), instance);
+                LRT_(info).format("static loading succeeded: {}: {}",
+                    hpx::filesystem::to_string(lib), instance);
             }
 
             // make sure startup/shutdown registration is called once for each
@@ -1170,16 +1182,118 @@ namespace hpx { namespace components { namespace server {
         catch (std::logic_error const& e)
         {
             LRT_(warning).format("static loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         catch (std::exception const& e)
         {
             LRT_(warning).format("static loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         return true;    // component got loaded
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Static equivalent of load_plugin. Looks up the statically registered
+    // plugin_factory_base getter by instance name and inserts the resulting
+    // factory into plugins_. Commandline options and startup/shutdown
+    // functions are handled via the existing component-side static helpers,
+    // which are agnostic to whether the module is a component or a plugin.
+    bool runtime_support::load_plugin_static(util::section& ini,
+        std::string const& instance, std::string const& plugin, bool isenabled,
+        hpx::program_options::options_description& options,
+        std::set<std::string>& startup_handled)
+    {
+        try
+        {
+            util::section const* glob_ini = nullptr;
+            if (ini.has_section("settings"))
+                glob_ini = ini.get_section("settings");
+
+            util::section const* plugin_ini = nullptr;
+            std::string const plugin_section("hpx.plugins." + instance);
+            if (ini.has_section(plugin_section))
+                plugin_ini = ini.get_section(plugin_section);
+
+            error_code ec(throwmode::lightweight);
+            if (nullptr == plugin_ini ||
+                "0" == plugin_ini->get_entry("no_factory", "0"))
+            {
+                util::plugin::get_plugins_list_type get_factory;
+                if (!components::get_static_plugin_factory(
+                        instance, get_factory))
+                {
+                    LRT_(warning).format(
+                        "static loading of plugin factory failed: {}: "
+                        "couldn't find factory in global static plugin "
+                        "factory map",
+                        instance);
+                    return false;
+                }
+
+                hpx::util::plugin::static_plugin_factory<
+                    plugins::plugin_factory_base> const pf(get_factory);
+
+                std::shared_ptr<plugins::plugin_factory_base> const f(
+                    pf.create(instance, ec, glob_ini, plugin_ini, isenabled));
+                if (!ec)
+                {
+                    plugin_factory_type data(f, isenabled);
+                    std::pair<plugin_map_type::iterator, bool> const p =
+                        plugins_.insert(
+                            plugin_map_type::value_type(instance, data));
+
+                    if (!p.second)
+                    {
+                        LRT_(fatal).format(
+                            "duplicate plugin type: {}", instance);
+                        return false;
+                    }
+
+                    LRT_(info).format(
+                        "static loading of plugin succeeded: {}", instance);
+                }
+                else
+                {
+                    LRT_(warning).format(
+                        "static loading of plugin factory failed: {}: {}",
+                        instance, get_error_what(ec));
+                    return false;
+                }
+            }
+
+            // Module-scoped startup/shutdown + commandline registration runs
+            // at most once per module. Plugin modules feed the same static
+            // commandline/startup maps as components via the shared
+            // HPX_REGISTER_COMMANDLINE_OPTIONS / HPX_REGISTER_STARTUP_SHUTDOWN
+            // macros, so the component-side helpers work unchanged.
+            if (startup_handled.find(plugin) == startup_handled.end())
+            {
+                startup_handled.insert(plugin);
+                load_commandline_options_static(plugin, options, ec);
+                if (ec)
+                    ec = error_code(throwmode::lightweight);
+                load_startup_shutdown_functions_static(plugin, ec);
+            }
+        }
+        catch (hpx::exception const&)
+        {
+            throw;
+        }
+        catch (std::logic_error const& e)
+        {
+            LRT_(warning).format(
+                "static loading of plugin failed: {}: {}", instance, e.what());
+            return false;
+        }
+        catch (std::exception const& e)
+        {
+            LRT_(warning).format(
+                "static loading of plugin failed: {}: {}", instance, e.what());
+            return false;
+        }
+        return true;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1219,7 +1333,7 @@ namespace hpx { namespace components { namespace server {
         }
 
         util::section::section_map const& s = (*sec).get_sections();
-        typedef util::section::section_map::const_iterator iterator;
+        using iterator = util::section::section_map::const_iterator;
         iterator end = s.end();
         for (iterator i = s.begin(); i != end; ++i)
         {
@@ -1484,7 +1598,8 @@ namespace hpx { namespace components { namespace server {
 
         // first, try using the path as the full path to the library
         error_code ec(throwmode::lightweight);
-        hpx::util::plugin::dll d(lib.string(), HPX_MANGLE_STRING(component));
+        hpx::util::plugin::dll d(
+            hpx::filesystem::to_string(lib), HPX_MANGLE_STRING(component));
         d.load_library(ec);
         if (ec)
         {
@@ -1495,7 +1610,8 @@ namespace hpx { namespace components { namespace server {
             if (ec)
             {
                 LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                    lib.string(), instance, get_error_what(ec));
+                    hpx::filesystem::to_string(lib), instance,
+                    get_error_what(ec));
                 return false;    // next please :-P
             }
         }
@@ -1650,7 +1766,7 @@ namespace hpx { namespace components { namespace server {
                     d, "factory");
 
                 LRT_(info).format("dynamic loading succeeded: {}: {}",
-                    lib.string(), instance);
+                    hpx::filesystem::to_string(lib), instance);
             }
 
             // make sure startup/shutdown registration is called once for each
@@ -1672,13 +1788,13 @@ namespace hpx { namespace components { namespace server {
         catch (std::logic_error const& e)
         {
             LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         catch (std::exception const& e)
         {
             LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         return true;    // component got loaded
@@ -1720,7 +1836,7 @@ namespace hpx { namespace components { namespace server {
         }
 
         util::section::section_map const& s = (*sec).get_sections();
-        typedef util::section::section_map::const_iterator iterator;
+        using iterator = util::section::section_map::const_iterator;
         iterator end = s.end();
         for (iterator i = s.begin(); i != end; ++i)
         {
@@ -1774,12 +1890,8 @@ namespace hpx { namespace components { namespace server {
 
                 if (sect.get_entry("static", "0") == "1")
                 {
-                    // FIXME: implement statically linked plugins
-                    HPX_THROW_EXCEPTION(hpx::error::service_unavailable,
-                        "runtime_support::load_plugins",
-                        "static linking configuration does not support static "
-                        "loading of plugin '{}'",
-                        instance);
+                    load_plugin_static(ini, instance, component, isenabled,
+                        options, startup_handled);
                 }
                 else
                 {
@@ -1848,7 +1960,7 @@ namespace hpx { namespace components { namespace server {
                 if (!ec)
                 {
                     // store component factory and module for later use
-                    plugin_factory_type data(f, d, isenabled);
+                    plugin_factory_type data(f, isenabled);
                     std::pair<plugin_map_type::iterator, bool> p =
                         plugins_.insert(
                             plugin_map_type::value_type(instance, data));
@@ -1861,13 +1973,14 @@ namespace hpx { namespace components { namespace server {
                     }
 
                     LRT_(info).format("dynamic loading succeeded: {}: {}",
-                        lib.string(), instance);
+                        hpx::filesystem::to_string(lib), instance);
                 }
                 else
                 {
                     LRT_(warning).format(
                         "dynamic loading of plugin factory failed: {}: {}: {}",
-                        lib.string(), instance, get_error_what(ec));
+                        hpx::filesystem::to_string(lib), instance,
+                        get_error_what(ec));
                 }
             }
 
@@ -1889,13 +2002,13 @@ namespace hpx { namespace components { namespace server {
         catch (std::logic_error const& e)
         {
             LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         catch (std::exception const& e)
         {
             LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                lib.string(), instance, e.what());
+                hpx::filesystem::to_string(lib), instance, e.what());
             return false;
         }
         return true;
@@ -1917,7 +2030,8 @@ namespace hpx { namespace components { namespace server {
 
         // get the handle of the library
         error_code ec(throwmode::lightweight);
-        hpx::util::plugin::dll d(lib.string(), HPX_MANGLE_STRING(plugin));
+        hpx::util::plugin::dll d(
+            hpx::filesystem::to_string(lib), HPX_MANGLE_STRING(plugin));
         d.load_library(ec);
         if (ec)
         {
@@ -1928,7 +2042,8 @@ namespace hpx { namespace components { namespace server {
             if (ec)
             {
                 LRT_(warning).format("dynamic loading failed: {}: {}: {}",
-                    lib.string(), instance, get_error_what(ec));
+                    hpx::filesystem::to_string(lib), instance,
+                    get_error_what(ec));
                 return false;    // next please :-P
             }
         }

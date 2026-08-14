@@ -185,7 +185,7 @@ namespace hpx::util::plugin {
             HPX_ASSERT(handle == dll_handle);
 
             return std::make_pair(
-                address, detail::free_dll<SymbolType>(handle));
+                address, Deleter{detail::free_dll<SymbolType>(handle)});
         }
 
         void keep_alive(error_code& ec = throws)

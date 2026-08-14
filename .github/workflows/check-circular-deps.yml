@@ -14,13 +14,17 @@ on:
       - 'release**'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-circular-deps:
     runs-on: ubuntu-latest
     container: stellargroup/build_env:17
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Check circular dependencies
       shell: bash
       run: |
