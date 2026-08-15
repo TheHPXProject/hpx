@@ -22,3 +22,19 @@ if(HPX_WITH_CXX26_REFLECTION AND Python3_EXECUTABLE)
     600
   )
 endif()
+
+if(HPX_WITH_DISTRIBUTED_RUNTIME)
+  set(benchmarks reflect_action_overhead)
+  foreach(benchmark ${benchmarks})
+    set(sources ${benchmark}.cpp)
+    source_group("Source Files" FILES ${sources})
+    add_hpx_executable(
+      ${benchmark}_test INTERNAL_FLAGS
+      SOURCES ${sources}
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Benchmarks/Modules/Full/ActionsBase"
+    )
+    add_hpx_performance_test("modules.actions_base" ${benchmark} LOCALITIES 2)
+  endforeach()
+endif()
