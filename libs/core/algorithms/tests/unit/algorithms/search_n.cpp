@@ -413,7 +413,7 @@ void search_n_test5()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// test 6: custom binary predicate (non-commutative: same parity)
+// test 6: custom binary predicate (non-commutative: a < b)
 template <typename IteratorTag>
 void test_search_n6_without_expolicy(IteratorTag)
 {
