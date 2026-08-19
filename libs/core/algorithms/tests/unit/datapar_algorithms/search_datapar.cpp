@@ -10,6 +10,8 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <functional>
 #include <iostream>
 #include <random>
 #include <string>
@@ -214,6 +216,81 @@ void search_test3()
     test_search3<std::forward_iterator_tag>();
 }
 
+template <typename ExPolicy, typename Pred = std::equal_to<>>
+void check_search_result(ExPolicy policy, std::vector<int> const& haystack,
+    std::vector<int> const& needle, Pred pred = Pred{})
+{
+    auto const result = hpx::search(policy, haystack.begin(), haystack.end(),
+        needle.begin(), needle.end(), pred);
+    auto const expected = std::search(
+        haystack.begin(), haystack.end(), needle.begin(), needle.end(), pred);
+
+    HPX_TEST(result == expected);
+}
+
+template <typename ExPolicy>
+void test_search_boundaries(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    // A single-element needle exercises the diff == 1 path.
+    {
+        std::vector<int> haystack(pack_size * 3 + 1, 9);
+        std::vector<int> const needle{1};
+        haystack[pack_size + 1] = needle[0];
+        check_search_result(policy, haystack, needle);
+    }
+
+    // The match starts at the last valid position (part_size - 1 for the
+    // single-partition SIMD policy).
+    {
+        std::vector<int> haystack(pack_size * 3 + 1, 9);
+        std::vector<int> const needle{1, 2, 3};
+        auto const needle_size =
+            static_cast<std::vector<int>::difference_type>(needle.size());
+        std::copy(needle.begin(), needle.end(), haystack.end() - needle_size);
+        check_search_result(policy, haystack, needle);
+    }
+
+    // The candidate begins in the final lane and crosses a pack boundary.
+    {
+        std::vector<int> haystack(pack_size * 3 + 1, 9);
+        std::vector<int> const needle{1, 2, 3};
+        std::copy(needle.begin(), needle.end(),
+            haystack.begin() + static_cast<std::ptrdiff_t>(pack_size - 1));
+        check_search_result(policy, haystack, needle);
+    }
+
+    // Every other element is a false first-element candidate.
+    {
+        std::vector<int> haystack(pack_size * 3 + 1, 9);
+        std::vector<int> const needle{1, 2};
+        for (std::size_t i = 0; i < haystack.size(); i += 2)
+            haystack[i] = needle[0];
+        check_search_result(policy, haystack, needle);
+    }
+
+    // Non-transparent predicates are valid for search. They must fall back
+    // to scalar comparisons if they cannot accept SIMD packs.
+    {
+        std::vector<int> haystack(pack_size * 3 + 1, 9);
+        std::vector<int> const needle{1, 2};
+        haystack[pack_size] = needle[0];
+        haystack[pack_size + 1] = needle[1];
+        check_search_result(policy, haystack, needle, std::equal_to<int>{});
+    }
+}
+
+void search_boundary_tests()
+{
+    using namespace hpx::execution;
+
+    test_search_boundaries(simd);
+    test_search_boundaries(par_simd);
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -225,6 +302,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     search_test1();
     search_test2();
     search_test3();
+    search_boundary_tests();
     return hpx::local::finalize();
 }
 
