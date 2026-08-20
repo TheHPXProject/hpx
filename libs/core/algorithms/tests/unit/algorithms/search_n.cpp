@@ -524,7 +524,7 @@ void test_search_n_exception(ExPolicy policy, IteratorTag)
         decorated_iterator;
 
     std::vector<std::size_t> c(10007);
-    std::iota(std::begin(c), std::end(c), std::rand() + 1);
+    std::fill(std::begin(c), std::end(c), std::size_t(2));
 
     bool caught_exception = false;
     try
@@ -558,7 +558,7 @@ void test_search_n_async_exception(ExPolicy p, IteratorTag)
         decorated_iterator;
 
     std::vector<std::size_t> c(10007);
-    std::iota(std::begin(c), std::end(c), std::rand() + 1);
+    std::fill(std::begin(c), std::end(c), std::size_t(2));
 
     bool caught_exception = false;
     try
@@ -617,7 +617,7 @@ void test_search_n_bad_alloc(ExPolicy policy, IteratorTag)
         decorated_iterator;
 
     std::vector<std::size_t> c(100007);
-    std::iota(std::begin(c), std::end(c), std::rand() + 1);
+    std::fill(std::begin(c), std::end(c), std::size_t(2));
 
     bool caught_bad_alloc = false;
     try
@@ -648,7 +648,7 @@ void test_search_n_async_bad_alloc(ExPolicy p, IteratorTag)
         decorated_iterator;
 
     std::vector<std::size_t> c(10007);
-    std::iota(std::begin(c), std::end(c), std::rand() + 1);
+    std::fill(std::begin(c), std::end(c), std::size_t(2));
 
     bool caught_bad_alloc = false;
     try

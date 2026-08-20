@@ -356,48 +356,62 @@ void test_fold_left_first_with_iter_empty()
 
 #include <memory>
 
+struct copyable_asymmetric_accumulator
+{
+    int value;
+
+    copyable_asymmetric_accumulator(int v)
+      : value(v)
+    {
+    }
+    copyable_asymmetric_accumulator(
+        copyable_asymmetric_accumulator const&) = default;
+    copyable_asymmetric_accumulator(
+        copyable_asymmetric_accumulator&&) = default;
+    copyable_asymmetric_accumulator& operator=(
+        copyable_asymmetric_accumulator const&) = default;
+    copyable_asymmetric_accumulator& operator=(
+        copyable_asymmetric_accumulator&&) = default;
+};
+
 void test_fold_left_first_asymmetric()
 {
-    std::vector<std::unique_ptr<int>> c;
-    for (int i = 1; i <= 5; ++i)
-    {
-        c.push_back(std::make_unique<int>(i));
-    }
+    std::vector<int> c = {1, 2, 3, 4, 5};
+    std::vector<int> expected_c = {1, 2, 3, 4, 5};
 
-    auto custom_op = [](std::unique_ptr<int>&& acc,
-                         const std::unique_ptr<int>& elem) {
-        *acc += *elem;
-        return std::move(acc);
+    auto custom_op = [](copyable_asymmetric_accumulator acc, int elem) {
+        acc.value += elem;
+        return acc;
     };
 
-    auto hpx_result = hpx::ranges::fold_left_first(std::move(c), custom_op);
+    auto hpx_result = hpx::ranges::fold_left_first(c, custom_op);
     HPX_TEST(hpx_result.has_value());
     if (hpx_result)
     {
-        HPX_TEST_EQ(*(*hpx_result), 15);
+        HPX_TEST_EQ(hpx_result->value, 15);
     }
+
+    HPX_TEST(std::equal(c.begin(), c.end(), expected_c.begin()));
 }
 
 void test_fold_right_last_asymmetric()
 {
-    std::vector<std::unique_ptr<int>> c;
-    for (int i = 1; i <= 5; ++i)
-    {
-        c.push_back(std::make_unique<int>(i));
-    }
+    std::vector<int> c = {1, 2, 3, 4, 5};
+    std::vector<int> expected_c = {1, 2, 3, 4, 5};
 
-    auto custom_op = [](const std::unique_ptr<int>& elem,
-                         std::unique_ptr<int>&& acc) {
-        *acc += *elem;
-        return std::move(acc);
+    auto custom_op = [](int elem, copyable_asymmetric_accumulator acc) {
+        acc.value += elem;
+        return acc;
     };
 
-    auto hpx_result = hpx::ranges::fold_right_last(std::move(c), custom_op);
+    auto hpx_result = hpx::ranges::fold_right_last(c, custom_op);
     HPX_TEST(hpx_result.has_value());
     if (hpx_result)
     {
-        HPX_TEST_EQ(*(*hpx_result), 15);
+        HPX_TEST_EQ(hpx_result->value, 15);
     }
+
+    HPX_TEST(std::equal(c.begin(), c.end(), expected_c.begin()));
 }
 
 void test_fold_custom_op()

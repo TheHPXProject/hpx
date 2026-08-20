@@ -328,8 +328,8 @@ namespace hpx::ranges {
 
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::fold_left_first_with_iter
-    HPX_CXX_CORE_EXPORT inline constexpr struct fold_left_first_with_iter_t
-        final
+    HPX_CXX_CORE_EXPORT inline constexpr struct
+        fold_left_first_with_iter_t final
       : hpx::detail::tag_dispatch<fold_left_first_with_iter_t,
             hpx::detail::tag_parallel_algorithm<fold_left_first_with_iter_t>>
     {
@@ -337,6 +337,8 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::input_iterator<InIter> &&
+            std::constructible_from<hpx::traits::iter_value_t<InIter>,
+                hpx::traits::iter_reference_t<InIter>> &&
             std::sentinel_for<Sent, InIter> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<InIter>, InIter>
@@ -355,7 +357,7 @@ namespace hpx::ranges {
                 return result_type{HPX_MOVE(first), hpx::optional<U>()};
             }
 
-            U result = HPX_MOVE(*first);
+            U result = *first;
             ++first;
 
             for (; first != last; ++first)
@@ -370,6 +372,9 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::input_range<Rng> &&
+            std::constructible_from<
+                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
+                hpx::traits::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
@@ -432,6 +437,8 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::input_iterator<InIter> &&
+            std::constructible_from<hpx::traits::iter_value_t<InIter>,
+                hpx::traits::iter_reference_t<InIter>> &&
             std::sentinel_for<Sent, InIter> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<InIter>, InIter>
@@ -448,6 +455,9 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::input_range<Rng> &&
+            std::constructible_from<
+                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
+                hpx::traits::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
@@ -523,6 +533,8 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::bidirectional_iterator<BidIter> &&
+            std::constructible_from<hpx::traits::iter_value_t<BidIter>,
+                hpx::traits::iter_reference_t<BidIter>> &&
             std::sentinel_for<Sent, BidIter> &&
             hpx::is_indirectly_binary_right_foldable<F,
                 hpx::traits::iter_value_t<BidIter>, BidIter>
@@ -541,7 +553,7 @@ namespace hpx::ranges {
             }
 
             auto it = hpx::parallel::detail::advance_to_sentinel(first, last);
-            U result = HPX_MOVE(*--it);
+            U result = *--it;
 
             while (it != first)
             {
@@ -554,6 +566,9 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::bidirectional_range<Rng> &&
+            std::constructible_from<
+                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
+                hpx::traits::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_right_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
