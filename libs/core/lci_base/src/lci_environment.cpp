@@ -178,7 +178,7 @@ namespace hpx { namespace util {
 
     std::string lci_environment::get_processor_name()
     {
-        return asio::ip::host_name();
+        return ::asio::ip::host_name();
     }
 
     void lci_environment::finalize()

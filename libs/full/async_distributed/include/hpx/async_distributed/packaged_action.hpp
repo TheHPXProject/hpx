@@ -55,8 +55,8 @@ namespace hpx::lcos {
                     if (hpx::tolerate_node_faults())
                     {
                         if (ec ==
-                            asio::error::make_error_code(
-                                asio::error::connection_reset))
+                            ::asio::error::make_error_code(
+                                ::asio::error::connection_reset))
                         {
                             return;
                         }

@@ -30,7 +30,7 @@ namespace hpx::util {
         DebugBreak();
 #elif defined(_POSIX_VERSION) && defined(HPX_HAVE_UNISTD_H)
         volatile int i = 0;
-        std::cerr << "PID: " << getpid() << " on " << asio::ip::host_name()
+        std::cerr << "PID: " << getpid() << " on " << ::asio::ip::host_name()
                   << " ready for attaching debugger. Once attached set i = 1 "
                      "and continue"
                   << std::endl;

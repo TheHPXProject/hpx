@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -44,8 +44,8 @@ namespace hpx::util {
         }
 
         // do full host name resolution
-        asio::io_context io_service;
-        asio::ip::tcp::endpoint const ep = util::resolve_hostname(
+        ::asio::io_context io_service;
+        ::asio::ip::tcp::endpoint const ep = util::resolve_hostname(
             prefix_ + host_name + suffix_, port, io_service, ipv4_);
 
         std::string resolved_addr(util::get_endpoint_name(ep));

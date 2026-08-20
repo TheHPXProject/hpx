@@ -98,7 +98,7 @@ namespace hpx::parcelset {
             // Return the name of this locality
             std::string get_locality_name() const override
             {
-                return asio::ip::host_name();
+                return ::asio::ip::host_name();
             }
 
             std::shared_ptr<sender> create_connection(
@@ -116,7 +116,7 @@ namespace hpx::parcelset {
                 std::shared_ptr<receiver> const& receiver_conn);
 
             /// Acceptor used to listen for incoming connections.
-            asio::ip::tcp::acceptor* acceptor_;
+            ::asio::ip::tcp::acceptor* acceptor_;
 
             /// The list of accepted connections
             mutable hpx::spinlock connections_mtx_;

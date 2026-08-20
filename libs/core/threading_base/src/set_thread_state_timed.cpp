@@ -99,7 +99,7 @@ namespace hpx::threads::detail {
 
         // create timer firing in correspondence with given time
         using deadline_timer =
-            asio::basic_waitable_timer<std::chrono::steady_clock>;
+            ::asio::basic_waitable_timer<std::chrono::steady_clock>;
 
         deadline_timer t(get_default_timer_service(), abs_time);
 

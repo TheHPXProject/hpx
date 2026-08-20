@@ -37,6 +37,11 @@
 #include <system_error>
 #include <type_traits>
 
+#include <asio/version.hpp>
+#if ASIO_VERSION >= 103400
+#include <asio/post.hpp>
+#endif
+
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx::parcelset {
@@ -142,8 +147,13 @@ namespace hpx::parcelset {
 
                 for (std::size_t i = 0; i != io_service_pool_.size(); ++i)
                 {
+#if ASIO_VERSION >= 103400
+                    ::asio::post(io_service_pool_.get_io_service(int(i)),
+                        hpx::bind(&parcelport::io_service_work, this));
+#else
                     io_service_pool_.get_io_service(int(i)).post(
                         hpx::bind(&parcelport::io_service_work, this));
+#endif
                 }
                 return true;
             }

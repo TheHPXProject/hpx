@@ -152,7 +152,7 @@ namespace hpx::detail {
         return &rt->get_thread_manager().default_pool();
     }
 
-    asio::io_context& get_default_timer_service()
+    ::asio::io_context& get_default_timer_service()
     {
         hpx::runtime const* rt = get_runtime_ptr();
         if (rt == nullptr)

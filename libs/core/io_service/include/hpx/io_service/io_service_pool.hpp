@@ -91,7 +91,7 @@ namespace hpx::util {
         bool stopped();
 
         /// \brief Get an io_service to use.
-        asio::io_context& get_io_service(int index = -1);
+        ::asio::io_context& get_io_service(int index = -1);
 
         /// \brief access underlying thread handle
         std::thread& get_os_thread_handle(std::size_t thread_num);
@@ -122,13 +122,13 @@ namespace hpx::util {
         void wait_locked();
 
     private:
-        using io_service_ptr = std::unique_ptr<asio::io_context>;
+        using io_service_ptr = std::unique_ptr<::asio::io_context>;
 
         using raw_work_type =
-            asio::executor_work_guard<asio::io_context::executor_type>;
+            ::asio::executor_work_guard<::asio::io_context::executor_type>;
         using work_type = std::unique_ptr<raw_work_type>;
 
-        static work_type initialize_work(asio::io_context& io_service);
+        static work_type initialize_work(::asio::io_context& io_service);
 
         std::mutex mtx_;
 

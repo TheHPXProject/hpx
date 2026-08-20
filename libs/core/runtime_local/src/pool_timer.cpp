@@ -68,7 +68,7 @@ namespace hpx::util::detail {
 
     private:
         using deadline_timer =
-            asio::basic_waitable_timer<std::chrono::steady_clock>;
+            ::asio::basic_waitable_timer<std::chrono::steady_clock>;
 
         mutable mutex_type mtx_;
         hpx::function<bool()> f_;          ///< function to call
@@ -146,7 +146,7 @@ namespace hpx::util::detail {
             }
 
             HPX_ASSERT(timer_ != nullptr);
-            timer_->expires_from_now(time_duration.value());
+            timer_->expires_at(time_duration.from_now());
             timer_->async_wait(hpx::bind_front(    //-V779
                 &pool_timer::timer_handler, this->shared_from_this()));
 

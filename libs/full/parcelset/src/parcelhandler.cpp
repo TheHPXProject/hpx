@@ -910,12 +910,12 @@ namespace hpx::parcelset {
             // If we are in a stopped state, ignore some errors
             if (hpx::is_stopped_or_shutting_down())
             {
-                using asio::error::make_error_code;
-                if (ec == make_error_code(asio::error::connection_aborted) ||
-                    ec == make_error_code(asio::error::connection_reset) ||
-                    ec == make_error_code(asio::error::broken_pipe) ||
-                    ec == make_error_code(asio::error::not_connected) ||
-                    ec == make_error_code(asio::error::eof))
+                using ::asio::error::make_error_code;
+                if (ec == make_error_code(::asio::error::connection_aborted) ||
+                    ec == make_error_code(::asio::error::connection_reset) ||
+                    ec == make_error_code(::asio::error::broken_pipe) ||
+                    ec == make_error_code(::asio::error::not_connected) ||
+                    ec == make_error_code(::asio::error::eof))
                 {
                     return;
                 }
@@ -923,7 +923,7 @@ namespace hpx::parcelset {
             else if (hpx::tolerate_node_faults())
             {
                 if (ec ==
-                    asio::error::make_error_code(asio::error::connection_reset))
+                    ::asio::error::make_error_code(::asio::error::connection_reset))
                 {
                     return;
                 }

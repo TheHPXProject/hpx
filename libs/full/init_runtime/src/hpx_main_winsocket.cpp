@@ -23,10 +23,10 @@ namespace hpx { namespace detail {
     // is executed.
     struct winsocket_init_helper
     {
-        static asio::detail::winsock_init<> const& init()
+        static ::asio::detail::winsock_init<> const& init()
         {
-            static const asio::detail::winsock_init<> init_winsocket =
-                asio::detail::winsock_init<>(false);
+            static const ::asio::detail::winsock_init<> init_winsocket =
+                ::asio::detail::winsock_init<>(false);
             return init_winsocket;
         }
     };

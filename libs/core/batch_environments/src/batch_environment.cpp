@@ -140,7 +140,7 @@ namespace hpx::util {
         bool found_agas_host = false;
 
 #if defined(HPX_HAVE_NETWORKING)
-        asio::io_context io_service;
+        ::asio::io_context io_service;
 
         std::size_t agas_node_num = 0;
         for (std::string const& s : nodes)
@@ -161,7 +161,7 @@ namespace hpx::util {
 
                 if (have_tcp)
                 {
-                    asio::ip::tcp::endpoint ep =
+                   ::asio::ip::tcp::endpoint ep =
                         util::resolve_hostname(s, 0, io_service);
 
                     if (0 == nodes_.count(ep))
@@ -251,7 +251,7 @@ namespace hpx::util {
 
     std::string batch_environment::host_name() const
     {
-        std::string hostname = asio::ip::host_name();
+        std::string hostname = ::asio::ip::host_name();
         if (debug_)
             std::cerr << "asio host_name: " << hostname << std::endl;
         return hostname;
