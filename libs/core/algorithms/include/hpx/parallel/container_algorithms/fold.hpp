@@ -344,7 +344,9 @@ namespace hpx::ranges {
         // clang-format on
         static auto invoke_default(InIter first, Sent last, F f)
         {
-            using U = decltype(HPX_INVOKE(f, *first, *first));
+            using U = std::decay_t<hpx::util::invoke_result_t<F&,
+                hpx::traits::iter_value_t<InIter>,
+                hpx::traits::iter_reference_t<InIter>>>;
             using result_type =
                 fold_left_first_with_iter_result<InIter, hpx::optional<U>>;
 
@@ -353,7 +355,7 @@ namespace hpx::ranges {
                 return result_type{HPX_MOVE(first), hpx::optional<U>()};
             }
 
-            U result = *first;
+            U result = HPX_MOVE(*first);
             ++first;
 
             for (; first != last; ++first)
@@ -528,7 +530,9 @@ namespace hpx::ranges {
         // clang-format on
         static auto invoke_default(BidIter first, Sent last, F f)
         {
-            using U = decltype(HPX_INVOKE(f, *first, *first));
+            using U = std::decay_t<hpx::util::invoke_result_t<F&,
+                hpx::traits::iter_reference_t<BidIter>,
+                hpx::traits::iter_value_t<BidIter>>>;
             using result_type = hpx::optional<U>;
 
             if (first == last)
@@ -537,7 +541,7 @@ namespace hpx::ranges {
             }
 
             auto it = hpx::parallel::detail::advance_to_sentinel(first, last);
-            U result = *--it;
+            U result = HPX_MOVE(*--it);
 
             while (it != first)
             {

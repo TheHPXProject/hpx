@@ -354,6 +354,52 @@ void test_fold_left_first_with_iter_empty()
     HPX_TEST(!hpx_value.has_value());
 }
 
+#include <memory>
+
+void test_fold_left_first_asymmetric()
+{
+    std::vector<std::unique_ptr<int>> c;
+    for (int i = 1; i <= 5; ++i)
+    {
+        c.push_back(std::make_unique<int>(i));
+    }
+
+    auto custom_op = [](std::unique_ptr<int>&& acc,
+                         const std::unique_ptr<int>& elem) {
+        *acc += *elem;
+        return std::move(acc);
+    };
+
+    auto hpx_result = hpx::ranges::fold_left_first(std::move(c), custom_op);
+    HPX_TEST(hpx_result.has_value());
+    if (hpx_result)
+    {
+        HPX_TEST_EQ(*(*hpx_result), 15);
+    }
+}
+
+void test_fold_right_last_asymmetric()
+{
+    std::vector<std::unique_ptr<int>> c;
+    for (int i = 1; i <= 5; ++i)
+    {
+        c.push_back(std::make_unique<int>(i));
+    }
+
+    auto custom_op = [](const std::unique_ptr<int>& elem,
+                         std::unique_ptr<int>&& acc) {
+        *acc += *elem;
+        return std::move(acc);
+    };
+
+    auto hpx_result = hpx::ranges::fold_right_last(std::move(c), custom_op);
+    HPX_TEST(hpx_result.has_value());
+    if (hpx_result)
+    {
+        HPX_TEST_EQ(*(*hpx_result), 15);
+    }
+}
+
 void test_fold_custom_op()
 {
     std::vector<std::size_t> c = test::random_repeat(1007, std::size_t(100));
@@ -391,6 +437,9 @@ int hpx_main()
     test_fold_left_first_with_iter_iter();
     test_fold_left_first_with_iter_range();
     test_fold_left_first_with_iter_empty();
+
+    test_fold_left_first_asymmetric();
+    test_fold_right_last_asymmetric();
 
     test_fold_custom_op();
 
