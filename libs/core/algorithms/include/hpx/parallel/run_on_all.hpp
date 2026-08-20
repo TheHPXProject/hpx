@@ -38,11 +38,12 @@ namespace hpx::experimental {
             auto cores =
                 hpx::execution::experimental::processing_units_count(policy);
 
-            // Create scheduler with proper core count configuration
-            auto sched =
+            // Create scheduler with proper core count configuration and priority
+            auto sched = hpx::execution::experimental::with_priority(
                 hpx::execution::experimental::with_processing_units_count(
                     hpx::execution::experimental::thread_pool_scheduler{},
-                    cores);
+                    cores),
+                hpx::execution::experimental::get_priority(policy));
 
             namespace ex = hpx::execution::experimental;
 
@@ -58,14 +59,19 @@ namespace hpx::experimental {
                 std::apply(
                     [&](auto&... r) { (r.init_iteration(0, 0), ...); }, *sp);
 
-                // 1. Extract lambdas into variables BEFORE the pipeline to prevent
-                // Clang 22 template instantiation crashes (exit code 139).
+                // Extract lambdas before pipeline composition. This prevents a
+                // Clang 22 template-instantiation crash (exit code 139).
                 auto bulk_task = [sp, f = HPX_FORWARD(F, f)](std::size_t i) {
                     std::apply(
                         [&](auto&... r) { f(r.iteration_value(i)...); }, *sp);
                 };
 
-                auto cleanup_task = [sp = HPX_MOVE(sp)]() mutable {
+                auto cleanup_task = [sp]() mutable {
+                    std::apply(
+                        [](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
+                };
+
+                auto cleanup_error = [sp]() mutable {
                     std::apply(
                         [](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
                 };
@@ -73,6 +79,11 @@ namespace hpx::experimental {
                 // 2. Build the graph
                 auto s = ex::schedule(sched) |
                     ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                    ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
+                                      std::exception_ptr ep) mutable {
+                        HPX_INVOKE(cleanup_error);
+                        return ex::just_error(HPX_MOVE(ep));
+                    }) |
                     ex::then(HPX_MOVE(cleanup_task));
 
                 // 3. Adapt the return type to a future
@@ -87,8 +98,8 @@ namespace hpx::experimental {
                 std::apply([](auto&... r) { (r.init_iteration(0, 0), ...); },
                     all_reductions);
 
-                // 1. Extract lambdas into variables BEFORE the pipeline to prevent
-                // Clang 22 template instantiation crashes (exit code 139).
+                // Extract lambdas before pipeline composition. This prevents a
+                // Clang 22 template-instantiation crash (exit code 139).
                 auto bulk_task = [&all_reductions, &f](std::size_t i) {
                     std::apply([&](auto&... r) { f(r.iteration_value(i)...); },
                         all_reductions);
@@ -99,9 +110,19 @@ namespace hpx::experimental {
                         all_reductions);
                 };
 
+                auto cleanup_error = [&all_reductions]() {
+                    std::apply([](auto&... r) { (r.exit_iteration(0), ...); },
+                        all_reductions);
+                };
+
                 // 2. Build the graph
                 auto s = ex::schedule(sched) |
                     ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                    ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
+                                      std::exception_ptr ep) mutable {
+                        HPX_INVOKE(cleanup_error);
+                        return ex::just_error(HPX_MOVE(ep));
+                    }) |
                     ex::then(HPX_MOVE(cleanup_task));
 
                 // 3. Adapt for void return (Synchronous blocking)
