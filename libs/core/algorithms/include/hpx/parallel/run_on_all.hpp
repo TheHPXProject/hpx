@@ -35,21 +35,16 @@ namespace hpx::experimental {
         decltype(auto) run_on_all(
             ExPolicy&& policy, F&& f, Reductions&&... reductions)
         {
-            // force using index_queue scheduler with given amount of threads
-            hpx::threads::thread_schedule_hint hint;
-            hint.sharing_mode(
-                hpx::threads::thread_sharing_hint::do_not_share_function);
-
             auto cores =
                 hpx::execution::experimental::processing_units_count(policy);
 
-            // Create executor with proper configuration
-            auto exec =
+            // Create scheduler with proper core count configuration
+            auto sched =
                 hpx::execution::experimental::with_processing_units_count(
-                    hpx::execution::parallel_executor(
-                        hpx::threads::thread_priority::bound,
-                        hpx::threads::thread_stacksize::default_, hint),
+                    hpx::execution::experimental::thread_pool_scheduler{},
                     cores);
+
+            namespace ex = hpx::execution::experimental;
 
             // Execute based on policy type
             if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
@@ -63,22 +58,25 @@ namespace hpx::experimental {
                 std::apply(
                     [&](auto&... r) { (r.init_iteration(0, 0), ...); }, *sp);
 
-                // Create a lambda that captures all reductions
-                auto task = [sp, f = HPX_FORWARD(F, f)](std::size_t i) {
+                // 1. Extract lambdas into variables BEFORE the pipeline to prevent
+                // Clang 22 template instantiation crashes (exit code 139).
+                auto bulk_task = [sp, f = HPX_FORWARD(F, f)](std::size_t i) {
                     std::apply(
                         [&](auto&... r) { f(r.iteration_value(i)...); }, *sp);
                 };
 
-                auto fut = hpx::parallel::execution::bulk_async_execute(
-                    HPX_MOVE(exec), HPX_MOVE(task), cores);
-
-                // Return a future that performs cleanup after all tasks
-                // complete
-                return fut.then([sp = HPX_MOVE(sp)](auto&& fut_inner) mutable {
+                auto cleanup_task = [sp = HPX_MOVE(sp)]() mutable {
                     std::apply(
                         [](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
-                    return fut_inner.get();
-                });
+                };
+
+                // 2. Build the graph
+                auto s = ex::schedule(sched) |
+                    ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                    ex::then(HPX_MOVE(cleanup_task));
+
+                // 3. Adapt the return type to a future
+                return ex::make_future(HPX_MOVE(s));
             }
             else
             {
@@ -89,18 +87,25 @@ namespace hpx::experimental {
                 std::apply([](auto&... r) { (r.init_iteration(0, 0), ...); },
                     all_reductions);
 
-                // Create a lambda that captures all reductions
-                auto task = [&all_reductions, &f](std::size_t i) {
+                // 1. Extract lambdas into variables BEFORE the pipeline to prevent
+                // Clang 22 template instantiation crashes (exit code 139).
+                auto bulk_task = [&all_reductions, &f](std::size_t i) {
                     std::apply([&](auto&... r) { f(r.iteration_value(i)...); },
                         all_reductions);
                 };
 
-                hpx::parallel::execution::bulk_sync_execute(
-                    HPX_MOVE(exec), HPX_MOVE(task), cores);
+                auto cleanup_task = [&all_reductions]() {
+                    std::apply([](auto&... r) { (r.exit_iteration(0), ...); },
+                        all_reductions);
+                };
 
-                // Clean up reductions
-                std::apply([](auto&... r) { (r.exit_iteration(0), ...); },
-                    all_reductions);
+                // 2. Build the graph
+                auto s = ex::schedule(sched) |
+                    ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                    ex::then(HPX_MOVE(cleanup_task));
+
+                // 3. Adapt for void return (Synchronous blocking)
+                hpx::this_thread::experimental::sync_wait(HPX_MOVE(s));
             }
         }
 
