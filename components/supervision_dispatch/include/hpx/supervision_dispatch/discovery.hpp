@@ -93,7 +93,7 @@ namespace hpx::supervision {
 
     /// Reactively fans out join() calls from \a local_registry to every peer in
     /// \a peers (typically the result of a prior discover_peers() call):
-    /// for each entry, this calls `local_registry.join(peer.peer_locality)`.
+    /// for each entry, this calls `local_registry.join(peer.locality)`.
     ///
     /// This reuses registry::join()'s existing reservation/idempotency
     /// machinery unchanged (see server::registry::reserve_ownership()) rather

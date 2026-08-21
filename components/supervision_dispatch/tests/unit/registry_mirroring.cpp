@@ -96,6 +96,9 @@ void test_same_locality_mirroring_completes_without_recursion()
         return;
     }
 
+    // Surface any publish_event failure instead of discarding it.
+    HPX_TEST_NO_THROW(f.get());
+
     auto const shadow_state = hpx::supervision::query_state(target);
     HPX_TEST(shadow_state.last_event == hpx::supervision::event::completed);
 }
@@ -157,6 +160,67 @@ void test_cross_locality_sequence_number_increasing(
     }
 }
 
+// Test C: a fresh join() (no prior local shadow for peer_locality at all)
+// against a peer whose own real epoch is already nonzero - peer_locality
+// completed its own hpx::supervision::init() before this observer ever calls
+// join() (see hpx_main() below: init() runs on every locality before the
+// barrier that gates the tests here) - must open the local shadow at that same
+// escalated epoch rather than epoch 0.
+//
+// This specifically exercises register_observers()'s "ec || unknown" guard in
+// registry_server.cpp: since the shadow has never been touched, the very first
+// notification observed for peer_locality - deliberately a `running` event
+// below, not `started`, simulating an observer that only starts mirroring after
+// the peer has already moved past its own `started` - must itself open the
+// shadow's epoch (at notification.epoch, i.e. the peer's real, escalated epoch)
+// before mirroring the `running` event, rather than leaving the shadow seeded
+// at epoch 0 (from join()'s own seed_epoch, which is - by design - never
+// escalated) and rejecting the mirrored `running` as an illegal new-epoch
+// opening.
+void test_fresh_join_nonzero_peer_epoch_mirrors_running(
+    hpx::id_type const& peer_locality)
+{
+    // Guarantee "no existing local shadow" for peer_locality, regardless of
+    // what earlier tests in this process may have left behind for this same key
+    // (see reset_shared_shadow_state() above).
+    {
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::supervision::remove_target(peer_locality, ec);
+    }
+
+    hpx::error_code epoch_ec(hpx::throwmode::lightweight);
+    std::uint64_t const peer_epoch = hpx::supervision::current_epoch(
+        hpx::launch::sync, peer_locality, epoch_ec);
+    HPX_TEST(!epoch_ec);
+    HPX_TEST(peer_epoch > 0);
+
+    hpx::supervision::registry const r(hpx::find_here());
+    hpx::supervision::joined_peer const peer =
+        r.join(hpx::launch::sync, peer_locality);
+    HPX_TEST_NEQ(peer.target, hpx::invalid_id);
+
+    // join_epoch must reflect the peer's real (nonzero) epoch, not seed_epoch
+    // (which stays at 0 for a never-before-seen shadow).
+    HPX_TEST_EQ(peer.join_epoch, peer_epoch);
+
+    hpx::supervision::publish_event(
+        peer_locality, hpx::supervision::event::running, peer.join_epoch);
+
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    hpx::supervision::lifecycle_state state =
+        hpx::supervision::query_state(peer.target);
+    while (state.last_event != hpx::supervision::event::running &&
+        std::chrono::steady_clock::now() < deadline)
+    {
+        hpx::this_thread::yield();
+        state = hpx::supervision::query_state(peer.target);
+    }
+
+    HPX_TEST(state.last_event == hpx::supervision::event::running);
+    HPX_TEST_EQ(state.epoch, peer.join_epoch);
+}
+
 // ============================================================================
 // Main Test Entry Point
 // ============================================================================
@@ -179,6 +243,7 @@ int hpx_main()
     if (is_observer)
     {
         test_same_locality_mirroring_completes_without_recursion();
+        test_fresh_join_nonzero_peer_epoch_mirrors_running(peer_locality);
         test_cross_locality_sequence_number_increasing(peer_locality);
     }
     hpx::distributed::barrier::synchronize();

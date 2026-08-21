@@ -106,8 +106,8 @@ namespace hpx::agas {
         naming::gid_type locality_;
 
         mutable hpx::shared_mutex resolved_localities_mtx_;
-        using resolved_localities_type =
-            std::map<naming::gid_type, parcelset::endpoints_type>;
+        using resolved_localities_type = std::map<naming::gid_type,
+            std::pair<parcelset::endpoints_type, bool>>;
         resolved_localities_type resolved_localities_;
 
         explicit addressing_service(util::runtime_configuration const& ini_);
@@ -165,6 +165,15 @@ namespace hpx::agas {
         {
             return runtime_type == runtime_mode::connect;
         }
+
+        /// \brief Return whether a locality joined while connecting.
+        ///
+        /// \param locality The locality GID to inspect. If locality is invalid,
+        ///                 return the connecting status of the calling
+        ///                 locality.
+        ///
+        /// \returns `true` if the locality is marked as connecting.
+        bool is_connecting(hpx::naming::gid_type const& locality) const;
 
         bool resolve_locally_known_addresses(
             naming::gid_type const& id, naming::address& addr) const;
@@ -228,7 +237,7 @@ namespace hpx::agas {
             naming::gid_type const& id, gva const& g, future<bool> f);
 
         /// Maintain list of migrated objects
-        bool was_object_migrated_locked(naming::gid_type const& id);
+        bool was_object_migrated_locked(naming::gid_type const& id) const;
 
     private:
         /// Assumes that \a refcnt_requests_mtx_ is locked.
@@ -269,7 +278,7 @@ namespace hpx::agas {
         /// \brief Add a locality to the runtime.
         bool register_locality(parcelset::endpoints_type const& endpoints,
             naming::gid_type& prefix, std::uint32_t num_threads,
-            error_code& ec = throws);
+            bool is_connecting, error_code& ec = throws);
 
         /// \brief Resolve a locality to its prefix.
         ///
@@ -277,7 +286,7 @@ namespace hpx::agas {
         parcelset::endpoints_type const& resolve_locality(
             naming::gid_type const& gid, error_code& ec = throws);
 
-        bool has_resolved_locality(naming::gid_type const& gid);
+        bool has_resolved_locality(naming::gid_type const& gid) const;
 
         /// \brief Remove a locality from the runtime.
         bool unregister_locality(
@@ -930,7 +939,7 @@ namespace hpx::agas {
         }
 
         bool resolve_cached(naming::gid_type const& id, naming::address& addr,
-            error_code& ec = throws);
+            error_code& ec = throws) const;
 
         bool resolve_cached(hpx::id_type const& id, naming::address& addr,
             error_code& ec = throws)
@@ -964,7 +973,8 @@ namespace hpx::agas {
 
         bool resolve_cached(naming::gid_type const* gids,
             naming::address* addrs, std::size_t size,
-            hpx::detail::dynamic_bitset<>& locals, error_code& ec = throws);
+            hpx::detail::dynamic_bitset<>& locals,
+            error_code& ec = throws) const;
 
 #if defined(HPX_HAVE_NETWORKING)
         /// \brief Route the given parcel to the appropriate AGAS service instance
@@ -1225,7 +1235,7 @@ namespace hpx::agas {
         /// Maintain list of migrated objects
         std::pair<bool, components::pinned_ptr> was_object_migrated(
             naming::gid_type const& gid,
-            hpx::move_only_function<components::pinned_ptr()>&& f);
+            hpx::move_only_function<components::pinned_ptr()>&& f) const;
 
         /// Mark the given object as being migrated (if the object is unpinned).
         /// Delay migration until the object is unpinned otherwise.

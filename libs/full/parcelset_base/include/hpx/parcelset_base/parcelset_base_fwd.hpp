@@ -28,6 +28,9 @@ namespace hpx::parcelset {
     ///       networking library and if no explicit parcel handler function was
     ///       specified for the parcel.
     HPX_CXX_EXPORT using parcel_write_handler_type =
+        hpx::function<bool(std::error_code const&, parcelset::parcel const&)>;
+
+    HPX_CXX_EXPORT using write_handler_type =
         hpx::function<void(std::error_code const&, parcelset::parcel const&)>;
 
     ////////////////////////////////////////////////////////////////////////

@@ -10,7 +10,6 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>

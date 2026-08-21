@@ -22,7 +22,8 @@ namespace hpx::agas {
 
     ////////////////////////////////////////////////////////////////////////
     // Base name used to register AGAS service instances
-    HPX_CXX_EXPORT inline constexpr char const* const service_name = "/0/agas/";
+    HPX_CXX_EXPORT inline constexpr char const* const service_name =
+        "/{}/agas/";
 
     // Fixed addresses of AGAS components
     HPX_CXX_EXPORT inline constexpr std::uint64_t booststrap_prefix = 0ULL;

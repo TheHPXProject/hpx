@@ -177,14 +177,6 @@ void run_worker_role()
     // Second rendezvous, same barrier object: signals teardown-readiness.
     b.wait();
 
-    // Publishing the "completed" terminal event here, before the second
-    // rendezvous below, is what opens a race window against the root's fenced
-    // dispatch_work<do_work_action>(...) call: if this event latches on this
-    // locality's supervision registry before the root's dispatch is
-    // fenced-checked against it, the root's call fails with
-    // hpx::error::target_fenced (see the catch block in run_root_role() below),
-    // which is what the b.wait() there guards against.
-    //
     // The root creates a worker_client instance on this locality, dispatches
     // do_work() to it, and verifies the result entirely on its own - this
     // worker has nothing further to do until teardown.

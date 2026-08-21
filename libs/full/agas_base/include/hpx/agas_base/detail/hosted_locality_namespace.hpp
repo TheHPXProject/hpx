@@ -28,7 +28,7 @@ namespace hpx::agas::detail {
 
     struct hosted_locality_namespace : locality_namespace
     {
-        explicit hosted_locality_namespace(naming::address addr);
+        explicit hosted_locality_namespace(naming::address const& addr);
 
         naming::address::address_type ptr() const override
         {
@@ -47,7 +47,7 @@ namespace hpx::agas::detail {
             std::uint64_t count, std::uint32_t num_threads,
             naming::gid_type const& suggested_prefix) override;
 
-        void free(naming::gid_type const& locality) override;
+        bool free(naming::gid_type const& locality) override;
 
         std::vector<std::uint32_t> localities() override;
 

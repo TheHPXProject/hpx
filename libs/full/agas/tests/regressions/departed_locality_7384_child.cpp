@@ -9,7 +9,10 @@
 // connects to the running test as a new locality, waits until the test has
 // captured this locality's id, and disconnects gracefully.
 
+#define HPX_HAVE_FORCE_NO_CXX_MODULES
+
 #include <hpx/config.hpp>
+
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_init.hpp>

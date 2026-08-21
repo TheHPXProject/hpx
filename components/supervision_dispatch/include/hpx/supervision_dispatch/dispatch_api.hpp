@@ -208,8 +208,8 @@ namespace hpx::supervision {
     ///                 function will throw on error instead.
     ///
     /// \throws         hpx::exception if \a handle does not hold a valid
-    ///                 registry client, unless \a ec was not pre-initialized to
-    ///                 \a hpx::throws.
+    ///                 registry client, unless \a ec was pre-initialized to
+    ///                 something other than \a hpx::throws.
     ///
     /// \return The last event recorded for the local locality.
     HPX_SUPERVISION_DISPATCH_EXPORT lifecycle_state query_state(
@@ -254,9 +254,9 @@ namespace hpx::supervision {
     ///                 if this is pre-initialized to \a hpx::throws the
     ///                 function will throw on error instead.
     ///
-    /// \throws         hpx::exception if \a peer does not hold a valid
-    ///                 locality, unless \a ec was not pre-initialized to
-    ///                 \a hpx::throws.
+    /// \throws         hpx::exception if \a peer.locality does not hold a valid
+    ///                 registry client, unless \a ec was pre-initialized to
+    ///                 something other than \a hpx::throws.
     ///
     /// \return The last event recorded for \a peer.locality.
     HPX_SUPERVISION_DISPATCH_EXPORT lifecycle_state query_state(
@@ -305,8 +305,8 @@ namespace hpx::supervision {
     ///                 function will throw on error instead.
     ///
     /// \throws         hpx::exception if \a handle does not hold a valid
-    ///                 registry client, unless \a ec was not pre-initialized to
-    ///                 \a hpx::throws.
+    ///                 registry client, unless \a ec was pre-initialized to
+    ///                 something other than \a hpx::throws.
     ///
     /// \return The same \a publish_result values as the raw-id overload.
     HPX_SUPERVISION_DISPATCH_EXPORT publish_result publish_event(

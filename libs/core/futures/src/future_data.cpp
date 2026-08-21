@@ -18,7 +18,10 @@
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/tracing.hpp>
 
+#include <atomic>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <mutex>
 #include <utility>
@@ -425,3 +428,28 @@ namespace hpx::lcos::detail {
         return hpx::future_status::ready;    //-V110
     }
 }    // namespace hpx::lcos::detail
+
+namespace hpx {
+
+    namespace {
+
+        std::atomic<std::int64_t> future_timeout_ms{
+            default_future_timeout.count()};
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    std::chrono::milliseconds get_future_timeout() noexcept
+    {
+        return std::chrono::milliseconds(
+            future_timeout_ms.load(std::memory_order_relaxed));
+    }
+
+    void set_future_timeout(
+        hpx::chrono::steady_duration const& timeout) noexcept
+    {
+        auto const timeout_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                timeout.value());
+        future_timeout_ms.store(timeout_ms.count(), std::memory_order_relaxed);
+    }
+}    // namespace hpx

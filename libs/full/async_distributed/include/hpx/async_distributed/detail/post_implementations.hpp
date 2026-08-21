@@ -8,11 +8,14 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
+#include <hpx/modules/errors.hpp>
+
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -35,6 +38,16 @@ namespace hpx::detail {
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
         }
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -106,6 +119,16 @@ namespace hpx::detail {
                 hpx::actions::detail::get_action_name<action_type>());
         }
 
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
+
         if (naming::get_locality_id_from_gid(addr.locality_) ==
             agas::get_locality_id())
         {
@@ -148,6 +171,16 @@ namespace hpx::detail {
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
         }
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -214,6 +247,16 @@ namespace hpx::detail {
                 hpx::actions::detail::get_action_name<action_type>());
         }
 
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
+
         if (naming::get_locality_id_from_gid(addr.locality_) ==
             agas::get_locality_id())
         {
@@ -258,6 +301,16 @@ namespace hpx::detail {
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
         }
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -327,6 +380,16 @@ namespace hpx::detail {
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
         }
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::post_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;

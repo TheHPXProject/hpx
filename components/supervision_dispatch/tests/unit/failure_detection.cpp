@@ -194,8 +194,11 @@ void test_no_false_positives(hpx::id_type const& peer_locality)
         sampled_sequence_numbers.push_back(sampled_state.event_sequence_number);
     }
 
-    HPX_TEST(std::ranges::is_sorted(
-        sampled_sequence_numbers, std::less<std::uint64_t>{}));
+    // Strictly increasing, not merely non-decreasing: a frozen counter
+    // produces an all-equal (and therefore "sorted") sample sequence.
+    HPX_TEST(std::ranges::adjacent_find(sampled_sequence_numbers,
+                 std::greater_equal<std::uint64_t>{}) ==
+        sampled_sequence_numbers.end());
 
     // Secondary check, kept from the original test: the peer must still never
     // be spuriously fenced across multiple poll cycles. This documents the

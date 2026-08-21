@@ -1064,8 +1064,8 @@ namespace hpx {
 
     bool tolerate_node_faults()
     {
-#ifdef HPX_HAVE_FAULT_TOLERANCE
-        return true;
+#if defined(HPX_HAVE_FAULT_TOLERANCE)
+        return hpx::get_config_entry("hpx.enable_fault_tolerance", "0") != "0";
 #else
         return false;
 #endif

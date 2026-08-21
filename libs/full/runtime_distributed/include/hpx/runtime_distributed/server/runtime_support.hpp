@@ -17,6 +17,7 @@
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/logging.hpp>
+#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/plugin.hpp>
@@ -133,7 +134,8 @@ namespace hpx::components::server {
             std::shared_ptr<Component> const& p, hpx::id_type);
 
         /// \brief Gracefully shutdown this runtime system instance
-        void shutdown(double timeout, hpx::id_type const& respond_to);
+        void shutdown(double timeout, hpx::id_type const& respond_to,
+            bool force_disconnect);
 
         /// \brief Gracefully shutdown runtime system instances on all localities
         void shutdown_all(double timeout);
@@ -227,9 +229,19 @@ namespace hpx::components::server {
         ///
         /// \note      This function can be called from any thread.
         void stop(double timeout, hpx::id_type const& respond_to,
-            bool remove_from_remote_caches);
+            bool remove_from_remote_caches, bool force_disconnect);
 
-        /// called locally only
+        /// \brief Remove the given locality from this locality's runtime
+        ///        support component.
+        ///
+        /// \param locality  The locality to be removed.
+        /// \param ec        Used to hold error code value originating from
+        ///                  the AGAS operations invoked by this function.
+        ///
+        /// \note This function must be called locally only; it is not
+        ///       exposed as a component action.
+        bool remove_locality(
+            hpx::id_type const& locality, error_code& ec = hpx::throws);
         void stopped();
         void notify_waiting_main();
 
@@ -243,8 +255,24 @@ namespace hpx::components::server {
         void add_pre_shutdown_function(shutdown_function_type f);
         void add_shutdown_function(shutdown_function_type f);
 
-        void remove_here_from_connection_cache();
-        void remove_here_from_console_connection_cache();
+        /// \brief Broadcast a request to remove the given locality from the
+        ///        connection caches of all remote, non-console localities.
+        ///
+        /// \param locality      The locality to remove from the remote
+        ///                      connection caches.
+        /// \param skip_current  If true, omits the locality identified by
+        ///                      \a locality from this broadcast (that locality
+        ///                      will not receive a removal request for itself).
+        static void remove_locality_from_connection_cache(
+            hpx::naming::gid_type const& locality, bool skip_current = false);
+
+        /// \brief Remove the given locality from the console's connection
+        ///        cache.
+        ///
+        /// \param locality  The locality to remove from the console's
+        ///                  connection cache.
+        static void remove_locality_from_console_connection_cache(
+            hpx::naming::gid_type const& locality);
 
 #if defined(HPX_HAVE_NETWORKING)
         ///////////////////////////////////////////////////////////////////////
@@ -387,7 +415,7 @@ namespace hpx::components::server {
         components::component_type const type =
             components::get_component_type<typename Component::wrapped_type>();
 
-        using wrapping_type = typename Component::wrapping_type;
+        using wrapping_type = Component::wrapping_type;
         naming::gid_type id = create<wrapping_type>();
         LRT_(info).format("successfully created component {} of type: {}", id,
             components::get_component_type_name(type));
@@ -401,7 +429,7 @@ namespace hpx::components::server {
         components::component_type const type =
             components::get_component_type<typename Component::wrapped_type>();
 
-        using wrapping_type = typename Component::wrapping_type;
+        using wrapping_type = Component::wrapping_type;
         // Note, T and Ts can't be (non-const) references, and parameters
         // should be moved to allow for move-only constructor argument
         // types.
@@ -425,7 +453,7 @@ namespace hpx::components::server {
         std::vector<naming::gid_type> ids;
         ids.reserve(count);
 
-        using wrapping_type = typename Component::wrapping_type;
+        using wrapping_type = Component::wrapping_type;
         for (std::size_t i = 0; i != count; ++i)
         {
             ids.push_back(create<wrapping_type>(vs...));
@@ -450,7 +478,7 @@ namespace hpx::components::server {
             std::vector<naming::gid_type> ids;
             ids.reserve(count);
 
-            using wrapping_type = typename Component::wrapping_type;
+            using wrapping_type = Component::wrapping_type;
             for (std::size_t i = 0; i != count; ++i)
             {
                 ids.push_back(create<wrapping_type>(first + i, vs...));
@@ -480,7 +508,7 @@ namespace hpx::components::server {
         components::component_type const type =
             components::get_component_type<typename Component::wrapped_type>();
 
-        using wrapping_type = typename Component::wrapping_type;
+        using wrapping_type = Component::wrapping_type;
         naming::gid_type id;
 
         if (!local_op)
@@ -510,7 +538,7 @@ namespace hpx::components::server {
         // AGAS
         naming::gid_type migrated_id = to_migrate.get_gid();
 
-        using wrapping_type = typename Component::wrapping_type;
+        using wrapping_type = Component::wrapping_type;
         typename wrapping_type::derived_type* new_instance = nullptr;
 
         naming::gid_type id = create_migrated<wrapping_type>(

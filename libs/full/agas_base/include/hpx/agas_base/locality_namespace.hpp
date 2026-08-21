@@ -34,7 +34,7 @@ namespace hpx::agas {
             std::uint32_t num_threads,
             naming::gid_type const& suggested_prefix) = 0;
 
-        virtual void free(naming::gid_type const& locality) = 0;
+        virtual bool free(naming::gid_type const& locality) = 0;
 
         virtual std::vector<std::uint32_t> localities() = 0;
 

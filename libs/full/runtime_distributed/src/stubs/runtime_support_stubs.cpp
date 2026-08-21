@@ -81,7 +81,8 @@ namespace hpx::components::stubs {
     /// \brief Shutdown the given runtime system
     hpx::future<void> runtime_support::shutdown_async(
         [[maybe_unused]] hpx::id_type const& targetgid,
-        [[maybe_unused]] double timeout)
+        [[maybe_unused]] double timeout,
+        [[maybe_unused]] bool const force_disconnect)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // Create a promise directly and execute the required action.
@@ -95,7 +96,7 @@ namespace hpx::components::stubs {
         // We need to make it unmanaged to avoid late refcnt requests
         id_type gid(
             value.get_id().get_gid(), id_type::management_type::unmanaged);
-        hpx::post<action_type>(targetgid, timeout, gid);
+        hpx::post<action_type>(targetgid, timeout, gid, force_disconnect);
 
         return f;
 #else
@@ -105,11 +106,11 @@ namespace hpx::components::stubs {
     }
 
     void runtime_support::shutdown(
-        hpx::id_type const& targetgid, double timeout)
+        hpx::id_type const& targetgid, double timeout, bool force_disconnect)
     {
         // The following get yields control while the action above
         // is executed and the result is returned to the future
-        shutdown_async(targetgid, timeout).get();
+        shutdown_async(targetgid, timeout, force_disconnect).get();
     }
 
     /// \brief Shutdown the runtime systems of all localities

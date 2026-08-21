@@ -152,7 +152,7 @@ namespace hpx::agas::server {
         parcelset::endpoints_type resolve_locality(
             naming::gid_type const& locality);
 
-        void free(naming::gid_type const& locality);
+        bool free(naming::gid_type const& locality);
 
         std::vector<std::uint32_t> localities();
 

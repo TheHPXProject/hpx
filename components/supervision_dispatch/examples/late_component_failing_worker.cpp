@@ -138,11 +138,8 @@ int main(int argc, char* argv[])
 {
     // Enforce connect mode: this worker joins an already-running
     // supervision_dispatch application rather than starting one of its own.
-    std::vector<std::string> const cfg = {"hpx.run_hpx_main!=1"};
-
     hpx::init_params init_args;
     init_args.mode = hpx::runtime_mode::connect;
-    init_args.cfg = cfg;
 
     return hpx::init(argc, argv, init_args);
 }

@@ -93,7 +93,7 @@ namespace hpx_startup {
 namespace hpx::detail {
 
     // forward declarations only
-    void console_print(std::string const&);
+    static void console_print(std::string const&);
 
     int init_impl(
         hpx::function<int(hpx::program_options::variables_map&)> const& f,
@@ -182,8 +182,9 @@ namespace hpx::detail {
 namespace hpx::detail {
 
     // forward declarations only
-    void list_symbolic_name(std::string const&, hpx::id_type const&);
-    void list_component_type(std::string const&, components::component_type);
+    static void list_symbolic_name(std::string const&, hpx::id_type const&);
+    static void list_component_type(
+        std::string const&, components::component_type);
 }    // namespace hpx::detail
 
 HPX_PLAIN_ACTION_ID(hpx::detail::console_print, console_print_action,
@@ -214,7 +215,7 @@ namespace hpx::detail {
         std::cout << name << std::endl;
     }
 
-    inline void print(std::string const& name, error_code& ec = throws)
+    static void print(std::string const& name, error_code& ec = throws)
     {
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
         hpx::id_type console(agas::get_console_locality(ec));
@@ -234,7 +235,7 @@ namespace hpx::detail {
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     ///////////////////////////////////////////////////////////////////////////
     // redirect the printing of the given counter name to the console
-    bool list_counter(
+    static bool list_counter(
         performance_counters::counter_info const& info, error_code& ec)
     {
         print(info.fullname_, ec);
@@ -242,7 +243,7 @@ namespace hpx::detail {
     }
 
     // List the names of all registered performance counters.
-    void list_counter_names_header(bool skeleton)
+    static void list_counter_names_header(bool const skeleton)
     {
         // print header
         print("List of available counter instances");
@@ -251,7 +252,7 @@ namespace hpx::detail {
         print(std::string(78, '-'));
     }
 
-    void list_counter_names_minimal()
+    static void list_counter_names_minimal()
     {
         // list all counter names
         list_counter_names_header(true);
@@ -259,7 +260,7 @@ namespace hpx::detail {
             performance_counters::discover_counters_mode::minimal);
     }
 
-    void list_counter_names_full()
+    static void list_counter_names_full()
     {
         // list all counter names
         list_counter_names_header(false);
@@ -269,7 +270,7 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     // redirect the printing of the full counter info to the console
-    bool list_counter_info(
+    static bool list_counter_info(
         performance_counters::counter_info const& info, error_code& ec)
     {
         // compose the information to be printed for each of the counters
@@ -294,7 +295,7 @@ namespace hpx::detail {
     }
 
     // List the names of all registered performance counters.
-    void list_counter_infos_header(bool skeleton)
+    static void list_counter_infos_header(bool const skeleton)
     {
         // print header
         print("Information about available counter instances");
@@ -303,7 +304,7 @@ namespace hpx::detail {
         print("--------------------------------------------------------");
     }
 
-    void list_counter_infos_minimal()
+    static void list_counter_infos_minimal()
     {
         // list all counter information
         list_counter_infos_header(true);
@@ -311,7 +312,7 @@ namespace hpx::detail {
             performance_counters::discover_counters_mode::minimal);
     }
 
-    void list_counter_infos_full()
+    static void list_counter_infos_full()
     {
         // list all counter information
         list_counter_infos_header(false);
@@ -329,7 +330,7 @@ namespace hpx::detail {
         print(str);
     }
 
-    void list_symbolic_names()
+    static void list_symbolic_names()
     {
         print(std::string("List of all registered symbolic names:"));
         print(std::string("--------------------------------------"));
@@ -345,13 +346,13 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     void list_component_type(
-        std::string const& name, components::component_type ctype)
+        std::string const& name, components::component_type const ctype)
     {
         print(hpx::util::format(
             "{1:-40}, {2}", name, components::get_component_type_name(ctype)));
     }
 
-    void list_component_types()
+    static void list_component_types()
     {
         print(std::string("List of all registered component types:"));
         print(std::string("---------------------------------------"));
@@ -365,7 +366,7 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    void start_counters(std::shared_ptr<util::query_counters> const& qc)
+    static void start_counters(std::shared_ptr<util::query_counters> const& qc)
     {
         try
         {
@@ -408,7 +409,7 @@ namespace hpx {
     namespace detail {
 
         ///////////////////////////////////////////////////////////////////////
-        void activate_global_options(
+        static void activate_global_options(
             util::command_line_handling& cmdline, int argc, char** argv)
         {
 #if defined(__linux) || defined(linux) || defined(__linux__) ||                \
@@ -457,7 +458,7 @@ namespace hpx {
 
         ///////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
-        void handle_list_and_print_options(hpx::runtime& rt,
+        static void handle_list_and_print_options(hpx::runtime& rt,
             hpx::program_options::variables_map& vm,
             bool print_counters_locally)
         {
@@ -471,7 +472,7 @@ namespace hpx {
             if (vm.count("hpx:list-counters"))
             {
                 // Print the names of all registered performance counters.
-                std::string option(vm["hpx:list-counters"].as<std::string>());
+                auto option(vm["hpx:list-counters"].as<std::string>());
                 if (0 == std::string("minimal").find(option))
                     rt.add_startup_function(&list_counter_names_minimal);
                 else if (0 == std::string("full").find(option))
@@ -488,8 +489,7 @@ namespace hpx {
             if (vm.count("hpx:list-counter-infos"))
             {
                 // Print info about all registered performance counters.
-                std::string option(
-                    vm["hpx:list-counter-infos"].as<std::string>());
+                auto option(vm["hpx:list-counter-infos"].as<std::string>());
                 if (0 == std::string("minimal").find(option))
                     rt.add_startup_function(&list_counter_infos_minimal);
                 else if (0 == std::string("full").find(option))
@@ -582,11 +582,10 @@ namespace hpx {
 
                 // schedule the query function at startup, which will schedule
                 // itself to run after the given interval
-                std::shared_ptr<util::query_counters> qc =
-                    std::make_shared<util::query_counters>(std::ref(counters),
-                        std::ref(reset_counters), interval, destination,
-                        counter_format, counter_shortnames, csv_header,
-                        print_counters_locally, counter_types);
+                auto qc = std::make_shared<util::query_counters>(
+                    std::ref(counters), std::ref(reset_counters), interval,
+                    destination, counter_format, counter_shortnames, csv_header,
+                    print_counters_locally, counter_types);
 
                 // schedule to print counters at shutdown, if requested
                 if (get_config_entry("hpx.print_counter.shutdown", "0") == "1")
@@ -641,8 +640,8 @@ namespace hpx {
         }
 #endif
 
-        void add_startup_functions(hpx::runtime& rt,
-            hpx::program_options::variables_map& vm, runtime_mode mode,
+        static void add_startup_functions(hpx::runtime& rt,
+            hpx::program_options::variables_map& vm, runtime_mode const mode,
             startup_function_type startup, shutdown_function_type shutdown)
         {
             if (vm.count("hpx:app-config"))
@@ -684,10 +683,10 @@ namespace hpx {
         }
 
         ///////////////////////////////////////////////////////////////////////
-        int run(hpx::runtime& rt,
+        static int run(hpx::runtime& rt,
             hpx::function<int(hpx::program_options::variables_map& vm)> const&
                 f,
-            hpx::program_options::variables_map& vm, runtime_mode mode,
+            hpx::program_options::variables_map& vm, runtime_mode const mode,
             startup_function_type startup, shutdown_function_type shutdown)
         {
             LPROGRESS_;
@@ -703,10 +702,10 @@ namespace hpx {
             return rt.run();
         }
 
-        int start(hpx::runtime& rt,
+        static int start(hpx::runtime& rt,
             hpx::function<int(hpx::program_options::variables_map& vm)> const&
                 f,
-            hpx::program_options::variables_map& vm, runtime_mode mode,
+            hpx::program_options::variables_map& vm, runtime_mode const mode,
             startup_function_type startup, shutdown_function_type shutdown)
         {
             LPROGRESS_;
@@ -724,9 +723,9 @@ namespace hpx {
             return rt.start();
         }
 
-        int run_or_start(bool blocking, std::unique_ptr<hpx::runtime> rt,
-            util::command_line_handling& cfg, startup_function_type startup,
-            shutdown_function_type shutdown)
+        static int run_or_start(bool const blocking,
+            std::unique_ptr<hpx::runtime> rt, util::command_line_handling& cfg,
+            startup_function_type startup, shutdown_function_type shutdown)
         {
             if (blocking)
             {
@@ -746,7 +745,7 @@ namespace hpx {
         }
 
         ////////////////////////////////////////////////////////////////////////
-        void init_environment(
+        static void init_environment(
             [[maybe_unused]] hpx::util::runtime_configuration const& cfg)
         {
             HPX_UNUSED(hpx::filesystem::initial_path());
@@ -820,7 +819,7 @@ namespace hpx {
         }
 
         // make sure the runtime system is not active yet
-        int ensure_no_runtime_is_up()
+        static int ensure_no_runtime_is_up()
         {
             // make sure the runtime system is not active yet
             if (get_runtime_ptr() != nullptr)
@@ -850,7 +849,8 @@ namespace hpx {
         int run_or_start(
             hpx::function<int(hpx::program_options::variables_map& vm)> const&
                 f,
-            int argc, char** argv, init_params const& params, bool blocking)
+            int const argc, char** argv, init_params const& params,
+            bool const blocking)
         {
             int result;
             try
@@ -1000,7 +1000,7 @@ namespace hpx {
 
         ////////////////////////////////////////////////////////////////////////
         template <typename T>
-        inline T get_option(std::string const& config, T default_ = T())
+        static T get_option(std::string const& config, T const& default_ = T())
         {
             if (!config.empty())
             {
@@ -1076,7 +1076,8 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    int disconnect(double shutdown_timeout, double localwait, error_code& ec)
+    int disconnect([[maybe_unused]] double shutdown_timeout,
+        [[maybe_unused]] double localwait, [[maybe_unused]] error_code& ec)
     {
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
         if (!threads::get_self_ptr())
@@ -1127,15 +1128,85 @@ namespace hpx {
         p->call_shutdown_functions(true);
         p->call_shutdown_functions(false);
 
-        p->stop(shutdown_timeout, hpx::invalid_id, true);
-#else
-        HPX_UNUSED(shutdown_timeout);
-        HPX_UNUSED(localwait);
-        HPX_UNUSED(ec);
+        p->stop(shutdown_timeout, hpx::invalid_id, true, false);
 #endif
 
         return 0;
     }
+
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+    ///////////////////////////////////////////////////////////////////////////
+    int force_disconnect(
+        [[maybe_unused]] hpx::id_type const& locality, error_code& ec)
+    {
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (!threads::get_self_ptr())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::force_disconnect",
+                "this function can be called from an HPX thread only");
+            return -1;
+        }
+
+        if (!is_running())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::force_disconnect",
+                "the runtime system is not active (did you already "
+                "call finalize?)");
+            return -1;
+        }
+
+        if (!agas::is_console())
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::force_disconnect",
+                "hpx::force_disconnect should be called on the console "
+                "locality only.");
+            return -1;
+        }
+
+        if (locality == hpx::find_here())
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::force_disconnect",
+                "hpx::force_disconnect cannot be used to disconnect the "
+                "console locality itself.");
+            return -1;
+        }
+
+        if (!agas::is_connecting(locality.get_gid()))
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "hpx::force_disconnect",
+                "hpx::force_disconnect can be called to disconnect only a "
+                "locality that was connecting late.");
+            return -1;
+        }
+
+        auto* p = static_cast<components::server::runtime_support*>(
+            get_runtime_distributed().get_runtime_support_lva());
+
+        if (nullptr == p)
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::force_disconnect",
+                "the runtime system is not active (did you already "
+                "call finalize?)");
+            return -1;
+        }
+
+        bool const res = p->remove_locality(locality, ec);
+        return ec || !res ? -1 : 0;
+#else
+        HPX_THROWS_IF(ec, hpx::error::invalid_status, "hpx::force_disconnect",
+            "hpx::force_disconnect is not supported in this configuration, "
+            "configure HPX with `-DHPX_WITH_FORCE_DISCONNECT=On` to enable "
+            "it.");
+        return -1;
+#endif
+    }
+#endif
 
     ///////////////////////////////////////////////////////////////////////////
     void terminate()

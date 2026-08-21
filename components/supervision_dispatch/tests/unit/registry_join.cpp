@@ -48,10 +48,9 @@ void reset_shared_shadow_state()
     HPX_TEST(!ec);
 }
 
-// Joining a peer sentinel must succeed and return a valid shadow target id that
-// is distinct from the peer sentinel's own id, confirming that a local shadow
-// was created rather than simply aliasing the peer.
-void test_registry_join_creates_shadow()
+// Joining a peer locality must create or reuse local mirrored state and return
+// the peer locality as the joined target.
+void test_registry_join_creates_state()
 {
     reset_shared_shadow_state();
 
@@ -80,7 +79,7 @@ void test_registry_join_idempotent()
     HPX_TEST_EQ(peer1, peer2);
 }
 
-// Same as test_registry_join_creates_shadow(), but using the asynchronous
+// Same as test_registry_join_creates_state(), but using the asynchronous
 // overload of join().
 void test_registry_join_async()
 {
@@ -289,12 +288,41 @@ void test_registry_join_terminal_peer_evicted_from_peers()
     HPX_TEST_NEQ(rejoined_shadow, peer);
 }
 
+// A peer_locality that does not represent a locality id must be rejected with
+// hpx::error::bad_parameter, and rejected *before* any registration side
+// effects occur - no shadow entry should be seeded/published, and
+// snapshot_peers() must stay empty.
+void test_registry_join_rejects_non_locality()
+{
+    reset_shared_shadow_state();
+
+    hpx::id_type const& here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    // use invalid_id to try to join "as if" it were a peer locality.
+    bool threw_bad_parameter = false;
+    try
+    {
+        r.join(hpx::launch::sync, hpx::invalid_id);
+        HPX_TEST(false);
+    }
+    catch (hpx::exception const& e)
+    {
+        threw_bad_parameter = (e.get_error() == hpx::error::bad_parameter);
+    }
+    HPX_TEST(threw_bad_parameter);
+
+    // No new peer entry should have been created for the rejected id.
+    auto const peers = r.snapshot_peers(hpx::launch::sync);
+    HPX_TEST(peers.empty());
+}
+
 // ============================================================================
 // Main Test Entry Point
 // ============================================================================
 int hpx_main()
 {
-    test_registry_join_creates_shadow();
+    test_registry_join_creates_state();
     test_registry_join_idempotent();
     test_registry_join_async();
     test_registry_join_distinct_peers();
@@ -306,6 +334,7 @@ int hpx_main()
         test_registry_join_concurrent_race();
     }
     test_registry_join_terminal_peer_evicted_from_peers();
+    test_registry_join_rejects_non_locality();
 
     return hpx::finalize();
 }

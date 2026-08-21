@@ -254,7 +254,8 @@ namespace hpx::detail {
     void post_main()
     {
 #if defined(HPX_HAVE_SUPERVISION)
-        hpx::supervision::get_supervision_manager().tidy();
+        hpx::error_code ec;    // swallow exceptions
+        hpx::supervision::get_supervision_manager().tidy(ec);
 #endif
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // destroy predefined communicators

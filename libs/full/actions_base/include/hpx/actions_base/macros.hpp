@@ -138,6 +138,7 @@
 #define HPX_ACTION_HAS_NORMAL_PRIORITY(action)         /**/
 #define HPX_ACTION_HAS_HIGH_PRIORITY(action)           /**/
 #define HPX_ACTION_HAS_HIGH_RECURSIVE_PRIORITY(action) /**/
+#define HPX_ACTION_HAS_BOUND_PRIORITY(action)          /**/
 // obsolete, kept for compatibility
 #define HPX_ACTION_HAS_CRITICAL_PRIORITY(action) /**/
 #else
@@ -168,6 +169,9 @@
 /**/
 #define HPX_ACTION_HAS_HIGH_RECURSIVE_PRIORITY(action)                         \
     HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::high_recursive)  \
+/**/
+#define HPX_ACTION_HAS_BOUND_PRIORITY(action)                                  \
+    HPX_ACTION_HAS_PRIORITY(action, threads::thread_priority::bound)           \
 /**/
 
 // obsolete, kept for compatibility

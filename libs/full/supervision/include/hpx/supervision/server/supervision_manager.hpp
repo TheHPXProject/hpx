@@ -203,16 +203,16 @@ namespace hpx::supervision::server {
 
         /// \brief Unconditionally clears all locally tracked state.
         ///
-        /// Snapshots every target currently present in states_ under mtx_,
-        /// releases the lock, then calls remove_target() for each one in
-        /// turn, reusing its existing per-target teardown (waiter
-        /// invalidation, activity-observer notifications, agent/state
-        /// cleanup) instead of duplicating that logic here. Targets added
-        /// concurrently with (or after) the snapshot are left untouched.
-        /// If states_ is empty at snapshot time, this is a no-op: tidy()
-        /// never reports an error and never fires any notification of its
-        /// own for the "nothing to do" case. Local-only: unlike
-        /// remove_target(), this is not exposed as a remote action.
+        /// Snapshots every target currently present in states_ or observers_
+        /// under mtx_, releases the lock, then calls remove_target() for each
+        /// one in turn, reusing its existing per-target teardown (waiter
+        /// invalidation, activity-observer notifications, agent/state cleanup)
+        /// instead of duplicating that logic here. Targets added concurrently
+        /// with (or after) the snapshot are left untouched. If states_ and
+        /// observers_ are empty at snapshot time, this is a no-op: tidy() never
+        /// reports an error and never fires any notification of its own for the
+        /// "nothing to do" case. Local-only: unlike remove_target(), this is
+        /// not exposed as a remote action.
         void tidy();
 
         /// \brief Registers a locality-scoped activity observer.

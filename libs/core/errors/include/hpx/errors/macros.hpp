@@ -101,7 +101,7 @@
         errcode, hpx::util::format(__VA_ARGS__), f, __FILE__, __LINE__) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
-/// \def HPX_THROW_EXCEPTION_MODE(errcode, f, throwmode, msg)
+/// \def HPX_THROW_EXCEPTION_MODE(errcode, throwmode, f, msg)
 /// \brief Throw a hpx::exception initialized from the given parameters
 ///
 /// The macro \a HPX_THROW_EXCEPTION_MODE can be used to throw a hpx::exception.

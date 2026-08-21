@@ -185,6 +185,29 @@ namespace hpx {
         return detail::sync_action_dispatch<Action, std::decay_t<F>>::call(
             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
     }
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+    /// \brief Reflection-based sync overload.
+    ///
+    /// Allows calling hpx::sync<^^func>(target, ...) directly without
+    /// defining an explicit action type. Internally constructs
+    /// reflect_action<F> and delegates to the existing sync machinery.
+    ///
+    /// \tparam F      A std::meta::info reflection of a free function.
+    /// \tparam Target id_type, client, or distribution policy.
+    /// \tparam Ts     Additional arguments to pass to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Target, typename... Ts>
+        requires(std::meta::is_namespace_member(F) && std::meta::is_function(F) &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    HPX_FORCEINLINE auto sync(Target&& target, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::sync<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Target, target), HPX_FORWARD(Ts, ts)...);
+    }
+#endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx
 
 ///////////////////////////////////////////////////////////////////////////////

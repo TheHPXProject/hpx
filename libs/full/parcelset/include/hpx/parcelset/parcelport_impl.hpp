@@ -409,12 +409,19 @@ namespace hpx::parcelset {
 
         void remove_from_connection_cache(locality const& loc) override
         {
-            connection_handler().reschedule_on_thread(
-                util::deferred_call(
-                    &parcelport_impl::remove_from_connection_cache_delayed,
-                    this, loc),
-                threads::thread_schedule_state::pending,
-                "remove_from_connection_cache_delayed");
+            if (hpx::threads::get_self_ptr() == nullptr)
+            {
+                connection_handler().reschedule_on_thread(
+                    util::deferred_call(
+                        &parcelport_impl::remove_from_connection_cache_delayed,
+                        this, loc),
+                    threads::thread_schedule_state::pending,
+                    "remove_from_connection_cache");
+            }
+            else
+            {
+                remove_from_connection_cache_delayed(loc);
+            }
         }
 
         /// Return the name of this locality

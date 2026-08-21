@@ -20,6 +20,7 @@ set(actions_base_headers
     hpx/actions_base/basic_action_fwd.hpp
     hpx/actions_base/component_action.hpp
     hpx/actions_base/reflect_action.hpp
+    hpx/actions_base/reflect_annotated_actions.hpp
     hpx/actions_base/detail/action_factory.hpp
     hpx/actions_base/detail/invocation_count_registry.hpp
     hpx/actions_base/detail/per_action_data_counter_registry.hpp

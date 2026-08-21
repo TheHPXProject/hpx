@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //  Copyright (c) 2014      Anuj R. Sharma
 //
@@ -151,8 +151,12 @@ namespace hpx {
                                ///< is a final rejection, not a staleness
                                ///< signal, and should not be retried
 
+        future_wait_timed_out = 59,        ///< future wait timed out
+        locality_was_disconnected = 60,    ///< the requested target locality
+                                           ///< was disconnected
+
         /// \cond NOINTERNAL
-        last_error = 59,
+        last_error = 61,
 
         system_error_flag = 0x4000L,
 

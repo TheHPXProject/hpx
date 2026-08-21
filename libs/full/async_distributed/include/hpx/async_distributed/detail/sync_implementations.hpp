@@ -7,13 +7,17 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/async_distributed/detail/sync_implementations_fwd.hpp>
-#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_local.hpp>
+#include <hpx/modules/errors.hpp>
+
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/async_implementations.hpp>
+#include <hpx/async_distributed/detail/sync_implementations_fwd.hpp>
 
 #include <utility>
 
@@ -55,8 +59,18 @@ namespace hpx::detail {
         Launch&& policy, hpx::id_type const& id, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using result_type = typename action_type::local_result_type;
-        using component_type = typename action_type::component_type;
+        using result_type = action_type::local_result_type;
+        using component_type = action_type::component_type;
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::sync_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;

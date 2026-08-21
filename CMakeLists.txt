@@ -253,6 +253,15 @@ if(HPX_WITH_FAULT_TOLERANCE)
   hpx_add_config_define(HPX_HAVE_FAULT_TOLERANCE)
 endif()
 
+hpx_option(
+  HPX_WITH_FORCE_DISCONNECT BOOL
+  "Build HPX to support forceful disconnect of localities (default: OFF)" OFF
+  ADVANCED
+)
+if(HPX_WITH_FORCE_DISCONNECT)
+  hpx_add_config_define(HPX_HAVE_FORCE_DISCONNECT)
+endif()
+
 # Compiler related build options
 hpx_option(
   HPX_WITH_GCC_VERSION_CHECK BOOL
@@ -1035,6 +1044,8 @@ hpx_option(
 
 if(HPX_WITH_SUPERVISION)
   hpx_add_config_define(HPX_HAVE_SUPERVISION)
+  hpx_add_config_define(HPX_HAVE_FAULT_TOLERANCE)
+  hpx_add_config_define(HPX_HAVE_FORCE_DISCONNECT)
 endif()
 
 # Profiling related build options

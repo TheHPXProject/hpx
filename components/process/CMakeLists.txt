@@ -108,7 +108,9 @@ else()
   )
 endif()
 
-set(process_sources server/child_component.cpp process.cpp)
+set(process_sources server/child_component.cpp launch_connecting_locality.cpp
+                    process.cpp
+)
 
 if(WIN32)
   set(process_sources

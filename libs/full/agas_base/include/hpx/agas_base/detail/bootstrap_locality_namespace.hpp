@@ -39,7 +39,7 @@ namespace hpx::agas::detail {
             std::uint64_t count, std::uint32_t num_threads,
             naming::gid_type const& suggested_prefix) override;
 
-        void free(naming::gid_type const& locality) override;
+        bool free(naming::gid_type const& locality) override;
 
         std::vector<std::uint32_t> localities() override;
 

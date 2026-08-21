@@ -27,6 +27,8 @@ namespace hpx::agas::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT extern HPX_EXPORT bool (*is_console)();
+    HPX_CXX_EXPORT extern HPX_EXPORT bool (*is_connecting)(
+        naming::gid_type const&);
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT extern HPX_EXPORT bool (*register_name)(

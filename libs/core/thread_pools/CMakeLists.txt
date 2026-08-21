@@ -50,7 +50,6 @@ add_hpx_module(
     hpx_functional
     hpx_logging
     hpx_schedulers
-    hpx_tag_invoke
     hpx_threading_base
     hpx_tracing
     hpx_topology

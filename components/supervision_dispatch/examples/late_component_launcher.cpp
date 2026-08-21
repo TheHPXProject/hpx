@@ -99,38 +99,7 @@ namespace {
         "__worker_slot_shutdown__";
 
     using set_message_action =
-        late_component::server::test_client::set_message_action;
-
-    // Copies this process's current environment, exactly as launch_process.cpp
-    // and os_assigned_parcelport_port_7406.cpp do, so it can be handed to
-    // process::set_env() with a few HPX_* entries appended for the spawned
-    // worker below.
-    inline int get_arraylen(char** arr)
-    {
-        int count = 0;
-        if (nullptr != arr)
-        {
-            while (nullptr != arr[count])
-                ++count;
-        }
-        return count;
-    }
-
-    std::vector<std::string> get_environment()
-    {
-        std::vector<std::string> env;
-#if defined(HPX_WINDOWS)
-        int len = get_arraylen(_environ);
-        std::copy(&_environ[0], &_environ[len], std::back_inserter(env));
-#elif defined(linux) || defined(__linux) || defined(__linux__) ||              \
-    defined(__AIX__) || defined(__APPLE__) || defined(__FreeBSD__)
-        int len = get_arraylen(environ);
-        std::copy(&environ[0], &environ[len], std::back_inserter(env));
-#else
-#error "Don't know, how to access the execution environment on this platform"
-#endif
-        return env;
-    }
+        late_component::server::test_server::set_message_action;
 
     // ========================================================================
     // Task 4a: spawn_worker()/worker_slot/task scaffolding.
@@ -184,8 +153,8 @@ namespace {
     // Assumes success throughout (see the "Explicit non-goals" paragraph in the
     // file comment above): a process launch failure here is not handled and
     // simply propagates out of this function.
-    worker_slot spawn_worker(
-        hpx::supervision::registry const& handle, bool use_failing_variant)
+    worker_slot spawn_worker(hpx::supervision::registry const& handle,
+        bool const use_failing_variant)
     {
         namespace process = hpx::components::process;
         namespace fs = hpx::filesystem;
@@ -206,45 +175,13 @@ namespace {
                     "late_component_worker" HPX_EXECUTABLE_EXTENSION);
 
         std::vector<std::string> args;
-        args.push_back(fs::to_string(exe));
-        args.push_back("--hpx:ignore-batch-env");
         args.push_back("--hpx:threads=1");
-
-        // Force use of the TCP parcelport, mirroring launch_process.cpp/
-        // os_assigned_parcelport_port_7406.cpp.
-        args.push_back("--hpx:ini=hpx.parcel.tcp.priority=1000");
-        args.push_back("--hpx:ini=hpx.parcel.bootstrap=tcp");
-
-        std::vector<std::string> env = get_environment();
-
-        std::string const address =
-            hpx::get_config_entry("hpx.agas.address", HPX_INITIAL_IP_ADDRESS);
-
-        env.push_back("HPX_AGAS_SERVER_ADDRESS=" + address);
-        env.push_back("HPX_AGAS_SERVER_PORT=" +
-            hpx::get_config_entry(
-                "hpx.agas.port", std::to_string(HPX_INITIAL_IP_PORT)));
-
-        // Let the operating system choose the parcelport port (mirroring
-        // os_assigned_parcelport_port_7406.cpp) rather than tracking
-        // previously-used ports ourselves -- every respawn needs a fresh,
-        // unused port, and an unbounded number of respawns can happen over this
-        // root's lifetime.
-        env.push_back("HPX_PARCEL_SERVER_ADDRESS=" + address);
-        env.push_back("HPX_PARCEL_SERVER_PORT=0");
-
-        std::string const latch_name =
-            "late_component_launcher/spawn/" + std::to_string(spawn_id);
-        env.push_back("HPX_ON_STARTUP_WAIT_ON_LATCH=" + latch_name);
 
         std::vector<hpx::id_type> const localities_before =
             hpx::find_remote_localities();
 
-        process::child c = process::execute(hpx::find_here(),
-            process::run_exe(fs::to_string(exe)), process::set_args(args),
-            process::set_env(env),
-            process::start_in_dir(fs::to_string(base_dir)),
-            process::throw_on_error(), process::wait_on_latch(latch_name));
+        process::child c =
+            process::launch_connecting_locality(fs::to_string(exe), args, {}, spawn_id);
 
         // Waits for the spawned locality to actually connect back.
         c.wait();
@@ -311,9 +248,9 @@ namespace {
         // finalize() (see late_component_failing_worker.cpp) - so the
         // fencing/retry/respawn path below is actually exercised rather than
         // only ever taking the success path.
-        worker_slots.push_back(
+        worker_slots.emplace_back(
             spawn_worker(handle, /* use_failing_variant */ false));
-        worker_slots.push_back(
+        worker_slots.emplace_back(
             spawn_worker(handle, /* use_failing_variant */ true));
 
         std::deque<task> queue;
@@ -429,7 +366,7 @@ int hpx_main()
     return hpx::finalize();
 }
 
-int main(int argc, char* argv[])
+int main(int const argc, char* argv[])
 {
     // Mirrors launch_process.cpp: this locality expects other localities (the
     // workers spawned by spawn_worker() above) to dynamically connect to it

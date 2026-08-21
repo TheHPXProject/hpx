@@ -13,6 +13,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(execution_distributed_headers
     hpx/execution_distributed/detail/distributed_receiver_component.hpp
     hpx/execution_distributed/detail/transfer_action.hpp
+    hpx/execution_distributed/distributed_bulk_sender.hpp
     hpx/execution_distributed/distributed_continues_on_sender.hpp
     hpx/execution_distributed/distributed_scheduler.hpp
     hpx/execution_distributed/distributed_then_sender.hpp
@@ -28,6 +29,7 @@ add_hpx_module(
   SOURCES ${execution_distributed_sources}
   HEADERS ${execution_distributed_headers}
   DEPENDENCIES hpx_core
-  MODULE_DEPENDENCIES hpx_actions_base hpx_components_base hpx_naming_base
+  MODULE_DEPENDENCIES hpx_actions_base hpx_async_distributed hpx_components_base
+                      hpx_naming_base
   CMAKE_SUBDIRS examples tests
 )

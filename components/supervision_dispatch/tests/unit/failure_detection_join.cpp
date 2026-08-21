@@ -95,6 +95,8 @@ hpx::supervision::joined_peer test_mirroring_survives_epoch_rollover(
         r.join(hpx::launch::sync, peer_locality);
     HPX_TEST_NEQ(peer1.target, hpx::invalid_id);
 
+    // start with a new epoch as the previous test leaves the locality in a
+    // terminated state
     std::uint64_t const epoch_n = peer1.join_epoch + 1;
 
     // Drive started -> running -> running under epoch N, confirming mirroring

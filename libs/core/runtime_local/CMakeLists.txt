@@ -127,7 +127,6 @@ add_hpx_module(
     hpx_serialization
     hpx_static_reinit
     hpx_synchronization
-    hpx_tag_invoke
     hpx_threading
     hpx_threading_base
     hpx_threadmanager

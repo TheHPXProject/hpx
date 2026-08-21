@@ -48,8 +48,6 @@ namespace hpx::parcelset {
         std::size_t num_thread = 0,
         parcelport_background_mode mode = parcelport_background_mode::all);
 
-    HPX_CXX_EXPORT using write_handler_type = parcel_write_handler_type;
-
     ///////////////////////////////////////////////////////////////////////
     // default callback for put_parcel
     HPX_CXX_EXPORT HPX_EXPORT void default_write_handler(

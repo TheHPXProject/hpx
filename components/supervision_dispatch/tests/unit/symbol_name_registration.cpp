@@ -72,7 +72,7 @@ void test_registry_register_unregister_cycle()
 
 // Same as test_registry_register_name(), but using the asynchronous
 // overloads of register_name()/unregister_name().
-void test_sentinel_register_name_async()
+void test_registry_register_name_async()
 {
     hpx::supervision::registry r(hpx::find_here());
 
@@ -90,7 +90,7 @@ int hpx_main()
 {
     test_registry_register_name();
     test_registry_register_unregister_cycle();
-    test_sentinel_register_name_async();
+    test_registry_register_name_async();
 
     return hpx::finalize();
 }

@@ -67,6 +67,24 @@ HPX_CLIENT(reflect_test_server2)
 HPX_CLIENT(reflect_test_server)
 
 ///////////////////////////////////////////////////////////////////////////////
+// Server for testing reflection-based get_component_name.
+// Uses single-argument HPX_REGISTER_COMPONENT -- no explicit name.
+// get_component_name<reflect_test_server3_type>() must derive the
+// name automatically via reflection from type_holder.
+struct reflect_test_server3
+  : hpx::components::component_base<reflect_test_server3>
+{
+    std::int32_t value() const
+    {
+        return 42;
+    }
+};
+using reflect_test_server3_type =
+    hpx::components::component<reflect_test_server3>;
+// Single-argument form -- name derived via reflection.
+HPX_REGISTER_COMPONENT(reflect_test_server3_type)
+
+///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
@@ -93,6 +111,42 @@ int main()
             loc, std::int32_t(10));
         hpx::future<std::int32_t> f3 = c2.increment(32);
         HPX_TEST_EQ(f3.get(), std::int32_t(42));
+    }
+
+    // Test reflection-based get_component_name.
+    // reflect_test_server3 uses HPX_REGISTER_COMPONENT with a single
+    // argument -- no explicit HPX_DEFINE_COMPONENT_NAME specialization.
+    // The name must be derived automatically via reflection.
+    {
+        char const* name =
+            hpx::components::get_component_name<reflect_test_server3_type>();
+        // Guard string conversion: HPX_TEST is non-fatal so check
+        // explicitly before dereferencing to avoid undefined behaviour.
+        HPX_TEST(name != nullptr);
+        if (name != nullptr)
+        {
+            std::string const name_str(name);
+            // The derived name must contain the type_holder identifier.
+            HPX_TEST(
+                name_str.find("reflect_test_server3") != std::string::npos);
+        }
+        // Test reflection-based get_component_base_name returns nullptr.
+        char const* base_name = hpx::components::get_component_base_name<
+            reflect_test_server3_type>();
+        HPX_TEST(base_name == nullptr);
+    }
+    // Test sync overload: c.member(hpx::launch::sync, args) -> R directly
+    for (hpx::id_type const& loc : localities)
+    {
+        auto c = hpx::components::make_client<reflect_test_server>(loc);
+
+        // Sync increment -- returns int directly, no .get() needed
+        std::int32_t r1 = c.increment(hpx::launch::sync, std::int32_t(41));
+        HPX_TEST_EQ(r1, std::int32_t(42));
+
+        // Sync identity -- returns id_type directly
+        hpx::id_type r2 = c.identity(hpx::launch::sync);
+        HPX_TEST_EQ(r2, loc);
     }
 
     return hpx::util::report_errors();

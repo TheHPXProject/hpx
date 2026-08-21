@@ -60,13 +60,14 @@ namespace hpx::supervision {
 
         /* implicit */ registry(hpx::future<hpx::id_type>&& f);
 
-        /// Join a peer locality: create (or reuse) a local shadow target that
-        /// mirrors the peer's lifecycle state, and register this registry as an
-        /// observer of the peer's lifecycle/activity events.
+        /// Join a peer locality: create (or reuse) a local supervision state
+        /// registry entry that mirrors the peer's lifecycle state, and register
+        /// this registry as an observer of the peer's lifecycle/activity
+        /// events.
         ///
         /// \param peer_locality The peer locality to join.
         ///
-        /// \return A future that becomes ready with the local shadow identifier
+        /// \return A future that becomes ready with the local supervision state
         ///         and the peer dispatch target.
         hpx::future<joined_peer> join(hpx::id_type const& peer_locality) const;
 

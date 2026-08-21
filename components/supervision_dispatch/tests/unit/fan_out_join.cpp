@@ -101,6 +101,10 @@ void test_fan_out_join_bidirectional()
         for (std::size_t i = 0; i != joined.size(); ++i)
         {
             HPX_TEST_EQ(joined_again[i].locality, joined[i].locality);
+
+            // A stable epoch proves the second pass reused the existing
+            // registry entry rather than minting a duplicate.
+            HPX_TEST_EQ(joined_again[i].join_epoch, joined[i].join_epoch);
         }
     }
 }

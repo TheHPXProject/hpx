@@ -86,9 +86,10 @@ void run_worker_role()
         hpx::supervision::init(hpx::launch::sync, worker_discovery_timeout);
 
     // Pull the epoch init() just established (via run_init_sequence()'s
-    // local_sentinel.start(sync, new_epoch)) rather than assuming epoch 0; this
-    // is the Task A handle-based query_state() overload -- there is no separate
-    // current_epoch() accessor.
+    // publish_event(here, event::started, new_epoch)) rather than assuming
+    // epoch 0. hpx::supervision::current_epoch() reports the same value for a
+    // given locality; the handle-based query_state() overload is used here
+    // because it also returns the last recorded event.
     std::uint64_t const epoch =
         hpx::supervision::query_state(hpx::launch::sync, handle).epoch;
 
@@ -121,7 +122,12 @@ void run_worker_role()
     // many-target dispatch_work() fan-out.
     if (hpx::get_locality_id() == 0)
     {
-        for (hpx::supervision::discovered_peer const& peer : peers)
+        // Tracks, per peer (by index into `peers`), whether dispatch_work()
+        // actually completed for that peer. Peers skipped via the
+        // target_fenced handling below stay `false`, since do_work() never
+        // ran on them.
+        std::vector<bool> peer_dispatched(peers.size(), false);
+        for (std::size_t i = 0; i != peers.size(); ++i)
         {
             try
             {
@@ -129,9 +135,10 @@ void run_worker_role()
                 // resolves to dispatch_work<Action>(peer.locality,
                 // peer.join_epoch, arg...) under the hood, so this call is
                 // automatically fenced against the peer's own join epoch.
-                hpx::supervision::dispatch_work(do_work_action(), peer,
+                hpx::supervision::dispatch_work(do_work_action(), peers[i],
                     static_cast<int>(hpx::get_locality_id()))
                     .get();
+                peer_dispatched[i] = true;
             }
             catch (hpx::exception const& e)
             {
@@ -147,12 +154,20 @@ void run_worker_role()
         }
 
         // Every peer we successfully dispatched to must have actually run
-        // do_work() exactly once.
-        for (hpx::supervision::discovered_peer const& peer : peers)
+        // do_work() exactly once; peers skipped above (target_fenced) must
+        // still show a count of zero.
+        for (std::size_t i = 0; i != peers.size(); ++i)
         {
-            int const count = hpx::sync(get_work_count_action(), peer.locality);
-            hpx::util::format_to(
-                std::cout, "peer {} did work {} times", peer.locality, count);
+            int const count =
+                hpx::sync(get_work_count_action(), peers[i].locality);
+            hpx::util::format_to(std::cout, "peer {} did work {} times\n",
+                peers[i].locality, count);
+            if (int const expected_count = peer_dispatched[i] ? 1 : 0;
+                count != expected_count)
+            {
+                std::cerr << "unexpected work count on peer\n";
+                hpx::terminate();
+            }
         }
     }
 

@@ -190,7 +190,9 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_HAVE_THREAD_BACKTRACE_DEPTH)) "}",
             "handle_signals = ${HPX_HANDLE_SIGNALS:1}",
             "handle_failed_new = ${HPX_HANDLE_FAILED_NEW:1}",
-
+#if defined(HPX_HAVE_FAULT_TOLERANCE)
+            "enable_fault_tolerance = ${HPX_ENABLE_FAULT_TOLERANCE:0}",
+#endif
             // arity for collective operations implemented in a tree fashion
             "[hpx.lcos.collectives]",
             "arity = ${HPX_LCOS_COLLECTIVES_ARITY:32}",
@@ -717,6 +719,8 @@ namespace hpx::util {
       , large_stacksize(HPX_LARGE_STACK_SIZE)
       , huge_stacksize(HPX_HUGE_STACK_SIZE)
       , need_to_call_pre_initialize(true)
+      , need_to_initialize_tolerate_node_faults(true)
+      , tolerate_node_faults_value(false)
 #if defined(__linux) || defined(linux) || defined(__linux__)
       , argv0(argv0_)
 #endif
@@ -1187,6 +1191,29 @@ namespace hpx::util {
             }
         }
         return HPX_PARCEL_MAX_OUTBOUND_MESSAGE_SIZE;    // default is 1GByte
+    }
+
+    bool runtime_configuration::tolerate_node_faults()
+    {
+        // ignore the benign data races around loading/setting the values from
+        // the booleans
+        if (!need_to_initialize_tolerate_node_faults)
+        {
+            return tolerate_node_faults_value;
+        }
+
+        bool value = false;
+        if (util::section const* sec = get_section("hpx"); nullptr != sec)
+        {
+            std::string const entry =
+                sec->get_entry("enable_fault_tolerance", "0");
+            value = !entry.empty() && entry != "0";
+        }
+
+        tolerate_node_faults_value = value;
+        need_to_initialize_tolerate_node_faults = false;
+
+        return value;
     }
 
     ///////////////////////////////////////////////////////////////////////////

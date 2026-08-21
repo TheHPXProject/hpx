@@ -96,11 +96,11 @@ namespace hpx::agas {
                 delete f;
         }
 
-        parcelset::locality here()
+        parcelset::locality here() const
         {
             return bootstrap_agas;
         }
-        parcelset::endpoints_type const& get_endpoints()
+        parcelset::endpoints_type const& get_endpoints() const
         {
             return endpoints;
         }
@@ -120,9 +120,23 @@ namespace hpx::agas {
             notification_header&& hdr);
 
         void wait_bootstrap();
+
+        /// Wait for a hosted (non-bootstrap) locality to register itself with
+        /// AGAS during startup.
+        ///
+        /// \param locality_name  Name of the locality being registered.
+        /// \param primary_ns_ptr Address of the primary namespace component
+        ///                       on the hosted locality.
+        /// \param symbol_ns_ptr  Address of the symbol namespace component
+        ///                       on the hosted locality.
+        /// \param is_connecting  Controls the locality registration mode:
+        ///                       true if the locality is joining as a
+        ///                       connecting (not yet fully registered)
+        ///                       locality, false for normal registration.
         void wait_hosted(std::string const& locality_name,
-            naming::address::address_type primary_ns_ptr,
-            naming::address::address_type symbol_ns_ptr);
+            naming::address::address_type const& primary_ns_ptr,
+            naming::address::address_type const& symbol_ns_ptr,
+            bool is_connecting);
 
         // no-op on non-bootstrap localities
         void trigger();

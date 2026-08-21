@@ -13,6 +13,7 @@
 
 #include <hpx/parcelset_base/parcelset_base_fwd.hpp>
 
+#include <cstdint>
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -21,6 +22,8 @@ namespace hpx::parcelset {
     HPX_CXX_EXPORT HPX_EXPORT parcelset::parcel create_parcel();
 
     HPX_CXX_EXPORT HPX_EXPORT locality create_locality(std::string const& name);
+
+    HPX_CXX_EXPORT HPX_EXPORT bool locality_was_disconnected(std::uint32_t id);
 
     ///////////////////////////////////////////////////////////////////////////
     // initialize locality interface function wrappers

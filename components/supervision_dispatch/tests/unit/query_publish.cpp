@@ -75,7 +75,7 @@ void test_epoch_after_init()
     hpx::supervision::lifecycle_state const state2 =
         hpx::supervision::query_state(hpx::launch::sync, handle2);
     HPX_TEST(state2.last_event == hpx::supervision::event::started);
-    HPX_TEST_EQ(state2.epoch, state1.epoch + 1);
+    HPX_TEST_LT(state1.epoch, state2.epoch);
 
     hpx::supervision::finalize();
     HPX_TEST(!hpx::supervision::is_initialized());

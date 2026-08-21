@@ -20,6 +20,7 @@
 #include <hpx/supervision_dispatch/testing.hpp>
 
 #include <cstdint>
+#include <iosfwd>
 #include <map>
 #include <tuple>
 #include <utility>

@@ -664,7 +664,7 @@ namespace hpx::supervision {
         {
             return hpx::make_exceptional_future<lifecycle_state>(
                 HPX_GET_EXCEPTION(hpx::error::bad_parameter,
-                    "hpx::supervision::supervision_manager::await_terminal",
+                    "hpx::supervision::await_terminal",
                     "The id passed as the first argument is not representing "
                     "a valid target"));
         }

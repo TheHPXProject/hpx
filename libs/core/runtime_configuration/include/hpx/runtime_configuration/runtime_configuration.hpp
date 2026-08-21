@@ -149,6 +149,30 @@ namespace hpx::util {
             return modules_;
         }
 
+        /// \brief Check whether fault tolerance for node/locality faults is
+        ///        enabled via the "enable_fault_tolerance" configuration
+        ///        entry in the "hpx" section.
+        ///
+        /// \return true if fault tolerance is enabled, false otherwise.
+        bool tolerate_node_faults();
+
+        /// \brief Set whether this runtime instance should tolerate node
+        ///        faults.
+        ///
+        /// This controls whether the runtime is configured to continue
+        /// operating in the presence of locality failures (e.g. forced or
+        /// unexpected disconnection of remote localities) rather than treating
+        /// such failures as fatal errors.
+        ///
+        /// \param value  Set to `true` to enable fault tolerance for node
+        ///               failures, or `false` to require all localities to
+        ///               remain connected for normal operation.
+        void tolerate_node_faults(bool const value) const
+        {
+            tolerate_node_faults_value = value;
+            need_to_initialize_tolerate_node_faults = false;
+        }
+
     private:
         std::ptrdiff_t init_stack_size(char const* entryname,
             char const* defaultvaluestr, std::ptrdiff_t defaultvalue) const;
@@ -194,6 +218,8 @@ namespace hpx::util {
         std::ptrdiff_t large_stacksize;
         std::ptrdiff_t huge_stacksize;
         bool need_to_call_pre_initialize;
+        mutable bool need_to_initialize_tolerate_node_faults;
+        mutable bool tolerate_node_faults_value;
 #if defined(__linux) || defined(linux) || defined(__linux__)
         char const* argv0;
 #endif

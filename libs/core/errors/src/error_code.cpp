@@ -77,6 +77,8 @@ namespace hpx {
         /* 56 */ "migration_needs_retry",
         /* 57 */ "stale_state",
         /* 58 */ "target_fenced",
+        /* 59 */ "future_wait_timed_out",
+        /* 60 */ "locality_was_disconnected",
 
         /*    */ ""};
     /// \endcond

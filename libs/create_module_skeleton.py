@@ -54,7 +54,7 @@ readme_template = f'''
 This module is part of HPX.
 
 Documentation can be found `here
-<https://hpx-docs.stellar-group.org/latest/html/modules/{module_name}/docs/index.html>`__.
+<https://docs.hpx.dev/latest/html/modules/{module_name}/docs/index.html>`__.
 '''
 
 index_rst = f'''..

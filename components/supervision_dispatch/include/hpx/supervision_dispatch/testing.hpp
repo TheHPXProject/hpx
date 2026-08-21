@@ -80,11 +80,11 @@ namespace hpx::supervision::testing {
     /// Stops this locality's failure_detection_loop() and heartbeat_loop()
     /// background tasks (joining both) without otherwise finalizing the
     /// dispatcher: unlike finalize(), this never publishes event::completed,
-    /// never unregisters the sentinel/registry symbol names, and never resets
-    /// the lifecycle state back to uninitialized, so the sentinel's last
-    /// published event stays stale and peers' failure_detection_loop() still
-    /// eventually times out and observes target_fenced/rejected_fenced against
-    /// this locality. Lets a caller depart the HPX runtime cleanly (e.g. via
+    /// never unregisters the registry symbol name, and never resets the
+    /// lifecycle state back to uninitialized, so the sentinel's last published
+    /// event stays stale and peers' failure_detection_loop() still eventually
+    /// times out and observes target_fenced/rejected_fenced against this
+    /// locality. Lets a caller depart the HPX runtime cleanly (e.g. via
     /// hpx::disconnect()) afterwards without leaving either background
     /// hpx::async task still running - simulating a worker that dies mid-epoch
     /// without corrupting AGAS or hanging runtime shutdown, as opposed to a

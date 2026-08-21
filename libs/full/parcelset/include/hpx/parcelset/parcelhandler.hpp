@@ -33,6 +33,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -105,11 +106,11 @@ namespace hpx::parcelset {
         /// \returns The function returns \a true if there is at least one
         ///          remote locality known by AGAS
         ///          (!prefixes.empty()).
-        bool get_raw_remote_localities(
+        static bool get_raw_remote_localities(
             std::vector<naming::gid_type>& locality_ids,
             components::component_type type = to_int(
                 hpx::components::component_enum_type::invalid),
-            error_code& ec = throws) const;
+            error_code& ec = throws);
 
         /// Return the list of all localities supporting the given
         /// component type
@@ -123,8 +124,9 @@ namespace hpx::parcelset {
         /// \returns The function returns \a true if there is at least one
         ///          locality known by AGAS
         ///          (!prefixes.empty()).
-        bool get_raw_localities(std::vector<naming::gid_type>& locality_ids,
-            components::component_type type, error_code& ec = throws) const;
+        static bool get_raw_localities(
+            std::vector<naming::gid_type>& locality_ids,
+            components::component_type type, error_code& ec = throws);
 
         /// A parcel is submitted for transport at the source locality site to
         /// the parcel set of the locality with the put-parcel command
@@ -215,6 +217,9 @@ namespace hpx::parcelset {
             return find_parcelport(name)->create_locality();
         }
 
+        /// \brief return whether the given locality was disconnected
+        bool locality_was_disconnected(std::uint32_t id) const;
+
         /// Return the name of this locality as retrieved from the active
         /// parcelport
         std::string get_locality_name() const;
@@ -222,7 +227,7 @@ namespace hpx::parcelset {
         /// \brief Make sure the specified locality is not held by any
         /// connection caches anymore
         void remove_from_connection_cache(
-            naming::gid_type const& gid, endpoints_type const& endpoints) const;
+            naming::gid_type const& gid, endpoints_type const& endpoints);
 
         /// \brief return the endpoints associated with this parcelhandler
         /// \returns all connection information for the enabled parcelports
@@ -392,18 +397,32 @@ namespace hpx::parcelset {
             parcelport::connection_cache_statistics_type stat_type, bool) const;
 
         void list_parcelports(std::ostringstream& strm) const;
-        void list_parcelport(std::ostringstream& strm,
-            std::string const& ppname, int priority, bool bootstrap) const;
+        static void list_parcelport(std::ostringstream& strm,
+            std::string const& ppname, int priority, bool bootstrap);
 
         void put_parcel_impl(parcel&& p, write_handler_type&& f);
         void put_parcels_impl(std::vector<parcel>&& parcels,
             std::vector<write_handler_type>&& handlers);
 
-        // manage default exception handler
-        void invoke_write_handler(
+        /// \brief Invoke the currently installed default write handler for a
+        ///        completed parcel send operation.
+        ///
+        /// \param ec The error code (if any) reported for the completed send.
+        /// \param p  The parcel that was sent.
+        ///
+        /// \return true if the error was handled by the installed default write
+        ///         handler, false otherwise.
+        bool invoke_write_handler(
             std::error_code const& ec, parcel const& p) const;
 
-        write_handler_type set_write_handler(write_handler_type f);
+        /// \brief Install a new write handler, replacing the previously
+        ///        installed one.
+        ///
+        /// \param f The new write handler to install.
+        ///
+        /// \return The previously installed write handler.
+        parcel_write_handler_type set_write_handler(
+            parcel_write_handler_type f);
 
         bool enum_parcelports(
             hpx::move_only_function<bool(std::string const&)> const& f) const;
@@ -440,6 +459,9 @@ namespace hpx::parcelset {
         /// the endpoints corresponding to the parcel-ports
         endpoints_type endpoints_;
 
+        /// the list of disconnected localities
+        std::set<std::uint32_t> disconnected_localities_;
+
         /// the thread-manager to use (optional)
         threads::threadmanager* tm_;
 
@@ -460,7 +482,7 @@ namespace hpx::parcelset {
         /// global exception handler for unhandled exceptions thrown from the
         /// parcel layer
         mutable mutex_type mtx_;
-        write_handler_type write_handler_;
+        parcel_write_handler_type write_handler_;
 
         /// cache whether networking has been enabled
         bool is_networking_enabled_;

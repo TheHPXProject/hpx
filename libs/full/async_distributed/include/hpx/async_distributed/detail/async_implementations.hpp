@@ -8,21 +8,24 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/detail/async_implementations_fwd.hpp>
-#include <hpx/async_distributed/packaged_action.hpp>
-#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/allocator_support.hpp>
 #include <hpx/modules/async_base.hpp>
-#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/threading.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
+
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/async_implementations_fwd.hpp>
+#include <hpx/async_distributed/packaged_action.hpp>
 
 #include <cstddef>
 #include <utility>
@@ -421,6 +424,16 @@ namespace hpx::detail {
         using action_type = hpx::traits::extract_action_t<Action>;
         using component_type = action_type::component_type;
 
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::async_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
+
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
 
@@ -481,6 +494,16 @@ namespace hpx::detail {
         using action_type = hpx::traits::extract_action_t<Action>;
         using result_type = action_type::local_result_type;
         using component_type = action_type::component_type;
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::async_cb_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -587,6 +610,16 @@ namespace hpx::detail {
         using result_type = action_type::local_result_type;
         using component_type = action_type::component_type;
 
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::async_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
+
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
 
@@ -650,6 +683,16 @@ namespace hpx::detail {
         using action_type = hpx::traits::extract_action_t<Action>;
         using result_type = action_type::local_result_type;
         using component_type = action_type::component_type;
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::async_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;
@@ -728,6 +771,16 @@ namespace hpx::detail {
     {
         using action_type = hpx::traits::extract_action_t<Action>;
         using result_type = action_type::local_result_type;
+
+#if defined(HPX_HAVE_FORCE_DISCONNECT)
+        if (parcelset::locality_was_disconnected(
+                naming::get_locality_id_from_id(id)))
+        {
+            HPX_THROW_EXCEPTION(hpx::error::locality_was_disconnected,
+                "hpx::detail::async_impl",
+                "the requested locality {} was disconnected", id);
+        }
+#endif
 
         naming::address addr;
         [[maybe_unused]] bool result = agas::is_local_address_cached(id, addr);

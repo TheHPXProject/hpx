@@ -119,11 +119,16 @@ namespace hpx::supervision {
                 continue;
             }
 
-            // Timed out: once this join() eventually settles, undo its
-            // registration so registry::snapshot_peers() cannot surface a peer
-            // that fan_out_join() never reported as joined. evict_peer() is
+            // Not (yet) successfully joined by the deadline: either the join is
+            // still pending (timed out), or it already settled with an
+            // exception. Either way, once this join() eventually resolves, undo
+            // its registration so registry::snapshot_peers() cannot surface a
+            // peer that fan_out_join() never reported as joined. leave()
+            // tolerates both outcomes - its continuation checks has_exception()
+            // before calling get(), so a failed join is dropped rather than
+            // rethrown out of this fire-and-forget call - and evict_peer() is
             // already safe to call redundantly/late (no-op if re-joined or
-            // already evicted), so this only needs to fire-and-forget.
+            // already evicted).
             local_registry.leave(peers[i].locality, HPX_MOVE(f));
         }
 

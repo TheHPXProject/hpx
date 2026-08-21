@@ -178,10 +178,10 @@ Registry client
     .. cpp:function:: hpx::future<hpx::supervision::joined_peer> join(hpx::id_type const& peer_locality) const
     .. cpp:function:: hpx::supervision::joined_peer join(hpx::launch::sync_policy, hpx::id_type const& peer_locality, hpx::error_code& ec = hpx::throws) const
 
-        Joins a peer sentinel: creates (or reuses) local supervision state
-        mirroring the peer's lifecycle, and registers this registry as an
-        joined_peer::target is ``peer_locality`` itself (not a generated
-        local id) and is what dispatch_work() colocates against.
+        Joins a peer locality: creates (or reuses) local supervision state
+        mirroring the peer's lifecycle. The returned ``joined_peer::target``
+        is ``peer_locality`` itself (not a generated local id) and is what
+        ``dispatch_work()`` colocates against.
 
     .. cpp:function:: hpx::future<std::vector<hpx::supervision::server::peer_snapshot>> snapshot_peers() const
     .. cpp:function:: std::vector<hpx::supervision::server::peer_snapshot> snapshot_peers(hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws) const

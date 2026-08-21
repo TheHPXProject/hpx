@@ -53,7 +53,6 @@ set(component_worker_FLAGS
 )
 
 set(late_component_worker_FLAGS
-    COMPILE_FLAGS -DHPX_HAVE_RUN_MAIN_EVERYWHERE
     HEADERS late_component_worker.hpp
     DEPENDENCIES supervision_dispatch_component
 )

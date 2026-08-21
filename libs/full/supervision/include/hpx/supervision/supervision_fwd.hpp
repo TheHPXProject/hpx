@@ -17,7 +17,7 @@ namespace hpx::supervision {
 
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT inline constexpr char const* const service_name =
-        "/0/supervision/";
+        "/{}/supervision/";
 
     namespace detail {
 

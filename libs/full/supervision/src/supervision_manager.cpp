@@ -272,7 +272,7 @@ namespace hpx::supervision {
         if (!server_)
         {
             return hpx::make_exceptional_future<lifecycle_state>(
-                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
                     "hpx::supervision::supervision_manager::await_terminal",
                     "server is not registered"));
         }

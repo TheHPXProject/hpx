@@ -30,12 +30,12 @@ namespace late_component {
     namespace server {
 
         /// Server-side component exposing a trivial get/set message interface.
-        class test_client : public hpx::components::component_base<test_client>
+        class test_server : public hpx::components::component_base<test_server>
         {
         public:
-            test_client() = default;
+            test_server() = default;
 
-            explicit test_client(std::string msg)
+            explicit test_server(std::string msg)
               : message_(std::move(msg))
             {
             }
@@ -51,21 +51,21 @@ namespace late_component {
             }
 
             HPX_DEFINE_COMPONENT_ACTION(
-                test_client, set_message, set_message_action)
+                test_server, set_message, set_message_action)
             HPX_DEFINE_COMPONENT_ACTION(
-                test_client, get_message, get_message_action)
+                test_server, get_message, get_message_action)
 
         private:
             std::string message_;
         };
     }    // namespace server
 
-    /// Client-side representation of \a server::test_client.
+    /// Client-side representation of \a server::test_server.
     class test_client
-      : public hpx::components::client_base<test_client, server::test_client>
+      : public hpx::components::client_base<test_client, server::test_server>
     {
         using base_type =
-            hpx::components::client_base<test_client, server::test_client>;
+            hpx::components::client_base<test_client, server::test_server>;
 
     public:
         test_client() = default;
@@ -82,22 +82,22 @@ namespace late_component {
 
         void set_message(std::string const& msg) const
         {
-            using action_type = server::test_client::set_message_action;
+            using action_type = server::test_server::set_message_action;
             action_type()(this->get_id(), msg);
         }
 
         std::string get_message() const
         {
-            using action_type = server::test_client::get_message_action;
+            using action_type = server::test_server::get_message_action;
             return action_type()(this->get_id());
         }
     };
 }    // namespace late_component
 
 using late_component_test_client_set_message_action =
-    late_component::server::test_client::set_message_action;
+    late_component::server::test_server::set_message_action;
 using late_component_test_client_get_message_action =
-    late_component::server::test_client::get_message_action;
+    late_component::server::test_server::get_message_action;
 
 HPX_REGISTER_ACTION_DECLARATION(late_component_test_client_set_message_action)
 HPX_REGISTER_ACTION_DECLARATION(late_component_test_client_get_message_action)
@@ -105,7 +105,7 @@ HPX_REGISTER_ACTION(late_component_test_client_set_message_action)
 HPX_REGISTER_ACTION(late_component_test_client_get_message_action)
 
 using late_component_test_client_type =
-    hpx::components::component<late_component::server::test_client>;
+    hpx::components::component<late_component::server::test_server>;
 HPX_REGISTER_COMPONENT(
     late_component_test_client_type, late_component_test_client)
 

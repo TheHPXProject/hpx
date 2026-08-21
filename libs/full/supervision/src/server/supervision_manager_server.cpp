@@ -6,14 +6,15 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/format.hpp>
-#include <hpx/modules/async_distributed.hpp>
-#include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
+
+#include <hpx/modules/async_distributed.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/naming_base.hpp>
 
 #include <hpx/supervision/server/activity_agent.hpp>
 #include <hpx/supervision/server/agent.hpp>
@@ -764,15 +765,11 @@ namespace hpx::supervision::server {
 
         // now fire event for all observers of this target
         auto f = fire_events(target, notification);
-        try
-        {
-            f.get();
-        }
-        catch (...)
-        {
-            record_error(target, notification.event_sequence_number,
-                hpx::make_error_code(std::current_exception()));
-        }
+        hpx::detail::try_catch_exception_ptr([&]() { f.get(); },
+            [&](std::exception_ptr const& e) {
+                record_error(target, notification.event_sequence_number,
+                    hpx::make_error_code(e));
+            });
 
         // Delivery ordering: per-target register_observer callbacks (above)
         // fire before activity-observer callbacks (below), both synchronous for
@@ -833,15 +830,13 @@ namespace hpx::supervision::server {
             {
                 f = f.then([this, target, agent, notification](
                                hpx::future<void>&& prev_f) {
-                    try
-                    {
-                        prev_f.get();
-                    }
-                    catch (...)
-                    {
-                        record_error(target, notification.event_sequence_number,
-                            hpx::make_error_code(std::current_exception()));
-                    }
+                    hpx::detail::try_catch_exception_ptr(
+                        [&]() { prev_f.get(); },
+                        [&](std::exception_ptr const& e) {
+                            record_error(target,
+                                notification.event_sequence_number,
+                                hpx::make_error_code(e));
+                        });
                     return fire_event(target, agent, notification);
                 });
             }
@@ -887,15 +882,11 @@ namespace hpx::supervision::server {
 
         return fut.then([this, target, agent](hpx::future<bool>&& f) mutable {
             bool keep_registered = true;
+
             std::exception_ptr ep;
-            try
-            {
-                keep_registered = f.get();
-            }
-            catch (...)
-            {
-                ep = std::current_exception();
-            }
+            hpx::detail::try_catch_exception_ptr(
+                [&]() { keep_registered = f.get(); },
+                [&](std::exception_ptr const& e) { ep = e; });
 
             bool deactivated = false;
 
@@ -1093,15 +1084,11 @@ namespace hpx::supervision::server {
                 initial_notification->event_sequence_number;
 
             auto f = fire_event(target, agent, HPX_MOVE(*initial_notification));
-            try
-            {
-                f.get();
-            }
-            catch (...)
-            {
-                record_error(target, initial_sequence,
-                    hpx::make_error_code(std::current_exception()));
-            }
+            hpx::detail::try_catch_exception_ptr([&]() { f.get(); },
+                [&](std::exception_ptr const& e) {
+                    record_error(
+                        target, initial_sequence, hpx::make_error_code(e));
+                });
         }
 
         // Delivery ordering: the per-target register_observer replay above
@@ -1216,7 +1203,8 @@ namespace hpx::supervision::server {
 
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "supervision_manager::unregister_observer",
-                    "observer_handle was not returned by register_observer()");
+                    "observer_handle was not returned by "
+                    "register_observer()");
             }
             else
             {
@@ -1226,7 +1214,8 @@ namespace hpx::supervision::server {
 
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "supervision_manager::unregister_observer",
-                    "observer_handle does not represent a handle previously "
+                    "observer_handle does not represent a handle "
+                    "previously "
                     "returned by register_observer()");
             }
 
@@ -1376,18 +1365,14 @@ namespace hpx::supervision::server {
                 continue;
             }
 
-            try
-            {
-                fire_activity_event(observer, notification).get();
-            }
-            // NOLINTNEXTLINE(bugprone-empty-catch)
-            catch (...)
-            {
-                // Best effort: one activity observer's failure must not
-                // prevent delivery to the remaining activity observers, and
-                // there is no per-target latch to record this failure into
-                // (unlike record_error() for per-target observers).
-            }
+            hpx::detail::try_catch_exception_ptr(
+                [&]() { fire_activity_event(observer, notification).get(); },
+                [&](std::exception_ptr const&) {
+                    // Best effort: one activity observer's failure must not
+                    // prevent delivery to the remaining activity observers, and
+                    // there is no per-target latch to record this failure into
+                    // (unlike record_error() for per-target observers).
+                });
         }
 
         return hpx::make_ready_future();
@@ -1408,28 +1393,27 @@ namespace hpx::supervision::server {
             }
         }
 
-        try
-        {
-            using action_type =
-                activity_agent_component::invoke_if_active_action;
-            hpx::future<bool> keep_registered = hpx::async(hpx::launch::task,
-                action_type(), agent, HPX_MOVE(notification));
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                using action_type =
+                    activity_agent_component::invoke_if_active_action;
+                hpx::future<bool> keep_registered =
+                    hpx::async(hpx::launch::task, action_type(), agent,
+                        HPX_MOVE(notification));
 
-            if (!keep_registered.get())
-            {
-                std::unique_lock<hpx::spinlock> l(mtx_);
-                std::erase_if(
-                    activity_observers_, [&agent](observer_entry const& entry) {
-                        return entry.agent == agent;
-                    });
-            }
-        }
-        catch (...)
-        {
-            return hpx::make_exceptional_future<void>(std::current_exception());
-        }
-
-        return hpx::make_ready_future();
+                if (!keep_registered.get())
+                {
+                    std::unique_lock<hpx::spinlock> l(mtx_);
+                    std::erase_if(activity_observers_,
+                        [&agent](observer_entry const& entry) {
+                            return entry.agent == agent;
+                        });
+                }
+                return hpx::make_ready_future();
+            },
+            [&](std::exception_ptr const& e) {
+                return hpx::make_exceptional_future<void>(e);
+            });
     }
 
     hpx::id_type supervision_manager::register_activity_observer(
@@ -1525,18 +1509,14 @@ namespace hpx::supervision::server {
         // this remains safe even if `agent` is concurrently unregistered.
         for (auto const& notification : replay)
         {
-            try
-            {
-                fire_activity_event(agent, notification).get();
-            }
-            // NOLINTNEXTLINE(bugprone-empty-catch)
-            catch (...)
-            {
-                // Best effort, mirroring deliver_activity_notification(): one
-                // replay delivery failing must not prevent delivery of the
-                // remaining replay notifications, nor this registration call
-                // from returning.
-            }
+            hpx::detail::try_catch_exception_ptr(
+                [&]() { fire_activity_event(agent, notification).get(); },
+                [&](std::exception_ptr const&) {
+                    // Best effort, mirroring deliver_activity_notification(): one
+                    // replay delivery failing must not prevent delivery of the
+                    // remaining replay notifications, nor this registration call
+                    // from returning.
+                });
         }
 
         return agent;
@@ -1570,7 +1550,8 @@ namespace hpx::supervision::server {
 
                     HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                         "supervision_manager::unregister_activity_observer",
-                        "observer_handle was returned by register_observer(), "
+                        "observer_handle was returned by "
+                        "register_observer(), "
                         "not register_activity_observer()");
                 }
 
@@ -1580,7 +1561,8 @@ namespace hpx::supervision::server {
 
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "supervision_manager::unregister_activity_observer",
-                    "observer_handle does not represent a handle previously "
+                    "observer_handle does not represent a handle "
+                    "previously "
                     "returned by register_activity_observer()");
             }
         }
@@ -1707,7 +1689,8 @@ namespace hpx::supervision::server {
         this->base_type::set_locality_id(locality_id);
 
         // now register this supervision instance with AGAS
-        std::string instance_name = supervision::service_name;
+        std::string instance_name =
+            hpx::util::format(supervision::service_name, locality_id);
         instance_name += service_name;
         instance_name += supervision::server::supervision_manager_name;
 
@@ -1720,23 +1703,18 @@ namespace hpx::supervision::server {
         if (ec)
             return;
 
-        instance_name_ = service_name;
+        instance_name_ = HPX_MOVE(instance_name);
 
         // register a gid (not the id) to avoid AGAS holding a reference to this
         // component
-        agas::register_name(launch::sync, instance_name, gid, ec);
+        agas::register_name(launch::sync, instance_name_, gid, ec);
     }
 
     void supervision_manager::unregister_server_instance(error_code& ec) const
     {
         if (!instance_name_.empty())
         {
-            std::string instance_name = supervision::service_name;
-            instance_name += instance_name_;
-            instance_name += supervision::server::supervision_manager_name;
-
-            agas::unregister_name(launch::sync, instance_name, ec);
-
+            agas::unregister_name(launch::sync, instance_name_, ec);
             instance_name_.clear();
         }
     }

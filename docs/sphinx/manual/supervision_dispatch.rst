@@ -740,7 +740,7 @@ Fencing a silent peer
 
     hpx::supervision::registry local_registry(hpx::find_here());
 
-    hpx::id_type const shadow = local_registry.join(
+    hpx::supervision::joined_peer const peer = local_registry.join(
         hpx::launch::sync, hpx::find_here());
 
     // ... time passes; the peer's heartbeat stops ...
@@ -806,7 +806,7 @@ caller to extract ``handle.get_id()`` and ``hpx::find_here()`` manually:
 
     #include <hpx/supervision_dispatch.hpp>
 
-    hpx::supervision::supervision_handle const handle =
+    hpx::supervision::registry const handle =
         hpx::supervision::init(hpx::launch::sync);
 
     // Recover the epoch init() started this handle's locality at, for use
@@ -824,7 +824,7 @@ Querying a peer's state after joining it follows the same pattern, using a
 .. code-block:: c++
 
     for (auto const& peer :
-        hpx::supervision::discover_and_join(handle.registry_client))
+        hpx::supervision::discover_and_join(handle))
     {
         hpx::supervision::lifecycle_state const peer_state =
             hpx::supervision::query_state(hpx::launch::sync, handle, peer);

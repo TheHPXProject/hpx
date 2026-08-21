@@ -40,7 +40,6 @@ add_hpx_module(
     hpx_futures
     hpx_iterator_support
     hpx_memory
-    hpx_tag_invoke
     hpx_type_support
     hpx_util
   CMAKE_SUBDIRS examples tests

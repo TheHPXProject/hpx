@@ -55,7 +55,8 @@ namespace hpx::agas::server {
         this->base_type::set_locality_id(locality_id);
 
         // now register this AGAS instance with AGAS :-P
-        instance_name_ = agas::service_name;
+        instance_name_ = hpx::util::format(agas::service_name,
+            agas::is_connecting() ? agas::get_locality_id() : 0);
         instance_name_ += servicename;
         instance_name_ += agas::server::symbol_namespace_service_name;
 

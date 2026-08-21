@@ -11,6 +11,7 @@
 #if defined(HPX_HAVE_NETWORKING)
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <hpx/parcelset/parcelset_fwd.hpp>
 

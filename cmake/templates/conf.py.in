@@ -806,11 +806,11 @@ rst_prolog += '''
 .. |cpplang_slack| replace:: Cpplang Slack
 .. _cpplang_slack: https://cpplang.slack.com
 .. |stellar_hpx_download| replace:: |hpx| Downloads
-.. _stellar_hpx_download: https://hpx.stellar-group.org/downloads/
+.. _stellar_hpx_download: https://hpx.dev/downloads/
 .. |stellar_hpx_funding| replace:: |hpx| Funding Acknowledgements
-.. _stellar_hpx_funding: https://hpx.stellar-group.org/funding-acknowledgements/
+.. _stellar_hpx_funding: https://hpx.dev/funding-acknowledgements/
 .. |stellar_hpx_users| replace:: |hpx| Users
-.. _stellar_hpx_users: https://hpx.stellar-group.org/hpx-users/
+.. _stellar_hpx_users: https://hpx.dev/hpx-users/
 .. |hpx_github| replace:: Github
 .. _hpx_github: https://github.com/TheHPXProject/hpx/
 .. |hpx_github_issues| replace:: |hpx| Issues

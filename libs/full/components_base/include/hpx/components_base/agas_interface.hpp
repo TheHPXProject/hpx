@@ -38,6 +38,8 @@ namespace hpx::agas {
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT HPX_EXPORT bool is_console();
+    HPX_CXX_EXPORT HPX_EXPORT bool is_connecting(
+        naming::gid_type const& locality = naming::invalid_gid);
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT HPX_EXPORT bool register_name(launch::sync_policy,

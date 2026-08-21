@@ -6,14 +6,14 @@
 
 ## Support for deploying and using HPX
 
-Welcome to [HPX](http://stellar-group.org/libraries/hpx/)! We use GitHub for
+Welcome to [HPX](http://hpx.dev)! We use GitHub for
 [tracking bugs and feature requests](https://github.com/TheHPXProject/hpx/issues).
 Please see for the resources below if you are looking for the right place to
 get support for using HPX.
 
 ### Documentation
 
-* [User Documentation](https://hpx-docs.stellar-group.org/latest/html/index.html)
+* [User Documentation](https://docs.hpx.dev/latest/html/index.html)
 
 ### Reporting security issues and vulnerabilities
 
@@ -46,7 +46,7 @@ for details.
 ### Latest News
 
 * For latest news and announcements please see our
-  [blog](http://hpx.stellar-group.org/blog/).
+  [blog](http://hpx.dev/blog/).
 
 ### Stack Overflow
 

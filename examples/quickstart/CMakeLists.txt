@@ -85,6 +85,9 @@ if(HPX_WITH_DISTRIBUTED_RUNTIME)
       zerocopy_rdma
   )
 endif()
+if(HPX_WITH_DISTRIBUTED_RUNTIME AND HPX_WITH_CXX26_REFLECTION)
+  set(example_programs ${example_programs} fibonacci_reflection)
+endif()
 
 # TODO: These examples currently fail. Disabled until they are fixed.
 set(disabled_tests error_handling fibonacci_await non_atomic_rma zerocopy_rdma)

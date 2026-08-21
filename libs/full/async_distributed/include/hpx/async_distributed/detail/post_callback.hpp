@@ -500,4 +500,31 @@ namespace hpx {
     {
         return hpx::post_c_cb<Action>(HPX_FORWARD(Ts, ts)...);
     }
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+    /// \brief Reflection-based post_cb overload.
+    ///
+    /// Allows calling hpx::post_cb<^^func>(target, callback, ...) directly
+    /// without defining an explicit action type. Internally constructs
+    /// reflect_action<F> and delegates to the existing post_cb machinery.
+    ///
+    /// \tparam F        A std::meta::info reflection of a free function.
+    /// \tparam Target   id_type or distribution policy.
+    /// \tparam Callback Callback type invoked on completion.
+    /// \tparam Ts       Additional arguments to pass to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Target,
+        typename Callback, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    HPX_FORCEINLINE bool post_cb(
+        Target&& target, Callback&& cb, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::post_cb(hpx::actions::reflect_action<F>{},
+            HPX_FORWARD(Target, target), HPX_FORWARD(Callback, cb),
+            HPX_FORWARD(Ts, ts)...);
+    }
+#endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx

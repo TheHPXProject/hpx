@@ -93,14 +93,19 @@ void test_snapshot_peers_excludes_evicted_peer()
     // matching what sentinel::start()/publish_event() publish under, so these
     // simulated events must target peer_locality too.
     hpx::error_code ec(hpx::throwmode::lightweight);
-
     hpx::supervision::publish_event(
         peer_locality, hpx::supervision::event::started, 0, ec);
-    hpx::supervision::publish_event(
-        peer_locality, hpx::supervision::event::running, 0, ec);
+    HPX_TEST(!ec);
 
+    hpx::error_code ec1(hpx::throwmode::lightweight);
     hpx::supervision::publish_event(
-        peer_locality, hpx::supervision::event::completed, 0, ec);
+        peer_locality, hpx::supervision::event::running, 0, ec1);
+    HPX_TEST(!ec1);
+
+    hpx::error_code ec2(hpx::throwmode::lightweight);
+    hpx::supervision::publish_event(
+        peer_locality, hpx::supervision::event::completed, 0, ec2);
+    HPX_TEST(!ec2);
 
     // Eviction runs via hpx::post(); poll (bounded) until it lands rather
     // than asserting synchronously.

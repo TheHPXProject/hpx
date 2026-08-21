@@ -39,7 +39,6 @@ add_hpx_module(
     hpx_executors
     hpx_functional
     hpx_futures
-    hpx_tag_invoke
     hpx_threading_base
   CMAKE_SUBDIRS examples tests
 )

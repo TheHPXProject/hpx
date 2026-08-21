@@ -714,6 +714,21 @@ For instance::
     //
     HPX_REGISTER_COMPONENT(some_component_type, some_component);
 
+.. note::
+
+   When C++26 reflection is enabled (``HPX_WITH_CXX26_REFLECTION=ON``),
+   the second argument to :c:macro:`HPX_REGISTER_COMPONENT` can be omitted.
+   The component name is then derived automatically from the server type
+   via ``std::meta::identifier_of``::
+
+       // With C++26 reflection -- single argument, name derived automatically
+       HPX_REGISTER_COMPONENT(some_component_type)
+
+   The derived name is fully qualified (includes enclosing namespaces) and
+   is equivalent to the explicit two-argument form. Explicit names always
+   take precedence over reflection-derived ones.
+
+
     // The parameters for this macro have to be the same as used in the corresponding
     // HPX_REGISTER_ACTION_DECLARATION() macro invocation in the corresponding
     // header file.
