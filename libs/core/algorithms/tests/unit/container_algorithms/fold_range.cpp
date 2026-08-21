@@ -354,6 +354,66 @@ void test_fold_left_first_with_iter_empty()
     HPX_TEST(!hpx_value.has_value());
 }
 
+#include <memory>
+
+struct copyable_asymmetric_accumulator
+{
+    int value;
+
+    copyable_asymmetric_accumulator(int v)
+      : value(v)
+    {
+    }
+    copyable_asymmetric_accumulator(
+        copyable_asymmetric_accumulator const&) = default;
+    copyable_asymmetric_accumulator(
+        copyable_asymmetric_accumulator&&) = default;
+    copyable_asymmetric_accumulator& operator=(
+        copyable_asymmetric_accumulator const&) = default;
+    copyable_asymmetric_accumulator& operator=(
+        copyable_asymmetric_accumulator&&) = default;
+};
+
+void test_fold_left_first_asymmetric()
+{
+    std::vector<int> c = {1, 2, 3, 4, 5};
+    std::vector<int> expected_c = {1, 2, 3, 4, 5};
+
+    auto custom_op = [](copyable_asymmetric_accumulator acc, int elem) {
+        acc.value += elem;
+        return acc;
+    };
+
+    auto hpx_result = hpx::ranges::fold_left_first(c, custom_op);
+    HPX_TEST(hpx_result.has_value());
+    if (hpx_result)
+    {
+        HPX_TEST_EQ(hpx_result->value, 15);
+    }
+
+    HPX_TEST(std::equal(c.begin(), c.end(), expected_c.begin()));
+}
+
+void test_fold_right_last_asymmetric()
+{
+    std::vector<int> c = {1, 2, 3, 4, 5};
+    std::vector<int> expected_c = {1, 2, 3, 4, 5};
+
+    auto custom_op = [](int elem, copyable_asymmetric_accumulator acc) {
+        acc.value += elem;
+        return acc;
+    };
+
+    auto hpx_result = hpx::ranges::fold_right_last(c, custom_op);
+    HPX_TEST(hpx_result.has_value());
+    if (hpx_result)
+    {
+        HPX_TEST_EQ(hpx_result->value, 15);
+    }
+
+    HPX_TEST(std::equal(c.begin(), c.end(), expected_c.begin()));
+}
+
 void test_fold_custom_op()
 {
     std::vector<std::size_t> c = test::random_repeat(1007, std::size_t(100));
@@ -391,6 +451,9 @@ int hpx_main()
     test_fold_left_first_with_iter_iter();
     test_fold_left_first_with_iter_range();
     test_fold_left_first_with_iter_empty();
+
+    test_fold_left_first_asymmetric();
+    test_fold_right_last_asymmetric();
 
     test_fold_custom_op();
 
