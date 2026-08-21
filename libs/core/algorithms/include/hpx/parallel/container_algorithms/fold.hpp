@@ -374,7 +374,7 @@ namespace hpx::ranges {
             std::ranges::input_range<Rng> &&
             std::constructible_from<
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                hpx::traits::range_reference_t<Rng>> &&
+                std::ranges::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
@@ -457,7 +457,7 @@ namespace hpx::ranges {
             std::ranges::input_range<Rng> &&
             std::constructible_from<
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                hpx::traits::range_reference_t<Rng>> &&
+                std::ranges::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_left_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
@@ -568,7 +568,7 @@ namespace hpx::ranges {
             std::ranges::bidirectional_range<Rng> &&
             std::constructible_from<
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                hpx::traits::range_reference_t<Rng>> &&
+                std::ranges::range_reference_t<Rng>> &&
             hpx::is_indirectly_binary_right_foldable<F,
                 hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
                 std::ranges::iterator_t<Rng>>
