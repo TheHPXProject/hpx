@@ -166,6 +166,7 @@ set(sender_tests
     adjacentfind_sender
     all_of_sender
     any_of_sender
+    copy_if_sender
     copy_sender
     copyn_sender
     count_sender
