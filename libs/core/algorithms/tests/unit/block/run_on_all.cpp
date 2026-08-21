@@ -25,9 +25,10 @@ void test_sync_exception()
     std::atomic<int> count{0};
     try
     {
-        run_on_all(hpx::execution::par, reduction_plus(n),
-            [&count](std::uint32_t&) { 
-                if (count++ == 0) throw std::runtime_error("test sync"); 
+        run_on_all(
+            hpx::execution::par, reduction_plus(n), [&count](std::uint32_t&) {
+                if (count++ == 0)
+                    throw std::runtime_error("test sync");
             });
     }
     catch (std::exception const&)
@@ -46,9 +47,9 @@ void test_async_exception()
     try
     {
         auto f = run_on_all(hpx::execution::par(hpx::execution::task),
-            reduction_plus(n),
-            [&count](std::uint32_t&) { 
-                if (count++ == 0) throw std::runtime_error("test async"); 
+            reduction_plus(n), [&count](std::uint32_t&) {
+                if (count++ == 0)
+                    throw std::runtime_error("test async");
             });
         f.get();
     }
