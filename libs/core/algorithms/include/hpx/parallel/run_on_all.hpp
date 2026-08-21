@@ -81,7 +81,16 @@ namespace hpx::experimental {
                     ex::bulk(cores, HPX_MOVE(bulk_task)) |
                     ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
                                       std::exception_ptr ep) mutable {
-                        HPX_INVOKE(cleanup_error);
+                        try
+                        {
+                            HPX_INVOKE(cleanup_error);
+                        }
+                        catch (...)
+                        {
+                            // Suppress secondary exceptions during cleanup to
+                            // strictly preserve the primary bulk execution
+                            // error
+                        }
                         return ex::just_error(HPX_MOVE(ep));
                     }) |
                     ex::then(HPX_MOVE(cleanup_task));
@@ -120,7 +129,16 @@ namespace hpx::experimental {
                     ex::bulk(cores, HPX_MOVE(bulk_task)) |
                     ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
                                       std::exception_ptr ep) mutable {
-                        HPX_INVOKE(cleanup_error);
+                        try
+                        {
+                            HPX_INVOKE(cleanup_error);
+                        }
+                        catch (...)
+                        {
+                            // Suppress secondary exceptions during cleanup to
+                            // strictly preserve the primary bulk execution
+                            // error
+                        }
                         return ex::just_error(HPX_MOVE(ep));
                     }) |
                     ex::then(HPX_MOVE(cleanup_task));

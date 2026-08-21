@@ -15,6 +15,50 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <stdexcept>
+
+void test_sync_exception()
+{
+    using namespace hpx::experimental;
+    std::uint32_t n = 0;
+    bool caught = false;
+    std::atomic<int> count{0};
+    try
+    {
+        run_on_all(hpx::execution::par, reduction_plus(n),
+            [&count](std::uint32_t&) { 
+                if (count++ == 0) throw std::runtime_error("test sync"); 
+            });
+    }
+    catch (std::exception const&)
+    {
+        caught = true;
+    }
+    HPX_TEST(caught);
+}
+
+void test_async_exception()
+{
+    using namespace hpx::experimental;
+    std::uint32_t n = 0;
+    bool caught = false;
+    std::atomic<int> count{0};
+    try
+    {
+        auto f = run_on_all(hpx::execution::par(hpx::execution::task),
+            reduction_plus(n),
+            [&count](std::uint32_t&) { 
+                if (count++ == 0) throw std::runtime_error("test async"); 
+            });
+        f.get();
+    }
+    catch (std::exception const&)
+    {
+        caught = true;
+    }
+    HPX_TEST(caught);
+}
+
 int main()
 {
     using namespace hpx::experimental;
@@ -158,6 +202,9 @@ int main()
             [](std::uint32_t& local_n) { ++local_n; });
         HPX_TEST_EQ(n, static_cast<std::uint32_t>(4));
     }
+
+    test_sync_exception();
+    test_async_exception();
 
     return hpx::util::report_errors();
 }
