@@ -12,7 +12,7 @@ allocator_support
 =================
 
 This module provides utilities for allocators. It contains
-:cpp:class:`hpx::util::internal_allocator` which directly forwards allocation
+:hpx:class:`hpx::util::internal_allocator` which directly forwards allocation
 calls to ``jemalloc``. This utility is is mainly useful on Windows.
 
 See the :ref:`API reference <modules_allocator_support_api>` of the module for more

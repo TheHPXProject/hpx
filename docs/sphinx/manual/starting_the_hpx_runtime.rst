@@ -130,16 +130,16 @@ point of your |hpx| application on the console :term:`locality` only (this
 function will be invoked as the first |hpx| thread of your application). All
 |hpx| API functions can be used from within this function.
 
-The thread executing the function :cpp:func:`hpx::init` will block waiting for
+The thread executing the function :hpx:func:`hpx::init` will block waiting for
 the runtime system to exit. The value returned from ``hpx_main`` will be
-returned from :cpp:func:`hpx::init` after the runtime system has stopped.
+returned from :hpx:func:`hpx::init` after the runtime system has stopped.
 
-The function :cpp:func:`hpx::finalize` has to be called on one of the |hpx|
+The function :hpx:func:`hpx::finalize` has to be called on one of the |hpx|
 localities in order to signal that all work has been scheduled and the runtime
 system should be stopped after the scheduled work has been executed.
 
 This method of invoking |hpx| has the advantage of the user being able to decide
-which version of :cpp:func:`hpx::init` to call. This allows to pass
+which version of :hpx:func:`hpx::init` to call. This allows to pass
 additional configuration parameters while initializing the |hpx| runtime system.
 
 .. code-block:: c++
@@ -174,7 +174,7 @@ additional configuration parameters while initializing the |hpx| runtime system.
 The header file to include for this method of using |hpx| is
 ``hpx/hpx_init.hpp``.
 
-There are many additional overloads of :cpp:func:`hpx::init` available, such as
+There are many additional overloads of :hpx:func:`hpx::init` available, such as
 the ability to provide your own entry-point function instead of ``hpx_main``.
 Please refer to the function documentation for more details (see: ``hpx/hpx_init.hpp``).
 
@@ -189,17 +189,17 @@ point of your |hpx| application on the console :term:`locality` only (this
 function will be invoked as the first |hpx| thread of your application). All
 |hpx| API functions can be used from within this function.
 
-The thread executing the function :cpp:func:`hpx::start` will *not* block
+The thread executing the function :hpx:func:`hpx::start` will *not* block
 waiting for the runtime system to exit, but will return immediately.
-The function :cpp:func:`hpx::finalize` has to be called on one of the |hpx|
+The function :hpx:func:`hpx::finalize` has to be called on one of the |hpx|
 localities in order to signal that all work has been scheduled and the runtime
 system should be stopped after the scheduled work has been executed.
 
 This method of invoking |hpx| is useful for applications where the main thread
-is used for special operations, such a GUIs. The function :cpp:func:`hpx::stop`
+is used for special operations, such a GUIs. The function :hpx:func:`hpx::stop`
 can be used to wait for the |hpx| runtime system to exit and should at least be
 used as the last function called in ``main()``. The value returned from
-``hpx_main`` will be returned from :cpp:func:`hpx::stop` after the runtime
+``hpx_main`` will be returned from :hpx:func:`hpx::stop` after the runtime
 system has stopped.
 
 .. code-block:: c++
@@ -238,7 +238,7 @@ system has stopped.
 The header file to include for this method of using |hpx| is
 ``hpx/hpx_start.hpp``.
 
-There are many additional overloads of :cpp:func:`hpx::start` available, such as
+There are many additional overloads of :hpx:func:`hpx::start` available, such as
 the option for users to provide their own entry point function instead of ``hpx_main``.
 Please refer to the function documentation for more details (see:
 ``hpx/hpx_start.hpp``).
@@ -270,7 +270,7 @@ the main entry point for your |hpx| application:
 
 .. note::
 
-   The function supplied to :cpp:func:`hpx::init` must have one of the following
+   The function supplied to :hpx:func:`hpx::init` must have one of the following
    prototypes:
 
        int application_entry_point(int argc, char* argv[]);
@@ -287,12 +287,12 @@ Suspending and resuming the |hpx| runtime
 =========================================
 
 In some applications it is required to combine |hpx| with other runtimes. To
-support this use case, |hpx| provides two functions: :cpp:func:`hpx::suspend` and
-:cpp:func:`hpx::resume`. :cpp:func:`hpx::suspend` is a blocking call which will
+support this use case, |hpx| provides two functions: :hpx:func:`hpx::suspend` and
+:hpx:func:`hpx::resume`. :hpx:func:`hpx::suspend` is a blocking call which will
 wait for all scheduled tasks to finish executing and then put the thread pool OS
-threads to sleep. :cpp:func:`hpx::resume` simply wakes up the sleeping threads
-so that they are ready to accept new work. :cpp:func:`hpx::suspend` and
-:cpp:func:`hpx::resume` can be found in the header ``hpx/hpx_suspend.hpp``.
+threads to sleep. :hpx:func:`hpx::resume` simply wakes up the sleeping threads
+so that they are ready to accept new work. :hpx:func:`hpx::suspend` and
+:hpx:func:`hpx::resume` can be found in the header ``hpx/hpx_suspend.hpp``.
 
 .. code-block:: c++
 
@@ -325,19 +325,19 @@ so that they are ready to accept new work. :cpp:func:`hpx::suspend` and
 
 .. note::
 
-   :cpp:func:`hpx::suspend` does not wait for :cpp:func:`hpx::finalize` to be
-   called. Only call :cpp:func:`hpx::finalize` when you wish to fully stop the
+   :hpx:func:`hpx::suspend` does not wait for :hpx:func:`hpx::finalize` to be
+   called. Only call :hpx:func:`hpx::finalize` when you wish to fully stop the
    |hpx| runtime.
 
 .. warning::
 
-   :cpp:func:`hpx::suspend` only waits for local tasks, i.e. tasks on the
-    current locality, to finish executing. When using :cpp:func:`hpx::suspend`
+   :hpx:func:`hpx::suspend` only waits for local tasks, i.e. tasks on the
+    current locality, to finish executing. When using :hpx:func:`hpx::suspend`
     in a multi-locality scenario the user is responsible for ensuring that any
     work required from other localities has also finished.
 
 |hpx| also supports suspending individual thread pools and threads. For details
-on how to do that, see the documentation for :cpp:class:`hpx::threads::thread_pool_base`.
+on how to do that, see the documentation for :hpx:class:`hpx::threads::thread_pool_base`.
 
 Automatically suspending worker threads
 ---------------------------------------
@@ -381,7 +381,7 @@ this instead:
        return hpx::stop();
    }
 
-In this example each call to :cpp:func:`hpx::run_as_hpx_thread` acts as a
+In this example each call to :hpx:func:`hpx::run_as_hpx_thread` acts as a
 "parallel region".
 
 .. _hpx_main_implementation:

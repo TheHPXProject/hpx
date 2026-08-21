@@ -37,8 +37,8 @@ General changes
 ===============
 
 * We are moving into the direction of unifying managed and simple components. As
-  such, the classes :cpp:class:`hpx::components::component` and
-  :cpp:class:`hpx::components::component_base` have been added which currently
+  such, the classes :hpx:class:`hpx::components::component` and
+  :hpx:class:`hpx::components::component_base` have been added which currently
   just forward to the currently existing simple component facilities. The
   examples have been converted to only use those two classes.
 * Added integration with the `CircleCI
@@ -50,23 +50,23 @@ General changes
   set of cmake scripts to determine the available language and library features
   supported by the used compiler.
 * The API for creating instances of components has been consolidated. All
-  component instances should be created using the :cpp:func:`hpx::new_` only. It
+  component instances should be created using the :hpx:func:`hpx::new_` only. It
   allows one to instantiate both, single component instances and multiple
   component instances. The placement of the created components can be controlled
   by special distribution policies. Please see the corresponding documentation
-  outlining the use of :cpp:func:`hpx::new_`.
+  outlining the use of :hpx:func:`hpx::new_`.
 * Introduced four new distribution policies which can be used with many API
   functions which traditionally expected to be used with a locality id. The new
   distribution policies are:
 
-  * :cpp:class:`hpx::components::default_distribution_policy` which tries to
+  * :hpx:class:`hpx::components::default_distribution_policy` which tries to
     place multiple component instances as evenly as possible.
-  * :cpp:class:`hpx::components::colocating_distribution_policy` which will
+  * :hpx:class:`hpx::components::colocating_distribution_policy` which will
     refer to the locality where a given component instance is currently placed.
-  * :cpp:class:`hpx::components::binpacking_distribution_policy` which will
+  * :hpx:class:`hpx::components::binpacking_distribution_policy` which will
     place multiple component instances as evenly as possible based on any
     performance counter.
-  * :cpp:class:`hpx::components::target_distribution_policy` which allows one to
+  * :hpx:class:`hpx::components::target_distribution_policy` which allows one to
     represent a given locality in the context of a distrwibution policy.
 * The new distribution policies can now be also used with ``hpx::async``. This
   change also deprecates ``hpx::async_colocated(id, ...)`` which now is replaced
@@ -74,10 +74,10 @@ General changes
 * The ``hpx::vector`` and ``hpx::unordered_map`` data structures can now be used
   with the new distribution policies as well.
 * The parallel facility ``hpx::parallel::task_region`` has been renamed to
-  :cpp:class:`hpx::parallel::task_block` based on the changes in the
+  :hpx:class:`hpx::parallel::task_block` based on the changes in the
   corresponding standardization proposal |cpp11_n4088|_.
 * Added extensions to the parallel facility
-  :cpp:class:`hpx::parallel::task_block` allowing to combine a task_block with
+  :hpx:class:`hpx::parallel::task_block` allowing to combine a task_block with
   an execution policy. This implies a minor breaking change as the
   ``hpx::parallel::task_block`` is now a template.
 * Added new LCOs: ``hpx::lcos::latch`` and ``hpx::lcos::local::latch`` which
@@ -113,8 +113,8 @@ Breaking changes
 * We are moving into the direction of unifying managed and simple components. In
   order to stop exposing the old facilities, all examples have been converted to
   use the new classes. The breaking change in this release is that performance
-  counters are now a :cpp:class:`hpx::components::component_base` instead of
-  :cpp:class:`hpx::components::managed_component_base`.
+  counters are now a :hpx:class:`hpx::components::component_base` instead of
+  :hpx:class:`hpx::components::managed_component_base`.
 * We removed the support for stackless threads. It turned out that there was no
   performance benefit when using stackless threads. As such, we decided to clean
   up our codebase. This feature was not documented.
@@ -126,21 +126,21 @@ Breaking changes
   instead. The old macro will be removed in the next release.
 * The obsolete distributing_factory and binpacking_factory components have been
   removed. The corresponding functionality is now provided by the
-  :cpp:func:`hpx::new_()` API function in conjunction with the
+  :hpx:func:`hpx::new_()` API function in conjunction with the
   ``hpx::default_layout`` and ``hpx::binpacking`` distribution policies
-  (:cpp:class:`hpx::components::default_distribution_policy` and
-  :cpp:class:`hpx::components::binpacking_distribution_policy`)
+  (:hpx:class:`hpx::components::default_distribution_policy` and
+  :hpx:class:`hpx::components::binpacking_distribution_policy`)
 * The API function ``hpx::new_colocated`` has been deprecated. Please use the
-  consolidated API :cpp:func:`hpx::new_` in conjunction with the new
+  consolidated API :hpx:func:`hpx::new_` in conjunction with the new
   ``hpx::colocated`` distribution policy
-  (:cpp:class:`hpx::components::colocating_distribution_policy`) instead. The
+  (:hpx:class:`hpx::components::colocating_distribution_policy`) instead. The
   old API function will still be available for at least one release of |hpx| if
   the configuration variable ``HPX_WITH_COLOCATED_BACKWARDS_COMPATIBILITY`` is
   enabled.
 * The API function ``hpx::async_colocated`` has been deprecated. Please use the
   consolidated API ``hpx::async`` in conjunction with the new ``hpx::colocated``
   distribution policy
-  (:cpp:class:`hpx::components::colocating_distribution_policy`) instead. The
+  (:hpx:class:`hpx::components::colocating_distribution_policy`) instead. The
   old API function will still be available for at least one release of |hpx| if
   the configuration variable ``HPX_WITH_COLOCATED_BACKWARDS_COMPATIBILITY`` is
   enabled.
@@ -664,4 +664,3 @@ Here is a list of the important tickets we closed for this release.
 * :hpx-issue:`1001` - Zero copy serialization raises assert
 * :hpx-issue:`721` - Make HPX usable for Xeon Phi
 * :hpx-issue:`524` - Extend scheduler to support threads which can't be stolen
-
