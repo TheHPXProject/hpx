@@ -12,9 +12,9 @@ iterator_support
 ================
 
 This module provides helpers for iterators. It provides
-:cpp:class:`hpx::util::iterator_facade` and
-:cpp:class:`hpx::util::iterator_adaptor` for creating new iterators, and the
-trait :cpp:class:`hpx::util::is_iterator` along with more specific iterator
+:hpx:class:`hpx::util::iterator_facade` and
+:hpx:class:`hpx::util::iterator_adaptor` for creating new iterators, and the
+trait :hpx:class:`hpx::util::is_iterator` along with more specific iterator
 traits.
 
 See the :ref:`API reference <modules_iterator_support_api>` of the module for more

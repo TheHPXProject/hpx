@@ -21,7 +21,7 @@ Overview
 
 The termination detection API provides a way to wait for all local |hpx|-threads
 to complete their work. This is essential in scenarios where you spawn
-asynchronous tasks using :cpp:func:`hpx::post` or :cpp:func:`hpx::async` and
+asynchronous tasks using :hpx:func:`hpx::post` or :hpx:func:`hpx::async` and
 need to ensure they all finish before the runtime shuts down.
 
 The API supports several use cases:
@@ -158,6 +158,6 @@ The termination detection API is particularly useful in the following scenarios:
 See also
 ========
 
-* :cpp:func:`hpx::post` - Fire-and-forget asynchronous execution
-* :cpp:func:`hpx::async` - Asynchronous execution with a future
-* :cpp:func:`hpx::finalize` - Shut down the |hpx| runtime
+* :hpx:func:`hpx::post` - Fire-and-forget asynchronous execution
+* :hpx:func:`hpx::async` - Asynchronous execution with a future
+* :hpx:func:`hpx::finalize` - Shut down the |hpx| runtime

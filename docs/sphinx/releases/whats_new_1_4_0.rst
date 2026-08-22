@@ -53,7 +53,7 @@ General changes
 * It is now possible to create standalone thread pools without starting the
   runtime. See the ``standalone_thread_pool_executor.cpp`` test in the
   ``execution`` module for an example.
-* Tasks annotated with :cpp:func:`hpx::util::annotated_function` now have their
+* Tasks annotated with :hpx:func:`hpx::util::annotated_function` now have their
   correct name when using APEX to generate OTF2 files.
 * Cloning of APEX was defective in previous releases (it required manual
   intervention to check out the correct tag or branch). This has been fixed.

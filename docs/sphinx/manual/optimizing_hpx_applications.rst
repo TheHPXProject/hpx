@@ -686,7 +686,7 @@ functions of the created client component instance should be called::
     hpx::cout << count.get_value<int>().get() << std::endl;
 
 For more information about the client component type, see
-:cpp:class:`hpx::performance_counters::performance_counter`
+:hpx:class:`hpx::performance_counters::performance_counter`
 
 .. note::
 
@@ -755,7 +755,7 @@ requests the counter data of this performance counter.
 
 The next step in exposing this counter to the runtime system is to register the
 function as a new raw counter type using the |hpx| API function
-:cpp:func:`hpx::performance_counters::install_counter_type`. A counter type
+:hpx:func:`hpx::performance_counters::install_counter_type`. A counter type
 represents certain common characteristics of counters, like their counter type
 name and any associated description information. The following snippet shows an
 example of how to register the function ``some_performance_data``, which is shown
@@ -780,7 +780,7 @@ Now it is possible to instantiate a new counter instance based on the naming
 scheme ``"/test{locality#*/total}/data"`` where ``*`` is a zero-based integer
 index identifying the :term:`locality` for which the counter instance should be
 accessed. The function
-:cpp:func:`hpx::performance_counters::install_counter_type` enables users to
+:hpx:func:`hpx::performance_counters::install_counter_type` enables users to
 instantiate exactly one counter instance for each :term:`locality`. Repeated
 requests to instantiate such a counter will return the same instance, i.e., the
 instance created for the first request.
@@ -789,7 +789,7 @@ If this counter needs to be accessed using the standard |hpx| command line
 options, the registration has to be performed during application startup, before
 ``hpx_main`` is executed. The best way to achieve this is to register an |hpx|
 startup function using the API function
-:cpp:func:`hpx::register_startup_function` before calling ``hpx::init`` to
+:hpx:func:`hpx::register_startup_function` before calling ``hpx::init`` to
 initialize the runtime system::
 
     int main(int argc, char* argv[])
