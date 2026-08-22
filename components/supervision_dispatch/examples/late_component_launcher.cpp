@@ -115,7 +115,7 @@ namespace {
     enum class worker_variant : std::uint8_t
     {
         normal = 0,
-        //failing = 1,
+        failing = 1,
         //aborting = 2
     };
 
@@ -280,9 +280,9 @@ namespace {
         // true, unmodeled crash, rather than only ever taking the success path.
         worker_slots.emplace_back(spawn_worker(handle, worker_variant::normal));
         slot_variants.emplace_back(worker_variant::normal);
-        //worker_slots.emplace_back(
-        //    spawn_worker(handle, worker_variant::failing));
-        //slot_variants.emplace_back(worker_variant::failing);
+        worker_slots.emplace_back(
+            spawn_worker(handle, worker_variant::failing));
+        slot_variants.emplace_back(worker_variant::failing);
         //worker_slots.emplace_back(
         //    spawn_worker(handle, worker_variant::aborting));
         //slot_variants.emplace_back(worker_variant::aborting);
@@ -294,9 +294,9 @@ namespace {
         queue.push_back(task{.worker_slot_index = 0,
             .payload = "hello from root: message 2 for worker 0",
             .retries = 0});
-        //queue.push_back(task{.worker_slot_index = 1,
-        //    .payload = "hello from root: message 1 for worker 1",
-        //    .retries = 0});
+        queue.push_back(task{.worker_slot_index = 1,
+            .payload = "hello from root: message 1 for worker 1",
+            .retries = 0});
         //queue.push_back(task{.worker_slot_index = 2,
         //    .payload = "hello from root: message 1 for worker 2",
         //    .retries = 0});
