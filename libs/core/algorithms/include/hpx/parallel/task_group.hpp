@@ -14,7 +14,9 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
+
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -92,6 +94,57 @@ namespace hpx::experimental {
 
         /// \brief Adds a task to compute \c f() and returns immediately.
         ///
+        /// \tparam Scheduler The type of the P2300 scheduler to dispatch on.
+        /// \tparam F         The type of the user defined function to invoke.
+        /// \tparam Ts        The type of additional arguments used to invoke \c f().
+        ///
+        /// \param sched      The P2300 scheduler to use for dispatching the
+        ///                   task.
+        /// \param f          The user defined function to invoke inside the task
+        ///                   group.
+        /// \param ts         Additional arguments to use to invoke \c f().
+
+        template <typename Scheduler, typename F, typename... Ts>
+        // clang-format off
+            requires (
+                hpx::execution::experimental::is_scheduler_v<
+                    std::decay_t<Scheduler>> &&
+                !hpx::traits::is_executor_any_v<std::decay_t<Scheduler>>
+            )
+        // clang-format on
+        void run(Scheduler&& sched, F&& f, Ts&&... ts)
+        {
+            // make sure exceptions don't leave the latch in the wrong state
+            if (latch_.reset_if_needed_and_count_up(1, 1))
+            {
+                has_arrived_.store(false, std::memory_order_release);
+            }
+
+            namespace ex = hpx::execution::experimental;
+
+            // Workaround for Clang compiler crash (exit code 139):
+            // Extract lambda body into a separate function to reduce template AST depth
+            auto task = [this, f = HPX_FORWARD(F, f),
+                            ... ts = HPX_FORWARD(Ts, ts)]() mutable {
+                hpx::detail::try_catch_exception_ptr(
+                    [&]() { HPX_INVOKE(f, ts...); },
+                    [this](
+                        std::exception_ptr e) { add_exception(HPX_MOVE(e)); });
+            };
+
+            auto on_exit =
+                hpx::experimental::scope_exit([this] { latch_.count_down(1); });
+
+            ex::start_detached(ex::schedule(HPX_FORWARD(Scheduler, sched)) |
+                ex::then([this, on_exit = HPX_MOVE(on_exit),
+                             task = HPX_MOVE(task)]() mutable {
+                    auto _(HPX_MOVE(on_exit));
+                    HPX_INVOKE(task);
+                }));
+        }
+
+        /// \brief Adds a task to compute \c f() and returns immediately.
+        ///
         /// \tparam F  The type of the user defined function to invoke.
         /// \tparam Ts The type of additional arguments used to invoke \c f().
         ///
@@ -102,7 +155,9 @@ namespace hpx::experimental {
         template <typename F, typename... Ts>
         // clang-format off
             requires (
-                !hpx::traits::is_executor_any_v<std::decay_t<F>>
+                !hpx::traits::is_executor_any_v<std::decay_t<F>> &&
+                !hpx::execution::experimental::is_scheduler_v<
+                    std::decay_t<F>>
             )
         // clang-format on
         void run(F&& f, Ts&&... ts)
