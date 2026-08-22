@@ -388,6 +388,26 @@ namespace hpx::tracing {
         hpx::tracy::detail::add_zone_text_to_fiber(buffer, len);
     }
 
+    void work_stolen(std::size_t thief_id, std::size_t victim_id,
+        void const* task_id, char const* desc) noexcept
+    {
+        char buffer[256];
+        if (desc && desc[0] != '\0')
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Work Stolen: Thief W#%zu <- Victim W#%zu | Task: %p (%s)",
+                thief_id, victim_id, task_id, desc);
+        }
+        else
+        {
+            std::snprintf(buffer, sizeof(buffer),
+                "Work Stolen: Thief W#%zu <- Victim W#%zu | Task: %p", thief_id,
+                victim_id, task_id);
+        }
+        // Amber/Gold color: 0xFFC107
+        hpx::tracy::message(buffer, std::strlen(buffer), 0xFFC107u);
+    }
+
     void frame_mark(char const* name) noexcept
     {
         hpx::tracy::frame_mark(name);

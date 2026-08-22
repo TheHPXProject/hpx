@@ -264,6 +264,11 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void handle_on_completed_fired(
         void const* task_id = nullptr) noexcept;
 
+    /// \brief Signal emitted when a worker thread steals a task from another worker.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void work_stolen(std::size_t thief_id,
+        std::size_t victim_id, void const* task_id,
+        char const* desc = nullptr) noexcept;
+
     /// \brief Emit a frame/stage boundary marker in Tracy timeline.
     ///
     /// \param name  Optional name for the frame/stage.

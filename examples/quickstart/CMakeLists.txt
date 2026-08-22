@@ -38,6 +38,7 @@ set(example_programs
     vector_counting_dotproduct
     vector_zip_dotproduct
     wait_composition
+    work_stealing_smoke
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" AND NOT HPX_WITH_STATIC_LINKING)

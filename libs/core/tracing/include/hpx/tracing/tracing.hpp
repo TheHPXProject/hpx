@@ -10,6 +10,7 @@
 #include <hpx/config.hpp>
 #include <hpx/preprocessor/cat.hpp>
 #include <hpx/tracing/macros.hpp>
+#include <cstddef>
 #include <type_traits>
 
 #if defined(DOXYGEN)
@@ -229,6 +230,43 @@ namespace hpx::tracing {
         task_completed(thrdptr,
             ThreadData::get_safe_description(
                 thrdptr->get_description(), "thread"));
+#endif
+    }
+
+    template <typename ThreadId>
+    constexpr void work_stolen([[maybe_unused]] std::size_t thief_id,
+        [[maybe_unused]] std::size_t victim_id,
+        [[maybe_unused]] ThreadId const& thrd) noexcept
+    {
+#if defined(HPX_HAVE_TRACING)
+        if (auto* thrd_data = get_thread_id_data(thrd))
+        {
+            using thread_data_type = std::remove_pointer_t<decltype(thrd_data)>;
+            work_stolen(thief_id, victim_id, thrd_data,
+                thread_data_type::get_safe_description(
+                    thrd_data->get_description(), "thread"));
+        }
+#endif
+    }
+
+    template <typename Range>
+    constexpr void work_stolen_range([[maybe_unused]] std::size_t thief_id,
+        [[maybe_unused]] std::size_t victim_id,
+        [[maybe_unused]] Range const& tasks) noexcept
+    {
+#if defined(HPX_HAVE_TRACING)
+        for (auto const& stolen_thrd : tasks)
+        {
+            if (stolen_thrd)
+            {
+                auto* thrd_data = get_thread_id_data(stolen_thrd);
+                using thread_data_type =
+                    std::remove_pointer_t<decltype(thrd_data)>;
+                work_stolen(thief_id, victim_id, thrd_data,
+                    thread_data_type::get_safe_description(
+                        thrd_data->get_description(), "thread"));
+            }
+        }
 #endif
     }
 }    // namespace hpx::tracing

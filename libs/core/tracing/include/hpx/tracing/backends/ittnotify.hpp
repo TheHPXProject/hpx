@@ -314,6 +314,12 @@ namespace hpx::tracing {
     {
     }
 
+    /// \brief Signal emitted when a worker thread steals a task from another worker.
+    HPX_CXX_CORE_EXPORT constexpr void work_stolen(
+        std::size_t, std::size_t, void const*, char const* = nullptr) noexcept
+    {
+    }
+
     /// \brief Frame boundary marker (no-op stub for ITTNotify).
     HPX_CXX_CORE_EXPORT constexpr void frame_mark(
         char const* = nullptr) noexcept
