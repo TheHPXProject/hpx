@@ -189,7 +189,16 @@ namespace hpx::collectives {
     // Channel communicators shared by name
     namespace {
 
-        std::map<std::string, hpx::shared_future<channel_communicator>>
+        // A channel communicator registers under name_from_basename(basename,
+        // this_site), so a basename names a group of sites rather than one
+        // communicator, and the site has to be part of the key. Sites that
+        // share a process share the basename: were the site left out, the
+        // first of them would hand its own endpoint to all the others, which
+        // would then send and receive over a site index that is not theirs
+        // while their own names stay unregistered for every peer that looks
+        // them up.
+        std::map<std::pair<std::string, std::size_t>,
+            hpx::shared_future<channel_communicator>>
             cached_channel_communicators;
         hpx::mutex cached_channel_communicators_mtx;
     }    // namespace
@@ -198,12 +207,23 @@ namespace hpx::collectives {
 
         hpx::shared_future<collectives::channel_communicator>
         get_cached_channel_communicator(std::string name,
-            num_sites_arg const num_sites, this_site_arg const this_site)
+            num_sites_arg const num_sites, this_site_arg this_site)
         {
+            // The site identifies the entry, so it has to be the one the
+            // communicator registers under rather than the placeholder
+            // create_channel_communicator would have resolved later.
+            if (this_site.is_default())
+            {
+                this_site = this_site_arg(agas::get_locality_id());
+            }
+
+            auto key = std::make_pair(
+                HPX_MOVE(name), static_cast<std::size_t>(this_site));
+
             std::unique_lock<hpx::mutex> l(cached_channel_communicators_mtx);
             [[maybe_unused]] util::ignore_while_checking il(&l);
 
-            if (auto const it = cached_channel_communicators.find(name);
+            if (auto const it = cached_channel_communicators.find(key);
                 it != cached_channel_communicators.end())
             {
                 // Hand an exceptional creation back unchanged. Retrying after
@@ -215,7 +235,7 @@ namespace hpx::collectives {
 
             auto const it =
                 cached_channel_communicators
-                    .emplace(HPX_MOVE(name),
+                    .emplace(HPX_MOVE(key),
                         hpx::shared_future<collectives::channel_communicator>())
                     .first;
 
@@ -225,7 +245,7 @@ namespace hpx::collectives {
                 // factory reads the string back in a continuation of its own,
                 // by which time an argument owned by the caller may be gone.
                 it->second = collectives::create_channel_communicator(
-                    it->first.c_str(), num_sites, this_site)
+                    it->first.first.c_str(), num_sites, this_site)
                                  .share();
             }
             catch (...)

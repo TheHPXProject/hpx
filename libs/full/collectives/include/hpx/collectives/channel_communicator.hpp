@@ -280,8 +280,11 @@ namespace hpx::collectives {
         HPX_EXPORT void reset_world_channel_communicator();
 
         ///////////////////////////////////////////////////////////////////////
-        // Returns the channel communicator registered under the given name,
-        // creating it on first use and handing out the same one afterwards.
+        // Returns the channel communicator this site holds under the given
+        // name, creating it on first use and handing out the same one
+        // afterwards. A name plus a site is what identifies a communicator,
+        // because that pair is what it registers under; sites sharing a
+        // process therefore share the name but keep a communicator each.
         //
         // A caller that repeats an exchange over one fixed set of sites, and
         // separates the individual exchanges by tag rather than by name, would

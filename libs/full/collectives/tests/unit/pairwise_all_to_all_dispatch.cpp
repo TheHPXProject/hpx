@@ -252,6 +252,45 @@ void test_default_generation_still_works(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// One site's half of the exchange below.
+void run_colocated_site(std::string const& basename, std::uint32_t const site,
+    std::uint32_t const num_sites)
+{
+    std::vector<std::uint32_t> const result =
+        all_to_all(basename.c_str(), contribution(site, num_sites),
+            num_sites_arg(num_sites), this_site_arg(site), generation_arg(1),
+            root_site_arg(), pairwise_threshold_arg(0))
+            .get();
+
+    check_result(result, site, num_sites);
+}
+
+// A collective site need not be an HPX locality. Run four site indices through
+// HPX threads in one locality so they share one process-local cache. Each site
+// still needs its own communicator endpoint.
+void test_colocated_sites(
+    std::uint32_t const this_locality, std::uint32_t const num_sites)
+{
+    std::string const basename = "/test/pairwise_dispatch/local_sites/" +
+        std::to_string(this_locality) + "/";
+
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(
+            hpx::async(run_colocated_site, basename, site, num_sites));
+    }
+
+    hpx::wait_all(sites);
+    for (hpx::future<void>& site : sites)
+    {
+        site.get();
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Selecting the direct path must not bypass validation performed by the
 // established routed implementation.
 void test_direct_path_preserves_root_validation(
@@ -292,6 +331,7 @@ int hpx_main()
     test_auto_selects_direct_for_large_rows(this_locality, num_localities);
     test_default_generation_still_works(this_locality, num_localities);
     test_direct_path_preserves_root_validation(this_locality, num_localities);
+    test_colocated_sites(this_locality, 4);
 
     return hpx::finalize();
 }
