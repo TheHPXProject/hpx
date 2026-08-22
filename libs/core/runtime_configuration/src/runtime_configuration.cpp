@@ -318,6 +318,7 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_AGAS_LOCAL_CACHE_SIZE)) "}",
             "use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}",
             "use_caching = ${HPX_AGAS_USE_CACHING:1}",
+            "rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:5000}",
 
             "[hpx.components]",
             "load_external = ${HPX_LOAD_EXTERNAL_COMPONENTS:1}",
@@ -939,6 +940,19 @@ namespace hpx::util {
                 0;
         }
         return false;
+    }
+
+    std::uint64_t runtime_configuration::get_agas_rpc_timeout(
+        std::uint64_t const dflt) const
+    {
+        std::uint64_t timeout = dflt;
+
+        if (util::section const* sec = get_section("hpx.agas"); nullptr != sec)
+        {
+            timeout = hpx::util::get_entry_as<std::uint64_t>(
+                *sec, "rpc_timeout", timeout);
+        }
+        return timeout;
     }
 
     std::size_t runtime_configuration::get_agas_max_pending_refcnt_requests()

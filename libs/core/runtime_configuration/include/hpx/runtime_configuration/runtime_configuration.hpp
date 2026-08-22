@@ -90,6 +90,9 @@ namespace hpx::util {
 
         bool get_agas_range_caching_mode() const;
 
+        // Get AGAS RPC timeout in milliseconds
+        std::uint64_t get_agas_rpc_timeout(std::uint64_t dflt = 5000) const;
+
         std::size_t get_agas_max_pending_refcnt_requests() const;
 
         // Load application specific configuration and merge it with the

@@ -133,6 +133,10 @@ namespace hpx::agas {
     {
         if (caching_)
             gva_cache_->reserve(ini_.get_agas_local_cache_size());
+
+        std::uint64_t const timeout_ms = ini_.get_agas_rpc_timeout();
+        hpx::agas::set_rpc_timeout(hpx::chrono::steady_duration(
+            std::chrono::milliseconds(timeout_ms)));
     }
 
     void addressing_service::bootstrap(
