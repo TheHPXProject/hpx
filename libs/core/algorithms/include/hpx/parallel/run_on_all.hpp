@@ -118,11 +118,16 @@ namespace hpx::experimental {
 
         HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
             typename... Reductions>
+        // clang-format off
+            requires (
+                hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+            )
+        // clang-format on
         decltype(auto) run_on_all_sched(
             Scheduler&& sched, F&& f, Reductions&&... reductions)
         {
-            auto cores = hpx::execution::experimental::processing_units_count(
-                hpx::execution::experimental::thread_pool_scheduler{});
+            auto cores =
+                hpx::execution::experimental::processing_units_count(sched);
 
             namespace ex = hpx::execution::experimental;
 
