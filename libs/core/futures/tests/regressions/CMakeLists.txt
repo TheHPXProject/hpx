@@ -9,6 +9,7 @@ set(tests
     exception_from_continuation_1613
     future_2667
     future_790
+    future_uncompleted_7490
     future_unwrap_878
     future_unwrap_1182
     set_hpx_limit_798

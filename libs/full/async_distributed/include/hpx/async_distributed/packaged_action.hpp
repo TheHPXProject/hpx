@@ -84,21 +84,25 @@ namespace hpx::lcos {
                 // object
                 if (ec)
                 {
-                    if (hpx::tolerate_node_faults() && is_asio_error(ec))
-                    {
-                        return;
-                    }
-
-                    if (parcelset::locality_was_disconnected(
+                    if ((hpx::tolerate_node_faults() && is_asio_error(ec)) ||
+                        parcelset::locality_was_disconnected(
                             p.destination_locality_id()))
                     {
-                        return;
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(
+                            hpx::error_code(
+                                hpx::error::locality_was_disconnected,
+                                hpx::throwmode::lightweight),
+                            "packaged_action::parcel_write_handler",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
                     }
-
-                    std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
-                        "packaged_action::parcel_write_handler_cb",
-                        parcelset::dump_parcel(p));
-                    shared_state->set_exception(exception);
+                    else
+                    {
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
+                            "packaged_action::parcel_write_handler_cb",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
+                    }
                 }
 
                 // invoke user supplied callback

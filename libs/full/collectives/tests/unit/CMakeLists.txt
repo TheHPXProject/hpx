@@ -18,6 +18,7 @@ set(tests
     broadcast_post
     broadcast_sync
     channel_communicator
+    channel_communicator_cache
     collectives_throwing_op
     cross_collective_hierarchical
     cross_collective_hierarchical_mixed

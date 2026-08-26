@@ -189,7 +189,22 @@ namespace hpx::collectives {
     // Channel communicators shared by name
     namespace {
 
-        std::map<std::string, hpx::shared_future<channel_communicator>>
+        // A channel communicator registers under name_from_basename(basename,
+        // this_site), so a basename names a group of sites rather than one
+        // communicator, and the site has to be part of the key. Sites that
+        // share a process share the basename: were the site left out, the
+        // first of them would hand its own endpoint to all the others, which
+        // would then send and receive over a site index that is not theirs
+        // while their own names stay unregistered for every peer that looks
+        // them up.
+        //
+        // The number of sites the entry was created for is kept next to the
+        // future. The size of a group is fixed by its first call: a later call
+        // that names the same (basename, site) with a different participant
+        // count must not reuse an entry built for another one, or the exchange
+        // would silently run with the wrong number of participants.
+        std::map<std::pair<std::string, std::size_t>,
+            std::pair<std::size_t, hpx::shared_future<channel_communicator>>>
             cached_channel_communicators;
         hpx::mutex cached_channel_communicators_mtx;
     }    // namespace
@@ -197,26 +212,68 @@ namespace hpx::collectives {
     namespace detail {
 
         hpx::shared_future<collectives::channel_communicator>
-        get_cached_channel_communicator(std::string name,
-            num_sites_arg const num_sites, this_site_arg const this_site)
+        get_cached_channel_communicator(
+            std::string name, num_sites_arg num_sites, this_site_arg this_site)
         {
+            // The site identifies the entry, so it has to be the one the
+            // communicator registers under rather than the placeholder
+            // create_channel_communicator would have resolved later. The
+            // number of sites has to be resolved up front for the same
+            // reason: it is compared against the entry on a cache hit.
+            if (this_site.is_default())
+            {
+                this_site = this_site_arg(agas::get_locality_id());
+            }
+            if (num_sites.is_default())
+            {
+                num_sites =
+                    num_sites_arg(agas::get_num_localities(hpx::launch::sync));
+            }
+
+            auto key = std::make_pair(
+                HPX_MOVE(name), static_cast<std::size_t>(this_site));
+
+            // Two first calls that race for the same (basename, site) with
+            // different numbers of sites can both miss the cache and
+            // overwrite the same entry before either has registered a name.
+            // One name may therefore never be used for groups of different
+            // sizes, not even concurrently.
+
             std::unique_lock<hpx::mutex> l(cached_channel_communicators_mtx);
             [[maybe_unused]] util::ignore_while_checking il(&l);
 
-            if (auto const it = cached_channel_communicators.find(name);
+            if (auto const it = cached_channel_communicators.find(key);
                 it != cached_channel_communicators.end())
             {
+                // Only the first call creates the communicator; every later
+                // call has to agree on the number of participants, or it
+                // would receive a communicator built for a group of another
+                // size while its own endpoint stays unregistered.
+                if (it->second.first != static_cast<std::size_t>(num_sites))
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::detail::"
+                        "get_cached_channel_communicator",
+                        "the given base name for the communicator operation "
+                        "was already used with a different number of sites: "
+                        "{} (cached {}, requested {})",
+                        it->first.first, it->second.first,
+                        static_cast<std::size_t>(num_sites));
+                }
+
                 // Hand an exceptional creation back unchanged. Retrying after
                 // another site may already have registered its endpoint could
                 // split the sites across different communicators; recovery
                 // therefore needs a new basename.
-                return it->second;
+                return it->second.second;
             }
 
             auto const it =
                 cached_channel_communicators
-                    .emplace(HPX_MOVE(name),
-                        hpx::shared_future<collectives::channel_communicator>())
+                    .emplace(HPX_MOVE(key),
+                        std::make_pair(static_cast<std::size_t>(num_sites),
+                            hpx::shared_future<
+                                collectives::channel_communicator>()))
                     .first;
 
             try
@@ -224,9 +281,9 @@ namespace hpx::collectives {
                 // The key backs the name, not the argument: the asynchronous
                 // factory reads the string back in a continuation of its own,
                 // by which time an argument owned by the caller may be gone.
-                it->second = collectives::create_channel_communicator(
-                    it->first.c_str(), num_sites, this_site)
-                                 .share();
+                it->second.second = collectives::create_channel_communicator(
+                    it->first.first.c_str(), num_sites, this_site)
+                                        .share();
             }
             catch (...)
             {
@@ -234,7 +291,16 @@ namespace hpx::collectives {
                 throw;
             }
 
-            return it->second;
+            return it->second.second;
+        }
+
+        /// Returns the number of entries the cache currently holds.
+        std::size_t get_cached_channel_communicator_count()
+        {
+            std::unique_lock<hpx::mutex> l(cached_channel_communicators_mtx);
+            [[maybe_unused]] util::ignore_while_checking il(&l);
+
+            return cached_channel_communicators.size();
         }
 
         void reset_cached_channel_communicators()

@@ -79,6 +79,7 @@ namespace hpx {
         /* 58 */ "target_fenced",
         /* 59 */ "future_wait_timed_out",
         /* 60 */ "locality_was_disconnected",
+        /* 61 */ "future_uncompleted",
 
         /*    */ ""};
     /// \endcond

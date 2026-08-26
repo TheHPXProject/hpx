@@ -155,8 +155,10 @@ namespace hpx {
         locality_was_disconnected = 60,    ///< the requested target locality
                                            ///< was disconnected
 
+        future_uncompleted = 61,    ///< future was resumed while being empty
+
         /// \cond NOINTERNAL
-        last_error = 61,
+        last_error = 62,
 
         system_error_flag = 0x4000L,
 

@@ -19,6 +19,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -252,6 +253,90 @@ void test_default_generation_still_works(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+/// One site's half of the exchange below. The site may be left to the default,
+/// which resolves to the locality id the task runs on.
+void run_colocated_site(std::string const& basename, std::uint32_t const site,
+    std::uint32_t const num_sites, this_site_arg const this_site)
+{
+    std::vector<std::uint32_t> const result = all_to_all(basename.c_str(),
+        contribution(site, num_sites), num_sites_arg(num_sites), this_site,
+        generation_arg(1), root_site_arg(), pairwise_threshold_arg(0))
+                                                  .get();
+
+    check_result(result, site, num_sites);
+}
+
+/// The sites of one exchange wait on each other, so a site that ends up in a
+/// communicator of its own never returns. Bound the wait, so a regression in
+/// the cache key or in the default site resolution is reported here instead of
+/// running into the CI timeout with nothing to read.
+void wait_for_sites(std::vector<hpx::future<void>> sites)
+{
+    hpx::future<std::vector<hpx::future<void>>> done = hpx::when_all(sites);
+
+    hpx::future_status const status = done.wait_for(std::chrono::seconds(120));
+    HPX_TEST(status == hpx::future_status::ready);
+
+    if (status != hpx::future_status::ready)
+    {
+        return;
+    }
+
+    // Rethrows the first site that failed.
+    for (hpx::future<void>& site : done.get())
+    {
+        site.get();
+    }
+}
+
+/// A collective site need not be an HPX locality. Run four site indices through
+/// HPX threads in one locality so they share one process-local cache. Each site
+/// still needs its own communicator endpoint.
+void test_colocated_sites(
+    std::uint32_t const this_locality, std::uint32_t const num_sites)
+{
+    std::string const basename = "/test/pairwise_dispatch/local_sites/" +
+        std::to_string(this_locality) + "/";
+
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        sites.push_back(hpx::async(run_colocated_site, basename, site,
+            num_sites, this_site_arg(site)));
+    }
+
+    wait_for_sites(HPX_MOVE(sites));
+}
+
+/// The site that matches the locality id leaves this_site to the default
+/// resolution instead of naming itself; the default has to land on the same
+/// communicator the explicit value would have named, or the sites would split
+/// across different groups and wait on each other forever.
+void test_colocated_sites_with_defaults(
+    std::uint32_t const this_locality, std::uint32_t const num_sites)
+{
+    std::string const basename =
+        "/test/pairwise_dispatch/local_sites_defaults/" +
+        std::to_string(this_locality) + "/";
+
+    std::vector<hpx::future<void>> sites;
+    sites.reserve(num_sites);
+
+    for (std::uint32_t site = 0; site != num_sites; ++site)
+    {
+        this_site_arg const this_site =
+            site == this_locality ? this_site_arg() : this_site_arg(site);
+
+        sites.push_back(hpx::async(
+            run_colocated_site, basename, site, num_sites, this_site));
+    }
+
+    wait_for_sites(HPX_MOVE(sites));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Selecting the direct path must not bypass validation performed by the
 // established routed implementation.
 void test_direct_path_preserves_root_validation(
@@ -292,6 +377,8 @@ int hpx_main()
     test_auto_selects_direct_for_large_rows(this_locality, num_localities);
     test_default_generation_still_works(this_locality, num_localities);
     test_direct_path_preserves_root_validation(this_locality, num_localities);
+    test_colocated_sites(this_locality, 4);
+    test_colocated_sites_with_defaults(this_locality, num_localities);
 
     return hpx::finalize();
 }

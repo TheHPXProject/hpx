@@ -319,7 +319,8 @@ namespace hpx::threads::policies {
                             parameters_.min_add_new_count_,
                             parameters_.max_add_new_count_);
                 }
-                else if (work_items_.empty())
+                else if (work_items_count_.data_.load(
+                             std::memory_order_relaxed) == 0)
                 {
                     // add this number of threads
                     add_count = parameters_.min_add_new_count_;

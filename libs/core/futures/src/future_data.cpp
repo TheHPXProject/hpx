@@ -191,10 +191,9 @@ namespace hpx::lcos::detail {
 
         if (s == empty)
         {
-            // the value has already been moved out of this future
-            HPX_THROWS_IF(ec, hpx::error::no_state,
+            HPX_THROWS_IF(ec, hpx::error::future_uncompleted,
                 "future_data_base::get_result",
-                "this future has no valid shared state");
+                "this future was resumed while its state was 'empty'");
             return nullptr;
         }
 
