@@ -254,6 +254,7 @@ namespace hpx::ranges {
 #include <hpx/iterator_support/traits/is_foldable.hpp>
 #include <hpx/iterator_support/traits/is_iterator.hpp>
 #include <hpx/iterator_support/traits/is_range.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/ranges_facilities.hpp>
@@ -290,8 +291,8 @@ namespace hpx::ranges {
         // clang-format on
         static auto invoke_default(InIter first, Sent last, T init, F f)
         {
-            using U = std::decay_t<hpx::util::invoke_result_t<F&, T,
-                hpx::traits::iter_reference_t<InIter>>>;
+            using U = std::decay_t<std::invoke_result_t<F&, T,
+                std::iter_reference_t<InIter>>>;
             using result_type = fold_left_with_iter_result<InIter, U>;
 
             if (first == last)
@@ -349,9 +350,9 @@ namespace hpx::ranges {
         // clang-format on
         static auto invoke_default(InIter first, Sent last, F f)
         {
-            using U = std::decay_t<hpx::util::invoke_result_t<F&,
-                hpx::traits::iter_value_t<InIter>,
-                hpx::traits::iter_reference_t<InIter>>>;
+            using U = std::decay_t<std::invoke_result_t<F&,
+                std::iter_value_t<InIter>,
+                std::iter_reference_t<InIter>>>;
             using result_type =
                 fold_left_first_with_iter_result<InIter, hpx::optional<U>>;
 
