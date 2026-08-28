@@ -25,7 +25,7 @@ For the detailed semantics of individual lifecycle events, ``check_admission``,
 and ``dispatch_outcome`` values, see :ref:`modules_supervision`; this page does
 not repeat that reference material. For the API reference of the
 dispatch-specific types and functions this component introduces -
-``registry``, ``sentinel``, ``discovery::discover_and_join``, and
+``registry``, ``discovery::discover_and_join``, and
 ``dispatch_work`` - see :ref:`modules_supervision_dispatch`.
 
 Initialization and shutdown ordering
@@ -49,12 +49,11 @@ Supervision dispatch is brought up with a single call to
 
 ``init()`` performs, in order:
 
-#. Creation of a local ``sentinel`` and ``registry`` component for this
-   locality.
-#. Publication of ``event::started`` on the sentinel - *before* either
+#. Creation of a local ``registry`` component for this locality.
+#. Publication of ``event::started`` on the locality - *before* the
    component's symbol name is registered with AGAS, so that no peer can
-   discover and join a not-yet-started sentinel.
-#. Registration of both symbol names.
+   discover and join a not-yet-started locality.
+#. Registration of the symbol name.
 #. A single :hpx:func:`hpx::supervision::discover_and_join` pass that joins
    every peer registry reachable within ``discovery_timeout``. Its result is
    a list of ``joined_discovery_result`` (peer paired with the shadow id its
@@ -63,10 +62,10 @@ Supervision dispatch is brought up with a single call to
 
 ``init()`` is idempotent: calling it while already active is a no-op, and
 concurrent callers attach to a single in-flight initialization rather than
-racing to create duplicate sentinels/registries. ``finalize()`` mirrors this
+racing to create duplicate registries. ``finalize()`` mirrors this
 ordering in reverse - it publishes ``event::completed`` for the local
-sentinel, unregisters both symbol names, and releases the components - and is
-always safe to call speculatively (e.g. during shutdown) even if ``init()``
+locality, unregisters the symbol name, and releases the ``registry`` component -
+and is always safe to call speculatively (e.g. during shutdown) even if ``init()``
 was never called, since it is a no-op unless the runtime is currently active.
 
 Applications should treat ``init()``/``finalize()`` as a matched pair around
@@ -103,7 +102,7 @@ resolvable by AGAS to some locality - this is a separate requirement from
 having recorded supervision state, and it is not something supervision
 dispatch itself grants. Any id obtained the ordinary way (creating a
 component, ``hpx::find_here()``, a symbolic-name lookup, a peer's joined
-sentinel/registry id) already satisfies this. If a target id can no longer be
+registry id) already satisfies this. If a target id can no longer be
 resolved to a locality - for instance, because the underlying component was
 already destroyed and unregistered - ``dispatch_work()`` fails when
 ``hpx::colocated()`` cannot resolve it, *before* either admission check
@@ -112,7 +111,7 @@ is not something publishing ``event::started`` can paper over.
 
 In practice, two kinds of ids show up as targets in this component:
 
-- The sentinel/registry ids of peer localities, once joined via
+- The registry id of peer localities, once joined via
   :hpx:func:`hpx::supervision::registry::join` - these are the targets whose
   shadow state feeds ``registry::snapshot_peers()`` and local admission
   filtering.
@@ -220,7 +219,7 @@ Tracked once per locality (``dispatch_api.cpp``), driven by ``init()``/
   initialization rather than racing.
 - ``active``: heartbeat and failure-detection background tasks are running.
 - ``finalizing``: background tasks are being stopped, ``event::completed`` is
-  published, and both symbol names are being unregistered before component
+  published, and the symbol name is being unregistered before component
   release.
 
 ``init()``/``finalize()`` are idempotent no-ops when already in the target
@@ -843,5 +842,5 @@ above - is available in ``components/supervision_dispatch/examples/plain_worker.
 See :ref:`modules_supervision` for the full semantics of ``check_admission``,
 ``dispatch_outcome``, and the individual lifecycle events referenced above,
 and :ref:`modules_supervision_dispatch` for the API reference of this
-component's own types and functions (``registry``, ``sentinel``,
-``discovery``, and ``dispatch_work``).
+component's own types and functions (``registry``, ``discovery``, and
+``dispatch_work``).
