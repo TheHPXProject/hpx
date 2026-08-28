@@ -29,6 +29,10 @@ namespace hpx::tracy {
 
         HPX_CORE_EXPORT region_data start_region(
             char const*, std::size_t = 0, std::size_t = 0) noexcept;
+        HPX_CORE_EXPORT region_data start_named_region(
+            char const* name, std::uint32_t color) noexcept;
+        HPX_CORE_EXPORT void add_worker_thread_text(
+            region_data const& r, std::size_t num_thread) noexcept;
         HPX_CORE_EXPORT char const* rename_region(char const*) noexcept;
         HPX_CORE_EXPORT std::uint64_t push_zone(char const*) noexcept;
         HPX_CORE_EXPORT void pop_zone(std::uint64_t) noexcept;
@@ -120,6 +124,28 @@ namespace hpx::tracy {
         }
 
         region_data suspended_region;
+    };
+
+    HPX_CXX_CORE_EXPORT struct background_work_region
+    {
+        explicit background_work_region(std::size_t num_thread) noexcept
+          : surrounding_region(
+                detail::start_named_region("hpx::background_work", 0x008080u))
+        {
+            detail::add_worker_thread_text(surrounding_region, num_thread);
+        }
+
+        ~background_work_region() noexcept
+        {
+            detail::stop_region(surrounding_region);
+        }
+
+        background_work_region(background_work_region const&) = delete;
+        background_work_region& operator=(
+            background_work_region const&) = delete;
+
+    private:
+        region_data surrounding_region;
     };
 
     HPX_CXX_CORE_EXPORT struct mark_event

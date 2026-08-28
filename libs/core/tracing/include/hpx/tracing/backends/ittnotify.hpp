@@ -100,6 +100,12 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] background_work_region
+    {
+        constexpr explicit background_work_region(std::size_t = 0) noexcept {}
+    };
+
+    ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         explicit lock_context(
@@ -325,6 +331,9 @@ namespace hpx::tracing {
         char const* = nullptr) noexcept
     {
     }
+
+    HPX_CXX_CORE_EXPORT constexpr void os_thread_sleep(std::size_t) noexcept {}
+
     HPX_CXX_CORE_EXPORT constexpr void tracing_init(
         char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
     {

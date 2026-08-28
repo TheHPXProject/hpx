@@ -86,6 +86,17 @@ namespace hpx::tracing {
     fiber_suspend_region::~fiber_suspend_region() = default;
 
     ////////////////////////////////////////////////////////////////////////////
+    // background_work_region
+
+    background_work_region::background_work_region(
+        std::size_t const num_thread) noexcept
+      : impl(num_thread)
+    {
+    }
+
+    background_work_region::~background_work_region() = default;
+
+    ////////////////////////////////////////////////////////////////////////////
     // lock_context
 
     lock_context::lock_context(
@@ -411,6 +422,15 @@ namespace hpx::tracing {
     void frame_mark(char const* name) noexcept
     {
         hpx::tracy::frame_mark(name);
+    }
+
+    void os_thread_sleep(std::size_t num_thread) noexcept
+    {
+        char buffer[64];
+        std::snprintf(buffer, sizeof(buffer),
+            "OS Worker #%zu entering sleep on CV", num_thread);
+        // Blue-grey: cold/inactive state
+        hpx::tracy::message(buffer, std::strlen(buffer), 0x546E7Au);
     }
 
     ////////////////////////////////////////////////////////////////////////////

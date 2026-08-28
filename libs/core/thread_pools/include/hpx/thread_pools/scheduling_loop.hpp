@@ -402,6 +402,8 @@ namespace hpx::threads::detail {
                         idle_loop_count, enable_stealing_staged, added,
                         &next_thrd))
                 {
+                    hpx::tracing::os_thread_sleep(num_thread);
+
                     // Clean up terminated threads before trying to exit
                     bool can_exit = !running &&
                         scheduler.SchedulingPolicy::cleanup_terminated(
@@ -485,7 +487,8 @@ namespace hpx::threads::detail {
 
                 if (do_background_work)
                 {
-                    // do background work in parcel layer and in agas
+                    [[maybe_unused]] hpx::tracing::background_work_region
+                        bg_zone(num_thread);
                     call_and_create_background_thread(background_thread,
                         next_thrd, scheduler, num_thread,
                         bg_work_exec_time_init, context_storage, params,
@@ -514,7 +517,8 @@ namespace hpx::threads::detail {
 
                 if (do_background_work)
                 {
-                    // do background work in parcel layer and in agas
+                    [[maybe_unused]] hpx::tracing::background_work_region
+                        bg_zone(num_thread);
                     call_and_create_background_thread(background_thread,
                         next_thrd, scheduler, num_thread,
                         bg_work_exec_time_init, context_storage, params,

@@ -259,12 +259,14 @@ namespace hpx::tracing {
         {
             if (stolen_thrd)
             {
-                auto* thrd_data = get_thread_id_data(stolen_thrd);
-                using thread_data_type =
-                    std::remove_pointer_t<decltype(thrd_data)>;
-                work_stolen(thief_id, victim_id, thrd_data,
-                    thread_data_type::get_safe_description(
-                        thrd_data->get_description(), "thread"));
+                if (auto* thrd_data = get_thread_id_data(stolen_thrd))
+                {
+                    using thread_data_type =
+                        std::remove_pointer_t<decltype(thrd_data)>;
+                    work_stolen(thief_id, victim_id, thrd_data,
+                        thread_data_type::get_safe_description(
+                            thrd_data->get_description(), "thread"));
+                }
             }
         }
 #endif

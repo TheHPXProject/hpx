@@ -17,6 +17,12 @@ fi
 # These tests only make sense if hpx is being installed
 configure_extra_options+=" -DHPX_WITH_TESTS_EXTERNAL_BUILD=OFF"
 
+# Slurm on rostam has MpiDefault=none, so a bare srun (as issued by hpxrun.py)
+# does not provide a PMIx bootstrap and every rank starts as its own
+# single-rank MPI job. Distributed tests then hang in finalization waiting for
+# peers that never show up. Select PMIx explicitly for all srun invocations.
+export SLURM_MPI_TYPE=pmix
+
 ctest_extra_args+=" --verbose "
 
 hostname

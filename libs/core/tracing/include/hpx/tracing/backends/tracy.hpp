@@ -109,6 +109,20 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT background_work_region
+    {
+        explicit background_work_region(std::size_t num_thread) noexcept;
+        ~background_work_region();
+
+        background_work_region(background_work_region const&) = delete;
+        background_work_region& operator=(
+            background_work_region const&) = delete;
+
+    private:
+        hpx::tracy::background_work_region impl;
+    };
+
+    ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] lock_context
     {
         explicit lock_context(
@@ -274,6 +288,13 @@ namespace hpx::tracing {
     /// \param name  Optional name for the frame/stage.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void frame_mark(
         char const* name = nullptr) noexcept;
+
+    /// \brief Point message emitted just before an OS worker thread suspends on
+    ///        its condition variable.
+    ///
+    /// \param num_thread  Index of the worker thread entering sleep.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void os_thread_sleep(
+        std::size_t num_thread) noexcept;
 
     HPX_CXX_CORE_EXPORT constexpr void tracing_init(
         char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept

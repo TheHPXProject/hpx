@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 #include <tracy/TracyC.h>
@@ -117,6 +118,26 @@ namespace hpx::tracy {
             region.data = data.value;
             region.color = static_cast<std::uint32_t>(thread_num);
             region.phase = static_cast<std::uint32_t>(phase);
+
+            return prev_region;
+        }
+
+        HPX_CORE_EXPORT region_data start_named_region(
+            char const* name, std::uint32_t const color) noexcept
+        {
+            TracyCZoneC(ctx, color, 1);
+            TracyCZoneName(ctx, name, std::strlen(name));
+
+            tracy_context data;
+            data.context = ctx;
+
+            region_data& region = current_region();
+            region_data const prev_region = region;
+
+            region.name = name;
+            region.data = data.value;
+            region.color = color;
+            region.phase = 0;
 
             return prev_region;
         }
@@ -248,6 +269,72 @@ namespace hpx::tracy {
             data.value = fz.ctx_value;
             // TracyCZoneText sends the text via the zone validation protocol.
             TracyCZoneText(data.context, txt, size);
+        }
+
+        namespace {
+
+            // Pre-formatted "Worker #N" strings for common thread indices.
+            // Eliminates snprintf overhead in the hot background-polling path.
+            // Capacity covers up to 256 threads for high-core-count HPC systems.
+            // Thread counts exceeding capacity safely fall back to per-call snprintf.
+            struct worker_label_cache
+            {
+                static constexpr std::size_t capacity = 256;
+
+                worker_label_cache() noexcept
+                {
+                    for (std::size_t i = 0; i < capacity; ++i)
+                    {
+                        int const n = std::snprintf(
+                            storage[i], sizeof(storage[i]), "Worker #%zu", i);
+                        lengths[i] = n > 0 ? static_cast<std::size_t>(n) :
+                                             std::size_t{0};
+                    }
+                }
+
+                char storage[capacity][24];
+                std::size_t lengths[capacity];
+            };
+
+            worker_label_cache const& get_worker_labels() noexcept
+            {
+                static worker_label_cache const cache;
+                return cache;
+            }
+
+        }    // namespace
+
+        HPX_CORE_EXPORT void add_worker_thread_text(
+            region_data const& r, std::size_t const num_thread) noexcept
+        {
+            if (r.data == 0)
+                return;
+
+            auto const& cache = get_worker_labels();
+            char const* text;
+            std::size_t len;
+
+            char tmp[32];
+            if (num_thread < worker_label_cache::capacity)
+            {
+                text = cache.storage[num_thread];
+                len = cache.lengths[num_thread];
+            }
+            else
+            {
+                // Fallback for thread counts > 256 (e.g. massive multi-socket systems)
+                int const n =
+                    std::snprintf(tmp, sizeof(tmp), "Worker #%zu", num_thread);
+                text = tmp;
+                len = n > 0 ? static_cast<std::size_t>(n) : std::size_t{0};
+            }
+
+            if (len > 0)
+            {
+                tracy_context data;
+                data.value = r.data;
+                TracyCZoneText(data.context, text, len);
+            }
         }
 
         HPX_CORE_EXPORT char const* rename_region(
