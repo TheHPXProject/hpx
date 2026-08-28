@@ -14,7 +14,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-
 #include <stdexcept>
 
 void test_sync_exception()

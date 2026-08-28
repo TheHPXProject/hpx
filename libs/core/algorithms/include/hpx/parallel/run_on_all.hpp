@@ -161,10 +161,10 @@ namespace hpx::experimental {
                     {
                         HPX_INVOKE(cleanup_error);
                     }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
                     catch (...)
                     {
-                        // Suppress secondary exceptions during cleanup to
-                        // strictly preserve the primary bulk execution error
+                        // silently swallow secondary exceptions during cleanup
                     }
                     return ex::just_error(HPX_MOVE(ep));
                 }) |
