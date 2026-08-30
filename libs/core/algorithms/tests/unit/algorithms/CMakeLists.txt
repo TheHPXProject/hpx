@@ -202,6 +202,8 @@ set(sender_tests
     none_of_sender
     partial_sort_sender
     reduce_sender
+    remove_copy_if_sender
+    remove_copy_sender
     remove_sender
     remove_if_sender
     replace_sender
