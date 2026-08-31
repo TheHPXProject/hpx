@@ -23,6 +23,7 @@ set(tests
     partitioned_vector_iter
     partitioned_vector_max_element1
     partitioned_vector_max_element2
+    partitioned_vector_merge
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
