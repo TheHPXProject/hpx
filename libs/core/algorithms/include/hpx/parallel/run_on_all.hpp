@@ -20,6 +20,7 @@
 #include <hpx/parallel/algorithms/for_loop_reduction.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <memory>
 #include <tuple>
 #include <type_traits>

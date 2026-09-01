@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <utility>
 
 void test_sync_exception()
 {
