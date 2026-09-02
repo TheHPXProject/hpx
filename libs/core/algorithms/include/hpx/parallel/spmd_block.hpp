@@ -208,13 +208,57 @@ namespace hpx::lcos::local {
             hpx::util::counting_shape(num_images), HPX_FORWARD(Args, args)...);
     }
 
+    // P2300 Scheduler version
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
+        typename... Args>
+    // clang-format off
+        requires (
+            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+        )
+    // clang-format on
+    decltype(auto) define_spmd_block(
+        Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
+    {
+        using barrier_type = hpx::barrier<>;
+        using table_type =
+            std::map<std::set<std::size_t>, std::shared_ptr<barrier_type>>;
+        using mutex_type = hpx::mutex;
+
+        std::shared_ptr<barrier_type> barrier =
+            std::make_shared<barrier_type>(num_images);
+        std::shared_ptr<table_type> barriers = std::make_shared<table_type>();
+        std::shared_ptr<mutex_type> mtx = std::make_shared<mutex_type>();
+
+        namespace ex = hpx::execution::experimental;
+
+        std::vector<ex::any_sender<>> senders;
+        senders.reserve(num_images);
+
+        for (std::size_t image_id = 0; image_id < num_images; ++image_id)
+        {
+            senders.push_back(ex::just(HPX_FORWARD(Args, args)...) |
+                ex::continues_on(sched) |
+                ex::then([barrier, barriers, mtx, num_images, image_id,
+                             f = HPX_FORWARD(F, f)](
+                             auto&&... captured_args) mutable {
+                    spmd_block block(
+                        num_images, image_id, *barrier, *barriers, *mtx);
+                    HPX_INVOKE(f, HPX_MOVE(block),
+                        HPX_FORWARD(decltype(captured_args), captured_args)...);
+                }));
+        }
+
+        return ex::when_all_vector(HPX_MOVE(senders));
+    }
+
     // Synchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
         typename... Args,
-        typename =
-            std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy>>>
-    void define_spmd_block(
-        ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
+        typename = std::enable_if_t <
+                hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::is_async_execution_policy_v<ExPolicy> >>
+                void define_spmd_block(ExPolicy&& policy,
+                    std::size_t num_images, F&& f, Args&&... args)
     {
         static_assert(hpx::is_execution_policy_v<ExPolicy>,
             "hpx::is_execution_policy_v<ExPolicy>");
@@ -282,13 +326,30 @@ namespace hpx::parallel {
             HPX_FORWARD(Args, args)...);
     }
 
+    // P2300 Scheduler version
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
+        typename... Args>
+    // clang-format off
+        requires (
+            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+        )
+    // clang-format on
+    decltype(auto) define_spmd_block(
+        Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
+    {
+        return hpx::lcos::local::define_spmd_block(
+            HPX_FORWARD(Scheduler, sched), num_images, HPX_FORWARD(F, f),
+            HPX_FORWARD(Args, args)...);
+    }
+
     // Synchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
         typename... Args,
-        typename =
-            std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy>>>
-    void define_spmd_block(
-        ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
+        typename = std::enable_if_t <
+                hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::is_async_execution_policy_v<ExPolicy> >>
+                void define_spmd_block(ExPolicy&& policy,
+                    std::size_t num_images, F&& f, Args&&... args)
     {
         hpx::lcos::local::define_spmd_block(HPX_FORWARD(ExPolicy, policy),
             num_images, HPX_FORWARD(F, f), HPX_FORWARD(Args, args)...);

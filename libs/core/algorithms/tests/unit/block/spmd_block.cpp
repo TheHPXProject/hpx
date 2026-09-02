@@ -7,6 +7,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <array>
@@ -87,6 +88,31 @@ void bulk_test_function(
     }
 }
 
+void test_spmd_block_scheduler()
+{
+    auto sched = hpx::execution::experimental::thread_pool_scheduler{};
+
+    // Use a simple atomic counter to verify all images execute.
+    // We intentionally avoid sync_all()/sync_images() here because
+    // the thread_pool_scheduler does not create lightweight HPX
+    // threads that can yield at barriers, so using barriers with
+    // more images than worker threads would deadlock.
+    std::atomic<std::size_t> counter{0};
+
+    auto simple_test = [](hpx::parallel::spmd_block block,
+                           std::atomic<std::size_t>* ctr) {
+        HPX_TEST_EQ(block.get_num_images(), num_images);
+        HPX_TEST(block.this_image() < num_images);
+        ++(*ctr);
+    };
+
+    auto sender = hpx::parallel::define_spmd_block(
+        sched, num_images, simple_test, &counter);
+    hpx::this_thread::experimental::sync_wait(std::move(sender));
+
+    HPX_TEST_EQ(counter.load(), num_images);
+}
+
 int hpx_main()
 {
     using hpx::execution::par;
@@ -112,6 +138,8 @@ int hpx_main()
     hpx::wait_all(std::move(join));
 
     hpx::parallel::define_spmd_block(num_images, bulk_test_function, c3.data());
+
+    test_spmd_block_scheduler();
 
     return hpx::local::finalize();
 }
