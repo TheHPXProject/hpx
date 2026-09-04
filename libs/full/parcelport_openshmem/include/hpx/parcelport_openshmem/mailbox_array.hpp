@@ -1,4 +1,4 @@
-//  Copyright (c) 2025 Hartmut Kaiser
+//  Copyright (c) 2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -22,8 +22,7 @@
 
 namespace hpx::parcelset::policies::openshmem {
 
-    // TX/RX page-arena + per-pair 64-bit credit-word protocol, ported from
-    // the VALIDATED tools/shmem_diag/shmem_mailbox_credits_with_pages.cpp.
+    // TX/RX page-arena + per-pair 64-bit credit-word protocol
     //
     // ONE zeroed symmetric allocation (shmem_calloc) holds everything:
     //     tx       : npes * SLOTS * mtu   (my outbound staging/scratch pages)
@@ -201,11 +200,11 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // Return the symmetric scratch page that a sender uses to stage the
-        // chunk for the CURRENT credit slot of (dst_pe).  Each ring slot has
+        // chunk for the CURRENT credit slot of (dst_pe). Each ring slot has
         // its own dedicated staging page, mirroring the validated
         // shmem_mailbox_credits_with_pages harness (per-slot TX pages).
         //
-        // shmem_putmem is asynchronous, so a SINGLE shared staging buffer
+        // shmem_putmem is asynchronous, so a single shared staging buffer
         // would be overwritten by the next stage_chunk() while the previous
         // putmem is still being read by the transport, sending a blend of
         // two chunks ("memory aliasing" of the staging buffer) -> corrupted
@@ -248,7 +247,7 @@ namespace hpx::parcelset::policies::openshmem {
         // Non-blocking scan: return the index of the first PE that has at
         // least one page we have not yet consumed, or -1 if none.
         //
-        // Uses shmem_uint32_atomic_fetch, a REMOTE atomic read of src's
+        // Uses shmem_uint32_atomic_fetch, a remote atomic read of src's
         // produced counter, which (a) returns src's latest published value
         // and (b) drives delivery of src's inbound stores into our local
         // memory — the mechanism that makes a plain later local load see the
@@ -265,10 +264,10 @@ namespace hpx::parcelset::policies::openshmem {
                 std::size_t const w = src * num_pes_ + my_pe_;
 
                 // Pull delivery of src's inbound stores (putmem + produced
-                // atomic_set) into OUR local symmetric memory, then read the
-                // published value LOCALLY — the validated harness idiom.  A
-                // remote shmem_uint32_atomic_fetch return value would read
-                // src's own copy of the slot (which is 0), not our copy.
+                // atomic_set) into the local symmetric memory, then read the
+                // published value locally.  A remote shmem_uint32_atomic_fetch
+                // return value would read src's own copy of the slot (which
+                // is 0), not our copy.
                 progress_to(src);
                 std::uint32_t const produced = produced_beg_[w];
                 std::uint32_t const consumed = consumed_locals_[src];
@@ -280,7 +279,7 @@ namespace hpx::parcelset::policies::openshmem {
             return -1;
         }
 
-        // progress_to(peer): a remote atomic_fetch to the peer PUSHES the
+        // progress_to(peer): a remote atomic_fetch to the peer "pushes" the
         // peer's inbound stores into our local symmetric memory (the
         // validated delivery rule).  Called inside every blocking wait.
         void progress_to(std::size_t const peer) const noexcept
@@ -354,7 +353,7 @@ namespace hpx::parcelset::policies::openshmem {
             produced_locals_[dst_pe] = produced;    // update our mirror
             shmem_fence();
 
-            // DELIVERY PUSH: issue a remote atomic_fetch to the peer right
+            // delivery (push): issue a remote atomic_fetch to the peer right
             // after publishing produced, so our inbound stores (the
             // atomic_set we just posted onto dst) are forced into dst's local
             // view — the same ping-pong the validated harness relies on when
@@ -385,7 +384,7 @@ namespace hpx::parcelset::policies::openshmem {
             }
 
             std::size_t const slot = consumed % slots_per_dst;
-            // Read from src's OWN per-src ring in our shared rx pool
+            // Read from src's per-src ring in our shared rx pool
             // ((src_pe * slots + slot) * mtu_).  The sender keys its landing
             // ring by its own pe (== our src_pe), so each sender has a
             // disjoint ring and a chunk from one source is never
