@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/timing.hpp>
 
 #include <cstdint>
 #include <string>
@@ -47,6 +48,16 @@ namespace hpx::agas {
     HPX_CXX_EXPORT using iterate_types_function_type =
         hpx::function<void(std::string const&, components::component_type),
             true>;
+
+    /// \brief Get the currently configured timeout for AGAS RPC operations.
+    HPX_CXX_EXPORT HPX_EXPORT hpx::chrono::steady_duration
+    get_rpc_timeout() noexcept;
+
+    /// \brief Set the timeout for AGAS RPC operations.
+    ///
+    /// \param timeout The new duration for AGAS RPC timeouts.
+    HPX_CXX_EXPORT HPX_EXPORT void set_rpc_timeout(
+        hpx::chrono::steady_duration const& timeout) noexcept;
 
     HPX_CXX_EXPORT struct HPX_EXPORT component_namespace;
     HPX_CXX_EXPORT struct HPX_EXPORT locality_namespace;

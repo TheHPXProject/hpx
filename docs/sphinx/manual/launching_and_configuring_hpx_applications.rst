@@ -746,6 +746,7 @@ The ``hpx.agas`` configuration section
    use_caching = ${HPX_AGAS_USE_CACHING:1}
    use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}
    local_cache_size = ${HPX_AGAS_LOCAL_CACHE_SIZE:<hpx_agas_local_cache_size>}
+   rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:5000}
 
 .. REVIEW regarding hpx.agas.address and hpx.agas.port: Technically, I believe
    --hpx:agas sets this parameter, this may need to be reworded.
@@ -800,6 +801,12 @@ The ``hpx.agas`` configuration section
        maximum number of ranges stored in the cache, not the number of entries
        spanned by the cache. The default depends on the compile time
        preprocessor constant ``HPX_AGAS_LOCAL_CACHE_SIZE`` (``4096``).
+   * * ``hpx.agas.rpc_timeout``
+     * This property specifies the timeout (in milliseconds) for :term:`AGAS`
+       RPC requests. Defaults to ``5000`` ms. This property can be configured
+       at startup (e.g., ``--hpx:ini=hpx.agas.rpc_timeout=...``), set through
+       the ``HPX_AGAS_RPC_TIMEOUT`` environment variable, or updated at
+       runtime via the atomic setter ``hpx::agas::set_rpc_timeout()``.
 
 The ``hpx.commandline`` configuration section
 .............................................
