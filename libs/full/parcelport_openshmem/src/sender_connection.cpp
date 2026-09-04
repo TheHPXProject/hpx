@@ -89,7 +89,6 @@ namespace hpx::parcelset::policies::openshmem {
 
     // Blocking send: stage each chunk and call mailboxes_.send() which
     // transfers the data and waits for the receiver's ack before returning.
-    // This is the shmem_memcpy xmt() protocol.
     bool sender_connection::poll_send() noexcept
     {
         if (dst_ == static_cast<int>(mailboxes_->my_pe()))

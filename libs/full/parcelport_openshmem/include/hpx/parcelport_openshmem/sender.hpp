@@ -76,8 +76,8 @@ namespace hpx::parcelset::policies::openshmem {
 
         // Drive one connection to completion.  Called only from the single
         // progress thread.  poll_send() blocks until all chunks are sent
-        // and acked (the shmem_memcpy protocol), then delivers the
-        // completion callback.  Returns true if any progress was made.
+        // and acked, then delivers the completion callback. Returns true
+        // if any progress was made.
         bool background_work() noexcept
         {
             connection_ptr connection;

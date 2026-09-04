@@ -248,13 +248,12 @@ namespace hpx::parcelset {
                         }
                         else
                         {
-                            // Deliberate hot spin (no OS yield): mirrors the
-                            // validated shmem_mailbox_credits_with_pages
-                            // harness, where the receiver continuously pumps
-                            // the transport so a remote atomic_set produced is
-                            // reliably pulled into this PE's view. Yielding
-                            // starves OSHMEM/UCX progress and the pending
-                            // cross-PE store is never observed.
+                            // Deliberate hot spin (no OS yield).
+                            // The receiver continuously pumps the transport
+                            // so a remote atomic_set produced is reliably
+                            // pulled into this PE's view. Yielding starves
+                            // OpenSHMEM progress and the pending cross-PE
+                            // store is never observed.
                             ++k;
                         }
                     }

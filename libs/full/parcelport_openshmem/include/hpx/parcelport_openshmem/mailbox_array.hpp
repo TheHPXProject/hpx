@@ -35,16 +35,16 @@ namespace hpx::parcelset::policies::openshmem {
     //      credit words are tiny 4-byte atomics (no npes^2 page grid).
     //
     // Slot-writer ownership (avoids torn writes with only atomic_set):
-    //     produced[i*npes+j] written by SENDER i onto j;  receiver j reads LOCAL
-    //     consumed[i*npes+j] written by RECEIVER j onto i; sender i reads LOCAL
+    //     produced[i*npes+j] written by sender (tx) i onto j;  receiver j reads local
+    //     consumed[i*npes+j] written by receiver (rx) j onto i; sender i reads local
     //   -> each 32-bit half has a single writer; no RMW needed.
     //
-    // Validated (2-PE) transport rule from tools/shmem_diag:
-    //   - each side reads its OWN counter LOCALLY (plain load)
-    //   - each side WRITES the peer's counter via atomic_set(..., peer)
-    //   - both sides atomic_fetch the peer purely to FORCE DELIVERY of the
-    //     peer's inbound stores into local symmetric memory
-    //   - data carried by BLOCKING putmem.  NO atomic_*_nbi / fetch_add.
+    // Validated (2-PE) transport rule:
+    //   - each side reads its associated counter locally (plain load)
+    //   - each side remotely writes the peer's counter via atomic_set(..., peer)
+    //   - both sides atomic_fetch the peer purely to force delivery of the
+    //     peer's inbound stores into local symmetric memory (send queue)
+    //   - data carried by blocking putmem.  NO atomic_*_nbi / fetch_add.
     //
     // Receiver j's landing page for a page written by sender i lives in j's
     // shared rx pool at offset (i*SLOTS + (p % SLOTS)) * mtu.  Each sender is
@@ -200,19 +200,8 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // Return the symmetric scratch page that a sender uses to stage the
-        // chunk for the CURRENT credit slot of (dst_pe). Each ring slot has
-        // its own dedicated staging page, mirroring the validated
-        // shmem_mailbox_credits_with_pages harness (per-slot TX pages).
-        //
-        // shmem_putmem is asynchronous, so a single shared staging buffer
-        // would be overwritten by the next stage_chunk() while the previous
-        // putmem is still being read by the transport, sending a blend of
-        // two chunks ("memory aliasing" of the staging buffer) -> corrupted
-        // headers (garbage num_chunks -> segfault / duplicate AGAS
-        // bind_prefix) under the back-to-back send pressure of a 4-PE AGAS
-        // bootstrap.  Keying the staging page by (dst, slot) prevents the
-        // reuse until that slot is handed back by the receiver's credit,
-        // which guarantees the prior putmem has been drained.
+        // chunk for the current credit slot of (dst_pe). Each ring slot has
+        // its own dedicated staging page (per-slot TX pages).
         unsigned char* tx_page(std::size_t dst_pe) const
         {
             std::size_t const slot =
@@ -223,25 +212,6 @@ namespace hpx::parcelset::policies::openshmem {
         unsigned char* get_buffer(std::size_t pe) const
         {
             return tx_page(pe);
-        }
-
-        // Compatibility accessors for the old signal/ack doorbell model.
-        // The credit protocol no longer uses these; they are kept only so
-        // the class shape stays close to the original (and the local-send
-        // path can be adapted without them).
-        int* get_notify(std::size_t pe) const
-        {
-            return reinterpret_cast<int*>(&produced_beg_[pe]);
-        }
-
-        int* get_signal(std::size_t pe) const
-        {
-            return reinterpret_cast<int*>(&produced_beg_[pe]);
-        }
-
-        int* get_ack(std::size_t pe) const
-        {
-            return reinterpret_cast<int*>(&consumed_beg_[pe]);
         }
 
         // Non-blocking scan: return the index of the first PE that has at
@@ -280,8 +250,8 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // progress_to(peer): a remote atomic_fetch to the peer "pushes" the
-        // peer's inbound stores into our local symmetric memory (the
-        // validated delivery rule).  Called inside every blocking wait.
+        // peer's inbound stores into our local symmetric memory (the delivery
+        // rule).  Called inside every blocking wait.
         void progress_to(std::size_t const peer) const noexcept
         {
             std::size_t const w = my_pe_ * num_pes_ + peer;
@@ -302,11 +272,11 @@ namespace hpx::parcelset::policies::openshmem {
 
             // Works for both remote (dst != me) and local (dst == me, a
             // self-putmem into our own rx pool) destinations.
-
             std::size_t const w = my_pe_ * num_pes_ + dst_pe;
 
-            // our mirrors of the two halves
+            // mirrors of the two halves
             std::uint32_t produced = produced_locals_[dst_pe];   // mine
+
             // dst's consumed counter: for a local send it is our own drain
             // mirror (same thread); otherwise the delivered remote copy.
             std::uint32_t consumed =
@@ -314,14 +284,14 @@ namespace hpx::parcelset::policies::openshmem {
                 consumed_locals_[dst_pe] :
                 consumed_beg_[w];
 
-            // CREDIT WAIT: may write while produced - consumed < slots_per_dst
+            // credit wait: may write while produced - consumed < slots_per_dst
             while (static_cast<int>(produced - consumed) >=
                 static_cast<int>(slots_per_dst))
             {
                 if (dst_pe != my_pe_)
                 {
                     progress_to(dst_pe);           // deliver dst's consumed
-                    consumed = consumed_beg_[w];   // read LOCAL (delivered)
+                    consumed = consumed_beg_[w];   // read local (delivered)
                 }
                 else
                 {
@@ -330,12 +300,14 @@ namespace hpx::parcelset::policies::openshmem {
             }
 
             std::size_t const slot = produced % slots_per_dst;
+
             // Staging source: my per-dst staging page (tx mirror of the rx
             // slot), keyed by dst_pe so two different destinations use
             // disjoint staging pages (matches tx_page()).
             std::size_t const stage_slot =
                 (dst_pe * slots_per_dst + slot) * mtu_;
-            // Landing target: dst's shared rx pool, keyed by MY pe (the
+
+            // Landing target: dst's shared rx pool, keyed by self PE (the
             // sender), so each sender has its own disjoint per-src ring and
             // different senders cannot collide on the same guard pages (the
             // cause of duplicate delivery at 4 PEs).
@@ -346,7 +318,7 @@ namespace hpx::parcelset::policies::openshmem {
             shmem_putmem(rx_beg_ + rx_slot, tx_beg_ + stage_slot, count,
                 static_cast<int>(dst_pe));
 
-            // publish produced (low-32; WE own it)
+            // publish produced (low-32; self owns it)
             produced = produced + 1;
             shmem_uint32_atomic_set(
                 &produced_beg_[w], produced, static_cast<int>(dst_pe));
@@ -395,7 +367,7 @@ namespace hpx::parcelset::policies::openshmem {
 
             std::memcpy(out_buf, rx_beg_ + rx_slot, count);
 
-            // return the credit: publish consumed (high-32; WE own it) onto src
+            // return the credit: publish consumed (high-32; self owns it) onto src
             shmem_uint32_atomic_set(
                 &consumed_beg_[w], consumed + 1, static_cast<int>(src_pe));
             consumed_locals_[src_pe] = consumed + 1;    // update our mirror
