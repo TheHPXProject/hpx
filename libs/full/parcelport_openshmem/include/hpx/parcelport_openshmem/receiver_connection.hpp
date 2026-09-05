@@ -55,8 +55,7 @@ namespace hpx::parcelset::policies::openshmem {
         using buffer_type = parcel_buffer<>;
 
     public:
-        receiver_connection(
-            int src, mailbox_array& mailboxes, Parcelport* pp)
+        receiver_connection(int src, mailbox_array& mailboxes, Parcelport* pp)
           : state_(connection_state::initialized)
           , src_(src)
           , mailboxes_(mailboxes)
@@ -101,10 +100,10 @@ namespace hpx::parcelset::policies::openshmem {
     private:
         bool receive_header() noexcept
         {
-            std::size_t const src_pe =
-                static_cast<std::size_t>(src_);
+            std::size_t const src_pe = static_cast<std::size_t>(src_);
 
-            if (!mailboxes_.receive_(src_pe, recv_buf_.data(), mailboxes_.mtu()))
+            if (!mailboxes_.receive_(
+                    src_pe, recv_buf_.data(), mailboxes_.mtu()))
             {
                 return false;
             }
@@ -184,10 +183,10 @@ namespace hpx::parcelset::policies::openshmem {
 
         bool collect_chunks() noexcept
         {
-            std::size_t const src_pe =
-                static_cast<std::size_t>(src_);
+            std::size_t const src_pe = static_cast<std::size_t>(src_);
 
-            if (!mailboxes_.receive_(src_pe, recv_buf_.data(), mailboxes_.mtu()))
+            if (!mailboxes_.receive_(
+                    src_pe, recv_buf_.data(), mailboxes_.mtu()))
             {
                 return false;
             }

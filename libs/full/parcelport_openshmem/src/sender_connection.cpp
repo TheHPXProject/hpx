@@ -49,8 +49,7 @@ namespace hpx::parcelset::policies::openshmem {
         available_payload_ = mailboxes.mtu() - detail::header_size;
 
         num_chunks_ = static_cast<std::uint32_t>(
-            (total_data_size_ + available_payload_ - 1) /
-            available_payload_);
+            (total_data_size_ + available_payload_ - 1) / available_payload_);
         if (num_chunks_ == 0)
         {
             num_chunks_ = 1;
@@ -71,8 +70,8 @@ namespace hpx::parcelset::policies::openshmem {
             (total_data_size_ - offset) :
             available_payload_;
 
-        unsigned char* buffer = mailboxes.get_buffer(
-            static_cast<std::size_t>(dst_));
+        unsigned char* buffer =
+            mailboxes.get_buffer(static_cast<std::size_t>(dst_));
 
         detail::message_header header{buffer_.size_, buffer_.data_size_,
             num_chunks_, chunk_idx_,
@@ -108,8 +107,7 @@ namespace hpx::parcelset::policies::openshmem {
                 (total_data_size_ - offset) :
                 available_payload_;
 
-            mailboxes_->send(
-                static_cast<std::size_t>(dst_),
+            mailboxes_->send(static_cast<std::size_t>(dst_),
                 detail::header_size + chunk_size);
         }
 
@@ -152,8 +150,8 @@ namespace hpx::parcelset::policies::openshmem {
                 (total_data_size - offset) :
                 available_payload;
 
-            unsigned char* buffer = mailboxes.get_buffer(
-                static_cast<std::size_t>(dst_));
+            unsigned char* buffer =
+                mailboxes.get_buffer(static_cast<std::size_t>(dst_));
 
             detail::message_header header{buffer_.size_, buffer_.data_size_,
                 num_chunks, chunk_idx,

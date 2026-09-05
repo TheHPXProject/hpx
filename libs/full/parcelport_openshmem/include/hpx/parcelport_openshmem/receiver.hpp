@@ -109,8 +109,7 @@ namespace hpx::parcelset::policies::openshmem {
                 active_connections_.insert(src);
             }
 
-            return std::make_shared<connection_type>(
-                pe, mailboxes, &pp_);
+            return std::make_shared<connection_type>(pe, mailboxes, &pp_);
         }
 
         Parcelport& pp_;

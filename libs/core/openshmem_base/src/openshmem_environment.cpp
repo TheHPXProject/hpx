@@ -30,8 +30,7 @@ namespace hpx::util {
             cfg, "hpx.parcel.openshmem.enable", false);
     }
 
-    void openshmem_environment::init(
-        int*, char***, runtime_configuration& cfg)
+    void openshmem_environment::init(int*, char***, runtime_configuration& cfg)
     {
         if (enabled_)
             return;
@@ -74,8 +73,7 @@ namespace hpx::util {
             cfg.mode_ = hpx::runtime_mode::worker;
         }
 
-        cfg.add_entry(
-            "hpx.parcel.openshmem.rank", std::to_string(this_rank));
+        cfg.add_entry("hpx.parcel.openshmem.rank", std::to_string(this_rank));
         cfg.add_entry(
             "hpx.parcel.openshmem.processorname", get_processor_name());
     }

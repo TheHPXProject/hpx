@@ -204,8 +204,7 @@ namespace hpx::parcelset::policies::openshmem {
         // its own dedicated staging page (per-slot TX pages).
         unsigned char* tx_page(std::size_t dst_pe) const
         {
-            std::size_t const slot =
-                produced_locals_[dst_pe] % slots_per_dst;
+            std::size_t const slot = produced_locals_[dst_pe] % slots_per_dst;
             return tx_beg_ + (dst_pe * slots_per_dst + slot) * mtu_;
         }
 
@@ -255,18 +254,17 @@ namespace hpx::parcelset::policies::openshmem {
         void progress_to(std::size_t const peer) const noexcept
         {
             std::size_t const w = my_pe_ * num_pes_ + peer;
-            shmem_uint32_atomic_fetch(&produced_beg_[w],
-                static_cast<int>(peer));
-            shmem_uint32_atomic_fetch(&consumed_beg_[w],
-                static_cast<int>(peer));
+            shmem_uint32_atomic_fetch(
+                &produced_beg_[w], static_cast<int>(peer));
+            shmem_uint32_atomic_fetch(
+                &consumed_beg_[w], static_cast<int>(peer));
         }
 
         // Blocking send of one mtu-sized page (chunk) to dst_pe.
         // Copies 'count' bytes from our staging page (get_buffer()) into
         // dst's shared rx slot range, publishes produced, and applies the
         // credit wait (may keep up to slots_per_dst pages in flight).
-        void send(std::size_t const dst_pe,
-            std::size_t const count) noexcept
+        void send(std::size_t const dst_pe, std::size_t const count) noexcept
         {
             HPX_ASSERT(count <= mtu_);
 
@@ -275,12 +273,11 @@ namespace hpx::parcelset::policies::openshmem {
             std::size_t const w = my_pe_ * num_pes_ + dst_pe;
 
             // mirrors of the two halves
-            std::uint32_t produced = produced_locals_[dst_pe];   // mine
+            std::uint32_t produced = produced_locals_[dst_pe];    // mine
 
             // dst's consumed counter: for a local send it is our own drain
             // mirror (same thread); otherwise the delivered remote copy.
-            std::uint32_t consumed =
-                (dst_pe == my_pe_) ?
+            std::uint32_t consumed = (dst_pe == my_pe_) ?
                 consumed_locals_[dst_pe] :
                 consumed_beg_[w];
 
@@ -290,8 +287,8 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 if (dst_pe != my_pe_)
                 {
-                    progress_to(dst_pe);           // deliver dst's consumed
-                    consumed = consumed_beg_[w];   // read local (delivered)
+                    progress_to(dst_pe);            // deliver dst's consumed
+                    consumed = consumed_beg_[w];    // read local (delivered)
                 }
                 else
                 {
@@ -311,8 +308,7 @@ namespace hpx::parcelset::policies::openshmem {
             // sender), so each sender has its own disjoint per-src ring and
             // different senders cannot collide on the same guard pages (the
             // cause of duplicate delivery at 4 PEs).
-            std::size_t const rx_slot =
-                (my_pe_ * slots_per_dst + slot) * mtu_;
+            std::size_t const rx_slot = (my_pe_ * slots_per_dst + slot) * mtu_;
 
             // data: blocking putmem staging -> dst's rx page.
             shmem_putmem(rx_beg_ + rx_slot, tx_beg_ + stage_slot, count,
@@ -347,12 +343,12 @@ namespace hpx::parcelset::policies::openshmem {
 
             std::size_t const w = src_pe * num_pes_ + my_pe_;
 
-            std::uint32_t const consumed = consumed_locals_[src_pe];   // mine
+            std::uint32_t const consumed = consumed_locals_[src_pe];    // mine
 
             // wait for src to publish page 'consumed' (data ready)
             while (produced_beg_[w] <= consumed)
             {
-                progress_to(src_pe);               // deliver src's produced
+                progress_to(src_pe);    // deliver src's produced
             }
 
             std::size_t const slot = consumed % slots_per_dst;
@@ -362,8 +358,7 @@ namespace hpx::parcelset::policies::openshmem {
             // disjoint ring and a chunk from one source is never
             // aliased/overwritten by a different source (the duplicate
             // delivery / duplicate_component_id bug at 4 PEs).
-            std::size_t const rx_slot =
-                (src_pe * slots_per_dst + slot) * mtu_;
+            std::size_t const rx_slot = (src_pe * slots_per_dst + slot) * mtu_;
 
             std::memcpy(out_buf, rx_beg_ + rx_slot, count);
 
@@ -376,8 +371,8 @@ namespace hpx::parcelset::policies::openshmem {
             return true;
         }
 
-        bool receive(unsigned char* const output,
-            std::size_t const count) noexcept
+        bool receive(
+            unsigned char* const output, std::size_t const count) noexcept
         {
             int const pe = try_detect_pe_notification();
             if (pe < 0)

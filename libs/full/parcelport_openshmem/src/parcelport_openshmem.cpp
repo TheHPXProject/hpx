@@ -125,12 +125,11 @@ namespace hpx::parcelset {
                 // the pool runs the progress loop (io_pool_size is forced to
                 // 1 by the configuration below).
 #if ASIO_VERSION >= 103400
-                ::asio::post(
-                    io_service_pool_.get_io_service(0),
+                ::asio::post(io_service_pool_.get_io_service(0),
                     hpx::bind(&parcelport::io_service_work, this));
 #else
-                io_service_pool_.get_io_service(0)
-                    .post(hpx::bind(&parcelport::io_service_work, this));
+                io_service_pool_.get_io_service(0).post(
+                    hpx::bind(&parcelport::io_service_work, this));
 #endif
                 return true;
             }
@@ -179,8 +178,7 @@ namespace hpx::parcelset {
             // All shmem_* calls happen on the single progress thread
             // (io_service_work). HPX threads must not call into the shmem
             // transport, so this is a no-op.
-            bool background_work(
-                std::size_t, parcelport_background_mode)
+            bool background_work(std::size_t, parcelport_background_mode)
             {
                 return false;
             }
