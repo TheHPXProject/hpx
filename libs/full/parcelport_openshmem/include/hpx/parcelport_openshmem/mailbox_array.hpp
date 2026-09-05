@@ -204,7 +204,8 @@ namespace hpx::parcelset::policies::openshmem {
         // its own dedicated staging page (per-slot TX pages).
         unsigned char* tx_page(std::size_t dst_pe) const
         {
-            std::size_t const slot = produced_locals_[dst_pe] % slots_per_dst;
+            std::size_t const slot =
+                produced_locals_[dst_pe] % slots_per_dst;
             return tx_beg_ + (dst_pe * slots_per_dst + slot) * mtu_;
         }
 
