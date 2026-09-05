@@ -444,6 +444,17 @@ namespace hpx::parcelset::detail {
     {
         load_data(ar);
 
+        // Emit immediately after load_data, before either early return
+        // can skip it (migrated targets and zero-copy receives would
+        // otherwise never appear on the receive side).
+        HPX_TRACING_MARK_EVENT("recv_parcel");
+
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+        hpx::tracing::recv_parcel(data_.parcel_id_.get_msb(),
+            data_.parcel_id_.get_lsb(),
+            naming::get_locality_id_from_gid(data_.source_id_));
+#endif
+
         // make sure this parcel destination matches the proper locality
         HPX_ASSERT(destination_locality() == data_.addr_.locality_);
 
@@ -471,15 +482,6 @@ namespace hpx::parcelset::detail {
         action_->load_schedule(ar, HPX_MOVE(data_.dest_), p.first, p.second,
             num_thread, deferred_schedule);
 
-        HPX_TRACING_MARK_EVENT("recv_parcel");
-
-#if defined(HPX_HAVE_PARCEL_PROFILING)
-        hpx::tracing::recv_parcel(data_.parcel_id_.get_lsb(), size_,
-            naming::get_locality_id_from_gid(data_.source_id_),
-            reinterpret_cast<std::uint64_t>(
-                action_->get_parent_thread_id().get()));
-#endif
-
         return false;
     }
 
@@ -495,9 +497,24 @@ namespace hpx::parcelset::detail {
         auto const r = action_->was_object_migrated(data_.dest_, p.first);
         if (r.first)
         {
-            // If the object was migrated, just route.
+            // If the object was migrated, just route. No parcel_scheduled
+            // emit here: the AGAS re-route may deliver the same parcel to
+            // another schedule_action call, and emitting on both would
+            // double-count. Only the terminating call, below, emits.
             return true;
         }
+
+        // Emit only when we actually schedule -- migration returns above
+        // do not fire parcel_scheduled.
+        HPX_TRACING_MARK_EVENT("parcel_scheduled");
+
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+        hpx::tracing::parcel_scheduled(data_.parcel_id_.get_msb(),
+            data_.parcel_id_.get_lsb(),
+            naming::get_locality_id_from_gid(data_.source_id_),
+            reinterpret_cast<std::uint64_t>(
+                action_->get_parent_thread_id().get()));
+#endif
 
         // dispatch action, register work item either with or without
         // continuation support, this is handled in the transfer action

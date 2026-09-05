@@ -403,7 +403,7 @@ namespace hpx::parcelset {
         }
 
 #if defined(HPX_HAVE_PARCEL_PROFILING)
-        hpx::tracing::send_parcel(
+        hpx::tracing::send_parcel(p.parcel_id().get_msb(),
             p.parcel_id().get_lsb(), p.size(), p.destination_locality_id());
 #endif
     }

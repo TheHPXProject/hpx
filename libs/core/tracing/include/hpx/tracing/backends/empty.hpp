@@ -274,13 +274,26 @@ namespace hpx::tracing {
     {
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void send_parcel(
-        std::uint64_t, std::uint64_t, std::uint64_t) noexcept
+    /// \brief Parcel-send signal: parcel handed to parcelport (no-op stub).
+    HPX_CXX_CORE_EXPORT constexpr void send_parcel(std::uint64_t /*tag_msb*/,
+        std::uint64_t /*tag_lsb*/, std::uint64_t /*size*/,
+        std::uint64_t /*target_locality_id*/) noexcept
     {
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void recv_parcel(
-        std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t) noexcept
+    /// \brief Parcel-receive signal: parcel arrived (no-op stub).
+    HPX_CXX_CORE_EXPORT constexpr void recv_parcel(std::uint64_t /*tag_msb*/,
+        std::uint64_t /*tag_lsb*/,
+        std::uint64_t /*source_locality_id*/) noexcept
+    {
+    }
+
+    /// \brief Parcel-scheduled signal: action entered local scheduler
+    ///        (no-op stub).
+    HPX_CXX_CORE_EXPORT constexpr void parcel_scheduled(
+        std::uint64_t /*tag_msb*/, std::uint64_t /*tag_lsb*/,
+        std::uint64_t /*source_locality_id*/,
+        std::uint64_t /*source_thread_id*/) noexcept
     {
     }
 

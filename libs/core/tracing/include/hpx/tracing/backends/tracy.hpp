@@ -38,7 +38,7 @@ namespace hpx::tracing {
     // hot-path entries below short-circuit at the call site to a single
     // atomic load.
     namespace detail {
-        inline bool is_profiler_connected() noexcept
+        HPX_CXX_CORE_EXPORT inline bool is_profiler_connected() noexcept
         {
             return ___tracy_connected() != 0;
         }
@@ -206,7 +206,8 @@ namespace hpx::tracing {
     // Disconnected path returns the caller's input, mirroring the underlying
     // `hpx::tracy::detail::rename_region`'s in-fiber no-op. Returning nullptr
     // would risk a strlen(nullptr) if a caller later restored a saved name.
-    inline char const* rename_region(char const* name) noexcept
+    HPX_CXX_CORE_EXPORT inline char const* rename_region(
+        char const* name) noexcept
     {
         if (!detail::is_profiler_connected())
             return name;
@@ -291,7 +292,7 @@ namespace hpx::tracing {
     ///
     /// \param parent_task_id  Optional pointer to the spawning task, for
     ///                        parent-child correlation.
-    inline void task_staged(
+    HPX_CXX_CORE_EXPORT inline void task_staged(
         char const* description, void const* parent_task_id = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -303,8 +304,8 @@ namespace hpx::tracing {
     ///
     /// \param parent_task_id  Optional pointer to the spawning task, for
     ///                        parent-child correlation.
-    inline void task_created(char const* description, void const* task_id,
-        void const* parent_task_id = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void task_created(char const* description,
+        void const* task_id, void const* parent_task_id = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -314,8 +315,8 @@ namespace hpx::tracing {
     /// \brief Task-lifecycle signal: task begins executing on a worker thread.
     ///
     /// \param worker_thread  Index of the worker executing this task.
-    inline void task_executing(void const* task_id, char const* description,
-        std::size_t worker_thread) noexcept
+    HPX_CXX_CORE_EXPORT inline void task_executing(void const* task_id,
+        char const* description, std::size_t worker_thread) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -323,7 +324,7 @@ namespace hpx::tracing {
     }
 
     /// \brief Task-lifecycle signal: task voluntarily yielded to the scheduler.
-    inline void task_yielded(
+    HPX_CXX_CORE_EXPORT inline void task_yielded(
         void const* task_id, char const* description) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -334,8 +335,8 @@ namespace hpx::tracing {
     /// \brief Task-lifecycle signal: task blocked on an external resource.
     ///
     /// \param reason  Optional description of what the task is waiting on.
-    inline void task_suspended(void const* task_id, char const* description,
-        char const* reason = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void task_suspended(void const* task_id,
+        char const* description, char const* reason = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -346,8 +347,8 @@ namespace hpx::tracing {
     ///        pending state.
     ///
     /// \param wake_reason  Optional description of what unblocked the task.
-    inline void task_resumed(void const* task_id, char const* description,
-        char const* wake_reason = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void task_resumed(void const* task_id,
+        char const* description, char const* wake_reason = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -355,7 +356,7 @@ namespace hpx::tracing {
     }
 
     /// \brief Task-lifecycle signal: task finished its execution loop.
-    inline void task_completed(
+    HPX_CXX_CORE_EXPORT inline void task_completed(
         void const* task_id, char const* description) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -364,7 +365,7 @@ namespace hpx::tracing {
     }
 
     /// \brief Task-lifecycle signal: task identity removed from scheduler maps.
-    inline void task_deleted(void const* task_id) noexcept
+    HPX_CXX_CORE_EXPORT inline void task_deleted(void const* task_id) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -427,6 +428,19 @@ namespace hpx::tracing {
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void os_thread_sleep_impl(
             std::size_t num_thread) noexcept;
+
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void send_parcel_impl(
+            std::uint64_t tag_msb, std::uint64_t tag_lsb, std::uint64_t size,
+            std::uint64_t target_locality_id) noexcept;
+
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void recv_parcel_impl(
+            std::uint64_t tag_msb, std::uint64_t tag_lsb,
+            std::uint64_t source_locality_id) noexcept;
+
+        HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void parcel_scheduled_impl(
+            std::uint64_t tag_msb, std::uint64_t tag_lsb,
+            std::uint64_t source_locality_id,
+            std::uint64_t source_thread_id) noexcept;
     }    // namespace detail
 
     /// \brief Producer-side signal: a future shared state was set to a value.
@@ -436,7 +450,7 @@ namespace hpx::tracing {
     ///                   consumer events in the Tracy message log.
     /// \param desc       Optional description of the producing context
     ///                   (e.g. the name of the promise or task).
-    inline void future_fulfilled(
+    HPX_CXX_CORE_EXPORT inline void future_fulfilled(
         void const* future_id, char const* desc = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -449,7 +463,7 @@ namespace hpx::tracing {
     ///
     /// \param future_id  Pointer to the `future_data` shared state.
     /// \param desc       Optional description of the producing context.
-    inline void future_exception_set(
+    HPX_CXX_CORE_EXPORT inline void future_exception_set(
         void const* future_id, char const* desc = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -459,7 +473,8 @@ namespace hpx::tracing {
 
     /// \brief Consumer-side signal: a continuation has started
     ///        executing, correlated with the source future state.
-    inline void continuation_run(void const* task_id = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void continuation_run(
+        void const* task_id = nullptr) noexcept
     {
         // Counter update runs unconditionally so the tally stays consistent
         // across connect/disconnect transitions -- see g_active_continuations.
@@ -471,7 +486,7 @@ namespace hpx::tracing {
 
     /// \brief Consumer-side signal: a continuation has finished
     ///        executing.
-    inline void continuation_finished(
+    HPX_CXX_CORE_EXPORT inline void continuation_finished(
         void const* /* task_id */ = nullptr) noexcept
     {
         detail::g_active_continuations.fetch_sub(1, std::memory_order_relaxed);
@@ -482,7 +497,7 @@ namespace hpx::tracing {
 
     /// \brief Consumer-side signal: handle_on_completed fired,
     ///        dispatching registered continuations.
-    inline void handle_on_completed_fired(
+    HPX_CXX_CORE_EXPORT inline void handle_on_completed_fired(
         void const* task_id = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
@@ -492,8 +507,9 @@ namespace hpx::tracing {
 
     /// \brief Signal emitted when a worker thread steals a task from
     ///        another worker.
-    inline void work_stolen(std::size_t thief_id, std::size_t victim_id,
-        void const* task_id, char const* desc = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void work_stolen(std::size_t thief_id,
+        std::size_t victim_id, void const* task_id,
+        char const* desc = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -503,7 +519,8 @@ namespace hpx::tracing {
     /// \brief Emit a frame/stage boundary marker in Tracy timeline.
     ///
     /// \param name  Optional name for the frame/stage.
-    inline void frame_mark(char const* name = nullptr) noexcept
+    HPX_CXX_CORE_EXPORT inline void frame_mark(
+        char const* name = nullptr) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -514,7 +531,8 @@ namespace hpx::tracing {
     ///        on its condition variable.
     ///
     /// \param num_thread  Index of the worker thread entering sleep.
-    inline void os_thread_sleep(std::size_t num_thread) noexcept
+    HPX_CXX_CORE_EXPORT inline void os_thread_sleep(
+        std::size_t num_thread) noexcept
     {
         if (!detail::is_profiler_connected())
             return;
@@ -537,14 +555,65 @@ namespace hpx::tracing {
         std::string const& name, std::string const& short_name,
         double value) noexcept;
 
-    HPX_CXX_CORE_EXPORT constexpr void send_parcel(
-        std::uint64_t, std::uint64_t, std::uint64_t) noexcept
+    /// \brief Parcel-send signal: a parcel has been handed to the
+    ///        parcelport for transmission.
+    ///
+    /// \param tag_msb              High 64 bits of the parcel id.
+    /// \param tag_lsb              Low 64 bits of the parcel id. Together
+    ///                             with tag_msb they form the full 128-bit
+    ///                             id used to pair events across localities;
+    ///                             lsb alone restarts per locality and
+    ///                             would produce false matches.
+    /// \param size                 Wire size of the parcel in bytes.
+    /// \param target_locality_id   Destination locality id, or
+    ///                             `naming::invalid_locality_id` if unknown.
+    HPX_CXX_CORE_EXPORT inline void send_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t size,
+        std::uint64_t target_locality_id) noexcept
     {
+        if (!detail::is_profiler_connected())
+            return;
+        detail::send_parcel_impl(tag_msb, tag_lsb, size, target_locality_id);
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void recv_parcel(
-        std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t) noexcept
+    /// \brief Parcel-receive signal: a parcel has arrived and its header
+    ///        has been deserialized.
+    ///
+    /// \param tag_msb              High 64 bits of the parcel id.
+    /// \param tag_lsb              Low 64 bits of the parcel id.
+    /// \param source_locality_id   Sending locality id, or
+    ///                             `naming::invalid_locality_id` when the
+    ///                             parcel has no source id yet (pre-AGAS
+    ///                             handshake parcels).
+    HPX_CXX_CORE_EXPORT inline void recv_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t source_locality_id) noexcept
     {
+        if (!detail::is_profiler_connected())
+            return;
+        detail::recv_parcel_impl(tag_msb, tag_lsb, source_locality_id);
+    }
+
+    /// \brief Parcel-scheduled signal: an action carried by a parcel has
+    ///        been placed onto the local scheduler. Fires for deferred
+    ///        receives (zero-copy or multi-parcel message), for
+    ///        AGAS-routed parcels, and for parcels the AGAS re-route
+    ///        chain delivered after a migration detection. Does not fire
+    ///        for the non-deferred path where load_schedule schedules
+    ///        inline.
+    ///
+    /// \param tag_msb              High 64 bits of the parcel id.
+    /// \param tag_lsb              Low 64 bits of the parcel id.
+    /// \param source_locality_id   Sending locality id (see recv_parcel).
+    /// \param source_thread_id     Parent HPX thread id captured on the
+    ///                             sender; may be 0 when unavailable.
+    HPX_CXX_CORE_EXPORT inline void parcel_scheduled(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t source_locality_id,
+        std::uint64_t source_thread_id) noexcept
+    {
+        if (!detail::is_profiler_connected())
+            return;
+        detail::parcel_scheduled_impl(
+            tag_msb, tag_lsb, source_locality_id, source_thread_id);
     }
 
     HPX_CXX_CORE_EXPORT constexpr void set_enable_parent_task_handler(

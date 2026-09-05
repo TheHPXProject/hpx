@@ -461,6 +461,96 @@ namespace hpx::tracing {
             hpx::tracy::message(buffer, std::strlen(buffer), 0x546E7Au);
         }
 
+        // Mirror of naming::invalid_locality_id (~std::uint32_t(0)) from
+        // libs/full/naming_base/include/hpx/naming_base/naming_base.hpp.
+        // Duplicated because core cannot depend on full; if the real
+        // constant ever changes, update this or the invalid-locality
+        // branches will silently start printing L#4294967295 again.
+        static constexpr std::uint64_t invalid_locality = 0xFFFFFFFFULL;
+
+        void send_parcel_impl(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+            std::uint64_t size, std::uint64_t target_locality_id) noexcept
+        {
+            char buffer[160];
+            // "Parcel Send: id=<msb>:<lsb> size=<N> to=L#<N>" + NUL
+            static_assert(
+                sizeof(buffer) >= 16 + 16 + 1 + 16 + 6 + 20 + 6 + 20 + 1);
+            if (target_locality_id == invalid_locality)
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Send: id=%016llx:%016llx size=%llu to=L#unknown",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb),
+                    static_cast<unsigned long long>(size));
+            }
+            else
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Send: id=%016llx:%016llx size=%llu to=L#%llu",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb),
+                    static_cast<unsigned long long>(size),
+                    static_cast<unsigned long long>(target_locality_id));
+            }
+            hpx::tracy::message(buffer, std::strlen(buffer), 0x2196F3u);
+        }
+
+        // Size is omitted here: parcel::size_ is not populated on the
+        // receive side, so any value would be a fixed zero.
+        void recv_parcel_impl(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+            std::uint64_t source_locality_id) noexcept
+        {
+            char buffer[160];
+            // "Parcel Recv: id=<msb>:<lsb> from=L#<N>" + NUL
+            static_assert(sizeof(buffer) >= 16 + 16 + 1 + 16 + 8 + 20 + 1);
+            if (source_locality_id == invalid_locality)
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Recv: id=%016llx:%016llx from=L#unknown",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb));
+            }
+            else
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Recv: id=%016llx:%016llx from=L#%llu",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb),
+                    static_cast<unsigned long long>(source_locality_id));
+            }
+            hpx::tracy::message(buffer, std::strlen(buffer), 0x4CAF50u);
+        }
+
+        void parcel_scheduled_impl(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+            std::uint64_t source_locality_id,
+            std::uint64_t source_thread_id) noexcept
+        {
+            char buffer[160];
+            // "Parcel Scheduled: id=<msb>:<lsb> from=L#<N> thread=0x<hex>" + NUL
+            static_assert(
+                sizeof(buffer) >= 21 + 16 + 1 + 16 + 8 + 20 + 10 + 16 + 1);
+            if (source_locality_id == invalid_locality)
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Scheduled: id=%016llx:%016llx from=L#unknown "
+                    "thread=0x%016llx",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb),
+                    static_cast<unsigned long long>(source_thread_id));
+            }
+            else
+            {
+                std::snprintf(buffer, sizeof(buffer),
+                    "Parcel Scheduled: id=%016llx:%016llx from=L#%llu "
+                    "thread=0x%016llx",
+                    static_cast<unsigned long long>(tag_msb),
+                    static_cast<unsigned long long>(tag_lsb),
+                    static_cast<unsigned long long>(source_locality_id),
+                    static_cast<unsigned long long>(source_thread_id));
+            }
+            hpx::tracy::message(buffer, std::strlen(buffer), 0x9C27B0u);
+        }
+
     }    // namespace detail
 
     ////////////////////////////////////////////////////////////////////////////
