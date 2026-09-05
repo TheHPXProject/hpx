@@ -78,7 +78,7 @@ Parallel for loop
 
 
 In the above code, the |openmp| `#pragma omp parallel for` directive is replaced with
-:cpp:func:`hpx::experimental::for_loop` from the |hpx| library. The loop body within the lambda
+:hpx:func:`hpx::experimental::for_loop` from the |hpx| library. The loop body within the lambda
 function will be executed in parallel for each iteration.
 
 Private variables
@@ -167,7 +167,7 @@ Number of threads
 
 To declare the number of threads to be used for the parallel region, you can use
 `hpx::execution::experimental::num_cores` and pass the number of cores (`nc`) to
-:cpp:func:`hpx::experimental::for_loop` using `hpx::execution::par.with(nc)`.
+:hpx:func:`hpx::experimental::for_loop` using `hpx::execution::par.with(nc)`.
 This example uses 2 threads for the parallel loop.
 
 Reduction
@@ -236,7 +236,7 @@ Schedule
 
 To define the scheduling type, you can use the corresponding execution policy from
 `hpx::execution::experimental`, define the chunk size (cs, here declared as 1000) and pass
-it to the to :cpp:func:`hpx::experimental::for_loop` using `hpx::execution::par.with(cs)`.
+it to the to :hpx:func:`hpx::experimental::for_loop` using `hpx::execution::par.with(cs)`.
 
 Accordingly, other types of scheduling are available and can be used in a similar manner:
 
@@ -287,7 +287,7 @@ Accordingly, other types of scheduling are available and can be used in a simila
     }
 
 To make sure that only one thread accesses a specific code within a parallel section
-you can use :cpp:class:`hpx::mutex` and `std::scoped_lock` to take ownership of the given
+you can use :hpx:class:`hpx::mutex` and `std::scoped_lock` to take ownership of the given
 mutex `mtx`. For more information about mutexes please refer to :ref:`mutex`.
 
 |openmp| tasks
@@ -326,14 +326,14 @@ or
         // task code
     }); // fire and forget
 
-The tasks in |hpx| can be defined simply by using the :cpp:func:`async` function and passing as argument
-the code you wish to run asynchronously. Another alternative is to use :cpp:func:`post` which is a
+The tasks in |hpx| can be defined simply by using the :hpx:func:`async` function and passing as argument
+the code you wish to run asynchronously. Another alternative is to use :hpx:func:`post` which is a
 fire-and-forget method.
 
 .. tip::
 
     If you think you will like to synchronize your tasks later on, we suggest you use
-    :cpp:func:`hpx::async` which provides synchronization options, while :cpp:func:`hpx::post`
+    :hpx:func:`hpx::async` which provides synchronization options, while :hpx:func:`hpx::post`
     explicitly states that there is no return value or way to synchronize with the function
     execution. Synchronization options are listed below.
 
@@ -364,7 +364,7 @@ Task wait
 
     // code after completion of task
 
-The `get()` function can be used to ensure that the task created with :cpp:func:`hpx::async`
+The `get()` function can be used to ensure that the task created with :hpx:func:`hpx::async`
 is completed before the code continues executing beyond that point.
 
 Multiple tasks synchronization
@@ -406,7 +406,7 @@ Multiple tasks synchronization
     });
 
 
-If you would like to synchronize multiple tasks, you can use the :cpp:func:`hpx::when_all` function
+If you would like to synchronize multiple tasks, you can use the :hpx:func:`hpx::when_all` function
 to define which futures have to be ready and the `then()` function to declare what should
 be executed once these futures are ready.
 
@@ -454,10 +454,10 @@ Dependencies
 
     c = future_c.get();
 
-If one of the arguments of :cpp:func:`hpx::dataflow` is a future, then it will wait for the
+If one of the arguments of :hpx:func:`hpx::dataflow` is a future, then it will wait for the
 future to be ready to launch the thread. Hence, to define the dependencies of tasks
 you have to create futures representing the variables that create dependencies and pass
-them as arguments to :cpp:func:`hpx::dataflow`. `get()` is used to save the result of the future
+them as arguments to :hpx:func:`hpx::dataflow`. `get()` is used to save the result of the future
 to the desired variable.
 
 
@@ -505,8 +505,8 @@ or
         });
     });
 
-If you have nested tasks, you can simply use nested :cpp:func:`hpx::async` or
-:cpp:func:`hpx::post` calls. The implementation is similar if you want to take
+If you have nested tasks, you can simply use nested :hpx:func:`hpx::async` or
+:hpx:func:`hpx::post` calls. The implementation is similar if you want to take
 care of synchronization:
 
 |openmp| code:
@@ -568,7 +568,7 @@ Task yield
 
     // code after yielding
 
-After creating a task using :cpp:func:`hpx::async`, :cpp:func:`hpx::this_thread::yield`
+After creating a task using :hpx:func:`hpx::async`, :hpx:func:`hpx::this_thread::yield`
 can be used to reschedule the execution of threads, allowing other threads to run.
 
 Task group
@@ -612,7 +612,7 @@ Task group
     // Wait for the task group
     tg.wait();
 
-To create task groups, you can use :cpp:class:`hpx::experimental::task_group`. The function
+To create task groups, you can use :hpx:class:`hpx::experimental::task_group`. The function
 `run()` can be used to run each task within the task group, while `wait()` can be used to
 achieve synchronization. If you do not care about waiting for the task group to complete
 its execution, you can simply remove the `wait()` function.
@@ -650,12 +650,12 @@ its execution, you can simply remove the `wait()` function.
     hpx::wait_all(future_section1, future_section2);
 
 Unlike tasks, there is an implicit synchronization barrier at the end of each `sections`
-directive in |openmp|. This synchronization is achieved using :cpp:func:`hpx::wait_all` function.
+directive in |openmp|. This synchronization is achieved using :hpx:func:`hpx::wait_all` function.
 
 .. note::
 
     If the `nowait` clause is used in the `sections` directive, then you can just remove
-    the :cpp:func:`hpx::wait_all` function while keeping the rest of the code as it is.
+    the :hpx:func:`hpx::wait_all` function while keeping the rest of the code as it is.
 
 .. _tbb:
 
@@ -697,7 +697,7 @@ parallel_for
     });
 
 
-In the above code, `tbb::parallel_for` is replaced with :cpp:func:`hpx::experimental::for_loop`
+In the above code, `tbb::parallel_for` is replaced with :hpx:func:`hpx::experimental::for_loop`
 from the |hpx| library. The loop body within the lambda function will be executed in
 parallel for each iteration.
 
@@ -727,7 +727,7 @@ parallel_for_each
         // loop body
     });
 
-By utilizing :cpp:func:`hpx::for_each` and specifying a parallel execution policy with
+By utilizing :hpx:func:`hpx::for_each` and specifying a parallel execution policy with
 `hpx::execution::par`, it is possible to transform `tbb::parallel_for_each` into its
 equivalent counterpart in |hpx|.
 
@@ -748,9 +748,9 @@ parallel_invoke
 
     hpx::wait_all(hpx::async(task1), hpx::async(task2), hpx::async(task3));
 
-To convert `tbb::parallel_invoke` to |hpx|, we use :cpp:func:`hpx::async` to asynchronously
+To convert `tbb::parallel_invoke` to |hpx|, we use :hpx:func:`hpx::async` to asynchronously
 execute each task, which returns a future representing the result of each task.
-We then pass these futures to :cpp:func:`hpx::when_all`, which waits for all the futures
+We then pass these futures to :hpx:func:`hpx::when_all`, which waits for all the futures
 to complete before returning.
 
 
@@ -880,7 +880,7 @@ Reduction
     auto total = hpx::reduce(
         hpx::execution::par, values.begin(), values.end(), 0, std::plus{});
 
-By utilizing :cpp:func:`hpx::reduce` and specifying a parallel execution policy with
+By utilizing :hpx:func:`hpx::reduce` and specifying a parallel execution policy with
 `hpx::execution::par`, it is possible to transform `tbb::parallel_reduce` into its
 equivalent counterpart in |hpx|. As demonstrated in the previous example, the management
 of intermediate results is seamlessly handled internally by |hpx|, eliminating the need
@@ -931,7 +931,7 @@ Transformation & Reduction
         [&](double current_value) { return transform_function(current_value); });
 
 In situations where certain values require transformation before the reduction process,
-|hpx| provides a straightforward solution through :cpp:func:`hpx::transform_reduce`. The
+|hpx| provides a straightforward solution through :hpx:func:`hpx::transform_reduce`. The
 `transform_function()` allows for the application of the desired transformation to each value.
 
 parallel_scan
@@ -968,7 +968,7 @@ parallel_scan
         output.begin(),
         [](const int& left, const int& right) { return left + right; });
 
-:cpp:func:`hpx::inclusive_scan` with `hpx::execution::par` as execution policy
+:hpx:func:`hpx::inclusive_scan` with `hpx::execution::par` as execution policy
 can be used to perform a prefix scan in parallel. The management of intermediate
 results is seamlessly handled internally by |hpx|, eliminating the need
 for explicit consideration. `input.begin()` and `input.end()` refer to the beginning
@@ -978,7 +978,7 @@ specifies the function which will be invoked for each of the values of the input
 
 .. seealso::
 
-Apart from :cpp:func:`hpx::inclusive_scan`, |hpx| provides its users with :cpp:func:`hpx::exclusive_scan`.
+Apart from :hpx:func:`hpx::inclusive_scan`, |hpx| provides its users with :hpx:func:`hpx::exclusive_scan`.
 The key difference between inclusive scan and exclusive scan lies in the treatment of the current element
 during the scan operation. In an inclusive scan, each element in the output sequence includes the
 contribution of the corresponding element in the input sequence, while in an exclusive scan, the current
@@ -1007,7 +1007,7 @@ parallel_sort
 
     hpx::sort(hpx::execution::par, numbers.begin(), numbers.end());
 
-:cpp:func:`hpx::sort` provides an equivalent functionality to `tbb::parallel_sort`.
+:hpx:func:`hpx::sort` provides an equivalent functionality to `tbb::parallel_sort`.
 When given a parallel execution policy with `hpx::execution::par`, the algorithm employs
 parallel execution, allowing for efficient sorting across available threads.
 
@@ -1045,8 +1045,8 @@ task_group
     // Wait for the task group
     tg.wait();
 
-|hpx| drew inspiration from |tbb| to introduce the :cpp:func:`hpx::experimental::task_group`
-feature. Therefore, utilizing :cpp:func:`hpx::experimental::task_group` provides an
+|hpx| drew inspiration from |tbb| to introduce the :hpx:class:`hpx::experimental::task_group`
+feature. Therefore, utilizing :hpx:class:`hpx::experimental::task_group` provides an
 equivalent functionality to `tbb::task_group`.
 
 .. _mpi:
@@ -1062,25 +1062,25 @@ List of |mpi|-|hpx| functions
 
    .. table:: |hpx| equivalent functions of |mpi|
 
-   ========================================  ===================================================================================================================
+   ========================================  ========================================================================================================================
    |mpi| function                            |hpx| equivalent
-   ========================================  ===================================================================================================================
-   :ref:`MPI_Allgather`                      :cpp:class:`hpx::collectives::all_gather`
-   :ref:`MPI_Allreduce`                      :cpp:class:`hpx::collectives::all_reduce`
-   :ref:`MPI_Alltoall`                       :cpp:class:`hpx::collectives::all_to_all`
-   :ref:`MPI_Barrier`                        :cpp:class:`hpx::distributed::barrier`
-   :ref:`MPI_Bcast`                          :cpp:class:`hpx::collectives::broadcast_to()` and :cpp:class:`hpx::collectives::broadcast_from()` used with :code:`get()`
-   :ref:`MPI_Comm_size <MPI_Send_MPI_Recv>`  :cpp:class:`hpx::get_num_localities`
-   :ref:`MPI_Comm_rank <MPI_Send_MPI_Recv>`  :cpp:class:`hpx::get_locality_id()`
-   :ref:`MPI_Exscan`                         :cpp:class:`hpx::collectives::exclusive_scan()` used with :code:`get()`
-   :ref:`MPI_Gather`                         :cpp:class:`hpx::collectives::gather_here()` and :cpp:class:`hpx::collectives::gather_there()` used with :code:`get()`
-   :ref:`MPI_Irecv <MPI_Send_MPI_Recv>`      :cpp:class:`hpx::collectives::get()`
-   :ref:`MPI_Isend <MPI_Send_MPI_Recv>`      :cpp:class:`hpx::collectives::set()`
-   :ref:`MPI_Reduce`                         :cpp:class:`hpx::collectives::reduce_here` and :cpp:class:`hpx::collectives::reduce_there` used with :code:`get()`
-   :ref:`MPI_Scan`                           :cpp:class:`hpx::collectives::inclusive_scan()` used with :code:`get()`
-   :ref:`MPI_Scatter`                        :cpp:class:`hpx::collectives::scatter_to()` and :cpp:class:`hpx::collectives::scatter_from()`
-   :ref:`MPI_Wait <MPI_Send_MPI_Recv>`       :cpp:class:`hpx::collectives::get()` used with a future i.e. :code:`setf.get()`
-   ========================================  ===================================================================================================================
+   ========================================  ========================================================================================================================
+   :ref:`MPI_Allgather`                      :hpx:func:`hpx::collectives::all_gather`
+   :ref:`MPI_Allreduce`                      :hpx:func:`hpx::collectives::all_reduce`
+   :ref:`MPI_Alltoall`                       :hpx:func:`hpx::collectives::all_to_all`
+   :ref:`MPI_Barrier`                        :hpx:class:`hpx::distributed::barrier`
+   :ref:`MPI_Bcast`                          :hpx:func:`hpx::collectives::broadcast_to()` and :hpx:class:`hpx::collectives::broadcast_from()` used with :code:`get()`
+   :ref:`MPI_Comm_size <MPI_Send_MPI_Recv>`  :hpx:func:`hpx::get_num_localities`
+   :ref:`MPI_Comm_rank <MPI_Send_MPI_Recv>`  :hpx:func:`hpx::get_locality_id()`
+   :ref:`MPI_Exscan`                         :hpx:func:`hpx::collectives::exclusive_scan()` used with :code:`get()`
+   :ref:`MPI_Gather`                         :hpx:func:`hpx::collectives::gather_here()` and :hpx:class:`hpx::collectives::gather_there()` used with :code:`get()`
+   :ref:`MPI_Irecv <MPI_Send_MPI_Recv>`      :hpx:func:`hpx::collectives::get()`
+   :ref:`MPI_Isend <MPI_Send_MPI_Recv>`      :hpx:func:`hpx::collectives::set()`
+   :ref:`MPI_Reduce`                         :hpx:func:`hpx::collectives::reduce_here` and :hpx:class:`hpx::collectives::reduce_there` used with :code:`get()`
+   :ref:`MPI_Scan`                           :hpx:func:`hpx::collectives::inclusive_scan()` used with :code:`get()`
+   :ref:`MPI_Scatter`                        :hpx:func:`hpx::collectives::scatter_to()` and :hpx:class:`hpx::collectives::scatter_from()`
+   :ref:`MPI_Wait <MPI_Send_MPI_Recv>`       :hpx:func:`hpx::collectives::get()` used with a future i.e. :code:`setf.get()`
+   ========================================  ========================================================================================================================
 
 .. _MPI_Send_MPI_Recv:
 

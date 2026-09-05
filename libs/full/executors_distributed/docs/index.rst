@@ -12,7 +12,7 @@ executors_distributed
 =====================
 
 This module provides the executor
-:cpp:class:`hpx::parallel::execution::disribution_policy_executor`. It allows
+:hpx:class:`hpx::execution::experimental::distribution_policy_executor`. It allows
 one to create work that is implicitly distributed over multiple localities.
 
 See the :ref:`API reference <modules_executors_distributed_api>` of this module for more

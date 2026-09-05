@@ -20,7 +20,7 @@ now be replayed or replicated among different localities. The API exposed
 allows for an easy integration with the local only resiliency APIs as well.
 
 Distributed software resilience APIs have a similar function signature
-and lives under the same namespace of :cpp:func:`hpx::resiliency::experimental`.
+and lives under the same namespace of ``hpx::resiliency::experimental``.
 The difference arises in the formal parameters where distributed APIs takes
 the localities as the first argument, and an action as opposed to a function or
 a function object. The localities signify the order in which the API will either
@@ -32,4 +32,3 @@ defined in :ref:`local resiliency module <modules_resiliency_api>`.
 
 See the :ref:`API reference <modules_resiliency_distributed_api>` of this module
 for more details.
-

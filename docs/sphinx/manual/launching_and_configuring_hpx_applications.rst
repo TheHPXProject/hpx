@@ -1412,7 +1412,7 @@ one of the localities the application runs on.
 ==========================
 
 The predefined command line options for any application using
-:cpp:func:`hpx::init` are described in the following subsections.
+:hpx:func:`hpx::init` are described in the following subsections.
 
 .. todo:: Proofread the options.
 

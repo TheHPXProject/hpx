@@ -52,25 +52,25 @@ The only predefined global addresses are assigned to all localities. The
 following |hpx| API functions allow one to retrieve the global addresses of
 localities:
 
-* :cpp:func:`hpx::find_here`: retrieves the global address of the
+* :hpx:func:`hpx::find_here`: retrieves the global address of the
   :term:`locality` this function is called on.
-* :cpp:func:`hpx::find_all_localities()`: retrieves the global addresses of all
+* :hpx:func:`hpx::find_all_localities()`: retrieves the global addresses of all
   localities available to this application (including the :term:`locality` the
   function is being called on).
-* :cpp:func:`hpx::find_remote_localities()`: retrieves the global addresses of
+* :hpx:func:`hpx::find_remote_localities()`: retrieves the global addresses of
   all remote localities available to this application (not including the
   :term:`locality` the function is being called on).
-* :cpp:func:`hpx::get_num_localities()`: retrieves the number of localities
+* :hpx:func:`hpx::get_num_localities()`: retrieves the number of localities
   available to this application.
-* :cpp:func:`hpx::find_locality()`: retrieves the global address of any
+* :hpx:func:`hpx::find_locality()`: retrieves the global address of any
   :term:`locality` supporting the given component type.
-* :cpp:func:`hpx::get_colocation_id()`: retrieves the global address of the
+* :hpx:func:`hpx::get_colocation_id()`: retrieves the global address of the
   :term:`locality` currently hosting the object with the given global address.
 
 Additionally, the global addresses of localities can be used to create new
 instances of components using the following |hpx| API function:
 
-* :cpp:func:`hpx::components::new_()`: Creates a new instance of the given
+* :hpx:func:`hpx::components::new_()`: Creates a new instance of the given
   ``Component`` type on the specified :term:`locality`.
 
 .. note::
@@ -238,8 +238,8 @@ a single macro instead of the three-step process described above::
     }
 
 The resulting ``some_member_action`` type can be used exactly like an action
-type created with :c:macro:`HPX_DEFINE_COMPONENT_ACTION`, with :cpp:func:`hpx::post`,
-:cpp:func:`hpx::async`, and :cpp:func:`hpx::sync`, or by invoking it directly. No
+type created with :c:macro:`HPX_DEFINE_COMPONENT_ACTION`, with :hpx:func:`hpx::post`,
+:hpx:func:`hpx::async`, and :hpx:func:`hpx::sync`, or by invoking it directly. No
 separate registration step is required in the source file.
 
 .. _action_invocation:
@@ -603,7 +603,7 @@ executed::
     HPX_PLAIN_ACTION(app::some_function_with_error, some_error_action);
 
 The use of :c:macro:`HPX_THROW_EXCEPTION` to report the error encapsulates the
-creation of a :cpp:class:`hpx::exception` which is initialized with the error
+creation of a :hpx:class:`hpx::exception` which is initialized with the error
 code ``hpx::error::bad_parameter``. Additionally it carries the passed strings, the
 information about the file name, line number, and call stack of the point the
 exception was thrown from.
@@ -780,7 +780,7 @@ A client side object stores the global id of the component instance it
 represents. This global id is accessible by calling the function
 ``client_base<>::get_id()``. The special constructor which is provided in the
 example allows to create this client side object directly using the API function
-:cpp:func:`hpx::new_`.
+:hpx:func:`hpx::new_`.
 
 .. _create_components:
 
@@ -1053,7 +1053,7 @@ beginning of the next segment.
 It is sometimes useful not only to iterate element by element, but also segment
 by segment, or simply get a local iterator in order to avoid additional
 construction costs at each deferencing operations. To mitigate this need, the
-:cpp:class:`hpx::traits::segmented_iterator_traits` are used.
+:hpx:struct:`hpx::traits::segmented_iterator_traits` are used.
 
 With ``segmented_iterator_traits`` users can uniformly get the iterators
 which specifically iterates over segments (by providing a segmented iterator
