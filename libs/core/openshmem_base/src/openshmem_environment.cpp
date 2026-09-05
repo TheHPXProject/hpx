@@ -30,7 +30,8 @@ namespace hpx::util {
             cfg, "hpx.parcel.openshmem.enable", false);
     }
 
-    void openshmem_environment::init(int*, char***, runtime_configuration& cfg)
+    void openshmem_environment::init(
+        int*, char***, runtime_configuration& cfg)
     {
         if (enabled_)
             return;

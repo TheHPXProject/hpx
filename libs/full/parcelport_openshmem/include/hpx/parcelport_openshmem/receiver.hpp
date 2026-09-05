@@ -20,9 +20,9 @@
 
 #include <shmem.h>
 
-namespace hpx::parcelset::policies::openshmem {
-
 #include <hpx/parcelport_openshmem/mailbox_array.hpp>
+
+namespace hpx::parcelset::policies::openshmem {
 
     template <typename Parcelport>
     struct receiver
