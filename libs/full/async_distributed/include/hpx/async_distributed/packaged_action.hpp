@@ -691,3 +691,23 @@ namespace hpx::lcos {
         }
     };
 }    // namespace hpx::lcos
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/modules/actions_base.hpp>
+
+namespace hpx::lcos {
+
+    /// \brief Reflection-based packaged_action alias.
+    ///
+    /// Allows using hpx::lcos::reflect_packaged_action<^^func> directly
+    /// without defining an explicit action type.
+    ///
+    /// \tparam F  A std::meta::info reflection of a free function.
+    template <std::meta::info F>
+        requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
+    using reflect_packaged_action =
+        packaged_action<hpx::actions::reflect_action<F>,
+            typename hpx::actions::reflect_action<F>::result_type>;
+
+}    // namespace hpx::lcos
+#endif    // HPX_HAVE_CXX26_REFLECTION
