@@ -27,6 +27,10 @@
 #include <hpx/parcelset/parcelport_impl.hpp>
 #include <hpx/plugin_factories/parcelport_factory.hpp>
 
+#include <asio/io_context.hpp>
+#include <asio/post.hpp>
+#include <asio/version.hpp>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
