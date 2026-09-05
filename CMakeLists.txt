@@ -1521,15 +1521,14 @@ if(HPX_WITH_NETWORKING)
   endif()
 
   hpx_option(
-    HPX_WITH_PARCELPORT_OPENSHMEM BOOL "Enable the OpenSHMEM based parcelport." OFF
-    CATEGORY "Parcelport"
+    HPX_WITH_PARCELPORT_OPENSHMEM BOOL "Enable the OpenSHMEM based parcelport."
+    OFF CATEGORY "Parcelport"
   )
   if(HPX_WITH_PARCELPORT_OPENSHMEM)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_OPENSHMEM)
     hpx_option(
       HPX_WITH_PARCELPORT_OPENSHMEM_MTU INT
-      "Set the MTU for the OpenSHMEM parcelport (default: 65536)."
-      65536
+      "Set the MTU for the OpenSHMEM parcelport (default: 65536)." 65536
       CATEGORY "Parcelport"
     )
     if(HPX_WITH_PARCELPORT_OPENSHMEM_MTU)

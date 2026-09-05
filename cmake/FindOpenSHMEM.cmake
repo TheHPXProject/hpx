@@ -6,10 +6,10 @@
 
 macro(find_openshmem)
   # Only Open MPI's OpenSHMEM is supported. The package is located through
-  # pkg-config (pkg_check_modules uses PKG_CONFIG_PATH and the standard
-  # install locations), i.e. via the oshmem-c.pc, oshmem.pc or oshmem-cxx.pc
-  # module files. oshmem-c/oshmem are preferred because they carry the
-  # -loshmem link flag.
+  # pkg-config (pkg_check_modules uses PKG_CONFIG_PATH and the standard install
+  # locations), i.e. via the oshmem-c.pc, oshmem.pc or oshmem-cxx.pc module
+  # files. oshmem-c/oshmem are preferred because they carry the -loshmem link
+  # flag.
   find_package(PkgConfig QUIET)
   if(NOT PKG_CONFIG_FOUND)
     hpx_error("pkg-config was not found; OpenSHMEM detection requires it")
@@ -42,9 +42,10 @@ macro(find_openshmem)
 
   if(NOT TARGET OpenSHMEM::openshmem)
     add_library(OpenSHMEM::openshmem INTERFACE IMPORTED)
-    set_target_properties(OpenSHMEM::openshmem PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${OSHMEM_INCLUDE_DIRS}"
-      INTERFACE_LINK_LIBRARIES "${OSHMEM_LIBRARIES}"
+    set_target_properties(
+      OpenSHMEM::openshmem
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${OSHMEM_INCLUDE_DIRS}"
+                 INTERFACE_LINK_LIBRARIES "${OSHMEM_LIBRARIES}"
     )
   endif()
 

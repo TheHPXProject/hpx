@@ -19,10 +19,8 @@ set(parcelport_openshmem_headers
     hpx/parcelport_openshmem/sender_connection.hpp
 )
 
-set(parcelport_openshmem_sources
-    locality.cpp
-    parcelport_openshmem.cpp
-    sender_connection.cpp
+set(parcelport_openshmem_sources locality.cpp parcelport_openshmem.cpp
+                                 sender_connection.cpp
 )
 
 include(HPX_AddModule)
