@@ -23,7 +23,7 @@ concurrency:
 jobs:
   deploy-documentation:
     runs-on: ubuntu-latest
-    container: stellargroup/build_env:17
+    container: stellargroup/build_env:23
     if: >
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_repository.full_name == github.repository) ||
