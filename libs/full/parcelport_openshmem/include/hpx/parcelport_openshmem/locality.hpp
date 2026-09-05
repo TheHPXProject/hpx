@@ -61,7 +61,7 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         friend HPX_EXPORT std::ostream& operator<<(
-            std::ostream& os, locality const& loc) noexcept;
+            std::ostream& os, locality const& loc);
 
         std::int32_t rank_;
     };
