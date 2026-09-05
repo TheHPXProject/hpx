@@ -47,6 +47,13 @@ if(HPX_WITH_PARCELPORT_GASNET)
   endif()
   set(additional_dependencies ${additional_dependencies} PkgConfig::GASNET)
 endif()
+if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_OPENSHMEM)
+  include(HPX_SetupOpenSHMEM)
+  hpx_setup_openshmem()
+  set(additional_dependencies ${additional_dependencies} OpenSHMEM::openshmem
+                              hpx_openshmem_base
+  )
+endif()
 
 include(HPX_AddModule)
 add_hpx_module(
