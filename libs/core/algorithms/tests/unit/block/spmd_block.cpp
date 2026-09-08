@@ -107,16 +107,16 @@ void test_spmd_block_scheduler()
 
     auto scheduler_test = [](hpx::parallel::spmd_block block,
                               std::atomic<std::size_t>* ctr,
-                              std::unique_ptr<int>* sentinel_ptr) {
+                              std::unique_ptr<int>& sentinel) {
         HPX_TEST_EQ(block.get_num_images(), num_images);
         HPX_TEST(block.this_image() < num_images);
-        HPX_TEST_EQ(**sentinel_ptr, 42);
+        HPX_TEST_EQ(*sentinel, 42);
 
         ++(*ctr);
     };
 
     auto sender = hpx::parallel::define_spmd_block(
-        sched, num_images, scheduler_test, &counter, &sentinel);
+        sched, num_images, scheduler_test, &counter, std::move(sentinel));
     hpx::this_thread::experimental::sync_wait(std::move(sender));
 
     HPX_TEST_EQ(counter.load(), num_images);
