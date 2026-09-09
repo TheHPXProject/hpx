@@ -318,7 +318,8 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_AGAS_LOCAL_CACHE_SIZE)) "}",
             "use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}",
             "use_caching = ${HPX_AGAS_USE_CACHING:1}",
-            "rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:60000}",
+            "rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_AGAS_RPC_TIMEOUT)) "}",
 
             "[hpx.components]",
             "load_external = ${HPX_LOAD_EXTERNAL_COMPONENTS:1}",

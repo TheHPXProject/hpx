@@ -1,4 +1,4 @@
-# Copyright (c) 2020 The STE||AR-Group
+# Copyright (c) 2020-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,9 +18,7 @@ foreach(test ${tests})
     SOURCES ${sources} ${${test}_FLAGS}
     EXCLUDE_FROM_ALL
     FOLDER ${folder_name}
-    DEPENDENCIES hpx_agas_base
   )
 
   add_hpx_unit_test("modules.agas_base" ${test} ${${test}_PARAMETERS})
-  add_hpx_pseudo_dependencies(tests.unit.modules.agas_base ${test}_test)
 endforeach()

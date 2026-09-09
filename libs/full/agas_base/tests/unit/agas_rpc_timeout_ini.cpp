@@ -19,7 +19,6 @@ int hpx_main()
     auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         current_timeout.value())
                         .count();
-
     HPX_TEST_EQ(ms, std::int64_t(8888));
 
     return hpx::finalize();

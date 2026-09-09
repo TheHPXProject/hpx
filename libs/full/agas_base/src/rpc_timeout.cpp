@@ -12,11 +12,11 @@
 
 namespace hpx::agas {
 
-    static std::atomic<std::uint64_t> agas_rpc_timeout_ms{60000};
+    static std::atomic<std::uint64_t> agas_rpc_timeout_ms{HPX_AGAS_RPC_TIMEOUT};
 
-    void set_rpc_timeout(hpx::chrono::steady_duration const& timeout) noexcept
+    bool set_rpc_timeout(hpx::chrono::steady_duration const& timeout) noexcept
     {
-        if (timeout.value() >= timeout.value().zero())
+        if (timeout.value() > timeout.value().zero())
         {
             auto const timeout_ms =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -25,7 +25,9 @@ namespace hpx::agas {
             agas_rpc_timeout_ms.store(
                 static_cast<std::uint64_t>(timeout_ms.count()),
                 std::memory_order_relaxed);
+            return true;
         }
+        return false;
     }
 
     hpx::chrono::steady_duration get_rpc_timeout() noexcept
