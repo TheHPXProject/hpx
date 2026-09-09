@@ -23,6 +23,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -267,13 +268,12 @@ namespace hpx::debug {
         // ------------------------------------------------------------------
         [[nodiscard]] char const* hostname_print_helper::get_hostname() const
         {
-            static bool initialized = false;
+            static std::once_flag hostname_once;
             static char hostname_[32] = {'\0'};
-            if (!initialized)
-            {
-                initialized = true;
+            std::call_once(hostname_once, [this]() {
 #if !defined(__FreeBSD__)
-                gethostname(hostname_, static_cast<std::size_t>(12));
+                gethostname(hostname_, sizeof(hostname_) - 1);
+                hostname_[sizeof(hostname_) - 1] = '\0';
 #endif
                 int const rank = guess_rank();
                 if (rank >= 0)
@@ -282,7 +282,7 @@ namespace hpx::debug {
                     std::snprintf(
                         hostname_ + len, sizeof(hostname_) - len, "(%d)", rank);
                 }
-            }
+            });
             return hostname_;
         }
 
