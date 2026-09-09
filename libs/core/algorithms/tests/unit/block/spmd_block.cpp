@@ -131,7 +131,7 @@ void test_spmd_block_scheduler_one_worker()
     std::size_t const small_images = 2;
     std::atomic<std::size_t> counter{0};
 
-    auto fut = hpx::async([&counter, small_images] {
+    auto fut = hpx::async([&counter] {
         auto sched = hpx::execution::experimental::thread_pool_scheduler{};
 
         auto simple_test = [](hpx::parallel::spmd_block block,
