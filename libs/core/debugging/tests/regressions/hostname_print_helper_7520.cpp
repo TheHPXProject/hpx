@@ -15,14 +15,15 @@
 // worker threads and checks every task observed the same fully
 // initialized string once all tasks have finished.
 
+#include <hpx/barrier.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/debugging.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
-
 constexpr int num_tasks = 64;
 constexpr int calls_per_task = 1000;
 
