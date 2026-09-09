@@ -620,3 +620,12 @@ function(hpx_check_for_stable_inplace_merge)
     FILE ${ARGN}
   )
 endfunction()
+
+# ##############################################################################
+function(hpx_check_for_cxx26_filesystem_display_string)
+  add_hpx_config_test(
+    HPX_WITH_CXX26_FILESYSTEM_DISPLAY_STRING
+    SOURCE cmake/tests/cxx26_filesystem_display_string.cpp
+    FILE ${ARGN}
+  )
+endfunction()
