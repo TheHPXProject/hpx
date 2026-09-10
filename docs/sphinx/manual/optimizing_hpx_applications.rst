@@ -3634,6 +3634,17 @@ To profile a distributed run, additionally enable
 carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
 ``parcel_scheduled`` events can be correlated across localities by parcel id.
 
+Event classes can be compiled out individually to reduce the tracing cost
+when only a subset of the timeline is being investigated:
+:option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
+:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`, and
+:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
+one off compiles the wrapper for that class to a no-op, so the runtime
+connection check and the event body do not run (argument evaluation at each
+call site is unchanged). These gates affect the Tracy backend, which is the
+only backend that emits these classes today; the APEX, ITT-Notify and empty
+backends already treat all three as no-ops.
+
 Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
 or during the run. Tracy discovers instrumented processes via UDP broadcast
 on the local network; no port configuration is required for the common case.
