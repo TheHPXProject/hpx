@@ -174,11 +174,10 @@
 /// This defines the default AGAS RPC timeout in milliseconds.
 ///
 /// This value can be changed at runtime by setting the configuration parameter:
-///
-///   hpx.agas.rpc_timeout = ...
-///
-/// (or by setting the corresponding environment variable
-/// HPX_AGAS_RPC_TIMEOUT)
+/// \code
+///   hpx.agas.rpc_timeout = val
+/// \endcode
+/// (or by setting the corresponding environment variable HPX_AGAS_RPC_TIMEOUT)
 #if !defined(HPX_AGAS_RPC_TIMEOUT)
 #  define HPX_AGAS_RPC_TIMEOUT 60000
 #endif

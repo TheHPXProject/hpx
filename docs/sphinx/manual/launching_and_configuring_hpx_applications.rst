@@ -804,7 +804,7 @@ The ``hpx.agas`` configuration section
    * * ``hpx.agas.rpc_timeout``
      * This property specifies the timeout (in milliseconds) for :term:`AGAS`
        RPC requests. Defaults to ``60000`` ms. This property can be configured
-       at startup (e.g., ``--hpx:ini=hpx.agas.rpc_timeout=...``), set through
+       at startup (e.g., ``--hpx:ini=hpx.agas.rpc_timeout=val``), set through
        the ``HPX_AGAS_RPC_TIMEOUT`` environment variable, or updated at
        runtime via the atomic setter ``hpx::agas::set_rpc_timeout()``.
 

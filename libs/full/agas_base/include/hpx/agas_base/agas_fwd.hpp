@@ -56,7 +56,7 @@ namespace hpx::agas {
     /// \brief Set the timeout for AGAS RPC operations.
     ///
     /// \param timeout The new duration for AGAS RPC timeouts.
-    /// \returns true if timeout is valid (>0) and set successfully, false otherwise.
+    /// \returns true if timeout is strictly positive and set successfully, false otherwise.
     HPX_CXX_EXPORT HPX_EXPORT bool set_rpc_timeout(
         hpx::chrono::steady_duration const& timeout) noexcept;
 
