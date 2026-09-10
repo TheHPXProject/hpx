@@ -22,7 +22,11 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* barrier_direct_basename = "/test/barrier_hierarchical/";
+constexpr char const* barrier_direct_local_basename =
+    "/test/barrier_hierarchical/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 50;
 #else
@@ -79,7 +83,7 @@ void test_local_use(std::uint32_t num_sites, int arity)
     {
         sites.push_back(hpx::async([=]() {
             auto const barrier_clients = create_hierarchical_communicator(
-                barrier_direct_basename, num_sites_arg(num_sites),
+                barrier_direct_local_basename, num_sites_arg(num_sites),
                 this_site_arg(site), arity_arg(arity), generation_arg(),
                 root_site_arg(), flat_fallback_threshold_arg(0));
 

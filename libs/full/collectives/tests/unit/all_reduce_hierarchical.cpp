@@ -21,8 +21,12 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* all_reduce_direct_basename =
     "/test/all_reduce_hierarchical/";
+constexpr char const* all_reduce_direct_local_basename =
+    "/test/all_reduce_hierarchical/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 50;
 #else
@@ -76,7 +80,7 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
     {
         sites.push_back(hpx::async([=]() {
             auto const all_reduce_clients = create_hierarchical_communicator(
-                all_reduce_direct_basename, num_sites_arg(num_sites),
+                all_reduce_direct_local_basename, num_sites_arg(num_sites),
                 this_site_arg(site), arity_arg(arity), generation_arg(),
                 root_site_arg(), flat_fallback_threshold_arg(0));
 
