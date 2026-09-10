@@ -1187,7 +1187,7 @@ hpx_option(
 
 if(HPX_WITH_TRACY)
   hpx_option(
-    HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.13.1"
+    HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
     CATEGORY "Profiling"
   )
 endif()
