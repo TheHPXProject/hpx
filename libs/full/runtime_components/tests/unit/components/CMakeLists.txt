@@ -26,9 +26,12 @@ set(tests
 )
 
 if(HPX_WITH_CXX26_REFLECTION)
-  set(tests ${tests} reflect_client_test reflect_action_distributed_test)
+  set(tests ${tests} reflect_client_test reflect_action_distributed_test
+            reflect_async_distributed_test
+  )
   set(reflect_client_test_PARAMETERS LOCALITIES 2)
   set(reflect_action_distributed_test_PARAMETERS LOCALITIES 2)
+  set(reflect_async_distributed_test_PARAMETERS LOCALITIES 2)
 endif()
 
 set(action_invoke_no_more_than_PARAMETERS THREADS_PER_LOCALITY 4)
