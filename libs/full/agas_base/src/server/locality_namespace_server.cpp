@@ -51,10 +51,8 @@ namespace hpx::agas::server {
         char const* servicename, error_code& ec)
     {
         // now register this AGAS instance with AGAS :-P
-        instance_name_ = hpx::util::format(agas::service_name,
-            agas::is_connecting() ? agas::get_locality_id() : 0);
-        instance_name_ += servicename;
-        instance_name_ += agas::server::locality_namespace_service_name;
+        instance_name_ = agas::service_instance_name(
+            servicename, agas::server::locality_namespace_service_name);
 
         // register a gid (not the id) to avoid AGAS holding a reference to this
         // component

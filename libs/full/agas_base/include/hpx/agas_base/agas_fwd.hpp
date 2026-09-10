@@ -25,6 +25,18 @@ namespace hpx::agas {
     HPX_CXX_EXPORT inline constexpr char const* const service_name =
         "/{}/agas/";
 
+    /// Returns \a service_name with the id of the locality hosting the AGAS
+    /// services substituted, i.e. "/0/agas/" unless this locality is
+    /// connecting to a running application.
+    std::string service_name_prefix();
+
+    /// Returns the name one AGAS namespace service is registered under: the
+    /// prefix returned by \a service_name_prefix followed by \a servicename
+    /// and the service name of the namespace itself (one of
+    /// agas::server::primary_namespace_service_name and friends).
+    std::string service_instance_name(
+        char const* servicename, char const* namespace_service_name);
+
     // Fixed addresses of AGAS components
     HPX_CXX_EXPORT inline constexpr std::uint64_t booststrap_prefix = 0ULL;
     HPX_CXX_EXPORT inline constexpr std::uint64_t primary_ns_msb =
