@@ -445,6 +445,13 @@ namespace hpx::compute::host {
 
         void initialize_pages(pointer p, size_t n) const
         {
+            // initialize_pages() is expected to run on an HPX thread. The
+            // mutex is intentionally held across hpx::wait_all(), which may
+            // suspend and later resume the calling HPX thread on a different
+            // OS worker thread.
+            HPX_ASSERT_MSG(threads::get_self_ptr() != nullptr,
+                "numa_binding_allocator::initialize_pages must be called from an HPX thread");
+
             std::unique_lock<hpx::mutex> lk(init_mutex);
 
             threads::hwloc_bitmap_ptr const bitmap =

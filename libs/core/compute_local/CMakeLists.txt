@@ -68,6 +68,7 @@ add_hpx_module(
     hpx_resource_partitioner
     hpx_runtime_local
     hpx_serialization
+    hpx_synchronization
     hpx_threadmanager
     hpx_topology
     hpx_type_support
