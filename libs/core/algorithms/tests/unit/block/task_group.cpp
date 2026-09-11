@@ -6,8 +6,10 @@
 
 #include <hpx/init.hpp>
 #include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -114,12 +116,56 @@ void task_group_test3()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void task_group_test_scheduler()
+{
+    hpx::execution::experimental::thread_pool_scheduler sched{};
+    hpx::experimental::task_group g;
+    std::atomic<bool> executed{false};
+
+    g.run(sched, [&]() { executed = true; });
+    g.wait();
+
+    HPX_TEST(executed);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void task_group_test_scheduler_exception()
+{
+    bool throws_exception = true;
+    bool caught_exception = false;
+    try
+    {
+        hpx::experimental::task_group g;
+        hpx::execution::experimental::thread_pool_scheduler sched{};
+        g.run(sched, [] { throw std::runtime_error("test1"); });
+        g.run(sched, [] { throw std::runtime_error("test2"); });
+        throws_exception = false;
+
+        g.wait();    // rethrows after waiting for all tasks to finish
+        HPX_TEST(false);
+    }
+    catch (hpx::exception_list const& l)
+    {
+        caught_exception = true;
+        HPX_TEST_EQ(l.size(), std::size_t(2));
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+    HPX_TEST(!throws_exception);
+    HPX_TEST(caught_exception);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     task_group_test1();
     task_group_test1_reuse();
     task_group_test2();
     task_group_test3();
+    task_group_test_scheduler();
+    task_group_test_scheduler_exception();
 
     return hpx::local::finalize();
 }
