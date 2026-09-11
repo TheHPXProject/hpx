@@ -450,7 +450,8 @@ namespace hpx::compute::host {
             // suspend and later resume the calling HPX thread on a different
             // OS worker thread.
             HPX_ASSERT_MSG(threads::get_self_ptr() != nullptr,
-                "numa_binding_allocator::initialize_pages must be called from an HPX thread");
+                "numa_binding_allocator::initialize_pages must be "
+                "called from an HPX thread");
 
             std::unique_lock<hpx::mutex> lk(init_mutex);
 
