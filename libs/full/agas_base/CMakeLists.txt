@@ -59,6 +59,7 @@ set(agas_base_sources
     server/locality_namespace_server.cpp
     server/primary_namespace_server.cpp
     server/symbol_namespace_server.cpp
+    service_name.cpp
     symbol_namespace.cpp
 )
 
