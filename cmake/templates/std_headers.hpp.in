@@ -14,6 +14,10 @@
 #include <hpx/config/modules_enabled.hpp>
 
 @cxx_standard_headers@
+#if defined(HPX_HAVE_CXX17_STD_EXECUTION_POLICES)
+# include <execution>
+#endif
+
 # if defined(HPX_GCC_VERSION)
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Wall"

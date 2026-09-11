@@ -542,3 +542,11 @@ if(HPX_WITH_MODULES_AS_STATIC_LIBRARIES OR HPX_WITH_STATIC_LINKING)
     target_link_libraries(hpx_core PUBLIC Boost::filesystem)
   endif()
 endif()
+
+# We need to prevent depending on TBB, which is used as the implementation
+# platform for parallel algorithms in stdlibc++
+if(("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_CXX_COMPILER_ID}"
+                                                   STREQUAL "Clang")
+)
+  target_compile_definitions(hpx_core PUBLIC _GLIBCXX_USE_TBB_PAR_BACKEND=0)
+endif()
