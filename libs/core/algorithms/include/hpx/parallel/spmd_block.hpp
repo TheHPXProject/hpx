@@ -257,14 +257,16 @@ namespace hpx::lcos::local {
         for (std::size_t image_id = 0; image_id < num_images; ++image_id)
         {
             senders.push_back(ex::just(shared_data) | ex::continues_on(sched) |
-                ex::then([state, num_images, image_id](auto data) mutable {
+                ex::then([state, num_images, image_id](auto data) {
                     spmd_block block(num_images, image_id, state->barrier_,
                         state->barriers_, state->mtx_);
-                    auto invoke_helper = [&block](auto& func,
-                                             auto&... unpacked_args) {
-                        HPX_INVOKE(func, HPX_MOVE(block), unpacked_args...);
-                    };
-                    std::apply(invoke_helper, *data);
+
+                    // Inline the lambda directly into std::apply to reduce template AST depth
+                    std::apply(
+                        [&block](auto& func, auto&... unpacked_args) {
+                            HPX_INVOKE(func, HPX_MOVE(block), unpacked_args...);
+                        },
+                        *data);
                 }));
         }
 
