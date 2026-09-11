@@ -92,7 +92,6 @@ namespace hpx { namespace distributed {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -385,5 +384,4 @@ namespace hpx::distributed {
 
 #include <hpx/config/warnings_suffix.hpp>
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

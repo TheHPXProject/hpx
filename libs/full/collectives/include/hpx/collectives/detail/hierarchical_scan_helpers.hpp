@@ -10,7 +10,6 @@
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/collectives/argument_types.hpp>
 #include <hpx/collectives/create_communicator.hpp>
@@ -103,4 +102,3 @@ namespace hpx::collectives::detail {
             scatter_gen, detail::generation_mode::single_step);
     }
 }    // namespace hpx::collectives::detail
-#endif

@@ -47,3 +47,27 @@ if(HPX_WITH_NETWORKING)
   endforeach()
 
 endif()
+
+if(HPX_WITH_COMPILE_ONLY_TESTS)
+  set(compile_tests)
+  if(HPX_WITH_CUDA OR HPX_WITH_HIP)
+    list(APPEND compile_tests device_headers_6740)
+    set(device_headers_6740_CUDA ON)
+  endif()
+
+  foreach(compile_test ${compile_tests})
+    if(${${compile_test}_CUDA})
+      set(sources ${compile_test}.cu)
+    else()
+      set(sources ${compile_test}.cpp)
+    endif()
+
+    source_group("Source Files" FILES ${sources})
+
+    add_hpx_regression_compile_test(
+      "modules.collectives" ${compile_test}
+      SOURCES ${sources} ${${compile_test}_FLAGS}
+      FOLDER "Tests/Regressions/Modules/Full/Collectives/CompileOnly"
+    )
+  endforeach()
+endif()
