@@ -29,3 +29,10 @@ foreach(test ${tests})
 
   add_hpx_unit_test("modules.algorithms.block" ${test} ${${test}_PARAMETERS})
 endforeach()
+
+add_hpx_unit_test(
+  "modules.algorithms.block" spmd_block_one_worker
+  EXECUTABLE spmd_block
+  PSEUDO_DEPS_NAME spmd_block
+  THREADS_PER_LOCALITY 1
+)
