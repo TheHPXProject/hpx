@@ -150,7 +150,7 @@ namespace hpx::lcos::local {
             hpx::mutex mtx_;
 
             explicit spmd_shared_state(std::size_t num_images)
-              : barrier_(num_images)
+              : barrier_(static_cast<std::ptrdiff_t>(num_images))
             {
             }
         };
