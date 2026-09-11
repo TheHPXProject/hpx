@@ -14,6 +14,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/async_distributed/continuation_fwd.hpp>
+#include <hpx/async_distributed/detail/locality_disconnected.hpp>
 
 #include <cstdlib>
 #include <exception>
@@ -33,14 +34,11 @@ namespace hpx::actions {
                     cont.trigger_error(ex);
                 },
                 [&](std::exception_ptr const&) {
-#if defined(HPX_HAVE_FORCE_DISCONNECT)
-                    if (parcelset::locality_was_disconnected(
-                            naming::get_locality_id_from_id(cont.get_id())))
+                    if (hpx::detail::locality_is_disconnected(cont.get_id()))
                     {
                         // ignore any errors as locality is now unreachable
                         return;
                     }
-#endif
                     std::abort();    // nothing we can do here
                 });
         }
