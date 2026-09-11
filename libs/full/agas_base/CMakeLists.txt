@@ -55,6 +55,7 @@ set(agas_base_sources
     gva.cpp
     locality_namespace.cpp
     primary_namespace.cpp
+    rpc_timeout.cpp
     server/component_namespace_server.cpp
     server/locality_namespace_server.cpp
     server/primary_namespace_server.cpp

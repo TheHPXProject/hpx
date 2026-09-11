@@ -171,6 +171,17 @@
 #  define HPX_AGAS_LOCAL_CACHE_SIZE 4096
 #endif
 
+/// This defines the default AGAS RPC timeout in milliseconds.
+///
+/// This value can be changed at runtime by setting the configuration parameter:
+/// \code
+///   hpx.agas.rpc_timeout = val
+/// \endcode
+/// (or by setting the corresponding environment variable HPX_AGAS_RPC_TIMEOUT)
+#if !defined(HPX_AGAS_RPC_TIMEOUT)
+#  define HPX_AGAS_RPC_TIMEOUT 60000
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_INITIAL_AGAS_MAX_PENDING_REFCNT_REQUESTS)
 #  define HPX_INITIAL_AGAS_MAX_PENDING_REFCNT_REQUESTS 4096
