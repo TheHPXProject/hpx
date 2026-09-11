@@ -9,10 +9,15 @@
 # Make undefined variables errors, print each command
 set -eux
 
-# Clean up old artifacts
-rm -f ./jenkins-hpx* ./*-Testing
-
 export configuration_name_with_build_type="${configuration_name}-${build_type,,}"
+
+# Matrix lanes share this directory. Remove only this lane's old artifacts.
+rm -f \
+    "jenkins-hpx-${configuration_name_with_build_type}.out" \
+    "jenkins-hpx-${configuration_name_with_build_type}.err" \
+    "jenkins-hpx-${configuration_name_with_build_type}-ctest-status.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-build-id.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-submission.txt"
 
 source .jenkins/lsu/slurm-configuration-${configuration_name}.sh
 source .jenkins/common/slurm.sh
@@ -78,10 +83,12 @@ fi
 # Get the CDash dashboard build id
 cdash_build_id="$(cat jenkins-hpx-${configuration_name_with_build_type}-cdash-build-id.txt)"
 
+# Do not print the token passed to the status helper.
+set +x
 if [[ -z "${ghprbPullId:-}" ]]; then
     .jenkins/common/set_github_status.sh \
         "${GITHUB_TOKEN}" \
-        "STEllAR-GROUP/hpx" \
+        "TheHPXProject/hpx" \
         "${GIT_COMMIT}" \
         "${github_commit_status}" \
         "${configuration_name_with_build_type}" \
@@ -100,6 +107,16 @@ else
         "${configuration_name_with_build_type}" \
         "${cdash_build_id}" \
         "jenkins/lsu"
+fi
+github_status_result=$?
+set -x
+
+if [[ "${github_status_result}" -ne 0 ]]; then
+    build_status=$(cat "${status_file}")
+    if [[ "${build_status}" -ne 0 ]]; then
+        exit "${build_status}"
+    fi
+    exit "${github_status_result}"
 fi
 
 set -e
