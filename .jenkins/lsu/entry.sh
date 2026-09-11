@@ -9,10 +9,15 @@
 # Make undefined variables errors, print each command
 set -eux
 
-# Clean up old artifacts
-rm -f ./jenkins-hpx* ./*-Testing
-
 export configuration_name_with_build_type="${configuration_name}-${build_type,,}"
+
+# Matrix lanes share this directory. Remove only this lane's old artifacts.
+rm -f \
+    "jenkins-hpx-${configuration_name_with_build_type}.out" \
+    "jenkins-hpx-${configuration_name_with_build_type}.err" \
+    "jenkins-hpx-${configuration_name_with_build_type}-ctest-status.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-build-id.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-submission.txt"
 
 source .jenkins/lsu/slurm-configuration-${configuration_name}.sh
 source .jenkins/common/slurm.sh
