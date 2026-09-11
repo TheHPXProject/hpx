@@ -7,6 +7,10 @@
 
 configure_extra_options+=" -DCMAKE_BUILD_TYPE=${build_type}"
 configure_extra_options+=" -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON"
+
+# The stale allocator cache reference of #6540 only showed up in release
+# builds, so verify the cache owner in every configuration here.
+configure_extra_options+=" -DHPX_ALLOCATOR_SUPPORT_WITH_CACHE_OWNER_VERIFICATION=ON"
 if [ "${build_type}" = "Debug" ]; then
     configure_extra_options+=" -DHPX_WITH_PARCELPORT_COUNTERS=ON"
     configure_extra_options+=" -DLCI_DEBUG=ON"
