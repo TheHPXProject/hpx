@@ -321,7 +321,7 @@ namespace hpx::debug {
         struct hostname_print_helper
         {
             [[nodiscard]] HPX_CORE_EXPORT char const* get_hostname() const;
-            [[nodiscard]] HPX_CORE_EXPORT int guess_rank() const;
+            [[nodiscard]] HPX_CORE_EXPORT int guess_rank() const noexcept;
 
             HPX_CORE_EXPORT friend std::ostream& operator<<(
                 std::ostream& os, hostname_print_helper h);

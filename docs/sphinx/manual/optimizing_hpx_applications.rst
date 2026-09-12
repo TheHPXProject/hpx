@@ -3622,14 +3622,28 @@ per-thread zone tracking, message logs, and fiber support. Enable it with
 Tracy can be supplied via a system install (point ``Tracy_ROOT`` at the install
 tree) or fetched by CMake at configure time by adding
 ``HPX_WITH_FETCH_TRACY=ON``. The version fetched is pinned by
-``HPX_WITH_TRACY_TAG``, which defaults to ``v0.13.1``. When Tracy is
-fetched, |hpx| forces ``TRACY_ON_DEMAND`` and ``TRACY_FIBERS`` on the built
-client. A system-supplied Tracy must have been built with both.
+``HPX_WITH_TRACY_TAG``, which defaults to ``v0.14.1``. When Tracy is
+fetched, |hpx| forces ``TRACY_ENABLE``, ``TRACY_ON_DEMAND`` and
+``TRACY_FIBERS`` on the built client. A system-supplied Tracy must have
+been built with the same three options; Tracy 0.14 mangles its exported
+profiler symbol based on the active define set, so a mismatch fails at
+link time rather than producing a silent inconsistency at runtime.
 
 To profile a distributed run, additionally enable
 :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
 carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
 ``parcel_scheduled`` events can be correlated across localities by parcel id.
+
+Event classes can be compiled out individually to reduce the tracing cost
+when only a subset of the timeline is being investigated:
+:option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
+:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`, and
+:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
+one off compiles the wrapper for that class to a no-op, so the runtime
+connection check and the event body do not run (argument evaluation at each
+call site is unchanged). These gates affect the Tracy backend, which is the
+only backend that emits these classes today; the APEX, ITT-Notify and empty
+backends already treat all three as no-ops.
 
 Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
 or during the run. Tracy discovers instrumented processes via UDP broadcast

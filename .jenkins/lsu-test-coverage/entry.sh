@@ -11,6 +11,8 @@
 # Make undefined variables errors, print each command
 set -eux
 
+source .jenkins/common/slurm.sh
+
 source .jenkins/lsu-test-coverage/slurm-constraint-${configuration_name}.sh
 
 if [[ -z "${CHANGE_ID:-}" ]]; then
@@ -22,7 +24,7 @@ else
 
     # Cancel currently running builds on the same branch, but only for pull
     # requests
-    scancel  --verbose --verbose --verbose --verbose --jobname="${job_name}"
+    hpx_slurm_cancel_previous "${job_name}"
 fi
 
 # delay things for a random amount of time
@@ -41,7 +43,7 @@ fi
 
 # Start the actual build
 set +e
-sbatch \
+hpx_slurm_run "${HPX_SLURM_TIMEOUT:-6h}" \
     --verbose --verbose --verbose --verbose \
     --exclusive \
     --job-name="${job_name}" \
@@ -50,7 +52,8 @@ sbatch \
     --time="05:00:00" \
     --output="jenkins-hpx-${configuration_name}.out" \
     --error="jenkins-hpx-${configuration_name}.err" \
-    --wait .jenkins/lsu-test-coverage/batch.sh
+    .jenkins/lsu-test-coverage/batch.sh
+slurm_status=$?
 
 
 # Print slurm logs
@@ -64,4 +67,7 @@ cat jenkins-hpx-${configuration_name}.err
 status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
 
 set -e
+if [[ "${slurm_status}" -ne 0 ]]; then
+    exit "${slurm_status}"
+fi
 exit $(cat ${status_file})

@@ -253,6 +253,7 @@ namespace hpx::tracing {
     };
 
     namespace detail {
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_staged_impl(
             char const* description,
             void const* parent_task_id = nullptr) noexcept;
@@ -281,11 +282,15 @@ namespace hpx::tracing {
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_deleted_impl(
             void const* task_id) noexcept;
+#endif    // HPX_HAVE_TRACING_LIFECYCLE_EVENTS
     }    // namespace detail
 
-    // Inline gate wrappers. When the profiler is not connected, the whole
-    // per-task snprintf/message/log-string chain is short-circuited at the
-    // call site; only a single atomic load runs.
+    // Inline gate wrappers. When the profiler is not connected, each wrapper
+    // short-circuits on a single atomic load. HPX_HAVE_TRACING_LIFECYCLE_EVENTS
+    // compiles the wrapper body to a constexpr no-op, so the runtime check and
+    // the _impl call are elided; argument evaluation at each call site is
+    // unchanged.
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
 
     /// \brief Task-lifecycle signal: task description registered before the
     ///        thread object exists.
@@ -372,6 +377,42 @@ namespace hpx::tracing {
         detail::task_deleted_impl(task_id);
     }
 
+#else
+
+    // Gated-off versions mirror the empty-backend shape (unnamed parameters,
+    // constexpr no-op) so the wrapper inlines away at every existing site.
+    HPX_CXX_CORE_EXPORT constexpr void task_staged(
+        char const*, void const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_created(
+        char const*, void const*, void const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_executing(
+        void const*, char const*, std::size_t) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_yielded(
+        void const*, char const*) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_suspended(
+        void const*, char const*, char const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_resumed(
+        void const*, char const*, char const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_completed(
+        void const*, char const*) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void task_deleted(void const*) noexcept {}
+
+#endif    // HPX_HAVE_TRACING_LIFECYCLE_EVENTS
+
     ////////////////////////////////////////////////////////////////////////////
     // Causal tracing: future fulfillment signals.
     //
@@ -388,20 +429,22 @@ namespace hpx::tracing {
     // producer message precedes the consumer wake-up in wall-clock order).
 
     namespace detail {
+#if defined(HPX_HAVE_TRACING_CAUSAL_EVENTS)
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void future_fulfilled_impl(
             void const* future_id, char const* desc = nullptr) noexcept;
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void future_exception_set_impl(
             void const* future_id, char const* desc = nullptr) noexcept;
 
-        // Active-continuations counter. Updated unconditionally by the
-        // continuation_run / continuation_finished inline wrappers below,
-        // even when no profiler is attached, so the tally stays consistent
-        // across connect/disconnect transitions. Only the Tracy emission
-        // (message + sample_value + fiber text) is gated. If both sides
-        // were gated instead, a run that started disconnected and finished
-        // connected would decrement without a matching increment (and the
-        // reverse would leak a permanent positive drift).
+        // Active-continuations counter. Two gates apply at different levels.
+        // Runtime (profiler connected or not): continuation_run/finished bump
+        // this on every call regardless of connection state, so a run that
+        // spans a disconnect/connect transition leaves no drift. Only the
+        // Tracy emission (message + sample_value + fiber text) is gated on
+        // is_profiler_connected(). Compile (HPX_HAVE_TRACING_CAUSAL_EVENTS):
+        // the counter and its updates are compiled out together with the
+        // rest of the causal machinery; nothing outside these _emit bodies
+        // reads it.
         //
         // The plot value is loaded inside each _emit body rather than
         // snapshotted at the fetch_add/fetch_sub call site, so that Tracy
@@ -418,10 +461,13 @@ namespace hpx::tracing {
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void handle_on_completed_fired_impl(
             void const* task_id = nullptr) noexcept;
+#endif    // HPX_HAVE_TRACING_CAUSAL_EVENTS
 
+#if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void work_stolen_impl(
             std::size_t thief_id, std::size_t victim_id, void const* task_id,
             char const* desc = nullptr) noexcept;
+#endif    // HPX_HAVE_TRACING_WORK_STEALING_EVENTS
 
         HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void frame_mark_impl(
             char const* name = nullptr) noexcept;
@@ -442,6 +488,13 @@ namespace hpx::tracing {
             std::uint64_t source_locality_id,
             std::uint64_t source_thread_id) noexcept;
     }    // namespace detail
+
+    // HPX_HAVE_TRACING_CAUSAL_EVENTS gates the producer wrappers and the
+    // consumer wrappers together, including the g_active_continuations
+    // fetch_add/fetch_sub inside continuation_run/finished. Nothing outside
+    // these wrappers reads that counter, so gating it off leaves nothing
+    // stale.
+#if defined(HPX_HAVE_TRACING_CAUSAL_EVENTS)
 
     /// \brief Producer-side signal: a future shared state was set to a value.
     ///
@@ -505,6 +558,36 @@ namespace hpx::tracing {
         detail::handle_on_completed_fired_impl(task_id);
     }
 
+#else
+
+    HPX_CXX_CORE_EXPORT constexpr void future_fulfilled(
+        void const*, char const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void future_exception_set(
+        void const*, char const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void continuation_run(
+        void const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void continuation_finished(
+        void const* = nullptr) noexcept
+    {
+    }
+    HPX_CXX_CORE_EXPORT constexpr void handle_on_completed_fired(
+        void const* = nullptr) noexcept
+    {
+    }
+
+#endif    // HPX_HAVE_TRACING_CAUSAL_EVENTS
+
+    // HPX_HAVE_TRACING_WORK_STEALING_EVENTS gates the work-steal signal. The signal
+    // is emitted from the scheduler's steal loop after a successful steal;
+    // gating it off elides the runtime check and the _impl body.
+#if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+
     /// \brief Signal emitted when a worker thread steals a task from
     ///        another worker.
     HPX_CXX_CORE_EXPORT inline void work_stolen(std::size_t thief_id,
@@ -515,6 +598,15 @@ namespace hpx::tracing {
             return;
         detail::work_stolen_impl(thief_id, victim_id, task_id, desc);
     }
+
+#else
+
+    HPX_CXX_CORE_EXPORT constexpr void work_stolen(
+        std::size_t, std::size_t, void const*, char const* = nullptr) noexcept
+    {
+    }
+
+#endif    // HPX_HAVE_TRACING_WORK_STEALING_EVENTS
 
     /// \brief Emit a frame/stage boundary marker in Tracy timeline.
     ///

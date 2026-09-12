@@ -182,6 +182,7 @@ namespace hpx::tracing {
         }
 
         ////////////////////////////////////////////////////////////////////////
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
         enum class color : std::uint32_t
         {
             staged = 0x808080,
@@ -198,10 +199,12 @@ namespace hpx::tracing {
         {
             return str ? str : "<unknown>";
         }
+#endif    // HPX_HAVE_TRACING_LIFECYCLE_EVENTS
     }    // namespace detail
 
     namespace detail {
 
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
         void task_staged_impl(
             char const* description, void const* parent_task_id) noexcept
         {
@@ -319,10 +322,12 @@ namespace hpx::tracing {
             hpx::tracy::message(buffer, std::strlen(buffer),
                 static_cast<std::uint32_t>(color::deleted));
         }
+#endif    // HPX_HAVE_TRACING_LIFECYCLE_EVENTS
 
         ////////////////////////////////////////////////////////////////////////////
         // Causal tracing: future fulfillment signals
 
+#if defined(HPX_HAVE_TRACING_CAUSAL_EVENTS)
         void future_fulfilled_impl(
             void const* future_id, char const* desc) noexcept
         {
@@ -426,7 +431,9 @@ namespace hpx::tracing {
             // Embed directly into active fiber visual zone text
             hpx::tracy::detail::add_zone_text_to_fiber(buffer, len);
         }
+#endif    // HPX_HAVE_TRACING_CAUSAL_EVENTS
 
+#if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
         void work_stolen_impl(std::size_t thief_id, std::size_t victim_id,
             void const* task_id, char const* desc) noexcept
         {
@@ -446,6 +453,7 @@ namespace hpx::tracing {
             // Amber/Gold color: 0xFFC107
             hpx::tracy::message(buffer, std::strlen(buffer), 0xFFC107u);
         }
+#endif    // HPX_HAVE_TRACING_WORK_STEALING_EVENTS
 
         void frame_mark_impl(char const* name) noexcept
         {

@@ -15,10 +15,6 @@ if(TRACY_ROOT AND NOT Tracy_ROOT)
   unset(TRACY_ROOT CACHE)
 endif()
 
-if(NOT HPX_WITH_TRACY_TAG)
-  set(HPX_WITH_TRACY_TAG "v0.13.1")
-endif()
-
 if(NOT HPX_WITH_FETCH_TRACY)
   find_package(Tracy)
   if(NOT Tracy_FOUND)
@@ -48,7 +44,13 @@ elseif(NOT TARGET tracy::tracy)
     GIT_SHALLOW TRUE
   )
 
-  # Set the correct build options for Tracy and make it available
+  # Set the correct build options for Tracy and make it available. 0.14 defaults
+  # TRACY_ENABLE OFF; without forcing it on, a HPX build with HPX_WITH_TRACY=ON
+  # compiles, links, and records nothing.
+  set(TRACY_ENABLE
+      ON
+      CACHE BOOL "" FORCE
+  )
   set(TRACY_FIBERS
       ON
       CACHE BOOL "" FORCE

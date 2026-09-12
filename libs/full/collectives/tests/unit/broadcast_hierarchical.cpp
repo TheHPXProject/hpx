@@ -21,8 +21,14 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* broadcast_direct_basename =
     "/test/broadcast_hierarchical/";
+constexpr char const* broadcast_direct_explicit_generation_basename =
+    "/test/broadcast_hierarchical/explicit_generation/";
+constexpr char const* broadcast_direct_local_basename =
+    "/test/broadcast_hierarchical/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 50;
 #else
@@ -79,9 +85,9 @@ void test_multiple_use_with_generation(int arity = 2)
     HPX_TEST_LTE(static_cast<std::uint32_t>(2), num_localities);
 
     auto const broadcast_clients = create_hierarchical_communicator(
-        broadcast_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(here), arity_arg(arity), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        broadcast_direct_explicit_generation_basename,
+        num_sites_arg(num_localities), this_site_arg(here), arity_arg(arity),
+        generation_arg(), root_site_arg(), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -123,7 +129,7 @@ void test_local_use(std::uint32_t num_sites, int arity)
     {
         sites.push_back(hpx::async([=]() {
             auto const broadcast_clients = create_hierarchical_communicator(
-                broadcast_direct_basename, num_sites_arg(num_sites),
+                broadcast_direct_local_basename, num_sites_arg(num_sites),
                 this_site_arg(site), arity_arg(arity), generation_arg(),
                 root_site_arg(), flat_fallback_threshold_arg(0));
 
