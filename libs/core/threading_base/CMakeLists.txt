@@ -16,6 +16,7 @@ set(threading_base_headers
     hpx/threading_base/detail/get_default_pool.hpp
     hpx/threading_base/detail/get_default_timer_service.hpp
     hpx/threading_base/detail/switch_status.hpp
+    hpx/threading_base/detail/task_sampling.hpp
     hpx/threading_base/execution_agent.hpp
     hpx/threading_base/external_timer.hpp
     hpx/threading_base/network_background_callback.hpp
