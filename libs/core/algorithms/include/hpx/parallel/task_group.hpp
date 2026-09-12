@@ -1,4 +1,4 @@
-//  Copyright (c) 2021-2025 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -14,6 +14,7 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -26,6 +27,7 @@
 #include <exception>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 /// Top-level namespace
 namespace hpx::experimental {
@@ -102,13 +104,97 @@ namespace hpx::experimental {
         template <typename F, typename... Ts>
         // clang-format off
             requires (
-                !hpx::traits::is_executor_any_v<std::decay_t<F>>
+                !hpx::traits::is_executor_any_v<std::decay_t<F>> &&
+                !hpx::execution::experimental::is_scheduler_v<std::decay_t<F>>
             )
         // clang-format on
         void run(F&& f, Ts&&... ts)
         {
             run(execution::parallel_executor{}, HPX_FORWARD(F, f),
                 HPX_FORWARD(Ts, ts)...);
+        }
+
+        // ---------------------------------------------------------------
+        // P2300 Scheduler-based sender path
+        // ---------------------------------------------------------------
+
+        /// \brief Adds a task to compute \c f(ts...) on the given P2300
+        ///        scheduler and returns immediately.
+        ///
+        /// Instead of eagerly posting work, this overload constructs a lazy
+        /// sender graph \code ex::schedule(sched) | ex::then(f) \endcode and
+        /// stores it in an internal sender vector.  The work is not submitted
+        /// until \a wait() or \a wait_as_sender() is called.
+        ///
+        /// \tparam Scheduler  A type that models the P2300 \c scheduler
+        ///                    concept.
+        /// \tparam F          The type of the user defined function to invoke.
+        /// \tparam Ts         The type of additional arguments used to
+        ///                    invoke \c f().
+        ///
+        /// \param sched       The P2300 scheduler to use for execution.
+        /// \param f           The user defined function to invoke inside the
+        ///                    task group.
+        /// \param ts          Additional arguments to use to invoke \c f().
+
+        template <typename Scheduler, typename F, typename... Ts>
+        // clang-format off
+            requires (
+                hpx::execution::experimental::is_scheduler_v<
+                    std::decay_t<Scheduler>>
+            )
+        // clang-format on
+        void run(Scheduler&& sched, F&& f, Ts&&... ts)
+        {
+            namespace ex = hpx::execution::experimental;
+
+            // Package the callable and arguments into a shared_ptr so that
+            // they survive the lifetime of this call and can be shared
+            // across the sender graph safely.
+            auto shared_args = std::make_shared<
+                std::tuple<std::decay_t<F>, std::decay_t<Ts>...>>(
+                std::make_tuple(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...));
+
+            // Build a lazy sender: schedule on the given scheduler, then
+            // invoke the callable with the captured arguments.  Exceptions
+            // are caught and forwarded to the task_group's error list so
+            // that they are aggregated and re-thrown from wait().
+            auto sender = ex::schedule(HPX_FORWARD(Scheduler, sched)) |
+                ex::then([this, shared_args = HPX_MOVE(shared_args)]() {
+                    hpx::detail::try_catch_exception_ptr(
+                        [&]() {
+                            std::apply(
+                                [](auto&& func, auto&&... args) {
+                                    HPX_INVOKE(
+                                        HPX_FORWARD(decltype(func), func),
+                                        HPX_FORWARD(decltype(args), args)...);
+                                },
+                                HPX_MOVE(*shared_args));
+                        },
+                        [this](std::exception_ptr e) {
+                            add_exception(HPX_MOVE(e));
+                        });
+                });
+
+            senders_.push_back(HPX_MOVE(sender));
+        }
+
+        /// \brief Returns a sender that completes when all tasks added via
+        ///        the scheduler-based \a run() overload have finished.
+        ///
+        /// The returned sender joins all lazily accumulated senders using
+        /// \c ex::when_all_vector.  The caller owns the returned sender and
+        /// controls when to connect/start it (e.g. via \c sync_wait).
+        ///
+        /// \note  This method moves the internal sender vector, so the
+        ///        \c task_group is left in a reusable (empty) state afterward.
+        ///
+        /// \returns A sender that completes with void once every accumulated
+        ///          sender has completed.
+        decltype(auto) wait_as_sender()
+        {
+            namespace ex = hpx::execution::experimental;
+            return ex::when_all_vector(HPX_MOVE(senders_));
         }
 
         /// \brief Waits for all tasks in the group to complete or be cancelled.
@@ -134,6 +220,10 @@ namespace hpx::experimental {
         hpx::intrusive_ptr<shared_state_type> state_;
         hpx::exception_list errors_;
         std::atomic<bool> has_arrived_;
+
+        // P2300 sender storage: lazily accumulated senders from the
+        // scheduler-based run() overload, joined by wait_as_sender().
+        std::vector<hpx::execution::experimental::any_sender<>> senders_;
     };
 }    // namespace hpx::experimental
 
