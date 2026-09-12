@@ -326,6 +326,23 @@ namespace hpx::execution::experimental {
 
     HPX_CXX_CORE_EXPORT using stdexec::operation_state;
 
+    // Async scope (P3149: async_scope - creating scopes for
+    // non-sequential concurrency)
+    HPX_CXX_CORE_EXPORT using stdexec::scope_association;
+    HPX_CXX_CORE_EXPORT using stdexec::scope_token;
+
+    HPX_CXX_CORE_EXPORT using stdexec::associate;
+    HPX_CXX_CORE_EXPORT using stdexec::associate_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::spawn;
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_future;
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_future_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::simple_counting_scope;
+    HPX_CXX_CORE_EXPORT using stdexec::counting_scope;
+
     // sender invokes
     HPX_CXX_CORE_EXPORT template <typename Sender, typename AlgorithmTag>
     inline constexpr bool sender_invokes_algorithm_v =
