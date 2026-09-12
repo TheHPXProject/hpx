@@ -92,7 +92,7 @@ foreach(test ${tests})
     set(test_localities 2)
   endif()
   
-  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 2
+  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES ${test_localities}
                          THREADS_PER_LOCALITY 4
   )
 
