@@ -62,10 +62,6 @@ namespace hpx::threads {
             running_exit_funcs = 0x08,
             ran_exit_funcs = 0x10,
             is_background = 0x20,
-            // Tracing 1-in-N sampling flag. Set once in the ctor/rebind_base
-            // before the object is observable, then read by lifecycle hook
-            // wrappers on the worker that owns the task. Not mutated later.
-            emit_lifecycle = 0x40,
         };
 
         constexpr bool operator&(
@@ -346,6 +342,8 @@ namespace hpx::threads {
 #if defined(HPX_HAVE_TRACY)
     private:
         mutable char fiber_name_[64];
+        // 1-in-N tracing sample decision, set at ctor/rebind_base only.
+        bool emit_lifecycle_ = false;
 #endif
 
     public:
@@ -496,12 +494,15 @@ namespace hpx::threads {
         }
 
         // True if this task's lifecycle events should be emitted. On
-        // Tracy, reflects the 1/N sample bit. On other backends, always
-        // true (their hooks are constexpr no-ops).
+        // Tracy, reflects the 1/N sample decision made once at ctor and
+        // rebind_base; the read is unlocked because no other code path
+        // ever writes emit_lifecycle_ (unlike state_ bits, which are
+        // mutated concurrently by interrupt()). On other backends,
+        // always true (their hooks are constexpr no-ops).
         bool should_emit_lifecycle() const noexcept
         {
 #if defined(HPX_HAVE_TRACY)
-            return state_ & state::emit_lifecycle;
+            return emit_lifecycle_;
 #else
             return true;
 #endif

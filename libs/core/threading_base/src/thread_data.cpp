@@ -118,8 +118,7 @@ namespace hpx::threads {
         fiber_name_[0] = '\0';
         // Decide once per task creation whether this task's lifecycle is
         // sampled. Safe unlocked: the object is not yet observable.
-        if (hpx::threads::detail::should_sample_next())
-            state_ |= state::emit_lifecycle;
+        emit_lifecycle_ = hpx::threads::detail::should_sample_next();
 #endif
         hpx::tracing::task_created(this, parent_task_id);
     }
@@ -255,13 +254,11 @@ namespace hpx::threads {
         priority_ = init_data.priority;
         state_ |= state::enabled_interrupt;
         state_ &= ~(state::requested_interrupt | state::running_exit_funcs |
-            state::ran_exit_funcs | state::is_background |
-            state::emit_lifecycle);
+            state::ran_exit_funcs | state::is_background);
 #if defined(HPX_HAVE_TRACY)
-        // Fresh 1/N decision for the recycled slab; the mask above cleared
-        // the previous bit. Safe unlocked: no other worker can see it.
-        if (hpx::threads::detail::should_sample_next())
-            state_ |= state::emit_lifecycle;
+        // Fresh 1/N decision for the recycled slab. Safe unlocked: no
+        // other worker can see it during rebind.
+        emit_lifecycle_ = hpx::threads::detail::should_sample_next();
 #endif
 
         runs_as_child_.store(init_data.schedulehint.runs_as_child_mode() ==
