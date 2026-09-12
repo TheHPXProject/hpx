@@ -1237,6 +1237,11 @@ if(HPX_WITH_TRACY)
     "1"
     ADVANCED
   )
+  if(NOT HPX_WITH_TRACING_SAMPLE_RATE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "HPX_WITH_TRACING_SAMPLE_RATE must be a positive integer, got '${HPX_WITH_TRACING_SAMPLE_RATE}'"
+    )
+  endif()
   hpx_add_config_define(HPX_TRACING_SAMPLE_RATE ${HPX_WITH_TRACING_SAMPLE_RATE})
 endif()
 
