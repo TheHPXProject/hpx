@@ -114,8 +114,6 @@ hpx::experimental::define_task_block(sched, [](auto& tr, auto& sched) {
 
 ---
 
----
-
 ## Phase 3: Write CTest Regression Tests -- COMPLETE
 
 ### Summary of Tests Implemented in `task_block_scheduler.cpp`
@@ -140,6 +138,22 @@ All 7 CTest unit test targets under `tests.unit.modules.algorithms.block` pass 1
 - `task_group`: PASSED
 - `task_block_scheduler`: PASSED
 - `run_on_all`: PASSED
+
+---
+
+## Phase 4: CI/CD & Code Review -- IN PROGRESS
+
+### Status
+The Pull Request has been officially opened targeting the HPX V2.0 release on the `feat/modernize-task-block` branch.
+
+### Current Actions
+1. **GitHub Actions CI Pipeline Monitoring**:
+   - Tracking matrix test results across supported toolchains and platforms: Clang, GCC, MSVC, Tracy instrumentation, etc.
+   - Ensuring clean test runs, zero compiler warnings, and compliance checks.
+2. **Review & Maintenance**:
+   - Awaiting review feedback from CodeRabbit AI assistant.
+   - Awaiting core maintainer review from Hartmut Kaiser (`@hkaiser`).
+   - Prepared to address any requested architectural adjustments, constraint refinements, or follow-ups.
 
 ---
 
