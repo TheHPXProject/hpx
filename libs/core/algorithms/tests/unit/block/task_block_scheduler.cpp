@@ -250,8 +250,7 @@ void test_task_group_mixed_executor_scheduler()
 void test_run_on_all_scheduler()
 {
     ex::thread_pool_scheduler sched{};
-    auto cores = hpx::execution::experimental::processing_units_count(
-        hpx::execution::par);
+    auto cores = hpx::execution::experimental::processing_units_count(sched);
 
     // Single reduction
     {
@@ -279,6 +278,114 @@ void test_run_on_all_scheduler()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// 12. run_on_all worker mapping: verify each worker participates exactly once
+void test_run_on_all_scheduler_workers()
+{
+    ex::thread_pool_scheduler sched{};
+    auto const cores =
+        hpx::execution::experimental::processing_units_count(sched);
+
+    std::vector<std::atomic<int>> worker_hits(cores);
+    for (auto& hit : worker_hits)
+    {
+        hit.store(0);
+    }
+
+    hpx::experimental::run_on_all(sched, [&worker_hits, cores]() {
+        std::size_t worker_id = hpx::get_worker_thread_num();
+        if (worker_id < cores)
+        {
+            ++worker_hits[worker_id];
+        }
+    });
+
+    for (std::size_t i = 0; i < cores; ++i)
+    {
+        HPX_TEST_EQ(worker_hits[i].load(), 1);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 13. task_group: legacy wait() with P2300 scheduler-run tasks
+void test_task_group_scheduler_legacy_wait()
+{
+    ex::thread_pool_scheduler sched{};
+    task_group g;
+
+    std::atomic<int> count{0};
+    g.run(sched, [&count] { ++count; });
+    g.run(sched, [&count] { ++count; });
+
+    // Call legacy wait() directly to join senders via sync_wait internally
+    g.wait();
+
+    HPX_TEST_EQ(count.load(), 2);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 14. task_group: recursive/dynamic task spawning on the same task_group
+void test_task_group_recursive_spawning()
+{
+    ex::thread_pool_scheduler sched{};
+    task_group g;
+
+    std::atomic<int> count{0};
+
+    // Root task dynamically spawns child tasks on the same task_group g
+    g.run(sched, [&g, sched, &count] {
+        ++count;
+        g.run(sched, [&g, sched, &count] {
+            ++count;
+            g.run(sched, [&count] { ++count; });
+        });
+    });
+
+    auto sender = g.wait_as_sender();
+    tt::sync_wait(HPX_MOVE(sender));
+
+    HPX_TEST_EQ(count.load(), 3);
+}
+
+void test_task_group_recursive_spawning_legacy_wait()
+{
+    ex::thread_pool_scheduler sched{};
+    task_group g;
+
+    std::atomic<int> count{0};
+
+    // Root task dynamically spawns child tasks on the same task_group g
+    g.run(sched, [&g, sched, &count] {
+        ++count;
+        g.run(sched, [&g, sched, &count] {
+            ++count;
+            g.run(sched, [&count] { ++count; });
+        });
+    });
+
+    g.wait();
+
+    HPX_TEST_EQ(count.load(), 3);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 15. task_group: shared lifetime safety when task_group goes out of scope
+void test_task_group_lifetime_safety()
+{
+    ex::thread_pool_scheduler sched{};
+    std::atomic<int> count{0};
+
+    auto sender = [&]() {
+        task_group g;
+        g.run(sched, [&count] { ++count; });
+        g.run(sched, [&count] { ++count; });
+        return g.wait_as_sender();
+    }();    // g is destroyed here, sender must keep shared state alive
+
+    tt::sync_wait(HPX_MOVE(sender));
+    HPX_TEST_EQ(count.load(), 2);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_task_group_scheduler_basic();
@@ -292,6 +399,11 @@ int hpx_main()
     test_define_task_block_restore_thread_scheduler();
     test_task_group_mixed_executor_scheduler();
     test_run_on_all_scheduler();
+    test_run_on_all_scheduler_workers();
+    test_task_group_scheduler_legacy_wait();
+    test_task_group_recursive_spawning();
+    test_task_group_recursive_spawning_legacy_wait();
+    test_task_group_lifetime_safety();
 
     return hpx::local::finalize();
 }

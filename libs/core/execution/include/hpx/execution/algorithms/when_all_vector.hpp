@@ -497,9 +497,11 @@ namespace hpx::when_all_vector_detail {
         }
 
         template <typename Receiver>
+            requires(std::is_copy_constructible_v<Sender>)
         operation_state<Receiver> connect(Receiver&& receiver) &
         {
-            return operation_state<Receiver>(receiver, senders);
+            return operation_state<Receiver>(
+                receiver, std::vector<Sender>(senders));
         }
     };    // namespace hpx::when_all_vector_detail
 

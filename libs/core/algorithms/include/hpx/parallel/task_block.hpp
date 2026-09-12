@@ -411,11 +411,7 @@ namespace hpx::experimental {
                         trh.add_exception(HPX_MOVE(e));
                     });
 
-                // Join the lazily accumulated sender graph.  This blocks
-                // the calling thread until every sender completes, then
-                // falls through to the legacy wait_for_completion() path
-                // for any tasks that were spawned via the executor route.
-                ex::sync_wait(trh.tasks_.wait_as_sender());
+                // Join the lazily accumulated sender graph and any executor tasks.
                 trh.wait_for_completion();
             }
         };

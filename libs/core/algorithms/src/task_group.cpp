@@ -7,27 +7,29 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/parallel/task_group.hpp>
 
 #include <exception>
+#include <memory>
 
 namespace hpx::experimental {
 
     ///////////////////////////////////////////////////////////////////////////
     task_group::task_group()
-      : latch_(1)
-      , has_arrived_(false)
+      : state_(std::make_shared<detail::task_group_shared_state>())
     {
     }
 
 #if defined(HPX_DEBUG)
     task_group::~task_group()
     {
-        // wait() must have been called
-        HPX_ASSERT(latch_.is_ready());
+        // wait() or wait_as_sender() must have been called
+        HPX_ASSERT(!state_ || state_->latch_.is_ready() ||
+            state_->wait_called_.load(std::memory_order_relaxed));
     }
 #else
     task_group::~task_group() = default;
@@ -35,37 +37,64 @@ namespace hpx::experimental {
 
     void task_group::wait()
     {
-        bool expected = false;
-        if (has_arrived_.compare_exchange_strong(expected, true))
-        {
-            latch_.arrive_and_wait();
-            if (errors_.size() != 0)
-            {
-                throw errors_;
-            }
+        state_->wait_called_.store(true, std::memory_order_release);
 
-            if (auto const state = HPX_MOVE(state_))
+        // 1. Drain and sync_wait any accumulated P2300 senders
+        std::exception_ptr sender_error;
+        if (state_->has_senders())
+        {
+            try
+            {
+                auto sender = wait_as_sender();
+                hpx::this_thread::experimental::sync_wait(HPX_MOVE(sender));
+            }
+            catch (...)
+            {
+                sender_error = std::current_exception();
+            }
+        }
+
+        // 2. Wait for any legacy executor tasks tracked by latch_
+        bool expected = false;
+        if (state_->has_arrived_.compare_exchange_strong(expected, true))
+        {
+            state_->latch_.arrive_and_wait();
+            if (auto const state = HPX_MOVE(state_->state_))
             {
                 state->set_value(hpx::util::unused);
             }
+        }
+
+        if (state_->errors_.size() != 0)
+        {
+            throw state_->errors_;
+        }
+
+        if (sender_error)
+        {
+            std::rethrow_exception(HPX_MOVE(sender_error));
         }
     }
 
     void task_group::add_exception(std::exception_ptr p)
     {
-        errors_.add(HPX_MOVE(p));
+        state_->add_exception(HPX_MOVE(p));
     }
 
     void task_group::serialize(
         serialization::output_archive& ar, unsigned const)
     {
-        if (!latch_.is_ready())
+        if (!state_->latch_.is_ready())
         {
             if (ar.is_preprocessing())
             {
-                using init_no_addref = shared_state_type::init_no_addref;
-                state_.reset(new shared_state_type(init_no_addref{}), false);
-                preprocess_future(ar, *state_);
+                using init_no_addref = detail::task_group_shared_state::
+                    shared_state_type::init_no_addref;
+                state_->state_.reset(
+                    new detail::task_group_shared_state::shared_state_type(
+                        init_no_addref{}),
+                    false);
+                preprocess_future(ar, *state_->state_);
             }
             else
             {
@@ -78,6 +107,6 @@ namespace hpx::experimental {
         }
 
         // the state is not needed anymore
-        state_.reset();
+        state_->state_.reset();
     }
 }    // namespace hpx::experimental

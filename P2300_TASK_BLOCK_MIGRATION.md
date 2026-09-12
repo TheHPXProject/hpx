@@ -144,16 +144,33 @@ All 7 CTest unit test targets under `tests.unit.modules.algorithms.block` pass 1
 ## Phase 4: CI/CD & Code Review -- IN PROGRESS
 
 ### Status
-The Pull Request has been officially opened targeting the HPX V2.0 release on the `feat/modernize-task-block` branch.
+The Pull Request has been officially opened targeting the HPX V2.0 release on the `feat/modernize-task-block` branch. CodeRabbit automated review completed and identified 4 architectural/lifetime edge cases, all of which have been resolved and verified with dedicated regression tests.
 
-### Current Actions
-1. **GitHub Actions CI Pipeline Monitoring**:
-   - Tracking matrix test results across supported toolchains and platforms: Clang, GCC, MSVC, Tracy instrumentation, etc.
-   - Ensuring clean test runs, zero compiler warnings, and compliance checks.
-2. **Review & Maintenance**:
-   - Awaiting review feedback from CodeRabbit AI assistant.
-   - Awaiting core maintainer review from Hartmut Kaiser (`@hkaiser`).
-   - Prepared to address any requested architectural adjustments, constraint refinements, or follow-ups.
+### CodeRabbit Review Findings & Resolutions
+1. **Thread Counts & Work Stealing in `run_on_all`**:
+   - *Issue*: `run_on_all` with scheduler queried `processing_units_count(par)` instead of the supplied scheduler, and `ex::bulk` without work-stealing restrictions allowed worker threads to steal chunks, breaking the guarantee that each worker thread participates exactly once.
+   - *Fix*: Updated `processing_units_count(sched)` to query the scheduler's PU count. Applied `ex::with_priority(sched, hpx::threads::thread_priority::bound)` and `ex::with_hint(..., hint)` configured with `thread_sharing_hint::do_not_share_function` to enforce strict 1:1 PU binding and eliminate thread stealing across worker queues.
+   - *Test*: Added `test_run_on_all_scheduler_workers` verifying exact 1:1 execution mapping across all workers using `hpx::get_worker_thread_num()`.
+
+2. **Shared State Lifetime (`task_group_shared_state`)**:
+   - *Issue*: `wait_as_sender()` captured `this`, leading to a dangling pointer if the enclosing `task_group` went out of scope before the sender was connected and started.
+   - *Fix*: Extracted `exception_list`, `latch_`, `senders_` vector, and thread synchronization into `struct task_group_shared_state` managed by `std::shared_ptr<task_group_shared_state>`. Continuations and sender adaptors capture this shared state by value (`state = state_`), giving the sender independent ownership.
+   - *Test*: Added `test_task_group_lifetime_safety` verifying execution after `task_group` destruction.
+
+3. **Legacy `wait()` Integration with Schedulers**:
+   - *Issue*: Calling legacy `task_group::wait()` (or `task_block::wait()`) when P2300 senders were accumulated did not join or sync-wait those senders alongside the legacy latch.
+   - *Fix*: Updated `task_group::wait()` to detect if `state_->has_senders()` is true, and if so, safely drain and `sync_wait` the senders via `wait_as_sender()`, catching errors and synchronizing with `latch_.arrive_and_wait()`.
+   - *Test*: Added `test_task_group_scheduler_legacy_wait` verifying synchronous joining of scheduler-based tasks through legacy `wait()`.
+
+4. **Recursive Task Draining in P2300**:
+   - *Issue*: Dynamic tasks spawned recursively on the same `task_group` during sender execution were orphaned because `senders_` was previously moved once at `wait_as_sender()` call time.
+   - *Fix*: Implemented lazy recursive sender draining via `detail::drain_task_group_senders(state)`:
+     - `wait_as_sender()` returns an `ex::just() | ex::let_value(...)` chain that starts draining lazily only when connected/started.
+     - `drain_task_group_senders` drains the current batch of senders from the thread-safe shared state. If non-empty, it joins them with `ex::when_all_vector(std::move(senders))` and chains into `ex::let_value([state]() { return drain_task_group_senders(state); })`.
+     - Recursion continues until no more senders are appended, at which point an empty drain returns `ex::just()`.
+     - Fixed `when_all_vector`'s `connect &` overload with `requires(std::is_copy_constructible_v<Sender>)` to properly construct `operation_state` with an rvalue copy of senders.
+     - The terminal continuation checks `state->errors_` and re-throws any aggregated exceptions into the P2300 receiver pipeline.
+   - *Test*: Added `test_task_group_recursive_spawning` and `test_task_group_recursive_spawning_legacy_wait` verifying nested multi-tier task spawning on the same `task_group`.
 
 ---
 
@@ -163,4 +180,5 @@ The Pull Request has been officially opened targeting the HPX V2.0 release on th
 - Copyright year updated to 2026 where files are modified.
 - `clang-format` applied per `.clang-format` in repo root.
 - Only umbrella module headers (`hpx/modules/<name>.hpp`) are included from outside their own module (per AGENTS.md rule).
+- 100% test pass rate across all block unit tests (`spmd_block`, `task_block`, `task_block_executor`, `task_block_par`, `task_group`, `task_block_scheduler`, `run_on_all`).
 

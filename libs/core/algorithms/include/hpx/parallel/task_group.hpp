@@ -25,12 +25,74 @@
 
 #include <atomic>
 #include <exception>
+#include <memory>
+#include <mutex>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 /// Top-level namespace
 namespace hpx::experimental {
+
+    namespace detail {
+
+        struct task_group_shared_state
+        {
+            using shared_state_type = lcos::detail::future_data<void>;
+
+            hpx::lcos::local::latch latch_{1};
+            hpx::intrusive_ptr<shared_state_type> state_;
+            hpx::exception_list errors_;
+            std::atomic<bool> has_arrived_{false};
+            std::atomic<bool> senders_drained_{false};
+            std::atomic<bool> wait_called_{false};
+            mutable hpx::spinlock mtx_;
+            std::vector<hpx::execution::experimental::any_sender<>> senders_;
+
+            void add_exception(std::exception_ptr p)
+            {
+                std::lock_guard<hpx::spinlock> l(mtx_);
+                errors_.add(HPX_MOVE(p));
+            }
+
+            std::vector<hpx::execution::experimental::any_sender<>>
+            drain_senders()
+            {
+                std::lock_guard<hpx::spinlock> l(mtx_);
+                senders_drained_.store(true, std::memory_order_release);
+                return HPX_MOVE(senders_);
+            }
+
+            void add_sender(hpx::execution::experimental::any_sender<> sender)
+            {
+                std::lock_guard<hpx::spinlock> l(mtx_);
+                senders_.push_back(HPX_MOVE(sender));
+            }
+
+            bool has_senders() const
+            {
+                std::lock_guard<hpx::spinlock> l(mtx_);
+                return !senders_.empty();
+            }
+        };
+
+        inline hpx::execution::experimental::any_sender<>
+        drain_task_group_senders(
+            std::shared_ptr<task_group_shared_state> const& state)
+        {
+            namespace ex = hpx::execution::experimental;
+
+            auto senders = state->drain_senders();
+            if (senders.empty())
+            {
+                return ex::any_sender<>{ex::just()};
+            }
+
+            return ex::any_sender<>{ex::when_all_vector(HPX_MOVE(senders)) |
+                ex::let_value(
+                    [state]() { return drain_task_group_senders(state); })};
+        }
+    }    // namespace detail
 
     /// A \c task_group represents concurrent execution of a group of tasks.
     /// Tasks can be dynamically added to the group while it is executing.
@@ -70,24 +132,25 @@ namespace hpx::experimental {
         void run(Executor&& exec, F&& f, Ts&&... ts)
         {
             // make sure exceptions don't leave the latch in the wrong state
-            if (latch_.reset_if_needed_and_count_up(1, 1))
+            if (state_->latch_.reset_if_needed_and_count_up(1, 1))
             {
-                has_arrived_.store(false, std::memory_order_release);
+                state_->has_arrived_.store(false, std::memory_order_release);
             }
 
-            auto on_exit =
-                hpx::experimental::scope_exit([this] { latch_.count_down(1); });
+            auto on_exit = hpx::experimental::scope_exit(
+                [state = state_] { state->latch_.count_down(1); });
 
             hpx::parallel::execution::post(HPX_FORWARD(Executor, exec),
-                [this, on_exit = HPX_MOVE(on_exit), f = HPX_FORWARD(F, f),
+                [state = state_, on_exit = HPX_MOVE(on_exit),
+                    f = HPX_FORWARD(F, f),
                     ... ts = HPX_FORWARD(Ts, ts)]() mutable {
                     // latch needs to be released before the lambda exits
                     auto _(HPX_MOVE(on_exit));
 
                     hpx::detail::try_catch_exception_ptr(
                         [&]() { HPX_INVOKE(f, ts...); },
-                        [this](std::exception_ptr e) {
-                            add_exception(HPX_MOVE(e));
+                        [state](std::exception_ptr e) {
+                            state->add_exception(HPX_MOVE(e));
                         });
                 });
         }
@@ -148,6 +211,8 @@ namespace hpx::experimental {
         {
             namespace ex = hpx::execution::experimental;
 
+            state_->senders_drained_.store(false, std::memory_order_release);
+
             // Package the callable and arguments into a shared_ptr so that
             // they survive the lifetime of this call and can be shared
             // across the sender graph safely.
@@ -160,7 +225,8 @@ namespace hpx::experimental {
             // are caught and forwarded to the task_group's error list so
             // that they are aggregated and re-thrown from wait().
             auto sender = ex::schedule(HPX_FORWARD(Scheduler, sched)) |
-                ex::then([this, shared_args = HPX_MOVE(shared_args)]() {
+                ex::then([state = state_,
+                             shared_args = HPX_MOVE(shared_args)]() {
                     hpx::detail::try_catch_exception_ptr(
                         [&]() {
                             std::apply(
@@ -171,30 +237,40 @@ namespace hpx::experimental {
                                 },
                                 HPX_MOVE(*shared_args));
                         },
-                        [this](std::exception_ptr e) {
-                            add_exception(HPX_MOVE(e));
+                        [state](std::exception_ptr e) {
+                            state->add_exception(HPX_MOVE(e));
                         });
                 });
 
-            senders_.push_back(HPX_MOVE(sender));
+            state_->add_sender(ex::any_sender<>{HPX_MOVE(sender)});
         }
 
         /// \brief Returns a sender that completes when all tasks added via
         ///        the scheduler-based \a run() overload have finished.
         ///
         /// The returned sender joins all lazily accumulated senders using
-        /// \c ex::when_all_vector.  The caller owns the returned sender and
+        /// recursive draining.  The caller owns the returned sender and
         /// controls when to connect/start it (e.g. via \c sync_wait).
         ///
         /// \note  This method moves the internal sender vector, so the
         ///        \c task_group is left in a reusable (empty) state afterward.
         ///
         /// \returns A sender that completes with void once every accumulated
-        ///          sender has completed.
+        ///          sender (including dynamically spawned ones) has completed.
         decltype(auto) wait_as_sender()
         {
             namespace ex = hpx::execution::experimental;
-            return ex::when_all_vector(HPX_MOVE(senders_));
+
+            state_->wait_called_.store(true, std::memory_order_release);
+
+            return ex::just() | ex::let_value([state = state_]() {
+                return detail::drain_task_group_senders(state);
+            }) | ex::then([state = state_]() {
+                if (state->errors_.size() != 0)
+                {
+                    throw state->errors_;
+                }
+            });
         }
 
         /// \brief Waits for all tasks in the group to complete or be cancelled.
@@ -214,16 +290,7 @@ namespace hpx::experimental {
             serialization::output_archive&, unsigned const);
 
     private:
-        using shared_state_type = lcos::detail::future_data<void>;
-
-        hpx::lcos::local::latch latch_;
-        hpx::intrusive_ptr<shared_state_type> state_;
-        hpx::exception_list errors_;
-        std::atomic<bool> has_arrived_;
-
-        // P2300 sender storage: lazily accumulated senders from the
-        // scheduler-based run() overload, joined by wait_as_sender().
-        std::vector<hpx::execution::experimental::any_sender<>> senders_;
+        std::shared_ptr<detail::task_group_shared_state> state_;
     };
 }    // namespace hpx::experimental
 

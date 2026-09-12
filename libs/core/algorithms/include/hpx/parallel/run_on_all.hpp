@@ -111,8 +111,22 @@ namespace hpx::experimental {
         {
             namespace ex = hpx::execution::experimental;
 
-            auto cores = hpx::execution::experimental::processing_units_count(
-                hpx::execution::par);
+            // force using index_queue scheduler with given amount of threads
+            // and disable work-stealing to guarantee exact 1:1 worker mapping
+            hpx::threads::thread_schedule_hint hint;
+            hint.sharing_mode(
+                hpx::threads::thread_sharing_hint::do_not_share_function);
+
+            auto cores =
+                hpx::execution::experimental::processing_units_count(sched);
+
+            auto sched_with_priority =
+                hpx::execution::experimental::with_priority(
+                    HPX_FORWARD(Scheduler, sched),
+                    hpx::threads::thread_priority::bound);
+
+            auto sched_with_hint = hpx::execution::experimental::with_hint(
+                HPX_MOVE(sched_with_priority), hint);
 
             if constexpr (sizeof...(Reductions) > 0)
             {
@@ -131,7 +145,7 @@ namespace hpx::experimental {
                         *sp);
                 };
 
-                auto sender = ex::schedule(HPX_FORWARD(Scheduler, sched)) |
+                auto sender = ex::schedule(HPX_MOVE(sched_with_hint)) |
                     ex::bulk(cores, HPX_MOVE(task));
 
                 ex::sync_wait(HPX_MOVE(sender));
@@ -143,7 +157,7 @@ namespace hpx::experimental {
             {
                 auto task = [func = HPX_FORWARD(F, f)](std::size_t) { func(); };
 
-                auto sender = ex::schedule(HPX_FORWARD(Scheduler, sched)) |
+                auto sender = ex::schedule(HPX_MOVE(sched_with_hint)) |
                     ex::bulk(cores, HPX_MOVE(task));
 
                 ex::sync_wait(HPX_MOVE(sender));
