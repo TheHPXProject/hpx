@@ -501,7 +501,7 @@ namespace hpx::when_all_vector_detail {
         operation_state<Receiver> connect(Receiver&& receiver) &
         {
             return operation_state<Receiver>(
-                receiver, std::vector<Sender>(senders));
+                HPX_FORWARD(Receiver, receiver), std::vector<Sender>(senders));
         }
     };    // namespace hpx::when_all_vector_detail
 

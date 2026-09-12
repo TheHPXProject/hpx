@@ -400,7 +400,7 @@ namespace hpx::experimental {
                         if constexpr (std::is_invocable_v<std::decay_t<F>&,
                                           decltype(trh)&, decltype((sched))>)
                         {
-                            f(trh, HPX_FORWARD(Scheduler, sched));
+                            f(trh, sched);
                         }
                         else
                         {

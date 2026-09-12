@@ -74,6 +74,15 @@ namespace hpx::experimental {
                 std::lock_guard<hpx::spinlock> l(mtx_);
                 return !senders_.empty();
             }
+
+            ~task_group_shared_state()
+            {
+                bool expected = false;
+                if (has_arrived_.compare_exchange_strong(expected, true))
+                {
+                    latch_.count_down(1);
+                }
+            }
         };
 
         inline hpx::execution::experimental::any_sender<>
@@ -266,6 +275,12 @@ namespace hpx::experimental {
             return ex::just() | ex::let_value([state = state_]() {
                 return detail::drain_task_group_senders(state);
             }) | ex::then([state = state_]() {
+                bool expected = false;
+                if (state->has_arrived_.compare_exchange_strong(expected, true))
+                {
+                    state->latch_.count_down(1);
+                }
+
                 if (state->errors_.size() != 0)
                 {
                     throw state->errors_;

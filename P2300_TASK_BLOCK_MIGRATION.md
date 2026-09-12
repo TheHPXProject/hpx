@@ -172,6 +172,22 @@ The Pull Request has been officially opened targeting the HPX V2.0 release on th
      - The terminal continuation checks `state->errors_` and re-throws any aggregated exceptions into the P2300 receiver pipeline.
    - *Test*: Added `test_task_group_recursive_spawning` and `test_task_group_recursive_spawning_legacy_wait` verifying nested multi-tier task spawning on the same `task_group`.
 
+5. **Latch Destruction Segfault in P2300 Senders**:
+   - *Issue*: In `task_group_shared_state`, `latch_` was initialized to 1 for legacy coordination. Calling `wait_as_sender()` never decremented the latch, resulting in `Assertion 'counter_ == 0' failed: HPX(assertion_failure)` upon `~latch()` destruction in CI.
+   - *Fix*: Added an atomic exchange on `has_arrived_` followed by `state->latch_.count_down(1)` in the final `ex::then` continuation of `wait_as_sender()`. Additionally, added an RAII cleanup check in `~task_group_shared_state()` to guarantee `counter_ == 0` even if tasks are cancelled or aborted prior to completion. In `task_group::wait()`, added coordinated waiting if already arrived.
+
+6. **Serialization Drainage Check in `task_group`**:
+   - *Issue*: `task_group::serialize` only checked `!state_->latch_.is_ready()`, allowing active P2300 tasks to escape validation if senders had not finished draining.
+   - *Fix*: Expanded check to `if (!state_->latch_.is_ready() || !state_->senders_drained_.load(std::memory_order_acquire))` in `libs/core/algorithms/src/task_group.cpp`.
+
+7. **Lvalue Scheduler Forwarding in `task_block.hpp`**:
+   - *Issue*: In `detail::define_task_block_impl::operator()`, `f(trh, HPX_FORWARD(Scheduler, sched))` forwarded an rvalue, whereas `is_invocable_v` checked `decltype((sched))` (an lvalue `Scheduler&`). This could cause compilation errors if the user's callable accepted `auto&`.
+   - *Fix*: Changed invocation to `f(trh, sched);` to consistently pass an lvalue.
+
+8. **Move-Only Receiver Forwarding in `when_all_vector.hpp`**:
+   - *Issue*: In `connect(Receiver&& receiver) &`, `receiver` was passed by copy to `operation_state<Receiver>`, breaking move-only receivers.
+   - *Fix*: Wrapped with `HPX_FORWARD(Receiver, receiver)` to properly forward move-only receivers.
+
 ---
 
 ## CI Compliance Notes

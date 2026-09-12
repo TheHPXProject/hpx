@@ -64,6 +64,14 @@ namespace hpx::experimental {
                 state->set_value(hpx::util::unused);
             }
         }
+        else
+        {
+            state_->latch_.wait();
+            if (auto const state = HPX_MOVE(state_->state_))
+            {
+                state->set_value(hpx::util::unused);
+            }
+        }
 
         if (state_->errors_.size() != 0)
         {
@@ -84,7 +92,8 @@ namespace hpx::experimental {
     void task_group::serialize(
         serialization::output_archive& ar, unsigned const)
     {
-        if (!state_->latch_.is_ready())
+        if (!state_->latch_.is_ready() ||
+            !state_->senders_drained_.load(std::memory_order_acquire))
         {
             if (ar.is_preprocessing())
             {
