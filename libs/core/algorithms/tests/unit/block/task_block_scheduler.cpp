@@ -238,11 +238,35 @@ void test_task_group_mixed_executor_scheduler()
     g.run(sched, [&val1] { val1 = 10; });
     g.run(hpx::execution::parallel_executor{}, [&val2] { val2 = 20; });
 
-    tt::sync_wait(g.wait_as_sender());
+    // Mixing legacy executor tasks with wait() is fully supported and joins both
     g.wait();
 
     HPX_TEST_EQ(val1.load(), 10);
     HPX_TEST_EQ(val2.load(), 20);
+
+    // Mixing legacy executor tasks with wait_as_sender() is explicitly rejected
+    {
+        task_group g_mixed;
+        std::atomic<bool> flag{false};
+        g_mixed.run(sched, [] {});
+        g_mixed.run(hpx::execution::parallel_executor{}, [&flag] {
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(50));
+            flag = true;
+        });
+
+        bool caught = false;
+        try
+        {
+            tt::sync_wait(g_mixed.wait_as_sender());
+        }
+        catch (hpx::exception const& e)
+        {
+            caught = (e.get_error() == hpx::error::invalid_status);
+        }
+        HPX_TEST(caught);
+        g_mixed.wait();
+        HPX_TEST(flag.load());
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////

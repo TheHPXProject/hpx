@@ -27,6 +27,7 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -279,6 +280,14 @@ namespace hpx::experimental {
                 if (state->has_arrived_.compare_exchange_strong(expected, true))
                 {
                     state->latch_.count_down(1);
+                }
+
+                if (!state->latch_.is_ready())
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "task_group::wait_as_sender",
+                        "Mixing legacy executor tasks with wait_as_sender() is "
+                        "not supported. Use wait() instead.");
                 }
 
                 if (state->errors_.size() != 0)

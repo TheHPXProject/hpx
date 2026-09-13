@@ -17,6 +17,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/task_group.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 
@@ -353,6 +354,13 @@ namespace hpx::experimental {
         {
             // Legacy execution-policy-based path
             template <typename ExPolicy, typename F>
+            // clang-format off
+                requires (
+                    hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+                    !hpx::execution::experimental::is_scheduler_v<
+                        std::decay_t<ExPolicy>>
+                )
+            // clang-format on
             void operator()(ExPolicy&& policy, F&& f) const
             {
                 static_assert(hpx::is_execution_policy_v<ExPolicy>,

@@ -13,8 +13,10 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/parallel/task_group.hpp>
 
+#include <atomic>
 #include <exception>
 #include <memory>
+#include <utility>
 
 namespace hpx::experimental {
 
@@ -45,7 +47,7 @@ namespace hpx::experimental {
         {
             try
             {
-                auto sender = wait_as_sender();
+                auto sender = detail::drain_task_group_senders(state_);
                 hpx::this_thread::experimental::sync_wait(HPX_MOVE(sender));
             }
             catch (...)
