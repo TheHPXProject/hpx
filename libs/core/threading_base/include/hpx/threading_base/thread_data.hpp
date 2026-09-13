@@ -493,12 +493,17 @@ namespace hpx::threads {
             state_ |= state::is_background;
         }
 
-        // True if this task's lifecycle events should be emitted. On
-        // Tracy, reflects the 1/N sample decision made once at ctor and
-        // rebind_base; the read is unlocked because no other code path
-        // ever writes emit_lifecycle_ (unlike state_ bits, which are
-        // mutated concurrently by interrupt()). On other backends,
-        // always true (their hooks are constexpr no-ops).
+        /// True if this task's lifecycle events should be emitted.
+        ///
+        /// On Tracy, reflects the 1/N sample decision made once at ctor
+        /// and \a rebind_base; the read is unlocked because no other
+        /// code path ever writes \a emit_lifecycle_ (unlike \a state_
+        /// bits, which are mutated concurrently by \a interrupt()). On
+        /// other backends, always true (their hooks are constexpr
+        /// no-ops).
+        ///
+        /// \returns \a true if lifecycle events should be emitted for
+        ///          this task.
         bool should_emit_lifecycle() const noexcept
         {
 #if defined(HPX_HAVE_TRACY)
