@@ -24,7 +24,7 @@
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 
 #include <exception>
-#include <memory>    // std::addressof
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <type_traits>
@@ -422,7 +422,8 @@ namespace hpx::experimental {
                         trh.add_exception(HPX_MOVE(e));
                     });
 
-                // Join the lazily accumulated sender graph and any executor tasks.
+                // Join the lazily accumulated sender graph and any executor
+                // tasks.
                 trh.wait_for_completion();
             }
         };

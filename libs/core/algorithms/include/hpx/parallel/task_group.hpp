@@ -126,13 +126,14 @@ namespace hpx::experimental {
         /// \tparam Executor  The type of the executor to associate with this
         ///                   execution policy.
         /// \tparam F         The type of the user defined function to invoke.
-        /// \tparam Ts        The type of additional arguments used to invoke \c f().
+        /// \tparam Ts        The type of additional arguments used to invoke
+        ///                   \c f().
         ///
         /// \param exec       The executor to use for the execution of the
         ///                   parallel algorithm the returned execution
         ///                   policy is used with.
-        /// \param f          The user defined function to invoke inside the task
-        ///                   group.
+        /// \param f          The user defined function to invoke inside the
+        ///                   task group.
         /// \param ts         Additional arguments to use to invoke \c f().
 
         template <typename Executor, typename F, typename... Ts>

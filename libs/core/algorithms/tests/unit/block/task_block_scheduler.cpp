@@ -29,7 +29,8 @@ using hpx::experimental::define_task_block_restore_thread;
 using hpx::experimental::task_group;
 
 ///////////////////////////////////////////////////////////////////////////////
-// 1. Basic task spawning via P2300 scheduler (task_group::run(sched, f) + wait_as_sender())
+// 1. Basic task spawning via P2300 scheduler
+// (task_group::run(sched, f) + wait_as_sender())
 void test_task_group_scheduler_basic()
 {
     ex::thread_pool_scheduler sched{};
@@ -239,7 +240,8 @@ void test_task_group_mixed_executor_scheduler()
     g.run(sched, [&val1] { val1 = 10; });
     g.run(hpx::execution::parallel_executor{}, [&val2] { val2 = 20; });
 
-    // Mixing legacy executor tasks with wait() is fully supported and joins both
+    // Mixing legacy executor tasks with wait() is fully supported and joins
+    // both
     g.wait();
 
     HPX_TEST_EQ(val1.load(), 10);
@@ -433,7 +435,8 @@ void test_task_group_serialization()
         HPX_TEST(!caught);
     }
 
-    // Executor-only task_group: wait() flips senders_drained_ and arrives at latch
+    // Executor-only task_group: wait() flips senders_drained_ and arrives at
+    // latch
     {
         task_group g;
         std::atomic<bool> executed{false};
