@@ -48,6 +48,12 @@ else
     LIMIT=1000
 fi
 
+# A trailing underscore makes reStructuredText treat the preceding word as a
+# hyperlink reference, so titles such as "The test partitioned_vector_ ..."
+# would render as a broken link. Escape those underscores.
+# shellcheck disable=SC2016
+RST_ESCAPE='def rst_escape: gsub("_(?<t>\\s)"; "\\_\(.t)") | gsub("_$"; "\\_");'
+
 echo "Closed issues"
 echo "============="
 echo ""
@@ -56,7 +62,7 @@ echo ""
 # shellcheck disable=SC2016
 gh issue list --state closed --milestone "${VERSION_FULL_NOTAG}" \
     --limit "${LIMIT}" --json number,title \
-    --jq '.[] | "* :hpx-issue:`\(.number)` - \(.title)"'
+    --jq "${RST_ESCAPE}"'.[] | "* :hpx-issue:`\(.number)` - \(.title | rst_escape)"'
 
 echo ""
 echo "Closed pull requests"
@@ -68,4 +74,4 @@ echo ""
 # shellcheck disable=SC2016
 gh pr list --search "milestone:\"${VERSION_FULL_NOTAG}\" is:closed" \
     --limit "${LIMIT}" --json number,title \
-    --jq '.[] | "* :hpx-pr:`\(.number)` - \(.title)"'
+    --jq "${RST_ESCAPE}"'.[] | "* :hpx-pr:`\(.number)` - \(.title | rst_escape)"'
