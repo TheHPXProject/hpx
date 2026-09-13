@@ -27,11 +27,22 @@
 
 namespace hpx::parallel::detail {
 
-    ///////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////////
     // segmented merge
 
     /// \cond NOINTERNAL
 
+    // Stable Merge Path diagonal partitioning.
+    // Find the stable merge-path co-rank (a, b) for output position k,
+    // where a + b == k. The selected boundary satisfies:
+    //
+    //     A[a - 1] <= B[b]
+    //     B[b - 1] <  A[a]
+    //
+    // with boundary checks for a == 0, b == 0, a == len1, and
+    // b == len2. The asymmetric comparisons preserve merge stability:
+    // elements from the first input precede equivalent elements from
+    // the second input.
     template <typename Iter1, typename Iter2, typename Comp, typename Proj1,
         typename Proj2>
     std::pair<std::size_t, std::size_t> segmented_diagonal_intersection(

@@ -816,7 +816,7 @@ namespace {
 
         input1.reserve(input_size);
         input2.reserve(input_size);
-        expected.reserve(2 * input_size);
+        expected.reserve(static_cast<std::size_t>(2 * input_size));
 
         for (int i = 0; i != input_size; ++i)
         {
@@ -1256,11 +1256,15 @@ namespace {
 
         std::vector<int> const ignored{10000};
 
+        std::size_t const source1_partitions = first_is_empty ? 1 : 4;
+
+        std::size_t const source2_partitions = first_is_empty ? 4 : 1;
+
         auto const source1_layout = hpx::container_layout(
-            4, std::vector<hpx::id_type>{source1_locality});
+            source1_partitions, std::vector<hpx::id_type>{source1_locality});
 
         auto const source2_layout = hpx::container_layout(
-            4, std::vector<hpx::id_type>{source2_locality});
+            source2_partitions, std::vector<hpx::id_type>{source2_locality});
 
         auto const destination_layout = hpx::container_layout(
             4, std::vector<hpx::id_type>{destination_locality});

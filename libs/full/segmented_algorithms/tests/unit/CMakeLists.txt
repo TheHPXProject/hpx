@@ -86,12 +86,12 @@ foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  if (test STREQUAL "partitioned_vector_merge")
+  if(test STREQUAL "partitioned_vector_merge")
     set(test_localities 3)
   else()
     set(test_localities 2)
   endif()
-  
+
   set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES ${test_localities}
                          THREADS_PER_LOCALITY 4
   )
