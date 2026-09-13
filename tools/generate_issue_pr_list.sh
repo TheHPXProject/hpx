@@ -17,7 +17,9 @@
 # (for example GH_REPO=STEllAR-GROUP/hpx) to override that when working from a
 # fork.
 
-set -o pipefail
+# errexit as well as pipefail: a failing gh query must stop the script rather
+# than let it emit release notes with one of the two lists silently missing.
+set -e -o pipefail
 
 VERSION_MAJOR=$(sed -n 's/set(HPX_VERSION_MAJOR \(.*\))/\1/p' CMakeLists.txt)
 VERSION_MINOR=$(sed -n 's/set(HPX_VERSION_MINOR \(.*\))/\1/p' CMakeLists.txt)
