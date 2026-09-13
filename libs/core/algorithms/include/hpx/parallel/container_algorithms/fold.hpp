@@ -177,8 +177,8 @@ namespace hpx::ranges {
     template <typename InIter, typename Sent, typename T, typename F>
     auto fold_left_with_iter(InIter first, Sent last, T init, F f)
         -> fold_left_with_iter_result<InIter,
-            std::decay_t<hpx::util::invoke_result_t<F&, T,
-                hpx::traits::iter_reference_t<InIter>>>>;
+            std::decay_t<std::invoke_result_t<F&, T,
+                std::iter_reference_t<InIter>>>>;
 
     /// Left-folds a range and returns both the result and the end iterator.
     ///
@@ -197,8 +197,8 @@ namespace hpx::ranges {
     auto fold_left_with_iter(Rng&& rng, T init, F f)
         -> fold_left_with_iter_result<
             std::ranges::iterator_t<Rng>,
-            std::decay_t<hpx::util::invoke_result_t<F&, T,
-                hpx::traits::range_reference_t<Rng>>>>;
+            std::decay_t<std::invoke_result_t<F&, T,
+                std::ranges::range_reference_t<Rng>>>>;
 
     /// Left-folds a range using the first element and returns both an optional
     /// result and the end iterator.
@@ -218,9 +218,9 @@ namespace hpx::ranges {
     auto fold_left_first_with_iter(InIter first, Sent last, F f)
         -> fold_left_first_with_iter_result<InIter,
             hpx::optional<
-                std::decay_t<hpx::util::invoke_result_t<F&,
-                    hpx::traits::iter_reference_t<InIter>,
-                    hpx::traits::iter_reference_t<InIter>>>>>;
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_reference_t<InIter>,
+                    std::iter_reference_t<InIter>>>>>;
 
     /// Left-folds a range using the first element and returns both an optional
     /// result and the end iterator.
@@ -239,9 +239,9 @@ namespace hpx::ranges {
         -> fold_left_first_with_iter_result<
             std::ranges::iterator_t<Rng>,
             hpx::optional<
-                std::decay_t<hpx::util::invoke_result_t<F&,
-                    hpx::traits::range_reference_t<Rng>,
-                    hpx::traits::range_reference_t<Rng>>>>>;
+                std::decay_t<std::invoke_result_t<F&,
+                    std::ranges::range_reference_t<Rng>,
+                    std::ranges::range_reference_t<Rng>>>>>;
 
     // clang-format on
 }    // namespace hpx::ranges
@@ -254,6 +254,7 @@ namespace hpx::ranges {
 #include <hpx/iterator_support/traits/is_foldable.hpp>
 #include <hpx/iterator_support/traits/is_iterator.hpp>
 #include <hpx/iterator_support/traits/is_range.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/ranges_facilities.hpp>
@@ -283,15 +284,15 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::input_iterator<InIter> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<InIter>, T> &&
+            std::is_convertible_v<std::iter_value_t<InIter>, T> &&
             std::sentinel_for<Sent, InIter> &&
             hpx::is_indirectly_binary_left_foldable<F, T, InIter>
         )
         // clang-format on
         static auto invoke_default(InIter first, Sent last, T init, F f)
         {
-            using U = std::decay_t<hpx::util::invoke_result_t<F&, T,
-                hpx::traits::iter_reference_t<InIter>>>;
+            using U = std::decay_t<
+                std::invoke_result_t<F&, T, std::iter_reference_t<InIter>>>;
             using result_type = fold_left_with_iter_result<InIter, U>;
 
             if (first == last)
@@ -313,7 +314,7 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::input_range<Rng> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<
+            std::is_convertible_v<std::iter_value_t<
                 std::ranges::iterator_t<Rng>>, T> &&
             hpx::is_indirectly_binary_left_foldable<F, T,
                 std::ranges::iterator_t<Rng>>
@@ -339,12 +340,18 @@ namespace hpx::ranges {
             std::input_iterator<InIter> &&
             std::sentinel_for<Sent, InIter> &&
             hpx::is_indirectly_binary_left_foldable<F,
-                hpx::traits::iter_value_t<InIter>, InIter>
+                std::iter_value_t<InIter>, InIter> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_value_t<InIter>,
+                    std::iter_reference_t<InIter>>>,
+                std::iter_reference_t<InIter>>
         )
         // clang-format on
         static auto invoke_default(InIter first, Sent last, F f)
         {
-            using U = decltype(HPX_INVOKE(f, *first, *first));
+            using U = std::decay_t<std::invoke_result_t<F&,
+                std::iter_value_t<InIter>, std::iter_reference_t<InIter>>>;
             using result_type =
                 fold_left_first_with_iter_result<InIter, hpx::optional<U>>;
 
@@ -353,7 +360,7 @@ namespace hpx::ranges {
                 return result_type{HPX_MOVE(first), hpx::optional<U>()};
             }
 
-            U result = *first;
+            U result(*first);
             ++first;
 
             for (; first != last; ++first)
@@ -369,8 +376,13 @@ namespace hpx::ranges {
         requires (
             std::ranges::input_range<Rng> &&
             hpx::is_indirectly_binary_left_foldable<F,
-                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                std::ranges::iterator_t<Rng>>
+                std::iter_value_t<std::ranges::iterator_t<Rng>>,
+                std::ranges::iterator_t<Rng>> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_value_t<std::ranges::iterator_t<Rng>>,
+                    std::ranges::range_reference_t<Rng>>>,
+                std::ranges::range_reference_t<Rng>>
         )
         // clang-format on
         static auto invoke_default(Rng&& rng, F f)
@@ -391,7 +403,7 @@ namespace hpx::ranges {
         requires (
             std::input_iterator<InIter> &&
             std::sentinel_for<Sent, InIter> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<InIter>, T> &&
+            std::is_convertible_v<std::iter_value_t<InIter>, T> &&
             hpx::is_indirectly_binary_left_foldable<F, T, InIter>
         )
         // clang-format on
@@ -406,7 +418,7 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::input_range<Rng> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<
+            std::is_convertible_v<std::iter_value_t<
                 std::ranges::iterator_t<Rng>>, T> &&
             hpx::is_indirectly_binary_left_foldable<F, T,
                 std::ranges::iterator_t<Rng>>
@@ -432,7 +444,12 @@ namespace hpx::ranges {
             std::input_iterator<InIter> &&
             std::sentinel_for<Sent, InIter> &&
             hpx::is_indirectly_binary_left_foldable<F,
-                hpx::traits::iter_value_t<InIter>, InIter>
+                std::iter_value_t<InIter>, InIter> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_value_t<InIter>,
+                    std::iter_reference_t<InIter>>>,
+                std::iter_reference_t<InIter>>
         )
         // clang-format on
         static auto invoke_default(InIter first, Sent last, F f)
@@ -447,8 +464,13 @@ namespace hpx::ranges {
         requires (
             std::ranges::input_range<Rng> &&
             hpx::is_indirectly_binary_left_foldable<F,
-                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                std::ranges::iterator_t<Rng>>
+                std::iter_value_t<std::ranges::iterator_t<Rng>>,
+                std::ranges::iterator_t<Rng>> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_value_t<std::ranges::iterator_t<Rng>>,
+                    std::ranges::range_reference_t<Rng>>>,
+                std::ranges::range_reference_t<Rng>>
         )
         // clang-format on
         static auto invoke_default(Rng&& rng, F f)
@@ -469,15 +491,15 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::bidirectional_iterator<BidIter> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<BidIter>, T> &&
+            std::is_convertible_v<std::iter_value_t<BidIter>, T> &&
             std::sentinel_for<Sent, BidIter> &&
             hpx::is_indirectly_binary_right_foldable<F, T, BidIter>
         )
         // clang-format on
         static auto invoke_default(BidIter first, Sent last, T init, F f)
         {
-            using U = std::decay_t<hpx::util::invoke_result_t<F&,
-                hpx::traits::iter_reference_t<BidIter>, T>>;
+            using U = std::decay_t<
+                std::invoke_result_t<F&, std::iter_reference_t<BidIter>, T>>;
 
             if (first == last)
             {
@@ -498,7 +520,7 @@ namespace hpx::ranges {
         // clang-format off
         requires (
             std::ranges::bidirectional_range<Rng> &&
-            std::is_convertible_v<hpx::traits::iter_value_t<
+            std::is_convertible_v<std::iter_value_t<
                 std::ranges::iterator_t<Rng>>, T> &&
             hpx::is_indirectly_binary_right_foldable<F, T,
                 std::ranges::iterator_t<Rng>>
@@ -523,12 +545,18 @@ namespace hpx::ranges {
             std::bidirectional_iterator<BidIter> &&
             std::sentinel_for<Sent, BidIter> &&
             hpx::is_indirectly_binary_right_foldable<F,
-                hpx::traits::iter_value_t<BidIter>, BidIter>
+                std::iter_value_t<BidIter>, BidIter> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::iter_reference_t<BidIter>,
+                    std::iter_value_t<BidIter>>>,
+                std::iter_reference_t<BidIter>>
         )
         // clang-format on
         static auto invoke_default(BidIter first, Sent last, F f)
         {
-            using U = decltype(HPX_INVOKE(f, *first, *first));
+            using U = std::decay_t<std::invoke_result_t<F&,
+                std::iter_reference_t<BidIter>, std::iter_value_t<BidIter>>>;
             using result_type = hpx::optional<U>;
 
             if (first == last)
@@ -537,7 +565,7 @@ namespace hpx::ranges {
             }
 
             auto it = hpx::parallel::detail::advance_to_sentinel(first, last);
-            U result = *--it;
+            U result(*--it);
 
             while (it != first)
             {
@@ -551,8 +579,13 @@ namespace hpx::ranges {
         requires (
             std::ranges::bidirectional_range<Rng> &&
             hpx::is_indirectly_binary_right_foldable<F,
-                hpx::traits::iter_value_t<std::ranges::iterator_t<Rng>>,
-                std::ranges::iterator_t<Rng>>
+                std::iter_value_t<std::ranges::iterator_t<Rng>>,
+                std::ranges::iterator_t<Rng>> &&
+            std::constructible_from<
+                std::decay_t<std::invoke_result_t<F&,
+                    std::ranges::range_reference_t<Rng>,
+                    std::iter_value_t<std::ranges::iterator_t<Rng>>>>,
+                std::ranges::range_reference_t<Rng>>
         )
         // clang-format on
         static auto invoke_default(Rng&& rng, F f)

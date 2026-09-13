@@ -8,9 +8,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/iterator_support/boost_iterator_categories.hpp>
-#include <hpx/modules/functional.hpp>
-#include <hpx/modules/type_support.hpp>
 
 #include <concepts>
 #include <iterator>
@@ -26,7 +23,7 @@ namespace hpx {
         std::assignable_from<U&,
             std::invoke_result_t<F&, U, std::iter_reference_t<I>>>;
 
-    HPX_CXX_CORE_EXPORT template <typename F, typename T, typename I>
+    template <typename F, typename T, typename I>
     concept is_indirectly_binary_left_foldable =
         std::copy_constructible<F> && std::indirectly_readable<I> &&
         std::invocable<F&, T, std::iter_reference_t<I>> &&
@@ -46,7 +43,7 @@ namespace hpx {
         std::assignable_from<U&,
             std::invoke_result_t<F&, std::iter_reference_t<I>, U>>;
 
-    HPX_CXX_CORE_EXPORT template <typename F, typename T, typename I>
+    template <typename F, typename T, typename I>
     concept is_indirectly_binary_right_foldable =
         std::copy_constructible<F> && std::indirectly_readable<I> &&
         std::invocable<F&, std::iter_reference_t<I>, T> &&
