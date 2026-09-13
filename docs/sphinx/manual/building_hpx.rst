@@ -139,6 +139,15 @@ used CMake options.
    being consumed. The saving applies on Tracy builds; the other backends already treat this hook as
    a no-op.
 
+.. option:: HPX_WITH_TRACING_SAMPLE_RATE
+
+   1-in-N sampling rate for the per-task lifecycle events on Tracy builds. Defaults to ``1``
+   (every task sampled). Compile-time constant. Must be a positive integer; the CMake
+   configure step rejects non-integer or non-positive values. Only the lifecycle events
+   are sampled - causal events fire unconditionally so the causal-chain view stays intact
+   at any rate. ``task_staged`` is also unconditional because it fires before per-task
+   state exists to consult. Other backends already treat lifecycle hooks as no-ops.
+
 .. option:: HPX_WITH_GENERIC_CONTEXT_COROUTINES
 
    Enable Boost. Context for task context switching. It must be enabled for non-x86 architectures such as ARM and Power.

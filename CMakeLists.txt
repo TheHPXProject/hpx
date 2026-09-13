@@ -1226,6 +1226,23 @@ if(HPX_WITH_TRACY)
   if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
     hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
   endif()
+
+  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX and ITTNotify
+  # already treat every lifecycle hook as a constexpr no-op, so sampling would
+  # gate dead code on those backends; only Tracy actually emits.
+  hpx_option(
+    HPX_WITH_TRACING_SAMPLE_RATE
+    STRING
+    "1-in-N task-lifecycle sampling rate for the Tracy backend; 1 emits every task, higher values emit correspondingly fewer (default: 1)"
+    "1"
+    ADVANCED
+  )
+  if(NOT HPX_WITH_TRACING_SAMPLE_RATE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "HPX_WITH_TRACING_SAMPLE_RATE must be a positive integer, got '${HPX_WITH_TRACING_SAMPLE_RATE}'"
+    )
+  endif()
+  hpx_add_config_define(HPX_TRACING_SAMPLE_RATE ${HPX_WITH_TRACING_SAMPLE_RATE})
 endif()
 
 hpx_option(

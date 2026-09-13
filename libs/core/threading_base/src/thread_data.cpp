@@ -15,6 +15,7 @@
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/tracing.hpp>
+#include <hpx/threading_base/detail/task_sampling.hpp>
 #include <hpx/threading_base/scheduler_base.hpp>
 #include <hpx/threading_base/thread_data.hpp>
 #if defined(HPX_HAVE_TRACY)
@@ -115,6 +116,9 @@ namespace hpx::threads {
         set_timer_data(init_data.timer_data);
 #if defined(HPX_HAVE_TRACY)
         fiber_name_[0] = '\0';
+        // Decide once per task creation whether this task's lifecycle is
+        // sampled. Safe unlocked: the object is not yet observable.
+        emit_lifecycle_ = hpx::threads::detail::should_sample_next();
 #endif
         hpx::tracing::task_created(this, parent_task_id);
     }
@@ -123,7 +127,8 @@ namespace hpx::threads {
     {
         LTM_(debug).format("thread_data::~thread_data({})", this);
         free_thread_exit_callbacks();
-        hpx::tracing::task_deleted(this);
+        if (should_emit_lifecycle())
+            hpx::tracing::task_deleted(this);
     }
 
     void thread_data::destroy_thread()
@@ -243,12 +248,18 @@ namespace hpx::threads {
             this, get_description(), get_thread_phase());
 
         free_thread_exit_callbacks();
-        hpx::tracing::task_deleted(this);
+        if (should_emit_lifecycle())
+            hpx::tracing::task_deleted(this);
 
         priority_ = init_data.priority;
         state_ |= state::enabled_interrupt;
         state_ &= ~(state::requested_interrupt | state::running_exit_funcs |
             state::ran_exit_funcs | state::is_background);
+#if defined(HPX_HAVE_TRACY)
+        // Fresh 1/N decision for the recycled slab. Safe unlocked: no
+        // other worker can see it during rebind.
+        emit_lifecycle_ = hpx::threads::detail::should_sample_next();
+#endif
 
         runs_as_child_.store(init_data.schedulehint.runs_as_child_mode() ==
                 hpx::threads::thread_execution_hint::run_as_child,

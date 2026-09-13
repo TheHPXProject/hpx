@@ -342,6 +342,8 @@ namespace hpx::threads {
 #if defined(HPX_HAVE_TRACY)
     private:
         mutable char fiber_name_[64];
+        // 1-in-N tracing sample decision, set at ctor/rebind_base only.
+        bool emit_lifecycle_ = false;
 #endif
 
     public:
@@ -489,6 +491,26 @@ namespace hpx::threads {
         {
             std::scoped_lock<mutex_type> l(mtx_);
             state_ |= state::is_background;
+        }
+
+        /// True if this task's lifecycle events should be emitted.
+        ///
+        /// On Tracy, reflects the 1/N sample decision made once at ctor
+        /// and \a rebind_base; the read is unlocked because no other
+        /// code path ever writes \a emit_lifecycle_ (unlike \a state_
+        /// bits, which are mutated concurrently by \a interrupt()). On
+        /// other backends, always true (their hooks are constexpr
+        /// no-ops).
+        ///
+        /// \returns \a true if lifecycle events should be emitted for
+        ///          this task.
+        bool should_emit_lifecycle() const noexcept
+        {
+#if defined(HPX_HAVE_TRACY)
+            return emit_lifecycle_;
+#else
+            return true;
+#endif
         }
 
         // handle thread interruption

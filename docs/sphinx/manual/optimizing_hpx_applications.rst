@@ -3645,6 +3645,12 @@ call site is unchanged). These gates affect the Tracy backend, which is the
 only backend that emits these classes today; the APEX, ITT-Notify and empty
 backends already treat all three as no-ops.
 
+:option:`HPX_WITH_TRACING_SAMPLE_RATE` sets a 1-in-N sampling rate for
+the per-task lifecycle events instead of gating them off entirely. The
+rate is a compile-time constant; causal events are not sampled and
+continue to fire every time. ``task_staged`` is also unconditional
+because it fires before per-task state exists to consult.
+
 Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
 or during the run. Tracy discovers instrumented processes via UDP broadcast
 on the local network; no port configuration is required for the common case.
