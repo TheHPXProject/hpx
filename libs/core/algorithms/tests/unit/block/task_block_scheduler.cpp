@@ -474,6 +474,7 @@ void test_task_group_serialization()
             caught = (e.get_error() == hpx::error::invalid_status);
         }
         HPX_TEST(caught);
+        g.wait();
     }
 }
 

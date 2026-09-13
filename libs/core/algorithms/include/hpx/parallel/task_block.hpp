@@ -17,7 +17,6 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
-#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/task_group.hpp>
