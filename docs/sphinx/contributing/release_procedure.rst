@@ -30,7 +30,7 @@ are completed to avoid confusion.
 
 #. Write release notes in ``docs/sphinx/releases/whats_new_$VERSION.rst``. Keep
    adding merged PRs and closed issues to this until just before the release is
-   made. Use ``tools/generate_pr_issue_list.sh`` to generate the lists. Add the
+   made. Use ``tools/generate_issue_pr_list.sh`` to generate the lists. Add the
    new release notes to the table of contents in ``docs/sphinx/releases.rst``.
 
 #. Build the docs, and proof-read them. Update any documentation that may have
