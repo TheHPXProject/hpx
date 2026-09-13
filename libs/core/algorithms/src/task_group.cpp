@@ -11,11 +11,14 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lcos_local.hpp>
 #include <hpx/modules/serialization.hpp>
+#include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/task_group.hpp>
 
 #include <atomic>
 #include <exception>
 #include <memory>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace hpx::experimental {
@@ -43,17 +46,14 @@ namespace hpx::experimental {
 
         // 1. Drain and sync_wait any accumulated P2300 senders
         std::exception_ptr sender_error;
-        if (state_->has_senders())
+        try
         {
-            try
-            {
-                auto sender = detail::drain_task_group_senders(state_);
-                hpx::this_thread::experimental::sync_wait(HPX_MOVE(sender));
-            }
-            catch (...)
-            {
-                sender_error = std::current_exception();
-            }
+            auto sender = detail::drain_task_group_senders(state_);
+            hpx::this_thread::experimental::sync_wait(HPX_MOVE(sender));
+        }
+        catch (...)
+        {
+            sender_error = std::current_exception();
         }
 
         // 2. Wait for any legacy executor tasks tracked by latch_

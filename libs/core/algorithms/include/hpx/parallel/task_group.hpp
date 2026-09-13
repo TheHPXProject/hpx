@@ -22,11 +22,13 @@
 #include <hpx/modules/memory.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/synchronization.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <atomic>
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 #include <utility>

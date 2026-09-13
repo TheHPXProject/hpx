@@ -17,13 +17,16 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
+#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/task_group.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 
 #include <exception>
 #include <memory>    // std::addressof
 #include <mutex>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>

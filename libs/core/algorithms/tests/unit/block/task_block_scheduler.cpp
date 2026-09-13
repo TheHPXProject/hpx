@@ -10,6 +10,7 @@
 #include <hpx/experimental/run_on_all.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/task_block.hpp>
 
@@ -410,6 +411,70 @@ void test_task_group_lifetime_safety()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// 16. task_group: serialize empty and executor-only task groups
+void test_task_group_serialization()
+{
+    // Empty task_group: wait() flips senders_drained_ and arrives at latch
+    {
+        task_group g;
+        g.wait();
+
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        bool caught = false;
+        try
+        {
+            oarchive << g;
+        }
+        catch (...)
+        {
+            caught = true;
+        }
+        HPX_TEST(!caught);
+    }
+
+    // Executor-only task_group: wait() flips senders_drained_ and arrives at latch
+    {
+        task_group g;
+        std::atomic<bool> executed{false};
+        g.run(hpx::execution::parallel_executor{},
+            [&executed] { executed = true; });
+        g.wait();
+        HPX_TEST(executed.load());
+
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        bool caught = false;
+        try
+        {
+            oarchive << g;
+        }
+        catch (...)
+        {
+            caught = true;
+        }
+        HPX_TEST(!caught);
+    }
+
+    // Unready task_group: serialization must throw invalid_status
+    {
+        task_group g;
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        bool caught = false;
+        try
+        {
+            oarchive << g;
+        }
+        catch (hpx::exception const& e)
+        {
+            caught = (e.get_error() == hpx::error::invalid_status);
+        }
+        HPX_TEST(caught);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_task_group_scheduler_basic();
@@ -428,6 +493,7 @@ int hpx_main()
     test_task_group_recursive_spawning();
     test_task_group_recursive_spawning_legacy_wait();
     test_task_group_lifetime_safety();
+    test_task_group_serialization();
 
     return hpx::local::finalize();
 }
