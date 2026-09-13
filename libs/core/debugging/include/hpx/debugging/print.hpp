@@ -318,7 +318,7 @@ namespace hpx::debug {
         // ------------------------------------------------------------------
         // helper class for printing time since start
         // ------------------------------------------------------------------
-        struct hostname_print_helper
+        HPX_CXX_CORE_EXPORT struct hostname_print_helper
         {
             [[nodiscard]] HPX_CORE_EXPORT char const* get_hostname() const;
             [[nodiscard]] HPX_CORE_EXPORT int guess_rank() const noexcept;
