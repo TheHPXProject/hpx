@@ -558,7 +558,8 @@ namespace {
         std::merge(input1.begin(), input1.end(), input2.begin(), input2.end(),
             expected.begin());
 
-        // Each input has four partitions alternating between localities 0 and 1.
+        // Each input has four partitions alternating between
+        // localities 0 and 1.
         auto const source1_layout = hpx::container_layout(
             4, std::vector<hpx::id_type>{localities[0], localities[1]});
 
@@ -754,7 +755,7 @@ namespace {
 
         input1.reserve(input_size);
         input2.reserve(input_size);
-        expected.reserve(2 * input_size);
+        expected.reserve(2 * static_cast<std::size_t>(input_size));
 
         for (int i = 0; i != input_size; ++i)
         {
@@ -816,7 +817,7 @@ namespace {
 
         input1.reserve(input_size);
         input2.reserve(input_size);
-        expected.reserve(static_cast<std::size_t>(2 * input_size));
+        expected.reserve(2 * static_cast<std::size_t>(input_size));
 
         for (int i = 0; i != input_size; ++i)
         {

@@ -9,12 +9,12 @@
 #include <hpx/config.hpp>
 
 #include <hpx/assert.hpp>
-#include <hpx/errors/exception_list.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/distribution_policies.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
@@ -22,7 +22,6 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
-#include <hpx/serialization/vector.hpp>
 
 #include <algorithm>
 #include <cstddef>
