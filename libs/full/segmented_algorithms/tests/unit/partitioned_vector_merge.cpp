@@ -13,8 +13,8 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/parallel/segmented_algorithms/merge.hpp>
 
 #include <algorithm>
 #include <cstddef>
