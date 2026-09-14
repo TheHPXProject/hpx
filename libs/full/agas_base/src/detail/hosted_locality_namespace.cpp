@@ -84,9 +84,6 @@ namespace hpx::agas::detail {
             {
                 return {};
             }
-
-            while (!endpoints_future.is_ready())
-                /**/;
         }
 
         return hpx::wait_or_handle_timeout(HPX_MOVE(endpoints_future),
