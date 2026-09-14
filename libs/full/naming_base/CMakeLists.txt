@@ -42,5 +42,5 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION
 )
   # Workaround for Clang 22 ICE (exit code 139) during C++20 modules template
   # instantiation
-  target_compile_options(hpx_naming_base PRIVATE -O1 -fno-aggressive-inlining)
+  target_compile_options(hpx_naming_base PRIVATE -O1)
 endif()
