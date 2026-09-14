@@ -16,7 +16,9 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp>
+#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 
+#include <exception>
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
@@ -210,6 +212,30 @@ namespace hpx::parallel::detail {
         }
     };
 
+    template <typename ExPolicy, typename T>
+    HPX_FORCEINLINE hpx::future<T> make_policy_exceptional_future(
+        std::exception_ptr exception)
+    {
+        using policy_type = std::decay_t<ExPolicy>;
+
+        try
+        {
+            hpx::parallel::util::detail::
+                handle_local_exceptions<policy_type>::call(exception);
+        }
+        catch (...)
+        {
+            // The future contains either:
+            // - hpx::exception_list for ordinary exceptions, or
+            // - std::bad_alloc, which HPX treats specially.
+            return hpx::make_exceptional_future<T>(
+                std::current_exception());
+        }
+
+        // handle_local_exceptions::call is expected not to return.
+        std::terminate();
+    }
+
     template <bool Async, typename Traits3, typename Algo, typename ExPolicy,
         typename IsSeq, typename Iter1, typename Iter2, typename SegIteratorOut,
         typename OutLocIterator, typename Comp, typename Proj1, typename Proj2>
@@ -223,10 +249,42 @@ namespace hpx::parallel::detail {
         using value_type1 = typename std::iterator_traits<Iter1>::value_type;
         using value_type2 = typename std::iterator_traits<Iter2>::value_type;
 
-        auto [a0, b0] = segmented_diagonal_intersection(first1, len1, first2,
-            len2, k0, comparator, projection1, projection2);
-        auto [a1, b1] = segmented_diagonal_intersection(first1, len1, first2,
-            len2, k1, comparator, projection1, projection2);
+    using policy_type = std::decay_t<ExPolicy>;
+
+    std::pair<std::size_t, std::size_t> first_intersection;
+    std::pair<std::size_t, std::size_t> last_intersection;
+
+    try
+    {
+        first_intersection = segmented_diagonal_intersection(
+            first1, len1, first2, len2, k0,
+            comparator, projection1, projection2);
+
+        last_intersection = segmented_diagonal_intersection(
+            first1, len1, first2, len2, k1,
+            comparator, projection1, projection2);
+    }
+    catch (...)
+    {
+        std::exception_ptr exception = std::current_exception();
+
+        if constexpr (Async)
+        {
+            // Do not throw from the task-policy call. Return an
+            // exceptional future instead.
+            return make_policy_exceptional_future<
+                policy_type, OutLocIterator>(exception);
+        }
+        else
+        {
+            // seq/par synchronous path: normalize and throw now.
+            hpx::parallel::util::detail::
+                handle_local_exceptions<policy_type>::call(exception);
+        }
+    }
+
+    auto const [a0, b0] = first_intersection;
+    auto const [a1, b1] = last_intersection;
 
         Iter1 chunk_first1 = std::next(first1, a0);
         Iter1 chunk_last1 = std::next(first1, a1);
