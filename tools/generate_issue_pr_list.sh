@@ -50,14 +50,23 @@ else
     LIMIT=1000
 fi
 
-# An underscore that ends a word makes reStructuredText treat that word as a
-# hyperlink reference, so a title such as "The test partitioned_vector_ ..."
-# renders as a broken link. reStructuredText recognises the reference when the
-# underscore is followed by whitespace, by one of its closing punctuation
-# characters ("foo_." and "foo_," among them) or by the end of the title, so
-# escape it in exactly those positions and leave underscores inside words be.
+# GitHub titles are not plain ASCII: they carry typographic punctuation and the
+# occasional emoji, while the release notes are kept ASCII. Map what has an
+# ASCII equivalent and drop the rest.
+#
+# Separately, an underscore that ends a word makes reStructuredText treat that
+# word as a hyperlink reference, so a title such as "The test
+# partitioned_vector_ ..." renders as a broken link. reStructuredText
+# recognises the reference when the underscore is followed by whitespace, by
+# one of its closing punctuation characters ("foo_." and "foo_," among them) or
+# by the end of the title, so escape it in exactly those positions and leave
+# underscores inside words be.
 # shellcheck disable=SC2016
-RST_ESCAPE='def rst_escape: gsub("_(?<t>[\\s\\-.,:;!?/)\\]}>])"; "\\_\(.t)") | gsub("_$"; "\\_");'
+JQ_DEFS='def ascii_clean: gsub("\u2026"; "...") | gsub("[\u2018\u2019]"; "'"'"'")
+    | gsub("[\u201c\u201d]"; "\"") | gsub("[\u2013\u2014]"; "-")
+    | gsub("[^\\x00-\\x7f]"; "") | gsub("\\s{2,}"; " ")
+    | sub("^\\s+"; "") | sub("\\s+$"; "");
+def rst_escape: gsub("_(?<t>[\\s\\-.,:;!?/)\\]}>])"; "\\_\(.t)") | gsub("_$"; "\\_");'
 
 echo "Closed issues"
 echo "============="
@@ -67,7 +76,7 @@ echo ""
 # shellcheck disable=SC2016
 gh issue list --state closed --milestone "${VERSION_FULL_NOTAG}" \
     --limit "${LIMIT}" --json number,title \
-    --jq "${RST_ESCAPE}"'.[] | "* :hpx-issue:`\(.number)` - \(.title | rst_escape)"'
+    --jq "${JQ_DEFS}"'.[] | "* :hpx-issue:`\(.number)` - \(.title | ascii_clean | rst_escape)"'
 
 echo ""
 echo "Closed pull requests"
@@ -79,4 +88,4 @@ echo ""
 # shellcheck disable=SC2016
 gh pr list --search "milestone:\"${VERSION_FULL_NOTAG}\" is:closed" \
     --limit "${LIMIT}" --json number,title \
-    --jq "${RST_ESCAPE}"'.[] | "* :hpx-pr:`\(.number)` - \(.title | rst_escape)"'
+    --jq "${JQ_DEFS}"'.[] | "* :hpx-pr:`\(.number)` - \(.title | ascii_clean | rst_escape)"'
