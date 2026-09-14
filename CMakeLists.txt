@@ -1599,18 +1599,6 @@ if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
 endif()
 hpx_option(
-  HPX_WITH_EXAMPLES_TBB BOOL
-  "Enable examples requiring TBB support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_TBB)
-  find_package(TBB)
-  if(NOT Tbb_FOUND)
-    set(HPX_WITH_EXAMPLES_TBB OFF)
-  endif()
-endif()
-hpx_option(
   HPX_WITH_EXAMPLES_QTHREADS BOOL
   "Enable examples requiring QThreads support (default: OFF)." OFF
   CATEGORY "Build Targets"

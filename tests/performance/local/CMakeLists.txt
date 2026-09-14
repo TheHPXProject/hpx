@@ -81,17 +81,6 @@ if(HPX_WITH_EXAMPLES_QTHREADS)
   )
 endif()
 
-if(HPX_WITH_EXAMPLES_TBB)
-  list(APPEND benchmarks tbb_homogeneous_timed_task_spawn)
-
-  set(tbb_homogeneous_timed_task_spawn_FLAGS
-      NOLIBS DEPENDENCIES ${boost_library_dependencies} ${Tbb_LIBRARIES}
-      hpx_core
-  )
-
-  set(tbb_homogeneous_timed_task_spawn_INCLUDE_DIRECTORIES ${Tbb_INCLUDE_DIR})
-endif()
-
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   list(
     APPEND

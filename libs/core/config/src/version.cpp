@@ -11,10 +11,13 @@
 #include <hpx/config/version.hpp>
 #include <hpx/modules/preprocessor.hpp>
 
+// Note: the declarations in hpx/config/version.hpp carry HPX_CORE_EXPORT (they
+// are the first declarations of these variables). Repeating the visibility
+// attribute on the definitions here would trigger -Wattributes warnings on
+// GCC ("'visibility' attribute ignored"), so it is intentionally omitted.
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx {
-    HPX_CORE_EXPORT char const HPX_CHECK_VERSION[] =
-        HPX_PP_STRINGIZE(HPX_CHECK_VERSION);
-    HPX_CORE_EXPORT char const HPX_CHECK_BOOST_VERSION[] =
+    char const HPX_CHECK_VERSION[] = HPX_PP_STRINGIZE(HPX_CHECK_VERSION);
+    char const HPX_CHECK_BOOST_VERSION[] =
         HPX_PP_STRINGIZE(HPX_CHECK_BOOST_VERSION);
 }    // namespace hpx
