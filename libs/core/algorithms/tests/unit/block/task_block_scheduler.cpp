@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <exception>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -110,6 +111,23 @@ void test_task_group_scheduler_exception()
     {
         caught_exception = true;
         HPX_TEST_EQ(e.size(), 2u);
+
+        // Verify that the actual exception messages match what was thrown
+        std::string all_messages;
+        for (auto const& ep : e)
+        {
+            try
+            {
+                std::rethrow_exception(ep);
+            }
+            catch (std::runtime_error const& re)
+            {
+                all_messages += re.what();
+                all_messages += " ";
+            }
+        }
+        HPX_TEST(all_messages.find("error1") != std::string::npos);
+        HPX_TEST(all_messages.find("error2") != std::string::npos);
     }
     catch (...)
     {
@@ -203,6 +221,17 @@ void test_define_task_block_scheduler_exception()
     {
         caught_exception = true;
         HPX_TEST_EQ(el.size(), 1u);
+
+        // Verify the actual exception message matches what was thrown
+        try
+        {
+            std::rethrow_exception(*el.begin());
+        }
+        catch (std::runtime_error const& re)
+        {
+            std::string msg = re.what();
+            HPX_TEST(msg.find("tb_error") != std::string::npos);
+        }
     }
     catch (...)
     {

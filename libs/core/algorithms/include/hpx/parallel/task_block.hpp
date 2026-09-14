@@ -407,8 +407,8 @@ namespace hpx::experimental {
                 // route to the sender-based task_group::run() path.
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        if constexpr (std::is_invocable_v<std::decay_t<F>&,
-                                          decltype(trh)&, decltype((sched))>)
+                        if constexpr (std::is_invocable_v<F&&, task_block<>&,
+                                          Scheduler&&>)
                         {
                             f(trh, sched);
                         }
