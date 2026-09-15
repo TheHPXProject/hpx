@@ -21,6 +21,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -141,27 +142,31 @@ namespace hpx::lcos::local {
 
     namespace detail {
 
+        struct spmd_shared_state
+        {
+            hpx::barrier<> barrier_;
+            std::map<std::set<std::size_t>, std::shared_ptr<hpx::barrier<>>>
+                barriers_;
+            hpx::mutex mtx_;
+
+            explicit spmd_shared_state(std::size_t num_images)
+              : barrier_(static_cast<std::ptrdiff_t>(num_images))
+            {
+            }
+        };
+
         HPX_CXX_CORE_EXPORT template <typename F>
         struct spmd_block_helper
         {
-        private:
-            using barrier_type = hpx::barrier<>;
-            using table_type =
-                std::map<std::set<std::size_t>, std::shared_ptr<barrier_type>>;
-            using mutex_type = hpx::mutex;
-
-        public:
-            std::shared_ptr<barrier_type> barrier_;
-            std::shared_ptr<table_type> barriers_;
-            std::shared_ptr<mutex_type> mtx_;
+            std::shared_ptr<spmd_shared_state> state_;
             std::decay_t<F> f_;
             std::size_t num_images_;
 
             template <typename... Ts>
             void operator()(std::size_t image_id, Ts&&... ts) const
             {
-                spmd_block block(
-                    num_images_, image_id, *barrier_, *barriers_, *mtx_);
+                spmd_block block(num_images_, image_id, state_->barrier_,
+                    state_->barriers_, state_->mtx_);
                 HPX_INVOKE(f_, HPX_MOVE(block), HPX_FORWARD(Ts, ts)...);
             }
         };
@@ -169,8 +174,12 @@ namespace hpx::lcos::local {
 
     // Asynchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-        typename... Args,
-        typename = std::enable_if_t<hpx::is_async_execution_policy_v<ExPolicy>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>
+        )
+    // clang-format on
     decltype(auto) define_spmd_block(
         ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
     {
@@ -180,19 +189,11 @@ namespace hpx::lcos::local {
         using ftype = std::decay_t<F>;
         using first_type = hpx::util::first_argument_t<ftype>;
 
-        using barrier_type = hpx::barrier<>;
-        using table_type =
-            std::map<std::set<std::size_t>, std::shared_ptr<barrier_type>>;
-        using mutex_type = hpx::mutex;
-
         static_assert(std::is_same_v<spmd_block, first_type>,
             "define_spmd_block() needs a function or lambda that "
             "has at least a local spmd_block as 1st argument");
 
-        std::shared_ptr<barrier_type> barrier =
-            std::make_shared<barrier_type>(num_images);
-        std::shared_ptr<table_type> barriers = std::make_shared<table_type>();
-        std::shared_ptr<mutex_type> mtx = std::make_shared<mutex_type>();
+        auto state = std::make_shared<detail::spmd_shared_state>(num_images);
 
         // The tasks launched here may synchronize between each other. This may
         // lead to deadlocks if the tasks are combined to run on the same
@@ -203,16 +204,84 @@ namespace hpx::lcos::local {
 
         return hpx::parallel::execution::bulk_async_execute(
             hpx::execution::to_hierarchical_spawning(hinted_policy.executor()),
-            detail::spmd_block_helper<F>{
-                barrier, barriers, mtx, HPX_FORWARD(F, f), num_images},
+            detail::spmd_block_helper<F>{state, HPX_FORWARD(F, f), num_images},
             hpx::util::counting_shape(num_images), HPX_FORWARD(Args, args)...);
+    }
+
+    /// \brief Launch an SPMD block on a P2300 scheduler.
+    ///
+    /// Creates \a num_images concurrent images of \a f, each
+    /// receiving a unique \a spmd_block handle plus the forwarded
+    /// \a args. Every image is scheduled as an independent sender on
+    /// \a sched and the results are joined with
+    /// \a ex::when_all_vector.
+    ///
+    /// \param sched   The scheduler to use for execution. The
+    ///                provided scheduler must provide parallel
+    ///                forward-progress guarantees if the callable
+    ///                invokes sync_all() or sync_images().
+    ///                Schedulers without this guarantee (e.g.,
+    ///                inline schedulers) will cause deadlocks at
+    ///                the barrier.
+    /// \param num_images  Number of SPMD images to launch.
+    /// \param f       Callable whose first parameter is an
+    ///                \a spmd_block.
+    /// \param args    Extra arguments forwarded to every image.
+    ///
+    /// \returns A lazy sender representing the SPMD block
+    ///          execution. The caller controls synchronization
+    ///          (e.g. via \a sync_wait).
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
+        typename... Args>
+    // clang-format off
+        requires (
+            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+        )
+    // clang-format on
+    decltype(auto) define_spmd_block(
+        Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
+    {
+        auto state = std::make_shared<detail::spmd_shared_state>(num_images);
+
+        namespace ex = hpx::execution::experimental;
+
+        // Package the callable and arguments into a shared tuple
+        // so that move-only types survive across multiple images.
+        auto shared_data = std::make_shared<
+            std::tuple<std::decay_t<F>, std::decay_t<Args>...>>(
+            std::make_tuple(HPX_FORWARD(F, f), HPX_FORWARD(Args, args)...));
+
+        std::vector<ex::any_sender<>> senders;
+        senders.reserve(num_images);
+
+        for (std::size_t image_id = 0; image_id < num_images; ++image_id)
+        {
+            senders.push_back(ex::just(shared_data) | ex::continues_on(sched) |
+                ex::then([state, num_images, image_id](auto data) {
+                    spmd_block block(num_images, image_id, state->barrier_,
+                        state->barriers_, state->mtx_);
+
+                    // Inline the lambda directly into std::apply to reduce template AST depth
+                    std::apply(
+                        [&block](auto& func, auto&... unpacked_args) {
+                            HPX_INVOKE(func, HPX_MOVE(block), unpacked_args...);
+                        },
+                        *data);
+                }));
+        }
+
+        return ex::when_all_vector(HPX_MOVE(senders)) | ex::continues_on(sched);
     }
 
     // Synchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-        typename... Args,
-        typename =
-            std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>
+        )
+    // clang-format on
     void define_spmd_block(
         ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
     {
@@ -222,19 +291,11 @@ namespace hpx::lcos::local {
         using ftype = std::decay_t<F>;
         using first_type = hpx::util::first_argument_t<ftype>;
 
-        using barrier_type = hpx::barrier<>;
-        using table_type =
-            std::map<std::set<std::size_t>, std::shared_ptr<barrier_type>>;
-        using mutex_type = hpx::mutex;
-
         static_assert(std::is_same_v<spmd_block, first_type>,
             "define_spmd_block() needs a lambda that "
             "has at least a spmd_block as 1st argument");
 
-        std::shared_ptr<barrier_type> barrier =
-            std::make_shared<barrier_type>(num_images);
-        std::shared_ptr<table_type> barriers = std::make_shared<table_type>();
-        std::shared_ptr<mutex_type> mtx = std::make_shared<mutex_type>();
+        auto state = std::make_shared<detail::spmd_shared_state>(num_images);
 
         // The tasks launched here may synchronize between each other. This may
         // lead to deadlocks if the tasks are combined to run on the same
@@ -245,8 +306,7 @@ namespace hpx::lcos::local {
 
         hpx::parallel::execution::bulk_sync_execute(
             hpx::execution::to_hierarchical_spawning(hinted_policy.executor()),
-            detail::spmd_block_helper<F>{
-                barrier, barriers, mtx, HPX_FORWARD(F, f), num_images},
+            detail::spmd_block_helper<F>{state, HPX_FORWARD(F, f), num_images},
             hpx::util::counting_shape(num_images), HPX_FORWARD(Args, args)...);
     }
 
@@ -272,8 +332,12 @@ namespace hpx::parallel {
 
     // Asynchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-        typename... Args,
-        typename = std::enable_if_t<hpx::is_async_execution_policy_v<ExPolicy>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>
+        )
+    // clang-format on
     decltype(auto) define_spmd_block(
         ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
     {
@@ -282,11 +346,31 @@ namespace hpx::parallel {
             HPX_FORWARD(Args, args)...);
     }
 
+    // P2300 Scheduler version
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
+        typename... Args>
+    // clang-format off
+        requires (
+            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+        )
+    // clang-format on
+    decltype(auto) define_spmd_block(
+        Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
+    {
+        return hpx::lcos::local::define_spmd_block(
+            HPX_FORWARD(Scheduler, sched), num_images, HPX_FORWARD(F, f),
+            HPX_FORWARD(Args, args)...);
+    }
+
     // Synchronous version
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
-        typename... Args,
-        typename =
-            std::enable_if_t<!hpx::is_async_execution_policy_v<ExPolicy>>>
+        typename... Args>
+    // clang-format off
+        requires(
+            hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>
+        )
+    // clang-format on
     void define_spmd_block(
         ExPolicy&& policy, std::size_t num_images, F&& f, Args&&... args)
     {
