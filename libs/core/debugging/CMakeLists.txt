@@ -9,6 +9,7 @@ set(debugging_headers
     hpx/debugging/backtrace.hpp
     hpx/debugging/backtrace/backtrace.hpp
     hpx/debugging/demangle_helper.hpp
+    hpx/debugging/detail/dbghelp_lock.hpp
     hpx/debugging/environ.hpp
     hpx/debugging/macros.hpp
     hpx/debugging/print.hpp
@@ -24,7 +25,9 @@ set(debugging_compat_headers
 )
 # cmake-format: on
 
-set(debugging_sources attach_debugger.cpp backtrace.cpp print.cpp)
+set(debugging_sources attach_debugger.cpp backtrace.cpp detail/dbghelp_lock.cpp
+                      print.cpp
+)
 
 include(HPX_AddModule)
 add_hpx_module(

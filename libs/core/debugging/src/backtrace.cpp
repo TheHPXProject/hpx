@@ -55,6 +55,8 @@
 #include <vector>
 
 #if defined(HPX_MSVC)
+#include <hpx/debugging/detail/dbghelp_lock.hpp>
+
 #include <windows.h>
 
 #include <dbghelp.h>
@@ -361,13 +363,30 @@ namespace hpx::util::stack_trace {
 
         void init()
         {
+            // Serialise the check-then-set and the SymInitialize call
+            // against Tracy's DbgHelp path (see dbghelp_lock.hpp). The
+            // lock also fixes the previous non-atomic init() race.
+            hpx::util::detail::dbghelp_scoped_lock const l;
             if (hProcess == nullptr)
             {
                 hProcess = GetCurrentProcess();
-                SymSetOptions(SYMOPT_DEFERRED_LOADS);
+
+                // OR our preference in rather than clobbering: if Tracy
+                // (or anything else) initialised the handler first, its
+                // options are already set and we do not want to reset
+                // them here.
+                SymSetOptions(SymGetOptions() | SYMOPT_DEFERRED_LOADS);
 
                 if (SymInitialize(hProcess, nullptr, TRUE))
                 {
+                    syms_ready = true;
+                }
+                else if (GetLastError() == ERROR_INVALID_PARAMETER)
+                {
+                    // Someone else (typically Tracy's SymbolWorker) has
+                    // already initialised DbgHelp for this process. The
+                    // handler is usable; we just do not own its lifetime
+                    // and therefore never call SymCleanup.
                     syms_ready = true;
                 }
             }
@@ -395,6 +414,9 @@ namespace hpx::util::stack_trace {
             pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
             pSymbol->MaxNameLen = MAX_SYM_NAME;
 
+            // DbgHelp is single-threaded; serialise with Tracy and with
+            // any concurrent HPX callers on the same process.
+            hpx::util::detail::dbghelp_scoped_lock const l;
             if (SymFromAddr(hProcess, dwAddress, &dwDisplacement, pSymbol))
             {
                 ss << ": " << pSymbol->Name << std::hex << " +0x"

@@ -3629,6 +3629,12 @@ been built with the same three options; Tracy 0.14 mangles its exported
 profiler symbol based on the active define set, so a mismatch fails at
 link time rather than producing a silent inconsistency at runtime.
 
+On Windows, |hpx| additionally sets ``TRACY_DBGHELP_LOCK=HpxDbgHelp`` on the
+fetched Tracy client to serialise DbgHelp calls between Tracy and |hpx|'s own
+symbol lookup (DbgHelp is single-threaded per MSDN). A system-supplied Tracy
+must be built with the same define; otherwise Tracy's callstack captures run
+unlocked and can race with |hpx|'s own DbgHelp use.
+
 To profile a distributed run, additionally enable
 :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
 carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
