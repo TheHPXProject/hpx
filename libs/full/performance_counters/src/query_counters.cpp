@@ -86,6 +86,38 @@ namespace hpx::util {
         }
     }
 
+    void query_counters::refresh_counters()
+    {
+        // Re-discovery is opportunistic: a name pattern that legitimately
+        // matches nothing new should not abort the pending evaluation, so
+        // errors are reported through a lightweight error_code instead of
+        // being thrown.
+        error_code ec(throwmode::lightweight);
+
+        std::size_t const size_before = counters_.size();
+
+        if (!names_.empty())
+            counters_.add_counters(names_, false, ec);
+        if (!reset_names_.empty())
+            counters_.add_counters(reset_names_, true, ec);
+
+        std::vector<performance_counters::counter_info> const infos =
+            counters_.get_counter_infos();
+        if (infos.size() <= size_before)
+            return;    // nothing new was discovered
+
+        error_code ec2(throwmode::lightweight);
+        counters_.start(launch::sync, ec2);
+
+        for (std::size_t i = size_before; i != infos.size(); ++i)
+        {
+            std::string const real_name =
+                performance_counters::remove_counter_prefix(
+                    infos[i].fullname_);
+            hpx::tracing::create_counter(infos[i].fullname_, real_name);
+        }
+    }
+
     void query_counters::start()
     {
 #if defined(HPX_GCC_VERSION) && HPX_GCC_VERSION >= 110000
@@ -112,6 +144,11 @@ namespace hpx::util {
     {
         timer_.stop(terminate);
         counters_.stop(launch::sync);
+    }
+
+    std::size_t query_counters::size() const
+    {
+        return counters_.size();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -618,6 +655,17 @@ namespace hpx::util {
                 "query_counters::evaluate",
                 "The counters to be evaluated have not been initialized yet");
             return false;
+        }
+
+        if (force)
+        {
+            // This is the final, forced evaluation, e.g. the one performed
+            // when counters are printed at shutdown. Re-discover the
+            // requested counter names so that counters registered after
+            // query_counters::start() was called, such as APEX counters
+            // that only become known to HPX once sampled for the first
+            // time, are still included (see #4627).
+            refresh_counters();
         }
 
         std::vector<performance_counters::counter_info> const infos =
