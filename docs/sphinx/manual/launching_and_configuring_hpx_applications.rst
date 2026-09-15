@@ -330,6 +330,31 @@ The |hpx| configuration section
        ``HPX_WITH_THREAD_GUARD_PAGE`` is set to 1 while configuring the build
        system. It is set by default to ``1``.
 
+The ``hpx.tracing`` configuration section
+.........................................
+
+.. code-block:: ini
+
+   [hpx.tracing]
+   sample_rate = ${HPX_TRACING_SAMPLE_RATE:1}
+
+.. _ini_hpx_tracing:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.tracing.sample_rate``
+     * 1-in-N sampling rate for the per-task lifecycle events on Tracy
+       builds. Initialized from the CMake option
+       :option:`HPX_WITH_TRACING_SAMPLE_RATE` (default ``1``, every task
+       sampled). Values below 1 are clamped to 1. Applied at
+       ``init_global_data`` time; can also be updated from user code via
+       ``hpx::threads::set_tracing_sample_rate(int)``, in which case each
+       worker abandons its current countdown and starts a fresh one on
+       the next task creation. Only present on Tracy builds
+       (``HPX_WITH_TRACY=ON``).
+
 The ``hpx.threadpools`` configuration section
 .............................................
 

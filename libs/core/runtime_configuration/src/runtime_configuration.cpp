@@ -202,6 +202,16 @@ namespace hpx::util {
             "[hpx.on_startup]",
             "wait_on_latch = ${HPX_ON_STARTUP_WAIT_ON_LATCH}",
 
+#if defined(HPX_HAVE_TRACY)
+            // Runtime override for the 1-in-N task-sampling countdown.
+            // Defaults to the compile-time HPX_TRACING_SAMPLE_RATE; the
+            // atomic in task_sampling.cpp is repopulated during startup
+            // from this key.
+            "[hpx.tracing]",
+            "sample_rate = ${HPX_TRACING_SAMPLE_RATE:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_TRACING_SAMPLE_RATE)) "}",
+#endif
+
 #if defined(HPX_HAVE_NETWORKING)
             // by default, enable networking
             "[hpx.parcel]",
