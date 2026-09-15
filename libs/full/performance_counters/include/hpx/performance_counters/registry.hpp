@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/synchronization.hpp>
 #include <hpx/performance_counters/counters.hpp>
 
 #include <cstddef>
@@ -160,12 +161,27 @@ namespace hpx::performance_counters {
             counter_info& info, error_code& ec = throws);
 
     protected:
+        // Both overloads read countertypes_ without locking mtx_
+        // themselves; every caller is required to hold mtx_ already.
         counter_type_map_type::iterator locate_counter_type(
             std::string const& type_name);
         counter_type_map_type::const_iterator locate_counter_type(
             std::string const& type_name) const;
 
     private:
+        using mutex_type = hpx::spinlock;
+
+        // Protects countertypes_ against concurrent registration and
+        // discovery, e.g. a provider such as APEX calling
+        // install_counter_type() to lazily register a counter type from
+        // one HPX thread while another thread runs
+        // discover_counter_type() for a wildcard query. Every member
+        // function takes mtx_ only around the direct access to
+        // countertypes_ and releases it before doing anything that could
+        // block or suspend the calling HPX thread, such as constructing a
+        // component, registering a name with AGAS, or invoking a
+        // user-supplied discoverer or creator callback.
+        mutable mutex_type mtx_;
         counter_type_map_type countertypes_;
 
     public:
