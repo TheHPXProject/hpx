@@ -358,116 +358,53 @@ namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     // extensions
-
+    //
+    // Register each simd/vectorpack execution policy defined above with
+    // policy_traits, replacing what used to be a separate specialization of
+    // is_execution_policy, is_sequenced_execution_policy,
+    // is_async_execution_policy, is_parallel_execution_policy, and
+    // is_vectorpack_execution_policy for each of the policies below.
     /// \cond NOINTERNAL
     template <typename Executor, typename Parameters>
-    struct is_execution_policy<
+    struct policy_traits<
         hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
-      : std::true_type
+      : policy_traits_default
     {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_sequenced = true;
+        static constexpr bool is_vectorpack = true;
     };
 
     template <typename Executor, typename Parameters>
-    struct is_execution_policy<
+    struct policy_traits<
         hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
+      : policy_traits_default
     {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_sequenced = true;
+        static constexpr bool is_async = true;
+        static constexpr bool is_vectorpack = true;
     };
 
     template <typename Executor, typename Parameters>
-    struct is_execution_policy<
+    struct policy_traits<
         hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
-      : std::true_type
+      : policy_traits_default
     {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_parallel = true;
+        static constexpr bool is_vectorpack = true;
     };
 
     template <typename Executor, typename Parameters>
-    struct is_execution_policy<
+    struct policy_traits<
         hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
+      : policy_traits_default
     {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<
-        hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<
-        hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<
-        hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<
-        hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<
-        hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<
-        hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_vectorpack_execution_policy<
-        hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_vectorpack_execution_policy<
-        hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_vectorpack_execution_policy<
-        hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_vectorpack_execution_policy<
-        hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_parallel = true;
+        static constexpr bool is_async = true;
+        static constexpr bool is_vectorpack = true;
     };
     /// \endcond
 }    // namespace hpx::detail

@@ -21,6 +21,7 @@ set(tests
     parallel_fork_executor
     parallel_policy_executor
     parallel_scheduler
+    policy_traits
     polymorphic_executor
     scheduler_executor
     sequenced_executor
