@@ -955,6 +955,10 @@ rst_prolog += '''
 .. _tracy: https://github.com/wolfpld/tracy
 .. |ittnotify| replace:: Intel ITT API
 .. _ittnotify: https://github.com/intel/ittapi
+.. |stdexec| replace:: stdexec
+.. _stdexec: https://github.com/NVIDIA/stdexec
+.. |lci| replace:: LCI
+.. _lci: https://github.com/uiuc-hpc/lci
 .. |cmake| replace:: CMake
 .. _cmake: https://www.cmake.org
 .. |cppdependencies| replace:: cpp-dependencies
