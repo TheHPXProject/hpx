@@ -1495,14 +1495,16 @@ namespace {
 
 }    // namespace
 
-#define RUN(f)
-{
-    std::fprintf(stderr, "[merge-test] start %s\n", #f);
-    std::fflush(stderr);
-    f();
-    std::fprintf(stderr, "[merge-test] done %s\n", #f);
-    std::fflush(stderr);
-}
+// clang-format off
+#define RUN(f)                                                                 \
+    {                                                                          \
+        std::fprintf(stderr, "[merge-test] start %s\n", #f);                   \
+        std::fflush(stderr);                                                   \
+        f();                                                                   \
+        std::fprintf(stderr, "[merge-test] done  %s\n", #f);                   \
+        std::fflush(stderr);                                                   \
+    }
+// clang-format on
 
 int main()
 {
