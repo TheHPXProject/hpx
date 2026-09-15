@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
 #include <iterator>
 #include <random>
 #include <stdexcept>
@@ -1494,28 +1495,37 @@ namespace {
 
 }    // namespace
 
+#define RUN(f)
+{
+    std::fprintf(stderr, "[merge-test] start %s\n", #f);
+    std::fflush(stderr);
+    f();
+    std::fprintf(stderr, "[merge-test] done %s\n", #f);
+    std::fflush(stderr);
+}
+
 int main()
 {
-    test_capture_second_input();
-    test_capture_first_input();
-    test_capture_both_inputs();
-    test_multi_partition_capture();
-    test_empty_input_ranges();
-    test_stable_merge();
-    test_multi_partition_stable_merge();
-    test_parallel_multi_destination_partitions();
-    test_multi_locality_destination_partitions();
-    test_sequenced_task_merge();
-    test_parallel_task_merge();
-    test_statefull_comparator();
-    test_ranges_merge_with_projections();
-    test_different_input_types();
-    test_partial_subranges();
-    test_both_inputs_empty();
-    test_disjoint_parallel_chunks();
-    test_task_empty_side_paths();
-    test_remote_comparator_exception();
-    test_randomized_distributed_merge();
+    RUN(test_capture_second_input);
+    RUN(test_capture_first_input);
+    RUN(test_capture_both_inputs);
+    RUN(test_multi_partition_capture);
+    RUN(test_empty_input_ranges);
+    RUN(test_stable_merge);
+    RUN(test_multi_partition_stable_merge);
+    RUN(test_parallel_multi_destination_partitions);
+    RUN(test_multi_locality_destination_partitions);
+    RUN(test_sequenced_task_merge);
+    RUN(test_parallel_task_merge);
+    RUN(test_statefull_comparator);
+    RUN(test_ranges_merge_with_projections);
+    RUN(test_different_input_types);
+    RUN(test_partial_subranges);
+    RUN(test_both_inputs_empty);
+    RUN(test_disjoint_parallel_chunks);
+    RUN(test_task_empty_side_paths);
+    RUN(test_remote_comparator_exception);
+    RUN(test_randomized_distributed_merge);
 
     return hpx::util::report_errors();
 }
