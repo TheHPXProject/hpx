@@ -17,6 +17,7 @@
 
 #include <hpx/iterator_support/traits/is_iterator.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <cstddef>
@@ -235,6 +236,73 @@ namespace hpx::util {
         ////////////////////////////////////////////////////////////////////////
         // Implementation for random access iterators
 
+        // A type trait to check whether all elements of a tuple-like type
+        // are lvalue references. Used to decide whether indexing an iterator
+        // (operator[]) can safely be made transparent to hpx::get<I>: only
+        // then do the tuple elements outlive the temporary that the proxy
+        // converts to.
+        // std::conjunction short-circuits instantiation: as soon as one
+        // element turns out not to be an lvalue reference, the remaining
+        // (recursively instantiated) elements are not evaluated at all.
+        HPX_CXX_CORE_EXPORT template <typename T, std::size_t N>
+        struct all_elements_are_lvalue_refs
+          : std::conjunction<
+                std::is_lvalue_reference<tuple_element_t<N - 1, T>>,
+                all_elements_are_lvalue_refs<T, N - 1>>
+        {
+        };
+
+        // an empty tuple trivially has only lvalue reference elements; this
+        // specialization also terminates the recursion above (for N == 0 it
+        // is selected instead of the primary template, so tuple_element is
+        // never instantiated with an invalid index)
+        // note: no HPX_CXX_CORE_EXPORT here - export declarations are not
+        // allowed on partial specializations (C7760 on MSVC), see range.hpp
+        // for the same pattern
+        template <typename T>
+        struct all_elements_are_lvalue_refs<T, 0> : std::true_type
+        {
+        };
+
+        // a type that is not tuple-like is not transparent to hpx::get<I> at
+        // all; a plain lvalue reference trivially consists of only lvalue
+        // references
+        HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
+        struct all_lvalue_references : std::is_lvalue_reference<T>
+        {
+        };
+
+        template <typename T>
+        struct all_lvalue_references<T,
+            std::enable_if_t<traits::is_tuple_like_v<T>>>
+          : all_elements_are_lvalue_refs<T, tuple_size_v<T>>
+        {
+        };
+
+        HPX_CXX_CORE_EXPORT template <typename T>
+        inline constexpr bool all_lvalue_references_v =
+            all_lvalue_references<T>::value;
+
+        // Helper to conditionally define hpx::tuple_size for
+        // operator_brackets_proxy below (the primary hpx::tuple_size template
+        // has only one template parameter, so the condition cannot be
+        // expressed as an enable_if on the specialization itself). When the
+        // condition does not hold, this has no ::value, which keeps it
+        // SFINAE-friendly.
+        template <typename Iterator, typename Enable = void>
+        struct proxy_tuple_size
+        {
+        };
+
+        template <typename Iterator>
+        struct proxy_tuple_size<Iterator,
+            std::enable_if_t<
+                traits::is_tuple_like_v<typename Iterator::reference> &&
+                all_lvalue_references_v<typename Iterator::reference>>>
+          : tuple_size<typename Iterator::reference>
+        {
+        };
+
         // A proxy return type for operator[], needed to deal with iterators
         // that may invalidate references upon destruction. Consider the
         // temporary iterator in *(a + n)
@@ -265,6 +333,20 @@ namespace hpx::util {
                 *iter_ = val;
                 return *this;
             }
+
+            // The hpx::tuple_element/get<I> specializations below (for
+            // tuple-like references) must not go through operator reference()
+            // - converting to the reference type would invoke hpx::tuple's
+            // tuple-like constructor (made viable by the tuple_size
+            // specialization below), which itself calls hpx::get<I>, leading
+            // to infinite mutual recursion. The name must be qualified: an
+            // unqualified friend would declare (and befriend) a distinct
+            // hpx::util::detail::tuple_element instead. The parameter list
+            // must match hpx::tuple_element's primary template exactly
+            // (including the trailing Enable) for the friendship to apply to
+            // the partial specializations.
+            template <std::size_t I, typename Iter, typename Enable>
+            friend struct hpx::tuple_element;
 
         private:
             Iterator iter_;
@@ -714,3 +796,71 @@ namespace hpx::util {
         return tmp += n;
     }
 }    // namespace hpx::util
+
+///////////////////////////////////////////////////////////////////////////
+// Make hpx::get<I> work on operator_brackets_proxy when the underlying
+// iterator's reference is a tuple of lvalue references (e.g.
+// zip_iterator). This keeps the proxy (preserving its lifetime
+// guarantees) while making it transparent to projections like
+// hpx::parallel::detail::extract_key that use hpx::get<I>. For
+// iterators whose reference is not tuple-like (e.g.
+// std::vector<bool>::iterator) or whose tuple elements are not plain
+// lvalue references (which would dangle when bound to the temporary
+// the proxy converts to), the specializations below are simply not
+// viable, leaving the proxy opaque as before.
+namespace hpx {
+    // The number of elements of the proxy, same as for its reference. This
+    // makes the proxy genuinely tuple-like for generic code that gates on
+    // traits::is_tuple_like_v before calling hpx::get<I> (e.g. projections).
+    // It is only defined when the reference is tuple-like and all of its
+    // elements are lvalue references (see the specialization of tuple_element
+    // below); otherwise proxy_tuple_size has no ::value, the specialization
+    // falls back to an empty base and the proxy stays non-tuple-like.
+    // note: no HPX_CXX_CORE_EXPORT here - export declarations are not
+    // allowed on partial specializations (C7760 on MSVC), see range.hpp
+    // for the same pattern
+    template <typename Iterator>
+    struct tuple_size<util::detail::operator_brackets_proxy<Iterator>>
+      : util::detail::proxy_tuple_size<Iterator>
+    {
+    };
+
+    template <std::size_t I, typename Iterator>
+    struct tuple_element<I, util::detail::operator_brackets_proxy<Iterator>,
+        std::enable_if_t<
+            traits::is_tuple_like_v<typename Iterator::reference> &&
+            util::detail::all_lvalue_references_v<
+                typename Iterator::reference>>>
+    {
+        // The reference of the proxy is a tuple of lvalue references, so the
+        // elements outlive the temporary the proxy converts to. Element
+        // access simply delegates to it. Note that the proxy converts to its
+        // reference implicitly.
+        using type = tuple_element_t<I, typename Iterator::reference>;
+
+        // There are no rvalue-reference overloads on purpose: operator[]
+        // returns a prvalue, and rvalue proxies are handled by the generic
+        // hpx::get<I>(Tuple&&) overloads, which delegate to the members below
+        // and forward the result. The returned reference always refers to an
+        // element of the underlying sequence, never into a temporary. Note
+        // that element access dereferences the underlying iterator directly
+        // (the proxy befriends tuple_element above for this purpose):
+        // converting the proxy to its reference would invoke hpx::tuple's
+        // tuple-like constructor (made viable by the tuple_size
+        // specialization below), which itself resolves hpx::get<I> back to
+        // these members - infinite mutual recursion.
+        static constexpr HPX_HOST_DEVICE HPX_FORCEINLINE type&
+        get(util::detail::operator_brackets_proxy<Iterator>& p) noexcept(
+            noexcept(hpx::get<I>(*p.iter_)))
+        {
+            return hpx::get<I>(*p.iter_);
+        }
+
+        static constexpr HPX_HOST_DEVICE HPX_FORCEINLINE type const&
+        get(util::detail::operator_brackets_proxy<Iterator> const& p) noexcept(
+            noexcept(hpx::get<I>(*p.iter_)))
+        {
+            return hpx::get<I>(*p.iter_);
+        }
+    };
+}    // namespace hpx
