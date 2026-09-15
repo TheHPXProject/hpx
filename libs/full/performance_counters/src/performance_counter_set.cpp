@@ -88,6 +88,24 @@ namespace hpx::performance_counters {
             }
         }
 
+        // Discovery may be re-run for the same name pattern after the set
+        // has already been populated, e.g. to pick up counters that were
+        // registered only after this set was first filled (see #4627).
+        // Skip counters that are already part of this set instead of
+        // adding a duplicate entry.
+        {
+            std::lock_guard<mutex_type> l(mtx_);
+            for (counter_info const& known : infos_)
+            {
+                if (known.fullname_ == info.fullname_)
+                {
+                    if (&ec != &throws)
+                        ec = make_success_code();
+                    return true;
+                }
+            }
+        }
+
         hpx::id_type id = get_counter(info.fullname_, ec);
         if (HPX_UNLIKELY(!id))
         {

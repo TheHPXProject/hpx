@@ -45,6 +45,10 @@ namespace hpx::util {
         void stop_evaluating_counters(bool terminate = false);
         bool evaluate(bool force = false);
 
+        /// \brief Return the number of performance counters currently held
+        ///        by this object.
+        std::size_t size() const;
+
         void terminate();
 
         void start_counters(error_code& ec = throws);
@@ -57,6 +61,22 @@ namespace hpx::util {
 
     protected:
         void find_counters();
+
+        /// \brief Re-run discovery for the counter names this object was
+        ///        constructed with and merge any newly found counters into
+        ///        the existing set.
+        ///
+        /// Counters requested by wild-card patterns (for instance
+        /// \c /apex/*) can be registered with HPX only after program
+        /// startup, e.g. because the counter is not known to its provider
+        /// until the counter is sampled for the first time. Since
+        /// find_counters() only resolves names once, at startup, such
+        /// counters would never be picked up. Calling refresh_counters()
+        /// again before a final evaluation, such as the one performed when
+        /// counters are printed at shutdown, allows those late counters to
+        /// be discovered and included as well. Counters that were already
+        /// part of the set are left untouched.
+        void refresh_counters();
 
         bool print_raw_counters(bool destination_is_cout, bool reset,
             bool no_output, char const* description,
