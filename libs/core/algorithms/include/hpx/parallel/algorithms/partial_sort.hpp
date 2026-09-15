@@ -108,6 +108,7 @@ namespace hpx {
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
@@ -579,6 +580,7 @@ namespace hpx {
         // clang-format on
         static RandIter invoke_default(
             RandIter first, RandIter middle, RandIter last, Comp comp = Comp())
+            HPX_PRE(first <= middle && middle <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires at least random access iterator.");
@@ -601,6 +603,7 @@ namespace hpx {
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
             RandIter middle, RandIter last, Comp comp = Comp())
+            HPX_PRE(first <= middle && middle <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires at least random access iterator.");

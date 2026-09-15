@@ -64,8 +64,8 @@ compatibility:
 
 * Move to Variadics- All of the API now uses variadic templates. However, this
   change required to modify the argument sequence for some of the exiting API
-  functions (:cpp:func:`hpx::async_continue`, :cpp:func:`hpx::apply_continue`,
-  :cpp:func:`hpx::when_each`, :cpp:func:`hpx::wait_each`, synchronous invocation
+  functions (:hpx:func:`hpx::async_continue`, :hpx:func:`hpx::apply_continue`,
+  :hpx:func:`hpx::when_each`, :hpx:func:`hpx::wait_each`, synchronous invocation
   of actions).
 * Changes to Macros- We also removed the macros ``HPX_STD_FUNCTION`` and
   ``HPX_STD_TUPLE``. This shouldn't affect any user code as we replaced
@@ -76,7 +76,7 @@ compatibility:
   Similarly, ``HPX_STD_TUPLE`` was replaced by its default expansion as well:
   ``hpx::util::tuple``.
 * Changes to ``hpx::unique_future``- ``hpx::unique_future``, which was
-  deprecated in the previous release for :cpp:func:`hpx::future` is now
+  deprecated in the previous release for :hpx:func:`hpx::future` is now
   completely removed from |hpx|. This completes the transition to a completely
   standards conforming implementation of ``hpx::future``.
 * Changes to Supported Compilers. Finally, in order to utilize more C++11
@@ -233,4 +233,3 @@ Here is a list of the important tickets we closed for this release.
 * :hpx-issue:`504` - Refactor Dataflow LCO to work with futures
 * :hpx-issue:`196` - Don't store copies of the locality network metadata in the
   gva table
-

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -10,6 +10,7 @@
 #include <hpx/assert.hpp>
 
 #include <hpx/modules/command_line_handling_local.hpp>
+#include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/debugging.hpp>
 #include <hpx/modules/errors.hpp>
@@ -28,6 +29,7 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
+
 #include <hpx/runtime_local/config_entry.hpp>
 #include <hpx/runtime_local/custom_exception_info.hpp>
 #include <hpx/runtime_local/debugging.hpp>
@@ -1064,8 +1066,8 @@ namespace hpx {
 
     bool tolerate_node_faults()
     {
-#ifdef HPX_HAVE_FAULT_TOLERANCE
-        return true;
+#if defined(HPX_HAVE_FAULT_TOLERANCE)
+        return hpx::get_config_entry("hpx.enable_fault_tolerance", "0") != "0";
 #else
         return false;
 #endif
@@ -1515,11 +1517,19 @@ namespace hpx {
             runtime_local::os_thread_type::main_thread, 0, 0, "", "", false);
 
 #ifdef HPX_HAVE_IO_POOL
-        // start the io pool
-        io_pool_->run(false);
-        HPX_UNUSED(
-            lbt_ << "(1st stage) runtime::start: started the application "
-                    "I/O service pool");
+        {
+            // start the io pool
+            auto const p =
+                std::make_shared<util::barrier>(io_pool_->size() + 1);
+            if (io_pool_->run(false, p))
+            {
+                p->wait();
+            }
+
+            HPX_UNUSED(lbt_
+                << "(1st stage) runtime::start: started the application "
+                   "I/O service pool");
+        }
 #endif
         // start the thread manager
         if (!thread_manager_->run())

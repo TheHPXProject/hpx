@@ -10,7 +10,6 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
@@ -523,17 +522,17 @@ struct custom_sender_descriptor_tag
 {
 };
 
-struct custom_sender_tag_invoke
+struct custom_sender_overload
 {
     using is_sender = void;
     using sender_concept = hpx::execution::experimental::sender_t;
 
     [[no_unique_address]] custom_sender_descriptor_tag __desc_tag{};
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
 
-    explicit custom_sender_tag_invoke(
-        std::atomic<bool>& tag_invoke_overload_called_) noexcept
-      : tag_invoke_overload_called(tag_invoke_overload_called_)
+    explicit custom_sender_overload(
+        std::atomic<bool>& overload_called_) noexcept
+      : overload_called(overload_called_)
     {
     }
 
@@ -571,14 +570,14 @@ struct custom_sender
     [[no_unique_address]] custom_sender_descriptor_tag __desc_tag{};
     std::atomic<bool>& start_called;
     std::atomic<bool>& connect_called;
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
 
     custom_sender(std::atomic<bool>& start_called_,
         std::atomic<bool>& connect_called_,
-        std::atomic<bool>& tag_invoke_overload_called_) noexcept
+        std::atomic<bool>& overload_called_) noexcept
       : start_called(start_called_)
       , connect_called(connect_called_)
-      , tag_invoke_overload_called(tag_invoke_overload_called_)
+      , overload_called(overload_called_)
     {
     }
 
@@ -623,17 +622,16 @@ struct custom_sender_multi_tuple
     [[no_unique_address]] custom_sender_descriptor_tag __desc_tag{};
     std::atomic<bool>& start_called;
     std::atomic<bool>& connect_called;
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
 
     bool expect_set_value = true;
 
     custom_sender_multi_tuple(std::atomic<bool>& start_called_,
-        std::atomic<bool>& connect_called_,
-        std::atomic<bool>& tag_invoke_overload_called_,
+        std::atomic<bool>& connect_called_, std::atomic<bool>& overload_called_,
         bool expect_set_value_ = true) noexcept
       : start_called(start_called_)
       , connect_called(connect_called_)
-      , tag_invoke_overload_called(tag_invoke_overload_called_)
+      , overload_called(overload_called_)
       , expect_set_value(expect_set_value_)
     {
     }
@@ -692,16 +690,16 @@ struct custom_typed_sender
 
     std::atomic<bool>& start_called;
     std::atomic<bool>& connect_called;
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
 
     template <typename U>
     custom_typed_sender(U&& x_, std::atomic<bool>& start_called_,
         std::atomic<bool>& connect_called_,
-        std::atomic<bool>& tag_invoke_overload_called_) noexcept
+        std::atomic<bool>& overload_called_) noexcept
       : x(std::forward<U>(x_))
       , start_called(start_called_)
       , connect_called(connect_called_)
-      , tag_invoke_overload_called(tag_invoke_overload_called_)
+      , overload_called(overload_called_)
     {
     }
 
@@ -751,7 +749,7 @@ struct custom_sender2 : custom_sender
 template <typename T>
 struct custom_type
 {
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
     std::decay_t<T> x;
 };
 
@@ -795,15 +793,14 @@ struct example_scheduler_template
 
     std::atomic<bool>& schedule_called;
     std::atomic<bool>& execute_called;
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
 
     // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
     example_scheduler_template(std::atomic<bool>& schedule_called,
-        std::atomic<bool>& execute_called,
-        std::atomic<bool>& tag_invoke_overload_called)
+        std::atomic<bool>& execute_called, std::atomic<bool>& overload_called)
       : schedule_called(schedule_called)
       , execute_called(execute_called)
-      , tag_invoke_overload_called(tag_invoke_overload_called)
+      , overload_called(overload_called)
     {
     }
 
@@ -876,7 +873,7 @@ struct example_scheduler_template
     example_scheduler_template(example_scheduler_template<D> const& other)
       : schedule_called(other.schedule_called)
       , execute_called(other.execute_called)
-      , tag_invoke_overload_called(other.tag_invoke_overload_called)
+      , overload_called(other.overload_called)
     {
     }
 };
@@ -897,8 +894,7 @@ namespace tag_namespace {
         template <typename Sender>
         auto operator()(Sender&& sender) const
         {
-            return hpx::functional::tag_invoke(
-                *this, std::forward<Sender>(sender));
+            return adl_invoke(*this, std::forward<Sender>(sender));
         }
 
         struct wrapper
@@ -910,7 +906,7 @@ namespace tag_namespace {
         // sure this is a worse match than the one in my_namespace by requiring
         // a conversion.
         template <typename Sender>
-        friend void tag_invoke(wrapper, Sender&&)
+        friend void adl_invoke(wrapper, Sender&&)
         {
         }
     } my_tag{};
@@ -1015,7 +1011,7 @@ namespace my_namespace {
     // sure this is a better match than the one in tag_namespace so that if this
     // one is visible it is chosen. It should not be visible.
     template <typename Sender>
-    void tag_invoke(tag_namespace::my_tag_t, Sender&&)
+    void adl_invoke(tag_namespace::my_tag_t, Sender&&)
     {
         static_assert(sizeof(Sender) == 0);
     }
@@ -1023,8 +1019,8 @@ namespace my_namespace {
 
 // This test function expects a type that has my_namespace::my_type as a
 // template argument. If template arguments are correctly hidden from ADL the
-// friend tag_invoke overload in my_tag_t will be chosen. If template arguments
-// are not hidden the unconstrained tag_invoke overload in my_namespace will be
+// friend adl_invoke overload in my_tag_t will be chosen. If template arguments
+// are not hidden the unconstrained adl_invoke overload in my_namespace will be
 // chosen instead.
 template <typename Sender>
 void test_adl_isolation(Sender&& sender)

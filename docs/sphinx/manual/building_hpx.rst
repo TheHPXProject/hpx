@@ -99,6 +99,46 @@ used CMake options.
    Enable APEX integration. `APEX <https://uo-oaciss.github.io/apex/quickstarthpx/>`_ can be used to profile |hpx|
    applications. In particular, it provides information about individual tasks in the |hpx| runtime.
 
+.. option:: HPX_WITH_TRACY
+
+   Enable |tracy|_ integration. Tracy shows task lifecycle, work stealing, suspension, and (with
+   :option:`HPX_WITH_PARCEL_PROFILING`) distributed parcel events. See :ref:`optimizing_with_tracy` for
+   build and attach instructions.
+
+.. option:: HPX_WITH_ITTNOTIFY
+
+   Enable |ittnotify|_ integration. Requires VTune or any other |ittnotify|
+   provider; point ``Amplifier_ROOT`` at the install (the name is legacy;
+   it accepts any ITTNotify installation).
+
+.. option:: HPX_WITH_PARCEL_PROFILING
+
+   Enable per-parcel profiling data. Adds per-parcel identifier and timestamp fields (creation time,
+   start time, parcel id) that are carried on the wire and surfaced to whichever tracing backend is
+   enabled. Defaults to ``ON`` when :option:`HPX_WITH_APEX` is on, ``OFF`` otherwise.
+
+.. option:: HPX_WITH_TRACING_LIFECYCLE_EVENTS
+
+   Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed,
+   deleted). Defaults to ``ON``. Turn ``OFF`` to compile out the per-task hooks and their runtime
+   connection check when profiling a workload where only causal or work-stealing events matter. The
+   saving applies on Tracy builds; the other backends already treat these hooks as no-ops.
+
+.. option:: HPX_WITH_TRACING_CAUSAL_EVENTS
+
+   Emit causal-chain events (``future_fulfilled``, ``future_exception_set``, ``continuation_run``,
+   ``continuation_finished``, ``handle_on_completed_fired``). Defaults to ``ON``. Turning this ``OFF``
+   also elides the active-continuations counter update in ``continuation_run`` /
+   ``continuation_finished``. The saving applies on Tracy builds; the other backends already treat
+   these hooks as no-ops.
+
+.. option:: HPX_WITH_TRACING_WORK_STEALING_EVENTS
+
+   Emit the work-stealing signal when a worker steals a task from another worker. Defaults to ``ON``.
+   Turn ``OFF`` when profiling a workload with heavy work stealing where the signal itself is not
+   being consumed. The saving applies on Tracy builds; the other backends already treat this hook as
+   a no-op.
+
 .. option:: HPX_WITH_GENERIC_CONTEXT_COROUTINES
 
    Enable Boost. Context for task context switching. It must be enabled for non-x86 architectures such as ARM and Power.

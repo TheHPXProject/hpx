@@ -8,8 +8,9 @@ if(NOT HPX_WITH_NETWORKING)
   return()
 endif()
 
-set(tests distributed_scheduler)
+set(tests distributed_bulk_test distributed_scheduler)
 
+set(distributed_bulk_test_PARAMETERS LOCALITIES 2)
 set(distributed_scheduler_PARAMETERS LOCALITIES 2)
 
 foreach(test ${tests})

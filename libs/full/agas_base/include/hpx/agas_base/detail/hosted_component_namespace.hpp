@@ -20,12 +20,10 @@
 #include <string>
 #include <vector>
 
-namespace hpx { namespace agas { namespace detail {
-
+namespace hpx::agas::detail {
     struct hosted_component_namespace : component_namespace
     {
-        explicit hosted_component_namespace(naming::address addr);
-        hosted_component_namespace();
+        explicit hosted_component_namespace(naming::address const& addr);
 
         naming::address::address_type ptr() const
         {
@@ -60,7 +58,6 @@ namespace hpx { namespace agas { namespace detail {
         hpx::id_type gid_;
         naming::address addr_;
     };
-
-}}}    // namespace hpx::agas::detail
+}    // namespace hpx::agas::detail
 
 #endif

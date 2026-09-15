@@ -6,6 +6,9 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file fold.hpp
+/// \page hpx::lcos::fold, hpx::lcos::fold_with_index
+/// \page hpx::lcos::inverse_fold, hpx::lcos::inverse_fold_with_index
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 

@@ -6,13 +6,15 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/logging.hpp>
+
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/modules/functional.hpp>
-#include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/supervision/server/activity_agent.hpp>
@@ -61,21 +63,19 @@ namespace hpx::supervision::server {
         }
 
         bool result = true;
-        try
-        {
-            if (f_)
-            {
-                result = f_(notify);
-            }
-        }
-        catch (...)
-        {
-            finish_delivery();
-            std::rethrow_exception(std::current_exception());
-        }
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                if (f_)
+                {
+                    result = f_(notify);
+                }
+            },
+            [&](std::exception_ptr const& e) {
+                finish_delivery();
+                std::rethrow_exception(e);
+            });
 
         finish_delivery();
-
         return result;
     }
 

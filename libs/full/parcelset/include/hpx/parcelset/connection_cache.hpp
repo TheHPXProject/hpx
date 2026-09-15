@@ -123,12 +123,12 @@ namespace hpx::util {
             return hpx::get<2>(entry);
         }
 
-        static typename key_tracker_type::iterator& lru_reference(
+        static key_tracker_type::iterator& lru_reference(
             cache_value_type& entry)
         {
             return hpx::get<3>(entry);
         }
-        static typename key_tracker_type::iterator const& lru_reference(
+        static key_tracker_type::iterator const& lru_reference(
             cache_value_type const& entry)
         {
             return hpx::get<3>(entry);
@@ -349,7 +349,7 @@ namespace hpx::util {
         ///       a prior call to \a get() or \a get_or_reserve().
         void reclaim(key_type const& l, connection_type const& conn)
         {
-            std::lock_guard<mutex_type> lock(mtx_);
+            std::unique_lock<mutex_type> lock(mtx_);
 
             // Search for an entry for this key.
             typename cache_type::iterator const ct = cache_.find(l);
@@ -362,6 +362,8 @@ namespace hpx::util {
                 if (cached_connections(ct->second).size() >=
                     num_existing_connections(ct->second))
                 {
+                    lock.unlock();
+
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "connection_cache::reclaim",
                         "reclaiming a connection that was not "
@@ -437,7 +439,7 @@ namespace hpx::util {
         ///       invariants.
         void clear()
         {
-            std::lock_guard<mutex_type> lock(mtx_);
+            std::unique_lock<mutex_type> lock(mtx_);
 
             // Verify that no connections are currently checked out. Clearing
             // the cache while connections are outstanding is a caller error
@@ -447,6 +449,8 @@ namespace hpx::util {
                 if (cached_connections(entry.second).size() <
                     num_existing_connections(entry.second))
                 {
+                    lock.unlock();
+
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "connection_cache::clear",
                         "clearing cache while connections are still "
@@ -476,7 +480,7 @@ namespace hpx::util {
         ///       invariants.
         void clear(key_type const& l)
         {
-            std::lock_guard<mutex_type> lock(mtx_);
+            std::unique_lock<mutex_type> lock(mtx_);
 
             // Check if this key already exists in the cache.
             typename cache_type::iterator it = cache_.find(l);
@@ -488,6 +492,8 @@ namespace hpx::util {
                 if (cached_connections(it->second).size() <
                     num_existing_connections(it->second))
                 {
+                    lock.unlock();
+
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "connection_cache::clear",
                         "clearing locality cache entry while connections "
@@ -509,12 +515,11 @@ namespace hpx::util {
             check_invariants();
         }
 
-        /// Destroys all connections for the given locality in the cache, reset
-        /// all associated counts.
+        /// Discards one checked-out connection or reserved connection slot.
         void clear(
             key_type const& l, [[maybe_unused]] connection_type const& conn)
         {
-            std::lock_guard<mutex_type> lock(mtx_);
+            std::unique_lock<mutex_type> lock(mtx_);
 
             // Check if this key already exists in the cache.
             typename cache_type::iterator const it = cache_.find(l);
@@ -526,6 +531,8 @@ namespace hpx::util {
                 if (cached_connections(it->second).size() >=
                     num_existing_connections(it->second))
                 {
+                    lock.unlock();
+
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "connection_cache::clear",
                         "clearing a connection that was not "
@@ -540,7 +547,10 @@ namespace hpx::util {
 
                 // the connection itself will go out of scope on return
 #if defined(HPX_TRACK_STATE_OF_OUTGOING_TCP_CONNECTION)
-                conn->set_state(Connection::state_deleting);
+                if (conn)
+                {
+                    conn->set_state(Connection::state_deleting);
+                }
 #endif
             }
 

@@ -15,6 +15,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>
+
 #include <hpx/thread_pools/scheduling_loop.hpp>
 
 #include <atomic>
@@ -140,7 +141,7 @@ namespace hpx::threads::detail {
         void stop(
             std::unique_lock<std::mutex>& l, bool blocking = true) override;
 
-        void wait() override;
+        void wait(std::unique_lock<std::mutex>& l) override;
         bool is_busy() override;
         bool is_idle() override;
 

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2020 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -61,7 +61,7 @@ namespace hpx::actions {
     continuation& continuation::operator=(continuation&& o) noexcept = default;
 
     ///////////////////////////////////////////////////////////////////////////
-    void continuation::trigger_error(std::exception_ptr const& e)
+    void continuation::trigger_error(std::exception_ptr const& e) const
     {
         if (!id_)
         {
@@ -75,7 +75,7 @@ namespace hpx::actions {
         set_lco_error(id_, this->get_addr(), e);
     }
 
-    void continuation::trigger_error(std::exception_ptr&& e)    //-V659
+    void continuation::trigger_error(std::exception_ptr&& e) const    //-V659
     {
         if (!id_)
         {

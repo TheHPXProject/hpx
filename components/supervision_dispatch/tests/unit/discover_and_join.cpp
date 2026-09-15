@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 // Acceptance check: discover_and_join() is the single composed entry point
-// deferred by fan_out_join.cpp's test_fan_out_join_bidirectional() -- it
+// deferred by fan_out_join.cpp's test_fan_out_join_bidirectional() - it
 // performs exactly one discover_peers() pull followed by one fan_out_join()
 // pass, with no polling thread, timer, or repeated broadcast of its own. Run
 // with two localities so both sides invoke discover_and_join() concurrently
@@ -25,9 +25,7 @@
 #include <hpx/modules/supervision.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/discovery.hpp>
-#include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -44,10 +42,10 @@ namespace {
 // Test Cases
 // ============================================================================
 
-// Both localities register their sentinel/registry names, then call *only*
-// discover_and_join() -- no explicit discover_peers()/fan_out_join() calls.
+// Both localities register their registry name, then call *only*
+// discover_and_join() - no explicit discover_peers()/fan_out_join() calls.
 // Since both sides run this identical sequence concurrently, each ends up
-// owning exactly one shadow of the peer's sentinel, seeded with event::started.
+// owning exactly one shadow of the peer's locality, seeded with event::started.
 // A second discover_and_join() invocation must be idempotent, returning the
 // same shadow ids rather than minting duplicates or re-running any
 // discovery/broadcast activity.
@@ -61,31 +59,27 @@ void test_discover_and_join_bidirectional()
         return;    // nothing to join without a second locality
     }
 
-    hpx::supervision::sentinel local_sentinel(hpx::find_here());
     hpx::supervision::registry local_registry(hpx::find_here());
 
-    HPX_TEST(local_sentinel.register_name(hpx::launch::sync));
     HPX_TEST(local_registry.register_name(hpx::launch::sync));
 
     auto at_exit = hpx::experimental::scope_exit([&]() noexcept {
-        hpx::error_code ec1(hpx::throwmode::lightweight);
-        local_sentinel.unregister_name(hpx::launch::sync, ec1);
-        hpx::error_code ec2(hpx::throwmode::lightweight);
-        local_registry.unregister_name(hpx::launch::sync, ec2);
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        local_registry.unregister_name(hpx::launch::sync, ec);
     });
 
-    // Only the composed entry point is exercised here -- no direct
+    // Only the composed entry point is exercised here - no direct
     // discover_peers()/fan_out_join() calls.
-    std::vector<hpx::supervision::shadow_id> const shadows =
+    std::vector<hpx::supervision::discovered_peer> const joined =
         hpx::supervision::discover_and_join(
             local_registry, test_discovery_timeout);
 
-    HPX_TEST_EQ(shadows.size(), remote_localities.size());
-    for (hpx::supervision::shadow_id const& shadow : shadows)
+    HPX_TEST_EQ(joined.size(), remote_localities.size());
+    for (hpx::supervision::discovered_peer const& peer : joined)
     {
-        HPX_TEST_NEQ(shadow, hpx::supervision::invalid_shadow_id);
+        HPX_TEST_NEQ(peer.locality, hpx::invalid_id);
 
-        auto const state = hpx::supervision::query_state(shadow.get());
+        auto const state = hpx::supervision::query_state(peer.locality);
         HPX_TEST(state.last_event == hpx::supervision::event::started);
     }
 
@@ -95,16 +89,16 @@ void test_discover_and_join_bidirectional()
     // shadows, mirroring fan_out_join()'s own idempotency guarantee -- this is
     // exactly the concern raised by two localities concurrently discovering and
     // joining each other.
-    std::vector<hpx::supervision::shadow_id> const shadows_again =
+    std::vector<hpx::supervision::discovered_peer> const joined_again =
         hpx::supervision::discover_and_join(
             local_registry, test_discovery_timeout);
 
-    HPX_TEST_EQ(shadows_again.size(), shadows.size());
-    if (shadows_again.size() == shadows.size())
+    HPX_TEST_EQ(joined_again.size(), joined.size());
+    if (joined_again.size() == joined.size())
     {
-        for (std::size_t i = 0; i != shadows.size(); ++i)
+        for (std::size_t i = 0; i != joined.size(); ++i)
         {
-            HPX_TEST_EQ(shadows_again[i], shadows[i]);
+            HPX_TEST_EQ(joined_again[i].locality, joined[i].locality);
         }
     }
 
@@ -125,7 +119,12 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    HPX_TEST_EQ(hpx::init(argc, argv), 0);
+    int const result = hpx::init(argc, argv);
+
+    // non-console localities may see the runtime being shutdown before they
+    // call finalize, causing an error to be reported that can be ignored.
+    HPX_TEST(result == 0 || result == -1);
+
     return hpx::util::report_errors();
 }
 

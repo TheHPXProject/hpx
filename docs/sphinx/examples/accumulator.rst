@@ -117,15 +117,15 @@ The following code is from
 :hpx-header:`examples/accumulators,server/accumulator.hpp`.
 
 All |hpx| component server classes must inherit publicly from the |hpx|
-component base class: :cpp:class:`hpx::components::component_base`
+component base class: :hpx:class:`hpx::components::component_base`
 
 The accumulator component inherits from
-:cpp:class:`hpx::components::locking_hook`. This allows the runtime system to
+:hpx:class:`hpx::components::locking_hook`. This allows the runtime system to
 ensure that all action invocations are serialized. That means that the system
 ensures that no two actions are invoked at the same time on a given component
 instance. This makes the component thread safe and no additional locking has to
 be implemented by the user. Moreover, an accumulator component is a component
-because it also inherits from :cpp:class:`hpx::components::component_base` (the
+because it also inherits from :hpx:class:`hpx::components::component_base` (the
 template argument passed to locking_hook is used as its base class). The
 following snippet shows the corresponding code:
 
@@ -207,7 +207,7 @@ and to invoke component actions::
     c.add(hpx::launch::apply, 4);
 
 Clients, like servers, need to inherit from a base class, this time,
-:cpp:class:`hpx::components::client_base`:
+:hpx:class:`hpx::components::client_base`:
 
 .. literalinclude:: ../../examples/accumulators/accumulator.hpp
    :language: c++
@@ -229,7 +229,7 @@ There are a few different ways of invoking actions:
   care about the result of an action, we can invoke the action using
   fire-and-forget semantics. This means that once we have asked |hpx| to compute
   the action, we forget about it completely and continue with our computation.
-  We use :cpp:func:`hpx::post` to invoke an action in a non-blocking fashion.
+  We use :hpx:func:`hpx::post` to invoke an action in a non-blocking fashion.
 
 .. literalinclude:: ../../examples/accumulators/accumulator.hpp
    :language: c++
@@ -247,8 +247,8 @@ There are a few different ways of invoking actions:
    :end-before: //]
 
 * **Synchronous**: To invoke an action in a fully synchronous manner, we can
-  simply call :cpp:func:`hpx::sync` which is semantically equivalent to
-  :cpp:func:`hpx::async`\ ``().get()`` (i.e., create a future and immediately
+  simply call :hpx:func:`hpx::sync` which is semantically equivalent to
+  :hpx:func:`hpx::async`\ ``().get()`` (i.e., create a future and immediately
   wait on it to be ready). Here's an example from the accumulator
   client class:
 
@@ -258,12 +258,12 @@ There are a few different ways of invoking actions:
    :end-before: //]
 
 Note that ``this->get_id()`` references a data member of the
-:cpp:class:`hpx::components::client_base` base class which identifies the server
+:hpx:class:`hpx::components::client_base` base class which identifies the server
 accumulator instance.
 
-:cpp:class:`hpx::id_type` is a type which represents a global identifier
+:hpx:struct:`hpx::id_type` is a type which represents a global identifier
 in |hpx|. This type specifies the target of an action. This is the type that is
-returned by :cpp:func:`hpx::find_here` in which case it represents the
+returned by :hpx:func:`hpx::find_here` in which case it represents the
 :term:`locality` the code is running on.
 
 
@@ -280,8 +280,8 @@ The following code is from
 :hpx-header:`examples/accumulators,server/template_accumulator.hpp`.
 
 Similarly to the accumulator example, the component server class
-inherits publicly from :cpp:class:`hpx::components::component_base` and from
-:cpp:class:`hpx::components::locking_hook` ensuring thread-safe method invocations.
+inherits publicly from :hpx:class:`hpx::components::component_base` and from
+:hpx:class:`hpx::components::locking_hook` ensuring thread-safe method invocations.
 
 .. literalinclude:: ../../examples/accumulators/server/template_accumulator.hpp
    :language: c++
@@ -334,7 +334,7 @@ The server class
 The following code is from
 :hpx-header:`examples/accumulators,server/template_function_accumulator.hpp`.
 
-The component server class inherits publicly from :cpp:class:`hpx::components::component_base`.
+The component server class inherits publicly from :hpx:class:`hpx::components::component_base`.
 
 .. literalinclude:: ../../examples/accumulators/server/template_function_accumulator.hpp
    :language: c++

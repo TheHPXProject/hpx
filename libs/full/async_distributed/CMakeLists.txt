@@ -32,6 +32,7 @@ set(async_headers
     hpx/async_distributed/detail/async_implementations.hpp
     hpx/async_distributed/detail/async_unwrap_result_implementations_fwd.hpp
     hpx/async_distributed/detail/async_unwrap_result_implementations.hpp
+    hpx/async_distributed/detail/locality_disconnected.hpp
     hpx/async_distributed/detail/post_callback.hpp
     hpx/async_distributed/detail/post_continue_callback.hpp
     hpx/async_distributed/detail/post_continue_fwd.hpp
@@ -114,6 +115,7 @@ set(async_sources
     base_lco_with_value_2.cpp
     base_lco_with_value_3.cpp
     continuation.cpp
+    locality_disconnected.cpp
     packaged_action.cpp
     promise.cpp
     trigger_lco.cpp

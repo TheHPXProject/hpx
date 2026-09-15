@@ -253,11 +253,16 @@ namespace hpx::detail {
 
     void post_main()
     {
+#if defined(HPX_HAVE_SUPERVISION)
+        hpx::error_code ec;    // swallow exceptions
+        hpx::supervision::get_supervision_manager().tidy(ec);
+#endif
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // destroy predefined communicators
         hpx::collectives::detail::reset_global_communicator();
         hpx::collectives::detail::reset_local_communicator();
         hpx::collectives::detail::reset_world_channel_communicator();
+        hpx::collectives::detail::reset_cached_channel_communicators();
 
         // simply destroy global barrier
         hpx::distributed::barrier::get_global_barrier().detach();

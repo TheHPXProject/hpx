@@ -8,7 +8,9 @@
 
 #include <hpx/config/defines.hpp>
 
-#if defined(HPX_HAVE_BUILTIN_FORWARD_MOVE)
+// nvcc's cudafe strips the && from static_cast<decltype(x)&&>, so route CUDA
+// through std::forward, which avoids that pattern.
+#if defined(HPX_HAVE_BUILTIN_FORWARD_MOVE) || defined(__CUDACC__)
 #include <utility>
 
 #define HPX_FORWARD(T, ...) std::forward<T>(__VA_ARGS__)

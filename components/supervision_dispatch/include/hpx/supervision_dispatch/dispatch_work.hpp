@@ -21,13 +21,15 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
+
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/runtime_distributed.hpp>
 #include <hpx/modules/supervision.hpp>
 
-#include <hpx/supervision_dispatch/shadow_id.hpp>
+#include <hpx/supervision_dispatch/discovery.hpp>
 
 #include <cstdint>
 
@@ -55,8 +57,18 @@ namespace hpx::supervision {
     /// `admitted`, the target may have latched a terminal event for this epoch
     /// in the meantime, and this re-check will catch it.
     ///
+    /// This re-check is authoritative only because a joining registry (see
+    /// components/supervision_dispatch/src/server/registry_server.cpp)
+    /// dual-publishes lifecycle mirrors for a joined peer onto that peer's own
+    /// locality, in addition to the joining registry's local copy: \p target
+    /// must resolve to that same peer locality for this guarantee to hold.
+    /// Dispatching \p target against an unrelated third locality - one that
+    /// never received the dual-published mirror for this target - remains
+    /// out of contract; the re-check performed there consults a
+    /// supervision_manager state that was never seeded for \p target and so
+    /// cannot detect fencing.
+    ///
     /// \tparam Action  The wrapped HPX action type to invoke on admission.
-    /// \tparam ShadowId Type of the shadow identifier.
     /// \tparam IdType  Type of the target identifier forwarded to \p act (this
     ///                 type is always `hpx::id_type`).
     /// \tparam Epoch   Type of the fencing epoch value (this type is always
@@ -64,8 +76,6 @@ namespace hpx::supervision {
     /// \tparam Ts      Types of the additional arguments forwarded to \p act.
     ///
     /// \param act    The action instance to invoke once admission succeeds.
-    /// \param shadow Identifier of the shadow id representing the target
-    ///               component instance.
     /// \param target Identifier of the component instance being dispatched
     ///               to; forwarded to \p act (the epoch is fencing metadata
     ///               only and is not part of \p act's argument list).
@@ -80,17 +90,16 @@ namespace hpx::supervision {
     ///         latched a terminal event for \p epoch since the client's own
     ///         admission check, in which case the wrapped action is not
     ///         invoked.
-    template <typename Action, typename ShadowId, typename IdType,
-        typename Epoch, typename... Ts>
+    template <typename Action, typename IdType, typename Epoch, typename... Ts>
     decltype(auto) invoke_fenced_action(
-        Action act, ShadowId shadow, IdType target, Epoch const epoch, Ts... ts)
+        Action act, IdType target, Epoch const epoch, Ts... ts)
     {
         // Authoritative re-check: runs on the same locality/thread that owns
         // the target's supervision_manager state, so there is no suspension
         // point between this check and the actual invocation below -- this is
         // what closes the client-side/dispatch race.
         dispatch_outcome const outcome =
-            hpx::supervision::check_admission(shadow.get(), epoch);
+            hpx::supervision::check_admission(hpx::find_here(), epoch);
 
         if (outcome == dispatch_outcome::rejected_fenced)
         {
@@ -99,7 +108,8 @@ namespace hpx::supervision {
             // Surface this as an exceptional future so callers can distinguish
             // "fenced" dispatch failures from other errors.
 
-            HPX_THROW_EXCEPTION(hpx::error::target_fenced,
+            HPX_THROW_EXCEPTION_MODE(hpx::error::target_fenced,
+                hpx::throwmode::lightweight,
                 "hpx::supervision::invoke_fenced_action",
                 "target has latched a terminal event for this epoch "
                 "since the client-side admission check; dispatch was "
@@ -121,19 +131,71 @@ namespace hpx::supervision {
     /// dispatch_work()).
     ///
     /// \tparam Action  The wrapped HPX action type.
-    /// \tparam ShadowId Type of the shadow identifier.
     /// \tparam IdType  Type of the target identifier.
     /// \tparam Epoch   Type of the fencing epoch value.
     /// \tparam Ts      Types of the additional action arguments.
-    template <typename Action, typename ShadowId, typename IdType,
-        typename Epoch, typename... Ts>
+    template <typename Action, typename IdType, typename Epoch, typename... Ts>
     struct fenced_action
-      : hpx::actions::make_action_t<decltype(&invoke_fenced_action<Action,
-                                        ShadowId, IdType, Epoch, Ts...>),
-            &invoke_fenced_action<Action, ShadowId, IdType, Epoch, Ts...>,
-            fenced_action<Action, ShadowId, IdType, Epoch, Ts...>>
+      : hpx::actions::make_action_t<
+            decltype(&invoke_fenced_action<Action, IdType, Epoch, Ts...>),
+            &invoke_fenced_action<Action, IdType, Epoch, Ts...>,
+            fenced_action<Action, IdType, Epoch, Ts...>>
     {
     };
+
+    namespace detail {
+
+        template <typename Action,
+            typename Args = typename Action::arguments_type>
+        struct fenced_action_pack;
+
+        template <typename Action, typename... Args>
+        struct fenced_action_pack<Action, hpx::tuple<Args...>>
+        {
+            using type =
+                fenced_action<Action, hpx::id_type, std::uint64_t, Args...>;
+        };
+    }    // namespace detail
+
+    /// \brief Type trait that derives the fenced-action wrapper type for a
+    ///        given HPX \p Action.
+    ///
+    /// Given an existing HPX action type \p Action, this trait computes the
+    /// corresponding fenced_action specialization that wraps it: the target
+    /// identifier type is fixed to `hpx::id_type`, the fencing epoch type is
+    /// fixed to `std::uint64_t`, and the remaining argument types are taken
+    /// from \p Action::arguments_type (i.e. \p Action's own declared argument
+    /// list, unpacked via detail::fenced_action_pack).
+    ///
+    /// This is the type-level building block used by dispatch_work() to obtain
+    /// the concrete fenced_action type to instantiate/register for a given
+    /// wrapped action, without requiring callers to spell out fenced_action's
+    /// template arguments by hand.
+    ///
+    /// \tparam Action The wrapped HPX action type whose fenced dispatch
+    ///                wrapper should be derived.
+    ///
+    /// \see fenced_action
+    /// \see detail::fenced_action_pack
+    /// \see make_fenced_action_t
+    template <typename Action>
+        requires(hpx::traits::is_action_v<Action>)
+    struct make_fenced_action
+    {
+        using type = detail::fenced_action_pack<Action>::type;
+    };
+
+    /// \brief Convenience alias for `make_fenced_action<Action>::type`.
+    ///
+    /// Yields the fenced_action wrapper type for \p Action directly, avoiding
+    /// the `typename ...::type` boilerplate at call sites.
+    ///
+    /// \tparam Action The wrapped HPX action type whose fenced dispatch
+    ///                wrapper should be derived.
+    ///
+    /// \see make_fenced_action
+    template <typename Action>
+    using make_fenced_action_t = make_fenced_action<Action>::type;
 
     /// \brief Dispatch an action to \p target under supervision fencing, by
     ///        action type template argument.
@@ -154,8 +216,6 @@ namespace hpx::supervision {
     /// \tparam Action The HPX action type to dispatch.
     /// \tparam Ts     Types of the additional arguments forwarded to \p Action.
     ///
-    /// \param shadow Identifier of the shadow id representing the target
-    ///               component instance.
     /// \param target Identifier of the target component instance.
     /// \param epoch  The fencing epoch to check admission for and to
     ///               validate authoritatively on the target's locality.
@@ -172,15 +232,15 @@ namespace hpx::supervision {
     ///       single exception type to handle regardless of which side detected
     ///       the fence), and the wrapped action is not invoked.
     template <typename Action, typename... Ts>
-    decltype(auto) dispatch_work(shadow_id const& shadow,
+    decltype(auto) dispatch_work(
         hpx::id_type const& target, std::uint64_t const epoch, Ts&&... ts)
     {
         // Cheap, non-authoritative early-out: avoids a wasted round trip when
         // the caller's local view already shows the target fenced. This does
         // NOT by itself close the race -- the authoritative re-check happens
         // later, inside invoke_fenced_action on the target's own locality.
-        dispatch_outcome const outcome =
-            hpx::supervision::check_admission(shadow.get(), epoch);
+        dispatch_outcome const outcome = hpx::supervision::check_admission(
+            naming::get_locality_from_id(target), epoch);
         if (outcome == dispatch_outcome::rejected_fenced)
         {
             // Same error code/message shape as the server-side fence, so
@@ -188,20 +248,20 @@ namespace hpx::supervision {
             // detected the fence.
             return hpx::make_exceptional_future<typename Action::result_type>(
                 HPX_GET_EXCEPTION(hpx::error::target_fenced,
+                    hpx::throwmode::lightweight,
                     "hpx::supervision::dispatch_work",
                     "target has already latched a terminal event for this "
                     "epoch; dispatch was fenced and the wrapped action was "
                     "not invoked"));
         }
 
-        using fenced_action = fenced_action<Action, shadow_id, hpx::id_type,
-            std::uint64_t, std::decay_t<Ts>...>;
+        using fenced_action = make_fenced_action_t<Action>;
 
         // Dispatch fenced_action to run *on target's own locality*
         // (hpx::colocated), so invoke_fenced_action's re-check above is
         // authoritative and same-thread with the wrapped Action call.
         return hpx::async(fenced_action(), hpx::colocated(target), Action(),
-            shadow, target, epoch, HPX_FORWARD(Ts, ts)...);
+            target, epoch, HPX_FORWARD(Ts, ts)...);
     }
 
     /// \brief Dispatch an action to \p target under supervision fencing, by
@@ -217,8 +277,6 @@ namespace hpx::supervision {
     ///                \p Action instance argument).
     /// \tparam Ts     Types of the additional arguments forwarded to \p Action.
     ///
-    /// \param shadow Identifier of the shadow id representing the target
-    ///               component instance.
     /// \param target Identifier of the target component instance.
     /// \param epoch  The fencing epoch to check admission for.
     /// \param ts     Additional arguments forwarded to the action.
@@ -228,72 +286,119 @@ namespace hpx::supervision {
     ///         returned immediately without an actual dispatch.
     template <typename Action, typename... Ts>
         requires(hpx::traits::is_action_v<Action>)
-    decltype(auto) dispatch_work(Action, shadow_id const& shadow,
-        hpx::id_type const& target, std::uint64_t const epoch, Ts&&... ts)
+    decltype(auto) dispatch_work(Action, hpx::id_type const& target,
+        std::uint64_t const epoch, Ts&&... ts)
     {
-        return dispatch_work<Action>(
-            shadow, target, epoch, HPX_FORWARD(Ts, ts)...);
+        return dispatch_work<Action>(target, epoch, HPX_FORWARD(Ts, ts)...);
     }
 
-    /// \brief Dispatch an action to \p target under supervision fencing, by
-    ///        action type template argument.
+    /// \brief Dispatch an action to \p peer under supervision fencing, by
+    ///        discovered_peer argument.
     ///
-    /// Convenience overload of dispatch_work() that accepts a joined_peer
-    /// (bundling shadow id and target) instead of separate shadow/target
-    /// arguments. Callers must supply \p Action explicitly as a template
-    /// argument (it cannot be deduced from the arguments). Forwards directly to
-    /// the primary dispatch_work() overload.
+    /// Convenience overload of dispatch_work() that dispatches directly against
+    /// a discovered_peer (typically returned by fan_out_join() or
+    /// discover_and_join()), forwarding to the primary dispatch_work() overload
+    /// as `dispatch_work<Action>(peer.locality, peer.join_epoch, ts...)`, so
+    /// callers do not need to unpack the locality/epoch pair themselves.
     ///
-    /// \tparam Action The HPX action type to dispatch (must be provided
-    ///                explicitly as a template argument).
-    /// \tparam Ts     Types of the additional arguments forwarded to \p Action.
+    /// \p peer.join_epoch is checked against unjoined_epoch first: a
+    /// discovered_peer obtained from discover_peers() alone (as opposed to
+    /// fan_out_join()/discover_and_join()) never calls join() and so is left
+    /// at that sentinel. Dispatching against such a peer is rejected up
+    /// front, using the same target_fenced exceptional future as the
+    /// primary overload, rather than silently forwarding an epoch that was
+    /// never actually joined.
     ///
-    /// \param peer   Identifiers of the shadow id representing the target
-    ///               component instance and the target itself.
-    /// \param epoch  The fencing epoch to check admission for.
-    /// \param ts     Additional arguments forwarded to the action.
-    ///
-    /// \return A future holding the result of the dispatched action. If the
-    ///         local admission check fails, an already-exceptional future is
-    ///         returned immediately without an actual dispatch.
-    template <typename Action, typename... Ts>
-        requires(hpx::traits::is_action_v<Action>)
-    decltype(auto) dispatch_work(
-        joined_peer const& peer, std::uint64_t const epoch, Ts&&... ts)
-    {
-        return dispatch_work<Action>(
-            peer.shadow, peer.target, epoch, HPX_FORWARD(Ts, ts)...);
-    }
-
-    /// \brief Dispatch an action to \p target under supervision fencing, by
-    ///        action instance argument.
-    ///
-    /// Convenience overload of dispatch_work() constrained to HPX action types
-    /// (via `hpx::traits::is_action_v<Action>`) that accepts an action instance
-    /// rather than requiring the caller to specify \p Action explicitly as a
-    /// template argument. Forwards directly to the primary dispatch_work()
-    /// overload.
-    ///
-    /// \tparam Action The HPX action type to dispatch (deduced from the
+    /// \tparam Action The action type to dispatch (deduced from the
     ///                \p Action instance argument).
     /// \tparam Ts     Types of the additional arguments forwarded to \p Action.
     ///
-    /// \param peer   Identifiers of the shadow id representing the target
-    ///               component instance and the target itself.
-    /// \param epoch  The fencing epoch to check admission for.
-    /// \param ts     Additional arguments forwarded to the action.
+    /// \param peer The discovered/joined peer to dispatch to.
+    /// \param ts   Additional arguments forwarded to the action.
     ///
-    /// \return A future holding the result of the dispatched action. If the
-    ///         local admission check fails, an already-exceptional future is
-    ///         returned immediately without an actual dispatch.
+    /// \return A future holding the result of the dispatched action. If
+    ///         \p peer has not been joined, or the local admission check
+    ///         fails, an already-exceptional future is returned immediately
     template <typename Action, typename... Ts>
         requires(hpx::traits::is_action_v<Action>)
     decltype(auto) dispatch_work(
-        Action, joined_peer const& peer, std::uint64_t const epoch, Ts&&... ts)
+        Action, discovered_peer const& peer, Ts&&... ts)
     {
+        if (peer.join_epoch == unjoined_epoch)
+        {
+            // Peer was never joined (e.g. came from discover_peers() alone, not
+            // fan_out_join()/discover_and_join()); reject up front rather than
+            // silently fencing against epoch 0.
+            return hpx::make_exceptional_future<
+                typename Action::result_type>(HPX_GET_EXCEPTION(
+                hpx::error::target_fenced, hpx::throwmode::lightweight,
+                "hpx::supervision::dispatch_work",
+                "peer has not completed fan_out_join()/discover_and_join() "
+                "(join_epoch is un-initialized); dispatch was rejected and the "
+                "wrapped action was not invoked"));
+        }
+
         return dispatch_work<Action>(
-            peer.shadow, peer.target, epoch, HPX_FORWARD(Ts, ts)...);
+            peer.locality, peer.join_epoch, HPX_FORWARD(Ts, ts)...);
     }
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/modules/actions_base.hpp>
+    /// \brief Dispatch a reflected function to \p target under supervision
+    ///        fencing, by C++26 reflection.
+    ///
+    /// Reflection-based overload of dispatch_work() that accepts a
+    /// compile-time reflection of a free function instead of an explicit
+    /// action type. Equivalent to:
+    /// \code
+    ///   dispatch_work<hpx::actions::reflect_action<^^fn>>(target, epoch, ts...);
+    /// \endcode
+    ///
+    /// \tparam F    A std::meta::info reflection of the free function to dispatch.
+    /// \tparam Ts   Types of the additional arguments forwarded to \p F.
+    /// \param target Identifier of the target component instance.
+    /// \param epoch  The fencing epoch to check admission for.
+    /// \param ts     Additional arguments forwarded to the reflected function.
+    /// \return See:
+    ///         dispatch_work(hpx::id_type const&, std::uint64_t const, Ts&&...)
+    // clang-format off
+    template <std::meta::info F, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    decltype(auto) dispatch_work(
+        hpx::id_type const& target, std::uint64_t const epoch, Ts&&... ts)
+    // clang-format on
+    {
+        return dispatch_work<hpx::actions::reflect_action<F>>(
+            target, epoch, HPX_FORWARD(Ts, ts)...);
+    }
+    /// \brief Dispatch a reflected function to \p peer under supervision
+    ///        fencing, by C++26 reflection and discovered_peer.
+    ///
+    /// Reflection-based overload of dispatch_work() that accepts a
+    /// compile-time reflection of a free function and a discovered_peer.
+    /// Equivalent to:
+    /// \code
+    ///   dispatch_work(hpx::actions::reflect_action<^^fn>(), peer, ts...);
+    /// \endcode
+    ///
+    /// \tparam F   A std::meta::info reflection of the free function to dispatch.
+    /// \tparam Ts  Types of the additional arguments forwarded to \p F.
+    /// \param peer The discovered/joined peer to dispatch to.
+    /// \param ts   Additional arguments forwarded to the reflected function.
+    /// \return See:
+    ///         dispatch_work(Action, discovered_peer const&, Ts&&...)
+    // clang-format off
+    template <std::meta::info F, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    decltype(auto) dispatch_work(
+        discovered_peer const& peer, Ts&&... ts)
+    // clang-format on
+    {
+        return dispatch_work(
+            hpx::actions::reflect_action<F>(), peer, HPX_FORWARD(Ts, ts)...);
+    }
+#endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx::supervision
 
 #include <hpx/config/warnings_suffix.hpp>

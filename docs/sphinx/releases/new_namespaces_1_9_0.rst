@@ -20,17 +20,17 @@ deprecated. Below is a comprehensive list of the namespace changes.
    ===========================================================  ==============================================================
    Old namespace                                                New namespace
    ===========================================================  ==============================================================
-   :cpp:func:`hpx::util::mem_fn`                                :cpp:func:`hpx::mem_fn`
-   :cpp:func:`hpx::util::invoke`                                :cpp:func:`hpx::invoke`
-   :cpp:func:`hpx::util::invoke_r`                              :cpp:func:`hpx::invoke_r`
-   :cpp:func:`hpx::util::invoke_fused`                          :cpp:func:`hpx::invoke_fused`
-   :cpp:func:`hpx::util::invoke_fused_r`                        :cpp:func:`hpx::invoke_fused_r`
-   :cpp:class:`hpx::util::unlock_guard`                         :cpp:class:`hpx::unlock_guard`
-   :cpp:func:`hpx::parallel::v1::reduce_by_key`                 :cpp:func:`hpx::experimental::reduce_by_key`
-   :cpp:func:`hpx::parallel::v1::sort_by_key`                   :cpp:func:`hpx::experimental::sort_by_key`
-   :cpp:class:`hpx::parallel::task_canceled_exception`          :cpp:class:`hpx::experimental::task_canceled_exception`
-   :cpp:class:`hpx::parallel::task_block`                       :cpp:class:`hpx::experimental::task_block`
-   :cpp:func:`hpx::parallel::define_task_block`                 :cpp:func:`hpx::experimental::define_task_block`                |
-   :cpp:func:`hpx::parallel::define_task_block_restore_thread`  :cpp:func:`hpx::experimental::define_task_block_restore_thread`
-   :cpp:class:`hpx::execution::experimental::task_group`        :cpp:class:`hpx::experimental::task_group`
+   :hpx:func:`hpx::util::mem_fn`                                :hpx:func:`hpx::mem_fn`
+   :hpx:func:`hpx::util::invoke`                                :hpx:func:`hpx::invoke`
+   :hpx:func:`hpx::util::invoke_r`                              :hpx:func:`hpx::invoke_r`
+   :hpx:func:`hpx::util::invoke_fused`                          :hpx:func:`hpx::invoke_fused`
+   :hpx:func:`hpx::util::invoke_fused_r`                        :hpx:func:`hpx::invoke_fused_r`
+   :hpx:class:`hpx::util::unlock_guard`                         :hpx:class:`hpx::unlock_guard`
+   :hpx:func:`hpx::parallel::v1::reduce_by_key`                 :hpx:func:`hpx::experimental::reduce_by_key`
+   :hpx:func:`hpx::parallel::v1::sort_by_key`                   :hpx:func:`hpx::experimental::sort_by_key`
+   :hpx:class:`hpx::parallel::task_canceled_exception`          :hpx:class:`hpx::experimental::task_canceled_exception`
+   :hpx:class:`hpx::parallel::task_block`                       :hpx:class:`hpx::experimental::task_block`
+   :hpx:func:`hpx::parallel::define_task_block`                 :hpx:func:`hpx::experimental::define_task_block`                |
+   :hpx:func:`hpx::parallel::define_task_block_restore_thread`  :hpx:func:`hpx::experimental::define_task_block_restore_thread`
+   :hpx:class:`hpx::execution::experimental::task_group`        :hpx:class:`hpx::experimental::task_group`
    ===========================================================  ==============================================================

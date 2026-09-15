@@ -44,6 +44,7 @@ if(HPX_WITH_SUPERVISION)
       hpx_components_base
       hpx_naming
       hpx_naming_base
+      hpx_parcelset_base
       hpx_runtime_components
   )
 

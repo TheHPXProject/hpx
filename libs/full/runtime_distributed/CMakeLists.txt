@@ -15,6 +15,7 @@ set(runtime_distributed_headers
     hpx/runtime_distributed/applier_fwd.hpp
     hpx/runtime_distributed/big_boot_barrier.hpp
     hpx/runtime_distributed/copy_component.hpp
+    hpx/runtime_distributed/detail/dijkstra_termination_token.hpp
     hpx/runtime_distributed.hpp
     hpx/runtime_distributed/find_all_localities.hpp
     hpx/runtime_distributed/find_here.hpp
@@ -62,6 +63,8 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${runtime_distributed_sources}
   HEADERS ${runtime_distributed_headers}
+  ADD_TO_GLOBAL_HEADER
+    "hpx/runtime_distributed/detail/dijkstra_termination_token.hpp"
   COMPAT_HEADERS ${runtime_distributed_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  Parts of this code were taken from the Boost.Asio library
 //  Copyright (c) 2003-2007 Christopher M. Kohlhoff (chris at kohlhoff dot com)
@@ -13,6 +13,7 @@
 #include <hpx/modules/threading_base.hpp>
 
 #include <cstddef>
+#include <memory>
 #include <thread>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -26,9 +27,10 @@ namespace hpx::util {
         {
             virtual ~io_service_pool_base() = default;
 
-            virtual bool run(bool join_threads, barrier* startup) = 0;
+            virtual bool run(
+                bool join_threads, std::shared_ptr<barrier> startup) = 0;
             virtual bool run(std::size_t num_threads, bool join_threads,
-                barrier* startup) = 0;
+                std::shared_ptr<barrier> startup) = 0;
             virtual void stop() = 0;
             virtual void join() = 0;
             virtual void clear() = 0;
@@ -39,7 +41,7 @@ namespace hpx::util {
                 std::size_t thread_num) = 0;
             virtual std::size_t size() const noexcept = 0;
             virtual void thread_run(
-                std::size_t index, barrier* startup) const = 0;
+                std::size_t index, std::shared_ptr<barrier> startup) const = 0;
             virtual char const* get_name() const noexcept = 0;
             virtual void init(std::size_t pool_size) = 0;
         };
@@ -75,14 +77,33 @@ namespace hpx::util {
 
         ~io_service_pool();
 
-        /// Run all io_service objects in the pool. If join_threads is true
-        /// this will also wait for all threads to complete
-        bool run(bool join_threads = true, barrier* startup = nullptr) const;
+        /// \brief Run all io_service objects in the pool. If join_threads is
+        ///        true this will also wait for all threads to complete.
+        ///
+        /// \param join_threads [in] If true, wait for all pool threads to join
+        ///                      before returning.
+        /// \param startup [in] Optional startup barrier used to synchronize
+        ///                pool worker thread startup with the caller. Its
+        ///                participant count must equal the number of pool
+        ///                worker threads plus one for the caller. The caller
+        ///                must call startup->wait() after invoking run().
+        bool run(bool join_threads = true,
+            std::shared_ptr<barrier> startup = {}) const;
 
-        /// Run all io_service objects in the pool. If join_threads is true
-        /// this will also wait for all threads to complete
+        /// \brief Run num_threads io_service objects in the pool. If
+        ///        join_threads is true this will also wait for all threads to
+        ///        complete.
+        ///
+        /// \param num_threads [in] The number of worker threads to start.
+        /// \param join_threads [in] If true, wait for all pool threads to join
+        ///                      before returning.
+        /// \param startup [in] Optional startup barrier used to synchronize
+        ///                pool worker thread startup with the caller. Its
+        ///                participant count must equal num_threads plus one for
+        ///                the caller. The caller must call startup->wait()
+        ///                after invoking run().
         bool run(std::size_t num_threads, bool join_threads = true,
-            barrier* startup = nullptr) const;
+            std::shared_ptr<barrier> startup = {}) const;
 
         /// \brief Stop all io_service objects in the pool.
         void stop() const;
@@ -108,7 +129,8 @@ namespace hpx::util {
         [[nodiscard]] std::size_t size() const noexcept;
 
         /// \brief Activate the thread \a index for this thread pool
-        void thread_run(std::size_t index, barrier* startup = nullptr) const;
+        void thread_run(
+            std::size_t index, std::shared_ptr<barrier> startup = {}) const;
 
         /// \brief Return name of this pool
         [[nodiscard]] char const* get_name() const noexcept;

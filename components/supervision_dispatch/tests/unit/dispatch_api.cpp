@@ -15,7 +15,7 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/dispatch_api.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -58,10 +58,9 @@ void test_no_side_effects_before_init()
 //
 // N racing init() calls must all resolve to `true`, but the underlying
 // uninitialized -> initializing CAS guarantees exactly one caller actually runs
-// the create-sentinel/create-registry/start/register/ discover_and_join()
-// sequence; every other racer either observes `active` immediately or attaches
-// to that single winner's in-flight future. No duplicate sentinel/registry pair
-// should ever be created.
+// the create-registry/start/register/ discover_and_join() sequence; every other
+// racer either observes `active` immediately or attaches to that single
+// winner's in-flight future. No duplicate registry should ever be created.
 void test_concurrent_init_idempotency()
 {
     HPX_TEST(!hpx::supervision::is_initialized());
@@ -75,9 +74,8 @@ void test_concurrent_init_idempotency()
     // through hpx::async's scheduling.
     for (std::size_t i = 0; i != num_racers; ++i)
     {
-        results.push_back(hpx::async([]() {
-            return hpx::supervision::init(
-                hpx::launch::sync, test_discovery_timeout);
+        results.emplace_back(hpx::async([]() {
+            hpx::supervision::init(hpx::launch::sync, test_discovery_timeout);
         }));
     }
 
@@ -141,11 +139,10 @@ void test_concurrent_finalize_idempotency()
 //
 // Verifies the lifecycle can be run through more than one complete cycle: after
 // finalize() resets state to uninitialized, a subsequent init() call must
-// succeed again from scratch (fresh sentinel/registry pair, fresh started
-// publication at the next epoch) -- this is the property that makes the
-// epoch-increment-on-init fix (rather than on finalize) necessary, since
-// reusing the finalize epoch for the next started publication would otherwise
-// be silently dropped as stale/no-op.
+// succeed again from scratch (fresh registry, fresh started publication at the
+// next epoch) - this is the property that makes the epoch-increment-on-init fix
+// (rather than on finalize) necessary, since reusing the finalize epoch for the
+// next started publication would otherwise be silently dropped as stale/no-op.
 void test_reinit_after_finalize()
 {
     HPX_TEST(!hpx::supervision::is_initialized());
@@ -159,9 +156,8 @@ void test_reinit_after_finalize()
     HPX_TEST(!hpx::supervision::is_initialized());
 
     // Second cycle: must succeed just as cleanly as the first, confirming
-    // finalize() left the lifecycle fully re-armable (no stale sentinel_/
-    // registry_ pointers, no epoch collision blocking the new started
-    // publication).
+    // finalize() left the lifecycle fully re-armable (no stale registry_
+    // pointers, no epoch collision blocking the new started publication).
     HPX_TEST_NO_THROW(
         hpx::supervision::init(hpx::launch::sync, test_discovery_timeout));
     HPX_TEST(hpx::supervision::is_initialized());

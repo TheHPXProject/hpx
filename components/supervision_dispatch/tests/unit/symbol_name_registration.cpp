@@ -18,8 +18,7 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
 #include <cstdint>
 #include <string>
@@ -29,31 +28,8 @@
 // Test Cases
 // ============================================================================
 
-// register_name() must succeed and register the sentinel's id under a name
-// pinned to the locality derived from the sentinel's own id (via
-// hpx::naming::get_locality_id_from_id()), not merely the ambient
-// hpx::get_locality_id() of the caller.
-void test_sentinel_register_name()
-{
-    hpx::id_type const target = hpx::find_here();
-
-    hpx::supervision::sentinel s(target);
-
-    bool const registered = s.register_name(hpx::launch::sync);
-    HPX_TEST(registered);
-
-    std::uint32_t const locality_id =
-        hpx::naming::get_locality_id_from_id(s.get_id());
-    HPX_TEST_EQ(locality_id, hpx::naming::get_locality_id_from_id(target));
-
-    std::string const expected_name =
-        "/" + std::to_string(locality_id) + "/supervision_dispatch/sentinel";
-    HPX_TEST_EQ(s.registered_name(), expected_name);
-
-    s.unregister_name(hpx::launch::sync);
-}
-
-// Same as above, but for registry::register_name().
+// register_name() must succeed and register the registry's id under a name
+// pinned to the locality derived from the registry's own id.
 void test_registry_register_name()
 {
     hpx::id_type const target = hpx::find_here();
@@ -64,7 +40,7 @@ void test_registry_register_name()
     HPX_TEST(registered);
 
     std::uint32_t const locality_id =
-        hpx::naming::get_locality_id_from_id(r.get_id());
+        hpx::naming::get_locality_id_from_id(r.get_locality());
     HPX_TEST_EQ(locality_id, hpx::naming::get_locality_id_from_id(target));
 
     std::string const expected_name =
@@ -75,26 +51,10 @@ void test_registry_register_name()
 }
 
 // Registering, unregistering, and then registering a freshly constructed
-// sentinel under the very same pinned name (both instances live on the same
+// registry under the very same pinned name (both instances live on the same
 // locality, so they are assigned the same name) must succeed without error,
 // confirming that unregister_name() actually removed the prior registration
 // from AGAS rather than leaving it dangling.
-void test_sentinel_register_unregister_cycle()
-{
-    hpx::id_type const here = hpx::find_here();
-
-    {
-        hpx::supervision::sentinel s(here);
-        HPX_TEST(s.register_name(hpx::launch::sync));
-        s.unregister_name(hpx::launch::sync);
-    }
-
-    hpx::supervision::sentinel s2(here);
-    HPX_TEST(s2.register_name(hpx::launch::sync));
-    s2.unregister_name(hpx::launch::sync);
-}
-
-// Same as above, but for registry.
 void test_registry_register_unregister_cycle()
 {
     hpx::id_type const here = hpx::find_here();
@@ -110,16 +70,16 @@ void test_registry_register_unregister_cycle()
     r2.unregister_name(hpx::launch::sync);
 }
 
-// Same as test_sentinel_register_name(), but using the asynchronous
+// Same as test_registry_register_name(), but using the asynchronous
 // overloads of register_name()/unregister_name().
-void test_sentinel_register_name_async()
+void test_registry_register_name_async()
 {
-    hpx::supervision::sentinel s(hpx::find_here());
+    hpx::supervision::registry r(hpx::find_here());
 
-    hpx::future<bool> f = s.register_name();
+    hpx::future<bool> f = r.register_name();
     HPX_TEST(f.get());
 
-    hpx::future<hpx::id_type> unreg_f = s.unregister_name();
+    hpx::future<hpx::id_type> unreg_f = r.unregister_name();
     unreg_f.get();
 }
 
@@ -128,11 +88,9 @@ void test_sentinel_register_name_async()
 // ============================================================================
 int hpx_main()
 {
-    test_sentinel_register_name();
     test_registry_register_name();
-    test_sentinel_register_unregister_cycle();
     test_registry_register_unregister_cycle();
-    test_sentinel_register_name_async();
+    test_registry_register_name_async();
 
     return hpx::finalize();
 }

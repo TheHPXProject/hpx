@@ -16,7 +16,7 @@ Asynchronous execution with actions
 This example extends the :ref:`previous example <examples_fibonacci_local>` by
 introducing :term:`actions<action>`: functions that can be run remotely. In this
 example, however, we will still only run the action locally. The mechanism to
-execute :term:`actions<action>` stays the same: :cpp:func:`hpx::async`. Later
+execute :term:`actions<action>` stays the same: :hpx:func:`hpx::async`. Later
 examples will demonstrate running actions on remote :term:`localities<locality>`
 (e.g. :ref:`examples_hello_world`).
 
@@ -76,10 +76,10 @@ The code needed to initialize the |hpx| runtime is the same as in the
    :end-before: //]
 
 
-The :cpp:func:`hpx::init` function in ``main()`` starts the runtime system, and
+The :hpx:func:`hpx::init` function in ``main()`` starts the runtime system, and
 invokes ``hpx_main()`` as the first |hpx|-thread. The command line option
 ``--n-value`` is read in, a timer
-(:cpp:class:`hpx::chrono::high_resolution_timer`) is set up to record the time it
+(:hpx:class:`hpx::chrono::high_resolution_timer`) is set up to record the time it
 takes to do the computation, the ``fibonacci`` :term:`action` is invoked
 synchronously, and the answer is printed out.
 
@@ -98,7 +98,7 @@ send packets of work to different processing units. These vehicles allow users
 to calculate work now, later, or on certain nodes. The first argument to our
 :term:`action` is the location where the :term:`action` should be run. In this
 case, we just want to run the :term:`action` on the machine that we are
-currently on, so we use :cpp:func:`hpx::find_here`. To
+currently on, so we use :hpx:func:`hpx::find_here`. To
 further understand this we turn to the code to find where ``fibonacci_action``
 was defined:
 
@@ -131,7 +131,7 @@ This block of code is much more straightforward and should look familiar from
 the :ref:`previous example <examples_fibonacci_local>`. First, ``if (n < 2)``,
 meaning n is 0 or 1, then we return 0 or 1 (recall the first element of the
 Fibonacci sequence is 0 and the second is 1). If n is larger than 1 we spawn two
-tasks using :cpp:func:`hpx::async`. Each of these futures represents an
+tasks using :hpx:func:`hpx::async`. Each of these futures represents an
 asynchronous, recursive call to ``fibonacci``. As previously we wait for both
 futures to finish computing, get the results, add them together, and return that
 value as our result. The recursive call tree will continue until n is equal to 0

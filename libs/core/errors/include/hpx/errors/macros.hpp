@@ -101,6 +101,38 @@
         errcode, hpx::util::format(__VA_ARGS__), f, __FILE__, __LINE__) /**/
 
 ///////////////////////////////////////////////////////////////////////////////
+/// \def HPX_THROW_EXCEPTION_MODE(errcode, throwmode, f, msg)
+/// \brief Throw a hpx::exception initialized from the given parameters
+///
+/// The macro \a HPX_THROW_EXCEPTION_MODE can be used to throw a hpx::exception.
+/// The purpose of this macro is to prepend the source file name and line number
+/// of the position where the exception is thrown to the error message.
+/// Moreover, this associates additional diagnostic information with the
+/// exception, such as file name and line number, locality id and thread id, and
+/// stack backtrace from the point where the exception was thrown.
+///
+/// The parameter \p errcode holds the hpx::error code the new exception should
+/// encapsulate. The parameter \p f is expected to hold the name of the function
+/// exception is thrown from and the parameter \p msg holds the error message
+/// the new exception should encapsulate. The \p throwmode parameter allows to
+/// specify the type of the thrown exception.
+///
+/// \par Example:
+///
+/// \code
+///      void raise_exception() {
+///          // Throw a hpx::exception initialized from the given parameters.
+///          HPX_THROW_EXCEPTION_MODE(hpx::error::no_success,
+///             hpx::throwmode::lighweight, "raise_exception",
+///             "simulated error");
+///      }
+/// \endcode
+///
+#define HPX_THROW_EXCEPTION_MODE(errcode, mode, f, ...)                        \
+    hpx::detail::throw_exception(errcode, hpx::util::format(__VA_ARGS__), f,   \
+        __FILE__, __LINE__, mode) /**/
+
+///////////////////////////////////////////////////////////////////////////////
 /// \def HPX_THROW_BAD_ALLOC(f, msg)
 /// \brief Throw a hpx::bad_alloc_exception initialized from the given parameters
 ///

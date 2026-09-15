@@ -17,7 +17,7 @@ set(transform_stream_PARAMETERS THREADS_PER_LOCALITY 4)
 set(cuda_future_CUDA_SOURCE saxpy trivial_demo)
 set(cuda_multi_device_polling_CUDA_SOURCE trivial_demo)
 
-set(transform_stream_CUDA ON)
+set(transform_stream_CUDA_SOURCE transform_stream_kernels)
 
 foreach(test ${tests})
   if(${${test}_CUDA})

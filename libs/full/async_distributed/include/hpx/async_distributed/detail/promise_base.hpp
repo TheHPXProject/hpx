@@ -27,16 +27,16 @@ namespace hpx::lcos::detail {
     HPX_CXX_EXPORT template <typename Result>
     struct promise_data : task_base<Result>
     {
-        using init_no_addref = typename task_base<Result>::init_no_addref;
+        using init_no_addref = task_base<Result>::init_no_addref;
 
         promise_data() = default;
 
-        explicit promise_data(init_no_addref no_addref)
+        explicit promise_data(init_no_addref no_addref) noexcept
           : task_base<Result>(no_addref)
         {
         }
 
-        void set_task(hpx::move_only_function<void()>&& f)
+        void set_task(hpx::move_only_function<void()>&& f) noexcept
         {
             f_ = HPX_MOVE(f);
         }
@@ -47,7 +47,7 @@ namespace hpx::lcos::detail {
         }
 
     private:
-        void do_run()
+        void do_run() override
         {
             if (!f_)
                 return;    // do nothing if no deferred task is given
@@ -69,8 +69,8 @@ namespace hpx::lcos::detail {
     template <typename Result, typename Allocator>
     struct promise_data_allocator : promise_data<Result>
     {
-        using init_no_addref = typename promise_data<Result>::init_no_addref;
-        using other_allocator = typename std::allocator_traits<
+        using init_no_addref = promise_data<Result>::init_no_addref;
+        using other_allocator = std::allocator_traits<
             Allocator>::template rebind_alloc<promise_data_allocator>;
 
         explicit promise_data_allocator(other_allocator const& alloc)
@@ -86,7 +86,7 @@ namespace hpx::lcos::detail {
         }
 
     private:
-        void destroy() noexcept
+        void destroy() noexcept override
         {
             using traits = std::allocator_traits<other_allocator>;
 
@@ -229,7 +229,7 @@ namespace hpx::lcos::detail {
             }
             if (!this->future_retrieved_)
             {
-                HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
                     "promise<Result>::get_id",
                     "future has not been retrieved from this promise yet");
                 return hpx::invalid_id;
@@ -308,14 +308,14 @@ namespace hpx::lcos::detail {
     protected:
         void init_shared_state()
         {
-            using wrapped_type = typename keep_alive::wrapped_type;
-            using wrapping_type = typename keep_alive::wrapping_type;
+            using wrapped_type = keep_alive::wrapped_type;
+            using wrapping_type = keep_alive::wrapping_type;
 
             // The lifetime of the LCO (component) part is completely
             // handled by the shared state, we create the object to get our
             // gid and then attach it to the completion handler of the
             // shared state.
-            using wrapping_ptr = typename keep_alive::wrapping_ptr;
+            using wrapping_ptr = keep_alive::wrapping_ptr;
 
             auto ptr = hpx::components::component_heap<wrapping_type>().alloc();
             wrapping_ptr lco_ptr(

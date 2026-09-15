@@ -10,6 +10,7 @@
 #include <hpx/parcelset_base/detail/locality_interface_functions.hpp>
 #include <hpx/parcelset_base/locality.hpp>
 
+#include <cstdint>
 #include <string>
 #include <system_error>
 
@@ -20,11 +21,12 @@ namespace hpx::parcelset::detail {
 
     locality (*create_locality)(std::string const& name) = nullptr;
 
+    bool (*locality_was_disconnected)(std::uint32_t) = nullptr;
+
     parcel_write_handler_type (*set_parcel_write_handler)(
         parcel_write_handler_type const& f) = nullptr;
 
-    void (*put_parcel)(
-        parcelset::parcel&& p, parcel_write_handler_type&& f) = nullptr;
+    void (*put_parcel)(parcelset::parcel&& p, write_handler_type&& f) = nullptr;
 
     void (*sync_put_parcel)(parcelset::parcel&& p) = nullptr;
 

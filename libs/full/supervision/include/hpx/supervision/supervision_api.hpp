@@ -63,7 +63,11 @@ namespace hpx::supervision {
     /// publications for the same target/epoch become no-ops, reported via
     /// \c already_terminal. Non-terminal transitions remain invalid.
     HPX_CXX_EXPORT enum class publish_result : std::uint8_t {
-        /// The event was recorded and observers (if any) were notified.
+        /// The event was successfully recorded (state was mutated),
+        /// independent of whether any registered observers were notified.
+        /// Notification behavior depends on which function was called:
+        /// \a publish_event() notifies registered observers, while
+        /// \a publish_event_no_notify() never does.
         applied,
         /// The target had already reached a terminal event (\c completed
         /// or \c failed) within the current epoch; the call was a no-op
@@ -207,6 +211,43 @@ namespace hpx::supervision {
     /// \note         Local observers of \a target are notified
     ///               synchronously as part of this call.
     HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event(
+        hpx::id_type const& target, hpx::supervision::event ev,
+        std::uint64_t epoch = 0, hpx::error_code& ec = throws);
+
+    /// \brief Publish a lifecycle event for a target actor on the local
+    ///        locality, without notifying any registered observers.
+    ///
+    /// This overload applies the same epoch/terminal-latch state-mutation rules
+    /// as the local-only \a publish_event() overload above, and resolves any \a
+    /// await_terminal() waiters affected by the transition, but never invokes
+    /// per-target lifecycle observers (\a register_observer()) or activity
+    /// observers (\a register_activity_observer()) for this call: it is meant
+    /// purely as a state write for consumers of \a query_state(), \a
+    /// check_admission(), and \a await_terminal(), not as a notification
+    /// mechanism. In particular, calling it from within a lifecycle observer
+    /// callback registered for \a target cannot re-invoke that observer, unlike
+    /// the notifying overload.
+    ///
+    /// \param target [in] The actor (or component) for which the event is
+    ///               published. Must be local to the calling locality.
+    /// \param ev     [in] The lifecycle event to publish for \a target.
+    /// \param epoch  [in] The epoch this publication belongs to. See
+    ///               \a publish_event() for the epoch-scoped semantics.
+    /// \param ec     [in,out] this represents the error status on exit, if
+    ///               this is pre-initialized to \a hpx::throws the function
+    ///               will throw on error instead.
+    ///
+    /// \throws       hpx::exception if \a target does not represent a
+    ///               valid target, unless \a ec was not pre-initialized to
+    ///               \a hpx::throws.
+    ///
+    /// \returns      \c publish_result::applied,
+    ///               \c publish_result::already_terminal if \a target had
+    ///               already reached a terminal event (\c completed or
+    ///               \c failed) within \a epoch, or
+    ///               \c publish_result::stale_epoch if \a epoch is lower
+    ///               than the target's current epoch.
+    HPX_CXX_EXPORT HPX_EXPORT publish_result publish_event_no_notify(
         hpx::id_type const& target, hpx::supervision::event ev,
         std::uint64_t epoch = 0, hpx::error_code& ec = throws);
 
@@ -802,9 +843,6 @@ namespace hpx::supervision {
     ///               in the asynchronous overload for this call only. If
     ///               \c std::nullopt (the default), the local locality's
     ///               default timeout is used instead.
-    /// \param ec     [in,out] this represents the error status on exit, if
-    ///               this is pre-initialized to \a hpx::throws the function
-    ///               will throw on error instead.
     ///
     /// \returns      A future that becomes ready, holding the
     ///               \a lifecycle_state recorded for \a target, as soon as
@@ -818,15 +856,10 @@ namespace hpx::supervision {
     ///               superseded, or with
     ///               \a hpx::error::future_cancelled if \a timeout elapses
     ///               first.
-    ///
-    /// \throws       hpx::exception if \a target does not represent a
-    ///               valid target, unless \a ec was not pre-initialized to
-    ///               \a hpx::throws.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<lifecycle_state> await_terminal(
         hpx::id_type const& target, std::uint64_t epoch = 0,
         std::optional<std::chrono::steady_clock::duration> timeout =
-            std::nullopt,
-        hpx::error_code& ec = hpx::throws);
+            std::nullopt);
 
     /// \brief Synchronously wait for a local supervised target to reach a
     ///        terminal lifecycle state (\c completed or \c failed).
@@ -844,8 +877,8 @@ namespace hpx::supervision {
     ///                matches the target's current epoch may cause the wait to
     ///                resolve immediately with a mismatch-related error.
     /// \param timeout Optional upper bound on how long to wait before giving
-    ///                up. If not supplied, waits indefinitely for a terminal
-    ///                state.
+    ///                up. If not supplied, uses the local supervision
+    ///                manager's default timeout.
     /// \param ec      Used to report errors instead of throwing an
     ///                exception. When \p target does not represent a valid id,
     ///                \c hpx::error::bad_parameter is reported. If the

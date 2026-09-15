@@ -48,9 +48,17 @@ namespace hpx::actions {
         continuation(continuation&& o) noexcept;
         continuation& operator=(continuation&& o) noexcept;
 
-        //
-        void trigger_error(std::exception_ptr const& e);
-        void trigger_error(std::exception_ptr&& e);
+        /// \brief Deliver an exception to this continuation's destination
+        ///        instead of a value.
+        ///
+        /// \param e The exception to forward to the destination.
+        void trigger_error(std::exception_ptr const& e) const;
+
+        /// \brief Deliver an exception to this continuation's destination
+        ///        instead of a value.
+        ///
+        /// \param e The exception to forward to the destination.
+        void trigger_error(std::exception_ptr&& e) const;
 
         // serialization support
         void serialize(hpx::serialization::input_archive& ar, unsigned);
@@ -155,7 +163,6 @@ namespace hpx::actions {
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "typed_continuation<Result>::trigger_value",
                         "attempt to trigger invalid LCO (the id is invalid)");
-                    return;
                 }
                 hpx::set_lco_value(
                     this->get_id(), this->get_addr(), HPX_MOVE(result));
@@ -267,7 +274,6 @@ namespace hpx::actions {
                     HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                         "typed_continuation<Result>::trigger_value",
                         "attempt to trigger invalid LCO (the id is invalid)");
-                    return;
                 }
                 hpx::set_lco_value(
                     this->get_id(), this->get_addr(), HPX_MOVE(result));

@@ -98,7 +98,15 @@ hpx_libs = {}
 hpx_components = []
 header_info = {}
 all_symbol_anchors = {}
+page_symbol_targets = {}
 
+# Symmetric mapping between a page's title (the key used in
+# all_symbol_anchors) and its "distributed"/"core" counterpart's title,
+# for pages that were split into distinct Doxygen page IDs to avoid
+# "multiple use of page label" warnings while still wanting a "See also"
+# cross-reference between the two pages, e.g.
+# "hpx::async" <-> "hpx::async (distributed)".
+overload_counterparts = {}
 
 _doxygen_xml_dir = os.path.abspath(breathe_projects['hpx'])
 _function_signatures_by_qualname = None
@@ -114,8 +122,23 @@ _DOXYGEN_KIND_TO_DIRECTIVE = {
     'enum': 'doxygenenum',
     'typedef': 'doxygentypedef',
     'function': 'doxygenfunction',
+    'concept': 'doxygenconcept',
 }
 
+# Maps a Breathe directive (as returned by detect_symbol_kind() below) to
+# the matching disambiguation-aware ":hpx:<kind>:" role registered by
+# extensions/sphinx-hpx.py, used to emit kind-aware counterpart "See also"
+# cross-references (see populate see_also below).
+_DOXYGEN_DIRECTIVE_TO_HPX_ROLE = {
+    'doxygenclass': 'class',
+    'doxygenstruct': 'struct',
+    'doxygenvariable': 'member',
+    'doxygenenum': 'enum',
+    'doxygentypedef': 'type',
+    'doxygenfunction': 'func',
+    'doxygenconcept': 'concept',
+    'doxygenvariable': 'variable',
+}
 
 def _load_doxygen_function_signatures():
     """Lazily parse the already-generated Doxygen XML once, building a map
@@ -271,7 +294,26 @@ def get_info_from_file(source):
         for line in content.splitlines():
             if "/// \\page" in line:
                 page_value = line.split("/// \\page", 1)[-1].strip()
-                group = [t.strip() for t in page_value.split(',') if t.strip()]
+                if ',' in page_value:
+                    group = [t.strip() for t in page_value.split(',') if t.strip()]
+                else:
+                    # Either a plain "\page <qualified-name>" tag, or a
+                    # two-token "\page <unique-page-id> <title>" tag used
+                    # to give a page a Doxygen-unique ID while keeping a
+                    # descriptive title (e.g. "hpx::async (distributed)").
+                    # <title> (kept verbatim) is what all other
+                    # bookkeeping below (anchors, kind lookups,
+                    # doxygenfunction targets) keys off of, exactly as if
+                    # the single-token form had been used.
+                    page_id, _, remainder = page_value.partition(' ')
+                    remainder = remainder.strip()
+                    title = remainder if remainder else page_id
+                    if remainder:
+                        leading_token = title.split()[0]
+                        page_symbol_targets[title] = leading_token
+                        overload_counterparts[title] = leading_token
+                        overload_counterparts[leading_token] = title
+                    group = [title]
                 if group:
                     page_groups.append(group)
             elif "/// \\headerfile" in line:
@@ -288,7 +330,8 @@ def get_info_from_file(source):
                     merged_group.append(title)
         page_groups = [merged_group] if merged_group else [["None"]]
         for title in merged_group:
-            kind_map[title] = detect_symbol_kind(title)
+            kind_map[title] = detect_symbol_kind(
+                page_symbol_targets.get(title, title))
 
     if not page_groups:
         page_groups = [["None"]]
@@ -544,6 +587,44 @@ def sanitize_page_name(title):
     return re.sub(r'[^A-Za-z0-9_]+', '_', title).strip('_')
 
 
+def populate_symbol_anchors(module, out_root):
+    """First pass over `module`'s headers: populate all_symbol_anchors for
+    every \\page-tagged symbol without writing any files. This must run
+    for every module before generate_module_api_refs() writes any page
+    bodies, since a page's "See also" cross-reference (via
+    overload_counterparts) may point at a symbol whose anchor is only
+    known once its (possibly later-processed) module/header has been
+    scanned."""
+    assert module in breathe_projects_source.keys()
+    module_sources = breathe_projects_source[module]
+    if len(module_sources[1]) == 0:
+        return
+    header_names = set()
+    symbol_page_names = set()
+    for source in module_sources[1]:
+        header = source[len('include/'):]
+        header_splitted = re.split('[/ .]', header)
+        header_name = header_splitted[-2]
+        if header_name in header_names:
+            header_name = '{0}_{1}'.format(header_splitted[-3], header_name)
+        header_names.add(header_name)
+        page_groups, _, _ = header_info.get(header, ([["None"]], "None", {}))
+        if page_groups == [["None"]]:
+            continue
+        for group in page_groups:
+            for title in group:
+                if title == "None":
+                    continue
+                symbol_page_name = header_name + '_' + sanitize_page_name(title)
+                if symbol_page_name in symbol_page_names:
+                    prefix = (header_splitted[-3]
+                        if len(header_splitted) >= 3 else module)
+                    symbol_page_name = '{0}_{1}'.format(
+                        prefix, symbol_page_name)
+                symbol_page_names.add(symbol_page_name)
+                all_symbol_anchors[title] = 'modules_{0}_api'.format(symbol_page_name)
+
+
 def generate_module_api_refs(module, out_root):
     """Generate full_api.rst and per-header/per-symbol API pages for a
     single module. `out_root` is the doc-tree-relative path under which
@@ -614,19 +695,27 @@ def generate_module_api_refs(module, out_root):
                             sib, title_to_pagename[sib])
                         for sib in siblings) + "\n"
 
+                counterpart_title = overload_counterparts.get(page_title)
+                if counterpart_title:
+                    hpx_role = _DOXYGEN_DIRECTIVE_TO_HPX_ROLE.get(
+                        detect_symbol_kind(counterpart_title), 'func')
+                    see_also += "\n.. seealso::\n   :hpx:{0}:`{1}`\n".format(
+                        hpx_role, counterpart_title)
+
                 symbol_ref = open(basedir + '/' + symbol_page_name + '.rst', 'w')
                 kind = kind_map.get(page_title, 'doxygenfunction')
 
+                symbol_target = page_symbol_targets.get(page_title, page_title)
                 if kind == 'doxygenfunction':
-                    overload_sigs = find_overloads(page_title)
+                    overload_sigs = find_overloads(symbol_target)
                 else:
                     overload_sigs = []
 
                 if not overload_sigs:
-                    directive_block = '.. {0}:: {1}\n   :project: hpx'.format(kind, page_title)
+                    directive_block = '.. {0}:: {1}\n   :project: hpx'.format(kind, symbol_target)
                 else:
                     directive_block = '\n'.join(
-                        '.. {0}:: {1}{2}\n   :project: hpx'.format(kind, page_title, sig)
+                        '.. {0}:: {1}{2}\n   :project: hpx'.format(kind, symbol_target, sig)
                         for sig in overload_sigs)
 
                 symbol_ref.write(api_symbol_file.format(
@@ -644,6 +733,19 @@ def generate_module_api_refs(module, out_root):
     return '   /' + out_root + '/api/full_api.rst\n'
 
 
+# Pass 1: populate all_symbol_anchors (and, via get_info_from_file()
+# above, overload_counterparts) across *all* modules before writing any
+# page bodies, since module processing order is not guaranteed to match
+# the order in which "See also" counterparts need to be resolved.
+for lib in hpx_libs.keys():
+    for module in sorted(hpx_libs[lib]):
+        populate_symbol_anchors(module, 'libs/' + lib + '/' + module)
+
+for module in sorted(hpx_components):
+    populate_symbol_anchors(module, 'components/' + module)
+
+# Pass 2: emit the actual page bodies, now that all_symbol_anchors and
+# overload_counterparts are fully known.
 for lib in hpx_libs.keys():
     for module in sorted(hpx_libs[lib]):
         api_refs += generate_module_api_refs(module, 'libs/' + lib + '/' + module)
@@ -652,8 +754,8 @@ for module in sorted(hpx_components):
     api_refs += generate_module_api_refs(module, 'components/' + module)
 
 
-# write found symbols to 'symbol_anchors.json' for the :hpx-api: sphinx
-# role to pick up (see: extensions/sphinx-hpx.py)
+# write found symbols to 'symbol_anchors.json' for the :hpx:<kind>:
+# sphinx roles to pick up (see: extensions/sphinx-hpx.py)
 json_path = os.path.join(os.path.abspath('.'), 'api/symbol_anchors.json')
 with open(json_path, 'w') as json_file:
     json.dump(all_symbol_anchors, json_file, indent=2, sort_keys=True)
@@ -704,11 +806,11 @@ rst_prolog += '''
 .. |cpplang_slack| replace:: Cpplang Slack
 .. _cpplang_slack: https://cpplang.slack.com
 .. |stellar_hpx_download| replace:: |hpx| Downloads
-.. _stellar_hpx_download: https://hpx.stellar-group.org/downloads/
+.. _stellar_hpx_download: https://hpx.dev/downloads/
 .. |stellar_hpx_funding| replace:: |hpx| Funding Acknowledgements
-.. _stellar_hpx_funding: https://hpx.stellar-group.org/funding-acknowledgements/
+.. _stellar_hpx_funding: https://hpx.dev/funding-acknowledgements/
 .. |stellar_hpx_users| replace:: |hpx| Users
-.. _stellar_hpx_users: https://hpx.stellar-group.org/hpx-users/
+.. _stellar_hpx_users: https://hpx.dev/hpx-users/
 .. |hpx_github| replace:: Github
 .. _hpx_github: https://github.com/TheHPXProject/hpx/
 .. |hpx_github_issues| replace:: |hpx| Issues
@@ -849,6 +951,10 @@ rst_prolog += '''
 .. _apex_hpx_doc: https://uo-oaciss.github.io/apex/usage/#hpx-louisiana-state-university
 .. |tau| replace:: TAU
 .. _tau: https://www.cs.uoregon.edu/research/tau/home.php
+.. |tracy| replace:: Tracy
+.. _tracy: https://github.com/wolfpld/tracy
+.. |ittnotify| replace:: Intel ITT API
+.. _ittnotify: https://github.com/intel/ittapi
 .. |cmake| replace:: CMake
 .. _cmake: https://www.cmake.org
 .. |cppdependencies| replace:: cpp-dependencies

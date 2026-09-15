@@ -6,6 +6,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file broadcast_direct.hpp
+/// \page hpx::lcos::broadcast, hpx::lcos::broadcast_post
+/// \page hpx::lcos::broadcast_with_index
+/// \page hpx::lcos::broadcast_post_with_index
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -129,7 +133,6 @@ namespace hpx { namespace lcos {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/actions_base.hpp>
@@ -633,5 +636,4 @@ namespace hpx::lcos {
     }
 }    // namespace hpx::lcos
 
-#endif    //COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

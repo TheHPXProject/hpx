@@ -558,7 +558,7 @@ void test_future_sender()
         [[maybe_unused]] auto sched = loop.get_scheduler();
 
         auto s = ex::just(3) | ex::continues_on(sched);
-        auto f = ex::make_future(std::move(s));
+        auto f = ex::make_future(sched, std::move(s));
         HPX_TEST_EQ(f.get(), 3);
     }
 
@@ -567,7 +567,7 @@ void test_future_sender()
         ex::run_loop loop;
         [[maybe_unused]] auto sched = loop.get_scheduler();
 
-        auto f = ex::just(3) | ex::continues_on(sched) | ex::make_future();
+        auto f = ex::just(3) | ex::continues_on(sched) | ex::make_future(sched);
         HPX_TEST_EQ(f.get(), 3);
     }
 
@@ -587,7 +587,7 @@ void test_future_sender()
 
         std::atomic<bool> called{false};
         auto s = ex::schedule(sched) | ex::then([&] { called = true; });
-        auto f = ex::make_future(std::move(s));
+        auto f = ex::make_future(sched, std::move(s));
         f.get();
         HPX_TEST(called);
     }
@@ -616,7 +616,7 @@ void test_future_sender()
 
         std::atomic<bool> called{false};
         auto s = ex::as_sender(
-            ex::make_future(ex::continues_on(ex::just(42), sched)));
+            ex::make_future(sched, ex::continues_on(ex::just(42), sched)));
         auto r = callback_receiver{[&called](int value) {
                                        called = true;
                                        HPX_TEST_EQ(value, 42);
@@ -637,7 +637,7 @@ void test_future_sender()
             return 42;
         });
 
-        HPX_TEST_EQ(ex::make_future(
+        HPX_TEST_EQ(ex::make_future(sched,
                         ex::continues_on(ex::as_sender(std::move(f)), sched))
                         .get(),
             42);
@@ -667,6 +667,19 @@ void test_future_sender()
             t1f, t2);
 
         HPX_TEST_EQ(last.get(), std::size_t(18));
+    }
+
+    std::cout << "9\n";
+    {
+        ex::run_loop loop;
+        auto sched = loop.get_scheduler();
+        auto s = ex::just(3) | ex::continues_on(sched);
+
+        // The make_future CPO detects the run_loop completion scheduler
+        // and automatically routes through make_future_with_run_loop,
+        // which correctly drives the loop. No explicit scheduler needed.
+        auto f = ex::make_future(std::move(s));
+        HPX_TEST_EQ(f.get(), 3);
     }
 }
 

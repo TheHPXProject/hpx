@@ -90,6 +90,18 @@ namespace hpx::supervision::server {
         void unregister_server_instance(error_code& ec = throws) const;
 
         // Supervision API implementation
+
+        /// \brief Applies epoch/terminal-latch state-mutation rules,
+        ///        resolves any await_terminal() waiters affected by the
+        ///        transition, and invokes registered per-target lifecycle
+        ///        observers and activity observers for this call.
+        ///
+        /// \param target Target whose supervision state is updated. Must
+        ///               live on this locality.
+        /// \param ev Lifecycle event to apply.
+        /// \param epoch Epoch associated with \p ev.
+        ///
+        /// \returns The result of applying \p ev to target's state.
         publish_result publish_event(
             hpx::id_type const& target, event ev, std::uint64_t epoch);
 
@@ -100,6 +112,31 @@ namespace hpx::supervision::server {
                 &supervision_manager::publish_event, publish_event_action>
         {
         };
+        /// \endcond
+
+        /// \cond NOINTERNAL
+        /// \brief Applies the same epoch/terminal-latch state-mutation
+        ///        rules as publish_event() and resolves any
+        ///        await_terminal() waiters affected by the transition, but
+        ///        never invokes registered per-target lifecycle observers
+        ///        or activity observers for this call.
+        ///
+        /// Meant purely as a state write for consumers of
+        /// query_state()/check_admission()/await_terminal(), not as a
+        /// notification mechanism - in particular, calling this from
+        /// within a lifecycle observer callback registered for \p target
+        /// cannot re-invoke that observer, unlike publish_event(). Not
+        /// exposed as an action: like check_admission(), this is only ever
+        /// meant to be called on the locality \p target lives on.
+        ///
+        /// \param target Target whose supervision state is updated. Must
+        ///               live on this locality.
+        /// \param ev Lifecycle event to apply.
+        /// \param epoch Epoch associated with \p ev.
+        ///
+        /// \returns The result of applying \p ev to target's state.
+        publish_result publish_event_no_notify(
+            hpx::id_type const& target, event ev, std::uint64_t epoch);
         /// \endcond
 
         lifecycle_state query_state(hpx::id_type const& target);
@@ -163,6 +200,20 @@ namespace hpx::supervision::server {
         {
         };
         /// \endcond
+
+        /// \brief Unconditionally clears all locally tracked state.
+        ///
+        /// Snapshots every target currently present in states_ or observers_
+        /// under mtx_, releases the lock, then calls remove_target() for each
+        /// one in turn, reusing its existing per-target teardown (waiter
+        /// invalidation, activity-observer notifications, agent/state cleanup)
+        /// instead of duplicating that logic here. Targets added concurrently
+        /// with (or after) the snapshot are left untouched. If states_ and
+        /// observers_ are empty at snapshot time, this is a no-op: tidy() never
+        /// reports an error and never fires any notification of its own for the
+        /// "nothing to do" case. Local-only: unlike remove_target(), this is
+        /// not exposed as a remote action.
+        void tidy();
 
         /// \brief Registers a locality-scoped activity observer.
         ///
@@ -311,6 +362,26 @@ namespace hpx::supervision::server {
         using waiters_t = std::vector<waiter_entry>;
         using stale_waiters_t =
             std::vector<std::pair<std::uint64_t, waiters_t>>;
+
+        // Result of apply_event_and_resolve(): shared by publish_event() and
+        // publish_event_no_notify(), which differ only in whether they go on
+        // to deliver `notification`/the first_event activity transition to
+        // observers_/activity_observers_ once result == applied.
+        struct apply_event_outcome
+        {
+            publish_result result;
+            lifecycle_event_notification notification;
+            bool had_state_before = false;
+            std::vector<observer_entry> activity_observers_snapshot;
+        };
+
+        // Shared implementation of publish_event()/publish_event_no_notify():
+        // performs the epoch/terminal-latch state mutation and resolves any
+        // await_terminal() waiters affected by it, but stops short of
+        // delivering anything to observers_/activity_observers_, which is left
+        // to the caller.
+        apply_event_outcome apply_event_and_resolve(
+            hpx::id_type const& target, event ev, std::uint64_t epoch);
 
         // A waiter that was swept because its deadline passed, together with
         // the (target, epoch) it was registered for; unlike stale_waiters_t,

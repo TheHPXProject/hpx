@@ -8,7 +8,6 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/rfa.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -24,15 +23,12 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_reduce_deterministic_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_reduce_deterministic_t<ExPolicy>>
     {
-    private:
         template <typename InIterB, typename InIterE, typename T,
             typename Reduce>
-        friend constexpr T tag_fallback_invoke(
-            sequential_reduce_deterministic_t, ExPolicy&&, InIterB first,
-            InIterE last, T init, [[maybe_unused]] Reduce&& r)
+        HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T operator()(ExPolicy&&,
+            InIterB first, InIterE last, T init,
+            [[maybe_unused]] Reduce&& r) const
         {
             /// TODO: Put constraint on Reduce to be a binary plus operator
 
@@ -68,16 +64,12 @@ namespace hpx::parallel::detail {
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy>
     struct sequential_reduce_deterministic_rfa_t final
-      : hpx::functional::detail::tag_fallback<
-            sequential_reduce_deterministic_rfa_t<ExPolicy>>
     {
-    private:
         template <typename InIterB, typename T>
-        friend constexpr hpx::parallel::detail::rfa::
+        HPX_HOST_DEVICE HPX_FORCEINLINE constexpr hpx::parallel::detail::rfa::
             reproducible_floating_accumulator<T>
-            tag_fallback_invoke(sequential_reduce_deterministic_rfa_t,
-                ExPolicy&&, InIterB first, std::size_t partition_size, T init,
-                std::true_type&&)
+            operator()(ExPolicy&&, InIterB first, std::size_t partition_size,
+                T init, std::true_type&&) const
         {
             // hpx_rfa_bin_host_buffer should be initialized by the frontend of
             // this method
@@ -110,9 +102,9 @@ namespace hpx::parallel::detail {
         }
 
         template <typename InIterB, typename T>
-        friend constexpr T tag_fallback_invoke(
-            sequential_reduce_deterministic_rfa_t, ExPolicy&&, InIterB first,
-            std::size_t partition_size, T init, std::false_type&&)
+        HPX_HOST_DEVICE HPX_FORCEINLINE constexpr T operator()(ExPolicy&&,
+            InIterB first, std::size_t partition_size, T init,
+            std::false_type&&) const
         {
             // hpx_rfa_bin_host_buffer should be initialized by the frontend of
             // this method

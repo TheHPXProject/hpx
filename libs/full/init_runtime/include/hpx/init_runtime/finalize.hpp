@@ -12,6 +12,9 @@
 
 #include <hpx/config.hpp>
 #include <hpx/modules/errors.hpp>
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+#include <hpx/modules/naming_base.hpp>
+#endif
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -181,7 +184,7 @@ namespace hpx {
     ///           is pre-initialized to \a hpx#throws the function will throw
     ///           on error instead.
     ///
-    /// \returns  This function will always return zero.
+    /// \returns  This function will always return zero if successful, -1 otherwise.
     ///
     /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
     ///           function doesn't throw but returns the result code using the
@@ -196,6 +199,44 @@ namespace hpx {
     {
         return disconnect(-1.0, -1.0, ec);
     }
+
+#if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
+    /// \brief Force disconnecting the given locality from the application.
+    ///
+    /// The function \a hpx::force_disconnect can be used to disconnect a
+    /// locality from a running HPX application.
+    ///
+    /// This function should be used from the console locality only to force the
+    /// disconnect of a different (i.e. the given) locality. It should not be
+    /// used by a locality to disconnect itself (use \a hpx::disconnect()
+    /// without the locality argument for this purpose).
+    ///
+    /// Only a locality that connected late can be removed this way. The
+    /// function fails with \a hpx::error::bad_parameter if the given locality
+    /// started with the application, was already disconnected, or is being
+    /// disconnected by another call.
+    ///
+    /// \param locality The locality to remove from the distributed connection
+    ///        caches
+    /// \param ec [in,out] this represents the error status on exit, if this
+    ///           is pre-initialized to \a hpx#throws the function will throw on
+    ///           error instead.
+    ///
+    /// \returns  This function will always return zero if successful, -1 otherwise.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise, it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// This function blocks until the locality has been removed from AGAS and
+    /// from the connection caches of the remaining localities. It waits a
+    /// bounded time for the locality to acknowledge its shutdown, so an
+    /// unreachable locality does not block the caller indefinitely.
+    ///
+    HPX_CXX_EXPORT HPX_EXPORT int force_disconnect(
+        hpx::id_type const& locality, hpx::error_code& ec = throws);
+#endif
 
     /// \brief Stop the runtime system
     ///

@@ -190,3 +190,30 @@ namespace hpx::serialization {
         bound.serialize(ar, version);
     }
 }    // namespace hpx::serialization
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/modules/actions_base.hpp>
+
+namespace hpx {
+
+    /// \brief Reflection-based bind overload.
+    ///
+    /// Allows calling hpx::bind<^^func>(ts...) directly without defining
+    /// an explicit action type. Forwards to hpx::bind<reflect_action<F>>.
+    ///
+    /// \tparam F   A std::meta::info reflection of a free function.
+    /// \tparam Ts  Types of the arguments to bind.
+    /// \param vs   Arguments forwarded to the bound action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    // clang-format on
+    auto bind(Ts&&... vs)
+    {
+        return hpx::bind<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Ts, vs)...);
+    }
+
+}    // namespace hpx
+#endif    // HPX_HAVE_CXX26_REFLECTION

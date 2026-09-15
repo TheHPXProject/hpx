@@ -98,7 +98,7 @@ namespace hpx {
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename Sig, bool Serializable>
+    template <typename Sig, bool Serializable>
     struct get_function_address<hpx::function<Sig, Serializable>>
     {
         [[nodiscard]] static constexpr std::size_t call(
@@ -108,7 +108,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Sig, bool Serializable>
+    template <typename Sig, bool Serializable>
     struct get_function_annotation<hpx::function<Sig, Serializable>>
     {
         [[nodiscard]] static constexpr char const* call(
@@ -118,7 +118,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Sig, bool Serializable>
+    template <typename Sig, bool Serializable>
     struct get_function_annotation_tracing<hpx::function<Sig, Serializable>>
     {
         [[nodiscard]] static hpx::tracing::annotation_handle call(

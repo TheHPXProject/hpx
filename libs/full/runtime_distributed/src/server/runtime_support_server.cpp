@@ -17,6 +17,7 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/filesystem.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/ini.hpp>
 #include <hpx/modules/logging.hpp>
@@ -36,6 +37,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/runtime_distributed.hpp>
+#include <hpx/runtime_distributed/detail/dijkstra_termination_token.hpp>
 #include <hpx/runtime_distributed/find_localities.hpp>
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
 #include <hpx/runtime_distributed/server/runtime_support.hpp>
@@ -132,28 +134,24 @@ namespace hpx::components::server {
       , main_thread_id_(std::this_thread::get_id())
       , shutdown_all_invoked_(false)
 #if defined(HPX_HAVE_NETWORKING)
-      , dijkstra_mtx_()
-      , dijkstra_cond_()
       , dijkstra_color_(false)
 #endif
-      , p_mtx_()
-      , plugins_()
       , modules_(cfg.modules())
-      , static_modules_()
     {
     }
 
     // function to be called during shutdown
     // Action: shut down this runtime system instance
-    void runtime_support::shutdown(
-        double timeout, hpx::id_type const& respond_to)
+    void runtime_support::shutdown(double const timeout,
+        hpx::id_type const& respond_to, bool const force_disconnect)
     {
         // initiate system shutdown
-        stop(timeout, respond_to, false);
+        stop(timeout, respond_to, false, force_disconnect);
     }
 
     // function to be called to terminate this locality immediately
-    void runtime_support::terminate(hpx::id_type const& respond_to)
+    void runtime_support::terminate(
+        [[maybe_unused]] hpx::id_type const& respond_to)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // push pending logs
@@ -183,22 +181,59 @@ namespace hpx::components::server {
         }
 #else
         HPX_ASSERT(false);
-        HPX_UNUSED(respond_to);
 #endif
         std::abort();
     }
 }    // namespace hpx::components::server
 
 ///////////////////////////////////////////////////////////////////////////////
-namespace hpx { namespace components { namespace server {
+namespace {
+
+    // wait for all futures to become ready, ignore disconnected locality errors
+    void wait_all_ignore_disconnected_localities(
+        std::vector<hpx::future<void>>& results)
+    {
+        if (!hpx::wait_all_nothrow(results))
+        {
+            return;
+        }
+
+        // re throw possible errors
+        for (auto& result : results)
+        {
+            if (!result.has_exception())
+            {
+                continue;
+            }
+
+            hpx::detail::try_catch_exception_ptr<hpx::exception>(
+                [&]() { result.get(); },
+                [&](hpx::exception const& e) {
+                    if (hpx::get_error(e) !=
+                        hpx::error::locality_was_disconnected)
+                    {
+                        throw e;
+                    }
+                },
+                [&](std::exception_ptr const& ep) {
+                    std::rethrow_exception(ep);
+                });
+        }
+    }
+}    // namespace
+
+///////////////////////////////////////////////////////////////////////////////
+namespace hpx::components::server {
 
     // initiate system shutdown for all localities
-    void invoke_shutdown_functions(
-        std::vector<hpx::id_type> const& localities, bool pre_shutdown)
+    static void invoke_shutdown_functions(
+        [[maybe_unused]] std::vector<hpx::id_type> const& localities,
+        [[maybe_unused]] bool pre_shutdown)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         std::vector<hpx::future<void>> results;
         results.reserve(localities.size());
+
         for (auto const& l : localities)
         {
             using call_shutdown_functions_action = hpx::components::server::
@@ -206,11 +241,10 @@ namespace hpx { namespace components { namespace server {
             results.push_back(
                 hpx::async(call_shutdown_functions_action(), l, pre_shutdown));
         }
-        hpx::wait_all(results);
+
+        wait_all_ignore_disconnected_localities(results);
 #else
         HPX_ASSERT(false);
-        HPX_UNUSED(localities);
-        HPX_UNUSED(pre_shutdown);
 #endif
     }
 
@@ -225,8 +259,8 @@ namespace hpx { namespace components { namespace server {
         }
     }
 
-    void runtime_support::send_dijkstra_termination_token(
-        [[maybe_unused]] std::uint32_t target_locality_id,
+    bool runtime_support::send_dijkstra_termination_token(
+        [[maybe_unused]] std::uint32_t const target_locality_id,
         [[maybe_unused]] std::uint32_t initiating_locality_id,
         [[maybe_unused]] std::uint32_t num_localities,
         [[maybe_unused]] bool dijkstra_token)
@@ -236,13 +270,13 @@ namespace hpx { namespace components { namespace server {
         //
         // Rule 0: When active, machine nr.i + 1 keeps the token; when passive,
         // it hands over the token to machine nr.i.
-        threads::threadmanager& tm =
+        threads::threadmanager const& tm =
             hpx::applier::get_applier().get_thread_manager();
 
         // if the threading system is not finished running after a small amount
         // of time we assume that more work has to be done
         bool const passive = tm.wait_for(std::chrono::milliseconds(10));
-        tm.cleanup_terminated(true);
+        [[maybe_unused]] auto const result = tm.cleanup_terminated(true);
 
         // Now this locality has become passive, thus we can send the token
         // to the next locality.
@@ -250,42 +284,86 @@ namespace hpx { namespace components { namespace server {
         // Rule 2: When machine nr.i + 1 propagates the probe, it hands over a
         // black token to machine nr.i if it is black itself, whereas while
         // being white it leaves the color of the token unchanged.
-        {
-            if (!passive || dijkstra_color_)
-                dijkstra_token = true;
-
-            // Rule 5: Upon transmission of the token to machine nr.i, machine
-            // nr.i + 1 becomes white.
-            dijkstra_color_ = false;
-        }
+        // Rule 5: Upon transmission of the token to machine nr.i, machine
+        // nr.i + 1 becomes white. Capture and clear the color in one step, so
+        // that a concurrent dijkstra_make_black() cannot slip in between the
+        // token decision and the whitening, and whiten before handing the
+        // token to the parcelport. The token can complete its round trip
+        // before the send completion callback is observed, delivering a black
+        // token to the initiator or turning this locality black again through
+        // a message sent in between, and whitening after that point erases
+        // that taint. If the send fails the taint is restored so that a retry
+        // carries it.
+        bool const was_black = dijkstra_color_.exchange(false);
+        if (!passive || was_black)
+            dijkstra_token = true;
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-        hpx::latch l(2);
-        hpx::id_type const id(
-            naming::get_id_from_locality_id(target_locality_id));
-        hpx::post_cb<dijkstra_termination_action>(
-            id,
-            [&l](std::error_code const&, parcelset::parcel const&) {
-                l.count_down(1);
+        // Only the post_cb completion callback ever counts down the latch;
+        // this function merely waits for it. latch and ec are stack
+        // variables that stay alive until wait() returns, which only
+        // happens after the callback has run.
+        auto l = std::make_shared<hpx::latch>(1);
+        std::error_code ec;
+
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                hpx::id_type const id(
+                    naming::get_id_from_locality_id(target_locality_id));
+
+                hpx::post_cb<dijkstra_termination_action>(
+                    id,
+                    [&, l](std::error_code const& e, parcelset::parcel const&) {
+                        ec = e;
+                        l->count_down(1);
+                    },
+                    initiating_locality_id, num_localities, dijkstra_token);
+
+                // post_cb returned without throwing, i.e. the completion
+                // callback above has been registered and is guaranteed to run
+                // (and count down the latch) eventually.
+                l->wait();
+                if (ec)
+                {
+                    if (was_black)
+                        dijkstra_color_ = true;
+                    return false;
+                }
+                return true;
             },
-            initiating_locality_id, num_localities, dijkstra_token);
-        l.arrive_and_wait();
+            [&](std::exception_ptr const& e) {
+                // post_cb threw synchronously, i.e. the completion callback
+                // above was never registered and will never run. Force the
+                // latch's counter to zero ourselves so its destructor's
+                // invariant holds, then rethrow.
+                l->count_down(1);
+                if (was_black)
+                    dijkstra_color_ = true;
+
+                if (auto const err = hpx::get_error(e);
+                    err != hpx::error::locality_was_disconnected)
+                {
+                    std::rethrow_exception(e);
+                }
+                return false;
+            });
 #else
         HPX_ASSERT(false);
+        return false;
 #endif
     }
 
     // invoked during termination detection
     void runtime_support::dijkstra_termination(
-        std::uint32_t initiating_locality_id, std::uint32_t num_localities,
-        bool dijkstra_token)
+        std::uint32_t const initiating_locality_id,
+        std::uint32_t const num_localities, bool const dijkstra_token)
     {
         applier::applier& appl = hpx::applier::get_applier();
         agas::addressing_service& agas_client = naming::get_agas_client();
 
         agas_client.start_shutdown();
 
-        parcelset::parcelhandler& ph = appl.get_parcel_handler();
+        parcelset::parcelhandler const& ph = appl.get_parcel_handler();
         ph.flush_parcels();
 
         std::uint32_t locality_id = get_locality_id();
@@ -300,7 +378,7 @@ namespace hpx { namespace components { namespace server {
 
             // We need the lock here to ensure the mutual exclusion of
             // hpx::latch::count_down and hpx::latch::~latch
-            std::unique_lock<dijkstra_mtx_type> l(dijkstra_mtx_);
+            std::unique_lock<dijkstra_mtx_type> const l(dijkstra_mtx_);
             [[maybe_unused]] hpx::util::ignore_while_checking<
                 std::unique_lock<dijkstra_mtx_type>> il(&l);
             dijkstra_cond_->count_down(1);
@@ -310,18 +388,56 @@ namespace hpx { namespace components { namespace server {
         if (0 == locality_id)
             locality_id = num_localities;
 
-        send_dijkstra_termination_token(locality_id - 1, initiating_locality_id,
-            num_localities, dijkstra_token);
+        // accommodate for disconnected localities
+        bool const token_sent =
+            detail::dijkstra_forward_token(locality_id, initiating_locality_id,
+                [&](std::uint32_t const target_locality_id) {
+                    return send_dijkstra_termination_token(target_locality_id,
+                        initiating_locality_id, num_localities, dijkstra_token);
+                });
+
+        if (!token_sent && initiating_locality_id != agas::get_locality_id())
+        {
+            // The regular ring-forwarding failed (every locality between us and
+            // the initiator is unreachable). Fall back to notifying the
+            // initiator directly; retry a bounded number of times in case the
+            // failure is transient, rather than giving up after a single
+            // attempt.
+            constexpr int max_fallback_attempts = 3;
+
+            bool fallback_sent = false;
+            for (int attempt = 0;
+                !fallback_sent && attempt != max_fallback_attempts; ++attempt)
+            {
+                fallback_sent =
+                    send_dijkstra_termination_token(initiating_locality_id,
+                        initiating_locality_id, num_localities, dijkstra_token);
+            }
+
+            if (!fallback_sent)
+            {
+                // Nothing more can be done from this locality: the initiator is
+                // unreachable from here. Report this loudly instead of silently
+                // dropping the token, as the initiator will otherwise wait for
+                // it indefinitely.
+                LRT_(error).format(
+                    "runtime_support::dijkstra_termination: failed to "
+                    "deliver the termination token back to the initiating "
+                    "locality {} after {} attempts; termination detection "
+                    "on that locality may hang.",
+                    initiating_locality_id, max_fallback_attempts);
+            }
+        }
     }
 #endif
 
     // Kick off termination detection, this is modeled after Dijkstra's paper:
     // http://www.cs.mcgill.ca/~lli22/575/termination3.pdf.
     std::size_t runtime_support::dijkstra_termination_detection(
-        std::vector<hpx::id_type> const& locality_ids)
+        [[maybe_unused]] std::vector<hpx::id_type> const& locality_ids)
     {
 #if defined(HPX_HAVE_NETWORKING)
-        std::uint32_t num_localities =
+        std::uint32_t const num_localities =
             static_cast<std::uint32_t>(locality_ids.size());
         if (num_localities == 1)
 #endif
@@ -330,24 +446,29 @@ namespace hpx { namespace components { namespace server {
             // While no real distributed termination detection has to be
             // performed, we should still wait for the thread-queues to drain.
             applier::applier& appl = hpx::applier::get_applier();
-            threads::threadmanager& tm = appl.get_thread_manager();
+            threads::threadmanager const& tm = appl.get_thread_manager();
 
             tm.wait();
-            tm.cleanup_terminated(true);
+            [[maybe_unused]] auto const result = tm.cleanup_terminated(true);
 
-            HPX_UNUSED(locality_ids);
             return 0;
         }
 
 #if defined(HPX_HAVE_NETWORKING)
-        std::uint32_t initiating_locality_id = get_locality_id();
-
-        // send token to previous node
-        std::uint32_t target_id = initiating_locality_id;
-        if (0 == target_id)
-            target_id = num_localities;
+        std::uint32_t const initiating_locality_id = get_locality_id();
 
         std::size_t count = 0;    // keep track of number of trials
+
+        // A probe that could not be handed to any other locality will not be
+        // delivered by repeating it, the ring is simply missing a locality.
+        // Bound those retries the way dijkstra_termination already bounds its
+        // own fallback, so an unreachable locality ends shutdown with a
+        // diagnostic instead of probing until the job hits its wall clock. A
+        // probe that is delivered and returns black is an ordinary
+        // unsuccessful probe under rule 3 and stays unbounded.
+        constexpr std::size_t max_undeliverable_probes = 3;
+        std::size_t undeliverable_probes = 0;
+        bool reprobe = false;
 
         {
             do
@@ -362,17 +483,79 @@ namespace hpx { namespace components { namespace server {
                 dijkstra_color_ = false;    // start off with white
                 dijkstra_cond_ = std::make_unique<hpx::latch>(2);
 
+                // Start each probe at the initiator's predecessor in the ring.
+                // dijkstra_forward_token consumes target_id (it walks it
+                // backwards in-place), so it has to be re-initialized for every
+                // probe; reusing the value left over from the previous probe
+                // makes a repeated probe walk past the other localities and the
+                // initiator ends up handing the token to itself indefinitely.
+                std::uint32_t target_id = initiating_locality_id;
+                if (0 == target_id)
+                    target_id = num_localities;
+
                 {
-                    send_dijkstra_termination_token(target_id - 1,
-                        initiating_locality_id, num_localities,
-                        dijkstra_color_);
+                    // The ring walk ends at the initiator, so its last hop
+                    // hands the token back to this locality, and the fallback
+                    // below targets this locality as well. Both of those sends
+                    // are local and therefore always succeed, so a probe that
+                    // reached nobody still reports a successful handoff. Track
+                    // whether some other locality accepted the token and count
+                    // undeliverable probes off that instead.
+                    bool reached_other_locality = false;
 
-                    LRT_(info).format(
-                        "runtime_support::dijkstra_termination_detection: "
-                        "wait for token to come back to us.");
+                    // accommodate for disconnected localities
+                    bool token_sent = detail::dijkstra_forward_token(target_id,
+                        initiating_locality_id,
+                        [&](std::uint32_t const target_locality_id) {
+                            bool const sent = send_dijkstra_termination_token(
+                                target_locality_id, initiating_locality_id,
+                                num_localities, dijkstra_color_);
+                            if (sent &&
+                                target_locality_id != initiating_locality_id)
+                            {
+                                reached_other_locality = true;
+                            }
+                            return sent;
+                        });
 
-                    // wait for token to come back to us
-                    dijkstra_cond_->arrive_and_wait(1);
+                    if (!token_sent)
+                    {
+                        token_sent = send_dijkstra_termination_token(
+                            initiating_locality_id, initiating_locality_id,
+                            num_localities, dijkstra_color_);
+                    }
+
+                    if (reached_other_locality)
+                    {
+                        undeliverable_probes = 0;
+                    }
+                    else
+                    {
+                        ++undeliverable_probes;
+                    }
+
+                    if (token_sent)
+                    {
+                        LRT_(info).format(
+                            "runtime_support::dijkstra_termination_detection: "
+                            "wait for token to come back to us.");
+
+                        // wait for token to come back to us
+                        dijkstra_cond_->arrive_and_wait(1);
+                    }
+                    else
+                    {
+                        // No response will ever arrive to count down the latch;
+                        // force it to zero and mark this probe unsuccessful so
+                        // another round runs.
+                        dijkstra_color_ = true;
+
+                        std::unique_lock<dijkstra_mtx_type> const l(
+                            dijkstra_mtx_);
+                        [[maybe_unused]] hpx::util::ignore_while_checking<
+                            std::unique_lock<dijkstra_mtx_type>> il(&l);
+                        dijkstra_cond_->count_down(2);
+                    }
                 }
 
                 // Rule 3: After the completion of an unsuccessful probe, machine
@@ -380,19 +563,40 @@ namespace hpx { namespace components { namespace server {
 
                 ++count;
 
-                if (dijkstra_color_)
+                // Decide once whether to probe again and report off that same
+                // answer, so the diagnostic can never disagree with the loop.
+                reprobe = detail::dijkstra_should_reprobe(dijkstra_color_,
+                    undeliverable_probes, max_undeliverable_probes);
+
+                if (reprobe)
                 {
                     LRT_(info).format(
                         "runtime_support::dijkstra_termination_detection: "
                         "After the completion of an unsuccessful probe, "
                         "initiate next probe.");
                 }
+                else if (dijkstra_color_)
+                {
+                    // Still black and out of undeliverable probes. Report this
+                    // loudly rather than blocking shutdown: the caller only
+                    // logs the trial count, so giving up here lets the runtime
+                    // shut down instead of probing forever. Termination is
+                    // abandoned here, not confirmed, which is a deliberate
+                    // best-effort relaxation for a ring that is missing a
+                    // locality.
+                    LRT_(error).format(
+                        "runtime_support::dijkstra_termination_detection: "
+                        "could not deliver the termination token to any other "
+                        "locality in {} consecutive probes (trial {}); giving "
+                        "up so shutdown can proceed.",
+                        max_undeliverable_probes, count);
+                }
 
-            } while (dijkstra_color_);
+            } while (reprobe);
 
             // We need the lock here to ensure the mutual exclusion of
             // hpx::latch::count_down and hpx::latch::~latch
-            std::unique_lock<dijkstra_mtx_type> l(dijkstra_mtx_);
+            std::unique_lock<dijkstra_mtx_type> const l(dijkstra_mtx_);
             [[maybe_unused]] hpx::util::ignore_while_checking<
                 std::unique_lock<dijkstra_mtx_type>> il(&l);
             dijkstra_cond_.reset();
@@ -403,19 +607,18 @@ namespace hpx { namespace components { namespace server {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    void runtime_support::shutdown_all(double timeout)
+    void runtime_support::shutdown_all(double const timeout)
     {
         if (find_here() != hpx::find_root_locality())
         {
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                 "runtime_support::shutdown_all",
                 "shutdown_all should be invoked on the root locality only");
-            return;
         }
 
         // make sure shutdown_all is invoked only once
-        bool flag = false;
-        if (!shutdown_all_invoked_.compare_exchange_strong(flag, true))
+        if (bool flag = false;
+            !shutdown_all_invoked_.compare_exchange_strong(flag, true))
         {
             return;
         }
@@ -426,12 +629,13 @@ namespace hpx { namespace components { namespace server {
         applier::applier& appl = hpx::applier::get_applier();
         agas::addressing_service& agas_client = naming::get_agas_client();
 
-        agas_client.start_shutdown();
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        agas_client.start_shutdown(ec);
 
         stop_evaluating_counters(true);
 
         // wake up suspended pus
-        threads::threadmanager& tm = appl.get_thread_manager();
+        threads::threadmanager const& tm = appl.get_thread_manager();
         tm.resume();
 
         std::vector<hpx::id_type> locality_ids = find_all_localities();
@@ -460,8 +664,8 @@ namespace hpx { namespace components { namespace server {
         // Shut down all localities except the local one, we can't use
         // broadcast here as we have to handle the back parcel in a special
         // way.
-        std::reverse(locality_ids.begin(), locality_ids.end());
-        std::uint32_t locality_id = get_locality_id();
+        std::ranges::reverse(locality_ids);
+        std::uint32_t const locality_id = get_locality_id();
         std::vector<hpx::future<void>> lazy_actions;
 
         for (hpx::id_type const& id : locality_ids)
@@ -474,15 +678,14 @@ namespace hpx { namespace components { namespace server {
             }
         }
 
-        // wait for all localities to be stopped
-        hpx::wait_all(lazy_actions);
+        wait_all_ignore_disconnected_localities(lazy_actions);
 
         LRT_(info).format("runtime_support::shutdown_all: all localities have "
                           "been shut down");
 
         // Now make sure this local locality gets shut down as well.
         // There is no need to respond...
-        stop(timeout, hpx::invalid_id, false);
+        stop(timeout, hpx::invalid_id, false, false);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -491,13 +694,13 @@ namespace hpx { namespace components { namespace server {
     {
         std::vector<naming::gid_type> locality_ids;
         naming::get_agas_client().get_localities(locality_ids);
-        std::reverse(locality_ids.begin(), locality_ids.end());
+        std::ranges::reverse(locality_ids);
 
         // Terminate all localities except the local one, we can't use
         // broadcast here as we have to handle the back parcel in a special
         // way.
         {
-            std::uint32_t locality_id = get_locality_id();
+            std::uint32_t const locality_id = get_locality_id();
             std::vector<hpx::future<void>> lazy_actions;
 
             for (naming::gid_type gid : locality_ids)
@@ -513,7 +716,7 @@ namespace hpx { namespace components { namespace server {
             }
 
             // wait for all localities to be stopped
-            hpx::wait_all(lazy_actions);
+            wait_all_ignore_disconnected_localities(lazy_actions);
         }
 
         // now make sure this local locality gets terminated as well.
@@ -562,7 +765,8 @@ namespace hpx { namespace components { namespace server {
     ///////////////////////////////////////////////////////////////////////////
     /// \brief Remove the given locality from our connection cache
     void runtime_support::remove_from_connection_cache(
-        naming::gid_type const& gid, parcelset::endpoints_type const& eps)
+        [[maybe_unused]] naming::gid_type const& gid,
+        [[maybe_unused]] parcelset::endpoints_type const& eps)
     {
         runtime_distributed* rt = get_runtime_distributed_ptr();
         if (rt == nullptr)
@@ -571,9 +775,6 @@ namespace hpx { namespace components { namespace server {
 #if defined(HPX_HAVE_NETWORKING)
         // instruct our connection cache to drop all connections it is holding
         rt->get_parcel_handler().remove_from_connection_cache(gid, eps);
-#else
-        HPX_UNUSED(gid);
-        HPX_UNUSED(eps);
 #endif
     }
 
@@ -599,7 +800,7 @@ namespace hpx { namespace components { namespace server {
     }
 
     void runtime_support::stop(double timeout, hpx::id_type const& respond_to,
-        bool remove_from_remote_caches)
+        bool const remove_from_remote_caches, bool const force_disconnect)
     {
         std::unique_lock<std::mutex> l(mtx_);
         if (!stop_called_)
@@ -620,17 +821,24 @@ namespace hpx { namespace components { namespace server {
             {
                 unlock_guard<std::mutex> ul(mtx_);
 
-                auto duration_timeout = hpx::chrono::steady_duration(
+                if (timeout == -1.0)
+                {
+                    timeout = 0.0;
+                }
+
+                auto const duration_timeout = hpx::chrono::steady_duration(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::duration<double>(timeout)));
 
-                util::runtime_configuration& cfg = get_runtime().get_config();
+                util::runtime_configuration const& cfg =
+                    get_runtime().get_config();
                 std::size_t const shutdown_check_count =
                     util::get_entry_as<std::size_t>(
                         cfg, "hpx.shutdown_check_count", 10);
                 bool const success = util::detail::yield_while_count_timeout(
                     [&tm] {
-                        tm.cleanup_terminated(true);
+                        [[maybe_unused]] auto const result =
+                            tm.cleanup_terminated(true);
                         return tm.is_busy();
                     },
                     shutdown_check_count, duration_timeout,
@@ -644,7 +852,8 @@ namespace hpx { namespace components { namespace server {
                     util::detail::yield_while_count_timeout(
                         [&tm] {
                             tm.abort_all_suspended_threads();
-                            tm.cleanup_terminated(true);
+                            [[maybe_unused]] auto const result =
+                                tm.cleanup_terminated(true);
                             return tm.is_busy();
                         },
                         shutdown_check_count, duration_timeout,
@@ -666,12 +875,14 @@ namespace hpx { namespace components { namespace server {
                     appl.get_runtime_support_raw_gid(), ec);
 
                 if (remove_from_remote_caches)
-                    remove_here_from_connection_cache();
+                    remove_locality_from_connection_cache(agas::get_locality());
 
-                agas_client.unregister_locality(here, ec);
+                if (!force_disconnect)
+                    agas_client.unregister_locality(here, ec);
 
                 if (remove_from_remote_caches)
-                    remove_here_from_console_connection_cache();
+                    remove_locality_from_console_connection_cache(
+                        agas::get_locality());
 
                 if (respond_to)
                 {
@@ -718,6 +929,92 @@ namespace hpx { namespace components { namespace server {
         }
     }
 
+    namespace {
+
+        // working around non-copy-ability of packaged_task
+        struct indirect_packaged_task
+        {
+            using packaged_task_type = hpx::packaged_task<void()>;
+
+            indirect_packaged_task()
+              : pt(std::make_shared<packaged_task_type>([]() {}))
+            {
+            }
+
+            hpx::future<void> get_future() const
+            {
+                return pt->get_future();
+            }
+
+            template <typename... Ts>
+            void operator()(Ts&&... /* vs */)
+            {
+                // This needs to be run on a HPX thread
+                hpx::post(HPX_MOVE(*pt));
+                pt.reset();
+            }
+
+            std::shared_ptr<packaged_task_type> pt;
+        };
+    }    // namespace
+
+    bool runtime_support::remove_locality(
+        hpx::id_type const& locality, error_code& ec)
+    {
+        agas::addressing_service& agas_client = naming::get_agas_client();
+        if (!agas_client.mark_connecting_locality_as_disconnecting(
+                locality.get_gid()))
+        {
+            HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                "runtime_support::remove_locality",
+                "hpx::force_disconnect can be called to disconnect only a "
+                "locality that was connecting late and is not already being "
+                "disconnected.");
+            return false;
+        }
+
+        // A removal that throws must not leave the locality claimed forever,
+        // so hand it back as connecting. A retry then repeats the shutdown
+        // notification and the cache removal broadcasts, which are idempotent.
+        // A removal that fails without throwing needs nothing, because the
+        // console connection cache removal below still erases the entry.
+        auto release_claim = hpx::experimental::scope_fail([&]() noexcept {
+            agas_client.mark_disconnecting_locality_as_connecting(
+                locality.get_gid());
+        });
+
+#if !defined(HPX_COMPUTE_DEVICE_CODE) && defined(HPX_HAVE_NETWORKING)
+        // try to inform the locality that it has been disconnected (ignore any
+        // errors)
+        using action_type = server::runtime_support::shutdown_action;
+
+        indirect_packaged_task ipt;
+        future<void> callback = ipt.get_future();
+
+        hpx::post_cb(action_type(), locality, HPX_MOVE(ipt), -1.0,
+            hpx::invalid_id, true);
+
+        // Bounded wait: don't let an unreachable/partitioned locality block
+        // forced cleanup indefinitely. Best-effort - ignore timeout/errors.
+        constexpr std::chrono::seconds shutdown_notify_timeout(5);
+        if (callback.wait_for(shutdown_notify_timeout) ==
+            hpx::future_status::ready)
+        {
+            error_code cb_ec(throwmode::lightweight);
+            callback.get(cb_ec);    // swallow any errors
+        }
+#endif
+
+        remove_locality_from_connection_cache(locality.get_gid(), true);
+
+        bool const result =
+            agas_client.unregister_locality(locality.get_gid(), ec);
+
+        remove_locality_from_console_connection_cache(locality.get_gid());
+
+        return result;
+    }
+
     void runtime_support::notify_waiting_main()
     {
         std::unique_lock<std::mutex> l(mtx_);
@@ -749,7 +1046,7 @@ namespace hpx { namespace components { namespace server {
     }
 
 #if defined(HPX_HAVE_NETWORKING)
-    namespace detail {
+    namespace {
         void handle_list_parcelports()
         {
             // make sure all output is kept together
@@ -762,7 +1059,7 @@ namespace hpx { namespace components { namespace server {
 
             std::cout << strm.str();
         }
-    }    // namespace detail
+    }    // namespace
 #endif
 
     ///////////////////////////////////////////////////////////////////////////
@@ -787,7 +1084,7 @@ namespace hpx { namespace components { namespace server {
 
         // then dynamic ones
         agas::addressing_service& client = naming::get_agas_client();
-        int result = load_components(
+        int const result = load_components(
             ini, client.get_local_locality(), client, options, startup_handled);
         if (result != 0)
         {
@@ -801,14 +1098,14 @@ namespace hpx { namespace components { namespace server {
 
 #if defined(HPX_HAVE_NETWORKING)
         return util::handle_late_commandline_options(ini, options,
-            &hpx::detail::handle_print_bind, &detail::handle_list_parcelports);
+            &hpx::detail::handle_print_bind, &handle_list_parcelports);
 #else
         return util::handle_late_commandline_options(
             ini, options, &hpx::detail::handle_print_bind);
 #endif
     }
 
-    void runtime_support::call_startup_functions(bool pre_startup)
+    void runtime_support::call_startup_functions(bool const pre_startup)
     {
         if (pre_startup)
         {
@@ -828,7 +1125,7 @@ namespace hpx { namespace components { namespace server {
         }
     }
 
-    void runtime_support::call_shutdown_functions(bool pre_shutdown)
+    void runtime_support::call_shutdown_functions(bool const pre_shutdown)
     {
         runtime& rt = get_runtime();
         if (pre_shutdown)
@@ -863,41 +1160,17 @@ namespace hpx { namespace components { namespace server {
         }
     }
 
-    // working around non-copy-ability of packaged_task
-    struct indirect_packaged_task
-    {
-        using packaged_task_type = hpx::packaged_task<void()>;
-
-        indirect_packaged_task()
-          : pt(std::make_shared<packaged_task_type>([]() {}))
-        {
-        }
-
-        hpx::future<void> get_future()
-        {
-            return pt->get_future();
-        }
-
-        template <typename... Ts>
-        void operator()(Ts&&... /* vs */)
-        {
-            // This needs to be run on a HPX thread
-            hpx::post(HPX_MOVE(*pt));
-            pt.reset();
-        }
-
-        std::shared_ptr<packaged_task_type> pt;
-    };
-
-    void runtime_support::remove_here_from_connection_cache()
+    void runtime_support::remove_locality_from_connection_cache(
+        [[maybe_unused]] hpx::naming::gid_type const& locality,
+        [[maybe_unused]] bool const skip_current)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #if defined(HPX_HAVE_NETWORKING)
-        runtime_distributed* rtd = get_runtime_distributed_ptr();
+        runtime_distributed const* rtd = get_runtime_distributed_ptr();
         if (rtd == nullptr)
             return;
 
-        std::vector<hpx::id_type> locality_ids = find_remote_localities();
+        std::vector<hpx::id_type> const locality_ids = find_remote_localities();
 
         using action_type =
             server::runtime_support::remove_from_connection_cache_action;
@@ -905,45 +1178,56 @@ namespace hpx { namespace components { namespace server {
         std::vector<future<void>> callbacks;
         callbacks.reserve(locality_ids.size());
 
-        action_type act;
         for (hpx::id_type const& id : locality_ids)
         {
             // console is handled separately
             if (naming::get_locality_id_from_id(id) == 0)
                 continue;
 
+            // optionally skip the locality that is to be removed
+            if (skip_current && locality == id.get_gid())
+                continue;
+
             indirect_packaged_task ipt;
             callbacks.emplace_back(ipt.get_future());
             hpx::post_cb(
-                act, id, HPX_MOVE(ipt), agas::get_locality(), rtd->endpoints());
+                action_type(), id, HPX_MOVE(ipt), locality, rtd->endpoints());
         }
 
-        hpx::wait_all(callbacks);
+        wait_all_ignore_disconnected_localities(callbacks);
 #endif
 #else
         HPX_ASSERT(false);
 #endif
     }
 
-    void runtime_support::remove_here_from_console_connection_cache()
+    void runtime_support::remove_locality_from_console_connection_cache(
+        [[maybe_unused]] hpx::naming::gid_type const& locality)
     {
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
-#if defined(HPX_HAVE_NETWORKING)
         runtime_distributed* rtd = get_runtime_distributed_ptr();
         if (rtd == nullptr)
             return;
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+#if defined(HPX_HAVE_NETWORKING)
+        if (agas::is_console())
+        {
+            // do it locally, if possible
+            rtd->get_parcel_handler().remove_from_connection_cache(
+                locality, rtd->endpoints());
+            return;
+        }
+
         using action_type =
             server::runtime_support::remove_from_connection_cache_action;
 
-        action_type act;
         indirect_packaged_task ipt;
-        future<void> callback = ipt.get_future();
+        future<void> const callback = ipt.get_future();
 
         // handle console separately
-        id_type id = naming::get_id_from_locality_id(0);
+        id_type const id = naming::get_id_from_locality_id(0);
         hpx::post_cb(
-            act, id, HPX_MOVE(ipt), agas::get_locality(), rtd->endpoints());
+            action_type(), id, HPX_MOVE(ipt), locality, rtd->endpoints());
 
         callback.wait();
 #endif
@@ -952,7 +1236,7 @@ namespace hpx { namespace components { namespace server {
 #endif
     }
 
-    ///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_NETWORKING)
     void runtime_support::register_message_handler(
         char const* message_handler_type, char const* action, error_code& ec)
@@ -961,9 +1245,9 @@ namespace hpx { namespace components { namespace server {
         using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
-        plugin_map_type::const_iterator it =
+        plugin_map_type::const_iterator const it =
             plugins_.find(message_handler_type);
-        if (it == plugins_.end() || !(*it).second.first)
+        if (it == plugins_.end() || !it->second.first)
         {
             l.unlock();
             if (ec.category() != hpx::get_lightweight_hpx_category() &&
@@ -990,9 +1274,9 @@ namespace hpx { namespace components { namespace server {
         l.unlock();
 
         // create new component instance
-        std::shared_ptr<plugins::message_handler_factory_base> factory(
+        std::shared_ptr<plugins::message_handler_factory_base> const factory(
             std::static_pointer_cast<plugins::message_handler_factory_base>(
-                (*it).second.first));
+                it->second.first));
 
         factory->register_action(action, ec);
 
@@ -1017,16 +1301,17 @@ namespace hpx { namespace components { namespace server {
 
     parcelset::policies::message_handler*
     runtime_support::create_message_handler(char const* message_handler_type,
-        char const* action, parcelset::parcelport* pp, std::size_t num_messages,
-        std::size_t interval, error_code& ec)
+        char const* action, parcelset::parcelport* pp,
+        std::size_t const num_messages, std::size_t const interval,
+        error_code& ec)
     {
         // locate the factory for the requested plugin type
         using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
-        plugin_map_type::const_iterator it =
+        plugin_map_type::const_iterator const it =
             plugins_.find(message_handler_type);
-        if (it == plugins_.end() || !(*it).second.first)
+        if (it == plugins_.end() || !it->second.first)
         {
             l.unlock();
             if (ec.category() != hpx::get_lightweight_hpx_category() &&
@@ -1053,9 +1338,9 @@ namespace hpx { namespace components { namespace server {
         l.unlock();
 
         // create new component instance
-        std::shared_ptr<plugins::message_handler_factory_base> factory(
+        std::shared_ptr<plugins::message_handler_factory_base> const factory(
             std::static_pointer_cast<plugins::message_handler_factory_base>(
-                (*it).second.first));
+                it->second.first));
 
         parcelset::policies::message_handler* mh =
             factory->create(action, pp, num_messages, interval);
@@ -1079,15 +1364,16 @@ namespace hpx { namespace components { namespace server {
     }
 
     serialization::binary_filter* runtime_support::create_binary_filter(
-        char const* binary_filter_type, bool compress,
+        char const* binary_filter_type, bool const compress,
         serialization::binary_filter* next_filter, error_code& ec)
     {
         // locate the factory for the requested plugin type
         using plugin_map_scoped_lock = std::unique_lock<plugin_map_mutex_type>;
         plugin_map_scoped_lock l(p_mtx_);
 
-        plugin_map_type::const_iterator it = plugins_.find(binary_filter_type);
-        if (it == plugins_.end() || !(*it).second.first)
+        plugin_map_type::const_iterator const it =
+            plugins_.find(binary_filter_type);
+        if (it == plugins_.end() || !it->second.first)
         {
             l.unlock();
             // we don't know anything about this component
@@ -1102,9 +1388,9 @@ namespace hpx { namespace components { namespace server {
         l.unlock();
 
         // create new component instance
-        std::shared_ptr<plugins::binary_filter_factory_base> factory(
+        std::shared_ptr<plugins::binary_filter_factory_base> const factory(
             std::static_pointer_cast<plugins::binary_filter_factory_base>(
-                (*it).second.first));
+                it->second.first));
 
         serialization::binary_filter* bf =
             factory->create(compress, next_filter);
@@ -1142,7 +1428,7 @@ namespace hpx { namespace components { namespace server {
             // initialize the factory instance using the preferences from the
             // ini files
             util::section const* component_ini = nullptr;
-            std::string component_section("hpx.components." + instance);
+            std::string const component_section("hpx.components." + instance);
             if (ini.has_section(component_section))
                 component_ini = ini.get_section(component_section);
 
@@ -1165,7 +1451,7 @@ namespace hpx { namespace components { namespace server {
 
             // make sure startup/shutdown registration is called once for each
             // module, same for plugins
-            if (startup_handled.find(component) == startup_handled.end())
+            if (!startup_handled.contains(component))
             {
                 error_code ec(throwmode::lightweight);
                 startup_handled.insert(component);
@@ -1201,7 +1487,8 @@ namespace hpx { namespace components { namespace server {
     // functions are handled via the existing component-side static helpers,
     // which are agnostic to whether the module is a component or a plugin.
     bool runtime_support::load_plugin_static(util::section& ini,
-        std::string const& instance, std::string const& plugin, bool isenabled,
+        std::string const& instance, std::string const& plugin,
+        bool const isenabled,
         hpx::program_options::options_description& options,
         std::set<std::string>& startup_handled)
     {
@@ -1268,7 +1555,7 @@ namespace hpx { namespace components { namespace server {
             // commandline/startup maps as components via the shared
             // HPX_REGISTER_COMMANDLINE_OPTIONS / HPX_REGISTER_STARTUP_SHUTDOWN
             // macros, so the component-side helpers work unchanged.
-            if (startup_handled.find(plugin) == startup_handled.end())
+            if (!startup_handled.contains(plugin))
             {
                 startup_handled.insert(plugin);
                 load_commandline_options_static(plugin, options, ec);
@@ -1332,7 +1619,7 @@ namespace hpx { namespace components { namespace server {
             return 0;    // something bad happened
         }
 
-        util::section::section_map const& s = (*sec).get_sections();
+        util::section::section_map const& s = sec->get_sections();
         using iterator = util::section::section_map::const_iterator;
         iterator end = s.end();
         for (iterator i = s.begin(); i != end; ++i)
@@ -1372,9 +1659,9 @@ namespace hpx { namespace components { namespace server {
                     isdefault = true;
             }
 
-            fs::path lib;
             try
             {
+                fs::path lib;
                 std::string component_path;
                 if (sect.has_entry("path"))
                     component_path = sect.get_entry("path");
@@ -1454,12 +1741,12 @@ namespace hpx { namespace components { namespace server {
                 return false;
             }
 
-            util::plugin::static_plugin_factory<component_startup_shutdown_base>
-                pf(f);
+            util::plugin::static_plugin_factory<
+                component_startup_shutdown_base> const pf(f);
 
             // create the startup_shutdown object
-            std::shared_ptr<component_startup_shutdown_base> startup_shutdown(
-                pf.create("startup_shutdown", ec));
+            std::shared_ptr<component_startup_shutdown_base> const
+                startup_shutdown(pf.create("startup_shutdown", ec));
             if (ec)
             {
                 LRT_(debug).format("static loading of startup/shutdown "
@@ -1541,12 +1828,12 @@ namespace hpx { namespace components { namespace server {
             }
 
             // get the factory, may fail
-            hpx::util::plugin::static_plugin_factory<component_commandline_base>
-                pf(f);
+            hpx::util::plugin::static_plugin_factory<
+                component_commandline_base> const pf(f);
 
             // create the startup_shutdown object
-            std::shared_ptr<component_commandline_base> commandline_options(
-                pf.create("commandline_options", ec));
+            std::shared_ptr<component_commandline_base> const
+                commandline_options(pf.create("commandline_options", ec));
             if (ec)
             {
                 LRT_(debug).format(
@@ -1582,16 +1869,17 @@ namespace hpx { namespace components { namespace server {
     bool runtime_support::load_component_dynamic(util::section& ini,
         std::string const& instance, std::string const& component,
         filesystem::path lib, naming::gid_type const& prefix,
-        agas::addressing_service& agas_client, bool isdefault, bool isenabled,
+        agas::addressing_service& agas_client, bool const isdefault,
+        bool const isenabled,
         hpx::program_options::options_description& options,
         std::set<std::string>& startup_handled)
     {
-        modules_map_type::iterator it =
+        modules_map_type::iterator const it =
             modules_.find(HPX_MANGLE_STRING(component));
         if (it != modules_.cend())
         {
             // use loaded module, instantiate the requested factory
-            return load_component((*it).second, ini, instance, component, lib,
+            return load_component(it->second, ini, instance, component, lib,
                 prefix, agas_client, isdefault, isenabled, options,
                 startup_handled);
         }
@@ -1604,7 +1892,7 @@ namespace hpx { namespace components { namespace server {
         if (ec)
         {
             // build path to component to load
-            std::string libname(HPX_MAKE_DLL_STRING(component));
+            std::string const libname(HPX_MAKE_DLL_STRING(component));
             lib /= filesystem::path(libname);
             d.load_library(ec);
             if (ec)
@@ -1633,12 +1921,13 @@ namespace hpx { namespace components { namespace server {
         try
         {
             // get the factory, may fail
-            hpx::util::plugin::plugin_factory<component_startup_shutdown_base>
-                pf(d, "startup_shutdown");
+            hpx::util::plugin::plugin_factory<
+                component_startup_shutdown_base> const pf(d,
+                "startup_shutdown");
 
             // create the startup_shutdown object
-            std::shared_ptr<component_startup_shutdown_base> startup_shutdown(
-                pf.create("startup_shutdown", ec));
+            std::shared_ptr<component_startup_shutdown_base> const
+                startup_shutdown(pf.create("startup_shutdown", ec));
             if (ec)
             {
                 LRT_(debug).format(
@@ -1694,12 +1983,12 @@ namespace hpx { namespace components { namespace server {
         try
         {
             // get the factory, may fail
-            hpx::util::plugin::plugin_factory<component_commandline_base> pf(
-                d, "commandline_options");
+            hpx::util::plugin::plugin_factory<component_commandline_base> const
+                pf(d, "commandline_options");
 
             // create the startup_shutdown object
-            std::shared_ptr<component_commandline_base> commandline_options(
-                pf.create("commandline_options", ec));
+            std::shared_ptr<component_commandline_base> const
+                commandline_options(pf.create("commandline_options", ec));
             if (ec)
             {
                 LRT_(debug).format(
@@ -1730,23 +2019,19 @@ namespace hpx { namespace components { namespace server {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    bool runtime_support::load_component(hpx::util::plugin::dll& d,
-        util::section& ini, std::string const& instance,
-        std::string const& /* component */, filesystem::path const& lib,
+    bool runtime_support::load_component(
+        [[maybe_unused]] hpx::util::plugin::dll& d,
+        [[maybe_unused]] util::section& ini,
+        [[maybe_unused]] std::string const& instance,
+        std::string const& /* component */,
+        [[maybe_unused]] filesystem::path const& lib,
         naming::gid_type const& /* prefix */,
         agas::addressing_service& /* agas_client */, bool /* isdefault */,
         bool /* isenabled */,
-        hpx::program_options::options_description& options,
-        std::set<std::string>& startup_handled)
+        [[maybe_unused]] hpx::program_options::options_description& options,
+        [[maybe_unused]] std::set<std::string>& startup_handled)
     {
 #if defined(HPX_COMPUTE_DEVICE_CODE)
-        HPX_UNUSED(d);
-        HPX_UNUSED(ini);
-        HPX_UNUSED(instance);
-        HPX_UNUSED(lib);
-        HPX_UNUSED(options);
-        HPX_UNUSED(startup_handled);
-
         return false;
 #else
         try
@@ -1754,9 +2039,12 @@ namespace hpx { namespace components { namespace server {
             // initialize the factory instance using the preferences from the
             // ini files
             util::section const* component_ini = nullptr;
-            std::string component_section("hpx.components." + instance);
-            if (ini.has_section(component_section))
+            if (std::string const component_section(
+                    "hpx.components." + instance);
+                ini.has_section(component_section))
+            {
                 component_ini = ini.get_section(component_section);
+            }
 
             if (nullptr == component_ini ||
                 "0" == component_ini->get_entry("no_factory", "0"))
@@ -1771,7 +2059,7 @@ namespace hpx { namespace components { namespace server {
 
             // make sure startup/shutdown registration is called once for each
             // module, same for plugins
-            if (startup_handled.find(d.get_name()) == startup_handled.end())
+            if (!startup_handled.contains(d.get_name()))
             {
                 error_code ec(throwmode::lightweight);
                 startup_handled.insert(d.get_name());
@@ -1835,7 +2123,7 @@ namespace hpx { namespace components { namespace server {
             return false;    // something bad happened
         }
 
-        util::section::section_map const& s = (*sec).get_sections();
+        util::section::section_map const& s = sec->get_sections();
         using iterator = util::section::section_map::const_iterator;
         iterator end = s.end();
         for (iterator i = s.begin(); i != end; ++i)
@@ -1864,9 +2152,9 @@ namespace hpx { namespace components { namespace server {
                 }
             }
 
-            fs::path lib;
             try
             {
+                fs::path lib;
                 std::string component_path;
                 if (sect.has_entry("path"))
                     component_path = sect.get_entry("path");
@@ -1930,7 +2218,8 @@ namespace hpx { namespace components { namespace server {
     bool runtime_support::load_plugin(hpx::util::plugin::dll& d,
         util::section& ini, std::string const& instance,
         std::string const& /* plugin */, filesystem::path const& lib,
-        bool isenabled, hpx::program_options::options_description& options,
+        bool const isenabled,
+        hpx::program_options::options_description& options,
         std::set<std::string>& startup_handled)
     {
         try
@@ -1942,7 +2231,7 @@ namespace hpx { namespace components { namespace server {
                 glob_ini = ini.get_section("settings");
 
             util::section const* plugin_ini = nullptr;
-            std::string plugin_section("hpx.plugins." + instance);
+            std::string const plugin_section("hpx.plugins." + instance);
             if (ini.has_section(plugin_section))
                 plugin_ini = ini.get_section(plugin_section);
 
@@ -1951,8 +2240,8 @@ namespace hpx { namespace components { namespace server {
                 "0" == plugin_ini->get_entry("no_factory", "0"))
             {
                 // get the factory
-                hpx::util::plugin::plugin_factory<plugins::plugin_factory_base>
-                    pf(d, "factory");
+                hpx::util::plugin::plugin_factory<
+                    plugins::plugin_factory_base> const pf(d, "factory");
 
                 // create the component factory object, if not disabled
                 std::shared_ptr<plugins::plugin_factory_base> const f(
@@ -1961,7 +2250,7 @@ namespace hpx { namespace components { namespace server {
                 {
                     // store component factory and module for later use
                     plugin_factory_type data(f, isenabled);
-                    std::pair<plugin_map_type::iterator, bool> p =
+                    std::pair<plugin_map_type::iterator, bool> const p =
                         plugins_.insert(
                             plugin_map_type::value_type(instance, data));
 
@@ -1986,7 +2275,7 @@ namespace hpx { namespace components { namespace server {
 
             // make sure startup/shutdown registration is called once for each
             // module, same for plugins
-            if (startup_handled.find(d.get_name()) == startup_handled.end())
+            if (!startup_handled.contains(d.get_name()))
             {
                 startup_handled.insert(d.get_name());
                 load_commandline_options(d, options, ec);
@@ -2016,15 +2305,15 @@ namespace hpx { namespace components { namespace server {
 
     bool runtime_support::load_plugin_dynamic(util::section& ini,
         std::string const& instance, std::string const& plugin,
-        filesystem::path lib, bool isenabled,
+        filesystem::path lib, bool const isenabled,
         hpx::program_options::options_description& options,
         std::set<std::string>& startup_handled)
     {
-        auto it = modules_.find(HPX_MANGLE_STRING(plugin));
+        auto const it = modules_.find(HPX_MANGLE_STRING(plugin));
         if (it != modules_.cend())
         {
             // use loaded module, instantiate the requested factory
-            return load_plugin((*it).second, ini, instance, plugin, lib,
+            return load_plugin(it->second, ini, instance, plugin, lib,
                 isenabled, options, startup_handled);
         }
 
@@ -2036,7 +2325,7 @@ namespace hpx { namespace components { namespace server {
         if (ec)
         {
             // build path to component to load
-            std::string libname(HPX_MAKE_DLL_STRING(plugin));
+            std::string const libname(HPX_MAKE_DLL_STRING(plugin));
             lib /= filesystem::path(libname);
             d.load_library(ec);
             if (ec)
@@ -2059,4 +2348,4 @@ namespace hpx { namespace components { namespace server {
         return true;    // plugin got loaded
     }
 #endif
-}}}    // namespace hpx::components::server
+}    // namespace hpx::components::server

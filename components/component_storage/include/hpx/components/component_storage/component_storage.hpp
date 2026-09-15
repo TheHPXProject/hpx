@@ -28,6 +28,8 @@ namespace hpx { namespace components {
             base_type;
 
     public:
+        component_storage() = default;
+
         component_storage(hpx::id_type target_locality);
         component_storage(hpx::future<hpx::id_type>&& f);
 

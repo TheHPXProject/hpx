@@ -154,7 +154,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<int> v) {
             HPX_TEST_EQ(v.size(), std::size_t(3));
@@ -181,7 +181,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<double> v) {
             HPX_TEST_EQ(v.size(), std::size_t(3));
@@ -245,7 +245,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = []() {};
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
@@ -267,7 +267,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = []() {};
         auto r = callback_receiver<decltype(f)>{f, set_value_called};
@@ -294,7 +294,7 @@ int main()
         check_value_types<hpx::variant<
             hpx::tuple<std::vector<custom_type_non_default_constructible>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<custom_type_non_default_constructible> v) {
             HPX_TEST_EQ(v.size(), std::size_t(3));
@@ -328,7 +328,7 @@ int main()
             std::vector<custom_type_non_default_constructible_non_copyable>>>>(
             s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f =
             [](std::vector<custom_type_non_default_constructible_non_copyable>
@@ -372,7 +372,7 @@ int main()
         check_value_types<
             hpx::variant<hpx::tuple<std::vector<double>, std::vector<int>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto f = [](std::vector<double> v1, std::vector<int> v3) {
             HPX_TEST_EQ(v1.size(), std::size_t(3));
@@ -444,7 +444,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -467,7 +467,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -490,7 +490,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};
@@ -513,7 +513,7 @@ int main()
 
         check_value_types<hpx::variant<hpx::tuple<std::vector<double>>>>(s);
         check_error_types<hpx::variant<std::exception_ptr>>(s);
-        check_sends_stopped<false>(s);
+        check_sends_stopped<true>(s);
 
         auto r = error_callback_receiver<check_exception_ptr>{
             check_exception_ptr{}, set_error_called};

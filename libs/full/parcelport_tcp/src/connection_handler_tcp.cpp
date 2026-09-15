@@ -202,7 +202,9 @@ namespace hpx::parcelset::policies::tcp {
             // An exit here, avoids hangs when late parcels are in flight (those are
             // mainly decref requests).
             if (acceptor_ == nullptr)
+            {
                 return std::shared_ptr<sender>();
+            }
             try
             {
                 util::detail::endpoint_iterator_type end = util::connect_end();

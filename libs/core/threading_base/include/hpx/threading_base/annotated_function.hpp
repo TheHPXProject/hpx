@@ -143,7 +143,7 @@ namespace hpx {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 
 ///////////////////////////////////////////////////////////////////////////
-HPX_CXX_CORE_EXPORT template <typename F>
+template <typename F>
 struct hpx::traits::get_function_address<hpx::detail::annotated_function<F>>
 {
     static constexpr std::size_t call(
@@ -153,7 +153,7 @@ struct hpx::traits::get_function_address<hpx::detail::annotated_function<F>>
     }
 };
 
-HPX_CXX_CORE_EXPORT template <typename F>
+template <typename F>
 struct hpx::traits::get_function_annotation<hpx::detail::annotated_function<F>>
 {
     static constexpr char const* call(

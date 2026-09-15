@@ -119,7 +119,7 @@ namespace hpx::util {
         register_locks_predicate_type) noexcept;
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct ignore_all_while_checking
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] ignore_all_while_checking
     {
         ignore_all_while_checking() noexcept
           : owns_registration_(ignore_all_locks())
@@ -148,12 +148,15 @@ namespace hpx::util {
     namespace detail {
 
         HPX_HAS_MEMBER_XXX_TRAIT_DEF(mutex)
-    }
+    }    // namespace detail
 
+    // clang-format off
     HPX_CXX_CORE_EXPORT template <typename Lock,
-        typename Enable = std::enable_if_t < detail::has_mutex_v<Lock> &&
-            detail::has_owns_lock_v<Lock> >> struct ignore_while_checking
+        typename Enable = std::enable_if_t<
+            detail::has_mutex_v<Lock> && detail::has_owns_lock_v<Lock> >>
+    struct [[maybe_unused]] ignore_while_checking
     {
+        // clang-format on
         explicit ignore_while_checking(Lock const* lock) noexcept
           : mtx_(lock->owns_lock() ? lock->mutex() : nullptr)
           , owns_registration_(false)
@@ -188,7 +191,7 @@ namespace hpx::util {
     };
 
     template <typename Lock>
-    struct ignore_while_checking<Lock,
+    struct [[maybe_unused]] ignore_while_checking<Lock,
         std::enable_if_t<detail::has_mutex_v<Lock> &&
             !detail::has_owns_lock_v<Lock>>>
     {
@@ -237,7 +240,7 @@ namespace hpx::util {
 #else
 
     HPX_CXX_CORE_EXPORT template <typename Lock, typename Enable = void>
-    struct ignore_while_checking
+    struct [[maybe_unused]] ignore_while_checking
     {
         explicit constexpr ignore_while_checking(Lock const* /*lock*/) noexcept
         {
@@ -246,7 +249,7 @@ namespace hpx::util {
         constexpr void reset_owns_registration() noexcept {}
     };
 
-    HPX_CXX_CORE_EXPORT struct ignore_all_while_checking
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] ignore_all_while_checking
     {
         constexpr ignore_all_while_checking() noexcept {}
     };

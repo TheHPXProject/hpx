@@ -48,3 +48,5 @@ tests.examples.modules.collectives.distributed.tcp.channel_communicator
 tests.examples.modules.collectives.distributed.tcp.distributed_pi
 tests.examples.modules.collectives.distributed.tcp.channel_pingpong
 tests.examples.modules.futures.monadic_operations
+tests.examples.components.supervision_dispatch.distributed.tcp.plain_worker
+tests.examples.components.supervision_dispatch.distributed.tcp.component_worker

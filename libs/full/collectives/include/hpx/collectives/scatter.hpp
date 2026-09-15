@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file scatter.hpp
+/// \page hpx::collectives::scatter_from, hpx::collectives::scatter_to
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -381,7 +383,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -1078,5 +1079,4 @@ namespace hpx::collectives {
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_SCATTER(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

@@ -4,13 +4,13 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Acceptance check: discover_peers() resolves the supervision_dispatch sentinel
-// and registry names (see register_name()) of remote localities that have
-// already registered them, bounded by a single hpx::wait_all_for_nothrow()
-// call, and excludes localities that never do so -- without hanging
-// indefinitely. This test only exercises the one-time discovery pull itself;
-// the resulting peers are never join()ed here (see registry_join.cpp for that,
-// exercised with explicit manually-supplied peers instead).
+// Acceptance check: discover_peers() resolves the supervision_dispatch registry
+// name (see register_name()) of remote localities that have already registered
+// them, bounded by a single hpx::wait_all_for_nothrow() call, and excludes
+// localities that never do so -- without hanging indefinitely. This test only
+// exercises the one-time discovery pull itself; the resulting peers are never
+// join()ed here (see registry_join.cpp for that, exercised with explicit
+// manually-supplied peers instead).
 
 #include <hpx/config.hpp>
 
@@ -22,9 +22,7 @@
 #include <hpx/modules/supervision.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/discovery.hpp>
-#include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
 #include <chrono>
 #include <cstddef>
@@ -43,12 +41,11 @@ namespace {
 // Test Cases
 // ============================================================================
 
-// A remote locality that never registers its sentinel/registry names must
-// be excluded from the result, and discover_peers() must still return within
-// roughly the given timeout rather than hanging indefinitely -- constructing a
-// sentinel/registry client from a symbolic name never fails fast on an
-// unregistered symbol, so the bound has to come from
-// discover_peers()/wait_all_for() instead.
+// A remote locality that never registers its registry name must be excluded
+// from the result, and discover_peers() must still return within roughly the
+// given timeout rather than hanging indefinitely - constructing a registry
+// client from a symbolic name never fails fast on an unregistered symbol, so
+// the bound has to come from discover_peers()/wait_all_for() instead.
 void test_discover_peers_excludes_unregistered_peer()
 {
     std::vector<hpx::id_type> const remote_localities =
@@ -78,9 +75,9 @@ void test_discover_peers_excludes_unregistered_peer()
     }
 }
 
-// If a remote locality has already registered its sentinel/registry names
-// (see register_name()) before discover_peers() is called, that locality
-// must be included in the result well inside the given timeout.
+// If a remote locality has already registered its registry name (see
+// register_name()) before discover_peers() is called, that locality must be
+// included in the result well inside the given timeout.
 void test_discover_peers_finds_registered_peer()
 {
     std::vector<hpx::id_type> const remote_localities =
@@ -92,9 +89,6 @@ void test_discover_peers_finds_registered_peer()
     }
 
     hpx::id_type const& target_locality = remote_localities[0];
-
-    hpx::supervision::sentinel s(target_locality);
-    HPX_TEST(s.register_name(hpx::launch::sync));
 
     hpx::supervision::registry r(target_locality);
     HPX_TEST(r.register_name(hpx::launch::sync));
@@ -110,18 +104,19 @@ void test_discover_peers_finds_registered_peer()
     HPX_TEST(elapsed < test_discovery_timeout);
 
     bool found = false;
-    for (auto const& [locality, sentinel_client, registry_client] : peers)
+    for (auto const& [locality, registry_client, epoch] : peers)
     {
+        // epoch should default to unjoined_epoch since discover_peers() never
+        // calls join()
+        HPX_TEST_EQ(epoch, hpx::supervision::unjoined_epoch);
         if (locality == target_locality)
         {
             found = true;
-            HPX_TEST(sentinel_client.is_ready());
             HPX_TEST(registry_client.is_ready());
         }
     }
     HPX_TEST(found);
 
-    s.unregister_name(hpx::launch::sync);
     r.unregister_name(hpx::launch::sync);
 }
 
@@ -144,7 +139,12 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    HPX_TEST_EQ(hpx::init(argc, argv), 0);
+    int const result = hpx::init(argc, argv);
+
+    // non-console localities may see the runtime being shutdown before they
+    // call finalize, causing an error to be reported that can be ignored.
+    HPX_TEST(result == 0 || result == -1);
+
     return hpx::util::report_errors();
 }
 

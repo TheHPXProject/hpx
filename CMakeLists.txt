@@ -242,15 +242,35 @@ if(HPX_WITH_LOGGING)
   hpx_add_config_define(HPX_HAVE_LOGGING)
 endif()
 
+# Explicitly enable the supervision functionalities
+hpx_option(
+  HPX_WITH_SUPERVISION BOOL "Enable supervision functionalities. (default: OFF)"
+  OFF
+  CATEGORY "Modules"
+  ADVANCED
+)
+if(HPX_WITH_SUPERVISION)
+  hpx_add_config_define(HPX_HAVE_SUPERVISION)
+endif()
+
 hpx_option(
   HPX_WITH_FAULT_TOLERANCE
   BOOL
   "Build HPX to tolerate failures of nodes, i.e. ignore errors in active communication channels (default: OFF)"
-  OFF
+  ${HPX_WITH_SUPERVISION}
   ADVANCED
 )
-if(HPX_WITH_FAULT_TOLERANCE)
+if(HPX_WITH_FAULT_TOLERANCE OR HPX_WITH_SUPERVISION)
   hpx_add_config_define(HPX_HAVE_FAULT_TOLERANCE)
+endif()
+
+hpx_option(
+  HPX_WITH_FORCE_DISCONNECT BOOL
+  "Build HPX to support forceful disconnect of localities (default: OFF)"
+  ${HPX_WITH_SUPERVISION} ADVANCED
+)
+if(HPX_WITH_FORCE_DISCONNECT OR HPX_WITH_SUPERVISION)
+  hpx_add_config_define(HPX_HAVE_FORCE_DISCONNECT)
 endif()
 
 # Compiler related build options
@@ -1025,18 +1045,6 @@ if(HPX_WITH_SPINLOCK_DEADLOCK_DETECTION)
   hpx_add_config_define(HPX_HAVE_SPINLOCK_DEADLOCK_DETECTION)
 endif()
 
-# Explicitly enable the supervision functionalities
-hpx_option(
-  HPX_WITH_SUPERVISION BOOL "Enable supervision functionalities. (default: OFF)"
-  OFF
-  CATEGORY "Modules"
-  ADVANCED
-)
-
-if(HPX_WITH_SUPERVISION)
-  hpx_add_config_define(HPX_HAVE_SUPERVISION)
-endif()
-
 # Profiling related build options
 hpx_option(
   HPX_WITH_APEX BOOL "Enable APEX instrumentation support." OFF
@@ -1175,6 +1183,57 @@ hpx_option(
 hpx_option(
   HPX_WITH_TRACY BOOL "Enable Tracy instrumentation support." OFF
   CATEGORY "Profiling"
+)
+
+if(HPX_WITH_TRACY)
+  hpx_option(
+    HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
+    CATEGORY "Profiling"
+  )
+
+  # Per-subsystem tracing gates. Each event class is compiled out when its
+  # option is OFF so that users profiling one subsystem do not pay the cost of
+  # the others. Defaults preserve current behaviour: all three classes on.
+  hpx_option(
+    HPX_WITH_TRACING_LIFECYCLE_EVENTS
+    BOOL
+    "Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed, deleted). Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_LIFECYCLE_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_CAUSAL_EVENTS
+    BOOL
+    "Emit causal chain events (future_fulfilled, future_exception_set, continuation_run, continuation_finished, handle_on_completed_fired). Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_CAUSAL_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_WORK_STEALING_EVENTS
+    BOOL
+    "Emit work-stealing events when a worker steals a task from another. Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+  endif()
+endif()
+
+hpx_option(
+  HPX_WITH_FETCH_TRACY
+  BOOL
+  "Use FetchContent to fetch Tracy. By default an installed Tracy will be used. (default: OFF)"
+  OFF
+  CATEGORY "Build Targets"
 )
 
 # Experimental settings
@@ -1538,18 +1597,6 @@ hpx_option(
 )
 if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
-endif()
-hpx_option(
-  HPX_WITH_EXAMPLES_TBB BOOL
-  "Enable examples requiring TBB support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_TBB)
-  find_package(TBB)
-  if(NOT Tbb_FOUND)
-    set(HPX_WITH_EXAMPLES_TBB OFF)
-  endif()
 endif()
 hpx_option(
   HPX_WITH_EXAMPLES_QTHREADS BOOL

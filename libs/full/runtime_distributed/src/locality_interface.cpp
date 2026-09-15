@@ -10,6 +10,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/errors.hpp>
+
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
 #include <hpx/runtime_distributed.hpp>
@@ -17,6 +18,7 @@
 #include <hpx/runtime_distributed/runtime_fwd.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -44,6 +46,14 @@ namespace hpx::parcelset {
             return get_runtime_distributed()
                 .get_parcel_handler()
                 .create_locality(name);
+        }
+
+        bool locality_was_disconnected(std::uint32_t const id)
+        {
+            HPX_ASSERT(get_runtime_ptr());
+            return get_runtime_distributed()
+                .get_parcel_handler()
+                .locality_was_disconnected(id);
         }
 
         parcel_write_handler_type set_parcel_write_handler(
@@ -141,6 +151,8 @@ namespace hpx::parcelset {
         {
             detail::create_parcel = &detail::impl::create_parcel;
             detail::create_locality = &detail::impl::create_locality;
+            detail::locality_was_disconnected =
+                &detail::impl::locality_was_disconnected;
             detail::set_parcel_write_handler =
                 &detail::impl::set_parcel_write_handler;
 

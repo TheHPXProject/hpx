@@ -98,6 +98,7 @@ namespace hpx { namespace experimental {
 #else
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/sort.hpp>
@@ -141,6 +142,7 @@ namespace hpx::experimental {
         sort_by_key_result<KeyIter, ValueIter>>
     sort_by_key(ExPolicy&& policy, KeyIter key_first, KeyIter key_last,
         ValueIter value_first, Compare comp = Compare())
+        HPX_PRE(key_first <= key_last)
     {
 #if !defined(HPX_HAVE_TUPLE_RVALUE_SWAP)
         static_assert(hpx::util::detail::always_false<KeyIter>::value,

@@ -5,6 +5,10 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file create_communicator.hpp
+/// \page hpx::collectives::channel_communicator
+/// \page hpx::collectives::create_channel_communicator
+/// \page hpx::collectives::get, hpx::collectives::set
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -124,7 +128,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
@@ -135,6 +138,7 @@ namespace hpx { namespace collectives {
 
 #include <cstddef>
 #include <memory>
+#include <string>
 #include <utility>
 
 namespace hpx::collectives {
@@ -273,8 +277,48 @@ namespace hpx::collectives {
 
         HPX_EXPORT void create_world_channel_communicator();
         HPX_EXPORT void reset_world_channel_communicator();
+
+        ///////////////////////////////////////////////////////////////////////
+        // Returns the channel communicator this site holds under the given
+        // name, creating it on first use and handing out the same one
+        // afterwards. A name plus a site is what identifies a communicator,
+        // because that pair is what it registers under; sites sharing a
+        // process therefore share the name but keep a communicator each.
+        //
+        // A caller that repeats an exchange over one fixed set of sites, and
+        // separates the individual exchanges by tag rather than by name, would
+        // otherwise pay a fresh AGAS registration plus a full peer lookup on
+        // every repetition -- which is the cost such a caller went to the
+        // channel communicator to avoid in the first place.
+        //
+        // The name must therefore identify the group of sites and not one
+        // operation on it: the number of sites is fixed by the first call
+        // that names a communicator, and a later call that disagrees about
+        // it is rejected instead of silently reusing an entry built for
+        // another participant count. The future is shared because the
+        // communicator is, and returning it unwaited keeps an asynchronous
+        // caller asynchronous.
+        //
+        // Entries live until reset_cached_channel_communicators drops them
+        // during runtime shutdown, which is what releases the registered names
+        // while AGAS is still up.
+        //
+        // The communicator type has to be qualified: inside this namespace the
+        // unqualified name resolves to the detail implementation class, not to
+        // the public handle callers hold.
+        HPX_CXX_EXPORT HPX_EXPORT
+            hpx::shared_future<collectives::channel_communicator>
+            get_cached_channel_communicator(std::string name,
+                num_sites_arg num_sites = num_sites_arg(),
+                this_site_arg this_site = this_site_arg());
+
+        HPX_EXPORT void reset_cached_channel_communicators();
+
+        /// The number of entries currently held, for tests to verify that
+        /// repeated lookups reuse an entry instead of growing the cache.
+        HPX_CXX_EXPORT HPX_EXPORT std::size_t
+        get_cached_channel_communicator_count();
     }    // namespace detail
 }    // namespace hpx::collectives
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

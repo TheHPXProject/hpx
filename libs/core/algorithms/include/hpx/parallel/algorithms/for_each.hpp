@@ -660,7 +660,7 @@ namespace hpx {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_address<
         parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
     {
@@ -672,7 +672,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_annotation<
         parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
     {
@@ -684,7 +684,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_annotation_tracing<
         parallel::detail::for_each_iteration<ExPolicy, F, Proj>>
     {
@@ -695,7 +695,6 @@ namespace hpx::traits {
             return get_function_annotation_tracing<std::decay_t<F>>::call(f.f_);
         }
     };
-
 }    // namespace hpx::traits
 
 #endif

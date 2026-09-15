@@ -51,9 +51,8 @@ namespace hpx::agas::server {
         char const* servicename, error_code& ec)
     {
         // now register this AGAS instance with AGAS :-P
-        instance_name_ = agas::service_name;
-        instance_name_ += servicename;
-        instance_name_ += agas::server::locality_namespace_service_name;
+        instance_name_ = agas::service_instance_name(
+            servicename, agas::server::locality_namespace_service_name);
 
         // register a gid (not the id) to avoid AGAS holding a reference to this
         // component
@@ -109,7 +108,7 @@ namespace hpx::agas::server {
 
         // check if the suggested prefix can be used instead of the next
         // free one
-        std::uint32_t suggested_locality_id =
+        std::uint32_t const suggested_locality_id =
             naming::get_locality_id_from_gid(suggested_prefix);
 
         partition_table_type::iterator it = partitions_.end();
@@ -161,7 +160,7 @@ namespace hpx::agas::server {
         // table so that parcels can be sent to the memory of a locality.
         if (primary_)
         {
-            naming::gid_type id(naming::get_gid_from_locality_id(prefix));
+            naming::gid_type const id(naming::get_gid_from_locality_id(prefix));
             gva const g(id,
                 to_int(hpx::components::component_enum_type::runtime_support),
                 count);
@@ -191,10 +190,10 @@ namespace hpx::agas::server {
         counter_data_.increment_resolve_locality_count();
 
         using hpx::get;
-        std::uint32_t prefix = naming::get_locality_id_from_gid(locality);
+        std::uint32_t const prefix = naming::get_locality_id_from_gid(locality);
 
         std::lock_guard<mutex_type> l(mutex_);
-        partition_table_type::iterator it = partitions_.find(prefix);
+        partition_table_type::iterator const it = partitions_.find(prefix);
 
         if (it != partitions_.end())
         {
@@ -204,7 +203,7 @@ namespace hpx::agas::server {
         return parcelset::endpoints_type();
     }    // }}}
 
-    void locality_namespace::free(naming::gid_type const& locality)
+    bool locality_namespace::free(naming::gid_type const& locality)
     {    // {{{ free implementation
         util::scoped_timer<std::atomic<std::int64_t>> update(
             counter_data_.free_.time_, counter_data_.free_.enabled_);
@@ -213,24 +212,13 @@ namespace hpx::agas::server {
         using hpx::get;
 
         // parameters
-        std::uint32_t prefix = naming::get_locality_id_from_gid(locality);
+        std::uint32_t const prefix = naming::get_locality_id_from_gid(locality);
 
         std::unique_lock<mutex_type> l(mutex_);
 
-        partition_table_type::iterator pit = partitions_.find(prefix),
-                                       pend = partitions_.end();
-
+        auto const pit = partitions_.find(prefix), pend = partitions_.end();
         if (pit != pend)
         {
-            /*
-        // Wipe the locality from the tables.
-        naming::gid_type locality =
-            naming::get_gid_from_locality_id(get<0>(pit->second));
-
-        // first remove entry from reverse partition table
-        prefixes_.erase(get<0>(pit->second));
-        */
-
             // now remove it from the main partition table
             partitions_.erase(pit);
 
@@ -240,7 +228,7 @@ namespace hpx::agas::server {
 
                 // remove primary namespace
                 {
-                    naming::gid_type service(
+                    constexpr naming::gid_type service(
                         agas::primary_ns_msb, agas::primary_ns_lsb);
                     primary_->unbind_gid(
                         1, naming::replace_locality_id(service, prefix));
@@ -248,23 +236,18 @@ namespace hpx::agas::server {
 
                 // remove symbol namespace
                 {
-                    naming::gid_type service(
+                    constexpr naming::gid_type service(
                         agas::symbol_ns_msb, agas::symbol_ns_lsb);
                     primary_->unbind_gid(
                         1, naming::replace_locality_id(service, prefix));
                 }
 
                 // remove locality itself
-                {
-                    primary_->unbind_gid(0, locality);
-                }
+                primary_->unbind_gid(0, locality);
             }
-
-            /*LAGAS_(info).format("locality_namespace::free, ep({1})", ep);*/
+            return true;
         }
-
-        /*LAGAS_(info).format(
-            "locality_namespace::free, ep({1}), response(no_success)", ep);*/
+        return false;
     }    // }}}
 
     std::vector<std::uint32_t> locality_namespace::localities()
@@ -298,7 +281,7 @@ namespace hpx::agas::server {
         counter_data_.increment_num_localities_count();
         std::lock_guard<mutex_type> l(mutex_);
 
-        std::uint32_t num_localities =
+        std::uint32_t const num_localities =
             static_cast<std::uint32_t>(partitions_.size());
 
         LAGAS_(info).format(
@@ -314,7 +297,7 @@ namespace hpx::agas::server {
 
         std::vector<std::uint32_t> num_threads;
 
-        partition_table_type::iterator end = partitions_.end();
+        partition_table_type::iterator const end = partitions_.end();
         for (partition_table_type::iterator it = partitions_.begin(); it != end;
             ++it)
         {
@@ -335,7 +318,7 @@ namespace hpx::agas::server {
 
         std::uint32_t num_threads = 0;
 
-        partition_table_type::iterator end = partitions_.end();
+        partition_table_type::iterator const end = partitions_.end();
         for (partition_table_type::iterator it = partitions_.begin(); it != end;
             ++it)
         {

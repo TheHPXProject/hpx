@@ -124,9 +124,8 @@ are completed to avoid confusion.
    script automatically tag the with the corresponding release number. The
    script requires that you have the |stellar| Group signing key.
 
-#. Update the websites (`hpx.stellar-group.org <https://hpx.stellar-group.org>`_
-   and `stellar-group.org <https://stellar-group.org>`). You can login on
-   wordpress through `this page <https://hpx.stellar-group.org/wp-login.php>`.
+#. Update the website (`hpx.dev <https://hpx.dev>`_). You can login on
+   wordpress through `this page <https://hpx.dev/wp-login.php>`.
    You can update the pages with the following:
 
    * Update links on the downloads page. Link to the release on GitHub.

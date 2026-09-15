@@ -6,6 +6,14 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file create_communicator.hpp
+/// \page hpx::collectives::communicator
+/// \page hpx::collectives::create_communicator
+/// \page hpx::collectives::create_local_communicator
+/// \page hpx::collectives::create_hierarchical_communicator
+/// \page hpx::collectives::communicator::set_info
+/// \page hpx::collectives::communicator::get_info
+/// \page hpx::collectives::communicator::is_root
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -204,7 +212,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/datastructures.hpp>
@@ -467,5 +474,4 @@ namespace hpx::collectives {
     inline constexpr bool is_communicator_v = is_communicator<T>::value;
 }    // namespace hpx::collectives
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

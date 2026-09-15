@@ -195,8 +195,13 @@ namespace hpx::actions {
         data.parent_locality_id = this->parent_locality_;
 #endif
         data.timer_data = threads::thread_init_data::setup_timer_data(data);
-        data.priority = this->priority_;
-        data.stacksize = this->stacksize_;
+        data.priority = this->priority_ == threads::thread_priority::default_ ?
+            actions::action_priority<Action>() :
+            this->priority_;
+        data.stacksize =
+            this->stacksize_ == threads::thread_stacksize::default_ ?
+            actions::action_stacksize<Action>() :
+            this->stacksize_;
 
         hpx::detail::post_helper<typename base_type::derived_type>::call(
             HPX_MOVE(data), HPX_MOVE(cont_), HPX_MOVE(target), lva, comptype,

@@ -278,7 +278,7 @@ HPX is utilized in a diverse set of applications:
    Array Processing Toolkit.
 
 For a updated list of applications, we refer to the
-corresponding [HPX website](https://hpx.stellar-group.org/hpx-users/).
+corresponding [HPX website](https://hpx.dev/hpx-users/).
 
 # Example code
 
@@ -403,6 +403,6 @@ grants:
 
 
 For a updated list of previous and current funding, we refer to the
-corresponding [HPX website](http://hpx.stellar-group.org/funding-acknowledgements/).
+corresponding [HPX website](http://hpx.dev/funding-acknowledgements/).
 
 # References

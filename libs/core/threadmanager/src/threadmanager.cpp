@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach, Katelyn Kufahl
 //  Copyright (c) 2008-2009 Chirag Dekate, Anshul Tandon
 //  Copyright (c) 2015 Patricia Grubel
@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_combinators.hpp>
+#include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -1579,8 +1580,15 @@ namespace hpx::threads {
         init_tss(rp.get_num_threads());
 
 #ifdef HPX_HAVE_TIMER_POOL
-        LTM_(info).format("run: running timer pool");
-        timer_pool_.run(false);
+        {
+            LTM_(info).format("run: running timer pool");
+            auto const p =
+                std::make_shared<util::barrier>(timer_pool_.size() + 1);
+            if (timer_pool_.run(false, p))
+            {
+                p->wait();
+            }
+        }
 #endif
 
         for (auto const& pool_iter : pools_)

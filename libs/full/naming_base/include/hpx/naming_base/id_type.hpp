@@ -456,7 +456,7 @@ namespace std {
     {
         std::size_t operator()(::hpx::id_type const& id) const noexcept
         {
-            return hash<::hpx::naming::gid_type>()(id.get_gid());
+            return id ? hash<::hpx::naming::gid_type>()(id.get_gid()) : 0;
         }
     };
 }    // namespace std

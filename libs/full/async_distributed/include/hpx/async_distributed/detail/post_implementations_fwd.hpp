@@ -98,4 +98,15 @@ namespace hpx::detail {
         cb();
 #endif
     }
+
+    template <typename Callback>
+    void invoke_callback(Callback&& cb, std::error_code const& ec)
+    {
+        // invoke callback
+#if defined(HPX_HAVE_NETWORKING)
+        cb(ec, parcelset::empty_parcel);
+#else
+        cb();
+#endif
+    }
 }    // namespace hpx::detail

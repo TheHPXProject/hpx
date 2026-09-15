@@ -233,7 +233,7 @@ namespace hpx::execution::experimental {
 
         public:
             explicit run_loop_scheduler(run_loop* loop) noexcept
-              : env_t(loop)
+              : env_t{loop}
             {
             }
 

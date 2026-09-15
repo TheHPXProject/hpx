@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file all_reduce.hpp
+/// \page hpx::collectives::all_reduce
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -220,7 +222,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/async_base.hpp>
@@ -580,5 +581,4 @@ namespace hpx::collectives {
 ////////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_ALLREDUCE(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

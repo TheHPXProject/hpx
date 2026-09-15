@@ -13,8 +13,8 @@ hashing
 
 The hashing module provides two hashing implementations:
 
-* :cpp:func:`hpx::util::fibhash`
-* :cpp:class:`hpx::util::jenkins_hash`
+* :hpx:func:`hpx::util::fibhash`
+* :hpx:class:`hpx::util::jenkins_hash`
 
 See the :ref:`API reference <modules_hashing_api>` of the module for more
 details.

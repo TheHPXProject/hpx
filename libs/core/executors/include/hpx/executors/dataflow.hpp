@@ -42,7 +42,7 @@ namespace hpx::lcos::detail {
 
 ///////////////////////////////////////////////////////////////////////////
 // traits specialization to get annotation from dataflow_finalization
-HPX_CXX_CORE_EXPORT template <typename Frame>
+template <typename Frame>
 struct hpx::traits::get_function_annotation<
     hpx::lcos::detail::dataflow_finalization<Frame>>
 {

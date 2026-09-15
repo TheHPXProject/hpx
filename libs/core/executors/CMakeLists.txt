@@ -140,7 +140,6 @@ add_hpx_module(
     hpx_resource_partitioner
     hpx_serialization
     hpx_synchronization
-    hpx_tag_invoke
     hpx_timing
     hpx_threading
     hpx_threading_base

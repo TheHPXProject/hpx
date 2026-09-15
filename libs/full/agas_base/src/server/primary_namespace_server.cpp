@@ -12,6 +12,7 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/timing.hpp>
@@ -57,9 +58,8 @@ namespace hpx::agas::server {
         this->base_type::set_locality_id(locality_id);
 
         // now register this AGAS instance with AGAS :-P
-        instance_name_ = agas::service_name;
-        instance_name_ += servicename;
-        instance_name_ += agas::server::primary_namespace_service_name;
+        instance_name_ = agas::service_instance_name(
+            servicename, agas::server::primary_namespace_service_name);
 
         // register a gid (not the id) to avoid AGAS holding a reference to this
         // component

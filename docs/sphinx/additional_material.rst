@@ -18,7 +18,7 @@ Additional material
 * `Tutorials repository <https://github.com/STEllAR-GROUP/tutorials>`_
 * `C++ Lectures <https://www.youtube.com/playlist?list=PL7vEgTL3FalY2eBxud1wsfz8OKvE9sd_z>`
 * `Parallel C++ for Scientific Applications Lectures <https://www.youtube.com/watch?v=RdmXiIilArM&list=PL7vEgTL3Falab59uJoOb7AtFQKVuL0MV->`
-* `STE||AR Group blog posts <http://stellar-group.org/blog/>`_
+* `HPX blog posts <http://hpx.dev/blog/>`_
 * Basic |hpx| recipes
 
   * `Exporting a free function from a shared library which lives in a namespace, to use as Action <https://gitlab.com/-/snippets/1821389>`_

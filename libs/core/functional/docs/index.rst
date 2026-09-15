@@ -14,26 +14,26 @@ functional
 This module provides function wrappers and helpers for managing functions and
 their arguments.
 
-* :cpp:class:`hpx::function`
-* :cpp:class:`hpx::function_ref`
-* :cpp:class:`hpx::move_only_function`
-* :cpp:func:`hpx::bind`
-* :cpp:func:`hpx::bind_back`
-* :cpp:func:`hpx::bind_front`
-* :cpp:func:`hpx::util::deferred_call`
-* :cpp:func:`hpx::invoke`
-* :cpp:func:`hpx::invoke_r`
-* :cpp:func:`hpx::invoke_fused`
-* :cpp:func:`hpx::invoke_fused_r`
-* :cpp:func:`hpx::mem_fn`
-* :cpp:func:`hpx::util::one_shot`
-* :cpp:func:`hpx::util::protect`
-* :cpp:class:`hpx::util::result_of`
+* :hpx:class:`hpx::function`
+* :hpx:class:`hpx::function_ref`
+* :hpx:class:`hpx::move_only_function`
+* :hpx:func:`hpx::bind`
+* :hpx:func:`hpx::bind_back`
+* :hpx:func:`hpx::bind_front`
+* :hpx:func:`hpx::util::deferred_call`
+* :hpx:func:`hpx::invoke`
+* :hpx:func:`hpx::invoke_r`
+* :hpx:func:`hpx::invoke_fused`
+* :hpx:func:`hpx::invoke_fused_r`
+* :hpx:func:`hpx::mem_fn`
+* :hpx:func:`hpx::util::one_shot`
+* :hpx:func:`hpx::util::protect`
+* :hpx:class:`hpx::util::result_of`
 
-* :cpp:var:`hpx::placeholders::_1`
-* :cpp:var:`hpx::placeholders::_2`
+* :hpx:var:`hpx::placeholders::_1`
+* :hpx:var:`hpx::placeholders::_2`
 * ...
-* :cpp:var:`hpx::placeholders::_9`
+* :hpx:var:`hpx::placeholders::_9`
 
 See the :ref:`API reference <modules_functional_api>` of the module for more
 details.

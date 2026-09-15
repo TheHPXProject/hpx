@@ -22,10 +22,10 @@ General changes
 * Implemented decrement merging logic to optimize the distributed reference
   counting system.
 * Restructured the LCO framework. Renamed ``hpx::lcos::eager_future<>`` and
-  ``hpx::lcos::lazy_future<>`` into :cpp:class:`hpx::lcos::packaged_task` and
-  :cpp:class:`hpx::lcos::deferred_packaged_task`. Split
-  :cpp:class:`hpx::lcos::promise` into :cpp:class:`hpx::lcos::packaged_task` and
-  :cpp:class:`hpx::lcos::future`. Added 'local' futures (in namespace
+  ``hpx::lcos::lazy_future<>`` into :hpx:class:`hpx::lcos::packaged_task` and
+  :hpx:class:`hpx::lcos::deferred_packaged_task`. Split
+  :hpx:class:`hpx::lcos::promise` into :hpx:class:`hpx::lcos::packaged_task` and
+  :hpx:class:`hpx::lcos::future`. Added 'local' futures (in namespace
   ``hpx::lcos::local``).
 * Improved the general performance of local and remote action invocations. This
   (under certain circumstances) drastically reduces the number of copies created
@@ -89,16 +89,16 @@ API changes
 
 * Moved all local LCOs into a separate namespace ``hpx::lcos::local`` (for
   instance, ``hpx::lcos::local_mutex`` is now
-  :cpp:class:`hpx::lcos::local::mutex`).
-* Replaced ``hpx::actions::function`` with :cpp:class:`hpx::util::function`.
+  :hpx:class:`hpx::lcos::local::mutex`).
+* Replaced ``hpx::actions::function`` with :hpx:class:`hpx::util::function`.
   Cleaned up related code.
 * Removed ``hpx::traits::handle_gid`` and moved handling of global reference
   counts into the corresponding serialization code.
 * Changed terminology: ``prefix`` is now called ``locality_id``, renamed the
   corresponding API functions (such as ``hpx::get_prefix``, which is now called
   ``hpx::get_locality_id``).
-* Adding :cpp:func:`hpx::find_remote_localities`, and
-  :cpp:func:`hpx::get_num_localities`.
+* Adding :hpx:func:`hpx::find_remote_localities`, and
+  :hpx:func:`hpx::get_num_localities`.
 * Changed performance counter naming scheme to make it more bash friendly.
   The new performance counter naming scheme is now
 

@@ -277,7 +277,7 @@ void test_any_sender(F&& f, Ts&&... ts)
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
-    check_sends_stopped<false>(as2);
+    check_sends_stopped<true>(as2);
 
     // We should be able to connect both as1 and as2 multiple times; set_value
     // should always be called
@@ -367,7 +367,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as1);
     check_error_types<hpx::variant<std::exception_ptr>>(as1);
-    check_sends_stopped<false>(as1);
+    check_sends_stopped<true>(as1);
 
     auto as2 = std::move(as1);
 
@@ -376,7 +376,7 @@ void test_unique_any_sender(F&& f, Ts&&... ts)
 
     check_value_types<hpx::variant<hpx::tuple<Ts...>>>(as2);
     check_error_types<hpx::variant<std::exception_ptr>>(as2);
-    check_sends_stopped<false>(as2);
+    check_sends_stopped<true>(as2);
 
     // We expect set_value to be called here
     {
@@ -551,6 +551,38 @@ struct wait_globals
     }
 } waiter{};
 
+void test_any_sender_set_stopped()
+{
+    stopped_sender_with_value_type s;
+
+    ex::any_sender<> as{std::move(s)};
+
+    // Connect and start: should call set_stopped on the receiver
+    {
+        std::atomic<bool> set_stopped_called{false};
+        auto os = ex::connect(
+            std::move(as), expect_stopped_receiver{set_stopped_called});
+        ex::start(os);
+        HPX_TEST(set_stopped_called);
+    }
+}
+
+void test_unique_any_sender_set_stopped()
+{
+    stopped_sender_with_value_type s;
+
+    ex::unique_any_sender<> as{std::move(s)};
+
+    // Connect and start: should call set_stopped on the receiver
+    {
+        std::atomic<bool> set_stopped_called{false};
+        auto os = ex::connect(
+            std::move(as), expect_stopped_receiver{set_stopped_called});
+        ex::start(os);
+        HPX_TEST(set_stopped_called);
+    }
+}
+
 void test_globals()
 {
     global_unique_any_sender =
@@ -642,6 +674,10 @@ int main()
     // Failure paths
     test_any_sender_set_error();
     test_unique_any_sender_set_error();
+
+    // Stopped paths
+    test_any_sender_set_stopped();
+    test_unique_any_sender_set_stopped();
 
     // Test use of *any_* in globals
     test_globals();

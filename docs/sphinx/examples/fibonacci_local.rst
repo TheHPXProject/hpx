@@ -112,7 +112,7 @@ In |hpx| ``main()`` is used to initialize the runtime system and pass the
 command line arguments to the program. If you wish to add command line options
 to your program you would add them here using the instance of the Boost class
 ``options_description``, and invoking the public member function
-``.add_options()`` (see |boost_doc|_ for more details). :cpp:func:`hpx::init`
+``.add_options()`` (see |boost_doc|_ for more details). :hpx:func:`hpx::init`
 calls ``hpx_main()`` after setting up |hpx|, which is where the logic of our
 program is encoded.
 
@@ -120,10 +120,10 @@ program is encoded.
    :start-after: //[main
    :end-before: //main]
 
-The :cpp:func:`hpx::init` function in ``main()`` starts the runtime system, and
+The :hpx:func:`hpx::init` function in ``main()`` starts the runtime system, and
 invokes ``hpx_main()`` as the first |hpx|-thread. Below we can see that the
 basic program is simple. The command line option ``--n-value`` is read in, a
-timer (:cpp:class:`hpx::chrono::high_resolution_timer`) is set up to record the
+timer (:hpx:class:`hpx::chrono::high_resolution_timer`) is set up to record the
 time it takes to do the computation, the ``fibonacci`` function is invoked
 synchronously, and the answer is printed out.
 
@@ -143,7 +143,7 @@ This block of code looks similar to regular C++ code. First, ``if (n < 2)``,
 meaning n is 0 or 1, then we return 0 or 1 (recall the first element of the
 Fibonacci sequence is 0 and the second is 1). If n is larger than 1 we spawn two
 new tasks whose results are contained in ``n1`` and ``n2``. This is done using
-:cpp:func:`hpx::async` which takes as arguments a function (function pointer,
+:hpx:func:`hpx::async` which takes as arguments a function (function pointer,
 object or lambda) and the arguments to the function. Instead of returning a
 ``std::uint64_t`` like ``fibonacci`` does, ``hpx::async`` returns a future of a
 ``std::uint64_t``, i.e. ``hpx::future<std::uint64_t>``. Each of these futures

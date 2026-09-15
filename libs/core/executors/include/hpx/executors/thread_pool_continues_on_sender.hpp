@@ -33,6 +33,7 @@
 #include <hpx/modules/type_support.hpp>
 
 #include <exception>
+#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -112,25 +113,41 @@ namespace hpx::execution::experimental::detail {
 
             // Slow path: not on target pool -- schedule onto it.
             //
-            // Capture receiver_ by reference in the outer lambda so
-            // that if scheduler_.execute() throws synchronously, the
-            // catch block can still deliver set_error on the valid
-            // receiver. Use hpx::bind_back to safely capture the
-            // forwarded values by value instead of C++20 pack
-            // init-capture.
+            // The posted task must own the receiver: this receiver object is
+            // only guaranteed to be alive for the duration of this set_value
+            // call (it may live in a transient completion context, such as a
+            // CUDA event callback), while the task runs later. Capturing
+            // `this` here is a use-after-free.
+            //
+            // Moving the receiver directly into the task instead would leave
+            // the error path below holding a moved-from receiver whenever
+            // execute() throws, because the task is constructed before
+            // execute() runs. Park the receiver in state that outlives both
+            // paths and let whichever one runs consume it exactly once. Use
+            // hpx::bind_back to safely capture the forwarded values by value
+            // instead of C++20 pack init-capture.
+            auto r = std::make_shared<std::optional<std::decay_t<Receiver>>>(
+                std::in_place, HPX_MOVE(receiver_));
+
             hpx::detail::try_catch_exception_ptr(
                 [&]() {
                     scheduler_.execute(
-                        [this,
+                        [r,
                             f = hpx::bind_back(
                                 hpx::execution::experimental::set_value,
                                 HPX_FORWARD(Ts, ts)...)]() mutable {
-                            HPX_MOVE(f)(HPX_MOVE(receiver_));
+                            HPX_MOVE(f)(HPX_MOVE(**r));
                         });
                 },
                 [&](std::exception_ptr ep) {
-                    hpx::execution::experimental::set_error(
-                        HPX_MOVE(receiver_), HPX_MOVE(ep));
+                    // execute() threw without taking ownership of the task,
+                    // so the receiver is still here and this is the only
+                    // completion that will run.
+                    if (r->has_value())
+                    {
+                        hpx::execution::experimental::set_error(
+                            HPX_MOVE(**r), HPX_MOVE(ep));
+                    }
                 });
         }
 

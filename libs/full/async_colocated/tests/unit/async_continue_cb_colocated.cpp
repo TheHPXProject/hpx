@@ -79,7 +79,7 @@ void cb()
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-int test_async_continue_cb_colocated(test_client const& target)
+void test_async_continue_cb_colocated(test_client const& target)
 {
     using hpx::make_continuation;
 
@@ -228,8 +228,6 @@ int test_async_continue_cb_colocated(test_client const& target)
         hpx::this_thread::sleep_for(std::chrono::milliseconds(100));
         HPX_TEST_EQ(callback_called.load(), 1);
     }
-
-    return hpx::finalize();
 }
 
 int hpx_main()

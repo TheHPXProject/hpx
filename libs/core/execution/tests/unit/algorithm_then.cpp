@@ -26,7 +26,7 @@ namespace ex = hpx::execution::experimental;
 
 struct custom_transformer
 {
-    std::atomic<bool>& tag_invoke_overload_called;
+    std::atomic<bool>& overload_called;
     std::atomic<bool>& call_operator_called;
     bool throws;
 

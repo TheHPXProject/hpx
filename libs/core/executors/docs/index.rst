@@ -14,18 +14,17 @@ executors
 The executors module exposes executors and execution policies. Most importantly,
 it exposes the following classes and constants:
 
-* :cpp:class:`hpx::execution::sequenced_executor`
-* :cpp:class:`hpx::execution::parallel_executor`
-* :cpp:class:`hpx::execution::sequenced_policy`
-* :cpp:class:`hpx::execution::parallel_policy`
-* :cpp:class:`hpx::execution::parallel_unsequenced_policy`
-* :cpp:class:`hpx::execution::sequenced_task_policy`
-* :cpp:class:`hpx::execution::parallel_task_policy`
-* :cpp:var:`hpx::execution::seq`
-* :cpp:var:`hpx::execution::par`
-* :cpp:var:`hpx::execution::par_unseq`
-* :cpp:var:`hpx::execution::task`
+* :hpx:class:`hpx::execution::sequenced_executor`
+* :hpx:class:`hpx::execution::parallel_executor`
+* :hpx:class:`hpx::execution::sequenced_policy`
+* :hpx:class:`hpx::execution::parallel_policy`
+* :hpx:class:`hpx::execution::parallel_unsequenced_policy`
+* :hpx:class:`hpx::execution::sequenced_task_policy`
+* :hpx:class:`hpx::execution::parallel_task_policy`
+* :hpx:var:`hpx::execution::seq`
+* :hpx:var:`hpx::execution::par`
+* :hpx:var:`hpx::execution::par_unseq`
+* :hpx:var:`hpx::execution::task`
 
 See the :ref:`API reference <modules_executors_api>` of this module for more
 details.
-

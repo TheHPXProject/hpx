@@ -128,7 +128,7 @@ namespace hpx::threads {
         virtual void stop(
             std::unique_lock<std::mutex>& l, bool blocking = true) = 0;
 
-        virtual void wait() = 0;
+        virtual void wait(std::unique_lock<std::mutex>& l) = 0;
         virtual bool is_busy() = 0;
         virtual bool is_idle() = 0;
 

@@ -21,6 +21,7 @@
 #include <functional>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -325,6 +326,48 @@ namespace hpx {
         std::exception_ptr const& e);
     /// \endcond
 
+    /// \brief Return the error message and error codes from which the exception
+    ///        was thrown.
+    ///
+    /// The function \a hpx::get_error_info can be used to extract the error
+    /// message and error codes from the given exception instance.
+    ///
+    /// \returns    A pair holding error message and error codes.
+    ///
+    /// \param e    The parameter \p e will be inspected for the requested
+    ///             diagnostic information elements which have been stored at
+    ///             the point where the exception was thrown. This parameter can
+    ///             be one of the following types: \a hpx::exception,
+    ///             or \a std::exception_ptr.
+    ///
+    /// \returns    A pair holding the error message and error codes of the
+    ///             locality where the exception was thrown.
+    ///
+    /// \throws     nothing
+    ///
+    /// \see        \a hpx::diagnostic_information(),
+    ///             \a hpx::get_error_host_name(),
+    ///             \a hpx::get_error_process_id(),
+    ///             \a hpx::get_error_function_name(),
+    ///             \a hpx::get_error_file_name()
+    ///             \a hpx::get_error_os_thread(),
+    ///             \a hpx::get_error_thread_id(),
+    ///             \a hpx::get_error_thread_description(), \a hpx::get_error(),
+    ///             \a hpx::get_error_backtrace(), \a hpx::get_error_env(),
+    ///             \a hpx::get_error_what(), \a hpx::get_error_config(),
+    ///             \a hpx::get_error_state()
+    ///
+    HPX_CXX_CORE_EXPORT
+    [[nodiscard]] HPX_CORE_EXPORT std::pair<std::string, error> get_error_info(
+        hpx::exception const& e);
+
+    /// \cond NOINTERNAL
+    HPX_CXX_CORE_EXPORT
+    [[nodiscard]] HPX_CORE_EXPORT std::pair<std::string, error> get_error_info(
+        std::exception_ptr const& e);
+    /// \endcond
+
+    ////////////////////////////////////////////////////////////////////////////
     /// \brief Return the function name from which the exception was thrown.
     ///
     /// The function \a hpx::get_error_function_name can be used to extract the

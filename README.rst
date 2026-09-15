@@ -66,7 +66,7 @@ Governance
 The HPX project is a meritocratic, consensus-based community project. Anyone
 with an interest in the project can join the community, contribute to the
 project design and participate in the decision making process.
-`This document <http://hpx.stellar-group.org/documents/governance/>`_ describes
+`This document <http://hpx.dev/documents/governance/>`_ describes
 how that participation takes place and how to set about earning merit within
 the project community.
 
@@ -143,9 +143,9 @@ We have used a free open-source license of `PVS-Studio, a static analyzer for C+
 to check our code base.
 
 Past and current funding and support for HPX is listed `here
-<https://hpx.stellar-group.org/funding-acknowledgements>`_.
+<https://hpx.dev/funding-acknowledgements>`_.
 
-Copyright © 2026 HPX Project a Series of LF Projects, LLC
+Copyright � 2026 HPX Project a Series of LF Projects, LLC
 
 .. |github_status| image:: https://github.com/TheHPXProject/hpx/actions/workflows/build-and-test.yml/badge.svg
      :target: https://github.com/TheHPXProject/hpx/actions/workflows/build-and-test.yml
@@ -172,7 +172,7 @@ Copyright © 2026 HPX Project a Series of LF Projects, LLC
     :alt: OpenSSF Best Practices
 
 .. |hpx_logo| image:: http://hpx.stellar-group.org/files/hpx_logo.png
-    :target: http://hpx.stellar-group.org/
+    :target: http://hpx.dev/
     :alt: HPX Logo
 
 .. |deepwiki| image:: https://deepwiki.com/badge.svg

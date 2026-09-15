@@ -12,6 +12,7 @@
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -595,7 +596,8 @@ namespace hpx::performance_counters {
         if (paths.instancename_ == "total" && paths.instanceindex_ == -1)
         {
             // find the referenced AGAS instance and dispatch the request there
-            std::string service(agas::service_name);
+            std::string service = agas::service_name_prefix();
+
             service += paths.parentinstancename_;
 
             if (-1 == paths.parentinstanceindex_)

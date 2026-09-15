@@ -164,7 +164,7 @@ namespace hpx::util {
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
+    template <typename F, typename... Ts>
     struct get_function_address<util::detail::deferred<F, Ts...>>
     {
         [[nodiscard]] static constexpr std::size_t call(
@@ -175,7 +175,7 @@ namespace hpx::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
+    template <typename F, typename... Ts>
     struct get_function_annotation<util::detail::deferred<F, Ts...>>
     {
         [[nodiscard]] static constexpr char const* call(
@@ -185,7 +185,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename F, typename... Ts>
+    template <typename F, typename... Ts>
     struct get_function_annotation_tracing<util::detail::deferred<F, Ts...>>
     {
         [[nodiscard]] static hpx::tracing::annotation_handle call(

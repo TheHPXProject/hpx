@@ -8,13 +8,18 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/detail/async_implementations.hpp>
-#include <hpx/async_distributed/detail/async_unwrap_result_implementations_fwd.hpp>
-#include <hpx/async_distributed/detail/sync_implementations.hpp>
-#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/errors.hpp>
+
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components_base.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/async_implementations.hpp>
+#include <hpx/async_distributed/detail/async_unwrap_result_implementations_fwd.hpp>
+#include <hpx/async_distributed/detail/locality_disconnected.hpp>
+#include <hpx/async_distributed/detail/sync_implementations.hpp>
 
 #include <utility>
 
@@ -61,6 +66,11 @@ namespace hpx::detail {
     {
         using action_type = hpx::traits::extract_action_t<Action>;
         using component_type = typename action_type::component_type;
+
+        if (locality_is_disconnected(id))
+        {
+            throw_locality_disconnected(id);
+        }
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
         naming::address addr;

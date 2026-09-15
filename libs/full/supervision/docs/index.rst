@@ -22,6 +22,27 @@ Several core operations are exposed, each with a local (synchronous) call and
 a remote (locality-qualified, future-returning or ``launch::sync_policy``)
 call:
 
+Functions
+---------
+
+.. table:: `hpx::supervision` functions
+
+   ==========================================================  ===================================================================================================================
+   Function                                                    Description
+   ==========================================================  ===================================================================================================================
+   :hpx:func:`hpx::supervision::publish_event`                 :ref:`Publish a lifecycle event for a target. <supervision_publish_event>`
+   :hpx:func:`hpx::supervision::query_state`                   :ref:`Query the most recently observed lifecycle state. <supervision_query_state>`
+   :hpx:func:`hpx::supervision::register_observer`             :ref:`Register an observer for a target's lifecycle events. <supervision_register_observer>`
+   :hpx:func:`hpx::supervision::unregister_observer`           :ref:`Unregister a previously registered lifecycle observer. <supervision_unregister_observer>`
+   :hpx:func:`hpx::supervision::remove_target`                 :ref:`Clear all locally tracked state for a target. <supervision_remove_target>`
+   :hpx:func:`hpx::supervision::await_terminal`                :ref:`Wait for a target to reach a terminal lifecycle event. <supervision_await_terminal>`
+   :hpx:func:`hpx::supervision::check_admission`               :ref:`Check whether a target currently admits new dispatch. <supervision_check_admission>`
+   :hpx:func:`hpx::supervision::register_activity_observer`    :ref:`Register an observer for activity-state transitions of all targets. <supervision_register_activity_observer>`
+   :hpx:func:`hpx::supervision::unregister_activity_observer`  :ref:`Unregister a previously registered activity observer. <supervision_unregister_activity_observer>`
+   ==========================================================  ===================================================================================================================
+
+.. _supervision_publish_event:
+
 Publishing events
 -----------------
 
@@ -38,6 +59,8 @@ Publishing events
     publication for that target is a no-op that returns
     ``publish_result::already_terminal``.
 
+.. _supervision_query_state:
+
 Querying lifecycle state
 ------------------------
 
@@ -48,6 +71,8 @@ Querying lifecycle state
     Query the most recently observed lifecycle state for ``target``. Includes
     a sequence number for gap detection and a staleness error code for remote
     queries whose result may lag the latest event.
+
+.. _supervision_register_observer:
 
 Registering observers
 ---------------------
@@ -64,6 +89,8 @@ Registering observers
     at registration time) whose epoch matches; by default the observer
     receives notifications for every epoch.
 
+.. _supervision_unregister_observer:
+
 Unregistering observers
 -----------------------
 
@@ -75,6 +102,8 @@ Unregistering observers
     have been obtained from ``register_observer``; a handle obtained from
     ``register_activity_observer``, or any handle never returned by either
     registration function, is rejected.
+
+.. _supervision_remove_target:
 
 Removing target state
 ---------------------
@@ -92,6 +121,8 @@ Removing target state
     will never be queried or observed again locally (e.g. after a failed
     registration that seeded some state for it, or once a peer has been
     evicted), so that local state does not accumulate indefinitely.
+
+.. _supervision_await_terminal:
 
 Waiting for terminal events
 ---------------------------
@@ -114,6 +145,8 @@ Waiting for terminal events
     swept and invalidated. Dispatch is routed locally when ``target``'s
     supervision manager lives on the calling locality, and remotely (via a
     registered distributed action) otherwise.
+
+.. _supervision_check_admission:
 
 Checking dispatch admission
 ---------------------------
@@ -142,6 +175,8 @@ Checking dispatch admission
     additional locality that needs to fence its own dispatch decisions on
     ``target`` must independently mirror or route to the owning locality's
     state; this module does not provide that for you.
+
+.. _supervision_register_activity_observer:
 
 Registering activity observers
 ------------------------------
@@ -176,6 +211,8 @@ Registering activity observers
     If ``epoch_filter`` is set, ``callback`` only receives notifications -
     including the registration-time replay - whose epoch matches; by
     default it receives notifications regardless of epoch.
+
+.. _supervision_unregister_activity_observer:
 
 Unregistering activity observers
 --------------------------------

@@ -7,36 +7,44 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_base.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/futures.hpp>
+#include <hpx/modules/ini.hpp>
+#include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/type_support.hpp>
+
+#include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_colocated.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/modules/errors.hpp>
-#include <hpx/modules/ini.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
 #include <hpx/modules/performance_counters.hpp>
-#include <hpx/modules/runtime_local.hpp>
-#include <hpx/modules/type_support.hpp>
 
 #include <hpx/runtime_distributed/applier.hpp>
 #include <hpx/runtime_distributed/stubs/runtime_support.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <system_error>
 #include <utility>
 
 namespace hpx::components::stubs {
 
-    template <typename Policy>
-    auto disable_run_as_child(Policy&& p)
-    {
-        auto policy = p;
-        auto hint = policy.get_hint();
-        hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
-        policy.set_hint(hint);
-        return policy;
-    }
+    namespace {
+
+        template <typename Policy>
+        auto disable_run_as_child(Policy&& p)
+        {
+            auto policy = p;
+            auto hint = policy.get_hint();
+            hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+            policy.set_hint(hint);
+            return policy;
+        }
+    }    // namespace
 
     hpx::future<int> runtime_support::load_components_async(
         [[maybe_unused]] hpx::id_type const& gid)
@@ -80,8 +88,9 @@ namespace hpx::components::stubs {
 
     /// \brief Shutdown the given runtime system
     hpx::future<void> runtime_support::shutdown_async(
-        [[maybe_unused]] hpx::id_type const& targetgid,
-        [[maybe_unused]] double timeout)
+        [[maybe_unused]] hpx::id_type const& targetid,
+        [[maybe_unused]] double timeout,
+        [[maybe_unused]] bool const force_disconnect)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // Create a promise directly and execute the required action.
@@ -95,7 +104,31 @@ namespace hpx::components::stubs {
         // We need to make it unmanaged to avoid late refcnt requests
         id_type gid(
             value.get_id().get_gid(), id_type::management_type::unmanaged);
-        hpx::post<action_type>(targetgid, timeout, gid);
+
+#if defined(HPX_HAVE_NETWORKING)
+        auto callback = [targetgid = targetid.get_gid(),
+                            shared_state = traits::detail::get_shared_state(f)](
+                            std::error_code const& ec,
+                            parcelset::parcel const& p) mutable {
+            if (ec)
+            {
+                if (!parcelset::locality_was_disconnected(
+                        naming::get_locality_id_from_gid(targetgid)))
+                {
+                    std::exception_ptr const exception =
+                        HPX_GET_EXCEPTION(ec, "runtime_support::shutdown_async",
+                            parcelset::dump_parcel(p));
+                    shared_state->set_exception(exception);
+                }
+            }
+        };
+
+        hpx::post_cb<action_type>(targetid, HPX_MOVE(callback), timeout,
+            HPX_MOVE(gid), force_disconnect);
+#else
+        hpx::post<action_type>(
+            targetid, timeout, HPX_MOVE(gid), force_disconnect);
+#endif
 
         return f;
 #else
@@ -105,11 +138,11 @@ namespace hpx::components::stubs {
     }
 
     void runtime_support::shutdown(
-        hpx::id_type const& targetgid, double timeout)
+        hpx::id_type const& targetgid, double timeout, bool force_disconnect)
     {
         // The following get yields control while the action above
         // is executed and the result is returned to the future
-        shutdown_async(targetgid, timeout).get();
+        shutdown_async(targetgid, timeout, force_disconnect).get();
     }
 
     /// \brief Shutdown the runtime systems of all localities
@@ -139,7 +172,6 @@ namespace hpx::components::stubs {
     }
 
     ///////////////////////////////////////////////////////////////////////
-    /// \brief Retrieve configuration information
     /// \brief Terminate the given runtime system
     hpx::future<void> runtime_support::terminate_async(
         [[maybe_unused]] hpx::id_type const& targetgid)

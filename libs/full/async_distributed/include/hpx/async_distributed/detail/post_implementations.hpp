@@ -8,11 +8,15 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
-#include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
+#include <hpx/modules/errors.hpp>
+
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components_base.hpp>
-#include <hpx/modules/errors.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/locality_disconnected.hpp>
+#include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -26,7 +30,7 @@ namespace hpx::detail {
         Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         if (!traits::action_is_target_valid<action_type>::call(id))
         {
@@ -34,6 +38,11 @@ namespace hpx::detail {
                 "hpx::detail::post_impl",
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            throw_locality_disconnected(id);
         }
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
@@ -95,7 +104,7 @@ namespace hpx::detail {
         }
 
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         // Determine whether the id is local or remote
         if (!traits::action_is_target_valid<action_type>::call(id))
@@ -104,6 +113,11 @@ namespace hpx::detail {
                 "hpx::detail::post_impl",
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            throw_locality_disconnected(id);
         }
 
         if (naming::get_locality_id_from_gid(addr.locality_) ==
@@ -139,7 +153,7 @@ namespace hpx::detail {
     bool post_impl(hpx::id_type const& id, hpx::launch policy, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         if (!traits::action_is_target_valid<action_type>::call(id))
         {
@@ -147,6 +161,11 @@ namespace hpx::detail {
                 "hpx::detail::post_impl",
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            throw_locality_disconnected(id);
         }
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
@@ -203,7 +222,7 @@ namespace hpx::detail {
         }
 
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         // Determine whether the id is local or remote
         if (!traits::action_is_target_valid<action_type>::call(id))
@@ -212,6 +231,11 @@ namespace hpx::detail {
                 "hpx::detail::post_impl",
                 "the target (destination) does not match the action type ({})",
                 hpx::actions::detail::get_action_name<action_type>());
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            throw_locality_disconnected(id);
         }
 
         if (naming::get_locality_id_from_gid(addr.locality_) ==
@@ -249,14 +273,20 @@ namespace hpx::detail {
         hpx::launch policy, Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         if (!traits::action_is_target_valid<action_type>::call(id))
         {
-            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                "hpx::detail::post_cb_impl",
-                "the target (destination) does not match the action type ({})",
-                hpx::actions::detail::get_action_name<action_type>());
+            invoke_callback(HPX_FORWARD(Callback, cb),
+                make_system_error_code(hpx::error::bad_parameter));
+            return false;
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            invoke_callback(HPX_FORWARD(Callback, cb),
+                make_system_error_code(hpx::error::locality_was_disconnected));
+            return false;
         }
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
@@ -318,14 +348,20 @@ namespace hpx::detail {
         hpx::id_type const& id, hpx::launch policy, Callback&& cb, Ts&&... vs)
     {
         using action_type = hpx::traits::extract_action_t<Action>;
-        using component_type = typename action_type::component_type;
+        using component_type = action_type::component_type;
 
         if (!traits::action_is_target_valid<action_type>::call(id))
         {
-            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                "hpx::detail::post_cb_impl",
-                "the target (destination) does not match the action type ({})",
-                hpx::actions::detail::get_action_name<action_type>());
+            invoke_callback(HPX_FORWARD(Callback, cb),
+                make_system_error_code(hpx::error::bad_parameter));
+            return false;
+        }
+
+        if (locality_is_disconnected(id))
+        {
+            invoke_callback(HPX_FORWARD(Callback, cb),
+                make_system_error_code(hpx::error::locality_was_disconnected));
+            return false;
         }
 
         [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;

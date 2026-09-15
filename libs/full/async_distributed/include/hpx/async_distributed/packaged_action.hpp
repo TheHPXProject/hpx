@@ -9,15 +9,19 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/allocator_support.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/memory.hpp>
+
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/parcelset_base.hpp>
+
+#include <hpx/async_distributed/detail/locality_disconnected.hpp>
 #include <hpx/async_distributed/detail/post.hpp>
 #include <hpx/async_distributed/detail/post_callback.hpp>
 #include <hpx/async_distributed/detail/post_implementations_fwd.hpp>
 #include <hpx/async_distributed/promise.hpp>
-#include <hpx/modules/actions_base.hpp>
-#include <hpx/modules/allocator_support.hpp>
-#include <hpx/modules/components_base.hpp>
-#include <hpx/modules/errors.hpp>
-#include <hpx/modules/memory.hpp>
 
 #include <exception>
 #include <memory>
@@ -45,15 +49,25 @@ namespace hpx::lcos {
                 // object
                 if (ec)
                 {
-                    if (hpx::tolerate_node_faults() && is_asio_error(ec))
+                    if ((hpx::tolerate_node_faults() && is_asio_error(ec)) ||
+                        hpx::detail::locality_is_disconnected(
+                            p.destination_locality_id()))
                     {
-                        return;
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(
+                            hpx::error_code(
+                                hpx::error::locality_was_disconnected,
+                                hpx::throwmode::lightweight),
+                            "packaged_action::parcel_write_handler",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
                     }
-
-                    std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
-                        "packaged_action::parcel_write_handler",
-                        parcelset::dump_parcel(p));
-                    shared_state->set_exception(exception);
+                    else
+                    {
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
+                            "packaged_action::parcel_write_handler",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
+                    }
                 }
             }
         };
@@ -71,10 +85,25 @@ namespace hpx::lcos {
                 // object
                 if (ec)
                 {
-                    std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
-                        "packaged_action::parcel_write_handler_cb",
-                        parcelset::dump_parcel(p));
-                    shared_state->set_exception(exception);
+                    if ((hpx::tolerate_node_faults() && is_asio_error(ec)) ||
+                        hpx::detail::locality_is_disconnected(
+                            p.destination_locality_id()))
+                    {
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(
+                            hpx::error_code(
+                                hpx::error::locality_was_disconnected,
+                                hpx::throwmode::lightweight),
+                            "packaged_action::parcel_write_handler",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
+                    }
+                    else
+                    {
+                        std::exception_ptr exception = HPX_GET_EXCEPTION(ec,
+                            "packaged_action::parcel_write_handler_cb",
+                            parcelset::dump_parcel(p));
+                        shared_state->set_exception(exception);
+                    }
                 }
 
                 // invoke user supplied callback
@@ -426,6 +455,11 @@ namespace hpx::lcos {
             using action_type = hpx::traits::extract_action_t<Action>;
             using component_type = action_type::component_type;
 
+            if (hpx::detail::locality_is_disconnected(id))
+            {
+                hpx::detail::throw_locality_disconnected(id);
+            }
+
             [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
             naming::address addr;
 
@@ -485,6 +519,11 @@ namespace hpx::lcos {
             using action_type = hpx::traits::extract_action_t<Action>;
             using component_type = action_type::component_type;
 
+            if (hpx::detail::locality_is_disconnected(id))
+            {
+                hpx::detail::throw_locality_disconnected(id);
+            }
+
             if (addr &&
                 naming::get_locality_id_from_gid(addr.locality_) ==
                     agas::get_locality_id())
@@ -524,6 +563,11 @@ namespace hpx::lcos {
         {
             using action_type = hpx::traits::extract_action_t<Action>;
             using component_type = action_type::component_type;
+
+            if (hpx::detail::locality_is_disconnected(id))
+            {
+                hpx::detail::throw_locality_disconnected(id);
+            }
 
             [[maybe_unused]] std::pair<bool, components::pinned_ptr> r;
             naming::address addr;
@@ -584,6 +628,11 @@ namespace hpx::lcos {
         void post_cb(naming::address&& addr, hpx::id_type const& id,
             Callback&& cb, Ts&&... vs)
         {
+            if (hpx::detail::locality_is_disconnected(id))
+            {
+                hpx::detail::throw_locality_disconnected(id);
+            }
+
             if (addr &&
                 naming::get_locality_id_from_gid(addr.locality_) ==
                     agas::get_locality_id())
@@ -623,3 +672,23 @@ namespace hpx::lcos {
         }
     };
 }    // namespace hpx::lcos
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/modules/actions_base.hpp>
+
+namespace hpx::lcos {
+
+    /// \brief Reflection-based packaged_action alias.
+    ///
+    /// Allows using hpx::lcos::reflect_packaged_action<^^func> directly
+    /// without defining an explicit action type.
+    ///
+    /// \tparam F  A std::meta::info reflection of a free function.
+    template <std::meta::info F>
+        requires(std::meta::is_namespace_member(F) && std::meta::is_function(F))
+    using reflect_packaged_action =
+        packaged_action<hpx::actions::reflect_action<F>,
+            typename hpx::actions::reflect_action<F>::result_type>;
+
+}    // namespace hpx::lcos
+#endif    // HPX_HAVE_CXX26_REFLECTION

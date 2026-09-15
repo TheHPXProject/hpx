@@ -28,6 +28,6 @@ add_hpx_module(
   SOURCES ${tracy_sources}
   HEADERS ${tracy_headers}
   MODULE_DEPENDENCIES hpx_config
-  PRIVATE_DEPENDENCIES tracy::tracy
+  DEPENDENCIES tracy::tracy
   CMAKE_SUBDIRS tests
 )

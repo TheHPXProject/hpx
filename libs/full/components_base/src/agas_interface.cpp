@@ -33,6 +33,11 @@ namespace hpx::agas {
         return detail::is_console();
     }
 
+    bool is_connecting(naming::gid_type const& locality)
+    {
+        return detail::is_connecting(locality);
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     bool register_name(launch::sync_policy, std::string const& name,
         naming::gid_type const& gid, error_code& ec)

@@ -106,3 +106,60 @@ namespace hpx {
             HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
     }
 }    // namespace hpx
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+
+namespace hpx {
+
+    /// \brief Reflection-based async_continue_cb overload targeting a gid.
+    ///
+    /// \tparam F        A std::meta::info reflection of a free function.
+    /// \tparam Cont     Continuation type.
+    /// \tparam Callback Callback type invoked on completion.
+    /// \tparam Ts       Additional arguments forwarded to the action.
+    /// \param cont      The continuation to invoke on completion.
+    /// \param gid       The target locality id.
+    /// \param cb        The callback invoked on completion.
+    /// \param vs        Additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Cont,
+        typename Callback, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    auto async_continue_cb(
+        Cont&& cont, hpx::id_type const& gid, Callback&& cb, Ts&&... vs)
+    // clang-format on
+    {
+        return hpx::async_continue_cb<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Cont, cont), gid, HPX_FORWARD(Callback, cb),
+            HPX_FORWARD(Ts, vs)...);
+    }
+
+    /// \brief Reflection-based async_continue_cb overload targeting a distribution policy.
+    ///
+    /// \tparam F          A std::meta::info reflection of a free function.
+    /// \tparam Cont       Continuation type.
+    /// \tparam DistPolicy Distribution policy type.
+    /// \tparam Callback   Callback type invoked on completion.
+    /// \tparam Ts         Additional arguments forwarded to the action.
+    /// \param cont        The continuation to invoke on completion.
+    /// \param policy      The distribution policy.
+    /// \param cb          The callback invoked on completion.
+    /// \param vs          Additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Cont,
+        typename DistPolicy, typename Callback, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            traits::is_distribution_policy_v<DistPolicy>)
+    auto async_continue_cb(
+        Cont&& cont, DistPolicy const& policy, Callback&& cb, Ts&&... vs)
+    // clang-format on
+    {
+        return hpx::async_continue_cb<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Cont, cont), policy, HPX_FORWARD(Callback, cb),
+            HPX_FORWARD(Ts, vs)...);
+    }
+
+}    // namespace hpx
+#endif    // HPX_HAVE_CXX26_REFLECTION

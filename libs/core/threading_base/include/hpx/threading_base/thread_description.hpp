@@ -63,7 +63,7 @@ namespace hpx::threads {
         data data_;
         hpx::tracing::annotation_handle desc_tracing_{};
 
-        HPX_CORE_EXPORT void init_from_alternative_name(char const* altname);
+        void init_from_alternative_name(char const* altname);
 
     public:
         constexpr thread_description() noexcept

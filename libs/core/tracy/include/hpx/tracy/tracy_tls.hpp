@@ -17,10 +17,20 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::tracy {
 
+    // Mirror of TracyCZoneCtx under TRACY_ON_DEMAND (which HPX forces on).
+    // Keeping our own struct lets tracy_tls.hpp stay free of Tracy's headers.
+    // tracy_tls.cpp asserts the Tracy version and that the layouts still match.
+    struct zone_ctx_storage
+    {
+        std::uint32_t id = 0;
+        std::int32_t active = 0;
+        std::uint64_t connectionId = 0;
+    };
+
     HPX_CXX_CORE_EXPORT struct region_data
     {
         char const* name = nullptr;
-        std::uint64_t data = 0;
+        zone_ctx_storage data{};
         std::uint32_t color = 0;
         std::uint32_t phase = 0;
     };
@@ -29,9 +39,13 @@ namespace hpx::tracy {
 
         HPX_CORE_EXPORT region_data start_region(
             char const*, std::size_t = 0, std::size_t = 0) noexcept;
+        HPX_CORE_EXPORT region_data start_named_region(
+            char const* name, std::uint32_t color) noexcept;
+        HPX_CORE_EXPORT void add_worker_thread_text(
+            region_data const& r, std::size_t num_thread) noexcept;
         HPX_CORE_EXPORT char const* rename_region(char const*) noexcept;
-        HPX_CORE_EXPORT std::uint64_t push_zone(char const*) noexcept;
-        HPX_CORE_EXPORT void pop_zone(std::uint64_t) noexcept;
+        HPX_CORE_EXPORT zone_ctx_storage push_zone(char const*) noexcept;
+        HPX_CORE_EXPORT void pop_zone(zone_ctx_storage const&) noexcept;
         HPX_CORE_EXPORT region_data stop_region(
             region_data const& prev_region) noexcept;
         // Set/clear the per-OS-thread "inside fiber" flag used to guard
@@ -122,10 +136,70 @@ namespace hpx::tracy {
         region_data suspended_region;
     };
 
+    HPX_CXX_CORE_EXPORT struct background_work_region
+    {
+        /// \brief Opens a background-work zone on the given worker thread.
+        ///
+        /// \param active  If false, the ctor and dtor emit no Tracy events.
+        // Two-arg ctor: caller supplies an explicit `active` flag captured
+        // at the outer wrapper's construction (see backends/tracy.hpp
+        // background_work_region). Disconnected -> we skip start_named_region
+        // AND the paired stop_region in the dtor, preserving the invariant
+        // that an instance whose ctor didn't emit must not emit on destroy.
+        explicit background_work_region(
+            std::size_t num_thread, bool active) noexcept
+          : active_(active)
+        {
+            if (active_)
+            {
+                surrounding_region = detail::start_named_region(
+                    "hpx::background_work", 0x008080u);
+                detail::add_worker_thread_text(surrounding_region, num_thread);
+            }
+        }
+
+        // Legacy single-arg ctor kept for source-compat with code that
+        // instantiates this type directly (nothing in-tree does today).
+        // Defaults to active -- the classic pre-gate behaviour.
+        explicit background_work_region(std::size_t num_thread) noexcept
+          : background_work_region(num_thread, true)
+        {
+        }
+
+        ~background_work_region() noexcept
+        {
+            if (active_)
+            {
+                detail::stop_region(surrounding_region);
+            }
+        }
+
+        background_work_region(background_work_region const&) = delete;
+        background_work_region& operator=(
+            background_work_region const&) = delete;
+
+    private:
+        bool active_;
+        region_data surrounding_region;
+    };
+
     HPX_CXX_CORE_EXPORT struct mark_event
     {
+        /// \brief Opens a Tracy zone for the given event name.
+        ///
+        /// \param active  If false, the ctor and dtor emit no Tracy events.
+        // Two-arg ctor: `active` records the profiler-connected decision
+        // taken by the outer wrapper. If not active, we skip push_zone and
+        // the paired pop_zone in the dtor.
+        explicit mark_event(char const* name, bool active) noexcept
+          : active_(active)
+          , ctx_value(active_ ? detail::push_zone(name) : zone_ctx_storage{})
+        {
+        }
+
+        // Legacy single-arg ctor for direct instantiation; defaults active.
         explicit mark_event(char const* name) noexcept
-          : ctx_value(detail::push_zone(name))
+          : mark_event(name, true)
         {
         }
 
@@ -136,11 +210,15 @@ namespace hpx::tracy {
 
         ~mark_event()
         {
-            detail::pop_zone(ctx_value);
+            if (active_)
+            {
+                detail::pop_zone(ctx_value);
+            }
         }
 
     private:
-        std::uint64_t ctx_value;
+        bool active_;
+        zone_ctx_storage ctx_value;
     };
 
     // RAII guard that closes the running fiber zone before self_.yield() and
@@ -151,16 +229,41 @@ namespace hpx::tracy {
     // start_region() - so there is no zone-stack conflict.
     struct fiber_suspend_region
     {
+        /// \brief Suspends the currently active fiber zone with the given
+        ///        reason.
+        ///
+        /// \param active  If false, the ctor and dtor emit no Tracy events.
+        // Two-arg ctor honours the profiler-connected decision captured by
+        // the outer wrapper. Skipping suspend_fiber_zone means the paired
+        // resume_fiber_zone in the dtor is also skipped -- critical for
+        // zone-stack balance.
+        explicit fiber_suspend_region(
+            char const* suspend_reason, bool active) noexcept
+          : active_(active)
+        {
+            if (active_)
+            {
+                detail::suspend_fiber_zone(suspend_reason);
+            }
+        }
+
+        // Legacy single-arg ctor for direct instantiation; defaults active.
         explicit fiber_suspend_region(
             char const* suspend_reason = nullptr) noexcept
+          : fiber_suspend_region(suspend_reason, true)
         {
-            detail::suspend_fiber_zone(suspend_reason);
         }
 
         ~fiber_suspend_region() noexcept
         {
-            detail::resume_fiber_zone();
+            if (active_)
+            {
+                detail::resume_fiber_zone();
+            }
         }
+
+    private:
+        bool active_;
     };
 }    // namespace hpx::tracy
 

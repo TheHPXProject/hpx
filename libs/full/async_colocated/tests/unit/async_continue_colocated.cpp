@@ -63,7 +63,7 @@ struct test_client : hpx::components::client_base<test_client, test_server>
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-int test_async_continue_colocated(test_client const& target)
+void test_async_continue_colocated(test_client const& target)
 {
     using hpx::make_continuation;
 
@@ -131,8 +131,6 @@ int test_async_continue_colocated(test_client const& target)
             hpx::colocated(target), 42);
         HPX_TEST_EQ(f.get(), 86);
     }
-
-    return hpx::finalize();
 }
 
 int hpx_main()

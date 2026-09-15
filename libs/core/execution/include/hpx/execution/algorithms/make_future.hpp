@@ -205,58 +205,10 @@ namespace hpx::execution::experimental {
             }
         };
 
-        // Detects whether a sender's set_value completion scheduler is
-        // run_loop_scheduler. Used by detail::make_future as a runtime
-        // guard (see HPX_ASSERT_MSG below). The trait itself is SFINAE-
-        // friendly so it can be safely instantiated during overload
-        // resolution.
-        template <typename Sender, typename = void>
-        struct sender_completion_is_run_loop_scheduler : std::false_type
-        {
-        };
-
-        template <typename Sender>
-        struct sender_completion_is_run_loop_scheduler<Sender,
-            std::void_t<
-                decltype(hpx::execution::experimental::get_completion_scheduler<
-                    hpx::execution::experimental::set_value_t>(hpx::execution::
-                        experimental::get_env(std::declval<Sender>())))>>
-          : std::is_same<std::decay_t<decltype(hpx::execution::experimental::
-                                 get_completion_scheduler<
-                                     hpx::execution::experimental::set_value_t>(
-                                     hpx::execution::experimental::get_env(
-                                         std::declval<Sender>())))>,
-                hpx::execution::experimental::run_loop_scheduler>
-        {
-        };
-
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename Sender, typename Allocator>
         auto make_future(Sender&& sender, Allocator const& allocator)
         {
-            // Debug-only runtime guard against the silent-hang case:
-            // this 1-argument fallback constructs a future_data that
-            // never drives loop.run(), so a sender whose set_value
-            // completion scheduler is a run_loop_scheduler produces a
-            // future that hangs in get(). The public make_future CPO
-            // routes such senders to the scheduler-form overload, so
-            // reaching this body with a run-loop completion scheduler
-            // indicates a direct call to detail::make_future rather than
-            // the public API. HPX_ASSERT_MSG is a no-op in release builds
-            // (HPX_DEBUG off), so this only catches the misuse in debug;
-            // an unconditional throw would also alter the release-mode
-            // failure shape and is left out intentionally -- the assert
-            // exists to flag bypassing the public CPO during development,
-            // not to harden release-mode misuse. static_assert is avoided
-            // here because overload-resolution probing may instantiate
-            // this body before the scheduler-form overload is selected.
-            HPX_ASSERT_MSG(!sender_completion_is_run_loop_scheduler<
-                               std::decay_t<Sender>>::value,
-                "make_future(sender) cannot drive the parent run_loop when "
-                "the sender's completion scheduler is a run_loop_scheduler. "
-                "Use make_future(loop.get_scheduler(), sender) so the "
-                "resulting future can drive the loop in its get().");
-
             using allocator_type = Allocator;
 
             using value_types = hpx::execution::experimental::value_types_of_t<

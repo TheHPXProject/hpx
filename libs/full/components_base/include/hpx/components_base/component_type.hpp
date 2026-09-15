@@ -297,3 +297,65 @@ namespace hpx::components {
         traits::component_type_database<Component>::set(type);
     }
 }    // namespace hpx::components
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+#include <hpx/serialization/detail/refl_qualified_name_of.hpp>
+
+namespace hpx::components {
+
+    namespace detail {
+
+        // Primary: component has no type_holder -- name unknown via reflection.
+        template <typename Component, typename = void>
+        struct reflect_component_name
+        {
+            static constexpr char const* get() noexcept
+            {
+                return nullptr;
+            }
+        };
+
+        /// \brief Specialization for components with type_holder.
+        ///
+        /// Derives the fully-qualified component name from
+        /// Component::type_holder via qualified_name_of, so the
+        /// name passed to AGAS includes enclosing namespaces.
+        ///
+        /// \tparam Component The component type.
+        template <typename Component>
+        struct reflect_component_name<Component,
+            std::void_t<typename Component::type_holder>>
+        {
+            static char const* get() noexcept
+            {
+                using qualified = hpx::serialization::detail::qualified_name_of<
+                    typename Component::type_holder>;
+                return qualified::value.data;
+            }
+        };
+
+    }    // namespace detail
+
+    // Primary template definitions -- use reflection when type_holder exists
+    // and no explicit HPX_DEFINE_COMPONENT_NAME specialization is present.
+    template <typename Component, typename Enable>
+    HPX_ALWAYS_EXPORT char const* get_component_name() noexcept
+    {
+        return detail::reflect_component_name<Component>::get();
+    }
+
+    /// \brief Reflection-based default for get_component_base_name.
+    ///
+    /// Returns nullptr when no explicit base component is registered.
+    ///
+    /// \tparam Component The component type.
+    /// \tparam Enable    Unused -- matches primary template signature.
+    /// \return nullptr
+    template <typename Component, typename Enable>
+    HPX_ALWAYS_EXPORT char const* get_component_base_name() noexcept
+    {
+        return nullptr;
+    }
+
+}    // namespace hpx::components
+#endif    // HPX_HAVE_CXX26_REFLECTION

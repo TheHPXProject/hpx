@@ -23,7 +23,13 @@
 
 using namespace hpx::collectives;
 
-constexpr char const* scatter_direct_basename = "/test/scatter_hierachical/";
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
+constexpr char const* scatter_direct_basename = "/test/scatter_hierarchical/";
+constexpr char const* scatter_direct_explicit_generation_basename =
+    "/test/scatter_hierarchical/explicit_generation/";
+constexpr char const* scatter_direct_local_basename =
+    "/test/scatter_hierarchical/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 50;
 #else
@@ -84,9 +90,10 @@ void test_multiple_use_with_generation(int arity = 2)
     std::uint32_t const this_locality = hpx::get_locality_id();
 
     auto const scatter_clients = create_hierarchical_communicator(
-        scatter_direct_basename, num_sites_arg(num_localities),
-        this_site_arg(this_locality), arity_arg(arity), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        scatter_direct_explicit_generation_basename,
+        num_sites_arg(num_localities), this_site_arg(this_locality),
+        arity_arg(arity), generation_arg(), root_site_arg(),
+        flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
@@ -130,7 +137,7 @@ void test_local_use(std::uint32_t num_sites, int arity = 2)
     {
         sites.push_back(hpx::async([=]() {
             auto const scatter_clients = create_hierarchical_communicator(
-                scatter_direct_basename, num_sites_arg(num_sites),
+                scatter_direct_local_basename, num_sites_arg(num_sites),
                 this_site_arg(site), arity_arg(arity), generation_arg(),
                 root_site_arg(), flat_fallback_threshold_arg(0));
 

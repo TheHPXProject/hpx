@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build-documentation:
     runs-on: ubuntu-latest
-    container: stellargroup/build_env:17
+    container: stellargroup/build_env:23
     permissions:
       actions: read
 

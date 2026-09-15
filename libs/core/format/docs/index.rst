@@ -11,7 +11,7 @@
 format
 ======
 
-The format module exposes the :cpp:func:`format` and :cpp:func:`format_to`
+The format module exposes the :hpx:func:`format` and :hpx:func:`format_to`
 functions for formatting strings.
 
 See the :ref:`API reference <modules_format_api>` of the module for more details.

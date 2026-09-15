@@ -14,12 +14,8 @@
 
 namespace hpx::experimental {
 
-    // TODO(): prefer_t no longer dispatches through tag_invoke.
-    //   Before: prefer(tag, obj, prop) could be customized by defining
-    //     tag_invoke(prefer_t, tag, obj, prop) for a type.
-    //   Now: prefer(tag, obj, prop) simply calls tag(obj, prop) if possible,
-    //     else returns obj unchanged. To customize behavior, customize tag
-    //     itself (i.e. define tag_invoke(tag, obj, prop)).
+    // prefer(tag, obj, prop) calls tag(obj, prop) if invocable, else
+    // returns obj unchanged.
     HPX_CXX_CORE_EXPORT inline constexpr struct prefer_t
     {
         // call tag(tn...) when invocable

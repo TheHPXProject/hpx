@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/execution_base/detail/execution_member_detect.hpp>
 #include <hpx/execution_base/traits/is_executor.hpp>
+#include <hpx/functional/tag_invoke.hpp>
 #include <hpx/modules/iterator_support.hpp>
 
 #include <concepts>
@@ -120,9 +121,27 @@ namespace hpx::parallel::execution {
                 .sync_execute(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename... Ts>
+            requires(!detail::has_sync_execute_member<Executor, F, Ts...> &&
+                hpx::functional::is_tag_invocable_v<sync_execute_t, Executor &&,
+                    F &&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for sync_execute are deprecated. "
+            "Define a .sync_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(sync_execute_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
             requires(!detail::has_sync_execute_member<Executor, F, Ts...> &&
+                !hpx::functional::is_tag_invocable_v<sync_execute_t,
+                    Executor &&, F &&, Ts && ...> &&
                 (std::invocable<F &&, Ts && ...> ||
                     hpx::traits::is_action_v<std::decay_t<F>>) )
         HPX_FORCEINLINE decltype(auto) operator()(
@@ -174,9 +193,27 @@ namespace hpx::parallel::execution {
                 .async_execute(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename... Ts>
+            requires(!detail::has_async_execute_member<Executor, F, Ts...> &&
+                hpx::functional::is_tag_invocable_v<async_execute_t,
+                    Executor &&, F &&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for async_execute are deprecated. "
+            "Define an .async_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(async_execute_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
             requires(!detail::has_async_execute_member<Executor, F, Ts...> &&
+                !hpx::functional::is_tag_invocable_v<async_execute_t,
+                    Executor &&, F &&, Ts && ...> &&
                 (std::invocable<F &&, Ts && ...> ||
                     hpx::traits::is_action_v<std::decay_t<F>>) )
         HPX_FORCEINLINE decltype(auto) operator()(
@@ -223,11 +260,32 @@ namespace hpx::parallel::execution {
                     HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename Future,
+            typename... Ts>
+            requires(
+                !detail::has_then_execute_member<Executor, F, Future, Ts...> &&
+                hpx::functional::is_tag_invocable_v<then_execute_t, Executor &&,
+                    F &&, Future &&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for then_execute are deprecated. "
+            "Define a .then_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(
+            Executor&& exec, F&& f, Future&& predecessor, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(then_execute_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename Future,
             typename... Ts>
             requires(
                 !detail::has_then_execute_member<Executor, F, Future, Ts...> &&
+                !hpx::functional::is_tag_invocable_v<then_execute_t,
+                    Executor &&, F &&, Future &&, Ts && ...> &&
                 std::invocable<F &&, Future &&, Ts && ...>)
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Future&& predecessor, Ts&&... ts) const
@@ -271,9 +329,27 @@ namespace hpx::parallel::execution {
                 .post(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename... Ts>
+            requires(!detail::has_post_member<Executor, F, Ts...> &&
+                hpx::functional::is_tag_invocable_v<post_t, Executor &&, F &&,
+                    Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for post are deprecated. "
+            "Define a .post() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(post_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Ts>
-            requires(!detail::has_post_member<Executor, F, Ts...>)
+            requires(!detail::has_post_member<Executor, F, Ts...> &&
+                !hpx::functional::is_tag_invocable_v<post_t, Executor &&, F &&,
+                    Ts && ...>)
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Ts&&... ts) const
         {
@@ -336,12 +412,32 @@ namespace hpx::parallel::execution {
                     HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename Shape, typename... Ts>
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_sync_execute_member<Executor, F, Shape,
+                    Ts...> &&
+                hpx::functional::is_tag_invocable_v<bulk_sync_execute_t,
+                    Executor &&, F &&, Shape const&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for bulk_sync_execute are deprecated. "
+            "Define a .bulk_sync_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(
+                bulk_sync_execute_t{}, HPX_FORWARD(Executor, exec),
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: non-integral shape
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
             requires(!std::integral<Shape> &&
                 !detail::has_bulk_sync_execute_member<Executor, F, Shape,
-                    Ts...>)
+                    Ts...> &&
+                !hpx::functional::is_tag_invocable_v<bulk_sync_execute_t,
+                    Executor &&, F &&, Shape const&, Ts && ...>)
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
@@ -416,7 +512,10 @@ namespace hpx::parallel::execution {
             requires(!std::integral<Shape> &&
                 !detail::has_bulk_async_execute_member<Executor, F, Shape,
                     Ts...> &&
-                hpx::traits::is_bulk_two_way_executor_v<std::decay_t<Executor>>)
+                hpx::traits::is_bulk_two_way_executor_v<
+                    std::decay_t<Executor>> &&
+                !hpx::functional::is_tag_invocable_v<bulk_async_execute_t,
+                    Executor &&, F &&, Shape const&, Ts && ...>)
         HPX_FORCEINLINE auto operator()(
             Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
             -> decltype(HPX_FORWARD(Executor, exec)
@@ -428,6 +527,24 @@ namespace hpx::parallel::execution {
                     HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename Shape, typename... Ts>
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_async_execute_member<Executor, F, Shape,
+                    Ts...> &&
+                hpx::functional::is_tag_invocable_v<bulk_async_execute_t,
+                    Executor &&, F &&, Shape const&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for bulk_async_execute are deprecated. "
+            "Define a .bulk_async_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(
+                bulk_async_execute_t{}, HPX_FORWARD(Executor, exec),
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: non-integral shape, not bulk_two_way_executor
         template <executor_any Executor, typename F, typename Shape,
             typename... Ts>
@@ -435,7 +552,9 @@ namespace hpx::parallel::execution {
                 !detail::has_bulk_async_execute_member<Executor, F, Shape,
                     Ts...> &&
                 !hpx::traits::is_bulk_two_way_executor_v<
-                    std::decay_t<Executor>>)
+                    std::decay_t<Executor>> &&
+                !hpx::functional::is_tag_invocable_v<bulk_async_execute_t,
+                    Executor &&, F &&, Shape const&, Ts && ...>)
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Shape const& shape, Ts&&... ts) const
         {
@@ -509,12 +628,35 @@ namespace hpx::parallel::execution {
                     HPX_FORWARD(Future, predecessor), HPX_FORWARD(Ts, ts)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename Shape,
+            typename Future, typename... Ts>
+            requires(!std::integral<Shape> &&
+                !detail::has_bulk_then_execute_member<Executor, F, Shape,
+                    Future, Ts...> &&
+                hpx::functional::is_tag_invocable_v<bulk_then_execute_t,
+                    Executor &&, F &&, Shape const&, Future &&, Ts && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for bulk_then_execute are deprecated. "
+            "Define a .bulk_then_execute() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Shape const& shape,
+            Future&& predecessor, Ts&&... ts) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(
+                bulk_then_execute_t{}, HPX_FORWARD(Executor, exec),
+                HPX_FORWARD(F, f), shape, HPX_FORWARD(Future, predecessor),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
         // Fallback: non-integral shape
         template <executor_any Executor, typename F, typename Shape,
             typename Future, typename... Ts>
             requires(!std::integral<Shape> &&
                 !detail::has_bulk_then_execute_member<Executor, F, Shape,
-                    Future, Ts...>)
+                    Future, Ts...> &&
+                !hpx::functional::is_tag_invocable_v<bulk_then_execute_t,
+                    Executor &&, F &&, Shape const&, Future &&, Ts && ...>)
         HPX_FORCEINLINE decltype(auto) operator()(Executor&& exec, F&& f,
             Shape const& shape, Future&& predecessor, Ts&&... ts) const
         {
@@ -571,9 +713,27 @@ namespace hpx::parallel::execution {
                 .async_invoke(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename... Fs>
+            requires(!detail::has_async_invoke_member<Executor, F, Fs...> &&
+                hpx::functional::is_tag_invocable_v<async_invoke_t, Executor &&,
+                    F &&, Fs && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for async_invoke are deprecated. "
+            "Define an .async_invoke() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Fs&&... fs) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(async_invoke_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Fs, fs)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Fs>
             requires(!detail::has_async_invoke_member<Executor, F, Fs...> &&
+                !hpx::functional::is_tag_invocable_v<async_invoke_t,
+                    Executor &&, F &&, Fs && ...> &&
                 std::invocable<F> && (std::invocable<Fs> && ...))
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Fs&&... fs) const
@@ -617,9 +777,27 @@ namespace hpx::parallel::execution {
                 .sync_invoke(HPX_FORWARD(F, f), HPX_FORWARD(Fs, fs)...);
         }
 
+        // Deprecated: ADL tag_invoke backwards compatibility
+        template <typename Executor, typename F, typename... Fs>
+            requires(!detail::has_sync_invoke_member<Executor, F, Fs...> &&
+                hpx::functional::is_tag_invocable_v<sync_invoke_t, Executor &&,
+                    F &&, Fs && ...>)
+        HPX_DEPRECATED_V(2, 0,
+            "tag_invoke overloads for sync_invoke are deprecated. "
+            "Define a .sync_invoke() member function instead.")
+        HPX_FORCEINLINE decltype(auto)
+        operator()(Executor&& exec, F&& f, Fs&&... fs) const
+        {
+            return hpx::functional::tag_invoke_ns::tag_invoke(sync_invoke_t{},
+                HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Fs, fs)...);
+        }
+
         // Fallback: use fn_helper
         template <executor_any Executor, typename F, typename... Fs>
             requires(!detail::has_sync_invoke_member<Executor, F, Fs...> &&
+                !hpx::functional::is_tag_invocable_v<sync_invoke_t, Executor &&,
+                    F &&, Fs && ...> &&
                 std::invocable<F> && (std::invocable<Fs> && ...))
         HPX_FORCEINLINE decltype(auto) operator()(
             Executor&& exec, F&& f, Fs&&... fs) const

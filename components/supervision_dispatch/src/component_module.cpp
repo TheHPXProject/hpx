@@ -12,20 +12,12 @@
 #include <hpx/modules/runtime_components.hpp>
 
 #include <hpx/supervision_dispatch/server/registry.hpp>
-#include <hpx/supervision_dispatch/server/sentinel.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 // Add factory registration functionality.
 HPX_REGISTER_COMPONENT_MODULE()
-
-using supervision_sentinel_component = hpx::supervision::server::sentinel;
-
-HPX_REGISTER_COMPONENT(
-    hpx::components::component<supervision_sentinel_component>,
-    supervision_sentinel_component, hpx::components::factory_state::enabled)
-HPX_DEFINE_GET_COMPONENT_TYPE(supervision_sentinel_component)
 
 using supervision_registry_component = hpx::supervision::server::registry;
 

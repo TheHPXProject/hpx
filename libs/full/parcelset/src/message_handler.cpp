@@ -1,4 +1,4 @@
-//  Copyright (c) 2021 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -27,7 +27,7 @@ namespace hpx::parcelset {
             action, type, num, interval, loc, ec);
     }
 
-    void put_parcel(parcelset::parcel&& p, parcel_write_handler_type&& f)
+    void put_parcel(parcelset::parcel&& p, write_handler_type&& f)
     {
         detail::put_parcel(HPX_MOVE(p), HPX_MOVE(f));
     }

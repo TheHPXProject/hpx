@@ -29,9 +29,44 @@ namespace hpx::supervision {
     public:
         explicit supervision_manager(util::runtime_configuration const& ini);
 
-        // supervision API
+        /// \brief Publishes a lifecycle event for target, mutating its
+        ///        supervision state, resolving any pending
+        ///        await_terminal() waiters affected by the transition, and
+        ///        invoking any registered lifecycle and activity observers
+        ///        for target.
+        ///
+        /// \param target Target whose supervision state is updated. Must
+        ///               live on this locality.
+        /// \param ev Lifecycle event to apply.
+        /// \param epoch Epoch associated with \p ev.
+        /// \param ec Error code receiving the operation result.
+        ///
+        /// \returns The result of applying \p ev to target's state.
         publish_result publish_event(hpx::id_type const& target, event ev,
             std::uint64_t epoch = 0, hpx::error_code& ec = throws) const;
+
+        /// \brief Mutates target's supervision state the same way
+        ///        publish_event() does, resolving any pending
+        ///        await_terminal() waiters affected by the transition,
+        ///        but without invoking registered lifecycle or activity
+        ///        observers.
+        ///
+        /// Intended purely as a state write for consumers of
+        /// query_state()/check_admission()/await_terminal(); it is not a
+        /// notification mechanism. In particular, calling this from within
+        /// a lifecycle observer callback registered for \p target does not
+        /// re-invoke that observer, unlike publish_event().
+        ///
+        /// \param target Target whose supervision state is updated. Must
+        ///               live on this locality.
+        /// \param ev Lifecycle event to apply.
+        /// \param epoch Epoch associated with \p ev.
+        /// \param ec Error code receiving the operation result.
+        ///
+        /// \returns The result of applying \p ev to target's state.
+        publish_result publish_event_no_notify(hpx::id_type const& target,
+            event ev, std::uint64_t epoch = 0,
+            hpx::error_code& ec = throws) const;
 
         lifecycle_state query_state(
             hpx::id_type const& target, hpx::error_code& ec = throws) const;
@@ -74,11 +109,20 @@ namespace hpx::supervision {
         void unregister_activity_observer(hpx::id_type const& observer_handle,
             hpx::error_code& ec = throws) const;
 
+        /// \brief Unconditionally clears all locally tracked state.
+        ///
+        /// Removes every target this locality's supervision manager
+        /// currently tracks, as if remove_target() had been called for each
+        /// of them. Local-only: unlike remove_target(), this is not exposed
+        /// as a remote action. A no-op if nothing is currently tracked.
+        ///
+        /// \param ec Error code receiving the operation result.
+        void tidy(hpx::error_code& ec = throws) const;
+
         hpx::future<lifecycle_state> await_terminal(hpx::id_type const& target,
             std::uint64_t epoch = 0,
             std::chrono::steady_clock::duration timeout =
-                (std::chrono::steady_clock::duration::max) (),
-            hpx::error_code& ec = throws) const;
+                (std::chrono::steady_clock::duration::max) ()) const;
 
         dispatch_outcome check_admission(
             hpx::id_type const& target, std::uint64_t epoch = 0) const noexcept;

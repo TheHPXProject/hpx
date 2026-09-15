@@ -36,7 +36,7 @@ is executed by invoking the plain action ``raise_exception_type``.
    :end-before: //]
 
 The exception is thrown using the macro :c:macro:`HPX_THROW_EXCEPTION`. The type
-of the thrown exception is :cpp:class:`hpx::exception`. This associates
+of the thrown exception is :hpx:class:`hpx::exception`. This associates
 additional diagnostic information with the exception, such as file name and line
 number, :term:`locality` id and thread id, and stack backtrace from the point
 where the exception was thrown.
@@ -58,7 +58,7 @@ calling thread tries to wait for the result of the action by invoking either
 
 Additionally, this example demonstrates how an exception thrown by an (possibly
 remote) action can be handled. It shows the use of
-:cpp:func:`hpx::diagnostic_information`, which retrieves all available diagnostic
+:hpx:func:`hpx::diagnostic_information`, which retrieves all available diagnostic
 information from the exception as a formatted string. This includes, for
 instance, the name of the source file and line number, the sequence number of
 the OS thread and the |hpx| thread id, the :term:`locality` id and the stack
@@ -82,9 +82,9 @@ Working with error codes
 Most of the API functions exposed by |hpx| can be invoked in two different
 modes. By default those will throw an exception on error as described above.
 However, sometimes it is desirable not to throw an exception in case of an error
-condition. In this case an object instance of the :cpp:class:`hpx::error_code`
+condition. In this case an object instance of the :hpx:class:`hpx::error_code`
 type can be passed as the last argument to the API function. In case of an error,
-the error condition will be returned in that :cpp:class:`hpx::error_code`
+the error condition will be returned in that :hpx:class:`hpx::error_code`
 instance. The following example demonstrates extracting the full diagnostic
 information without exception handling:
 
@@ -99,9 +99,9 @@ information without exception handling:
    is executed on a different :term:`locality`.
 
 This example show how an error can be handled without having to resolve to
-exceptions and that the returned :cpp:class:`hpx::error_code` instance can be
-used in a very similar way as the :cpp:class:`hpx::exception` type above. Simply
-pass it to the :cpp:func:`hpx::diagnostic_information`, which retrieves all
+exceptions and that the returned :hpx:class:`hpx::error_code` instance can be
+used in a very similar way as the :hpx:class:`hpx::exception` type above. Simply
+pass it to the :hpx:func:`hpx::diagnostic_information`, which retrieves all
 available diagnostic information from the error code instance as a formatted
 string.
 
@@ -117,14 +117,14 @@ code snippet:
    :end-before: //]
 
 For more information please refer to the documentation of
-:cpp:func:`hpx::get_error_what`, :cpp:func:`hpx::get_error_locality_id`,
-:cpp:func:`hpx::get_error_host_name`, :cpp:func:`hpx::get_error_process_id`,
-:cpp:func:`hpx::get_error_function_name`, :cpp:func:`hpx::get_error_file_name`,
-:cpp:func:`hpx::get_error_line_number`, :cpp:func:`hpx::get_error_os_thread`,
-:cpp:func:`hpx::get_error_thread_id`,
-:cpp:func:`hpx::get_error_thread_description`,
-:cpp:func:`hpx::get_error_backtrace`, :cpp:func:`hpx::get_error_env`, and
-:cpp:func:`hpx::get_error_state`.
+:hpx:func:`hpx::get_error_what`, :hpx:func:`hpx::get_error_locality_id`,
+:hpx:func:`hpx::get_error_host_name`, :hpx:func:`hpx::get_error_process_id`,
+:hpx:func:`hpx::get_error_function_name`, :hpx:func:`hpx::get_error_file_name`,
+:hpx:func:`hpx::get_error_line_number`, :hpx:func:`hpx::get_error_os_thread`,
+:hpx:func:`hpx::get_error_thread_id`,
+:hpx:func:`hpx::get_error_thread_description`,
+:hpx:func:`hpx::get_error_backtrace`, :hpx:func:`hpx::get_error_env`, and
+:hpx:func:`hpx::get_error_state`.
 
 .. _lightweight_error_code:
 
@@ -142,5 +142,5 @@ that will hold the error code only. The following snippet demonstrates its use:
    :end-before: //]
 
 All functions that retrieve other diagnostic elements from the
-:cpp:class:`hpx::error_code` will fail if called with a lightweight error_code
+:hpx:class:`hpx::error_code` will fail if called with a lightweight error_code
 instance.

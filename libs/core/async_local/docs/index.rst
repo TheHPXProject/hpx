@@ -12,10 +12,9 @@ async_local
 ===========
 
 This module extends :ref:`modules_async_base` to provide local implementations of
-:cpp:func:`hpx::async`, :cpp:func:`hpx::post`, :cpp:func:`hpx::sync`, and
-:cpp:func:`hpx::dataflow`. The :ref:`modules_async_distributed` module extends the
+:hpx:func:`hpx::async`, :hpx:func:`hpx::post`, :hpx:func:`hpx::sync`, and
+:hpx:func:`hpx::dataflow`. The :ref:`modules_async_distributed` module extends the
 functionality in this module to work with :term:`action`\ s.
 
 See the :ref:`API reference <modules_async_local_api>` of this module for more
 details.
-

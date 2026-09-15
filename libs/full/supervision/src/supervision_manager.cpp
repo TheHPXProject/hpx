@@ -14,6 +14,7 @@
 #include <hpx/supervision/supervision_manager.hpp>
 
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <optional>
 #include <string>
@@ -68,10 +69,47 @@ namespace hpx::supervision {
             return publish_result::already_terminal;
         }
 
-        auto const result = server_->publish_event(target, ev, epoch);
-        if (&ec != &throws)
-            ec = make_success_code();
-        return result;
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto const result = server_->publish_event(target, ev, epoch);
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return result;
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::publish_event");
+                return publish_result::already_terminal;
+            });
+    }
+
+    publish_result supervision_manager::publish_event_no_notify(
+        hpx::id_type const& target, event const ev, std::uint64_t const epoch,
+        hpx::error_code& ec) const
+    {
+        if (!server_)
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::supervision::supervision_manager::publish_event_no_"
+                "notify",
+                "server is not registered");
+            return publish_result::already_terminal;
+        }
+
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto const result =
+                    server_->publish_event_no_notify(target, ev, epoch);
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return result;
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::publish_event_no_"
+                    "notify");
+                return publish_result::already_terminal;
+            });
     }
 
     lifecycle_state supervision_manager::query_state(
@@ -85,10 +123,18 @@ namespace hpx::supervision {
             return {};
         }
 
-        auto result = server_->query_state(target);
-        if (&ec != &throws)
-            ec = make_success_code();
-        return result;
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto result = server_->query_state(target);
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return result;
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::query_state");
+                return lifecycle_state{};
+            });
     }
 
     hpx::id_type supervision_manager::register_observer(
@@ -100,13 +146,22 @@ namespace hpx::supervision {
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
                 "hpx::supervision::supervision_manager::register_observer",
                 "server is not registered");
-            return {};
+            return hpx::invalid_id;
         }
 
-        auto result = server_->register_observer(target, agent, epoch_filter);
-        if (&ec != &throws)
-            ec = make_success_code();
-        return result;
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto result =
+                    server_->register_observer(target, agent, epoch_filter);
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return result;
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::register_observer");
+                return hpx::invalid_id;
+            });
     }
 
     void supervision_manager::unregister_observer(
@@ -120,9 +175,17 @@ namespace hpx::supervision {
             return;
         }
 
-        server_->unregister_observer(observer_handle);
-        if (&ec != &throws)
-            ec = make_success_code();
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                server_->unregister_observer(observer_handle);
+                if (&ec != &throws)
+                    ec = make_success_code();
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::unregister_"
+                    "observer");
+            });
     }
 
     hpx::id_type supervision_manager::register_activity_observer(
@@ -135,13 +198,23 @@ namespace hpx::supervision {
                 "hpx::supervision::supervision_manager::"
                 "register_activity_observer",
                 "server is not registered");
-            return {};
+            return hpx::invalid_id;
         }
 
-        auto result = server_->register_activity_observer(agent, epoch_filter);
-        if (&ec != &throws)
-            ec = make_success_code();
-        return result;
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto result =
+                    server_->register_activity_observer(agent, epoch_filter);
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return result;
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::"
+                    "register_activity_observer");
+                return hpx::invalid_id;
+            });
     }
 
     void supervision_manager::unregister_activity_observer(
@@ -156,9 +229,17 @@ namespace hpx::supervision {
             return;
         }
 
-        server_->unregister_activity_observer(observer_handle);
-        if (&ec != &throws)
-            ec = make_success_code();
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                server_->unregister_activity_observer(observer_handle);
+                if (&ec != &throws)
+                    ec = make_success_code();
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::"
+                    "unregister_activity_observer");
+            });
     }
 
     void supervision_manager::remove_target(
@@ -172,28 +253,35 @@ namespace hpx::supervision {
             return;
         }
 
-        server_->remove_target(target);
-        if (&ec != &throws)
-            ec = make_success_code();
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                server_->remove_target(target);
+                if (&ec != &throws)
+                    ec = make_success_code();
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(ec, ep,
+                    "hpx::supervision::supervision_manager::remove_target");
+            });
     }
 
     hpx::future<lifecycle_state> supervision_manager::await_terminal(
         hpx::id_type const& target, std::uint64_t const epoch,
-        std::chrono::steady_clock::duration const timeout,
-        hpx::error_code& ec) const
+        std::chrono::steady_clock::duration const timeout) const
     {
         if (!server_)
         {
-            HPX_THROWS_IF(ec, hpx::error::invalid_status,
-                "hpx::supervision::supervision_manager::await_terminal",
-                "server is not registered");
-            return hpx::make_ready_future(lifecycle_state{});
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    "hpx::supervision::supervision_manager::await_terminal",
+                    "server is not registered"));
         }
 
-        auto result = server_->await_terminal(target, epoch, timeout);
-        if (&ec != &throws)
-            ec = make_success_code();
-        return result;
+        return hpx::detail::try_catch_exception_ptr(
+            [&]() { return server_->await_terminal(target, epoch, timeout); },
+            [&](std::exception_ptr const& ep) {
+                return hpx::make_exceptional_future<lifecycle_state>(ep);
+            });
     }
 
     dispatch_outcome supervision_manager::check_admission(
@@ -207,11 +295,33 @@ namespace hpx::supervision {
         return server_->check_admission(target, epoch);
     }
 
+    void supervision_manager::tidy(hpx::error_code& ec) const
+    {
+        if (!server_)
+        {
+            HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                "hpx::supervision::supervision_manager::tidy",
+                "server is not registered");
+            return;
+        }
+
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                server_->tidy();
+                if (&ec != &throws)
+                    ec = make_success_code();
+            },
+            [&](std::exception_ptr const& ep) {
+                HPX_RETHROWS_IF(
+                    ec, ep, "hpx::supervision::supervision_manager::tidy");
+            });
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     naming::gid_type supervision_manager::get_service_instance(
         std::uint32_t const service_locality_id)
     {
-        naming::gid_type const service(
+        constexpr naming::gid_type service(
             supervision::detail::supervision_manager_msb,
             supervision::detail::supervision_manager_lsb);
         return naming::replace_locality_id(service, service_locality_id);
@@ -233,5 +343,4 @@ namespace hpx::supervision {
         }
         return get_service_instance(service_locality_id);
     }
-
 }    // namespace hpx::supervision

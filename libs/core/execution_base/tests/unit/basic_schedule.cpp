@@ -15,8 +15,8 @@
 
 namespace ex = hpx::execution::experimental;
 
-static std::size_t friend_tag_invoke_schedule_calls = 0;
-static std::size_t tag_invoke_schedule_calls = 0;
+static std::size_t member_schedule_calls = 0;
+static std::size_t free_schedule_calls = 0;
 
 struct dummy_scheduler
 {
@@ -68,7 +68,7 @@ struct scheduler_1
 
     sender_1 schedule() const noexcept
     {
-        ++friend_tag_invoke_schedule_calls;
+        ++member_schedule_calls;
         return {};
     }
 
@@ -89,7 +89,7 @@ struct scheduler_2
 
     sender_2 schedule() const noexcept
     {
-        ++tag_invoke_schedule_calls;
+        ++free_schedule_calls;
         return {};
     }
 
@@ -118,14 +118,14 @@ int main()
     scheduler_1 s1;
     auto snd1 = ex::schedule(s1);
     HPX_UNUSED(snd1);
-    HPX_TEST_EQ(friend_tag_invoke_schedule_calls, std::size_t(1));
-    HPX_TEST_EQ(tag_invoke_schedule_calls, std::size_t(0));
+    HPX_TEST_EQ(member_schedule_calls, std::size_t(1));
+    HPX_TEST_EQ(free_schedule_calls, std::size_t(0));
 
     scheduler_2 s2;
     auto snd2 = ex::schedule(s2);
     HPX_UNUSED(snd2);
-    HPX_TEST_EQ(friend_tag_invoke_schedule_calls, std::size_t(1));
-    HPX_TEST_EQ(tag_invoke_schedule_calls, std::size_t(1));
+    HPX_TEST_EQ(member_schedule_calls, std::size_t(1));
+    HPX_TEST_EQ(free_schedule_calls, std::size_t(1));
 
     static_assert(std::is_same_v<ex::schedule_result_t<scheduler_1>,
                       example_sender_template<scheduler_1>>,

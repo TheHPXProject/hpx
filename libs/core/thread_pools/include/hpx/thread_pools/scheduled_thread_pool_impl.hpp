@@ -14,8 +14,10 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/schedulers.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>
+
 #include <hpx/thread_pools/scheduled_thread_pool.hpp>
 #include <hpx/thread_pools/scheduling_loop.hpp>
 
@@ -194,10 +196,15 @@ namespace hpx::threads::detail {
     }
 
     template <typename Scheduler>
-    void scheduled_thread_pool<Scheduler>::wait()
+    void scheduled_thread_pool<Scheduler>::wait(std::unique_lock<std::mutex>& l)
     {
+        hpx::unlock_guard<std::unique_lock<std::mutex>> ul(l);
         hpx::util::detail::yield_while_count(
-            [this]() { return is_busy(); }, shutdown_check_count_);
+            [&]() {
+                std::unique_lock<std::mutex> lk(*l.mutex());
+                return is_busy();
+            },
+            shutdown_check_count_);
     }
 
     template <typename Scheduler>
@@ -225,7 +232,7 @@ namespace hpx::threads::detail {
 
                 if (must_wait)
                 {
-                    wait();
+                    wait(l);
                 }
             }
 
@@ -609,14 +616,26 @@ namespace hpx::threads::detail {
         thread_init_data& data, thread_id_ref_type& id, error_code& ec)
     {
         // verify state
-        if (thread_count_ == 0 &&
-            !sched_->Scheduler::is_state(hpx::state::running))
+        if (thread_count_ == 0)
         {
-            // thread-manager is not currently running
-            HPX_THROWS_IF(ec, hpx::error::invalid_status,
-                "thread_pool<Scheduler>::create_thread",
-                "invalid state: thread pool is not running");
-            return;
+            if (sched_->Scheduler::has_reached_state(hpx::state::stopping))
+            {
+                // don't schedule new threads any more if the runtime is being
+                // torn down
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "thread_pool<Scheduler>::create_thread",
+                    "runtime is being shut down, not creating any new threads");
+                return;
+            }
+
+            if (!sched_->Scheduler::is_state(hpx::state::running))
+            {
+                // thread-manager is not currently running
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "thread_pool<Scheduler>::create_thread",
+                    "invalid state: thread pool is not running");
+                return;
+            }
         }
 
         if (data.schedulehint.runs_as_child_mode() ==
@@ -638,14 +657,26 @@ namespace hpx::threads::detail {
         thread_init_data& data, error_code& ec)
     {
         // verify state
-        if (thread_count_ == 0 &&
-            !sched_->Scheduler::is_state(hpx::state::running))
+        if (thread_count_ == 0)
         {
-            // thread-manager is not currently running
-            HPX_THROWS_IF(ec, hpx::error::invalid_status,
-                "thread_pool<Scheduler>::create_work",
-                "invalid state: thread pool is not running");
-            return invalid_thread_id;
+            if (sched_->Scheduler::has_reached_state(hpx::state::stopping))
+            {
+                // don't schedule new threads any more if the runtime is being
+                // torn down
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "thread_pool<Scheduler>::create_work",
+                    "runtime is being shut down, not creating any new threads");
+                return invalid_thread_id;
+            }
+
+            if (!sched_->Scheduler::is_state(hpx::state::running))
+            {
+                // thread-manager is not currently running
+                HPX_THROWS_IF(ec, hpx::error::invalid_status,
+                    "thread_pool<Scheduler>::create_work",
+                    "invalid state: thread pool is not running");
+                return invalid_thread_id;
+            }
         }
 
         if (data.schedulehint.runs_as_child_mode() ==

@@ -139,7 +139,6 @@ add_hpx_module(
     hpx_lock_registration
     hpx_logging
     hpx_memory
-    hpx_tag_invoke
     hpx_thread_support
     hpx_timing
     hpx_topology

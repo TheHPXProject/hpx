@@ -30,10 +30,10 @@ namespace hpx::lcos::detail {
 ///////////////////////////////////////////////////////////////////////////////
 template <typename Result, typename RemoteResult>
 struct hpx::traits::managed_component_dtor_policy<
-    hpx::lcos::detail::promise_lco<Result, RemoteResult>>
+    hpx::lcos::detail::promise_lco<Result, RemoteResult>, void>
 {
     using type = managed_object_is_lifetime_controlled;
-};    // namespace hpx::traits
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::lcos::detail {

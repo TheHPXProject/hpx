@@ -64,6 +64,47 @@ namespace hpx::components {
         template <typename Ret, typename... Ps>
         using make_async_fn = std::function<Ret(Ps...)>;
 
+        /// Dual-mode callable: supports async and sync invocation.
+        /// c.add(42)                       -> future<R>  (async)
+        /// c.add(hpx::launch::sync, 42)    -> R          (sync)
+        template <typename Ret, typename... Ps>
+        struct dual_fn
+        {
+            std::function<hpx::future<Ret>(Ps...)> async_;
+            std::function<Ret(Ps...)> sync_;
+
+            template <typename... Ts>
+            /// \brief Async invocation: c.add(42) -> future<R>
+            /// \param args Arguments forwarded to the remote action.
+            /// \return hpx::future<R> representing the async result.
+            auto operator()(Ts&&... args) const
+            {
+                return async_(std::forward<Ts>(args)...);
+            }
+
+            /// \brief Sync invocation: c.add(hpx::launch::sync, 42) -> R
+            /// \param args Arguments forwarded to the remote action.
+            /// \return R the result directly, blocking until complete.
+            template <typename... Ts>
+            auto operator()(hpx::launch::sync_policy, Ts&&... args) const
+            {
+                return sync_(std::forward<Ts>(args)...);
+            }
+        };
+
+        template <typename Ret, typename... Ps>
+        using make_dual_fn = dual_fn<Ret, Ps...>;
+
+        /// Returns the dual_fn type for a server member function.
+        consteval std::meta::info build_dual_fn_type(std::meta::info fn)
+        {
+            auto ret = std::meta::return_type_of(fn);
+            std::vector<std::meta::info> args = {ret};
+            for (auto p : std::meta::parameters_of(fn))
+                args.push_back(std::meta::type_of(p));
+            return std::meta::substitute(^^detail::make_dual_fn, args);
+        }
+
         /// Returns the std::function type for async dispatch of a server fn.
         consteval std::meta::info build_async_fn_type(std::meta::info fn)
         {
@@ -85,7 +126,7 @@ namespace hpx::components {
             ::std::vector<::std::meta::info> mems;
             for (auto m : get_client_member_fns<Server>())
                 mems.push_back(
-                    ::std::meta::data_member_spec(build_async_fn_type(m),
+                    ::std::meta::data_member_spec(build_dual_fn_type(m),
                         {.name = ::std::meta::identifier_of(m)}));
             mems.push_back(::std::meta::data_member_spec(^^::hpx::id_type,
                 {
@@ -144,10 +185,18 @@ namespace hpx::components {
         template <std::meta::info Sfn, std::meta::info Cdm>
         auto reflect_dispatch(hpx::id_type id)
         {
-            return [id](auto&&... args) {
+            using dm_t = [:std::meta::type_of(Cdm):];
+            dm_t d;
+            d.async_ = [id](auto&&... args) {
                 return hpx::async<hpx::actions::reflect_component_action<Sfn>>(
                     id, std::forward<decltype(args)>(args)...);
             };
+            d.sync_ = [id](auto&&... args) {
+                return hpx::async<hpx::actions::reflect_component_action<Sfn>>(
+                    id, std::forward<decltype(args)>(args)...)
+                    .get();
+            };
+            return d;
         }
 
         /// Initialize all dispatchers in a generated client.

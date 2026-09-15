@@ -37,10 +37,11 @@ bool is_test_action(hpx::parcelset::parcel const& p)
 #endif
 }
 
-void write_handler(std::error_code const&, hpx::parcelset::parcel const& p)
+bool write_handler(std::error_code const&, hpx::parcelset::parcel const& p)
 {
     if (is_test_action(p))
         ++write_handler_called;
+    return true;
 }
 
 // working around non-copy-ability of packaged_task

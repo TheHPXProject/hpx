@@ -137,7 +137,7 @@ namespace hpx::util {
 namespace hpx::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F>
+    template <typename F>
     struct get_function_address<util::detail::one_shot_wrapper<F>>
     {
         [[nodiscard]] static constexpr std::size_t call(
@@ -148,7 +148,7 @@ namespace hpx::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename F>
+    template <typename F>
     struct get_function_annotation<util::detail::one_shot_wrapper<F>>
     {
         [[nodiscard]] static constexpr char const* call(
@@ -158,7 +158,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename F>
+    template <typename F>
     struct get_function_annotation_tracing<util::detail::one_shot_wrapper<F>>
     {
         [[nodiscard]] static hpx::tracing::annotation_handle call(

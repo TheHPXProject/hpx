@@ -15,6 +15,7 @@
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
@@ -911,6 +912,9 @@ namespace hpx::threads::policies {
                 // we are ready to send at least one task
                 if (!thrds.tasks_.empty())
                 {
+                    hpx::tracing::work_stolen_range(
+                        req.num_thread_, d.num_thread_, thrds.tasks_);
+
                     // send these tasks to the core that has sent the steal
                     // request
                     req.channel_->set(HPX_MOVE(thrds));

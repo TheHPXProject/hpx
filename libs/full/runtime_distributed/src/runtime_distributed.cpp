@@ -326,7 +326,7 @@ namespace hpx {
             agas::get_big_boot_barrier().wait_hosted(
                 pp ? pp->get_locality_name() : "<console>",
                 agas_client_.get_primary_ns_lva(),
-                agas_client_.get_symbol_ns_lva());
+                agas_client_.get_symbol_ns_lva(), agas_client_.is_connecting());
         }
 
         agas_client_.initialize(
@@ -533,12 +533,15 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    std::string locality_prefix(util::runtime_configuration const& cfg)
+    static std::string locality_prefix(util::runtime_configuration const& cfg)
     {
         std::string const localities = cfg.get_entry("hpx.localities", "1");
         std::size_t const num_localities =
             util::from_string<std::size_t>(localities, 1);
-        if (num_localities > 1)
+        bool const expect_connecting_localities =
+            cfg.get_entry("hpx.expect_connecting_localities", "0") != "0";
+        if (num_localities > 1 || expect_connecting_localities ||
+            cfg.mode_ == runtime_mode::connect)
         {
             std::string locality = cfg.get_entry("hpx.locality", "");
             if (!locality.empty())

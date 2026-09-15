@@ -28,6 +28,7 @@ namespace hpx::agas::detail {
 
     ///////////////////////////////////////////////////////////////////////////
     bool (*is_console)() = nullptr;
+    bool (*is_connecting)(naming::gid_type const&) = nullptr;
 
     ///////////////////////////////////////////////////////////////////////////
     bool (*register_name)(std::string const& name, naming::gid_type const& gid,

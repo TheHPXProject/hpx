@@ -1,5 +1,5 @@
 //  Copyright (c) 2012 Maciej Brodowicz
-//  Copyright (c) 2020-2024 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -44,8 +44,12 @@ namespace hpx::util {
         {
         public:
             os_thread_data() = default;
+
+            /// Construct metadata for the current OS thread.
+            /// \param label The thread label.
+            /// \param type The runtime thread type.
             os_thread_data(
-                std::string const& label, runtime_local::os_thread_type type);
+                std::string label, runtime_local::os_thread_type type);
 
         protected:
             friend class util::thread_mapper;

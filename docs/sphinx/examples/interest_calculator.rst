@@ -100,14 +100,14 @@ Here we find our command line variables read in, the rate is converted from a
 percent to a decimal, the number of calculation iterations is determined, and
 then our shared_futures are set up. Notice that we first place our principal and
 rate into shares futures by passing the variables ``init_principal`` and
-``init_rate`` using :cpp:class:`hpx::make_ready_future`.
+``init_rate`` using :hpx:func:`hpx::make_ready_future`.
 
-In this way :cpp:class:`hpx::shared_future`\ ``<double>`` ``principal``
+In this way :hpx:class:`hpx::shared_future`\ ``<double>`` ``principal``
 and ``rate`` will be initialized to ``init_principal`` and ``init_rate`` when
-:cpp:class:`hpx::make_ready_future`\ ``<double>`` returns a future containing
+:hpx:func:`hpx::make_ready_future`\ ``<double>`` returns a future containing
 those initial values. These shared futures then enter the for loop and are
 passed to ``interest``. Next ``principal`` and ``interest`` are passed to the
-reassignment of ``principal`` using a :cpp:class:`hpx::dataflow`. A dataflow
+reassignment of ``principal`` using a :hpx:func:`hpx::dataflow`. A dataflow
 will first wait for its arguments to be ready before launching any callbacks, so
 ``add`` in this case will not begin until both ``principal`` and ``interest``
 are ready. This loop continues for each compound period that must be calculated.
@@ -126,7 +126,7 @@ following statement:
 
    double result = principal.get();
 
-This statement calls :cpp:member:`hpx::future::get` on the shared future
+This statement calls :hpx:member:`hpx::future::get` on the shared future
 principal which had its value calculated by our for loop. The program will wait
 here until the entire dataflow tree has been calculated and the value assigned
 to result. The program then prints out the final value of the investment and the

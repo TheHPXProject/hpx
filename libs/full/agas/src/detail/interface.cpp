@@ -29,6 +29,11 @@ namespace hpx::agas::detail::impl {
         return naming::get_agas_client().is_console();
     }
 
+    bool is_connecting(naming::gid_type const& locality)
+    {
+        return naming::get_agas_client().is_connecting(locality);
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     bool register_name(
         std::string const& name, naming::gid_type const& gid, error_code&)
@@ -534,6 +539,7 @@ namespace hpx::agas {
         agas_interface_functions()
         {
             detail::is_console = &detail::impl::is_console;
+            detail::is_connecting = &detail::impl::is_connecting;
 
             detail::register_name = &detail::impl::register_name;
             detail::register_name_async = &detail::impl::register_name_async;

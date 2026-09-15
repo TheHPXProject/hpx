@@ -9,12 +9,18 @@
 # Make undefined variables errors, print each command
 set -eux
 
-# Clean up old artifacts
-rm -f ./jenkins-hpx* ./*-Testing
-
 export configuration_name_with_build_type="${configuration_name}-${build_type,,}"
 
+# Matrix lanes share this directory. Remove only this lane's old artifacts.
+rm -f \
+    "jenkins-hpx-${configuration_name_with_build_type}.out" \
+    "jenkins-hpx-${configuration_name_with_build_type}.err" \
+    "jenkins-hpx-${configuration_name_with_build_type}-ctest-status.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-build-id.txt" \
+    "jenkins-hpx-${configuration_name_with_build_type}-cdash-submission.txt"
+
 source .jenkins/lsu/slurm-configuration-${configuration_name}.sh
+source .jenkins/common/slurm.sh
 
 if [[ -z "${ghprbPullId:-}" ]]; then
     # Set name of branch if not building a pull request
@@ -31,13 +37,7 @@ else
 
     # Cancel currently running builds on the same branch, but only for pull
     # requests
-    scancel --verbose --verbose --verbose --verbose --jobname="${job_name}"
-
-    # Wait for the job to be cancelled before launching a new job with the
-    # same name
-    while squeue --name="${job_name}" --noheader | grep -q .; do
-        sleep 1                  # adjust the interval as needed
-    done
+    hpx_slurm_cancel_previous "${job_name}"
 
     export install_hpx=0
 fi
@@ -47,7 +47,7 @@ sleep $[(RANDOM % 20) + 1].$[(RANDOM % 20)]s
 
 # Start the actual build
 set +e
-sbatch \
+hpx_slurm_run "${HPX_SLURM_TIMEOUT:-7h}" \
     --verbose --verbose --verbose --verbose \
     --exclusive \
     --job-name="${job_name}" \
@@ -57,7 +57,8 @@ sbatch \
     --time="06:00:00" \
     --output="jenkins-hpx-${configuration_name_with_build_type}.out" \
     --error="jenkins-hpx-${configuration_name_with_build_type}.err" \
-    --wait .jenkins/lsu/batch.sh
+    .jenkins/lsu/batch.sh
+slurm_status=$?
 
 # Print slurm logs
 echo "= stdout =================================================="
@@ -72,7 +73,8 @@ cat jenkins-hpx-${configuration_name_with_build_type}-cdash-submission.txt
 
 # Get build status
 status_file="jenkins-hpx-${configuration_name_with_build_type}-ctest-status.txt"
-if [[ -f "${status_file}" && "$(cat ${status_file})" -eq "0" ]]; then
+if [[ "${slurm_status}" -eq 0 && -f "${status_file}" &&
+    "$(cat ${status_file})" -eq "0" ]]; then
     github_commit_status="success"
 else
     github_commit_status="failure"
@@ -81,10 +83,12 @@ fi
 # Get the CDash dashboard build id
 cdash_build_id="$(cat jenkins-hpx-${configuration_name_with_build_type}-cdash-build-id.txt)"
 
+# Do not print the token passed to the status helper.
+set +x
 if [[ -z "${ghprbPullId:-}" ]]; then
     .jenkins/common/set_github_status.sh \
         "${GITHUB_TOKEN}" \
-        "STEllAR-GROUP/hpx" \
+        "TheHPXProject/hpx" \
         "${GIT_COMMIT}" \
         "${github_commit_status}" \
         "${configuration_name_with_build_type}" \
@@ -104,6 +108,19 @@ else
         "${cdash_build_id}" \
         "jenkins/lsu"
 fi
+github_status_result=$?
+set -x
+
+if [[ "${github_status_result}" -ne 0 ]]; then
+    build_status=$(cat "${status_file}")
+    if [[ "${build_status}" -ne 0 ]]; then
+        exit "${build_status}"
+    fi
+    exit "${github_status_result}"
+fi
 
 set -e
+if [[ "${slurm_status}" -ne 0 ]]; then
+    exit "${slurm_status}"
+fi
 exit $(cat ${status_file})

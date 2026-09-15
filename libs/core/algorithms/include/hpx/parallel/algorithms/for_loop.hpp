@@ -1838,8 +1838,7 @@ namespace hpx::experimental {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
-        typename Tuple>
+    template <typename ExPolicy, typename F, typename S, typename Tuple>
     struct get_function_address<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {
@@ -1851,8 +1850,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
-        typename Tuple>
+    template <typename ExPolicy, typename F, typename S, typename Tuple>
     struct get_function_annotation<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {
@@ -1864,8 +1862,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename S,
-        typename Tuple>
+    template <typename ExPolicy, typename F, typename S, typename Tuple>
     struct get_function_annotation_tracing<
         hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>>
     {

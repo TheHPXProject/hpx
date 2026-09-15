@@ -142,9 +142,8 @@ int main()
     // hook is exercised here.
     {
         std::atomic<bool> receiver_set_value_called{false};
-        std::atomic<bool> tag_invoke_overload_called{false};
-        auto s = custom_sender_tag_invoke{tag_invoke_overload_called} |
-            ex::ensure_started();
+        std::atomic<bool> overload_called{false};
+        auto s = custom_sender_overload{overload_called} | ex::ensure_started();
         static_assert(ex::is_sender_v<decltype(s)>);
         static_assert(ex::is_sender_in_v<decltype(s), ex::empty_env>);
 
@@ -159,7 +158,7 @@ int main()
         auto os = ex::connect(std::move(s), std::move(r));
         ex::start(os);
         HPX_TEST(receiver_set_value_called);
-        HPX_TEST(!tag_invoke_overload_called);
+        HPX_TEST(!overload_called);
     }
 
     // Failure path

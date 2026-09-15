@@ -860,7 +860,7 @@ namespace hpx::parallel {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_address<
         parallel::detail::transform_iteration<ExPolicy, F, Proj>>
     {
@@ -872,7 +872,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_annotation<
         parallel::detail::transform_iteration<ExPolicy, F, Proj>>
     {
@@ -884,7 +884,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj>
+    template <typename ExPolicy, typename F, typename Proj>
     struct get_function_annotation_tracing<
         parallel::detail::transform_iteration<ExPolicy, F, Proj>>
     {
@@ -896,8 +896,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj1,
-        typename Proj2>
+    template <typename ExPolicy, typename F, typename Proj1, typename Proj2>
     struct get_function_address<
         parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1, Proj2>>
     {
@@ -909,8 +908,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj1,
-        typename Proj2>
+    template <typename ExPolicy, typename F, typename Proj1, typename Proj2>
     struct get_function_annotation<
         parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1, Proj2>>
     {
@@ -922,8 +920,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F, typename Proj1,
-        typename Proj2>
+    template <typename ExPolicy, typename F, typename Proj1, typename Proj2>
     struct get_function_annotation_tracing<
         parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1, Proj2>>
     {

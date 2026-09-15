@@ -19,11 +19,9 @@
 #include <hpx/modules/supervision.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
-#include <hpx/supervision_dispatch/server/registry.hpp>
-#include <hpx/supervision_dispatch/testing.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 
@@ -31,21 +29,38 @@
 // Test Cases
 // ============================================================================
 
-// Joining a peer sentinel must succeed and return a valid shadow target id that
-// is distinct from the peer sentinel's own id, confirming that a local shadow
-// was created rather than simply aliasing the peer.
-void test_registry_join_creates_shadow()
+// Every test below uses hpx::find_here() as the peer sentinel's locality;
+// registry::join() derives peer_locality from that same id (see
+// sentinel::get_locality()), and registry::register_observers() (see
+// registry_server.cpp) seeds/mirrors the peer's lifecycle state directly onto
+// that peer_locality id. hpx::supervision keys its local per-target
+// lifecycle state (including the current epoch) purely by hpx::id_type
+// value. Without resetting that shared state, whatever epoch/event one test
+// leaves behind on `here` - in particular a terminal event, which bumps the
+// *next* join's seed epoch via `local_state.epoch + 1` - leaks into and
+// corrupts whichever test runs next in this binary. Call this at the start
+// of every test function below to guarantee each one starts from a clean,
+// "never seen this target" state.
+void reset_shared_shadow_state()
 {
+    hpx::error_code ec(hpx::throwmode::lightweight);
+    hpx::supervision::remove_target(hpx::find_here(), ec);
+    HPX_TEST(!ec);
+}
+
+// Joining a peer locality must create or reuse local mirrored state and return
+// the peer locality as the joined target.
+void test_registry_join_creates_state()
+{
+    reset_shared_shadow_state();
+
     auto const here = hpx::find_here();
-    hpx::supervision::sentinel const peer_sentinel(here);
     hpx::supervision::registry const r(here);
 
-    auto const [shadow, target] =
-        r.join(hpx::launch::sync, peer_sentinel, here);
+    auto const [target, _] = r.join(hpx::launch::sync, here);
 
     HPX_TEST_EQ(target, here);
-    HPX_TEST_NEQ(shadow, hpx::supervision::invalid_shadow_id);
-    HPX_TEST_NEQ(shadow.get(), peer_sentinel.get_id());
+    HPX_TEST_NEQ(target, hpx::invalid_id);
 }
 
 // join() is idempotent for a given peer sentinel: joining the same peer twice
@@ -53,45 +68,62 @@ void test_registry_join_creates_shadow()
 // tracked in registry state rather than recreated on every call.
 void test_registry_join_idempotent()
 {
-    hpx::supervision::sentinel const peer(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    hpx::supervision::joined_peer const peer1 =
-        r.join(hpx::launch::sync, peer, hpx::find_here());
-    hpx::supervision::joined_peer const peer2 =
-        r.join(hpx::launch::sync, peer, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    hpx::supervision::joined_peer const peer1 = r.join(hpx::launch::sync, here);
+    hpx::supervision::joined_peer const peer2 = r.join(hpx::launch::sync, here);
 
     HPX_TEST_EQ(peer1, peer2);
 }
 
-// Same as test_registry_join_creates_shadow(), but using the asynchronous
+// Same as test_registry_join_creates_state(), but using the asynchronous
 // overload of join().
 void test_registry_join_async()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    hpx::future<hpx::supervision::joined_peer> f =
-        r.join(peer_sentinel, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    hpx::future<hpx::supervision::joined_peer> f = r.join(here);
     hpx::supervision::joined_peer const peer = f.get();
 
-    HPX_TEST_NEQ(peer.shadow, hpx::supervision::invalid_shadow_id);
+    HPX_TEST_NEQ(peer.target, hpx::invalid_id);
 }
 
-// Two different registries joining two different peer sentinels must be tracked
-// independently and get distinct shadow ids.
+// Two distinct peer sentinels joined against the same registry (even via the
+// same peer_locality) must be tracked independently: each gets its own entry in
+// the registry's internal peers_ map. `joined_peer` itself is not a reliable
+// witness for this - its `target` field is peer_locality-derived rather than
+// peer-derived (so it is identical for both joins here), and its `join_epoch`
+// field is seeded from the peer's own published state (so it is also identical
+// - both epoch 0 - for two freshly joined sentinels). Distinct per-sentinel
+// tracking is instead verified via snapshot_peers(), which exposes one entry
+// per tracked peer_sentinel.
 void test_registry_join_distinct_peers()
 {
-    hpx::supervision::sentinel const peer1(hpx::find_here());
-    hpx::supervision::sentinel const peer2(hpx::find_here());
+    reset_shared_shadow_state();
+
+    hpx::id_type const& here = hpx::find_here();
+
     hpx::supervision::registry const r(hpx::find_here());
 
-    hpx::supervision::joined_peer const shadow1 =
-        r.join(hpx::launch::sync, peer1, hpx::find_here());
-    hpx::supervision::joined_peer const shadow2 =
-        r.join(hpx::launch::sync, peer2, hpx::find_here());
+    r.join(hpx::launch::sync, here);
+    r.join(hpx::launch::sync, here);
 
-    HPX_TEST_NEQ(shadow1, shadow2);
+    std::vector<hpx::supervision::server::peer_snapshot> const peers =
+        r.snapshot_peers(hpx::launch::sync);
+
+    HPX_TEST_EQ(peers.size(), static_cast<std::size_t>(1));
+
+    bool const found_peer1 = std::ranges::find_if(peers, [&](auto const& peer) {
+        return peer.peer_locality == here;
+    }) != peers.end();
+
+    HPX_TEST(found_peer1);
 }
 
 // join() seeds the local shadow with `event::started`, giving it a
@@ -99,13 +131,15 @@ void test_registry_join_distinct_peers()
 // notification for the peer arrives.
 void test_registry_join_seeds_shadow_started()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    auto const [shadow, _] =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
 
-    auto const seeded_state = hpx::supervision::query_state(shadow.get());
+    hpx::supervision::registry const r(here);
+
+    auto const [target, _] = r.join(hpx::launch::sync, here);
+
+    auto const seeded_state = hpx::supervision::query_state(target);
     HPX_TEST(seeded_state.last_event == hpx::supervision::event::started);
 }
 
@@ -115,21 +149,27 @@ void test_registry_join_seeds_shadow_started()
 // querying the shadow's state reflects the peer's terminal state.
 void test_registry_join_mirrors_failed_event_on_shadow()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    auto const [shadow, _] =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
+
+    hpx::supervision::registry const r(here);
+
+    auto const [target, _] = r.join(hpx::launch::sync, here);
 
     // Bring the peer sentinel to a valid prior state (`started`); this is
     // required by hpx::supervision's own lifecycle state machine and is
     // independent of the shadow mirroring under test here.
-    peer_sentinel.start(hpx::launch::sync);
+    hpx::supervision::publish_event(here, hpx::supervision::event::started, 0);
 
-    hpx::supervision::publish_event(hpx::launch::sync, hpx::find_here(),
-        peer_sentinel.get_id(), hpx::supervision::event::failed, 0);
+    // sentinel::start()/publish_event() publish under the sentinel's own
+    // hosting locality (hpx::find_here(), evaluated on that locality) rather
+    // than the sentinel's own component id; register_observers() now watches
+    // that same locality-keyed target, so the simulated `failed` event below
+    // must target it too for the registry's lifecycle observer to fire.
+    hpx::supervision::publish_event(here, hpx::supervision::event::failed, 0);
 
-    auto const shadow_state = hpx::supervision::query_state(shadow.get());
+    auto const shadow_state = hpx::supervision::query_state(target);
     HPX_TEST(shadow_state.last_event == hpx::supervision::event::failed);
 }
 
@@ -139,20 +179,24 @@ void test_registry_join_mirrors_failed_event_on_shadow()
 // shadow so the mirrored `completed` event is accepted.
 void test_registry_join_mirrors_completed_event_on_shadow()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    auto const [shadow, _] =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
 
-    peer_sentinel.start(hpx::launch::sync);
+    hpx::supervision::registry const r(here);
 
-    hpx::supervision::publish_event(hpx::launch::sync, hpx::find_here(),
-        peer_sentinel.get_id(), hpx::supervision::event::running, 0);
-    hpx::supervision::publish_event(hpx::launch::sync, hpx::find_here(),
-        peer_sentinel.get_id(), hpx::supervision::event::completed, 0);
+    auto const [target, _] = r.join(hpx::launch::sync, here);
 
-    auto const shadow_state = hpx::supervision::query_state(shadow.get());
+    hpx::supervision::publish_event(here, hpx::supervision::event::started, 0);
+
+    // See test_registry_join_mirrors_failed_event_on_shadow() above for why
+    // these target hpx::find_here() rather than peer_sentinel.get_id().
+    hpx::supervision::publish_event(
+        hpx::find_here(), hpx::supervision::event::running, 0);
+    hpx::supervision::publish_event(
+        hpx::find_here(), hpx::supervision::event::completed, 0);
+
+    auto const shadow_state = hpx::supervision::query_state(target);
     HPX_TEST(shadow_state.last_event == hpx::supervision::event::completed);
 }
 
@@ -164,8 +208,11 @@ void test_registry_join_mirrors_completed_event_on_shadow()
 // a deadlock.
 void test_registry_join_concurrent_race()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
+
+    hpx::id_type const& here = hpx::find_here();
+
+    hpx::supervision::registry const r(here);
 
     constexpr std::size_t num_joiners = 64;
 
@@ -173,70 +220,29 @@ void test_registry_join_concurrent_race()
     futures.reserve(num_joiners);
     for (std::size_t i = 0; i != num_joiners; ++i)
     {
-        futures.push_back(r.join(peer_sentinel, hpx::find_here()));
+        futures.push_back(r.join(here));
     }
 
     std::vector<hpx::supervision::joined_peer> const peers =
         hpx::unwrap(std::move(futures));
 
     // Every concurrent joiner must observe the same, valid shadow id.
-    HPX_TEST_NEQ(peers.front().shadow, hpx::supervision::invalid_shadow_id);
-    HPX_TEST_NEQ(peers.front().shadow.get(), peer_sentinel.get_id());
-    for (hpx::supervision::joined_peer const& peer : peers)
+    HPX_TEST_EQ(peers.size(), num_joiners);
+    if (!peers.empty())
     {
-        HPX_TEST_EQ(peer, peers.front());
+        HPX_TEST_NEQ(peers.front().target, hpx::invalid_id);
+        for (hpx::supervision::joined_peer const& peer : peers)
+        {
+            HPX_TEST_EQ(peer, peers.front());
+        }
+
+        // The winning reservation must have fully seeded the shadow's lifecycle
+        // state; a losing/re-entrant caller returning early on a
+        // half-constructed entry would leave this unset or inconsistent.
+        auto const seeded_state =
+            hpx::supervision::query_state(peers.front().target);
+        HPX_TEST(seeded_state.last_event == hpx::supervision::event::started);
     }
-
-    // The winning reservation must have fully seeded the shadow's lifecycle
-    // state; a losing/re-entrant caller returning early on a
-    // half-constructed entry would leave this unset or inconsistent.
-    auto const seeded_state =
-        hpx::supervision::query_state(peers.front().shadow.get());
-    HPX_TEST(seeded_state.last_event == hpx::supervision::event::started);
-}
-
-// If register_observers() fails during join() -- e.g. because the peer's
-// locality could not be validated -- the shadow minted and seeded just before
-// that call must not be left behind: the failure path must remove its locally
-// tracked supervision state, not just release the peer's reservation in peers_.
-// hpx::supervision::server::detail::last_join_shadow() is testing
-// infrastructure support that lets us retrieve the shadow that was minted for
-// the failed attempt, since join() itself never hands it back to the caller on
-// failure.
-void test_registry_join_failure_removes_shadow_state()
-{
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
-
-    // An invalid peer locality makes hpx::supervision::register_observer()
-    // reject the call outright (see registry::register_observers()), so join()
-    // fails before either observer is actually registered -- but only after
-    // already minting and seeding a shadow for it.
-    hpx::error_code ec;
-    hpx::supervision::joined_peer const peer =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::invalid_id, ec);
-
-    HPX_TEST(ec);
-    HPX_TEST_EQ(peer.shadow, hpx::supervision::invalid_shadow_id);
-
-    hpx::supervision::shadow_id const failed_shadow =
-        hpx::supervision::testing::last_join_shadow();
-    HPX_TEST_NEQ(failed_shadow, hpx::supervision::invalid_shadow_id);
-
-    // The failed attempt's shadow must have had its local state removed by
-    // register_observers()'s catch block: querying it now must report the same
-    // "never seen this target" result as a target that never published
-    // anything, rather than the `started` event join() seeded it with.
-    auto const state = hpx::supervision::query_state(failed_shadow.get());
-    HPX_TEST(state.last_event == hpx::supervision::event::unknown);
-    HPX_TEST(state.ec);
-
-    // The failed reservation must also have been released: retrying with a
-    // valid locality must succeed and mint a fresh shadow.
-    auto const [shadow, _] =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
-    HPX_TEST_NEQ(shadow, hpx::supervision::invalid_shadow_id);
-    HPX_TEST_NEQ(shadow, failed_shadow);
 }
 
 // Once a joined peer sentinel reaches a terminal lifecycle event, its entry
@@ -249,15 +255,20 @@ void test_registry_join_failure_removes_shadow_state()
 // entry were still sitting in peers_.
 void test_registry_join_terminal_peer_evicted_from_peers()
 {
-    hpx::supervision::sentinel const peer_sentinel(hpx::find_here());
-    hpx::supervision::registry const r(hpx::find_here());
+    reset_shared_shadow_state();
 
-    hpx::supervision::joined_peer const peer =
-        r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
+    hpx::id_type const& here = hpx::find_here();
 
-    peer_sentinel.start(hpx::launch::sync);
-    hpx::supervision::publish_event(hpx::launch::sync, hpx::find_here(),
-        peer_sentinel.get_id(), hpx::supervision::event::failed, 0);
+    hpx::supervision::registry const r(here);
+
+    hpx::supervision::joined_peer const peer = r.join(hpx::launch::sync, here);
+
+    hpx::supervision::publish_event(here, hpx::supervision::event::started, 0);
+
+    // See test_registry_join_mirrors_failed_event_on_shadow() above for why
+    // this targets hpx::find_here() rather than peer_sentinel.get_id().
+    hpx::supervision::publish_event(
+        hpx::find_here(), hpx::supervision::event::failed, 0);
 
     // Eviction is dispatched asynchronously (via hpx::post()) once the terminal
     // publish above has completed, so poll re-joining until the peer's entry is
@@ -266,8 +277,7 @@ void test_registry_join_terminal_peer_evicted_from_peers()
     hpx::supervision::joined_peer rejoined_shadow;
     for (int i = 0; i != 10000; ++i)
     {
-        rejoined_shadow =
-            r.join(hpx::launch::sync, peer_sentinel, hpx::find_here());
+        rejoined_shadow = r.join(hpx::launch::sync, here);
         if (rejoined_shadow != peer)
         {
             break;
@@ -278,12 +288,41 @@ void test_registry_join_terminal_peer_evicted_from_peers()
     HPX_TEST_NEQ(rejoined_shadow, peer);
 }
 
+// A peer_locality that does not represent a locality id must be rejected with
+// hpx::error::bad_parameter, and rejected *before* any registration side
+// effects occur - no shadow entry should be seeded/published, and
+// snapshot_peers() must stay empty.
+void test_registry_join_rejects_non_locality()
+{
+    reset_shared_shadow_state();
+
+    hpx::id_type const& here = hpx::find_here();
+    hpx::supervision::registry const r(here);
+
+    // use invalid_id to try to join "as if" it were a peer locality.
+    bool threw_bad_parameter = false;
+    try
+    {
+        r.join(hpx::launch::sync, hpx::invalid_id);
+        HPX_TEST(false);
+    }
+    catch (hpx::exception const& e)
+    {
+        threw_bad_parameter = (e.get_error() == hpx::error::bad_parameter);
+    }
+    HPX_TEST(threw_bad_parameter);
+
+    // No new peer entry should have been created for the rejected id.
+    auto const peers = r.snapshot_peers(hpx::launch::sync);
+    HPX_TEST(peers.empty());
+}
+
 // ============================================================================
 // Main Test Entry Point
 // ============================================================================
 int hpx_main()
 {
-    test_registry_join_creates_shadow();
+    test_registry_join_creates_state();
     test_registry_join_idempotent();
     test_registry_join_async();
     test_registry_join_distinct_peers();
@@ -294,8 +333,8 @@ int hpx_main()
     {
         test_registry_join_concurrent_race();
     }
-    test_registry_join_failure_removes_shadow_state();
     test_registry_join_terminal_peer_evicted_from_peers();
+    test_registry_join_rejects_non_locality();
 
     return hpx::finalize();
 }

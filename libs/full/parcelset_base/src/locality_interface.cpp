@@ -16,6 +16,7 @@
 #include <hpx/parcelset_base/parcel_interface.hpp>
 #include <hpx/parcelset_base/policies/message_handler.hpp>
 
+#include <cstdint>
 #include <string>
 #include <system_error>
 
@@ -30,6 +31,11 @@ namespace hpx::parcelset {
     locality create_locality(std::string const& name)
     {
         return detail::create_locality(name);
+    }
+
+    bool locality_was_disconnected(std::uint32_t const id)
+    {
+        return detail::locality_was_disconnected(id);
     }
 
     namespace detail {

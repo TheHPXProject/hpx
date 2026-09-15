@@ -53,7 +53,8 @@ namespace hpx::parcelset {
         parcelport& operator=(parcelport&&) = delete;
 
     public:
-        using write_handler_type = parcel_write_handler_type;
+        using write_handler_type = hpx::function<void(
+            std::error_code const&, parcelset::parcel const&)>;
 
         using read_handler_type = hpx::function<void(parcelport& pp,
             std::shared_ptr<std::vector<char>>, threads::thread_priority)>;

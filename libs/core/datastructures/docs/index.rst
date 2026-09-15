@@ -14,12 +14,12 @@ datastructures
 The datastructures module provides basic data structures (typically provided for
 compatibility with older C++ standards):
 
-* :cpp:class:`hpx::detail::small_vector`
-* :cpp:class:`hpx::util::basic_any`
-* :cpp:class:`hpx::util::member_pack`
-* :cpp:class:`hpx::optional`
-* :cpp:struct:`hpx::tuple`
-* :cpp:class:`hpx::variant`
+* :hpx:class:`hpx::detail::small_vector`
+* :hpx:class:`hpx::util::basic_any`
+* :hpx:class:`hpx::util::member_pack`
+* :hpx:class:`hpx::optional`
+* :hpx:struct:`hpx::tuple`
+* :hpx:class:`hpx::variant`
 
 See the :ref:`API reference <modules_datastructures_api>` of the module for more
 details.

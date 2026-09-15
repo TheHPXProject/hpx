@@ -95,7 +95,7 @@ namespace hpx::parallel::util::detail {
 
 namespace hpx::traits {
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename F>
+    template <typename Result, typename F>
     struct get_function_address<
         parallel::util::detail::partitioner_iteration<Result, F>>
     {
@@ -107,7 +107,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename F>
+    template <typename Result, typename F>
     struct get_function_annotation<
         parallel::util::detail::partitioner_iteration<Result, F>>
     {
@@ -119,7 +119,7 @@ namespace hpx::traits {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename F>
+    template <typename Result, typename F>
     struct get_function_annotation_tracing<
         parallel::util::detail::partitioner_iteration<Result, F>>
     {

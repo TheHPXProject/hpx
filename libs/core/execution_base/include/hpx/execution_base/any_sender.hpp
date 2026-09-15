@@ -473,7 +473,7 @@ namespace hpx::execution::experimental::detail {
 
         void set_stopped() && noexcept override
         {
-            HPX_UNREACHABLE;
+            hpx::execution::experimental::set_stopped(HPX_MOVE(receiver));
         }
     };
 
@@ -772,10 +772,14 @@ namespace hpx::execution::experimental {
         unique_any_sender& operator=(unique_any_sender&&) = default;
         unique_any_sender& operator=(unique_any_sender const&) = delete;
 
-        // TODO: Remove this
-        using completion_signatures =
-            hpx::execution::experimental::completion_signatures<
-                set_value_t(Ts...), set_error_t(std::exception_ptr)>;
+        template <typename Self, typename... Env>
+        static consteval auto get_completion_signatures() noexcept
+            -> hpx::execution::experimental::completion_signatures<set_value_t(
+                                                                       Ts...),
+                set_error_t(std::exception_ptr), set_stopped_t()>
+        {
+            return {};
+        }
 
         template <typename R>
         detail::any_operation_state connect(R&& r) &&
@@ -847,10 +851,14 @@ namespace hpx::execution::experimental {
         any_sender& operator=(any_sender&&) = default;
         any_sender& operator=(any_sender const&) = default;
 
-        // TODO: Remove this
-        using completion_signatures =
-            hpx::execution::experimental::completion_signatures<
-                set_value_t(Ts...), set_error_t(std::exception_ptr)>;
+        template <typename Self, typename... Env>
+        static consteval auto get_completion_signatures() noexcept
+            -> hpx::execution::experimental::completion_signatures<set_value_t(
+                                                                       Ts...),
+                set_error_t(std::exception_ptr), set_stopped_t()>
+        {
+            return {};
+        }
 
         template <typename R>
         detail::any_operation_state connect(R&& r) &

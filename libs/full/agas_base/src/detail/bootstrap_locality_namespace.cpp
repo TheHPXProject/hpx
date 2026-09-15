@@ -50,9 +50,9 @@ namespace hpx::agas::detail {
             endpoints, count, num_threads, suggested_prefix);
     }
 
-    void bootstrap_locality_namespace::free(naming::gid_type const& locality)
+    bool bootstrap_locality_namespace::free(naming::gid_type const& locality)
     {
-        server_.free(locality);
+        return server_.free(locality);
     }
 
     std::vector<std::uint32_t> bootstrap_locality_namespace::localities()

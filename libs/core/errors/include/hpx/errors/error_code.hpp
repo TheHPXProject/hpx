@@ -219,6 +219,29 @@ namespace hpx {
         error_code(error e, std::string const& msg, char const* func,
             char const* file, long line, throwmode mode = throwmode::plain);
 
+        /// Construct an object of type error_code.
+        ///
+        /// \param ec     The parameter \p ec holds a std::error_code describing
+        ///               the error.
+        /// \param msg    The parameter \p msg holds the error message the new
+        ///               exception should encapsulate.
+        /// \param func   The name of the function where the error was raised.
+        /// \param file   The file name of the code where the error was raised.
+        /// \param line   The line number of the code line where the error was
+        ///               raised.
+        /// \param mode   The parameter \p mode specifies whether the
+        ///        constructed
+        ///               hpx::error_code belongs to the error category
+        ///               \a hpx_category (if mode is \a plain, this is the
+        ///               default) or to the category \a hpx_category_rethrow
+        ///               (if mode is \a rethrow).
+        ///
+        /// \throws std#bad_alloc (if allocation of a copy of the passed string
+        ///         fails).
+        error_code(std::error_code const& ec, std::string const& msg,
+            char const* func, char const* file, long line,
+            throwmode mode = throwmode::plain);
+
         error_code(error_code&&) = default;
         error_code& operator=(error_code&&) = default;
 

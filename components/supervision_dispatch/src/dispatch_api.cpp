@@ -6,18 +6,20 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/modules/actions.hpp>
 #include <hpx/modules/async_combinators.hpp>
+#include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/runtime_distributed.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/synchronization.hpp>
 
 #include <hpx/supervision_dispatch/discovery.hpp>
 #include <hpx/supervision_dispatch/dispatch_api.hpp>
 #include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
 #include <hpx/supervision_dispatch/testing.hpp>
 
 #include <algorithm>
@@ -28,6 +30,7 @@
 #include <iterator>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -77,11 +80,10 @@ namespace {
         // publish_event() call.
         std::atomic<std::uint64_t> epoch_{0};
 
-        // The locally owned sentinel/registry component pair. Only non-null
-        // while state is initializing/active; reset to nullptr (destroying the
-        // underlying components via client_'s default manage_lifetime=true)
-        // once finalize() unregisters their names.
-        hpx::supervision::sentinel sentinel_;
+        // The locally owned registry component. Only non-null while state is
+        // initializing/active; reset to nullptr (destroying the underlying
+        // components via client_'s default manage_lifetime=true) once
+        // finalize() unregisters their names.
         hpx::supervision::registry registry_;
 
         // Shared handle to the in-flight init() call's outcome, published by
@@ -90,15 +92,15 @@ namespace {
         // settles (whether it succeeds, throws, or rolls back). Concurrent
         // callers observing state == initializing attach to this shared_future
         // instead of starting a second, redundant init sequence.
-        hpx::shared_future<void> in_flight_init_;
+        hpx::shared_future<hpx::supervision::registry> in_flight_init_;
 
-        // Owned/guarded the same way sentinel_/registry_ already are.
+        // Owned/guarded the same way registry_ already are.
         // failure_detection_task_ holds the running poll loop so finalize() can
-        // join it before tearing down registry_/sentinel_.
+        // join it before tearing down registry_.
         hpx::future<void> failure_detection_task_;
 
         // Owned/guarded the same way failure_detection_task_ is. Keeps the
-        // local sentinel's last_event/timestamp/sequence-number moving while
+        // local locality's last_event/timestamp/sequence-number moving while
         // active, so failure_detection_loop() on peer localities can
         // distinguish idle-but-alive from actually dead.
         hpx::future<void> heartbeat_task_;
@@ -120,10 +122,10 @@ namespace {
         std::atomic<dispatcher_lifecycle_state> state_{
             dispatcher_lifecycle_state::uninitialized};
 
-        // Guards sentinel_/registry_ and in_flight_init_ together, since both
+        // Guards registry_ and in_flight_init_ together, since both
         // are read-modify-write as a unit whenever a lifecycle transition is in
         // progress (a losing caller reading in_flight_init_ must never observe
-        // a partially-constructed sentinel_/registry_ pair, and vice versa).
+        // a partially-constructed registry_, and vice versa).
         hpx::spinlock mtx_;
 
         // Testing infrastructure: track ongoing await_terminal calls.
@@ -139,6 +141,17 @@ namespace {
         return state;
     }
 
+    // Builds a ready shared_future carrying a copy of the currently-active
+    // registry_, taken under mtx_ so the read never observes a partially-
+    // constructed registry racing a concurrent init()/finalize() transition.
+    // Used by every "already active" return path in init().
+    hpx::shared_future<hpx::supervision::registry> make_active_handle(
+        dispatch_state& ds)
+    {
+        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+        return hpx::make_ready_future(ds.registry_);
+    }
+
     // Runs the actual initialization sequence. Only ever invoked by the caller
     // that won the uninitialized -> initializing transition.
     void run_init_sequence(
@@ -146,45 +159,40 @@ namespace {
     {
         dispatch_state& ds = get_dispatch_state();
 
-        // Steps 1-2: create the local sentinel/registry pair and publish
-        // event::started before either name is registered, so no peer can ever
-        // discover and join a not-yet-started sentinel.
+        // Steps 1-2: create the local registry and publish event::started
+        // before it is registered, so no peer can ever discover and join a
+        // not-yet-started locality.
         hpx::id_type const& here = hpx::find_here();
-        auto local_sentinel = hpx::supervision::sentinel(here);
         auto local_registry = hpx::supervision::registry(here);
 
-        try
-        {
-            // New, strictly increasing epoch for this cycle's event::start
-            // publication.
-            std::uint64_t const new_epoch = ++ds.epoch_;
-            local_sentinel.start(hpx::launch::sync, new_epoch);
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                // New, strictly increasing epoch for this cycle's event::start
+                // publication.
+                std::uint64_t const new_epoch = ++ds.epoch_;
+                hpx::supervision::publish_event(
+                    here, hpx::supervision::event::started, new_epoch);
 
-            // Step 3: register both names.
-            local_sentinel.register_name(hpx::launch::sync);
-            local_registry.register_name(hpx::launch::sync);
+                // Step 3: register symbol name.
+                local_registry.register_name(hpx::launch::sync);
 
-            // Step 4: single reactive discover_and_join() pass.
-            discover_and_join(local_registry, discovery_timeout);
+                // Step 4: single reactive discover_and_join() pass.
+                discover_and_join(local_registry, discovery_timeout);
 
-            // Success: install the pair for finalize() and is_initialized()
-            // to observe.
-            {
-                std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                ds.sentinel_ = HPX_MOVE(local_sentinel);
-                ds.registry_ = HPX_MOVE(local_registry);
-            }
-        }
-        catch (...)
-        {
-            // Step 5: unregister both names, best-effort.
-            hpx::error_code ec1(hpx::throwmode::lightweight);
-            local_registry.unregister_name(hpx::launch::sync, ec1);
-            hpx::error_code ec2(hpx::throwmode::lightweight);
-            local_sentinel.unregister_name(hpx::launch::sync, ec2);
+                // Success: install the pair for finalize() and is_initialized()
+                // to observe.
+                {
+                    std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                    ds.registry_ = HPX_MOVE(local_registry);
+                }
+            },
+            [&](std::exception_ptr const& e) {
+                // Step 5: unregister both names, best-effort.
+                hpx::error_code ec1(hpx::throwmode::lightweight);
+                local_registry.unregister_name(hpx::launch::sync, ec1);
 
-            std::rethrow_exception(std::current_exception());
-        }
+                std::rethrow_exception(e);
+            });
     }
 
     bool needs_stopping(std::atomic<bool> const& flag,
@@ -204,9 +212,8 @@ namespace {
     //     discover_and_join() returns, so it only ever iterates over peers
     //     already joined and never races initialization.
     //   - Stopped from finalize(): stop_failure_detection_ is flipped and the
-    //     owning hpx::future<void> is .get()'d before sentinel_/ registry_ are
-    //     torn down, since the loop dereferences the registry's shadows while
-    //     running.
+    //     owning hpx::future<void> is .get()'d before registry_ is torn down,
+    //     since the loop dereferences the registry's shadows while running.
     //
     // Per sweep:
     //   - Snapshots currently-joined, ready, non-evicting peers via
@@ -222,13 +229,16 @@ namespace {
     // Fencing semantics:
     //   - hpx::error::future_cancelled on a peer's await_terminal future means
     //     a genuine timeout: no terminal event arrived under the epoch we
-    //     waited on. In that case we bump and publish event::failed against
-    //     *our own local copy* of that peer's shadow only. We never contact the
-    //     (possibly dead) peer's own sentinel/registry - the remote re-check
-    //     inside invoke_fenced_action is what is authoritative on the target
-    //     locality; this loop only needs the local shadow to reflect failure so
-    //     future check_admission()/dispatch_work() calls against it observe the
-    //     fence.
+    //     waited on. Before fencing, the epoch captured when the wait was
+    //     started is re-confirmed against a fresh query_state() call, since the
+    //     target's supervision manager may have erased its recorded state for
+    //     this epoch in the interim (e.g. remove_target() ran because the peer
+    //     left/rejoined); publishing event::failed against a no-longer- open
+    //     epoch would otherwise be rejected as an illegal new-epoch opener. If
+    //     the epoch is still confirmed open, we bump and publish event::failed
+    //     against *our own local copy* of that peer's shadow only; this loop
+    //     only needs the local shadow to reflect failure so future
+    //     check_admission()/dispatch_work() calls against it observe the fence.
     //   - hpx::error::stale_state means the epoch was already advanced
     //     (typically the reactive eviction path already fired) - no action
     //     needed.
@@ -252,11 +262,10 @@ namespace {
     //     vector, so they run to completion safely after this function returns.
     //     This is intentionally allowed: each continuation only touches a
     //     captured-by-value shadow/epoch and calls publish_event against that
-    //     local shadow, never reaching into dispatch_state's
-    //     registry_/sentinel_, so it cannot race finalize()'s teardown.
-    //     Consequently, finalize() returning promptly does not imply all
-    //     background poll activity has ceased - only that this loop itself has
-    //     stopped issuing new sweeps.
+    //     local shadow, never reaching into dispatch_state's registry_, so it
+    //     cannot race finalize()'s teardown. Consequently, finalize() returning
+    //     promptly does not imply all background poll activity has ceased -
+    //     only that this loop itself has stopped issuing new sweeps.
 
     void pace_consecutive_sweeps(std::atomic<bool> const& flag,
         std::chrono::milliseconds const& poll_interval)
@@ -275,7 +284,19 @@ namespace {
     // Track query_state failures during executing the failure detection loop.
     struct peer_tracking
     {
-        std::uint64_t last_known_epoch = 0;
+        // Registry-level join epoch, used only to detect that the peer left
+        // and rejoined (in which case any stale tracking below must reset).
+        // This is distinct from the peer's local dispatch lifecycle epoch
+        // (state.epoch) that publish_event/await_terminal operate on -
+        // conflating the two causes spurious rejoin resets and lets the
+        // failure fence be published against the wrong epoch.
+        std::uint64_t join_epoch = 0;
+
+        // Last lifecycle epoch (state.epoch) observed from a successful
+        // query_state for this peer. Unset until the first successful query;
+        // only a value observed this way is valid to fence against.
+        std::optional<std::uint64_t> last_lifecycle_epoch;
+
         std::uint32_t consecutive_query_failures = 0;
     };
 
@@ -300,7 +321,7 @@ namespace {
     // Re-query and compare event_sequence_number before concluding genuine
     // silence. Callers reuse the returned seq instead of re-querying.
     silence_probe probe_peer_silence(
-        std::uint64_t const last_seq, hpx::supervision::shadow_id const& shadow)
+        std::uint64_t const last_seq, hpx::id_type const& locality)
     {
         // await_terminal only unblocks on a terminal event, so a timeout alone
         // does not distinguish "dead" from "alive but only publishing
@@ -308,7 +329,7 @@ namespace {
         // Re-query and compare event_sequence_number before concluding genuine
         // failure.
         hpx::error_code ec(hpx::throwmode::lightweight);
-        auto const recheck = hpx::supervision::query_state(shadow.get(), ec);
+        auto const recheck = hpx::supervision::query_state(locality, ec);
         if (ec || recheck.ec)
         {
             // Can't confirm liveness or death right now; don't fence on an
@@ -347,7 +368,7 @@ namespace {
             ++attempt)
         {
             auto const [seq, status] =
-                probe_peer_silence(last_seq, peer.shadow);
+                probe_peer_silence(last_seq, peer.peer_locality);
             if (status == silence_status::alive_or_unknown)
                 return false;
 
@@ -355,9 +376,16 @@ namespace {
 
             hpx::error_code ec2(hpx::throwmode::lightweight);
             hpx::supervision::await_terminal(hpx::launch::sync,
-                peer.shadow.get(), epoch, grace_interval, ec2);
+                peer.peer_locality, epoch, grace_interval, ec2);
 
-            if (!ec2 || get_error(ec2) != hpx::error::future_cancelled)
+            if (!ec2)
+            {
+                // peer became responsive during the grace window
+                return false;
+            }
+            if (auto const err = get_error(ec2);
+                err != hpx::error::future_cancelled &&
+                err != hpx::error::locality_was_disconnected)
             {
                 // peer became responsive during the grace window
                 return false;
@@ -368,7 +396,7 @@ namespace {
 
         // Close the observation gap left by the loop above.
         auto const [final_seq, final_status] =
-            probe_peer_silence(last_seq, peer.shadow);
+            probe_peer_silence(last_seq, peer.peer_locality);
         return final_status == silence_status::still_silent;
     }
 
@@ -384,8 +412,7 @@ namespace {
         // genuinely unreachable - not just transiently slow - can be
         // distinguished from a one-off blip and eventually fenced, instead of
         // perpetually deferring judgment via continue/return.
-        std::unordered_map<hpx::supervision::shadow_id, peer_tracking>
-            query_failures;
+        std::unordered_map<hpx::id_type, peer_tracking> query_failures;
 
         // Outer loop: keep polling as long as we haven't been asked to stop and
         // the dispatcher is still in the "active" state. is_initialized()
@@ -420,61 +447,137 @@ namespace {
                 // peer_snapshot carries no epoch of its own
                 hpx::error_code ec(hpx::throwmode::lightweight);
                 auto const state =
-                    hpx::supervision::query_state(peer.shadow.get(), ec);
+                    hpx::supervision::query_state(peer.peer_locality, ec);
 
-                auto [it, _] = query_failures.try_emplace(peer.shadow,
-                    peer_tracking{.last_known_epoch = peer.join_epoch,
+                auto [it, _] = query_failures.try_emplace(peer.peer_locality,
+                    peer_tracking{.join_epoch = peer.join_epoch,
+                        .last_lifecycle_epoch = std::nullopt,
                         .consecutive_query_failures = 0});
-                auto& [last_known_epoch, failures] = it->second;
+                auto& [join_epoch, last_lifecycle_epoch, failures] = it->second;
 
-                if (ec || state.ec)
+                // A pre-existing tracking entry from an earlier join epoch
+                // (e.g. the peer left and rejoined) must not carry over its
+                // stale failure count or lifecycle epoch.
+                if (join_epoch != peer.join_epoch)
                 {
-                    // Guard against sustained unreachability. Best-effort fence
-                    // attempt only - if the peer is genuinely gone, this
-                    // publish may itself fail, which is fine: reactive
-                    // eviction/registry cleanup is the fallback for that case.
+                    join_epoch = peer.join_epoch;
+                    last_lifecycle_epoch = std::nullopt;
+                    failures = 0;
+                }
+
+                if (ec)
+                {
+                    // Genuine query failure (transport/RPC error): the peer may
+                    // be unreachable. Guard against sustained unreachability
+                    // with a best-effort fence attempt once the threshold is
+                    // hit - if the peer is genuinely gone, this publish may
+                    // itself fail, which is fine: reactive eviction/registry
+                    // cleanup is the fallback for that case.
                     if (++failures >= max_consecutive_query_failures)
                     {
-                        hpx::error_code ec1(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(peer.shadow.get(),
-                            hpx::supervision::event::failed, last_known_epoch,
-                            ec1);
-                        query_failures.erase(peer.shadow);
+                        // Only fence if a valid lifecycle epoch has ever been
+                        // observed for this peer - otherwise there is no epoch
+                        // to fence against and the publish would be rejected as
+                        // an invalid transition anyway.
+                        if (last_lifecycle_epoch.has_value())
+                        {
+                            hpx::error_code ec1(hpx::throwmode::lightweight);
+                            hpx::supervision::publish_event(peer.peer_locality,
+                                hpx::supervision::event::failed,
+                                *last_lifecycle_epoch, ec1);
+                        }
+                        query_failures.erase(peer.peer_locality);
                     }
                     continue;
                 }
 
+                if (state.ec)
+                {
+                    // The peer's own supervision manager is alive and reachable
+                    // but has not recorded any lifecycle state for this
+                    // target/epoch yet (e.g. it just rejoined and hasn't
+                    // published `started`). There is no epoch open to fence,
+                    // and attempting `event::failed` here is guaranteed to be
+                    // rejected as an invalid transition (bad_parameter). Treat
+                    // this as a no-op/reset rather than accumulating toward a
+                    // fence.
+                    failures = 0;
+                    continue;
+                }
+
                 // update failure tracking
-                last_known_epoch = state.epoch;
+                last_lifecycle_epoch = state.epoch;
                 failures = 0;
 
-                auto cont = [peer, epoch = state.epoch,
-                                seq = state.event_sequence_number,
-                                poll_timeout](auto&& f) {
-                    try
-                    {
-                        f.get();    // success: real terminal event delivered
-                    }
-                    catch (hpx::exception const& e)
-                    {
-                        if (e.get_error() != hpx::error::future_cancelled)
+                constexpr auto publish_failed_event =
+                    [](hpx::id_type const& peer_locality,
+                        std::uint64_t const epoch) {
+                        // No progress since the wait started: genuine stall. Before
+                        // fencing, re-confirm the target still has *this* epoch
+                        // open - remove_target() on the peer may have erased its
+                        // states_ entry in the interim (e.g. the peer
+                        // left/rejoined), in which case a `failed` fence would be
+                        // rejected as an illegal new-epoch opener. Treat that as a
+                        // no-op, mirroring the state.ec branch above.
+                        hpx::error_code ec_check(hpx::throwmode::lightweight);
+                        auto const recheck = hpx::supervision::query_state(
+                            peer_locality, ec_check);
+                        if (ec_check || recheck.ec || recheck.epoch != epoch)
                             return;
 
-                        if (!stalled_after_grace(
-                                seq, peer, epoch, poll_timeout))
-                            return;    // not stalled (yet)
-
-                        // No progress since the wait started: genuine stall.
-                        // Fence locally only, never touch the peer's own
-                        // sentinel/registry.
+                        // No progress since the wait started: genuine
+                        // stall. Fence locally only, never touch the peer's
+                        // own registry.
                         hpx::error_code ec3(hpx::throwmode::lightweight);
-                        hpx::supervision::publish_event(peer.shadow.get(),
+                        hpx::supervision::publish_event(peer_locality,
                             hpx::supervision::event::failed, epoch, ec3);
-                    }
+                    };
+
+                auto cont = [publish_failed_event, peer, epoch = state.epoch,
+                                seq = state.event_sequence_number,
+                                poll_timeout](auto&& f) {
+                    hpx::detail::try_catch_exception_ptr<hpx::exception>(
+                        [&]() {
+                            // success: real terminal event delivered
+                            f.get();
+                        },
+                        [&](hpx::exception const& e) {
+                            if (auto const err = e.get_error();
+                                err != hpx::error::future_cancelled &&
+                                err != hpx::error::locality_was_disconnected)
+                            {
+                                return;
+                            }
+
+                            if (!stalled_after_grace(
+                                    seq, peer, epoch, poll_timeout))
+                            {
+                                return;    // not stalled (yet)
+                            }
+
+                            publish_failed_event(peer.peer_locality, epoch);
+                        },
+                        [&](std::exception_ptr const& ep) {
+                            // Unanticipated failure mode (not an
+                            // hpx::exception): report it rather than silently
+                            // discarding it, and only fence if the same
+                            // stalled/disconnected condition as the typed
+                            // branch can be confirmed - an unrelated exception
+                            // must not by itself cause an incorrect peer fence.
+                            hpx::report_error(ep);
+
+                            if (!stalled_after_grace(
+                                    seq, peer, epoch, poll_timeout))
+                            {
+                                return;    // not stalled (yet)
+                            }
+
+                            publish_failed_event(peer.peer_locality, epoch);
+                        });
                 };
 
                 checks.push_back(hpx::supervision::await_terminal(
-                    peer.shadow.get(), state.epoch, poll_timeout)
+                    peer.peer_locality, state.epoch, poll_timeout)
                         .then(hpx::launch::async, HPX_MOVE(cont)));
             }
 
@@ -507,30 +610,30 @@ namespace {
             for (auto it = query_failures.begin(); it != query_failures.end();
                 /**/)
             {
-                bool const still_present = std::ranges::any_of(peers,
-                    [&](auto const& p) { return p.shadow == it->first; });
+                bool const still_present =
+                    std::ranges::any_of(peers, [&](auto const& p) {
+                        return p.peer_locality == it->first;
+                    });
                 it = still_present ? std::next(it) : query_failures.erase(it);
             }
         }
     }
 
-    // Periodically republishes event::running against this locality's own
-    // sentinel so failure_detection_loop() on peers observes a moving
-    // event_sequence_number/timestamp even when no work is being dispatched.
+    // Periodically republishes event::running against this locality so
+    // failure_detection_loop() on peers observes a moving
+    // event_sequence_number/ timestamp even when no work is being dispatched.
     // Started/stopped the same way failure_detection_loop() is: last step of
-    // run_init_sequence()'s success path, joined by finalize() before
-    // sentinel_/registry_ teardown.
+    // run_init_sequence()'s success path, joined by finalize() before registry_
+    // teardown.
     void heartbeat_loop()
     {
         dispatch_state& ds = get_dispatch_state();
 
         auto publish_pulse = [&]() {
-            hpx::id_type sentinel_id;
             {
                 std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                if (!ds.sentinel_)
+                if (!ds.registry_)
                     return false;    // torn down concurrently by finalize(); retry
-                sentinel_id = ds.sentinel_.get_id();
             }
 
             auto const epoch = ds.epoch_.load(std::memory_order_acquire);
@@ -540,7 +643,7 @@ namespace {
             // the terminal transition; this is purely a liveness pulse.
             hpx::error_code ec(hpx::throwmode::lightweight);
             hpx::supervision::publish_event(
-                sentinel_id, hpx::supervision::event::running, epoch, ec);
+                hpx::find_here(), hpx::supervision::event::running, epoch, ec);
             return true;
         };
 
@@ -562,7 +665,36 @@ namespace {
     }
 }    // namespace
 
+namespace hpx::supervision::detail {
+
+    // Free function (needs external linkage for the plain action wrapping it
+    // below) returning this locality's current dispatch-cycle epoch.
+    // dispatch_state is a private, file-local singleton with no component
+    // instance of its own to attach an action to, so this mirrors the
+    // hpx::detail::get_locality_name()/hpx_get_locality_name_action pattern HPX
+    // itself uses for other per-locality state queries that have no natural
+    // component to hang off of.
+    std::uint64_t current_epoch_impl()
+    {
+        return get_dispatch_state().epoch_.load(std::memory_order_acquire);
+    }
+}    // namespace hpx::supervision::detail
+
+HPX_PLAIN_ACTION(hpx::supervision::detail::current_epoch_impl,
+    supervision_dispatch_current_epoch_action)
+
 namespace hpx::supervision {
+
+    hpx::future<std::uint64_t> current_epoch(hpx::id_type const& locality)
+    {
+        return hpx::async<supervision_dispatch_current_epoch_action>(locality);
+    }
+
+    std::uint64_t current_epoch(hpx::launch::sync_policy,
+        hpx::id_type const& locality, hpx::error_code& ec)
+    {
+        return current_epoch(locality).get(ec);
+    }
 
     namespace testing {
 
@@ -620,10 +752,41 @@ namespace hpx::supervision {
             return get_dispatch_state().sweep_in_flight_.load(
                 std::memory_order_acquire);
         }
+
+        void stop_background_loops()
+        {
+            dispatch_state& ds = get_dispatch_state();
+
+            // Signal both loops to stop as early as possible, mirroring
+            // finalize()'s own teardown-start step.
+            ds.stop_failure_detection_.store(true, std::memory_order_release);
+            ds.stop_heartbeat_.store(true, std::memory_order_release);
+
+            // Join both tasks under the same lock discipline finalize() uses,
+            // but stop here: no event::completed publish, no name
+            // unregistration, no state_ reset - the locality's last published
+            // event is left stale on purpose.
+            hpx::future<void> local_heartbeat_task;
+            hpx::future<void> local_failure_detection_task;
+            {
+                std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                local_heartbeat_task = HPX_MOVE(ds.heartbeat_task_);
+                local_failure_detection_task =
+                    HPX_MOVE(ds.failure_detection_task_);
+            }
+            if (local_heartbeat_task.valid())
+            {
+                local_heartbeat_task.wait();
+            }
+            if (local_failure_detection_task.valid())
+            {
+                local_failure_detection_task.wait();
+            }
+        }
     }    // namespace testing
 
     ////////////////////////////////////////////////////////////////////////////
-    hpx::shared_future<void> init(
+    hpx::shared_future<registry> init(
         hpx::chrono::steady_duration const& discovery_timeout)
     {
         dispatch_state& ds = get_dispatch_state();
@@ -637,12 +800,12 @@ namespace hpx::supervision {
             hpx::future<void> f =
                 hpx::async(&run_init_sequence, discovery_timeout);
 
-            hpx::shared_future<void> sf =
-                f.then(hpx::launch::sync, [&ds](hpx::future<void>&& result) {
+            hpx::shared_future<registry> sf = f.then(hpx::launch::sync,
+                [&ds](hpx::future<void>&& result) -> registry {
                     if (result.has_value())
                     {
                         std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.in_flight_init_ = shared_future<void>();
+                        ds.in_flight_init_ = hpx::shared_future<registry>();
 
                         ds.state_.store(dispatcher_lifecycle_state::active);
 
@@ -655,24 +818,23 @@ namespace hpx::supervision {
                             false, std::memory_order_release);
 
                         // Start the poll loops as the last step of the success
-                        // path - after discover_and_join() has returned, so the
+                        // path., after discover_and_join() has returned, so the
                         // loops never race initialization.
                         ds.failure_detection_task_ =
                             hpx::async(&failure_detection_loop);
 
                         ds.heartbeat_task_ = hpx::async(&heartbeat_loop);
+                        return ds.registry_;
                     }
-                    else
-                    {
-                        std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-                        ds.sentinel_ = hpx::supervision::sentinel();
-                        ds.registry_ = hpx::supervision::registry();
 
-                        ds.in_flight_init_ = shared_future<void>();
-                        ds.state_.store(
-                            dispatcher_lifecycle_state::uninitialized);
-                    }
+                    std::scoped_lock<hpx::spinlock> l(ds.mtx_);
+                    ds.registry_ = hpx::supervision::registry();
+
+                    ds.in_flight_init_ = shared_future<registry>();
+                    ds.state_.store(dispatcher_lifecycle_state::uninitialized);
+
                     result.get();    // rethrow exception, if any
+                    return {};
                 });
 
             {
@@ -686,13 +848,13 @@ namespace hpx::supervision {
         switch (expected)
         {
         case dispatcher_lifecycle_state::active:
-            return hpx::make_ready_future();
+            return make_active_handle(ds);
 
         case dispatcher_lifecycle_state::finalizing:
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
+            return hpx::make_exceptional_future<registry>(HPX_GET_EXCEPTION(
                 hpx::error::invalid_status, "hpx::supervision::init",
-                "cannot initialize while a concurrent "
-                "finalize() is in progress"));
+                "cannot initialize while a concurrent finalize() is in "
+                "progress"));
 
         case dispatcher_lifecycle_state::initializing:
         default:
@@ -719,7 +881,7 @@ namespace hpx::supervision {
                 auto const current = ds.state_.load(std::memory_order_acquire);
                 if (current == dispatcher_lifecycle_state::active)
                 {
-                    return hpx::make_ready_future();
+                    return make_active_handle(ds);
                 }
                 if (current != dispatcher_lifecycle_state::initializing)
                 {
@@ -728,17 +890,17 @@ namespace hpx::supervision {
                 hpx::this_thread::yield();
             }
 
-            return hpx::make_exceptional_future<void>(HPX_GET_EXCEPTION(
-                hpx::error::invalid_status, "hpx::supervision::init",
-                "timed out attaching to a concurrent "
-                "init() call; retry"));
+            return hpx::make_exceptional_future<registry>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    hpx::throwmode::lightweight, "hpx::supervision::init",
+                    "timed out attaching to a concurrent init() call; retry"));
         }
     }
-
-    void init(hpx::launch::sync_policy,
+    ////////////////////////////////////////////////////////////////////////////
+    registry init(hpx::launch::sync_policy,
         hpx::chrono::steady_duration const& discovery_timeout)
     {
-        init(discovery_timeout).get();
+        return init(discovery_timeout).get();
     }
 
     void finalize()
@@ -760,9 +922,9 @@ namespace hpx::supervision {
         ds.stop_failure_detection_.store(true, std::memory_order_release);
         ds.stop_heartbeat_.store(true, std::memory_order_release);
 
-        // Join the task before releasing sentinel_/registry_ ownership - the
-        // loop dereferences registry_'s shadows, so this must complete first
-        // to avoid a dangling reference during extraction/publish. A failure
+        // Join the task before releasing registry_ ownership - the loop
+        // dereferences registry_'s shadows, so this must complete first to
+        // avoid a dangling reference during extraction/publish. A failure
         // inside the loop must not abort finalization.
         hpx::future<void> local_heartbeat_task;
         hpx::future<void> local_failure_detection_task;
@@ -780,68 +942,58 @@ namespace hpx::supervision {
             local_failure_detection_task.wait();
         }
 
-        // Winner: extract the owned pair under the lock so no other thread can
-        // observe a half-torn-down sentinel_/registry_.
-        hpx::supervision::sentinel local_sentinel;
+        // Winner: extract the owned registry under the lock so no other thread
+        // can observe a half-torn-down registry_.
         hpx::supervision::registry local_registry;
 
         {
             std::scoped_lock<hpx::spinlock> l(ds.mtx_);
-            local_sentinel = HPX_MOVE(ds.sentinel_);
             local_registry = HPX_MOVE(ds.registry_);
 
             // Drop any settled handle from the completed init cycle so a later
             // cycle's attaching caller can never observe it.
-            ds.in_flight_init_ = hpx::shared_future<void>();
+            ds.in_flight_init_ =
+                hpx::shared_future<hpx::supervision::registry>();
         }
 
-        HPX_ASSERT(local_sentinel);    // active implies sentinel_ was set
-
-        // Publish event::completed synchronously so observers see it before
-        // this function returns, using the same publish_event(sync_policy,
-        // locality, target, event, epoch) shape sentinel::start() uses for
-        // event::started.
+        HPX_ASSERT(local_registry);    // active implies registry_ was set
 
         // First make sure the current state has advanced to running as otherwise
         // the publish_event call below will fail.
-        hpx::id_type const& sentinel_id = local_sentinel.get_id();
         auto const epoch = ds.epoch_.load(std::memory_order_acquire);
 
         std::exception_ptr publish_failure;
-        try
-        {
-            if (auto const state = hpx::supervision::query_state(sentinel_id);
-                state.last_event == hpx::supervision::event::started)
-            {
+        hpx::detail::try_catch_exception_ptr(
+            [&]() {
+                auto const here = hpx::find_here();
+                if (auto const state = hpx::supervision::query_state(here);
+                    state.last_event == hpx::supervision::event::started)
+                {
+                    hpx::supervision::publish_event(
+                        here, hpx::supervision::event::running, epoch);
+                }
                 hpx::supervision::publish_event(
-                    sentinel_id, hpx::supervision::event::running, epoch);
-            }
-            hpx::supervision::publish_event(
-                sentinel_id, hpx::supervision::event::completed, epoch);
-        }
-        catch (...)
-        {
-            // Best-effort: still unregister/re-arm below even if event
-            // publication failed, so a transient failure never permanently
-            // strands the lifecycle at `finalizing`.
-            publish_failure = std::current_exception();
-        }
+                    here, hpx::supervision::event::completed, epoch);
+            },
+            [&](std::exception_ptr const& e) {
+                // Best-effort: still unregister/re-arm below even if event
+                // publication failed, so a transient failure never permanently
+                // strands the lifecycle at `finalizing`.
+                publish_failure = e;
+            });
 
-        // Unregister both names before releasing ownership, so no new peer
+        // Unregister registry name before releasing ownership, so no new peer
         // can discover either component mid-teardown.
-        hpx::error_code ec1(hpx::throwmode::lightweight);
-        local_sentinel.unregister_name(hpx::launch::sync, ec1);
         hpx::error_code ec2(hpx::throwmode::lightweight);
         local_registry.unregister_name(hpx::launch::sync, ec2);
 
-        // Let the clients go out of scope here: client_'s default
+        // Let the client go out of scope here: client_'s default
         // manage_lifetime=true means each destructor releases this locality's
         // ownership of the underlying component.
-        local_sentinel = hpx::supervision::sentinel();
         local_registry = hpx::supervision::registry();
 
-        // Re-arm: a subsequent init() call can now start a fresh
-        // sentinel/registry pair from scratch.
+        // Re-arm: a subsequent init() call can now start a fresh registry pair
+        // from scratch.
         ds.state_.store(dispatcher_lifecycle_state::uninitialized,
             std::memory_order_release);
 
@@ -856,5 +1008,76 @@ namespace hpx::supervision {
         dispatch_state const& ds = get_dispatch_state();
         return ds.state_.load(std::memory_order_acquire) ==
             dispatcher_lifecycle_state::active;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    hpx::future<lifecycle_state> query_state(registry const& handle)
+    {
+        if (!handle)
+        {
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::query_state",
+                    "the given registry is not valid"));
+        }
+        auto const here = hpx::find_here();
+        return hpx::supervision::query_state(here, here);
+    }
+
+    lifecycle_state query_state(
+        hpx::launch::sync_policy, registry const& handle, hpx::error_code& ec)
+    {
+        return query_state(handle).get(ec);
+    }
+
+    hpx::future<lifecycle_state> query_state(
+        registry const&, discovered_peer const& peer)
+    {
+        if (!peer.locality)
+        {
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::query_state",
+                    "the given peer does not hold a valid locality"));
+        }
+
+        // peer.locality is passed as both the locality to contact and the
+        // target to query: a locality's own lifecycle events are always
+        // published under its own id (see run_init_sequence()'s
+        // publish_event(here, ...) and the query_state(registry const&)
+        // overload above, which does the same with hpx::find_here() for both
+        // arguments). There is no separate sentinel/target identity to
+        // resolve here - this simply performs that same self-query remotely,
+        // against peer.locality's own supervision manager.
+        return hpx::supervision::query_state(peer.locality, peer.locality);
+    }
+
+    lifecycle_state query_state(hpx::launch::sync_policy,
+        registry const& handle, discovered_peer const& peer,
+        hpx::error_code& ec)
+    {
+        return query_state(handle, peer).get(ec);
+    }
+
+    hpx::future<publish_result> publish_event(
+        registry const& handle, event const ev, std::uint64_t const epoch)
+    {
+        if (!handle)
+        {
+            return hpx::make_exceptional_future<publish_result>(
+                HPX_GET_EXCEPTION(hpx::error::bad_parameter,
+                    "hpx::supervision::publish_event",
+                    "the given registry is not valid"));
+        }
+
+        auto const here = hpx::find_here();
+        return hpx::supervision::publish_event(here, here, ev, epoch);
+    }
+
+    publish_result publish_event(hpx::launch::sync_policy,
+        registry const& handle, event const ev, std::uint64_t const epoch,
+        hpx::error_code& ec)
+    {
+        return publish_event(handle, ev, epoch).get(ec);
     }
 }    // namespace hpx::supervision

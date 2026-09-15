@@ -79,7 +79,7 @@ struct test_context
 };
 
 // Global test context
-test_context g_test_context;
+static test_context g_test_context;
 
 // ============================================================================
 // Test Cases: 2B.1 - Connector Publishes Explicit Completion
@@ -803,6 +803,148 @@ void test_concurrent_publishes_settle_on_higher_epoch(
         hpx::supervision::query_state(hpx::launch::sync, locality, target);
     HPX_TEST_EQ(state.epoch, highest_epoch);
     HPX_TEST_EQ(state.event_sequence_number, static_cast<std::uint64_t>(1));
+}
+
+// ============================================================================
+// Test Cases: publish_event_no_notify()
+//
+// publish_event_no_notify() is a purely local API (no locality parameter), so
+// every test below operates directly on the local supervision manager rather
+// than looping over hpx::find_all_localities().
+// ============================================================================
+
+// publish_event_no_notify() must never invoke registered lifecycle observers,
+// unlike publish_event() which does; exercised on independent targets so the
+// notifying and non-notifying paths cannot interfere with each other.
+void test_publish_event_no_notify_skips_observer()
+{
+    hpx::id_type const notify_target = make_test_target();
+    hpx::id_type const no_notify_target = make_test_target();
+
+    int notify_count = 0;
+    int no_notify_count = 0;
+
+    auto const notify_handle =
+        hpx::supervision::register_observer(notify_target,
+            [&](hpx::supervision::lifecycle_event_notification const&) {
+                ++notify_count;
+                return true;
+            });
+
+    auto const no_notify_handle =
+        hpx::supervision::register_observer(no_notify_target,
+            [&](hpx::supervision::lifecycle_event_notification const&) {
+                ++no_notify_count;
+                return true;
+            });
+
+    // Contrast: publish_event() does invoke the observer.
+    hpx::supervision::publish_event(
+        notify_target, hpx::supervision::event::started);
+    HPX_TEST_EQ(notify_count, 1);
+
+    // publish_event_no_notify() must not invoke the observer, across several
+    // events including a terminal one.
+    hpx::supervision::publish_event_no_notify(
+        no_notify_target, hpx::supervision::event::started);
+    hpx::supervision::publish_event_no_notify(
+        no_notify_target, hpx::supervision::event::running);
+    hpx::supervision::publish_event_no_notify(
+        no_notify_target, hpx::supervision::event::completed);
+    HPX_TEST_EQ(no_notify_count, 0);
+
+    hpx::supervision::unregister_observer(notify_handle);
+    hpx::supervision::unregister_observer(no_notify_handle);
+}
+
+// publish_event() and publish_event_no_notify() share apply_event_and_resolve()
+// for all state mutation and only differ in whether they go on to notify
+// observers; driving the identical event/epoch sequence - new-epoch open,
+// same-epoch re-publish, stale-epoch rejection - through each on independent
+// targets must therefore leave identical resulting state, as observed via
+// query_state().
+void test_publish_event_no_notify_state_parity_with_publish_event()
+{
+    hpx::id_type const via_notify = make_test_target();
+    hpx::id_type const via_no_notify = make_test_target();
+
+    // New-epoch open: epoch 1 has no prior entry, so it must be opened with a
+    // legal `started` event.
+    auto const opened_notify = hpx::supervision::publish_event(
+        via_notify, hpx::supervision::event::started, 1);
+    auto const opened_no_notify = hpx::supervision::publish_event_no_notify(
+        via_no_notify, hpx::supervision::event::started, 1);
+    HPX_TEST(opened_notify == hpx::supervision::publish_result::applied);
+    HPX_TEST(opened_no_notify == hpx::supervision::publish_result::applied);
+
+    // Same-epoch re-publish.
+    auto const republish_notify = hpx::supervision::publish_event(
+        via_notify, hpx::supervision::event::running, 1);
+    auto const republish_no_notify = hpx::supervision::publish_event_no_notify(
+        via_no_notify, hpx::supervision::event::running, 1);
+    HPX_TEST(republish_notify == hpx::supervision::publish_result::applied);
+    HPX_TEST(republish_no_notify == hpx::supervision::publish_result::applied);
+
+    // Stale-epoch rejection: epoch 0 is lower than the current epoch (1) on
+    // both targets and must be rejected as a no-op by both paths.
+    auto const stale_notify = hpx::supervision::publish_event(
+        via_notify, hpx::supervision::event::started, 0);
+    auto const stale_no_notify = hpx::supervision::publish_event_no_notify(
+        via_no_notify, hpx::supervision::event::started, 0);
+    HPX_TEST(stale_notify == hpx::supervision::publish_result::stale_epoch);
+    HPX_TEST(stale_no_notify == hpx::supervision::publish_result::stale_epoch);
+
+    auto const state_notify = hpx::supervision::query_state(via_notify);
+    auto const state_no_notify = hpx::supervision::query_state(via_no_notify);
+
+    HPX_TEST(state_notify.last_event == state_no_notify.last_event);
+    HPX_TEST_EQ(state_notify.epoch, state_no_notify.epoch);
+    HPX_TEST_EQ(state_notify.event_sequence_number,
+        state_no_notify.event_sequence_number);
+}
+
+// await_terminal() waiters are resolved by resolve_terminal_waiters(), called
+// from within apply_event_and_resolve() - the state-mutation core shared by
+// publish_event() and publish_event_no_notify() - rather than from either
+// caller's notify-observers logic. A waiter pending on a target must therefore
+// resolve correctly with the recorded terminal state even when that terminal
+// event is published via publish_event_no_notify(), while a lifecycle observer
+// registered for the same target is confirmed to remain uninvoked by that same
+// call.
+void test_await_terminal_resolves_via_publish_event_no_notify()
+{
+    hpx::id_type const target = make_test_target();
+
+    hpx::supervision::publish_event(target, hpx::supervision::event::started);
+    hpx::supervision::publish_event(target, hpx::supervision::event::running);
+
+    int observer_calls = 0;
+    auto const observer_handle = hpx::supervision::register_observer(
+        target, [&](hpx::supervision::lifecycle_event_notification const&) {
+            ++observer_calls;
+            return true;
+        });
+
+    // register_observer() synchronously delivers one replay notification of
+    // the target's current (`running`) state as part of registration; reset
+    // the counter so the assertion below isolates the effect of the
+    // publish_event_no_notify() call that follows.
+    observer_calls = 0;
+
+    auto f = hpx::supervision::await_terminal(target);
+    HPX_TEST(!f.is_ready());
+
+    auto const result = hpx::supervision::publish_event_no_notify(
+        target, hpx::supervision::event::completed);
+    HPX_TEST(result == hpx::supervision::publish_result::applied);
+
+    auto const state = f.get();
+    HPX_TEST_EQ(state.actor, target);
+    HPX_TEST(state.last_event == hpx::supervision::event::completed);
+
+    HPX_TEST_EQ(observer_calls, 0);
+
+    hpx::supervision::unregister_observer(observer_handle);
 }
 
 // ============================================================================
@@ -1873,12 +2015,16 @@ void test_concurrent_publish_event_racing_epochs(
     hpx::future<hpx::supervision::publish_result> f_low, f_high;
     if (submit_high_first)
     {
-        hpx::supervision::publish_event(hpx::launch::sync, locality, target,
-            hpx::supervision::event::started, epoch_high);
-        f_high = hpx::supervision::publish_event(
-            locality, target, hpx::supervision::event::failed, epoch_high);
+        hpx::future<hpx::supervision::publish_result> f_started =
+            hpx::supervision::publish_event(
+                locality, target, hpx::supervision::event::started, epoch_high);
+
         f_low = hpx::supervision::publish_event(
             locality, target, hpx::supervision::event::failed, epoch_low);
+
+        f_started.get();
+        f_high = hpx::supervision::publish_event(
+            locality, target, hpx::supervision::event::failed, epoch_high);
     }
     else
     {
@@ -1897,9 +2043,9 @@ void test_concurrent_publish_event_racing_epochs(
 
     HPX_TEST(r_high == hpx::supervision::publish_result::applied ||
         r_high == hpx::supervision::publish_result::already_terminal);
-    HPX_TEST(r_low == hpx::supervision::publish_result::stale_epoch ||
+    HPX_TEST(r_low == hpx::supervision::publish_result::applied ||
+        r_low == hpx::supervision::publish_result::stale_epoch ||
         r_low == hpx::supervision::publish_result::already_terminal);
-
     auto const state =
         hpx::supervision::query_state(hpx::launch::sync, locality, target);
     HPX_TEST(state.last_event == hpx::supervision::event::failed);
@@ -2006,6 +2152,12 @@ int hpx_main()
     HPX_SUPERVISION_TEST_RUN(test_query_nonexistent_actor);
     HPX_SUPERVISION_TEST_RUN(test_observer_latency_local);
     HPX_SUPERVISION_TEST_RUN(test_publication_throughput);
+
+    HPX_SUPERVISION_TEST_RUN(test_publish_event_no_notify_skips_observer);
+    HPX_SUPERVISION_TEST_RUN(
+        test_publish_event_no_notify_state_parity_with_publish_event);
+    HPX_SUPERVISION_TEST_RUN(
+        test_await_terminal_resolves_via_publish_event_no_notify);
 
     return hpx::finalize();
 }

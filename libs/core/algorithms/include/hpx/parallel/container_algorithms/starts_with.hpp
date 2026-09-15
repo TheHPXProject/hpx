@@ -287,7 +287,6 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
-#include <hpx/modules/tag_invoke.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/starts_with.hpp>
 
@@ -301,8 +300,7 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::copy
     HPX_CXX_CORE_EXPORT inline constexpr struct starts_with_t final
-      : hpx::detail::tag_dispatch<starts_with_t,
-            hpx::functional::detail::tag_fallback<starts_with_t>>
+      : hpx::detail::tag_dispatch<starts_with_t, hpx::detail::no_base>
     {
         template <typename Iter1, typename Sent1, typename Iter2,
             typename Sent2, typename Pred = ranges::equal_to,

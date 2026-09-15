@@ -235,7 +235,7 @@ efficiency, and a verdict (``Excellent scaling``, ``Good scaling``,
 
    All functions in ``hpx/experimental/sandbox.hpp`` must be called from within
    a running |hpx| runtime, i.e., from an |hpx| thread. Calling them before
-   :cpp:func:`hpx::init` or after :cpp:func:`hpx::finalize` is undefined
+   :hpx:func:`hpx::init` or after :hpx:func:`hpx::finalize` is undefined
    behaviour. When using ``hpx/hpx_main.hpp``, the body of ``main`` satisfies
    this requirement automatically.
 

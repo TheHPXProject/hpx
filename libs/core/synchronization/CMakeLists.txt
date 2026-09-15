@@ -88,7 +88,6 @@ add_hpx_module(
     hpx_lock_registration
     hpx_logging
     hpx_memory
-    hpx_tag_invoke
     hpx_threading_base
     hpx_thread_support
     hpx_timing

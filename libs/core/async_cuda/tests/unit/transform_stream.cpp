@@ -10,6 +10,7 @@
 // Fixed in CUDA 12.3
 #if !defined(HPX_CUDA_VERSION) || (HPX_CUDA_VERSION > 1202)
 
+#include <hpx/async_cuda/custom_gpu_api.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/async_cuda.hpp>
@@ -21,7 +22,12 @@
 #include <type_traits>
 #include <utility>
 
-__global__ void dummy_kernel() {}
+// The kernels live in transform_stream_kernels.cu: the device compiler cannot
+// digest the HPX execution headers (stdexec does not support nvcc), so this
+// file is compiled by the host compiler and only launches the kernels through
+// these wrappers.
+extern void launch_dummy_kernel(cudaStream_t stream);
+extern void launch_increment_kernel(int* p, cudaStream_t stream);
 
 struct dummy
 {
@@ -50,7 +56,7 @@ struct dummy
     void operator()(cudaStream_t stream) const
     {
         ++stream_void_calls;
-        dummy_kernel<<<1, 1, 0, stream>>>();
+        launch_dummy_kernel(stream);
     }
 
     double operator()(int x) const
@@ -62,7 +68,7 @@ struct dummy
     double operator()(int x, cudaStream_t stream) const
     {
         ++stream_int_calls;
-        dummy_kernel<<<1, 1, 0, stream>>>();
+        launch_dummy_kernel(stream);
         return x + 1;
     }
 
@@ -75,7 +81,7 @@ struct dummy
     int operator()(double x, cudaStream_t stream) const
     {
         ++stream_double_calls;
-        dummy_kernel<<<1, 1, 0, stream>>>();
+        launch_dummy_kernel(stream);
         return x + 1;
     }
 };
@@ -87,16 +93,11 @@ std::atomic<std::size_t> dummy::stream_int_calls{0};
 std::atomic<std::size_t> dummy::host_double_calls{0};
 std::atomic<std::size_t> dummy::stream_double_calls{0};
 
-__global__ void increment_kernel(int* p)
-{
-    ++(*p);
-}
-
 struct increment
 {
     int* operator()(int* p, cudaStream_t stream) const
     {
-        increment_kernel<<<1, 1, 0, stream>>>(p);
+        launch_increment_kernel(p, stream);
         return p;
     }
 };

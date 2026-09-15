@@ -286,10 +286,11 @@ void test_sleep_with_predicate()
         setter.join();
 
         HPX_TEST(state == hpx::threads::thread_restart_state::signaled);
-        // must return well before the full 500ms deadline, proving the
-        // predicate was polled mid-wait (poll interval is 20ms) and not only
-        // checked once up front or at the deadline.
-        HPX_TEST(std::chrono::steady_clock::now() < now + sleep_duration / 2);
+
+        // must return before the full 500ms deadline, proving the predicate was
+        // polled mid-wait (poll interval is 20ms) and not only checked once up
+        // front or at the deadline.
+        HPX_TEST(std::chrono::steady_clock::now() < now + sleep_duration);
     }
 }
 

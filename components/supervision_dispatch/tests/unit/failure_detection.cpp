@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -59,26 +60,26 @@ namespace {
     // sleeping a hardcoded number of poll cycles) until `target` reports
     // fenced under `epoch`, or `bound` elapses. Returns whether fencing was
     // observed within `bound`.
-    bool wait_until_fenced(hpx::supervision::shadow_id const& target,
+    bool wait_until_fenced(hpx::id_type const& target,
         std::uint64_t const epoch, std::chrono::milliseconds const bound)
     {
         auto const deadline = std::chrono::steady_clock::now() + bound;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            if (hpx::supervision::check_admission(target.get(), epoch) ==
+            if (hpx::supervision::check_admission(target, epoch) ==
                 hpx::supervision::dispatch_outcome::rejected_fenced)
             {
                 return true;
             }
             hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
         }
-        return hpx::supervision::check_admission(target.get(), epoch) ==
+        return hpx::supervision::check_admission(target, epoch) ==
             hpx::supervision::dispatch_outcome::rejected_fenced;
     }
 
     // Finds the joined peer's shadow id for `peer_locality` in this locality's
     // own registry, or nullopt if not (yet) joined.
-    std::optional<hpx::supervision::shadow_id> find_shadow_for(
+    std::optional<hpx::id_type> find_locality_for(
         hpx::id_type const& peer_locality)
     {
         auto const peers = hpx::supervision::testing::local_snapshot_peers();
@@ -88,7 +89,7 @@ namespace {
 
         if (it != peers.end())
         {
-            return it->shadow;
+            return it->peer_locality;
         }
         return std::nullopt;
     }
@@ -101,28 +102,27 @@ namespace {
 
 // Scenario 1: detection causes fencing.
 //
-// The peer locality joins and then goes silent - no completed/failed event
-// ever arrives, simulating a hard crash where no lifecycle callback fires.
-// After one poll cycle (bounded by test_poll_timeout, not the real 60s
-// default), the observer's local shadow for that peer must report fenced, and a
-// subsequent dispatch_work() against it must fail with
-// hpx::error::target_fenced - proving the *local* shadow was fenced by the
-// detector, without the observer ever contacting the peer's own
-// sentinel/registry.
-void test_detection_causes_fencing(hpx::id_type const& peer_locality)
+// The peer locality joins and then goes silent - no completed/failed event ever
+// arrives, simulating a hard crash where no lifecycle callback fires. After one
+// poll cycle (bounded by test_poll_timeout, not the real 60s default), the
+// observer's local shadow for that peer must report fenced, and a subsequent
+// dispatch_work() against it must fail with hpx::error::target_fenced - proving
+// the *local* shadow was fenced by the detector, without the observer ever
+// contacting the peer's own registry.
+hpx::id_type test_detection_causes_fencing(hpx::id_type const& peer_locality)
 {
-    auto const shadow = find_shadow_for(peer_locality);
-    HPX_TEST(shadow.has_value());
-    if (!shadow)
+    auto const locality = find_locality_for(peer_locality);
+    HPX_TEST(locality.has_value());
+    if (!locality)
     {
-        return;
+        return hpx::invalid_id;
     }
 
     // The epoch to assert fencing against is whatever the shadow was
     // joined/started under; query it directly rather than assuming 0, since
     // discover_and_join() seeds shadows with event::started at the peer's own
     // epoch.
-    auto const state = hpx::supervision::query_state(shadow->get());
+    auto const state = hpx::supervision::query_state(*locality);
     std::uint64_t const epoch = state.epoch;
 
     // Give the poller a few sweep cycles' worth of time to notice the silence
@@ -130,11 +130,11 @@ void test_detection_causes_fencing(hpx::id_type const& peer_locality)
     // isn't flaky under scheduler jitter, but far short of the real
     // default_discovery_timeout.
     bool const fenced =
-        wait_until_fenced(*shadow, epoch, std::chrono::seconds(5));
+        wait_until_fenced(*locality, epoch, std::chrono::seconds(5));
     HPX_TEST(fenced);
 
-    hpx::future<int> f = hpx::supervision::dispatch_work<probe_action>(
-        *shadow, peer_locality, epoch);
+    hpx::future<int> f =
+        hpx::supervision::dispatch_work<probe_action>(*locality, epoch);
 
     bool caught = false;
     try
@@ -148,6 +148,8 @@ void test_detection_causes_fencing(hpx::id_type const& peer_locality)
         HPX_TEST(hpx::get_error(e) == hpx::error::target_fenced);
     }
     HPX_TEST(caught);
+
+    return *locality;
 }
 
 // Scenario 2: no false positives.
@@ -157,24 +159,58 @@ void test_detection_causes_fencing(hpx::id_type const& peer_locality)
 // between each, and asserts every dispatch keeps succeeding.
 void test_no_false_positives(hpx::id_type const& peer_locality)
 {
-    auto const shadow = find_shadow_for(peer_locality);
-    HPX_TEST(shadow.has_value());
-    if (!shadow)
+    auto const locality = find_locality_for(peer_locality);
+    HPX_TEST(locality.has_value());
+    if (!locality)
     {
         return;
     }
 
-    auto const state = hpx::supervision::query_state(shadow->get());
+    auto const state =
+        hpx::supervision::query_state(hpx::launch::sync, *locality, *locality);
     std::uint64_t const epoch = state.epoch;
 
+    // Directly assert that the peer's event_sequence_number keeps advancing
+    // across several heartbeat intervals, all still within `epoch` (well before
+    // any epoch rotation/rejoin logic would trigger). Under the old
+    // self-recursion/freeze bug, this sequence number would freeze after the
+    // first event within an epoch instead of continuing to advance with each
+    // subsequent heartbeat - this catches that regression immediately, rather
+    // than relying solely on stalled_after_grace()'s later (and less
+    // deterministic) fencing decision to surface it.
+    constexpr int sample_points = 5;
+    std::vector<std::uint64_t> sampled_sequence_numbers;
+    sampled_sequence_numbers.reserve(sample_points);
+    for (int i = 0; i != sample_points; ++i)
+    {
+        // Sleep past at least one full test_poll_timeout sweep, same as the
+        // dispatch loop below, so each sample point reflects a fresh
+        // heartbeat's worth of mirrored progress.
+        hpx::this_thread::sleep_for(test_poll_timeout * 2);
+
+        auto const sampled_state = hpx::supervision::query_state(
+            hpx::launch::sync, *locality, *locality);
+        HPX_TEST_EQ(sampled_state.epoch, epoch);
+        sampled_sequence_numbers.push_back(sampled_state.event_sequence_number);
+    }
+
+    // Strictly increasing, not merely non-decreasing: a frozen counter
+    // produces an all-equal (and therefore "sorted") sample sequence.
+    HPX_TEST(std::ranges::adjacent_find(sampled_sequence_numbers,
+                 std::greater_equal<std::uint64_t>{}) ==
+        sampled_sequence_numbers.end());
+
+    // Secondary check, kept from the original test: the peer must still never
+    // be spuriously fenced across multiple poll cycles. This documents the
+    // end-to-end behavior this test originally verified.
     constexpr int iterations = 5;
     for (int i = 0; i != iterations; ++i)
     {
-        HPX_TEST(hpx::supervision::check_admission(shadow->get(), epoch) ==
+        HPX_TEST(hpx::supervision::check_admission(*locality, epoch) ==
             hpx::supervision::dispatch_outcome::admitted);
 
-        hpx::future<int> f = hpx::supervision::dispatch_work<probe_action>(
-            *shadow, peer_locality, epoch);
+        hpx::future<int> f =
+            hpx::supervision::dispatch_work<probe_action>(*locality, epoch);
         HPX_TEST_NO_THROW(f.get());
 
         // Sleep past at least one full test_poll_timeout sweep so this
@@ -186,12 +222,12 @@ void test_no_false_positives(hpx::id_type const& peer_locality)
 // Scenario 3: clean shutdown while a sweep may still be in flight.
 //
 // Must run while `peer_locality` is still silent-but-joinable (heartbeat
-// suspended, but its sentinel/registry components not yet torn down) -
-// otherwise a fresh discover_and_join() finds no peer at all and
-// sweep_in_flight_ can never become true. Re-arms the session under the real
-// default_discovery_timeout to exercise finalize() racing a genuine
-// long-running sweep, then restores the short test timeout and rejoins so
-// later scenarios have a working session again.
+// suspended, but its registry components not yet torn down) - otherwise a fresh
+// discover_and_join() finds no peer at all and sweep_in_flight_ can never
+// become true. Re-arms the session under the real default_discovery_timeout to
+// exercise finalize() racing a genuine long-running sweep, then restores the
+// short test timeout and rejoins so later scenarios have a working session
+// again.
 void test_clean_shutdown_during_in_flight_sweep(
     hpx::id_type const& peer_locality)
 {
@@ -203,6 +239,25 @@ void test_clean_shutdown_during_in_flight_sweep(
     // rejoins it.
     hpx::supervision::finalize();
     HPX_TEST_NO_THROW(hpx::supervision::init(hpx::launch::sync));
+
+    // Rejoin latency (peer becoming visible via snapshot_peers()) must not eat
+    // into the window meant to observe an in-flight sweep below. Wait (bounded)
+    // for the peer to reappear in the registry first.
+    {
+        auto const rejoin_deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        bool rejoined = false;
+        while (std::chrono::steady_clock::now() < rejoin_deadline)
+        {
+            if (find_locality_for(peer_locality).has_value())
+            {
+                rejoined = true;
+                break;
+            }
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        HPX_TEST(rejoined);
+    }
 
     auto const deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -239,22 +294,21 @@ void test_clean_shutdown_during_in_flight_sweep(
 // target_fenced error, and the shadow's epoch must not churn between calls --
 // the detector must not re-fence (re-bump the epoch) on every subsequent sweep
 // once a shadow is already fenced.
-void test_fence_is_idempotent(hpx::id_type const& peer_locality)
+void test_fence_is_idempotent(hpx::id_type const& locality)
 {
-    auto const shadow = find_shadow_for(peer_locality);
-    HPX_TEST(shadow.has_value());
-    if (!shadow)
+    HPX_TEST(locality);
+    if (!locality)
     {
         return;
     }
 
-    auto const initial_state = hpx::supervision::query_state(shadow->get());
+    auto const initial_state = hpx::supervision::query_state(locality);
     std::uint64_t const epoch = initial_state.epoch;
 
-    HPX_TEST(wait_until_fenced(*shadow, epoch, std::chrono::seconds(5)));
+    HPX_TEST(wait_until_fenced(locality, epoch, std::chrono::seconds(5)));
 
     std::uint64_t const fenced_epoch =
-        hpx::supervision::query_state(shadow->get()).epoch;
+        hpx::supervision::query_state(locality).epoch;
 
     constexpr int repeats = 3;
     for (int i = 0; i != repeats; ++i)
@@ -262,8 +316,7 @@ void test_fence_is_idempotent(hpx::id_type const& peer_locality)
         bool caught = false;
         try
         {
-            hpx::supervision::dispatch_work<probe_action>(
-                *shadow, peer_locality, epoch)
+            hpx::supervision::dispatch_work<probe_action>(locality, epoch)
                 .get();
             HPX_TEST(false);
         }
@@ -277,7 +330,7 @@ void test_fence_is_idempotent(hpx::id_type const& peer_locality)
         // No epoch churn: a second/third sweep observing an already-fenced
         // shadow must not bump it again.
         HPX_TEST_EQ(
-            hpx::supervision::query_state(shadow->get()).epoch, fenced_epoch);
+            hpx::supervision::query_state(locality).epoch, fenced_epoch);
 
         hpx::this_thread::sleep_for(test_poll_timeout);
     }
@@ -332,10 +385,12 @@ int hpx_main()
         test_clean_shutdown_during_in_flight_sweep(peer_locality);
 
         // Scenario 1: peer is now silent; wait for detection.
-        test_detection_causes_fencing(peer_locality);
+        auto const locality = test_detection_causes_fencing(peer_locality);
 
-        // Scenario 4: fence must be sticky, no epoch churn.
-        test_fence_is_idempotent(peer_locality);
+        // Scenario 4: fence must be sticky, no epoch churn. Avoid
+        // re-discovering locality from snapshot_peers as the fencing makes it
+        // disappear from that list.
+        test_fence_is_idempotent(locality);
     }
     hpx::distributed::barrier::synchronize();
 
@@ -346,7 +401,12 @@ int hpx_main()
 
 int main(int const argc, char* argv[])
 {
-    HPX_TEST_EQ(hpx::init(argc, argv), 0);
+    int const result = hpx::init(argc, argv);
+
+    // non-console localities may see the runtime being shutdown before they
+    // call finalize, causing an error to be reported that can be ignored.
+    HPX_TEST(result == 0 || result == -1);
+
     return hpx::util::report_errors();
 }
 

@@ -124,7 +124,7 @@ namespace hpx {
     void set_lco_error([[maybe_unused]] hpx::id_type id,
         [[maybe_unused]] naming::address&& addr,
         [[maybe_unused]] std::exception_ptr&& e,
-        [[maybe_unused]] bool move_credits)
+        [[maybe_unused]] bool const move_credits)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         using set_action = lcos::base_lco::set_exception_action;
@@ -157,7 +157,7 @@ namespace hpx {
         [[maybe_unused]] naming::address&& addr,
         [[maybe_unused]] std::exception_ptr const& e,
         [[maybe_unused]] hpx::id_type const& cont,
-        [[maybe_unused]] bool move_credits)
+        [[maybe_unused]] bool const move_credits)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         using set_action = lcos::base_lco::set_exception_action;

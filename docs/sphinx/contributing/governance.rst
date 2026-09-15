@@ -14,7 +14,7 @@
 The |hpx| project is a meritocratic, consensus-based community project. Anyone
 with an interest in the project can join the community, contribute to the
 project design and participate in the decision making process.
-`This document <http://hpx.stellar-group.org/documents/governance/>`_ describes
+`This document <http://hpx.dev/documents/governance/>`_ describes
 how that participation takes place and how to set about earning merit within
 the project community.
 

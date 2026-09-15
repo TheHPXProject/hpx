@@ -262,6 +262,15 @@ namespace hpx::parcelset {
         {
             HPX_ASSERT(dest.type() == type());
 
+            if (parcelset::locality_was_disconnected(
+                    p.destination_locality_id()))
+            {
+                f(std::error_code(make_system_error_code(
+                      hpx::error::locality_was_disconnected)),
+                    p);
+                return;
+            }
+
             // We create a shared pointer of the parcels_await object since it
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
@@ -302,6 +311,24 @@ namespace hpx::parcelset {
                     parcels[i].destination_locality());
             }
 #endif
+
+            if (parcels.empty())
+            {
+                return;    // nothing to do, return early
+            }
+
+            if (parcelset::locality_was_disconnected(
+                    parcels[0].destination_locality_id()))
+            {
+                auto const e = std::error_code(make_system_error_code(
+                    hpx::error::locality_was_disconnected));
+                for (std::size_t i = 0; i != parcels.size(); ++i)
+                {
+                    handlers[i](e, parcels[i]);
+                }
+                return;
+            }
+
             // We create a shared pointer of the parcels_await object since it
             // needs to be kept alive as long as there are futures not ready
             // or GIDs to be split. This is necessary to preserve the identity
@@ -409,12 +436,19 @@ namespace hpx::parcelset {
 
         void remove_from_connection_cache(locality const& loc) override
         {
-            connection_handler().reschedule_on_thread(
-                util::deferred_call(
-                    &parcelport_impl::remove_from_connection_cache_delayed,
-                    this, loc),
-                threads::thread_schedule_state::pending,
-                "remove_from_connection_cache_delayed");
+            if (hpx::threads::get_self_ptr() == nullptr)
+            {
+                connection_handler().reschedule_on_thread(
+                    util::deferred_call(
+                        &parcelport_impl::remove_from_connection_cache_delayed,
+                        this, loc),
+                    threads::thread_schedule_state::pending,
+                    "remove_from_connection_cache");
+            }
+            else
+            {
+                remove_from_connection_cache_delayed(loc);
+            }
         }
 
         /// Return the name of this locality
@@ -692,24 +726,33 @@ namespace hpx::parcelset {
             {
                 std::terminate();
             }
-            else
+
+            // Get a connection or reserve space for a new connection.
+            if (!connection_cache_.get_or_reserve(l, sender_connection))
             {
-                // Get a connection or reserve space for a new connection.
-                if (!connection_cache_.get_or_reserve(l, sender_connection))
-                {
-                    // If no slot is available it's not a problem as the parcel
-                    // will be sent out whenever the next connection is returned
-                    // to the cache.
-                    if (&ec != &throws)
-                        ec = make_success_code();
-                    return sender_connection;
-                }
+                // If no slot is available it's not a problem as the parcel
+                // will be sent out whenever the next connection is returned
+                // to the cache.
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return sender_connection;
             }
 
             // Check if we need to create the new connection.
             if (!sender_connection)
             {
-                return connection_handler().create_connection(l, ec);
+                auto release_reservation = hpx::experimental::scope_exit(
+                    [&] { connection_cache_.clear(l, sender_connection); });
+
+                sender_connection =
+                    connection_handler().create_connection(l, ec);
+                if (sender_connection)
+                {
+                    release_reservation.release();
+                    if (&ec != &throws)
+                        ec = make_success_code();
+                }
+                return sender_connection;
             }
 
             if (&ec != &throws)
@@ -894,6 +937,10 @@ namespace hpx::parcelset {
                 return;
             }
 
+            ++operations_in_flight_;
+            auto finish_operation = hpx::experimental::scope_exit(
+                [this] { --operations_in_flight_; });
+
             // If one of the sending threads are in suspended state, we need to
             // force a new connection to avoid deadlocks.
             constexpr bool force_connection = true;
@@ -904,9 +951,21 @@ namespace hpx::parcelset {
 
             if (!sender_connection)
             {
-                // We can safely return if no connection is available at this
-                // point. As soon as a connection becomes available it checks
-                // for pending parcels and sends those out.
+                // A clear error means that creating a new connection failed.
+                // Complete the queued parcels instead of retrying them.
+                if (ec)
+                {
+                    std::vector<parcel> parcels;
+                    std::vector<write_handler_type> handlers;
+                    if (dequeue_parcels(locality_id, parcels, handlers))
+                    {
+                        detail::call_for_each(
+                            HPX_MOVE(handlers), HPX_MOVE(parcels))(ec);
+                    }
+                }
+
+                // If no cache slot was available, ec is clear and the parcels
+                // remain queued until a connection is returned to the cache.
                 return;
             }
 
@@ -1034,10 +1093,10 @@ namespace hpx::parcelset {
                     parcel_locality_id, HPX_MOVE(parcels), HPX_MOVE(handlers));
             }
 
-            // We yield here for a short amount of time to give another HPX
-            // thread the chance to put a subsequent parcel which leads to a
-            // more effective parcel buffering
-            hpx::execution_base::this_thread::yield();
+            // Note: this function must not suspend. It executes within the
+            // operations_in_flight_ window opened by the caller, and a
+            // suspension here can live-lock against a higher-priority thread
+            // spinning in flush_parcels waiting for that count to drop.
         }
 
     public:

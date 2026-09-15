@@ -51,6 +51,5 @@ add_hpx_module(
     hpx_threading_base
     hpx_runtime_local
     hpx_synchronization
-    hpx_tag_invoke
   CMAKE_SUBDIRS examples tests
 )

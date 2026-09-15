@@ -192,6 +192,7 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -568,8 +569,8 @@ namespace hpx {
             )
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(
-            ExPolicy&& policy, RndIter first, RndIter last, Comp comp)
+        invoke_default(ExPolicy&& policy, RndIter first, RndIter last,
+            Comp comp) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -589,6 +590,7 @@ namespace hpx {
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
         invoke_default(ExPolicy&& policy, RndIter first, RndIter last)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -613,6 +615,7 @@ namespace hpx {
         )
         // clang-format on
         static void invoke_default(RndIter first, RndIter last, Comp comp)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -625,6 +628,7 @@ namespace hpx {
         template <typename RndIter>
             requires(hpx::traits::is_iterator_v<RndIter>)
         static void invoke_default(RndIter first, RndIter last)
+            HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");

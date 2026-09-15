@@ -560,6 +560,14 @@ function(hpx_check_for_cxx26_contracts)
 endfunction()
 
 # ##############################################################################
+function(hpx_check_for_cxx26_reflection_annotations)
+  add_hpx_config_test(
+    HPX_WITH_CXX26_REFLECTION_ANNOTATIONS
+    SOURCE cmake/tests/cxx26_reflection_annotations.cpp
+    FILE ${ARGN}
+  )
+endfunction()
+
 function(hpx_check_for_cxx26_reflection)
   add_hpx_config_test(
     HPX_WITH_CXX26_REFLECTION
@@ -609,6 +617,15 @@ function(hpx_check_for_stable_inplace_merge)
   add_hpx_config_test(
     HPX_WITH_STABLE_INPLACE_MERGE
     SOURCE cmake/tests/stable_inplace_merge.cpp
+    FILE ${ARGN}
+  )
+endfunction()
+
+# ##############################################################################
+function(hpx_check_for_cxx26_filesystem_display_string)
+  add_hpx_config_test(
+    HPX_WITH_CXX26_FILESYSTEM_DISPLAY_STRING
+    SOURCE cmake/tests/cxx26_filesystem_display_string.cpp
     FILE ${ARGN}
   )
 endfunction()

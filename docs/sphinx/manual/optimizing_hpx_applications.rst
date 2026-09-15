@@ -686,7 +686,7 @@ functions of the created client component instance should be called::
     hpx::cout << count.get_value<int>().get() << std::endl;
 
 For more information about the client component type, see
-:cpp:class:`hpx::performance_counters::performance_counter`
+:hpx:class:`hpx::performance_counters::performance_counter`
 
 .. note::
 
@@ -755,7 +755,7 @@ requests the counter data of this performance counter.
 
 The next step in exposing this counter to the runtime system is to register the
 function as a new raw counter type using the |hpx| API function
-:cpp:func:`hpx::performance_counters::install_counter_type`. A counter type
+:hpx:func:`hpx::performance_counters::install_counter_type`. A counter type
 represents certain common characteristics of counters, like their counter type
 name and any associated description information. The following snippet shows an
 example of how to register the function ``some_performance_data``, which is shown
@@ -780,7 +780,7 @@ Now it is possible to instantiate a new counter instance based on the naming
 scheme ``"/test{locality#*/total}/data"`` where ``*`` is a zero-based integer
 index identifying the :term:`locality` for which the counter instance should be
 accessed. The function
-:cpp:func:`hpx::performance_counters::install_counter_type` enables users to
+:hpx:func:`hpx::performance_counters::install_counter_type` enables users to
 instantiate exactly one counter instance for each :term:`locality`. Repeated
 requests to instantiate such a counter will return the same instance, i.e., the
 instance created for the first request.
@@ -789,7 +789,7 @@ If this counter needs to be accessed using the standard |hpx| command line
 options, the registration has to be performed during application startup, before
 ``hpx_main`` is executed. The best way to achieve this is to register an |hpx|
 startup function using the API function
-:cpp:func:`hpx::register_startup_function` before calling ``hpx::init`` to
+:hpx:func:`hpx::register_startup_function` before calling ``hpx::init`` to
 initialize the runtime system::
 
     int main(int argc, char* argv[])
@@ -3609,6 +3609,45 @@ optionally, ``Tau_ROOT=$PATH_TO_TAU`` to your |cmake|_ configuration. In
 addition, you can override the tag used for |apex|_ with the
 :option:`HPX_WITH_APEX_TAG` option. Please see the |apex_hpx_doc|_ for detailed
 instructions on using |apex|_ with |hpx|.
+
+.. _optimizing_with_tracy:
+
+Tracy integration
+=================
+
+|hpx| provides integration with the |tracy|_ profiler, which offers
+per-thread zone tracking, message logs, and fiber support. Enable it with
+:option:`HPX_WITH_TRACY`\ ``=ON`` during |cmake|_ configuration.
+
+Tracy can be supplied via a system install (point ``Tracy_ROOT`` at the install
+tree) or fetched by CMake at configure time by adding
+``HPX_WITH_FETCH_TRACY=ON``. The version fetched is pinned by
+``HPX_WITH_TRACY_TAG``, which defaults to ``v0.14.1``. When Tracy is
+fetched, |hpx| forces ``TRACY_ENABLE``, ``TRACY_ON_DEMAND`` and
+``TRACY_FIBERS`` on the built client. A system-supplied Tracy must have
+been built with the same three options; Tracy 0.14 mangles its exported
+profiler symbol based on the active define set, so a mismatch fails at
+link time rather than producing a silent inconsistency at runtime.
+
+To profile a distributed run, additionally enable
+:option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
+carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
+``parcel_scheduled`` events can be correlated across localities by parcel id.
+
+Event classes can be compiled out individually to reduce the tracing cost
+when only a subset of the timeline is being investigated:
+:option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
+:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`, and
+:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
+one off compiles the wrapper for that class to a no-op, so the runtime
+connection check and the event body do not run (argument evaluation at each
+call site is unchanged). These gates affect the Tracy backend, which is the
+only backend that emits these classes today; the APEX, ITT-Notify and empty
+backends already treat all three as no-ops.
+
+Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
+or during the run. Tracy discovers instrumented processes via UDP broadcast
+on the local network; no port configuration is required for the common case.
 
 References
 ==========

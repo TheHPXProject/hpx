@@ -209,6 +209,7 @@ namespace hpx {
 #else    // DOXYGEN
 
 #include <hpx/config.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/execution.hpp>
@@ -611,7 +612,7 @@ namespace hpx {
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
-            RandIter last, Comp comp = Comp())
+            RandIter last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");
@@ -632,8 +633,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static bool invoke_default(
-            RandIter first, RandIter last, Comp comp = Comp())
+        static bool invoke_default(RandIter first, RandIter last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");
@@ -663,7 +664,7 @@ namespace hpx {
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
-            RandIter last, Comp comp = Comp())
+            RandIter last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");
@@ -684,8 +685,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static RandIter invoke_default(
-            RandIter first, RandIter last, Comp comp = Comp())
+        static RandIter invoke_default(RandIter first, RandIter last,
+            Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Requires a random access iterator.");

@@ -8,35 +8,66 @@
 import json
 import os
 from docutils import nodes
+from sphinx.domains import Domain
 from sphinx.roles import ReferenceRole
 from sphinx import addnodes
-from sphinx.util import logging
 
 
-logger = logging.getLogger(__name__)
+_symbol_anchors_cache = {}
 
-
-_hpx_api_anchors_cache = {}
-
-def _load_hpx_api_anchors(app):
+def _load_symbol_anchors(app):
+    """Load api/symbol_anchors.json (populated by
+    cmake/templates/conf.py.in), mapping a \\page-tagged symbol title
+    (e.g. "hpx::async") to the anchor of the (possibly disambiguated)
+    page documenting it."""
     srcdir = app.srcdir
-    if srcdir not in _hpx_api_anchors_cache:
+    if srcdir not in _symbol_anchors_cache:
         manifest = os.path.join(srcdir, 'api', 'symbol_anchors.json')
         try:
             with open(manifest) as f:
-                _hpx_api_anchors_cache[srcdir] = json.load(f)
+                _symbol_anchors_cache[srcdir] = json.load(f)
         except (OSError, ValueError):
-            _hpx_api_anchors_cache[srcdir] = {}
-    return _hpx_api_anchors_cache[srcdir]
+            _symbol_anchors_cache[srcdir] = {}
+    return _symbol_anchors_cache[srcdir]
 
 
-class HPXAPIRole(ReferenceRole):
+
+
+class HPXCppRole(ReferenceRole):
+    """A `:hpx:<kind>:` role, e.g. `:hpx:func:`hpx::async``.
+
+    Behaves exactly like the corresponding built-in `:cpp:<kind>:` role
+    (i.e. keeps normal signature-aware C++ domain cross-referencing), but
+    first consults api/symbol_anchors.json and, if the referenced symbol
+    has a disambiguated "counterpart" page (see overload_counterparts in
+    conf.py.in), redirects there instead of resolving through the C++
+    domain. This subsumes what the old, kind-agnostic hpx-api role did,
+    while keeping ordinary domain-aware resolution for everything else.
+    """
+    def __init__(self, cpp_reftype):
+        # name of the 'cpp' domain role this stands in for, e.g. 'func',
+        # 'class', 'member', 'type', 'enum', 'concept'.
+        super().__init__()
+        self.cpp_reftype = cpp_reftype
+
     def run(self):
-        anchors = _load_hpx_api_anchors(self.env.app)
-        anchor = anchors.get(self.target)
+        target = self.target.lstrip('~')
+        anchor = _load_symbol_anchors(self.env.app).get(target)
         if anchor is None:
-            logger.warning(f"hpx-api: unknown symbol '{self.target}'")
-            return [nodes.literal(self.rawtext, self.title)], []
+            # No disambiguated counterpart page for this symbol: delegate
+            # straight to the real :cpp:<kind>: role so behavior matches
+            # exactly.
+            cpp_role = self.env.get_domain('cpp').roles[self.cpp_reftype]
+            return cpp_role('cpp:' + self.cpp_reftype, self.rawtext,
+                self.text, self.lineno, self.inliner, self.options,
+                self.content)
+
+        title = self.title
+        if not self.has_explicit_title and title[:1] == '~':
+            title = title[1:]
+            dot = title.rfind('::')
+            if dot != -1:
+                title = title[dot + 2:]
 
         refnode = addnodes.pending_xref(
             self.rawtext,
@@ -46,8 +77,21 @@ class HPXAPIRole(ReferenceRole):
             refexplicit=True,
             refwarn=True,
         )
-        refnode += nodes.inline(self.rawtext, self.title, classes=['xref', 'std', 'std-ref'])
+        refnode += nodes.inline(self.rawtext, title, classes=['xref', 'std', 'std-ref'])
         return [refnode], []
+
+
+# 'cpp' domain role kinds exposed as disambiguation-aware :hpx:<kind>:
+# roles (see HPXCppRole above), e.g. :hpx:func:, :hpx:class:, ...
+_HPX_CPP_ROLE_KINDS = ('func', 'class', 'struct', 'member', 'type', 'enum', 'concept', 'var')
+
+
+class HPXDomain(Domain):
+    """Domain exposing disambiguation-aware HPX C++ cross-reference roles."""
+
+    name = 'hpx'
+    label = 'HPX'
+    roles = {kind: HPXCppRole(kind) for kind in _HPX_CPP_ROLE_KINDS}
 
 
 def setup(app):
@@ -59,7 +103,7 @@ def setup(app):
     app.add_role('cppreference-memory', autolink('http://en.cppreference.com/w/cpp/memory/%s'))
     app.add_role('cppreference-container', autolink('http://en.cppreference.com/w/cpp/container/%s'))
     app.add_role('cppreference-generic', autolink_generic('http://en.cppreference.com/w/cpp/%s/%s'))
-    app.add_role('hpx-api', HPXAPIRole())
+    app.add_domain(HPXDomain)
 
 
 def autolink(pattern, prefix=''):

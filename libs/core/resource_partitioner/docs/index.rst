@@ -11,7 +11,7 @@
 resource_partitioner
 ====================
 
-The resource_partitioner module defines :cpp:class:`hpx::resource::partitioner`,
+The resource_partitioner module defines :hpx:class:`hpx::resource::partitioner`,
 the class used by the runtime and users to partition available hardware
 resources into thread pools. See :ref:`using_resource_partitioner` for more
 details on using the resource partitioner in applications.

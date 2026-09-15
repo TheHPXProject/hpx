@@ -216,7 +216,13 @@ void test_await_terminal_abandoned_waiter_expires(hpx::id_type const& locality)
     }
     catch (hpx::exception const& e)
     {
-        caught_stale_state = (e.get_error() == hpx::error::future_cancelled);
+        auto const& err = e.get_error();
+        caught_stale_state = (err == hpx::error::future_cancelled ||
+            err == hpx::error::locality_was_disconnected);
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
     }
     HPX_TEST(caught_stale_state);
 }

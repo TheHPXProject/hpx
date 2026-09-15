@@ -17,7 +17,6 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/naming_base.hpp>
 
-#include <hpx/supervision_dispatch/sentinel.hpp>
 #include <hpx/supervision_dispatch/server/registry.hpp>
 
 #include <string>
@@ -29,7 +28,7 @@ namespace hpx::supervision {
 
     ///////////////////////////////////////////////////////////////////////////
     /// A registry is a lightweight, self-supervising handle for pairing with
-    /// peer sentinels. It mirrors a peer's lifecycle state locally via join(),
+    /// peer localities. It mirrors a peer's lifecycle state locally via join(),
     /// and can itself be discovered by name in AGAS like other
     /// supervision_dispatch components.
     class HPX_SUPERVISION_DISPATCH_EXPORT registry
@@ -61,30 +60,26 @@ namespace hpx::supervision {
 
         /* implicit */ registry(hpx::future<hpx::id_type>&& f);
 
-        /// Join a peer sentinel: create (or reuse) a local shadow target that
-        /// mirrors the peer's lifecycle state, and register this registry as an
-        /// observer of the peer's lifecycle/activity events.
+        /// Join a peer locality: create (or reuse) a local supervision state
+        /// registry entry that mirrors the peer's lifecycle state, and register
+        /// this registry as an observer of the peer's lifecycle/activity
+        /// events.
         ///
-        /// \param peer_sentinel The peer sentinel to join.
-        /// \param peer_locality The locality on which the peer sentinel
-        ///        resides.
+        /// \param peer_locality The peer locality to join.
         ///
-        /// \return A future that becomes ready with the local shadow identifier
+        /// \return A future that becomes ready with the local supervision state
         ///         and the peer dispatch target.
-        hpx::future<joined_peer> join(sentinel const& peer_sentinel,
-            hpx::id_type const& peer_locality) const;
+        hpx::future<joined_peer> join(hpx::id_type const& peer_locality) const;
 
-        /// \copydoc join(sentinel const&, hpx::id_type const&) const
+        /// \copydoc join(hpx::id_type const&) const
         ///
-        /// \param peer_sentinel The peer sentinel to join.
-        /// \param peer_locality The locality on which the peer sentinel
-        ///        resides.
+        /// \param peer_locality The peer locality to join.
         /// \param ec Used to hold the error code that results from the
         ///           operation instead of throwing an exception on failure.
         ///
         /// \return The local shadow identifier and the peer dispatch target.
         joined_peer join(hpx::launch::sync_policy,
-            sentinel const& peer_sentinel, hpx::id_type const& peer_locality,
+            hpx::id_type const& peer_locality,
             hpx::error_code& ec = hpx::throws) const;
 
         /// Returns a point-in-time snapshot of all fully joined, non-evicting
@@ -110,16 +105,15 @@ namespace hpx::supervision {
         ///
         /// Used by fan_out_join() for any join() that did not complete within
         /// its wait_all_for_nothrow() timeout: the join is silently excluded
-        /// from that call's returned joined_ids, so this ensures its eventual
-        /// side effects on the registry are discarded too, keeping "dropped
-        /// means dropped" true for snapshot_peers() as well. Exceptions from
-        /// the underlying join() are swallowed here (nothing to retract).
+        /// from that call's returned discovered_peer list, so this ensures its
+        /// eventual side effects on the registry are discarded too, keeping
+        /// "dropped means dropped" true for snapshot_peers() as well.
+        /// Exceptions from the underlying join() are swallowed here (nothing to
+        /// retract).
         ///
-        /// \param peer_sentinel The peer sentinel to leave.
-        /// \param peer_locality The locality that owns \p peer_sentinel.
+        /// \param peer_locality The peer locality to leave.
         /// \param f The pending join() future to watch and, on success, undo.
-        void leave(sentinel const& peer_sentinel,
-            hpx::id_type const& peer_locality,
+        void leave(hpx::id_type const& peer_locality,
             hpx::future<joined_peer>&& f) const;
 
         /// Register this registry's id with AGAS under a name pinned to the
@@ -164,6 +158,12 @@ namespace hpx::supervision {
         /// \return The id that was registered under the removed name.
         hpx::id_type unregister_name(
             hpx::launch::sync_policy, hpx::error_code& ec = hpx::throws) const;
+
+        /// Returns the id of the locality that actually hosts this
+        /// registry's underlying server-side component
+        ///
+        /// \return The id of the locality hosting this registry.
+        hpx::id_type get_locality() const;
     };
 }    // namespace hpx::supervision
 

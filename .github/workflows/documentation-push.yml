@@ -23,7 +23,7 @@ concurrency:
 jobs:
   deploy-documentation:
     runs-on: ubuntu-latest
-    container: stellargroup/build_env:17
+    container: stellargroup/build_env:23
     if: >
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_repository.full_name == github.repository) ||
@@ -35,7 +35,7 @@ jobs:
     - uses: actions/checkout@v7
 
     - name: Download Documentation Artifacts
-      uses: dawidd6/action-download-artifact@v21
+      uses: dawidd6/action-download-artifact@v24
       with:
         workflow: documentation-build.yml
         commit: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -43,7 +43,7 @@ jobs:
         path: /__w/hpx/hpx/build/share/hpx/docs
 
     - name: Download Depreport Artifacts
-      uses: dawidd6/action-download-artifact@v21
+      uses: dawidd6/action-download-artifact@v24
       with:
         workflow: depreport.yml
         commit: ${{ github.event.workflow_run.head_sha || github.sha }}

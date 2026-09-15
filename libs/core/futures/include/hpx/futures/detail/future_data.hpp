@@ -181,7 +181,7 @@ namespace hpx::lcos::detail {
     };
 
     template <typename Result>
-    using future_data_result_t = typename future_data_result<Result>::type;
+    using future_data_result_t = future_data_result<Result>::type;
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename R>
@@ -884,7 +884,7 @@ namespace hpx::lcos::detail {
 
     public:
         // NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
-        task_base()
+        task_base() noexcept
           : base_type()
           , started_(false)
         {

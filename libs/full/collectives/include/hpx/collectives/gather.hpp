@@ -6,6 +6,8 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file gather.hpp
+/// \page hpx::collectives::gather_here, hpx::collectives::gather_there
+/// \headerfile hpx/collectives.hpp
 
 #pragma once
 
@@ -396,7 +398,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -902,5 +903,4 @@ namespace hpx::collectives {
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_GATHER(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

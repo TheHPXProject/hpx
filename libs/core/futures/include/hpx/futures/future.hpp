@@ -33,9 +33,11 @@
 #include <hpx/modules/timing.hpp>
 #include <hpx/modules/type_support.hpp>
 
+#include <chrono>
 #include <exception>
 #include <iterator>
 #include <memory>
+#include <source_location>
 #include <type_traits>
 #include <utility>
 
@@ -882,6 +884,79 @@ namespace hpx {
                     return HPX_INVOKE(conv, f.get());
                 });
         }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Default bound for waiting on a future.
+    HPX_CXX_CORE_EXPORT inline constexpr std::chrono::milliseconds
+        default_future_timeout{30000};
+
+    /// \brief Returns the current process-wide timeout used when waiting on a
+    ///        future.
+    ///
+    /// \return The timeout duration. Defaults to \a default_future_timeout (30
+    ///         seconds) unless changed via \a set_future_timeout.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::chrono::milliseconds
+    get_future_timeout() noexcept;
+
+    /// \brief Sets the process-wide timeout used when waiting on a future.
+    ///
+    /// \param timeout The new timeout value applied to all subsequent future
+    ///                waits (e.g. via \a wait_or_handle_timeout) unless a
+    ///                different timeout is passed explicitly.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_future_timeout(
+        hpx::chrono::steady_duration const& timeout) noexcept;
+
+    /// \brief Waits on and consumes the given future, throwing (or reporting
+    ///        via \a ec) a timeout error if the wait exceeds \a timeout.
+    ///
+    /// \param f The future to wait on; consumed (moved-from) by this call.
+    /// \param function_name Name reported in the timeout error message.
+    /// \param timeout Maximum time to wait before timing out. Defaults to the
+    ///                current process-wide timeout returned by
+    ///                \a get_future_timeout.
+    /// \param ec Used to report the timeout error instead of throwing.
+    ///
+    /// \throws hpx::exception with \a hpx::error::future_wait_timed_out if the
+    ///         future is not ready before \a timeout elapses (unless \a ec is
+    ///         supplied, in which case the error is stored in \a ec).
+    ///
+    /// \return The value held by the future, as returned by \a f.get().
+    HPX_CXX_CORE_EXPORT template <typename T>
+    decltype(auto) wait_or_handle_timeout(hpx::future<T>&& f,
+        char const* function_name,
+        hpx::chrono::steady_duration const& timeout = hpx::get_future_timeout(),
+        hpx::error_code& ec = hpx::throws)
+    {
+        if (f.wait_for(timeout, ec) == hpx::future_status::timeout || ec)
+        {
+            HPX_THROWS_IF(ec, hpx::error::future_wait_timed_out, function_name,
+                "future.wait_for timed out");
+        }
+        return f.get(ec);
+    }
+
+    /// \brief Overload of \a wait_or_handle_timeout that derives the reported
+    ///        function name from \a location instead of an explicit string.
+    ///
+    /// \param f The future to wait on; consumed (moved-from) by this call.
+    /// \param location Call-site information identifying the caller in the
+    ///                 timeout error message. Defaults to the caller's
+    ///                 location.
+    /// \param timeout Maximum time to wait before timing out. Defaults to the
+    ///                current process-wide timeout returned by
+    ///                \a get_future_timeout.
+    /// \param ec Used to report the timeout error instead of throwing.
+    ///
+    /// \return The value held by the future, as returned by \a f.get().
+    HPX_CXX_CORE_EXPORT template <typename T>
+    decltype(auto) wait_or_handle_timeout(hpx::future<T>&& f,
+        std::source_location const& location = std::source_location::current(),
+        hpx::chrono::steady_duration const& timeout = hpx::get_future_timeout(),
+        hpx::error_code& ec = hpx::throws)
+    {
+        return wait_or_handle_timeout(
+            HPX_MOVE(f), location.function_name(), timeout, ec);
     }
 }    // namespace hpx
 

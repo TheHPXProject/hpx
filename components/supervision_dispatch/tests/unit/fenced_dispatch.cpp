@@ -14,9 +14,7 @@
 #include <hpx/modules/supervision.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <hpx/supervision_dispatch/dispatch_work.hpp>
-#include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
+#include <hpx/supervision_dispatch.hpp>
 
 #include <atomic>
 #include <cstdint>
@@ -69,24 +67,22 @@ void test_dispatch_success(hpx::id_type const& locality)
 
     constexpr std::uint64_t epoch = 0;
 
-    // Join `locality` as a peer sentinel to obtain a real, distinct shadow
-    // (never the action target itself), mirroring the shadow != target
-    // contract documented in shadow_id.hpp.
-    hpx::supervision::sentinel const peer_sentinel(locality);
+    // Join `locality` as a peer to obtain the real dispatch target for it via
+    // joined_peer::target.
     hpx::supervision::registry const r(locality);
     hpx::supervision::joined_peer const peer =
-        r.join(hpx::launch::sync, peer_sentinel, locality);
+        r.join(hpx::launch::sync, locality);
 
-    HPX_TEST_NEQ(peer.shadow, hpx::supervision::invalid_shadow_id);
-    HPX_TEST_NEQ(peer.shadow.get(), locality);
+    HPX_TEST_NEQ(peer.target, hpx::invalid_id);
+    HPX_TEST_EQ(peer.target, locality);
 
     hpx::future<int> f = hpx::supervision::dispatch_work(
-        count_invocation_action(), peer.shadow, locality, epoch);
+        count_invocation_action(), peer.target, epoch);
 
     HPX_TEST(f.get() == 1);
     HPX_TEST_EQ(hpx::sync(get_invocation_count_action(), locality), 1);
 
-    hpx::supervision::remove_target(locality, peer.shadow.get());
+    hpx::supervision::remove_target(locality, peer.target);
 }
 
 // Client-side early-out: target already latched a terminal event before
@@ -103,9 +99,8 @@ void test_dispatch_client_side_fence()
     hpx::supervision::publish_event(hpx::launch::sync, locality, target,
         hpx::supervision::event::completed, epoch);
 
-    hpx::future<int> f =
-        hpx::supervision::dispatch_work(count_invocation_action(),
-            hpx::supervision::shadow_id(target), target, epoch);
+    hpx::future<int> f = hpx::supervision::dispatch_work(
+        count_invocation_action(), target, epoch);
 
     bool caught = false;
     try
@@ -144,8 +139,8 @@ void test_dispatch_server_side_race()
     bool caught = false;
     try
     {
-        hpx::supervision::invoke_fenced_action(count_invocation_action(),
-            hpx::supervision::shadow_id(target), target, epoch);
+        hpx::supervision::invoke_fenced_action(
+            count_invocation_action(), target, epoch);
     }
     catch (hpx::exception const& e)
     {
@@ -176,7 +171,7 @@ void test_dispatch_epoch_mismatch_not_fenced()
 
     hpx::future<int> f =
         hpx::supervision::dispatch_work<count_invocation_action>(
-            hpx::supervision::shadow_id(target), target, other_epoch);
+            target, other_epoch);
 
     HPX_TEST(f.get() == 1);
     HPX_TEST_EQ(hpx::sync(get_invocation_count_action(), locality), 1);
@@ -206,8 +201,7 @@ void test_fenced_error_code_consistent_across_paths(
     try
     {
         hpx::supervision::dispatch_work<count_invocation_action>(
-            hpx::supervision::shadow_id(client_side_target), client_side_target,
-            epoch)
+            client_side_target, epoch)
             .get();
     }
     catch (hpx::exception const& e)
@@ -225,9 +219,8 @@ void test_fenced_error_code_consistent_across_paths(
     hpx::error server_side_error{};
     try
     {
-        hpx::supervision::invoke_fenced_action(count_invocation_action(),
-            hpx::supervision::shadow_id(server_side_target), server_side_target,
-            epoch);
+        hpx::supervision::invoke_fenced_action(
+            count_invocation_action(), server_side_target, epoch);
     }
     catch (hpx::exception const& e)
     {

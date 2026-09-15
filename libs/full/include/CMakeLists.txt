@@ -14,7 +14,6 @@ set(include_headers
     hpx/algorithm.hpp
     hpx/barrier.hpp
     hpx/channel.hpp
-    hpx/collectives.hpp
     hpx/compute.hpp
     hpx/future.hpp
     hpx/hpx.hpp

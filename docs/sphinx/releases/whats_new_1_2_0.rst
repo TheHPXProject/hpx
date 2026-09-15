@@ -76,8 +76,8 @@ Breaking changes
   we now test is 1.58.
 * Our ``boost::format``\ -based formatting implementation has been revised and
   replaced with a custom implementation. This changes the formatting syntax and
-  requires changes if you are relying on :cpp:func:`hpx::util::format` or
-  :cpp:func:`hpx::util::format_to`. The pull request for this change contains
+  requires changes if you are relying on :hpx:func:`hpx::util::format` or
+  :hpx:func:`hpx::util::format_to`. The pull request for this change contains
   more information: :hpx-pr:`3266`.
 * The following deprecated options have now been completely removed:
   ``HPX_WITH_ASYNC_FUNCTION_COMPATIBILITY``, ``HPX_WITH_LOCAL_DATAFLOW``,
@@ -349,4 +349,3 @@ Closed pull requests
 * :hpx-pr:`3228` - Allow suspension also on static schedulers
 * :hpx-pr:`3163` - libfabric parcelport w/o HPX_PARCELPORT_LIBFABRIC_ENDPOINT_RDM
 * :hpx-pr:`3036` - Switching to CircleCI 2.0
-

@@ -15,6 +15,5 @@
 #include <hpx/supervision_dispatch/dispatch_api.hpp>
 #include <hpx/supervision_dispatch/dispatch_work.hpp>
 #include <hpx/supervision_dispatch/registry.hpp>
-#include <hpx/supervision_dispatch/sentinel.hpp>
 #include <hpx/supervision_dispatch/testing.hpp>
 #endif

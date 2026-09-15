@@ -21,7 +21,7 @@ The easiest ways to get in contact with us are listed here:
 
 * Mailing list:    [hpx-users@stellar-group.org](email:hpx-users@stellar-group.org), [hpx-devel@stellar-group.org](email:hpx-devel@stellar-group.org)
 * Discord server:  [#ste||ar](https://discord.gg/Tn9QuzVjvy)
-* Blog:            [hpx.stellar-group.org](hpx.stellar-group.org)
+* Blog:            [hpx.dev](hpx.dev)
 * More options:    See our [support page](https://github.com/TheHPXProject/hpx/blob/master/.github/SUPPORT.md)
 
 The basic approach is to find something fun you want to fix, hack it up, and
@@ -138,13 +138,13 @@ Community is an important part of all we do.
 * The HPX project is a meritocratic, consensus-based community project. Anyone
   with an interest in the project can join the community, contribute to the
   project design and participate in the decision making process.
-  `This document <http://hpx.stellar-group.org/documents/governance/>`_ describes
+  `This document <http://hpx.dev/documents/governance/>`_ describes
   how that participation takes place and how to set about earning merit within
   the project community.
 * You can help us answer questions our users have by being around on IRC
   (#ste||ar on irc.freenode.net) or by chiming in on the
-  [users mailing list](email:hpx-users@stellar.cct.lsu.edu)
-* You can help write blog posts (for [stellar.cct.lsu.edu](stellar.cct.lsu.edu))
+  [users mailing list](email:hpx-users@stellar-group.org)
+* You can help write blog posts (for [hpx.dev](hpx.dev))
   about things you're doing with HPX. We can give you access or help with
   posting things.
 * Create an example of how to use HPX in the real world by building something
