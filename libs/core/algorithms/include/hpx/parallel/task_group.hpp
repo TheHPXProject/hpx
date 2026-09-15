@@ -39,6 +39,23 @@ namespace hpx::experimental {
 
     namespace detail {
 
+        // C++20 concepts to reduce template instantiation depth.
+        // Using concepts instead of inline std::is_invocable_v / is_scheduler_v
+        // forces lazy evaluation and short-circuiting, preventing Clang 22 ICE
+        // (exit code 139: stack exhaustion) during C++20 module compilation.
+
+        template <typename T>
+        concept is_executor_any =
+            hpx::traits::is_executor_any_v<std::decay_t<T>>;
+
+        template <typename T>
+        concept is_p2300_scheduler =
+            hpx::execution::experimental::is_scheduler_v<std::decay_t<T>>;
+
+        template <typename T>
+        concept is_non_scheduler_non_executor =
+            !is_executor_any<T> && !is_p2300_scheduler<T>;
+
         struct task_group_shared_state
         {
             using shared_state_type = lcos::detail::future_data<void>;
@@ -136,12 +153,7 @@ namespace hpx::experimental {
         ///                   task group.
         /// \param ts         Additional arguments to use to invoke \c f().
 
-        template <typename Executor, typename F, typename... Ts>
-        // clang-format off
-            requires (
-                hpx::traits::is_executor_any_v<std::decay_t<Executor>>
-            )
-        // clang-format on
+        template <detail::is_executor_any Executor, typename F, typename... Ts>
         void run(Executor&& exec, F&& f, Ts&&... ts)
         {
             // make sure exceptions don't leave the latch in the wrong state
@@ -177,13 +189,7 @@ namespace hpx::experimental {
         ///            group.
         /// \param ts  Additional arguments to use to invoke \c f().
 
-        template <typename F, typename... Ts>
-        // clang-format off
-            requires (
-                !hpx::traits::is_executor_any_v<std::decay_t<F>> &&
-                !hpx::execution::experimental::is_scheduler_v<std::decay_t<F>>
-            )
-        // clang-format on
+        template <detail::is_non_scheduler_non_executor F, typename... Ts>
         void run(F&& f, Ts&&... ts)
         {
             run(execution::parallel_executor{}, HPX_FORWARD(F, f),
@@ -213,13 +219,8 @@ namespace hpx::experimental {
         ///                    task group.
         /// \param ts          Additional arguments to use to invoke \c f().
 
-        template <typename Scheduler, typename F, typename... Ts>
-        // clang-format off
-            requires (
-                hpx::execution::experimental::is_scheduler_v<
-                    std::decay_t<Scheduler>>
-            )
-        // clang-format on
+        template <detail::is_p2300_scheduler Scheduler, typename F,
+            typename... Ts>
         void run(Scheduler&& sched, F&& f, Ts&&... ts)
         {
             namespace ex = hpx::execution::experimental;

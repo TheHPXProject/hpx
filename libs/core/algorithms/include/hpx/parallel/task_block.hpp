@@ -34,6 +34,17 @@ namespace hpx::experimental {
 
     namespace detail {
 
+        // C++20 concepts for task_block overload disambiguation.
+        // Using concepts instead of inline type traits forces lazy
+        // evaluation and short-circuiting, preventing Clang 22 ICE
+        // (exit code 139: stack exhaustion) during C++20 module
+        // compilation.
+
+        template <typename T>
+        concept is_execution_policy_not_scheduler =
+            hpx::is_execution_policy_v<std::decay_t<T>> &&
+            !hpx::execution::experimental::is_scheduler_v<std::decay_t<T>>;
+
         HPX_CXX_CORE_EXPORT struct define_task_block_impl;
     }    // namespace detail
 
@@ -264,13 +275,8 @@ namespace hpx::experimental {
         ///
         /// \throw task_canceled_exception, as described in Exception Handling.
         ///
-        template <typename Scheduler, typename F, typename... Ts>
-        // clang-format off
-            requires (
-                hpx::execution::experimental::is_scheduler_v<
-                    std::decay_t<Scheduler>>
-            )
-        // clang-format on
+        template <detail::is_p2300_scheduler Scheduler, typename F,
+            typename... Ts>
         void run(Scheduler&& sched, F&& f, Ts&&... ts)
         {
             // The proposal requires that the task_block should be
@@ -351,18 +357,15 @@ namespace hpx::experimental {
 
     namespace detail {
 
+        template <typename F, typename Scheduler>
+        concept is_task_block_invocable =
+            std::is_invocable_v<F&&, task_block<>&, Scheduler&&>;
+
         /// \cond NOINTERNAL
         HPX_CXX_CORE_EXPORT struct define_task_block_impl
         {
-            // Legacy execution-policy-based path
-            template <typename ExPolicy, typename F>
-            // clang-format off
-                requires (
-                    hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
-                    !hpx::execution::experimental::is_scheduler_v<
-                        std::decay_t<ExPolicy>>
-                )
-            // clang-format on
+            template <detail::is_execution_policy_not_scheduler ExPolicy,
+                typename F>
             void operator()(ExPolicy&& policy, F&& f) const
             {
                 static_assert(hpx::is_execution_policy_v<ExPolicy>,
@@ -389,13 +392,7 @@ namespace hpx::experimental {
             // scheduling is governed by the user-supplied scheduler).
             // After the user callable returns, the lazily accumulated
             // sender graph is joined via wait_as_sender() + sync_wait().
-            template <typename Scheduler, typename F>
-            // clang-format off
-                requires (
-                    hpx::execution::experimental::is_scheduler_v<
-                        std::decay_t<Scheduler>>
-                )
-            // clang-format on
+            template <detail::is_p2300_scheduler Scheduler, typename F>
             void operator()(Scheduler&& sched, F&& f) const
             {
                 namespace ex = hpx::execution::experimental;
@@ -407,8 +404,8 @@ namespace hpx::experimental {
                 // route to the sender-based task_group::run() path.
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        if constexpr (std::is_invocable_v<F&&, task_block<>&,
-                                          Scheduler&&>)
+                        if constexpr (detail::is_task_block_invocable<F,
+                                          Scheduler&>)
                         {
                             f(trh, sched);
                         }
@@ -457,14 +454,8 @@ namespace hpx::experimental {
     /// \note It is expected (but not mandated) that f will (directly or
     ///       indirectly) call tr.run(_callable_object_).
     ///
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
-    // clang-format off
-        requires (
-            hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
-            !hpx::execution::experimental::is_scheduler_v<
-                std::decay_t<ExPolicy>>
-        )
-    // clang-format on
+    HPX_CXX_CORE_EXPORT template <
+        detail::is_execution_policy_not_scheduler ExPolicy, typename F>
     decltype(auto) define_task_block(ExPolicy&& policy, F&& f)
     {
         if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
@@ -533,13 +524,8 @@ namespace hpx::experimental {
     ///
     /// \throws exception_list, as specified in Exception Handling.
     ///
-    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F>
-    // clang-format off
-        requires (
-            hpx::execution::experimental::is_scheduler_v<
-                std::decay_t<Scheduler>>
-        )
-    // clang-format on
+    HPX_CXX_CORE_EXPORT
+    template <detail::is_p2300_scheduler Scheduler, typename F>
     void define_task_block(Scheduler&& sched, F&& f)
     {
         detail::define_task_block(
@@ -571,14 +557,8 @@ namespace hpx::experimental {
     /// \note It is expected (but not mandated) that f will (directly or
     ///       indirectly) call tr.run(_callable_object_).
     ///
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
-    // clang-format off
-        requires (
-            hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
-            !hpx::execution::experimental::is_scheduler_v<
-                std::decay_t<ExPolicy>>
-        )
-    // clang-format on
+    HPX_CXX_CORE_EXPORT template <
+        detail::is_execution_policy_not_scheduler ExPolicy, typename F>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
     define_task_block_restore_thread(ExPolicy&& policy, F&& f)
     {
@@ -635,13 +615,8 @@ namespace hpx::experimental {
     ///
     /// \throws exception_list, as specified in Exception Handling.
     ///
-    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F>
-    // clang-format off
-        requires (
-            hpx::execution::experimental::is_scheduler_v<
-                std::decay_t<Scheduler>>
-        )
-    // clang-format on
+    HPX_CXX_CORE_EXPORT
+    template <detail::is_p2300_scheduler Scheduler, typename F>
     void define_task_block_restore_thread(Scheduler&& sched, F&& f)
     {
         // By design, we always return on the same (HPX-) thread as we started
