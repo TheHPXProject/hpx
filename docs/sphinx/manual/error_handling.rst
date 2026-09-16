@@ -48,7 +48,7 @@ calling thread tries to wait for the result of the action by invoking either
 
 .. literalinclude:: ../../examples/quickstart/error_handling.cpp
    :language: c++
-   :start-after: //exception_diagnostic_information
+   :start-after: //[exception_diagnostic_information
    :end-before: //]
 
 .. note::
@@ -71,7 +71,7 @@ snippet:
 
 .. literalinclude:: ../../examples/quickstart/error_handling.cpp
    :language: c++
-   :start-after: //exception_diagnostic_elements
+   :start-after: //[exception_diagnostic_elements
    :end-before: //]
 
 .. _error_code:
