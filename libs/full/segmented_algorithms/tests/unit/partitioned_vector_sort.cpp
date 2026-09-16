@@ -115,8 +115,7 @@ void test_sort_once(ExPolicy&& policy, hpx::partitioned_vector<T>& values)
 }
 
 template <typename ExPolicy, typename T>
-void test_sort_once_async(
-    ExPolicy&& policy, hpx::partitioned_vector<T>& values)
+void test_sort_once_async(ExPolicy&& policy, hpx::partitioned_vector<T>& values)
 {
     std::vector<T> const expected = copy_values(values);
     hpx::sort(HPX_FORWARD(ExPolicy, policy), values.begin(), values.end())
