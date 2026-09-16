@@ -1535,6 +1535,8 @@ namespace {
 
 int main()
 {
+    auto const suite_start = std::chrono::steady_clock::now();
+
     RUN(test_capture_second_input);
     RUN(test_capture_first_input);
     RUN(test_capture_both_inputs);
@@ -1554,6 +1556,12 @@ int main()
     RUN(test_disjoint_parallel_chunks);
     RUN(test_task_empty_side_paths);
     RUN(test_remote_comparator_exception);
+    double const elapsed_before_randomized = 
+        std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - suite_start).count();
+    std::fprintf(stderr, 
+        "[merge-test] starting randomized after %.3fs of earlier tests\n", 
+        elapsed_before_randomized);
     RUN(test_randomized_distributed_merge);
 
     return hpx::util::report_errors();
