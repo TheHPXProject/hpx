@@ -8,21 +8,32 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
+#include <hpx/async_combinators/wait_all.hpp>
 #include <hpx/hpx_main.hpp>
 #include <hpx/include/partitioned_vector.hpp>
+#include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/distribution_policies.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/segmented_algorithms.hpp>
+#include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/parallel/segmented_algorithms/merge.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <iterator>
+#include <numeric>
 #include <random>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 struct throwing_compare
@@ -182,38 +193,79 @@ struct stateful_key_projection
 };
 
 namespace {
+
+    // Transfer whole partitions, rather than issuing one remote action per
+    // element. Wait for every operation before releasing its input buffers.
     template <typename T>
     void assign_values(
         hpx::partitioned_vector<T>& destination, std::vector<T> const& source)
     {
         HPX_TEST_EQ(destination.size(), source.size());
-
-        auto destination_it = destination.begin();
-
-        for (T const& value : source)
+        if (destination.size() != source.size())
         {
-            *destination_it = value;
-            ++destination_it;
+            return;
+        }
+
+        auto const sizes = destination.get_partition_sizes();
+        std::vector<hpx::future<void>> operations;
+        operations.reserve(sizes.size());
+        std::vector<std::size_t> const all_positions;
+        auto first = source.begin();
+        for (std::size_t part = 0; part != sizes.size(); ++part)
+        {
+            auto last = std::next(first,
+                static_cast<typename std::vector<T>::difference_type>(
+                    sizes[part]));
+            operations.push_back(destination.set_values(
+                part, all_positions, std::vector<T>(first, last)));
+            first = last;
+        }
+        HPX_TEST(first == source.end());
+        hpx::wait_all(operations);
+        for (auto& operation : operations)
+        {
+            operation.get();
         }
     }
 
-    void check_mixed_values(
-        hpx::partitioned_vector<mixed_output_value> const& actual,
-        std::vector<mixed_output_value> const& expected)
+    template <typename T>
+    std::vector<T> collect_values(hpx::partitioned_vector<T> const& source)
     {
-        HPX_TEST_EQ(actual.size(), expected.size());
+        auto const sizes = source.get_partition_sizes();
+        std::vector<hpx::future<std::vector<T>>> operations;
+        operations.reserve(sizes.size());
+        for (std::size_t part = 0; part != sizes.size(); ++part)
+        {
+            operations.push_back(source.get_values(part));
+        }
+        hpx::wait_all(operations);
 
-        auto actual_it = actual.begin();
+        std::vector<T> values;
+        values.reserve(source.size());
+        // Preserve global partition order, not completion order.
+        for (auto& operation : operations)
+        {
+            auto partition = operation.get();
+            values.insert(values.end(),
+                std::make_move_iterator(partition.begin()),
+                std::make_move_iterator(partition.end()));
+        }
+        return values;
+    }
 
+    template <typename T>
+    void check_values(hpx::partitioned_vector<T> const& actual,
+        std::vector<T> const& expected)
+    {
+        auto const values = collect_values(actual);
+        HPX_TEST_EQ(values.size(), expected.size());
+        if (values.size() != expected.size())
+        {
+            return;
+        }
         for (std::size_t i = 0; i != expected.size(); ++i)
         {
-            mixed_output_value const value = *actual_it;
-
-            HPX_TEST_EQ(value.key, expected[i].key);
-            HPX_TEST_EQ(value.source, expected[i].source);
-            HPX_TEST_EQ(value.sequence, expected[i].sequence);
-
-            ++actual_it;
+            HPX_TEST_EQ(values[i], expected[i]);
         }
     }
 
@@ -221,34 +273,101 @@ namespace {
         hpx::partitioned_vector<stable_value> const& actual,
         std::vector<stable_value> const& expected)
     {
-        HPX_TEST_EQ(actual.size(), expected.size());
-
-        auto actual_it = actual.begin();
-
+        auto const values = collect_values(actual);
+        HPX_TEST_EQ(values.size(), expected.size());
+        if (values.size() != expected.size())
+        {
+            return;
+        }
         for (std::size_t i = 0; i != expected.size(); ++i)
         {
-            stable_value const value = *actual_it;
-
-            HPX_TEST_EQ(value.key, expected[i].key);
-            HPX_TEST_EQ(value.source, expected[i].source);
-            HPX_TEST_EQ(value.sequence, expected[i].sequence);
-
-            ++actual_it;
+            HPX_TEST_EQ(values[i].key, expected[i].key);
+            HPX_TEST_EQ(values[i].source, expected[i].source);
+            HPX_TEST_EQ(values[i].sequence, expected[i].sequence);
         }
     }
 
-    template <typename T>
-    void check_values(hpx::partitioned_vector<T> const& actual,
-        std::vector<T> const& expected)
+    void check_values(hpx::partitioned_vector<stable_value> const& actual,
+        std::vector<stable_value> const& expected)
     {
-        HPX_TEST_EQ(actual.size(), expected.size());
+        check_stable_values(actual, expected);
+    }
 
-        auto actual_it = actual.begin();
+    // One owner entry per partition. Repeated owners explicitly create
+    // non-adjacent partitions on the same locality; do not assume that a
+    // partition count larger than the locality count implies round-robin.
+    hpx::container_distribution_policy partition_layout(
+        std::size_t partitions, std::vector<hpx::id_type> const& localities)
+    {
+        std::vector<hpx::id_type> owners;
+        owners.reserve(partitions);
+        for (std::size_t i = 0; i != partitions; ++i)
+        {
+            owners.push_back(localities[i % localities.size()]);
+        }
+        return hpx::container_layout(partitions, HPX_MOVE(owners));
+    }
 
+    template <typename Policy, typename T, typename Layout1, typename Layout2,
+        typename LayoutOut>
+    void run_merge_case(Policy policy, std::vector<T> const& input1,
+        std::vector<T> const& input2, Layout1 const& layout1,
+        Layout2 const& layout2, LayoutOut const& layout_out)
+    {
+        HPX_TEST(std::is_sorted(input1.begin(), input1.end()));
+        HPX_TEST(std::is_sorted(input2.begin(), input2.end()));
+
+        std::vector<T> expected(input1.size() + input2.size());
+        std::merge(input1.begin(), input1.end(), input2.begin(), input2.end(),
+            expected.begin());
+
+        hpx::partitioned_vector<T> source1(input1.size(), layout1);
+        hpx::partitioned_vector<T> source2(input2.size(), layout2);
+        hpx::partitioned_vector<T> destination(expected.size(), layout_out);
+        assign_values(source1, input1);
+        assign_values(source2, input2);
+
+        auto result = hpx::merge(policy, source1.begin(), source1.end(),
+            source2.begin(), source2.end(), destination.begin());
+        if constexpr (hpx::is_async_execution_policy_v<Policy>)
+        {
+            HPX_TEST(result.get() == destination.end());
+        }
+        else
+        {
+            HPX_TEST(result == destination.end());
+        }
+        check_values(destination, expected);
+    }
+
+    void run_test(char const* name, void (*test)())
+    {
+        auto const start = std::chrono::steady_clock::now();
+        std::fprintf(stderr, "[merge-test] start %s\n", name);
+        std::fflush(stderr);
+        test();
+        double const elapsed = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start)
+                                   .count();
+        std::fprintf(stderr, "[merge-test] done %s (%.3fs)\n", name, elapsed);
+        std::fflush(stderr);
+    }
+
+    void check_mixed_values(
+        hpx::partitioned_vector<mixed_output_value> const& actual,
+        std::vector<mixed_output_value> const& expected)
+    {
+        auto const values = collect_values(actual);
+        HPX_TEST_EQ(values.size(), expected.size());
+        if (values.size() != expected.size())
+        {
+            return;
+        }
         for (std::size_t i = 0; i != expected.size(); ++i)
         {
-            HPX_TEST_EQ(*actual_it, expected[i]);
-            ++actual_it;
+            HPX_TEST_EQ(values[i].key, expected[i].key);
+            HPX_TEST_EQ(values[i].source, expected[i].source);
+            HPX_TEST_EQ(values[i].sequence, expected[i].sequence);
         }
     }
 
@@ -287,6 +406,52 @@ namespace {
 
         HPX_TEST(result == destination.end());
         check_values(destination, expected);
+    }
+
+    void run_one_empty_input_case(bool first_is_empty,
+        hpx::id_type const& source_locality,
+        hpx::id_type const& destination_locality)
+    {
+        std::vector<int> const values{1, 3, 5, 7, 9};
+        std::vector<int> const ignored{100};
+
+        auto const source_layout = hpx::container_layout(
+            1, std::vector<hpx::id_type>{source_locality});
+
+        auto const destination_layout = hpx::container_layout(
+            1, std::vector<hpx::id_type>{destination_locality});
+
+        hpx::partitioned_vector<int> source1(
+            first_is_empty ? ignored.size() : values.size(), source_layout);
+
+        hpx::partitioned_vector<int> source2(
+            first_is_empty ? values.size() : ignored.size(), source_layout);
+
+        hpx::partitioned_vector<int> destination(
+            values.size(), destination_layout);
+
+        if (first_is_empty)
+        {
+            assign_values(source1, ignored);
+            assign_values(source2, values);
+        }
+        else
+        {
+            assign_values(source1, values);
+            assign_values(source2, ignored);
+        }
+
+        auto first1 = source1.begin();
+        auto last1 = first_is_empty ? first1 : source1.end();
+
+        auto first2 = source2.begin();
+        auto last2 = first_is_empty ? source2.end() : first2;
+
+        auto result = hpx::merge(hpx::execution::seq, first1, last1, first2,
+            last2, destination.begin());
+
+        HPX_TEST(result == destination.end());
+        check_values(destination, values);
     }
 
     void test_capture_second_input()
@@ -356,8 +521,8 @@ namespace {
             13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
 
         // Four partitions distributed across the available localities.
-        auto const source1_layout = hpx::container_layout(4, localities);
-        auto const source2_layout = hpx::container_layout(4, localities);
+        auto const source1_layout = partition_layout(4, localities);
+        auto const source2_layout = partition_layout(4, localities);
 
         // output is on one partition on locality 0.
         auto const destination_layout =
@@ -376,52 +541,6 @@ namespace {
 
         HPX_TEST(result == destination.end());
         check_values(destination, expected);
-    }
-
-    void run_one_empty_input_case(bool first_is_empty,
-        hpx::id_type const& source_locality,
-        hpx::id_type const& destination_locality)
-    {
-        std::vector<int> const values{1, 3, 5, 7, 9};
-        std::vector<int> const ignored{100};
-
-        auto const source_layout = hpx::container_layout(
-            1, std::vector<hpx::id_type>{source_locality});
-
-        auto const destination_layout = hpx::container_layout(
-            1, std::vector<hpx::id_type>{destination_locality});
-
-        hpx::partitioned_vector<int> source1(
-            first_is_empty ? ignored.size() : values.size(), source_layout);
-
-        hpx::partitioned_vector<int> source2(
-            first_is_empty ? values.size() : ignored.size(), source_layout);
-
-        hpx::partitioned_vector<int> destination(
-            values.size(), destination_layout);
-
-        if (first_is_empty)
-        {
-            assign_values(source1, ignored);
-            assign_values(source2, values);
-        }
-        else
-        {
-            assign_values(source1, values);
-            assign_values(source2, ignored);
-        }
-
-        auto first1 = source1.begin();
-        auto last1 = first_is_empty ? first1 : source1.end();
-
-        auto first2 = source2.begin();
-        auto last2 = first_is_empty ? source2.end() : first2;
-
-        auto result = hpx::merge(hpx::execution::seq, first1, last1, first2,
-            last2, destination.begin());
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, values);
     }
 
     void test_empty_input_ranges()
@@ -562,10 +681,10 @@ namespace {
 
         // Each input has four partitions alternating between
         // localities 0 and 1.
-        auto const source1_layout = hpx::container_layout(
+        auto const source1_layout = partition_layout(
             4, std::vector<hpx::id_type>{localities[0], localities[1]});
 
-        auto const source2_layout = hpx::container_layout(
+        auto const source2_layout = partition_layout(
             4, std::vector<hpx::id_type>{localities[1], localities[0]});
 
         // Both complete input ranges are remote from the destination.
@@ -589,280 +708,6 @@ namespace {
 
         HPX_TEST(result == destination.end());
         check_stable_values(destination, expected);
-    }
-
-    void test_parallel_multi_destination_partitions()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        std::vector<int> input1;
-        std::vector<int> input2;
-        std::vector<int> expected;
-
-        // input1 = 1, 3, 5, ..., 47
-        // input2 = 2, 4, 6, ..., 48
-        // expected = 1, 2, 3, ..., 48
-        for (int value = 1; value <= 48; ++value)
-        {
-            expected.push_back(value);
-
-            if (value % 2 == 0)
-            {
-                input2.push_back(value);
-            }
-            else
-            {
-                input1.push_back(value);
-            }
-        }
-
-        // Input partitions alternate between localities 0 and 1.
-        auto const source1_layout = hpx::container_layout(
-            6, std::vector<hpx::id_type>{localities[0], localities[1]});
-
-        auto const source2_layout = hpx::container_layout(
-            6, std::vector<hpx::id_type>{localities[1], localities[0]});
-
-        // Six output partitions are all located on locality 2.
-        // The parallel merge should process these output chunks concurrently.
-        auto const destination_layout =
-            hpx::container_layout(6, std::vector<hpx::id_type>{localities[2]});
-
-        hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            expected.size(), destination_layout);
-
-        assign_values(source1, input1);
-        assign_values(source2, input2);
-
-        auto result = hpx::merge(hpx::execution::par, source1.begin(),
-            source1.end(), source2.begin(), source2.end(), destination.begin());
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, expected);
-    }
-
-    void test_multi_locality_destination_partitions()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        std::vector<int> input1;
-        std::vector<int> input2;
-        std::vector<int> expected;
-
-        // input1 = 0, 2, 4, ..., 94
-        // input2 = 1, 3, 5, ..., 95
-        // expected = 0, 1, 2, ..., 95
-        for (int value = 0; value != 96; ++value)
-        {
-            expected.push_back(value);
-
-            if (value % 2 == 0)
-            {
-                input1.push_back(value);
-            }
-            else
-            {
-                input2.push_back(value);
-            }
-        }
-
-        // All input1 partitions are on locality 0.
-        auto const source1_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[0]});
-
-        // All input2 partitions are on locality 1.
-        auto const source2_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[1]});
-
-        // The six destination partitions are distributed across
-        // localities 0, 1, and 2.
-        auto const destination_layout = hpx::container_layout(6, localities);
-
-        hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            expected.size(), destination_layout);
-
-        assign_values(source1, input1);
-        assign_values(source2, input2);
-
-        // Test the ordinary parallel policy.
-        {
-            std::vector<int> const initial_values(expected.size(), -1);
-
-            assign_values(destination, initial_values);
-
-            auto result =
-                hpx::merge(hpx::execution::par, source1.begin(), source1.end(),
-                    source2.begin(), source2.end(), destination.begin());
-
-            HPX_TEST(result == destination.end());
-            check_values(destination, expected);
-        }
-
-        // Test the parallel task policy with the same distributed output.
-        {
-            std::vector<int> const initial_values(expected.size(), -1);
-
-            assign_values(destination, initial_values);
-
-            auto result_future =
-                hpx::merge(hpx::execution::par(hpx::execution::task),
-                    source1.begin(), source1.end(), source2.begin(),
-                    source2.end(), destination.begin());
-
-            auto result = result_future.get();
-
-            HPX_TEST(result == destination.end());
-            check_values(destination, expected);
-        }
-    }
-
-    void test_sequenced_task_merge()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        constexpr int input_size = 2048;
-
-        std::vector<int> input1;
-        std::vector<int> input2;
-        std::vector<int> expected;
-
-        input1.reserve(input_size);
-        input2.reserve(input_size);
-        expected.reserve(2 * static_cast<std::size_t>(input_size));
-
-        for (int i = 0; i != input_size; ++i)
-        {
-            input1.push_back(2 * i);
-            input2.push_back(2 * i + 1);
-        }
-
-        for (int i = 0; i != 2 * input_size; ++i)
-        {
-            expected.push_back(i);
-        }
-
-        auto const source1_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[0]});
-
-        auto const source2_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[1]});
-
-        auto const destination_layout =
-            hpx::container_layout(1, std::vector<hpx::id_type>{localities[2]});
-
-        hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            expected.size(), destination_layout);
-
-        assign_values(source1, input1);
-        assign_values(source2, input2);
-
-        auto result_future = hpx::merge(
-            hpx::execution::seq(hpx::execution::task), source1.begin(),
-            source1.end(), source2.begin(), source2.end(), destination.begin());
-
-        // Waiting is necessary before reading the destination.
-        auto result = result_future.get();
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, expected);
-    }
-
-    void test_parallel_task_merge()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        constexpr int input_size = 2048;
-
-        std::vector<int> input1;
-        std::vector<int> input2;
-        std::vector<int> expected;
-
-        input1.reserve(input_size);
-        input2.reserve(input_size);
-        expected.reserve(2 * static_cast<std::size_t>(input_size));
-
-        for (int i = 0; i != input_size; ++i)
-        {
-            input1.push_back(2 * i);
-            input2.push_back(2 * i + 1);
-        }
-
-        for (int i = 0; i != 2 * input_size; ++i)
-        {
-            expected.push_back(i);
-        }
-
-        // Every input-1 partition is on locality 0.
-        auto const source1_layout =
-            hpx::container_layout(8, std::vector<hpx::id_type>{localities[0]});
-
-        // Every input-2 partition is on locality 1.
-        auto const source2_layout =
-            hpx::container_layout(8, std::vector<hpx::id_type>{localities[1]});
-
-        // Multiple output partitions on locality 2 allow output chunks
-        // to execute concurrently.
-        auto const destination_layout =
-            hpx::container_layout(8, std::vector<hpx::id_type>{localities[2]});
-
-        hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            expected.size(), destination_layout);
-
-        assign_values(source1, input1);
-        assign_values(source2, input2);
-
-        auto result_future = hpx::merge(
-            hpx::execution::par(hpx::execution::task), source1.begin(),
-            source1.end(), source2.begin(), source2.end(), destination.begin());
-
-        auto result = result_future.get();
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, expected);
     }
 
     void test_statefull_comparator()
@@ -1101,10 +946,10 @@ namespace {
         std::vector<int> const expected_destination{
             -777, -777, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -777, -777};
 
-        auto const source1_layout = hpx::container_layout(
+        auto const source1_layout = partition_layout(
             4, std::vector<hpx::id_type>{localities[0], localities[1]});
 
-        auto const source2_layout = hpx::container_layout(
+        auto const source2_layout = partition_layout(
             4, std::vector<hpx::id_type>{localities[1], localities[0]});
 
         auto const destination_layout =
@@ -1190,147 +1035,6 @@ namespace {
         check_values(destination, initial_destination);
     }
 
-    void test_disjoint_parallel_chunks()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        std::vector<int> input1;
-        std::vector<int> input2;
-        std::vector<int> expected;
-
-        for (int value = 1; value <= 16; ++value)
-        {
-            input1.push_back(value);
-            expected.push_back(value);
-        }
-
-        for (int value = 101; value <= 116; ++value)
-        {
-            input2.push_back(value);
-            expected.push_back(value);
-        }
-
-        auto const source1_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[0]});
-
-        auto const source2_layout =
-            hpx::container_layout(4, std::vector<hpx::id_type>{localities[1]});
-
-        auto const destination_layout =
-            hpx::container_layout(8, std::vector<hpx::id_type>{localities[2]});
-
-        hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            expected.size(), destination_layout);
-
-        assign_values(source1, input1);
-        assign_values(source2, input2);
-
-        auto result = hpx::merge(hpx::execution::par, source1.begin(),
-            source1.end(), source2.begin(), source2.end(), destination.begin());
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, expected);
-    }
-
-    template <typename TaskPolicy>
-    void run_task_empty_side_case(TaskPolicy policy, bool first_is_empty,
-        hpx::id_type const& source1_locality,
-        hpx::id_type const& source2_locality,
-        hpx::id_type const& destination_locality)
-    {
-        std::vector<int> values;
-        values.reserve(512);
-
-        for (int i = 0; i != 512; ++i)
-        {
-            values.push_back(2 * i);
-        }
-
-        std::vector<int> const ignored{10000};
-
-        std::size_t const source1_partitions = first_is_empty ? 1 : 4;
-
-        std::size_t const source2_partitions = first_is_empty ? 4 : 1;
-
-        auto const source1_layout = hpx::container_layout(
-            source1_partitions, std::vector<hpx::id_type>{source1_locality});
-
-        auto const source2_layout = hpx::container_layout(
-            source2_partitions, std::vector<hpx::id_type>{source2_locality});
-
-        auto const destination_layout = hpx::container_layout(
-            4, std::vector<hpx::id_type>{destination_locality});
-
-        hpx::partitioned_vector<int> source1(
-            first_is_empty ? ignored.size() : values.size(), source1_layout);
-
-        hpx::partitioned_vector<int> source2(
-            first_is_empty ? values.size() : ignored.size(), source2_layout);
-
-        hpx::partitioned_vector<int> destination(
-            values.size(), destination_layout);
-
-        if (first_is_empty)
-        {
-            assign_values(source1, ignored);
-            assign_values(source2, values);
-        }
-        else
-        {
-            assign_values(source1, values);
-            assign_values(source2, ignored);
-        }
-
-        auto first1 = source1.begin();
-        auto last1 = first_is_empty ? first1 : source1.end();
-
-        auto first2 = source2.begin();
-        auto last2 = first_is_empty ? source2.end() : first2;
-
-        auto result_future = hpx::merge(HPX_MOVE(policy), first1, last1, first2,
-            last2, destination.begin());
-
-        auto result = result_future.get();
-
-        HPX_TEST(result == destination.end());
-        check_values(destination, values);
-    }
-
-    void test_task_empty_side_paths()
-    {
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        run_task_empty_side_case(hpx::execution::seq(hpx::execution::task),
-            true, localities[0], localities[1], localities[2]);
-
-        run_task_empty_side_case(hpx::execution::seq(hpx::execution::task),
-            false, localities[0], localities[1], localities[2]);
-
-        run_task_empty_side_case(hpx::execution::par(hpx::execution::task),
-            true, localities[0], localities[1], localities[2]);
-
-        run_task_empty_side_case(hpx::execution::par(hpx::execution::task),
-            false, localities[0], localities[1], localities[2]);
-    }
-
     void test_remote_comparator_exception()
     {
         auto const localities = hpx::find_all_localities();
@@ -1393,176 +1097,150 @@ namespace {
         HPX_TEST(caught_exception);
     }
 
-    void test_randomized_distributed_merge()
+    void test_merge_no_policy()
     {
-        auto const randomized_start = std::chrono::steady_clock::now();
+        auto const locs = hpx::find_all_localities();
+        std::vector<stable_value> const input1{
+            {0, 1, 0}, {1, 1, 1}, {1, 1, 2}, {4, 1, 3}, {10, 1, 4}};
+        std::vector<stable_value> const input2{
+            {1, 2, 0}, {1, 2, 1}, {2, 2, 2}, {4, 2, 3}, {9, 2, 4}};
+        std::vector<stable_value> expected(input1.size() + input2.size());
+        std::merge(input1.begin(), input1.end(), input2.begin(), input2.end(),
+            expected.begin());
 
-        char const* const policy_names[] = {
-            "seq", "par", "seq(task)", "par(task)"};
+        hpx::partitioned_vector<stable_value> source1(
+            input1.size(), partition_layout(1, {locs[0]}));
+        hpx::partitioned_vector<stable_value> source2(
+            input2.size(), partition_layout(1, {locs[1]}));
+        hpx::partitioned_vector<stable_value> destination(
+            expected.size(), partition_layout(2, {locs[2]}));
+        assign_values(source1, input1);
+        assign_values(source2, input2);
 
-        auto const localities = hpx::find_all_localities();
-
-        HPX_TEST(localities.size() >= 3);
-
-        if (localities.size() < 3)
-        {
-            return;
-        }
-
-        std::mt19937 generator(2026);
-        std::uniform_int_distribution<int> length_distribution(16, 96);
-        std::uniform_int_distribution<int> value_distribution(0, 30);
-
-        constexpr std::size_t test_count = 24;
-
-        for (std::size_t test = 0; test != test_count; ++test)
-        {
-            std::size_t const size1 =
-                static_cast<std::size_t>(length_distribution(generator));
-
-            std::size_t const size2 =
-                static_cast<std::size_t>(length_distribution(generator));
-
-            std::vector<int> input1(size1);
-            std::vector<int> input2(size2);
-
-            for (int& value : input1)
-            {
-                value = value_distribution(generator);
-            }
-
-            for (int& value : input2)
-            {
-                value = value_distribution(generator);
-            }
-
-            std::sort(input1.begin(), input1.end());
-            std::sort(input2.begin(), input2.end());
-
-            std::vector<int> expected(size1 + size2);
-
-            std::merge(input1.begin(), input1.end(), input2.begin(),
-                input2.end(), expected.begin());
-
-            std::size_t const partitions1 = 1 + test % 5;
-            std::size_t const partitions2 = 1 + (test + 2) % 5;
-            std::size_t const destination_partitions = 1 + (test + 3) % 6;
-
-            auto log_phase = [&](char const* phase) {
-                double const elapsed = std::chrono::duration<double>(
-                    std::chrono::steady_clock::now() - randomized_start)
-                                           .count();
-
-                std::fprintf(stderr,
-                    "[randomized] case=%zu/%zu policy=%s "
-                    "sizes=%zu,%zu partitions=%zu,%zu,%zu "
-                    "elapsed=%.3fs phase=%s\n",
-                    test + 1, test_count, policy_names[test % 4], size1, size2,
-                    partitions1, partitions2, destination_partitions, elapsed,
-                    phase);
-
-                std::fflush(stderr);
-            };
-
-            auto const source1_layout =
-                hpx::container_layout(partitions1, localities);
-
-            auto const source2_layout =
-                hpx::container_layout(partitions2, localities);
-
-            auto const destination_layout =
-                hpx::container_layout(destination_partitions, localities);
-
-            log_phase("construct and initialize source1");
-            hpx::partitioned_vector<int> source1(
-                input1.cbegin(), input1.cend(), source1_layout);
-
-            log_phase("construct and initialize source2");
-            hpx::partitioned_vector<int> source2(
-                input2.cbegin(), input2.cend(), source2_layout);
-
-            log_phase("construct destination");
-            hpx::partitioned_vector<int> destination(
-                expected.size(), destination_layout);
-
-            log_phase("merge");
-
-            auto result = [&]() {
-                switch (test % 4)
-                {
-                case 0:
-                    return hpx::merge(hpx::execution::seq, source1.begin(),
-                        source1.end(), source2.begin(), source2.end(),
-                        destination.begin());
-
-                case 1:
-                    return hpx::merge(hpx::execution::par, source1.begin(),
-                        source1.end(), source2.begin(), source2.end(),
-                        destination.begin());
-
-                case 2:
-                    return hpx::merge(hpx::execution::seq(hpx::execution::task),
-                        source1.begin(), source1.end(), source2.begin(),
-                        source2.end(), destination.begin())
-                        .get();
-
-                default:
-                    return hpx::merge(hpx::execution::par(hpx::execution::task),
-                        source1.begin(), source1.end(), source2.begin(),
-                        source2.end(), destination.begin())
-                        .get();
-                }
-            }();
-            log_phase("verify");
-            HPX_TEST(result == destination.end());
-            check_values(destination, expected);
-            log_phase("case complete");
-        }
+        auto result =
+            hpx::merge(source1.begin(), source1.end(), source2.begin(),
+                source2.end(), destination.begin(), hpx::ranges::less{});
+        HPX_TEST(result == destination.end());
+        check_stable_values(destination, expected);
     }
 
+    void test_zero_sized_containers()
+    {
+        auto const locs = hpx::find_all_localities();
+        auto const layout1 = partition_layout(1, {locs[0]});
+        auto const layout2 = partition_layout(1, {locs[1]});
+        auto const layout_out = partition_layout(1, {locs[2]});
+        std::vector<int> const empty;
+        std::vector<int> const values{1, 2, 3, 5, 8};
+
+        // These are zero-sized containers, not empty subranges.
+        run_merge_case(
+            hpx::execution::seq, empty, values, layout1, layout2, layout_out);
+        run_merge_case(
+            hpx::execution::seq, values, empty, layout1, layout2, layout_out);
+        run_merge_case(
+            hpx::execution::seq, empty, empty, layout1, layout2, layout_out);
+    }
+
+    void test_single_element_inputs()
+    {
+        auto const locs = hpx::find_all_localities();
+        auto const layout1 = partition_layout(1, {locs[0]});
+        auto const layout2 = partition_layout(1, {locs[1]});
+        auto const layout_out = partition_layout(1, {locs[2]});
+
+        run_merge_case(hpx::execution::seq, std::vector<int>{3},
+            std::vector<int>{1}, layout1, layout2, layout_out);
+        run_merge_case(hpx::execution::seq, std::vector<int>{1},
+            std::vector<int>{3}, layout1, layout2, layout_out);
+        run_merge_case(hpx::execution::seq,
+            std::vector<stable_value>{{5, 1, 0}},
+            std::vector<stable_value>{{5, 2, 0}}, layout1, layout2, layout_out);
+    }
+
+    void test_all_equal_keys()
+    {
+        auto const locs = hpx::find_all_localities();
+        std::vector<stable_value> input1;
+        std::vector<stable_value> input2;
+        for (int i = 0; i != 6; ++i)
+        {
+            input1.push_back({7, 1, i});
+        }
+        for (int i = 0; i != 4; ++i)
+        {
+            input2.push_back({7, 2, i});
+        }
+        // Both source identity and within-source order must survive.
+        run_merge_case(hpx::execution::seq, input1, input2,
+            partition_layout(2, {locs[0], locs[1]}),
+            partition_layout(2, {locs[1], locs[0]}),
+            partition_layout(2, {locs[2]}));
+    }
+
+    void test_nonoverlapping_sequential_ranges()
+    {
+        auto const locs = hpx::find_all_localities();
+        std::vector<int> const low{1, 2, 3, 4};
+        std::vector<int> const high{10, 11, 12, 13};
+        auto const layout1 = partition_layout(2, {locs[0]});
+        auto const layout2 = partition_layout(2, {locs[1]});
+        auto const layout_out = partition_layout(4, {locs[2]});
+
+        run_merge_case(
+            hpx::execution::seq, low, high, layout1, layout2, layout_out);
+        run_merge_case(
+            hpx::execution::seq, high, low, layout1, layout2, layout_out);
+    }
+
+    void test_skewed_sequential_ranges()
+    {
+        auto const locs = hpx::find_all_localities();
+        std::vector<int> large(20);
+        std::iota(large.begin(), large.end(), 0);
+        std::vector<int> const small{5, 15};
+        run_merge_case(hpx::execution::seq, large, small,
+            partition_layout(4, {locs[0], locs[1]}),
+            partition_layout(1, {locs[1]}), partition_layout(2, {locs[2]}));
+        run_merge_case(hpx::execution::seq, small, large,
+            partition_layout(1, {locs[0]}),
+            partition_layout(4, {locs[1], locs[0]}),
+            partition_layout(2, {locs[2]}));
+    }
 }    // namespace
-
-// clang-format off
-#define RUN(f)                                                                 \
-    {                                                                          \
-        std::fprintf(stderr, "[merge-test] start %s\n", #f);                   \
-        std::fflush(stderr);                                                   \
-        f();                                                                   \
-        std::fprintf(stderr, "[merge-test] done  %s\n", #f);                   \
-        std::fflush(stderr);                                                   \
-    }
-// clang-format on
 
 int main()
 {
-    auto const suite_start = std::chrono::steady_clock::now();
+    auto const localities = hpx::find_all_localities();
+    HPX_TEST(localities.size() >= 3);
+    if (localities.size() < 3)
+    {
+        return hpx::util::report_errors();
+    }
 
-    RUN(test_capture_second_input);
-    RUN(test_capture_first_input);
-    RUN(test_capture_both_inputs);
-    RUN(test_multi_partition_capture);
-    RUN(test_empty_input_ranges);
-    RUN(test_stable_merge);
-    RUN(test_multi_partition_stable_merge);
-    RUN(test_parallel_multi_destination_partitions);
-    RUN(test_multi_locality_destination_partitions);
-    RUN(test_sequenced_task_merge);
-    RUN(test_parallel_task_merge);
-    RUN(test_statefull_comparator);
-    RUN(test_ranges_merge_with_projections);
-    RUN(test_different_input_types);
-    RUN(test_partial_subranges);
-    RUN(test_both_inputs_empty);
-    RUN(test_disjoint_parallel_chunks);
-    RUN(test_task_empty_side_paths);
-    RUN(test_remote_comparator_exception);
-    double const elapsed_before_randomized = 
-        std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - suite_start).count();
-    std::fprintf(stderr, 
-        "[merge-test] starting randomized after %.3fs of earlier tests\n", 
-        elapsed_before_randomized);
-    RUN(test_randomized_distributed_merge);
+    run_test("test_capture_second_input", test_capture_second_input);
+    run_test("test_capture_first_input", test_capture_first_input);
+    run_test("test_capture_both_inputs", test_capture_both_inputs);
+    run_test("test_multi_partition_capture", test_multi_partition_capture);
+    run_test("test_empty_input_ranges", test_empty_input_ranges);
+    run_test("test_stable_merge", test_stable_merge);
+    run_test(
+        "test_multi_partition_stable_merge", test_multi_partition_stable_merge);
+    run_test("test_statefull_comparator", test_statefull_comparator);
+    run_test("test_ranges_merge_with_projections",
+        test_ranges_merge_with_projections);
+    run_test("test_different_input_types", test_different_input_types);
+    run_test("test_partial_subranges", test_partial_subranges);
+    run_test("test_both_inputs_empty", test_both_inputs_empty);
+    run_test(
+        "test_remote_comparator_exception", test_remote_comparator_exception);
+    run_test("test_merge_no_policy", test_merge_no_policy);
+    run_test("test_zero_sized_containers", test_zero_sized_containers);
+    run_test("test_single_element_inputs", test_single_element_inputs);
+    run_test("test_all_equal_keys", test_all_equal_keys);
+    run_test("test_nonoverlapping_sequential_ranges",
+        test_nonoverlapping_sequential_ranges);
+    run_test("test_skewed_sequential_ranges", test_skewed_sequential_ranges);
 
     return hpx::util::report_errors();
 }

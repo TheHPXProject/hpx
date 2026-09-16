@@ -24,6 +24,7 @@ set(tests
     partitioned_vector_max_element1
     partitioned_vector_max_element2
     partitioned_vector_merge
+    partitioned_vector_merge_extended
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
@@ -88,6 +89,8 @@ foreach(test ${tests})
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
   if(test STREQUAL "partitioned_vector_merge")
     set(test_localities 3)
+  elseif(test STREQUAL "partitioned_vector_merge_extended")
+    set(test_localities 4)
   else()
     set(test_localities 2)
   endif()
