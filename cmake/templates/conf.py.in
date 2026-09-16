@@ -796,10 +796,6 @@ breathe_doxygen_config_options = {
     'EXTRACT_PRIVATE': 'NO'
 }
 
-breathe_doxygen_aliases = {
-    'namedrequirement{1}': r'<a href=\"https://en.cppreference.com/w/cpp/named_req/\1\">\1</a>',
-}
-
 numfig = True
 primary_domain = 'cpp'
 highlight_language = 'cpp'
