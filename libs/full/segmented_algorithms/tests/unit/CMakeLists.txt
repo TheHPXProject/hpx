@@ -56,6 +56,7 @@ set(tests
     partitioned_vector_reduce
     partitioned_vector_replace
     partitioned_vector_replace_copy
+    partitioned_vector_sort
 )
 
 set(partitioned_vector_inclusive_scan_PARAMETERS RUN_SERIAL)
