@@ -42,8 +42,8 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename InIter, typename Sent,
             typename Comp, typename Proj>
-        static constexpr InIter sequential(ExPolicy, InIter first, Sent last,
-            Comp&& comp, Proj&& proj)
+        static constexpr InIter sequential(
+            ExPolicy, InIter first, Sent last, Comp&& comp, Proj&& proj)
         {
             auto last_iter = advance_to_sentinel(first, last);
             auto const n = last_iter - first;
@@ -60,8 +60,8 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename InIter, typename Sent,
             typename Comp, typename Proj>
-        static InIter parallel(ExPolicy&&, InIter first, Sent last, Comp&& comp,
-            Proj&& proj)
+        static InIter parallel(
+            ExPolicy&&, InIter first, Sent last, Comp&& comp, Proj&& proj)
         {
             return sequential(hpx::execution::seq, first, last,
                 HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
@@ -162,18 +162,16 @@ namespace hpx::parallel::detail {
         {
         }
 
-        template <typename ExPolicy, typename InIter, typename Sent,
-            typename T>
-        static InIter sequential(ExPolicy, InIter first, Sent,
-            std::vector<T> const& values)
+        template <typename ExPolicy, typename InIter, typename Sent, typename T>
+        static InIter sequential(
+            ExPolicy, InIter first, Sent, std::vector<T> const& values)
         {
             return std::copy(values.begin(), values.end(), first);
         }
 
-        template <typename ExPolicy, typename InIter, typename Sent,
-            typename T>
-        static InIter parallel(ExPolicy&&, InIter first, Sent last,
-            std::vector<T> const& values)
+        template <typename ExPolicy, typename InIter, typename Sent, typename T>
+        static InIter parallel(
+            ExPolicy&&, InIter first, Sent last, std::vector<T> const& values)
         {
             return sequential(hpx::execution::seq, first, last, values);
         }
@@ -199,8 +197,8 @@ namespace hpx::parallel::detail {
         std::merge(left.begin(), left.end(), right.begin(), right.end(),
             merged.begin(), pred);
 
-        auto const middle = merged.begin() +
-            static_cast<std::ptrdiff_t>(left.size());
+        auto const middle =
+            merged.begin() + static_cast<std::ptrdiff_t>(left.size());
         std::vector<value_type> left_out(merged.begin(), middle);
         std::vector<value_type> right_out(middle, merged.end());
 
@@ -238,9 +236,9 @@ namespace hpx::parallel::detail {
 
         for (auto const& run : runs)
         {
-            segments.push_back(dispatch_async(run.id,
-                segmented_local_sort<LocalIter>(), policy, forced_seq(),
-                run.first, run.last, comp, proj));
+            segments.push_back(
+                dispatch_async(run.id, segmented_local_sort<LocalIter>(),
+                    policy, forced_seq(), run.first, run.last, comp, proj));
         }
 
         if (!segments.empty())
@@ -291,11 +289,10 @@ namespace hpx::parallel::detail {
 
         if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
         {
-            return result::get(hpx::async(
-                [=, runs = HPX_MOVE(runs)]() mutable {
-                    segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
-                    segmented_sort_odd_even(runs, cmp, prj);
-                }));
+            return result::get(hpx::async([=, runs = HPX_MOVE(runs)]() mutable {
+                segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
+                segmented_sort_odd_even(runs, cmp, prj);
+            }));
         }
         else
         {
