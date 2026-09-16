@@ -1,0 +1,65 @@
+# Copyright (c) 2026 Abhishek Kumar
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Debug, VS2022 toolset, 32 bit)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lukka/get-cmake@v4.4.2
+
+      # Everything is fetched rather than taken from the prebuilt vcpkg
+      # export the other Windows workflows use, since that export is 64 bit.
+      # HPX_SetupHWLOC picks the win32 build of hwloc on its own when the
+      # target is 32 bit.
+      #
+      # HPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION is left at its default of
+      # OFF, unlike the 64 bit workflows: switch_to_fiber.asm is x86-64 only.
+      - name: Configure
+        shell: bash
+        run: |
+            cmake . -Bbuild -G'Visual Studio 17 2022' -A Win32 \
+                -DCMAKE_BUILD_TYPE=Debug \
+                -DHPX_WITH_MALLOC=system \
+                -DHPX_WITH_FETCH_ASIO=ON \
+                -DHPX_WITH_FETCH_BOOST=ON \
+                -DHPX_WITH_FETCH_HWLOC=ON \
+                -DHPX_WITH_EXAMPLES=ON \
+                -DHPX_WITH_TESTS=ON \
+                -DHPX_WITH_TESTS_UNIT=ON \
+                -DHPX_WITH_TESTS_EXAMPLES=ON \
+                -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
+                -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+                -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On
+      - name: Build
+        shell: bash
+        run: |
+            cmake --build build --config Debug \
+            --target ALL_BUILD \
+            -- -maxcpucount:2 -verbosity:minimal -nologo
+      - name: Install
+        shell: bash
+        run: |
+            cmake --install build --config Debug
+      - name: Test
+        run: |
+            $exclude_regex = & "$env:GITHUB_WORKSPACE/.github/ci-scripts/generate_ctest_exclude_regex.ps1" `
+              "$env:GITHUB_WORKSPACE/.github/workflows/tests.examples.targets"
+            cd build
+            ctest `
+              --output-on-failure `
+              --build-config Debug `
+              --tests-regex tests.examples `
+              --exclude-regex $exclude_regex
