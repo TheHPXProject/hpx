@@ -140,6 +140,24 @@ _DOXYGEN_DIRECTIVE_TO_HPX_ROLE = {
     'doxygenvariable': 'variable',
 }
 
+def _reconstruct_argsstring(memberdef, fallback):
+    params = memberdef.findall('param')
+    if not params:
+        return fallback
+    parts = []
+    for param in params:
+        type_el = param.find('type')
+        type_text = ''.join(type_el.itertext()).strip() if type_el is not None else ''
+        declname_el = param.find('declname')
+        declname = declname_el.text.strip() if declname_el is not None and declname_el.text else ''
+        array_el = param.find('array')
+        array = array_el.text.strip() if array_el is not None and array_el.text else ''
+        piece = f'{type_text} {declname}'.strip() if declname else type_text
+        piece += array
+        parts.append(piece)
+    rebuilt = '(' + ', '.join(parts) + ')'
+    return rebuilt if all(parts) else fallback
+
 def _load_doxygen_function_signatures():
     """Lazily parse the already-generated Doxygen XML once, building a map
     from fully-qualified function name -> list of real Doxygen
@@ -179,7 +197,7 @@ def _load_doxygen_function_signatures():
                 argsstring_el = memberdef.find('argsstring')
                 argsstring = (argsstring_el.text.strip()
                     if argsstring_el is not None and argsstring_el.text else '')
-
+                argsstring = _reconstruct_argsstring(memberdef, argsstring)
                 signatures.setdefault(qualname, []).append(argsstring)
 
     _function_signatures_by_qualname = signatures
@@ -775,13 +793,12 @@ breathe_doxygen_config_options = {
     'DIRECTORY_GRAPH': 'NO',
     'PREDEFINED': '@doxygen_definitions@',
     'STRIP_FROM_PATH': hpx_source_dir,
-    'EXTRACT_PRIVATE': 'NO',
-    'ALIASES': r'namedrequirement{1}="<a href=\"https://en.cppreference.com/w/cpp/named_req/\1\">\1</a>"'
+    'EXTRACT_PRIVATE': 'NO'
 }
 
-# ! this should work but doesn't. check after updating breathe version.
-# breathe_doxygen_aliases = {
-# }
+breathe_doxygen_aliases = {
+    'namedrequirement{1}': r'<a href=\"https://en.cppreference.com/w/cpp/named_req/\1\">\1</a>',
+}
 
 numfig = True
 primary_domain = 'cpp'
