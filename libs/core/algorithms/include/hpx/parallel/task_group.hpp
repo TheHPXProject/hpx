@@ -16,7 +16,6 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
-
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
@@ -33,6 +32,20 @@
 
 /// Top-level namespace
 namespace hpx::experimental {
+
+    namespace detail {
+        template <typename Executor>
+        inline constexpr bool is_task_group_executor_v =
+            hpx::traits::is_executor_any_v<std::decay_t<Executor>>;
+
+        // Explicitly exclude is_task_group_executor_v to prevent overload
+        // resolution ambiguity between legacy executors and modern schedulers.
+        template <typename Scheduler>
+        inline constexpr bool is_task_group_scheduler_v =
+            hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<Scheduler>> &&
+            !is_task_group_executor_v<Scheduler>;
+    }    // namespace detail
 
     /// A \c task_group represents concurrent execution of a group of tasks.
     /// Tasks can be dynamically added to the group while it is executing.
@@ -66,7 +79,7 @@ namespace hpx::experimental {
         template <typename Executor, typename F, typename... Ts>
         // clang-format off
             requires (
-                hpx::traits::is_executor_any_v<std::decay_t<Executor>>
+                detail::is_task_group_executor_v<Executor>
             )
         // clang-format on
         void run(Executor&& exec, F&& f, Ts&&... ts)
@@ -90,9 +103,7 @@ namespace hpx::experimental {
         template <typename Scheduler, typename F, typename... Ts>
         // clang-format off
             requires (
-                hpx::execution::experimental::is_scheduler_v<
-                    std::decay_t<Scheduler>> &&
-                !hpx::traits::is_executor_any_v<std::decay_t<Scheduler>>
+                detail::is_task_group_scheduler_v<Scheduler>
             )
         // clang-format on
         void run(Scheduler&& sched, F&& f, Ts&&... ts)
@@ -103,12 +114,13 @@ namespace hpx::experimental {
             // crashes on Clang compilers during complex template instantiations.
             auto task = wrap_task(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
 
-            auto stopped_handler = []() {
+            auto stopped_handler = [this]() {
                 // Note: This silently discards cancellation signals. If the scheduler
                 // signals 'stopped' (e.g., the pool is shutting down), this pipeline
                 // converts it to just() with no call to add_exception. This is an
                 // explicit semantic choice: a cancelled task will silently vanish
                 // and not appear in the exception_list.
+                this->latch_.count_down(1);
                 return ex::just();
             };
 
@@ -122,6 +134,7 @@ namespace hpx::experimental {
                     // We convert this error channel to a value channel via ex::just()
                     // to satisfy start_detached.
                     add_exception(HPX_MOVE(e));
+                    this->latch_.count_down(1);
                     return ex::just();
                 }) |
                 ex::let_stopped(HPX_MOVE(stopped_handler));
@@ -142,8 +155,8 @@ namespace hpx::experimental {
         template <typename F, typename... Ts>
         // clang-format off
             requires (
-                !hpx::traits::is_executor_any_v<std::decay_t<F>> &&
-                !hpx::execution::experimental::is_scheduler_v<std::decay_t<F>>
+                !detail::is_task_group_executor_v<F> &&
+                !detail::is_task_group_scheduler_v<F>
             )
         // clang-format on
         void run(F&& f, Ts&&... ts)

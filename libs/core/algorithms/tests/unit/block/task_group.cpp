@@ -158,6 +158,84 @@ void task_group_test_scheduler_exception()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+struct failing_scheduler
+{
+    friend constexpr bool operator==(
+        failing_scheduler const&, failing_scheduler const&) noexcept
+    {
+        return true;
+    }
+    friend constexpr bool operator!=(
+        failing_scheduler const&, failing_scheduler const&) noexcept
+    {
+        return false;
+    }
+
+    auto schedule() const noexcept
+    {
+        return hpx::execution::experimental::just_error(
+            std::make_exception_ptr(std::runtime_error("scheduler error")));
+    }
+};
+
+struct stopped_scheduler
+{
+    friend constexpr bool operator==(
+        stopped_scheduler const&, stopped_scheduler const&) noexcept
+    {
+        return true;
+    }
+    friend constexpr bool operator!=(
+        stopped_scheduler const&, stopped_scheduler const&) noexcept
+    {
+        return false;
+    }
+
+    auto schedule() const noexcept
+    {
+        return hpx::execution::experimental::just_stopped();
+    }
+};
+
+void task_group_test_scheduler_error_stopped()
+{
+    // Test scheduler returning error
+    {
+        bool throws_exception = true;
+        bool caught_exception = false;
+        try
+        {
+            hpx::experimental::task_group g;
+            failing_scheduler sched{};
+            g.run(sched, [] {});
+            throws_exception = false;
+
+            g.wait();    // should not hang
+            HPX_TEST(false);
+        }
+        catch (hpx::exception_list const& l)
+        {
+            caught_exception = true;
+            HPX_TEST_EQ(l.size(), std::size_t(1));
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+        HPX_TEST(!throws_exception);
+        HPX_TEST(caught_exception);
+    }
+
+    // Test scheduler returning stopped
+    {
+        hpx::experimental::task_group g;
+        stopped_scheduler sched{};
+        g.run(sched, [] {});
+        g.wait();    // should not hang
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     task_group_test1();
@@ -166,6 +244,7 @@ int hpx_main()
     task_group_test3();
     task_group_test_scheduler();
     task_group_test_scheduler_exception();
+    task_group_test_scheduler_error_stopped();
 
     return hpx::local::finalize();
 }
