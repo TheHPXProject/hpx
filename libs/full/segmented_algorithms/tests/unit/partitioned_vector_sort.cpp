@@ -16,11 +16,29 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <exception>
 #include <functional>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
 #define SIZE 64
+#define LARGE_SIZE 2048
+
+template <typename T>
+T make_sort_value(int i)
+{
+    if constexpr (std::is_same_v<T, std::string>)
+    {
+        return std::to_string(i);
+    }
+    else
+    {
+        return T(i);
+    }
+}
 
 template <typename T>
 std::vector<T> copy_values(hpx::partitioned_vector<T> const& values)
@@ -71,7 +89,7 @@ void initialize_reverse(hpx::partitioned_vector<T>& values)
 {
     typename hpx::partitioned_vector<T>::iterator it = values.begin();
     for (int i = 0; i < SIZE; ++i, ++it)
-        *it = T(SIZE - i);
+        *it = make_sort_value<T>(SIZE - i);
 }
 
 template <typename T>
@@ -79,7 +97,7 @@ void initialize_mixed(hpx::partitioned_vector<T>& values)
 {
     typename hpx::partitioned_vector<T>::iterator it = values.begin();
     for (int i = 0; i < SIZE; ++i, ++it)
-        *it = T((i * 17 + 3) % SIZE);
+        *it = make_sort_value<T>((i * 17 + 3) % SIZE);
 }
 
 template <typename T>
@@ -87,7 +105,7 @@ void initialize_sorted(hpx::partitioned_vector<T>& values)
 {
     typename hpx::partitioned_vector<T>::iterator it = values.begin();
     for (int i = 0; i < SIZE; ++i, ++it)
-        *it = T(i);
+        *it = make_sort_value<T>(i);
 }
 
 template <typename T>
@@ -95,8 +113,30 @@ void initialize_duplicates(hpx::partitioned_vector<T>& values)
 {
     typename hpx::partitioned_vector<T>::iterator it = values.begin();
     for (int i = 0; i < SIZE; ++i, ++it)
-        *it = T(i % 4);
+        *it = make_sort_value<T>(i % 4);
 }
+
+template <typename T>
+void initialize_mixed_n(hpx::partitioned_vector<T>& values, int n)
+{
+    typename hpx::partitioned_vector<T>::iterator it = values.begin();
+    for (int i = 0; i < n; ++i, ++it)
+        *it = make_sort_value<T>((i * 17 + 3) % n);
+}
+
+struct throwing_less
+{
+    template <typename T>
+    bool operator()(T const&, T const&) const
+    {
+        throw std::runtime_error("segmented sort comparator");
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
 
 template <typename T>
 void test_sort_once(hpx::partitioned_vector<T>& values)
@@ -123,20 +163,89 @@ void test_sort_once_async(ExPolicy&& policy, hpx::partitioned_vector<T>& values)
     verify_sorted(values, expected);
 }
 
-template <typename T>
-void test_sort_greater(hpx::partitioned_vector<T>& values)
+template <typename T, typename Comp>
+void test_sort_comp(hpx::partitioned_vector<T>& values, Comp comp)
 {
     std::vector<T> const expected = copy_values(values);
-    std::greater<T> comp;
     hpx::sort(values.begin(), values.end(), comp);
     verify_sorted(values, expected, comp);
+}
+
+template <typename ExPolicy, typename T, typename Comp>
+void test_sort_comp(
+    ExPolicy&& policy, hpx::partitioned_vector<T>& values, Comp comp)
+{
+    std::vector<T> const expected = copy_values(values);
+    hpx::sort(
+        HPX_FORWARD(ExPolicy, policy), values.begin(), values.end(), comp);
+    verify_sorted(values, expected, comp);
+}
+
+template <typename ExPolicy, typename T, typename Comp>
+void test_sort_comp_async(
+    ExPolicy&& policy, hpx::partitioned_vector<T>& values, Comp comp)
+{
+    std::vector<T> const expected = copy_values(values);
+    hpx::sort(HPX_FORWARD(ExPolicy, policy), values.begin(), values.end(), comp)
+        .get();
+    verify_sorted(values, expected, comp);
+}
+
+bool caught_sort_exception(std::function<void()> const& f)
+{
+    try
+    {
+        f();
+    }
+    catch (std::exception const&)
+    {
+        return true;
+    }
+    catch (...)
+    {
+        return true;
+    }
+    return false;
+}
+
+template <typename T>
+void test_sort_throwing(std::vector<hpx::id_type>& localities)
+{
+    hpx::partitioned_vector<T> values(
+        SIZE, T{}, hpx::container_layout(localities));
+    initialize_mixed(values);
+
+    throwing_less comp;
+    HPX_TEST(caught_sort_exception(
+        [&]() { hpx::sort(values.begin(), values.end(), comp); }));
+
+    initialize_mixed(values);
+    HPX_TEST(caught_sort_exception([&]() {
+        hpx::sort(hpx::execution::par, values.begin(), values.end(), comp);
+    }));
+
+    initialize_mixed(values);
+    HPX_TEST(caught_sort_exception([&]() {
+        hpx::sort(hpx::execution::par(hpx::execution::task), values.begin(),
+            values.end(), comp)
+            .get();
+    }));
+}
+
+template <typename T>
+void test_sort_large(std::vector<hpx::id_type>& localities)
+{
+    hpx::partitioned_vector<T> values(
+        LARGE_SIZE, T{}, hpx::container_layout(localities));
+    initialize_mixed_n(values, LARGE_SIZE);
+    test_sort_once(hpx::execution::par, values);
 }
 
 template <typename T>
 void run_cases(std::vector<hpx::id_type>& localities)
 {
     hpx::partitioned_vector<T> values(
-        SIZE, T(0), hpx::container_layout(localities));
+        SIZE, T{}, hpx::container_layout(localities));
 
     initialize_reverse(values);
     test_sort_once(values);
@@ -159,11 +268,18 @@ void run_cases(std::vector<hpx::id_type>& localities)
     initialize_duplicates(values);
     test_sort_once(values);
 
+    std::greater<T> greater;
     initialize_mixed(values);
-    test_sort_greater(values);
+    test_sort_comp(values, greater);
 
-    hpx::partitioned_vector<T> empty(
-        0, T(0), hpx::container_layout(localities));
+    initialize_mixed(values);
+    test_sort_comp(hpx::execution::par, values, greater);
+
+    initialize_mixed(values);
+    test_sort_comp_async(
+        hpx::execution::par(hpx::execution::task), values, greater);
+
+    hpx::partitioned_vector<T> empty(0, T{}, hpx::container_layout(localities));
     test_sort_once(empty);
 }
 
@@ -172,6 +288,9 @@ int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
     run_cases<int>(localities);
+    run_cases<std::string>(localities);
+    test_sort_large<int>(localities);
+    test_sort_throwing<int>(localities);
     return hpx::util::report_errors();
 }
 #endif

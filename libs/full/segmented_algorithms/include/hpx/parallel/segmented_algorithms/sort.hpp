@@ -19,6 +19,7 @@
 #include <exception>
 #include <iterator>
 #include <list>
+#include <queue>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -66,6 +67,14 @@ namespace hpx::parallel::detail {
         hpx::id_type id;
         LocalIter first;
         LocalIter last;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            // clang-format off
+            ar & id & first & last;
+            // clang-format on
+        }
     };
 
     template <typename SegIter>
@@ -169,76 +178,282 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename LocalIter>
-    std::vector<typename std::iterator_traits<LocalIter>::value_type>
-    segmented_sort_fetch_span(
-        std::vector<segmented_sort_run<LocalIter>> const& runs,
-        std::size_t first, std::size_t last)
+    template <typename ExPolicy, typename T>
+    void segmented_sort_wait_all(std::vector<hpx::future<T>>& fs)
     {
-        using value_type = typename std::iterator_traits<LocalIter>::value_type;
-
-        std::vector<value_type> values;
-        for (std::size_t i = first; i != last; ++i)
+        if (fs.empty())
         {
-            auto part = dispatch(runs[i].id,
-                segmented_fetch_values<LocalIter>(), hpx::execution::seq,
-                std::true_type(), runs[i].first, runs[i].last);
-            values.insert(values.end(), part.begin(), part.end());
+            return;
         }
-        return values;
+
+        hpx::wait_all_nothrow(fs);
+        std::list<std::exception_ptr> errors;
+        parallel::util::detail::handle_remote_exceptions<ExPolicy>::call(
+            fs, errors);
     }
 
     template <typename LocalIter>
-    void segmented_sort_store_span(
-        std::vector<segmented_sort_run<LocalIter>> const& runs,
-        std::size_t first, std::size_t last,
-        std::vector<typename std::iterator_traits<LocalIter>::value_type> const&
-            values)
+    std::size_t segmented_sort_host_index(
+        std::vector<segmented_sort_run<LocalIter>> const& runs)
     {
-        using value_type = typename std::iterator_traits<LocalIter>::value_type;
+        std::size_t host = 0;
+        auto host_n = runs[0].last - runs[0].first;
+        for (std::size_t i = 1; i != runs.size(); ++i)
+        {
+            auto const n = runs[i].last - runs[i].first;
+            if (n > host_n)
+            {
+                host = i;
+                host_n = n;
+            }
+        }
+        return host;
+    }
+
+    template <typename T, typename Pred>
+    std::vector<T> segmented_sort_kway_heap(
+        std::vector<std::vector<T>> const& parts, Pred pred)
+    {
+        struct cursor
+        {
+            std::size_t part;
+            std::size_t pos;
+        };
+
+        auto order = [&](cursor const& a, cursor const& b) {
+            return pred(parts[b.part][b.pos], parts[a.part][a.pos]);
+        };
+
+        std::priority_queue<cursor, std::vector<cursor>, decltype(order)> heap(
+            order);
+
+        std::size_t total = 0;
+        for (std::size_t i = 0; i != parts.size(); ++i)
+        {
+            total += parts[i].size();
+            if (!parts[i].empty())
+            {
+                heap.push(cursor{i, 0});
+            }
+        }
+
+        std::vector<T> merged;
+        merged.reserve(total);
+        while (!heap.empty())
+        {
+            cursor const c = heap.top();
+            heap.pop();
+            merged.push_back(parts[c.part][c.pos]);
+            std::size_t const next = c.pos + 1;
+            if (next != parts[c.part].size())
+            {
+                heap.push(cursor{c.part, next});
+            }
+        }
+        return merged;
+    }
+
+    template <typename T, typename Pred>
+    std::vector<T> segmented_sort_merge_parts(
+        std::true_type, std::vector<std::vector<T>>& parts, Pred pred)
+    {
+        if (parts.size() == 2)
+        {
+            std::size_t const total = parts[0].size() + parts[1].size();
+            std::vector<T> merged;
+            merged.reserve(total);
+            std::merge(parts[0].begin(), parts[0].end(), parts[1].begin(),
+                parts[1].end(), std::back_inserter(merged), pred);
+            return merged;
+        }
+        return segmented_sort_kway_heap(parts, pred);
+    }
+
+    template <typename T, typename Pred>
+    std::vector<T> segmented_sort_merge_parts(
+        std::false_type, std::vector<std::vector<T>>& parts, Pred pred)
+    {
+        if (parts.size() == 2)
+        {
+            std::size_t const total = parts[0].size() + parts[1].size();
+            if (total == 0)
+            {
+                return {};
+            }
+
+            T const sample =
+                !parts[0].empty() ? parts[0].front() : parts[1].front();
+            std::vector<T> merged(total, sample);
+            hpx::merge(hpx::execution::par, parts[0].begin(), parts[0].end(),
+                parts[1].begin(), parts[1].end(), merged.begin(), pred);
+            return merged;
+        }
+        return segmented_sort_kway_heap(parts, pred);
+    }
+
+    template <typename ExPolicy, typename InIter, typename Sent,
+        typename LocalIter, typename Comp, typename Proj, typename IsSeq>
+    InIter segmented_sort_merge_on_host(ExPolicy const& policy, InIter first,
+        Sent last, std::vector<segmented_sort_run<LocalIter>> const& runs,
+        std::size_t host, Comp&& comp, Proj&& proj, IsSeq is_seq)
+    {
+        using value_type = typename std::iterator_traits<InIter>::value_type;
+
+        auto last_iter = advance_to_sentinel(first, last);
+        std::size_t const n = runs.size();
+        std::vector<std::vector<value_type>> parts(n);
+
+        if constexpr (IsSeq::value)
+        {
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                if (i == host)
+                {
+                    parts[i] = std::vector<value_type>(first, last_iter);
+                }
+                else
+                {
+                    parts[i] = dispatch(runs[i].id,
+                        segmented_fetch_values<LocalIter>(),
+                        hpx::execution::seq, std::true_type(), runs[i].first,
+                        runs[i].last);
+                }
+            }
+        }
+        else
+        {
+            std::vector<hpx::future<std::vector<value_type>>> fetches;
+            fetches.reserve(n);
+            std::vector<std::size_t> remote;
+            remote.reserve(n);
+
+            parts[host] = std::vector<value_type>(first, last_iter);
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                if (i == host)
+                {
+                    continue;
+                }
+                remote.push_back(i);
+                fetches.push_back(dispatch_async(runs[i].id,
+                    segmented_fetch_values<LocalIter>(), hpx::execution::seq,
+                    std::true_type(), runs[i].first, runs[i].last));
+            }
+
+            segmented_sort_wait_all<ExPolicy>(fetches);
+            for (std::size_t j = 0; j != remote.size(); ++j)
+            {
+                parts[remote[j]] = fetches[j].get();
+            }
+        }
+
+        util::compare_projected<Comp&, Proj&> pred(comp, proj);
+        std::vector<value_type> merged =
+            segmented_sort_merge_parts(is_seq, parts, pred);
+        parts.clear();
 
         std::size_t offset = 0;
-        for (std::size_t i = first; i != last; ++i)
+        if constexpr (IsSeq::value)
         {
-            auto const n =
-                static_cast<std::size_t>(runs[i].last - runs[i].first);
-            std::vector<value_type> piece(
-                values.begin() + static_cast<std::ptrdiff_t>(offset),
-                values.begin() + static_cast<std::ptrdiff_t>(offset + n));
-            dispatch(runs[i].id, segmented_store_values<LocalIter>(),
-                hpx::execution::seq, std::true_type(), runs[i].first,
-                runs[i].last, piece);
-            offset += n;
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                auto const count =
+                    static_cast<std::size_t>(runs[i].last - runs[i].first);
+                if (i == host)
+                {
+                    std::copy(
+                        merged.begin() + static_cast<std::ptrdiff_t>(offset),
+                        merged.begin() +
+                            static_cast<std::ptrdiff_t>(offset + count),
+                        first);
+                }
+                else
+                {
+                    std::vector<value_type> piece(
+                        merged.begin() + static_cast<std::ptrdiff_t>(offset),
+                        merged.begin() +
+                            static_cast<std::ptrdiff_t>(offset + count));
+                    dispatch(runs[i].id, segmented_store_values<LocalIter>(),
+                        hpx::execution::seq, std::true_type(), runs[i].first,
+                        runs[i].last, piece);
+                }
+                offset += count;
+            }
         }
+        else
+        {
+            std::vector<hpx::future<LocalIter>> stores;
+            stores.reserve(n);
+            for (std::size_t i = 0; i != n; ++i)
+            {
+                auto const count =
+                    static_cast<std::size_t>(runs[i].last - runs[i].first);
+                if (i == host)
+                {
+                    std::copy(
+                        merged.begin() + static_cast<std::ptrdiff_t>(offset),
+                        merged.begin() +
+                            static_cast<std::ptrdiff_t>(offset + count),
+                        first);
+                }
+                else
+                {
+                    std::vector<value_type> piece(
+                        merged.begin() + static_cast<std::ptrdiff_t>(offset),
+                        merged.begin() +
+                            static_cast<std::ptrdiff_t>(offset + count));
+                    stores.push_back(dispatch_async(runs[i].id,
+                        segmented_store_values<LocalIter>(),
+                        hpx::execution::seq, std::true_type(), runs[i].first,
+                        runs[i].last, HPX_MOVE(piece)));
+                }
+                offset += count;
+            }
+            segmented_sort_wait_all<ExPolicy>(stores);
+        }
+
+        HPX_UNUSED(policy);
+        return last_iter;
     }
 
-    // Merge two already-sorted adjacent groups of partitions
-    // [first, mid) and [mid, last) and write the merged order back.
-    template <typename LocalIter, typename Comp, typename Proj>
-    void segmented_sort_merge_span(
-        std::vector<segmented_sort_run<LocalIter>> const& runs,
-        std::size_t first, std::size_t mid, std::size_t last, Comp& comp,
-        Proj& proj)
+    template <typename Iter>
+    struct segmented_sort_kway_merge
+      : algorithm<segmented_sort_kway_merge<Iter>, Iter>
     {
-        using value_type = typename std::iterator_traits<LocalIter>::value_type;
+        constexpr segmented_sort_kway_merge() noexcept
+          : algorithm<segmented_sort_kway_merge, Iter>(
+                "segmented_sort_kway_merge")
+        {
+        }
 
-        auto left = segmented_sort_fetch_span(runs, first, mid);
-        auto right = segmented_sort_fetch_span(runs, mid, last);
+        template <typename ExPolicy, typename InIter, typename Sent,
+            typename LocalIter, typename Comp, typename Proj>
+        static InIter sequential(ExPolicy&& policy, InIter first, Sent last,
+            std::vector<segmented_sort_run<LocalIter>> const& runs,
+            std::size_t host, Comp&& comp, Proj&& proj)
+        {
+            return segmented_sort_merge_on_host(HPX_FORWARD(ExPolicy, policy),
+                first, last, runs, host, HPX_FORWARD(Comp, comp),
+                HPX_FORWARD(Proj, proj), std::true_type{});
+        }
 
-        std::vector<value_type> merged;
-        merged.resize(left.size() + right.size());
-        util::compare_projected<Comp&, Proj&> pred(comp, proj);
-        std::merge(left.begin(), left.end(), right.begin(), right.end(),
-            merged.begin(), pred);
-
-        segmented_sort_store_span(runs, first, last, merged);
-    }
+        template <typename ExPolicy, typename InIter, typename Sent,
+            typename LocalIter, typename Comp, typename Proj>
+        static InIter parallel(ExPolicy&& policy, InIter first, Sent last,
+            std::vector<segmented_sort_run<LocalIter>> const& runs,
+            std::size_t host, Comp&& comp, Proj&& proj)
+        {
+            return segmented_sort_merge_on_host(HPX_FORWARD(ExPolicy, policy),
+                first, last, runs, host, HPX_FORWARD(Comp, comp),
+                HPX_FORWARD(Proj, proj), std::false_type{});
+        }
+    };
 
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj>
     void segmented_sort_local_runs(ExPolicy const& policy,
-        std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
-        Proj& proj, std::true_type)
+        std::vector<segmented_sort_run<LocalIter>>& runs, Comp&& comp,
+        Proj&& proj, std::true_type)
     {
         for (auto const& run : runs)
         {
@@ -250,8 +465,8 @@ namespace hpx::parallel::detail {
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj>
     void segmented_sort_local_runs(ExPolicy const& policy,
-        std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
-        Proj& proj, std::false_type)
+        std::vector<segmented_sort_run<LocalIter>>& runs, Comp&& comp,
+        Proj&& proj, std::false_type)
     {
         using forced_seq = std::false_type;
 
@@ -265,60 +480,28 @@ namespace hpx::parallel::detail {
                     policy, forced_seq(), run.first, run.last, comp, proj));
         }
 
-        if (!segments.empty())
-        {
-            hpx::wait_all(segments);
-            std::list<std::exception_ptr> errors;
-            parallel::util::detail::handle_remote_exceptions<ExPolicy>::call(
-                segments, errors);
-        }
+        segmented_sort_wait_all<ExPolicy>(segments);
     }
 
-    template <typename LocalIter, typename Comp, typename Proj>
-    void segmented_sort_merge_tree(
-        std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
-        Proj& proj, std::true_type)
+    // Fetch each remote sorted run once onto the locality that already
+    // holds the largest run, k-way merge there, and write only the remote
+    // pieces back. That keeps traffic O(N) and avoids a full gather to the
+    // caller.
+    template <typename ExPolicy, typename LocalIter, typename Comp,
+        typename Proj, typename IsSeq>
+    void segmented_sort_merge_runs(ExPolicy const& policy,
+        std::vector<segmented_sort_run<LocalIter>>& runs, Comp&& comp,
+        Proj&& proj, IsSeq is_seq)
     {
-        std::size_t const n = runs.size();
-        for (std::size_t stride = 1; stride < n; stride *= 2)
+        if (runs.size() <= 1)
         {
-            for (std::size_t i = 0; i + stride < n; i += 2 * stride)
-            {
-                std::size_t const last = (std::min) (i + 2 * stride, n);
-                segmented_sort_merge_span(
-                    runs, i, i + stride, last, comp, proj);
-            }
+            return;
         }
-    }
 
-    template <typename LocalIter, typename Comp, typename Proj>
-    void segmented_sort_merge_tree(
-        std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
-        Proj& proj, std::false_type)
-    {
-        std::size_t const n = runs.size();
-        for (std::size_t stride = 1; stride < n; stride *= 2)
-        {
-            std::vector<hpx::future<void>> merges;
-            for (std::size_t i = 0; i + stride < n; i += 2 * stride)
-            {
-                std::size_t const last = (std::min) (i + 2 * stride, n);
-                std::size_t const mid = i + stride;
-                merges.push_back(hpx::async([&runs, i, mid, last, &comp,
-                                                &proj]() {
-                    segmented_sort_merge_span(runs, i, mid, last, comp, proj);
-                }));
-            }
-
-            if (!merges.empty())
-            {
-                hpx::wait_all(merges);
-                for (auto& f : merges)
-                {
-                    f.get();
-                }
-            }
-        }
+        std::size_t const host = segmented_sort_host_index(runs);
+        dispatch(runs[host].id, segmented_sort_kway_merge<LocalIter>(), policy,
+            is_seq, runs[host].first, runs[host].last, runs, host,
+            HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
     }
 
     template <typename ExPolicy, typename SegIter, typename Comp, typename Proj,
@@ -347,13 +530,13 @@ namespace hpx::parallel::detail {
         {
             return result::get(hpx::async([=, runs = HPX_MOVE(runs)]() mutable {
                 segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
-                segmented_sort_merge_tree(runs, cmp, prj, is_seq);
+                segmented_sort_merge_runs(policy, runs, cmp, prj, is_seq);
             }));
         }
         else
         {
             segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
-            segmented_sort_merge_tree(runs, cmp, prj, is_seq);
+            segmented_sort_merge_runs(policy, runs, cmp, prj, is_seq);
             return result::get();
         }
     }
