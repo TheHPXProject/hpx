@@ -17,6 +17,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <iterator>
@@ -1394,6 +1395,11 @@ namespace {
 
     void test_randomized_distributed_merge()
     {
+        auto const randomized_start = std::chrono::steady_clock::now();
+
+        char const* const policy_names[] = {
+            "seq", "par", "seq(task)", "par(task)"};
+
         auto const localities = hpx::find_all_localities();
 
         HPX_TEST(localities.size() >= 3);
@@ -1442,6 +1448,22 @@ namespace {
             std::size_t const partitions2 = 1 + (test + 2) % 5;
             std::size_t const destination_partitions = 1 + (test + 3) % 6;
 
+            auto log_phase = [&](char const* phase) {
+                double const elapsed = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - randomized_start)
+                                           .count();
+
+                std::fprintf(stderr,
+                    "[randomized] case=%zu/%zu policy=%s "
+                    "sizes=%zu,%zu partitions=%zu,%zu,%zu "
+                    "elapsed=%.3fs phase=%s\n",
+                    test + 1, test_count, policy_names[test % 4], size1, size2,
+                    partitions1, partitions2, destination_partitions, elapsed,
+                    phase);
+
+                std::fflush(stderr);
+            };
+
             auto const source1_layout =
                 hpx::container_layout(partitions1, localities);
 
@@ -1451,16 +1473,21 @@ namespace {
             auto const destination_layout =
                 hpx::container_layout(destination_partitions, localities);
 
+            log_phase("construct source1");
             hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
 
+            log_phase("construct source2");
             hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
 
+            log_phase("construct destination");
             hpx::partitioned_vector<int> destination(
                 expected.size(), destination_layout);
 
+            log_phase("assign source1");
             assign_values(source1, input1);
+            log_phase("assign source2");
             assign_values(source2, input2);
-
+            log_phase("merge");
             auto result = [&]() {
                 switch (test % 4)
                 {
@@ -1487,9 +1514,10 @@ namespace {
                         .get();
                 }
             }();
-
+            log_phase("verify");
             HPX_TEST(result == destination.end());
             check_values(destination, expected);
+            log_phase("case complete");
         }
     }
 
