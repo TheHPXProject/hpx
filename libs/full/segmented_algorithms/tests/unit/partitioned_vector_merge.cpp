@@ -1473,21 +1473,20 @@ namespace {
             auto const destination_layout =
                 hpx::container_layout(destination_partitions, localities);
 
-            log_phase("construct source1");
-            hpx::partitioned_vector<int> source1(input1.size(), source1_layout);
+            log_phase("construct and initialize source1");
+            hpx::partitioned_vector<int> source1(
+                input1.cbegin(), input1.cend(), source1_layout);
 
-            log_phase("construct source2");
-            hpx::partitioned_vector<int> source2(input2.size(), source2_layout);
+            log_phase("construct and initialize source2");
+            hpx::partitioned_vector<int> source2(
+                input2.cbegin(), input2.cend(), source2_layout);
 
             log_phase("construct destination");
             hpx::partitioned_vector<int> destination(
                 expected.size(), destination_layout);
 
-            log_phase("assign source1");
-            assign_values(source1, input1);
-            log_phase("assign source2");
-            assign_values(source2, input2);
             log_phase("merge");
+
             auto result = [&]() {
                 switch (test % 4)
                 {
