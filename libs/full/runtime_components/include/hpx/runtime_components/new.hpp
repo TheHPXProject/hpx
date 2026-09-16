@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 /// \file new.hpp
-/// \page hpx::new_
+/// \page hpx::new_, local_new
 /// \headerfile hpx/components.hpp
 
 #pragma once
