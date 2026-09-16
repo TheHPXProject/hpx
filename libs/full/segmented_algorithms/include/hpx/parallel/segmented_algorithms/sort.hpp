@@ -19,7 +19,6 @@
 #include <exception>
 #include <iterator>
 #include <list>
-#include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -46,15 +45,8 @@ namespace hpx::parallel::detail {
             ExPolicy, InIter first, Sent last, Comp&& comp, Proj&& proj)
         {
             auto last_iter = advance_to_sentinel(first, last);
-            auto const n = last_iter - first;
-            if (n > 1)
-            {
-                using value_type =
-                    typename std::iterator_traits<InIter>::value_type;
-                value_type* const raw = std::addressof(*first);
-                std::sort(raw, raw + n,
-                    util::compare_projected<Comp&, Proj&>(comp, proj));
-            }
+            std::sort(first, last_iter,
+                util::compare_projected<Comp&, Proj&>(comp, proj));
             return last_iter;
         }
 
@@ -177,19 +169,61 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename LocalIter, typename Comp, typename Proj>
-    void segmented_sort_merge_runs(
-        segmented_sort_run<LocalIter> const& left_run,
-        segmented_sort_run<LocalIter> const& right_run, Comp& comp, Proj& proj)
+    template <typename LocalIter>
+    std::vector<typename std::iterator_traits<LocalIter>::value_type>
+    segmented_sort_fetch_span(
+        std::vector<segmented_sort_run<LocalIter>> const& runs,
+        std::size_t first, std::size_t last)
     {
         using value_type = typename std::iterator_traits<LocalIter>::value_type;
 
-        auto left = dispatch(left_run.id, segmented_fetch_values<LocalIter>(),
-            hpx::execution::seq, std::true_type(), left_run.first,
-            left_run.last);
-        auto right = dispatch(right_run.id, segmented_fetch_values<LocalIter>(),
-            hpx::execution::seq, std::true_type(), right_run.first,
-            right_run.last);
+        std::vector<value_type> values;
+        for (std::size_t i = first; i != last; ++i)
+        {
+            auto part = dispatch(runs[i].id,
+                segmented_fetch_values<LocalIter>(), hpx::execution::seq,
+                std::true_type(), runs[i].first, runs[i].last);
+            values.insert(values.end(), part.begin(), part.end());
+        }
+        return values;
+    }
+
+    template <typename LocalIter>
+    void segmented_sort_store_span(
+        std::vector<segmented_sort_run<LocalIter>> const& runs,
+        std::size_t first, std::size_t last,
+        std::vector<typename std::iterator_traits<LocalIter>::value_type> const&
+            values)
+    {
+        using value_type = typename std::iterator_traits<LocalIter>::value_type;
+
+        std::size_t offset = 0;
+        for (std::size_t i = first; i != last; ++i)
+        {
+            auto const n =
+                static_cast<std::size_t>(runs[i].last - runs[i].first);
+            std::vector<value_type> piece(
+                values.begin() + static_cast<std::ptrdiff_t>(offset),
+                values.begin() + static_cast<std::ptrdiff_t>(offset + n));
+            dispatch(runs[i].id, segmented_store_values<LocalIter>(),
+                hpx::execution::seq, std::true_type(), runs[i].first,
+                runs[i].last, piece);
+            offset += n;
+        }
+    }
+
+    // Merge two already-sorted adjacent groups of partitions
+    // [first, mid) and [mid, last) and write the merged order back.
+    template <typename LocalIter, typename Comp, typename Proj>
+    void segmented_sort_merge_span(
+        std::vector<segmented_sort_run<LocalIter>> const& runs,
+        std::size_t first, std::size_t mid, std::size_t last, Comp& comp,
+        Proj& proj)
+    {
+        using value_type = typename std::iterator_traits<LocalIter>::value_type;
+
+        auto left = segmented_sort_fetch_span(runs, first, mid);
+        auto right = segmented_sort_fetch_span(runs, mid, last);
 
         std::vector<value_type> merged;
         merged.resize(left.size() + right.size());
@@ -197,17 +231,7 @@ namespace hpx::parallel::detail {
         std::merge(left.begin(), left.end(), right.begin(), right.end(),
             merged.begin(), pred);
 
-        auto const middle =
-            merged.begin() + static_cast<std::ptrdiff_t>(left.size());
-        std::vector<value_type> left_out(merged.begin(), middle);
-        std::vector<value_type> right_out(middle, merged.end());
-
-        dispatch(left_run.id, segmented_store_values<LocalIter>(),
-            hpx::execution::seq, std::true_type(), left_run.first,
-            left_run.last, left_out);
-        dispatch(right_run.id, segmented_store_values<LocalIter>(),
-            hpx::execution::seq, std::true_type(), right_run.first,
-            right_run.last, right_out);
+        segmented_sort_store_span(runs, first, last, merged);
     }
 
     template <typename ExPolicy, typename LocalIter, typename Comp,
@@ -251,16 +275,48 @@ namespace hpx::parallel::detail {
     }
 
     template <typename LocalIter, typename Comp, typename Proj>
-    void segmented_sort_odd_even(
+    void segmented_sort_merge_tree(
         std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
-        Proj& proj)
+        Proj& proj, std::true_type)
     {
         std::size_t const n = runs.size();
-        for (std::size_t phase = 0; phase < n; ++phase)
+        for (std::size_t stride = 1; stride < n; stride *= 2)
         {
-            for (std::size_t i = phase % 2; i + 1 < n; i += 2)
+            for (std::size_t i = 0; i + stride < n; i += 2 * stride)
             {
-                segmented_sort_merge_runs(runs[i], runs[i + 1], comp, proj);
+                std::size_t const last = (std::min) (i + 2 * stride, n);
+                segmented_sort_merge_span(
+                    runs, i, i + stride, last, comp, proj);
+            }
+        }
+    }
+
+    template <typename LocalIter, typename Comp, typename Proj>
+    void segmented_sort_merge_tree(
+        std::vector<segmented_sort_run<LocalIter>>& runs, Comp& comp,
+        Proj& proj, std::false_type)
+    {
+        std::size_t const n = runs.size();
+        for (std::size_t stride = 1; stride < n; stride *= 2)
+        {
+            std::vector<hpx::future<void>> merges;
+            for (std::size_t i = 0; i + stride < n; i += 2 * stride)
+            {
+                std::size_t const last = (std::min) (i + 2 * stride, n);
+                std::size_t const mid = i + stride;
+                merges.push_back(hpx::async([&runs, i, mid, last, &comp,
+                                                &proj]() {
+                    segmented_sort_merge_span(runs, i, mid, last, comp, proj);
+                }));
+            }
+
+            if (!merges.empty())
+            {
+                hpx::wait_all(merges);
+                for (auto& f : merges)
+                {
+                    f.get();
+                }
             }
         }
     }
@@ -291,13 +347,13 @@ namespace hpx::parallel::detail {
         {
             return result::get(hpx::async([=, runs = HPX_MOVE(runs)]() mutable {
                 segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
-                segmented_sort_odd_even(runs, cmp, prj);
+                segmented_sort_merge_tree(runs, cmp, prj, is_seq);
             }));
         }
         else
         {
             segmented_sort_local_runs(policy, runs, cmp, prj, is_seq);
-            segmented_sort_odd_even(runs, cmp, prj);
+            segmented_sort_merge_tree(runs, cmp, prj, is_seq);
             return result::get();
         }
     }
