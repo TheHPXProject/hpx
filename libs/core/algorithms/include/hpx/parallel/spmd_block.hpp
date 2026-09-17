@@ -232,12 +232,9 @@ namespace hpx::lcos::local {
     ///          execution. The caller controls synchronization
     ///          (e.g. via \a sync_wait).
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
-        typename... Args>
-    // clang-format off
-        requires (
-            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
-        )
-    // clang-format on
+        typename... Args,
+        typename = std::enable_if_t<hpx::execution::experimental::
+                is_scheduler_v<std::decay_t<Scheduler>>>>
     decltype(auto) define_spmd_block(
         Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
     {
@@ -348,12 +345,9 @@ namespace hpx::parallel {
 
     // P2300 Scheduler version
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
-        typename... Args>
-    // clang-format off
-        requires (
-            hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
-        )
-    // clang-format on
+        typename... Args,
+        typename = std::enable_if_t<hpx::execution::experimental::
+                is_scheduler_v<std::decay_t<Scheduler>>>>
     decltype(auto) define_spmd_block(
         Scheduler&& sched, std::size_t num_images, F&& f, Args&&... args)
     {
