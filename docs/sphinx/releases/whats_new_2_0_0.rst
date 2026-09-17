@@ -464,7 +464,7 @@ Closed pull requests
 * :hpx-pr:`7540` - Explicitly disable the use of TBB as the parallelization backend for libstdc++
 * :hpx-pr:`7537` - Refactor disconnected locality dispatch guard
 * :hpx-pr:`7536` - Factor the disconnected-locality dispatch guard into a shared helper
-* :hpx-pr:`7535` - Fix data race in hostname_print_helper::get_hostname()"
+* :hpx-pr:`7535` - Fix data race in hostname_print_helper::get_hostname()
 * :hpx-pr:`7534` - Keep LSU matrix artifacts separate
 * :hpx-pr:`7533` - Stop failed LSU builds from publishing installs
 * :hpx-pr:`7532` - Fix LSU GitHub status reporting
