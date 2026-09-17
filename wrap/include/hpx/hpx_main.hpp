@@ -7,8 +7,19 @@
 
 #pragma once
 
-#include <hpx/config/static_linker_check.hpp>
+#include <hpx/config.hpp>
 #include <hpx/wrap_main.hpp>
+
+#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) && defined(HPX_HAVE_STATIC_LINKING) &&  \
+    (defined(__linux) || defined(__linux__) || defined(linux)) &&              \
+    !defined(HPX_HAVE_WRAP_MAIN_CONFIGURED)
+#warning                                                                       \
+    "HPX static-link wrap-main check: you included hpx/hpx_main.hpp but the " \
+    "--wrap=main linker flag has not been applied. Add "                       \
+    "target_link_libraries(<target> PRIVATE HPX::wrap_main) to your "         \
+    "CMakeLists.txt, or pass -Wl,--wrap=main to the linker manually. "        \
+    "Without this flag the HPX runtime will not be initialised correctly."
+#endif
 
 #if defined(HPX_HAVE_RUN_MAIN_EVERYWHERE)
 

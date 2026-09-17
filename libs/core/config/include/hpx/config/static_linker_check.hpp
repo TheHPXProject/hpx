@@ -26,9 +26,8 @@
 //   * Dynamic (shared-library) builds already embed the wrap stub inside
 //     libhpx.so, so no extra linker flag is needed.
 
-#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN)
-#if (defined(__linux) || defined(__linux__) || defined(linux)) &&              \
-    defined(HPX_HAVE_STATIC_LINKING) &&                                        \
+#if defined(HPX_HAVE_DYNAMIC_HPX_MAIN) && defined(HPX_HAVE_STATIC_LINKING) &&  \
+    (defined(__linux) || defined(__linux__) || defined(linux)) &&              \
     !defined(HPX_HAVE_WRAP_MAIN_CONFIGURED)
 #warning                                                                       \
     "HPX static-link wrap-main check: you included hpx/hpx_main.hpp but the " \
@@ -36,5 +35,4 @@
     "target_link_libraries(<target> PRIVATE HPX::wrap_main) to your "         \
     "CMakeLists.txt, or pass -Wl,--wrap=main to the linker manually. "        \
     "Without this flag the HPX runtime will not be initialised correctly."
-#endif
 #endif
