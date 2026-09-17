@@ -212,7 +212,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/components.hpp>
 #include <hpx/modules/datastructures.hpp>
@@ -475,5 +474,4 @@ namespace hpx::collectives {
     inline constexpr bool is_communicator_v = is_communicator<T>::value;
 }    // namespace hpx::collectives
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

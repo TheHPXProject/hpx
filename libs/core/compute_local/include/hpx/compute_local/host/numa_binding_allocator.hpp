@@ -14,7 +14,9 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/lock_registration.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threadmanager.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -442,9 +444,33 @@ namespace hpx::compute::host {
 #endif
         }
 
+        /// Touches every page of the allocation starting at \a p so that
+        /// each page is physically bound to the NUMA domain assigned to it
+        /// by \a binding_helper_. One first-touch task per NUMA domain is
+        /// dispatched and the call blocks until all of them complete.
+        ///
+        /// \pre Must be called from an HPX thread. init_mutex serializes
+        /// concurrent calls to this function and is intentionally held
+        /// across hpx::wait_all() below, which is a suspension point that
+        /// may resume the calling HPX thread on a different OS worker
+        /// thread. hpx::mutex (unlike std::mutex) supports this safely, and
+        /// ignore_while_checking silences the HPX lock-checking layer's
+        /// warning about a lock spanning a suspension point.
+        ///
+        /// \param p pointer to the start of the allocation to initialize.
+        /// \param n number of elements to initialize.
         void initialize_pages(pointer p, size_t n) const
         {
-            std::unique_lock<std::mutex> lk(init_mutex);
+            // initialize_pages() is expected to run on an HPX thread. The
+            // mutex is intentionally held across hpx::wait_all(), which may
+            // suspend and later resume the calling HPX thread on a different
+            // OS worker thread.
+            HPX_ASSERT_MSG(threads::get_self_ptr() != nullptr,
+                "numa_binding_allocator::initialize_pages must be "
+                "called from an HPX thread");
+
+            std::unique_lock<hpx::mutex> lk(init_mutex);
+            [[maybe_unused]] hpx::util::ignore_while_checking il(&lk);
 
             threads::hwloc_bitmap_ptr const bitmap =
                 threads::get_thread_manager().get_pool_numa_bitmap(
@@ -494,9 +520,20 @@ namespace hpx::compute::host {
             nba_deb.debug(debug::str<>("First-Touch"), "Done tasks");
         }
 
+        /// Builds a human-readable, page-by-page description of how the
+        /// allocation starting at \a p is bound across NUMA domains,
+        /// suitable for debug output. init_mutex is held only for the
+        /// duration of this synchronous call; unlike initialize_pages(), no
+        /// suspension point is crossed while it is held.
+        ///
+        /// \param p pointer to the start of the allocation to describe.
+        /// \param helper binding helper describing the array layout used to
+        /// compute per-page offsets.
+        /// \return a formatted string describing the domain binding of each
+        /// page in the allocation.
         std::string display_binding(pointer p, numa_binding_helper_ptr helper)
         {
-            std::unique_lock<std::mutex> lk(init_mutex);
+            std::unique_lock<hpx::mutex> lk(init_mutex);
             //
             std::ostringstream display;
             auto N = helper->array_rank();
@@ -678,6 +715,11 @@ namespace hpx::compute::host {
         unsigned int flags_;
 
     private:
-        mutable std::mutex init_mutex;
+        // Must be an HPX-aware mutex: initialize_pages() holds this
+        // lock across hpx::wait_all(), which can suspend the calling
+        // HPX thread and resume it on a different OS worker thread.
+        // std::mutex ties lock ownership to the OS thread, so
+        // unlocking after such a migration is undefined behavior.
+        mutable hpx::mutex init_mutex;
     };
 }    // namespace hpx::compute::host

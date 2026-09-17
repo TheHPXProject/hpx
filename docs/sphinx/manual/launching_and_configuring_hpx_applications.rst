@@ -330,6 +330,31 @@ The |hpx| configuration section
        ``HPX_WITH_THREAD_GUARD_PAGE`` is set to 1 while configuring the build
        system. It is set by default to ``1``.
 
+The ``hpx.tracing`` configuration section
+.........................................
+
+.. code-block:: ini
+
+   [hpx.tracing]
+   sample_rate = ${HPX_TRACING_SAMPLE_RATE:1}
+
+.. _ini_hpx_tracing:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.tracing.sample_rate``
+     * 1-in-N sampling rate for the per-task lifecycle events on Tracy
+       builds. Initialized from the CMake option
+       :option:`HPX_WITH_TRACING_SAMPLE_RATE` (default ``1``, every task
+       sampled). Values below 1 are clamped to 1. Applied at
+       ``init_global_data`` time; can also be updated from user code via
+       ``hpx::threads::set_tracing_sample_rate(int)``, in which case each
+       worker abandons its current countdown and starts a fresh one on
+       the next task creation. Only present on Tracy builds
+       (``HPX_WITH_TRACY=ON``).
+
 The ``hpx.threadpools`` configuration section
 .............................................
 
@@ -746,6 +771,7 @@ The ``hpx.agas`` configuration section
    use_caching = ${HPX_AGAS_USE_CACHING:1}
    use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}
    local_cache_size = ${HPX_AGAS_LOCAL_CACHE_SIZE:<hpx_agas_local_cache_size>}
+   rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:60000}
 
 .. REVIEW regarding hpx.agas.address and hpx.agas.port: Technically, I believe
    --hpx:agas sets this parameter, this may need to be reworded.
@@ -800,6 +826,12 @@ The ``hpx.agas`` configuration section
        maximum number of ranges stored in the cache, not the number of entries
        spanned by the cache. The default depends on the compile time
        preprocessor constant ``HPX_AGAS_LOCAL_CACHE_SIZE`` (``4096``).
+   * * ``hpx.agas.rpc_timeout``
+     * This property specifies the timeout (in milliseconds) for :term:`AGAS`
+       RPC requests. Defaults to ``60000`` ms. This property can be configured
+       at startup (e.g., ``--hpx:ini=hpx.agas.rpc_timeout=val``), set through
+       the ``HPX_AGAS_RPC_TIMEOUT`` environment variable, or updated at
+       runtime via the atomic setter ``hpx::agas::set_rpc_timeout()``.
 
 The ``hpx.commandline`` configuration section
 .............................................

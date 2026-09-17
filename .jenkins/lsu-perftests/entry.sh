@@ -10,6 +10,11 @@
 # Make undefined variables errors, print each command
 set -eux
 
+status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
+report_file="${configuration_name}-reports/reference-comparison/index.html"
+rm -f "jenkins-hpx-${configuration_name}.out" \
+    "jenkins-hpx-${configuration_name}.err" "${status_file}" "${report_file}"
+
 source .jenkins/common/slurm.sh
 
 source .jenkins/lsu-perftests/slurm-constraint-${configuration_name}.sh
@@ -51,11 +56,9 @@ cat jenkins-hpx-${configuration_name}.out
 echo "= stderr =================================================="
 cat jenkins-hpx-${configuration_name}.err
 
-# Get build status
-status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
-
-# Comment on the PR if any failures
-if [[ $(cat ${status_file}) != 0 ]]; then
+# Comment only when this run produced a failed comparison for a pull request.
+if [[ -n "${ghprbPullId:-}" && -s "${status_file}" &&
+    "$(cat "${status_file}")" != 0 && -s "${report_file}" ]]; then
     ./.jenkins/lsu-perftests/comment_github.sh
 fi
 
@@ -64,4 +67,8 @@ set -e
 if [[ "${slurm_status}" -ne 0 ]]; then
     exit "${slurm_status}"
 fi
-exit $(cat ${status_file})
+if [[ ! -s "${status_file}" ]]; then
+    echo "Missing performance test status: ${status_file}" >&2
+    exit 1
+fi
+exit "$(cat "${status_file}")"

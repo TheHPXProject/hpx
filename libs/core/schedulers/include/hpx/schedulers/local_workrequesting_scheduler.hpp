@@ -885,9 +885,11 @@ namespace hpx::threads::policies {
             std::size_t max_num_to_steal = 1;
             if (req.stealhalf_)
             {
-                max_num_to_steal = d.queue_->get_pending_queue_length(
-                                       std::memory_order_relaxed) /
-                    2;
+                // the pending queue length is never negative
+                max_num_to_steal =
+                    static_cast<std::size_t>(d.queue_->get_pending_queue_length(
+                                                 std::memory_order_relaxed) /
+                        2);
             }
 
             if (max_num_to_steal != 0)

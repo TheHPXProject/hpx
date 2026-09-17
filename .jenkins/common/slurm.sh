@@ -31,11 +31,13 @@ hpx_slurm_cancel_previous()
     return 124
 }
 
-# Called while the locals of hpx_slurm_run are still in scope. Never cancel
-# by name here: a newer Jenkins build may already have submitted the same lane.
+# Never cancel by name here: a newer Jenkins build may already have submitted
+# the same lane. Pass ownership explicitly because EXIT can run after the
+# caller's local variables have gone out of scope.
 hpx_slurm_cleanup()
 {
     local result="$1"
+    local submission_file="$2" submission_pid="$3"
     local job_id="" cluster="" extra=""
     local grace=$((SECONDS + 5))
 
@@ -86,7 +88,7 @@ hpx_slurm_run()
         echo "Slurm timeout must be a positive integer followed by s/m/h/d" >&2
         return 2
     fi
-    local submission_file submission_pid result abort_status=0
+    local submission_file submission_pid cleanup_trap result abort_status=0
     # Defer signals until the child PID and EXIT cleanup are installed.
     trap 'abort_status=129' HUP
     trap 'abort_status=130' INT
@@ -99,7 +101,9 @@ hpx_slurm_run()
     timeout --foreground --kill-after=5s "${limit}" sbatch --parsable --wait "$@" \
         > "${submission_file}" &
     submission_pid=$!
-    trap 'hpx_slurm_cleanup "$?"' EXIT
+    printf -v cleanup_trap 'hpx_slurm_cleanup "$?" %q %q' \
+        "${submission_file}" "${submission_pid}"
+    trap "${cleanup_trap}" EXIT
     trap 'exit 129' HUP
     trap 'exit 130' INT
     trap 'exit 143' TERM
@@ -109,7 +113,7 @@ hpx_slurm_run()
     else
         result=$?
     fi
-    if hpx_slurm_cleanup "${result}"; then
+    if hpx_slurm_cleanup "${result}" "${submission_file}" "${submission_pid}"; then
         result=0
     else
         result=$?

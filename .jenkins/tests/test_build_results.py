@@ -21,6 +21,7 @@ STUB = r'''
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 
 command = Path(sys.argv[0]).name
@@ -46,6 +47,8 @@ if command == 'ctest':
         else:
             body = '<Error>fixture</Error>' if os.environ.get(name) else ''
         (results / (name + '.xml')).write_text('<Site>' + body + '</Site>')
+    if os.environ.get('CTEST_SIGNAL'):
+        os.kill(os.getppid(), getattr(signal, os.environ['CTEST_SIGNAL']))
     sys.exit(int(os.environ.get('CTEST_EXIT', 0)))
 
 if command == 'cmake':
@@ -165,6 +168,13 @@ class BuildResultsTest(unittest.TestCase):
             with self.subTest(code=code):
                 commands = self.run_batch(
                     code, CTEST_EXIT=code, TEST_STATUS=status, existing=True)
+                self.assertNotIn('cmake', commands)
+
+    def test_interrupted_ctest_is_not_reported_as_success(self):
+        for name, code in (('SIGHUP', 129), ('SIGINT', 130), ('SIGTERM', 143)):
+            with self.subTest(signal=name):
+                commands = self.run_batch(
+                    code, CTEST_SIGNAL=name, existing=True)
                 self.assertNotIn('cmake', commands)
 
     def test_xml_failure_without_ctest_exit(self):

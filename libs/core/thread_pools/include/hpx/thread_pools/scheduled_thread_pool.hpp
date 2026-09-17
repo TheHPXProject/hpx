@@ -402,8 +402,8 @@ namespace hpx::threads::detail {
         network_background_callback_type network_background_callback_;
 
         std::size_t max_background_threads_;
-        std::size_t max_idle_loop_count_;
-        std::size_t max_busy_loop_count_;
+        std::int64_t max_idle_loop_count_;
+        std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
     };
 }    // namespace hpx::threads::detail

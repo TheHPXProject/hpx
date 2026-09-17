@@ -739,10 +739,10 @@ namespace hpx::threads {
         auto& rp = hpx::resource::get_partitioner();
         size_t const num_pools = rp.get_num_pools();
         std::size_t thread_offset = 0;
-        std::size_t const max_idle_loop_count =
+        std::int64_t const max_idle_loop_count =
             hpx::util::get_entry_as<std::int64_t>(
                 rtcfg_, "hpx.max_idle_loop_count", HPX_IDLE_LOOP_COUNT_MAX);
-        std::size_t const max_busy_loop_count =
+        std::int64_t const max_busy_loop_count =
             hpx::util::get_entry_as<std::int64_t>(
                 rtcfg_, "hpx.max_busy_loop_count", HPX_BUSY_LOOP_COUNT_MAX);
 

@@ -8,9 +8,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/iterator_support/boost_iterator_categories.hpp>
-#include <hpx/modules/functional.hpp>
-#include <hpx/modules/type_support.hpp>
 
 #include <concepts>
 #include <iterator>

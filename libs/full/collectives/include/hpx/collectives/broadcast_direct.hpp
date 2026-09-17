@@ -133,7 +133,6 @@ namespace hpx { namespace lcos {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/actions_base.hpp>
@@ -637,5 +636,4 @@ namespace hpx::lcos {
     }
 }    // namespace hpx::lcos
 
-#endif    //COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

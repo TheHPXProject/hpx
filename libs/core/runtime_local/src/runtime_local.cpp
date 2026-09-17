@@ -634,6 +634,14 @@ namespace hpx {
 
         runtime_ = this;
         runtime_uptime() = hpx::chrono::high_resolution_clock::now();
+
+#if defined(HPX_HAVE_TRACY)
+        // Apply the runtime override for the 1-in-N task-sampling rate.
+        // Compile-time HPX_TRACING_SAMPLE_RATE is the default; a value in
+        // hpx.tracing.sample_rate (from the INI or command line) wins.
+        threads::set_tracing_sample_rate(hpx::util::get_entry_as<int>(
+            rtcfg_, "hpx.tracing.sample_rate", HPX_TRACING_SAMPLE_RATE));
+#endif
     }
 
     void runtime::deinit_global_data()

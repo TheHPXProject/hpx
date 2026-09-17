@@ -202,6 +202,16 @@ namespace hpx::util {
             "[hpx.on_startup]",
             "wait_on_latch = ${HPX_ON_STARTUP_WAIT_ON_LATCH}",
 
+#if defined(HPX_HAVE_TRACY)
+            // Runtime override for the 1-in-N task-sampling countdown.
+            // Defaults to the compile-time HPX_TRACING_SAMPLE_RATE; the
+            // atomic in task_sampling.cpp is repopulated during startup
+            // from this key.
+            "[hpx.tracing]",
+            "sample_rate = ${HPX_TRACING_SAMPLE_RATE:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_TRACING_SAMPLE_RATE)) "}",
+#endif
+
 #if defined(HPX_HAVE_NETWORKING)
             // by default, enable networking
             "[hpx.parcel]",
@@ -318,6 +328,8 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_AGAS_LOCAL_CACHE_SIZE)) "}",
             "use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}",
             "use_caching = ${HPX_AGAS_USE_CACHING:1}",
+            "rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_AGAS_RPC_TIMEOUT)) "}",
 
             "[hpx.components]",
             "load_external = ${HPX_LOAD_EXTERNAL_COMPONENTS:1}",
@@ -939,6 +951,19 @@ namespace hpx::util {
                 0;
         }
         return false;
+    }
+
+    std::uint64_t runtime_configuration::get_agas_rpc_timeout(
+        std::uint64_t const dflt) const
+    {
+        std::uint64_t timeout = dflt;
+
+        if (util::section const* sec = get_section("hpx.agas"); nullptr != sec)
+        {
+            timeout = hpx::util::get_entry_as<std::uint64_t>(
+                *sec, "rpc_timeout", timeout);
+        }
+        return timeout;
     }
 
     std::size_t runtime_configuration::get_agas_max_pending_refcnt_requests()
