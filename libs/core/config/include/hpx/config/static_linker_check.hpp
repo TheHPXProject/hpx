@@ -9,7 +9,7 @@
 #include <hpx/config/defines.hpp>
 
 // Emit a compile-time diagnostic when the user includes hpx/hpx_main.hpp
-// while building a statically-linked HPX application on Linux or macOS.
+// while building a statically-linked HPX application on Linux.
 //
 // Root cause: the '--wrap=main' linker flag, which redirects user 'main' to
 // the HPX runtime entry-point, is only applied automatically when the user
@@ -21,14 +21,13 @@
 //   CMake  -- add target_link_libraries(<target> PRIVATE HPX::wrap_main)
 //   Manual -- pass -Wl,--wrap=main to the linker explicitly
 //
-// This check is intentionally limited to Linux/macOS static builds because:
-//   * On Windows the wrap mechanism is not used (MSVC uses a different ABI).
+// This check is intentionally limited to Linux static builds because:
+//   * On Windows and macOS the --wrap linker mechanism is not used.
 //   * Dynamic (shared-library) builds already embed the wrap stub inside
-//     libhpx.so/dylib, so no extra linker flag is needed.
+//     libhpx.so, so no extra linker flag is needed.
 
 #if defined(HPX_HAVE_DYNAMIC_HPX_MAIN)
-#if (defined(__linux) || defined(__linux__) || defined(linux) ||               \
-    defined(__APPLE__)) &&                                                     \
+#if (defined(__linux) || defined(__linux__) || defined(linux)) &&              \
     defined(HPX_HAVE_STATIC_LINKING) &&                                        \
     !defined(HPX_HAVE_WRAP_MAIN_CONFIGURED)
 #warning                                                                       \
