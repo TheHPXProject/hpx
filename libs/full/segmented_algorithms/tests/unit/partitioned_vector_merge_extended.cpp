@@ -8,13 +8,13 @@
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 
-#include <hpx/async_combinators/wait_all.hpp>
 #include <hpx/hpx_main.hpp>
 #include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/async_colocated.hpp>
+#include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/distribution_policies.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
@@ -22,7 +22,6 @@
 #include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/parallel/segmented_algorithms/merge.hpp>
 
 #include <algorithm>
 #include <chrono>

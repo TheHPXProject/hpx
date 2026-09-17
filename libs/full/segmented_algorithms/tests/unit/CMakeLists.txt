@@ -25,6 +25,7 @@ set(tests
     partitioned_vector_max_element2
     partitioned_vector_merge
     partitioned_vector_merge_extended
+    partitioned_vector_merge_regressions
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
@@ -91,6 +92,8 @@ foreach(test ${tests})
     set(test_localities 3)
   elseif(test STREQUAL "partitioned_vector_merge_extended")
     set(test_localities 4)
+  elseif(test STREQUAL "partitioned_vector_merge_regressions")
+    set(test_localities 3)
   else()
     set(test_localities 2)
   endif()
