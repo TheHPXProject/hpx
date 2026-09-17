@@ -240,7 +240,7 @@ struct regression_throw_point
     bool allocation_failure = false;
     int threshold = (std::numeric_limits<int>::min)();
 
-    void check(int value) const
+    void throw_if_needed(int value) const
     {
         if (value >= threshold && (everywhere || hpx::find_here() == locality))
         {
@@ -265,7 +265,7 @@ struct regression_throwing_compare
 
     bool operator()(int lhs, int rhs) const
     {
-        point.check((std::max) (lhs, rhs));
+        point.throw_if_needed((std::max) (lhs, rhs));
         return lhs < rhs;
     }
 
@@ -282,7 +282,7 @@ struct regression_throwing_projection
 
     int operator()(int value) const
     {
-        point.check(value);
+        point.throw_if_needed(value);
         return value;
     }
 

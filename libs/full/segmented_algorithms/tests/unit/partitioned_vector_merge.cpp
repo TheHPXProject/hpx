@@ -1197,11 +1197,11 @@ namespace {
         auto const locs = hpx::find_all_localities();
         std::vector<int> large(20);
         std::iota(large.begin(), large.end(), 0);
-        std::vector<int> const small{5, 15};
-        run_merge_case(hpx::execution::seq, large, small,
+        std::vector<int> const small_value{5, 15};
+        run_merge_case(hpx::execution::seq, large, small_value,
             partition_layout(4, {locs[0], locs[1]}),
             partition_layout(1, {locs[1]}), partition_layout(2, {locs[2]}));
-        run_merge_case(hpx::execution::seq, small, large,
+        run_merge_case(hpx::execution::seq, small_value, large,
             partition_layout(1, {locs[0]}),
             partition_layout(4, {locs[1], locs[0]}),
             partition_layout(2, {locs[2]}));
