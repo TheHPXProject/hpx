@@ -114,13 +114,12 @@ namespace hpx::experimental {
             // crashes on Clang compilers during complex template instantiations.
             auto task = wrap_task(HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
 
-            auto stopped_handler = [this]() {
+            auto stopped_handler = []() {
                 // Note: This silently discards cancellation signals. If the scheduler
                 // signals 'stopped' (e.g., the pool is shutting down), this pipeline
                 // converts it to just() with no call to add_exception. This is an
                 // explicit semantic choice: a cancelled task will silently vanish
                 // and not appear in the exception_list.
-                this->latch_.count_down(1);
                 return ex::just();
             };
 
@@ -134,7 +133,6 @@ namespace hpx::experimental {
                     // We convert this error channel to a value channel via ex::just()
                     // to satisfy start_detached.
                     add_exception(HPX_MOVE(e));
-                    this->latch_.count_down(1);
                     return ex::just();
                 }) |
                 ex::let_stopped(HPX_MOVE(stopped_handler));
