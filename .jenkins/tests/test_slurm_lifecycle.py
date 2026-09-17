@@ -224,7 +224,10 @@ class SlurmLifecycle(unittest.TestCase):
     def test_timeout_kills_unresponsive_sbatch(self):
         code, _, _ = self.finish(self.start(
             'hpx_slurm_run 1s batch.sh', JOB_DELAY="30", IGNORE_TERM="1"))
-        self.assertEqual(code, 137)
+        # Older GNU timeout (including 8.32 on Rostam) returns 124 after
+        # --foreground --kill-after kills the child. Both indicate timeout;
+        # finish also requires the child pipes to close within the bound.
+        self.assertIn(code, (124, 137))
         self.assertEqual(self.calls("scancel"), [["12345"]])
 
     def test_hung_cleanup_rpc_is_bounded(self):

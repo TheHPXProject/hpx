@@ -22,6 +22,9 @@ write_status()
     fi
 }
 trap write_status EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 rm -rf "${build_dir}"
 mkdir -p "${build_dir}"

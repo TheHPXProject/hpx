@@ -11,6 +11,7 @@
 
 #include <hpx/config.hpp>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace hpx::util {
@@ -30,15 +31,19 @@ namespace hpx::util {
     }    // namespace detail
 
     // This function calculates the hash based on a multiplicative Fibonacci
-    // scheme
-    HPX_CXX_CORE_EXPORT template <std::uint64_t N>
-    constexpr std::uint64_t fibhash(std::uint64_t i) noexcept
+    // scheme. N is the number of buckets to distribute over and the result is
+    // the index of one of them, so both are std::size_t. The mixing step
+    // itself stays in 64 bit arithmetic, which is what makes the distribution
+    // work, and the final shift leaves a value in [0, N) that always fits.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    constexpr std::size_t fibhash(std::uint64_t i) noexcept
     {
         static_assert(N != 0, "This algorithm only works with N != 0");
-        static_assert((1 << detail::log2<N>) == N,
+        static_assert((std::size_t{1} << detail::log2<N>) == N,
             "N must be a power of two");    // -V104
 
-        return (detail::golden_ratio * (i ^ (i >> detail::shift_amount<N>) )) >>
-            detail::shift_amount<N>;
+        return static_cast<std::size_t>(
+            (detail::golden_ratio * (i ^ (i >> detail::shift_amount<N>) )) >>
+            detail::shift_amount<N>);
     }
 }    // namespace hpx::util

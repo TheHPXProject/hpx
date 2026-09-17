@@ -24,6 +24,10 @@ jobs:
     container: stellargroup/build_env:23
     permissions:
       actions: read
+    # GitHub-hosted runners cap jobs at 360 minutes; the three documentation
+    # steps stay well within this in practice (observed worst case so far:
+    # HTML ~53 + singlehtml ~41 + PDF ~110 minutes).
+    timeout-minutes: 360
 
     steps:
     - uses: actions/checkout@v7
@@ -52,17 +56,17 @@ jobs:
               -DHPX_WITH_GIT_COMMIT_SHORT=${{ env.sha_short }}
 
     - name: Build Documentation (HTML)
-      timeout-minutes: 120
+      timeout-minutes: 180
       shell: bash
       run: cmake --build build --target docs-html
 
     - name: Build Documentation (Single HTML)
-      timeout-minutes: 120
+      timeout-minutes: 180
       shell: bash
       run: cmake --build build --target docs-singlehtml
 
     - name: Build Documentation (PDF)
-      timeout-minutes: 120
+      timeout-minutes: 240
       shell: bash
       run: cmake --build build --target docs-latexpdf
 
