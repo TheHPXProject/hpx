@@ -378,10 +378,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename F, typename Proj>
-            static typename util::detail::algorithm_result<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>::type
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, F&& f, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, F&& f, Proj&& proj)
             {
                 return copy_if<IterPair>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, dest,
@@ -444,9 +442,7 @@ namespace hpx {
             )
         // clang-format on
         // clang-format off
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
-        invoke_default(ExPolicy&& policy,
+        static decltype(auto) invoke_default(ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, Pred pred)
         // clang-format on
         {
@@ -456,12 +452,11 @@ namespace hpx {
             static_assert(std::forward_iterator<FwdIter2>,
                 "Required at least forward iterator.");
 
-            auto&& res = hpx::parallel::detail::remove_copy_if<
-                hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>()
-                             .call(HPX_FORWARD(ExPolicy, policy), first, last,
-                                 dest, HPX_MOVE(pred), hpx::identity_v);
-
-            return hpx::parallel::util::get_second_element(HPX_MOVE(res));
+            return hpx::parallel::util::get_second_element(
+                hpx::parallel::detail::remove_copy_if<
+                    hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>()
+                    .call(HPX_FORWARD(ExPolicy, policy), first, last, dest,
+                        HPX_MOVE(pred), hpx::identity_v));
         }
     } remove_copy_if{};
 
@@ -505,9 +500,7 @@ namespace hpx {
             )
         // clang-format on
         // clang-format off
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter2>::type
-        invoke_default(ExPolicy&& policy,
+        static decltype(auto) invoke_default(ExPolicy&& policy,
             FwdIter1 first, FwdIter1 last, FwdIter2 dest, T const& value)
         // clang-format on
         {
