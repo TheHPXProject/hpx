@@ -35,6 +35,7 @@ set(segmented_algorithms_headers
     hpx/parallel/segmented_algorithms/reduce.hpp
     hpx/parallel/segmented_algorithms/replace.hpp
     hpx/parallel/segmented_algorithms/replace_copy.hpp
+    hpx/parallel/segmented_algorithms/sort.hpp
     hpx/parallel/segmented_algorithms/traits/zip_iterator.hpp
     hpx/parallel/segmented_algorithms/transform_exclusive_scan.hpp
     hpx/parallel/segmented_algorithms/transform.hpp

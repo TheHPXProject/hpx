@@ -8,7 +8,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/assert.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/distribution_policies.hpp>
@@ -328,9 +327,10 @@ namespace hpx::parallel::detail {
                 f.get_exception_ptr(),
                 errors);    // NOLINT(bugprone-use-after-move)
 
-            // NOLINTNEXTLINE(bugprone-use-after-move)
-            HPX_ASSERT(errors.empty());
-            throw exception_list(HPX_MOVE(errors));
+            if (!errors.empty())
+            {
+                throw exception_list(HPX_MOVE(errors));
+            }
         }
         return f.get();
     }
