@@ -63,5 +63,5 @@ Continuous testing
 ==================
 
 In addition to manual testing, we run automated tests on various platforms. We also 
-run tests on all pull requests using both |github|_. You can see the dashboards
+run tests on all pull requests using both |hpx_github|_. You can see the dashboards
 |hpx_cdash|_ .

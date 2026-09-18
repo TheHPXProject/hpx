@@ -539,6 +539,7 @@ a given parallel algorithm or execution policy.
 * `is_never_blocking_one_way_executor` indicates whether the executor can schedule tasks in a fire-and-forget style without blocking.
 * `is_one_way_executor` indicates support for one-way execution (tasks can be scheduled but no result is returned).
 * `is_two_way_executor` indicates support for two-way execution (tasks return a result or a future).
+
 In all cases, the custom executor inherits the capabilities of the base executor, so it integrates seamlessly with |hpx| algorithms.
 
 This design ensures that `simple_annotating_executor` can be used anywhere its underlying executor could be used, while still
@@ -581,8 +582,7 @@ We then use hpx::for_each with a parallel execution policy and attach our custom
 * hpx::execution::par.on(exec) attaches our custom executor to the algorithm.
 * for_each internally partitions the work across threads and schedules each task using `bulk_async_execute`.
 * Each task is annotated with "for_each_task", visible in debuggers and profilers.
-* The results of the parallel computation are stored in the data vector, demonstrating that the algorithm
-  executed successfully in parallel.
+* The results of the parallel computation are stored in the data vector, demonstrating that the algorithm executed successfully in parallel.
 
 This pattern is especially useful in larger applications with many tasks, as annotations make it much easier
 to trace and debug the execution of parallel algorithms.
