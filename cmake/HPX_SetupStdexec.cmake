@@ -103,4 +103,6 @@ endif()
 
 # stdexec is now unconditionally required; define HPX_HAVE_STDEXEC so that
 # downstream code using #if defined(HPX_HAVE_STDEXEC) continues to work.
-hpx_add_config_define(HPX_HAVE_STDEXEC)
+if(NOT HPX_FIND_PACKAGE)
+  hpx_add_config_define(HPX_HAVE_STDEXEC)
+endif()
