@@ -7,6 +7,7 @@
 set(tests
     annotating_executor
     annotation_property
+    async_scope
     created_executor
     execution_policy_mappings
     executor_scheduler
@@ -56,6 +57,8 @@ foreach(test ${tests})
     HPX_PREFIX ${HPX_BUILD_PREFIX}
     FOLDER ${folder_name}
   )
+
+  target_link_libraries(${test}_test PRIVATE hpx_executors_test_utilities)
 
   add_hpx_unit_test("modules.executors" ${test} ${${test}_PARAMETERS})
 
