@@ -45,13 +45,18 @@ namespace hpx::parallel::detail {
 
         if (ready.has_exception())
         {
+            std::exception_ptr const exception = ready.get_exception_ptr();
+
             std::list<std::exception_ptr> errors;
 
             parallel::util::detail::handle_remote_exceptions<policy_type>::call(
-                ready.get_exception_ptr(), errors);
-            // handle_remote_exceptions is expected to throw. If it returns,
-            // it has collected the remote exception(s) in errors.
-            HPX_ASSERT(!errors.empty());
+                exception, errors);
+
+            if (errors.empty())
+            {
+                std::rethrow_exception(exception);
+            }
+
             throw hpx::exception_list(HPX_MOVE(errors));
         }
 
@@ -216,7 +221,9 @@ namespace hpx::parallel::detail {
                 std::decay_t<LocalIterator>>;
 
             hpx::id_type const partition_locality =
-                hpx::get_colocation_id(hpx::launch::sync, partition_id);
+                (hpx::naming::detail::is_migratable(partition_id.get_gid())) ?
+                hpx::get_colocation_id(hpx::launch::sync, partition_id) :
+                hpx::naming::get_locality_from_id(partition_id);
 
             if (partition_locality == destination_locality)
             {
@@ -320,33 +327,6 @@ namespace hpx::parallel::detail {
             if (ranges.empty())
             {
                 return output_local_traits::remote(HPX_MOVE(raw_dest));
-            }
-
-            if (ranges.size() == 1)
-            {
-                auto& range = ranges.front();
-
-                hpx::id_type const source_locality = hpx::get_colocation_id(
-                    hpx::launch::sync, range.partition_id);
-
-                if (source_locality == hpx::find_here())
-                {
-                    using input_local_iterator =
-                        std::decay_t<decltype(range.first)>;
-
-                    using input_local_traits =
-                        hpx::traits::segmented_local_iterator_traits<
-                            input_local_iterator>;
-
-                    auto raw_first =
-                        input_local_traits::local(HPX_MOVE(range.first));
-                    auto raw_last =
-                        input_local_traits::local(HPX_MOVE(range.last));
-
-                    auto raw_result = std::copy(raw_first, raw_last, raw_dest);
-
-                    return output_local_traits::remote(HPX_MOVE(raw_result));
-                }
             }
 
             auto values =
@@ -640,10 +620,9 @@ namespace hpx::parallel::detail {
     {
     };
 
-    HPX_CXX_EXPORT template <typename Value1, typename Value2,
-        collected_input CollectedInput, typename RangeList,
-        typename LocIterator, typename OutIterator, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
+    template <typename Value1, typename Value2, collected_input CollectedInput,
+        typename RangeList, typename LocIterator, typename OutIterator,
+        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
     HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>>
     capture_dispatch_async_impl(hpx::id_type const& id_recv, Algo&& algo,
         ExPolicy policy, RangeList ranges, LocIterator local_first,
@@ -670,9 +649,9 @@ namespace hpx::parallel::detail {
         return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
     }
 
-    HPX_CXX_EXPORT template <typename Value1, typename Value2,
-        typename RangeList1, typename RangeList2, typename OutIterator,
-        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
+    template <typename Value1, typename Value2, typename RangeList1,
+        typename RangeList2, typename OutIterator, typename Algo,
+        typename ExPolicy, typename IsSeq, typename... Args>
     HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>>
     capture_dispatch_async_impl(hpx::id_type const& id_recv, Algo&& algo,
         ExPolicy policy, RangeList1 ranges1, RangeList2 ranges2,
@@ -697,6 +676,17 @@ namespace hpx::parallel::detail {
         return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
     }
 
+    HPX_FORCEINLINE hpx::id_type get_partition_locality(
+        hpx::id_type const& partition_id)
+    {
+        if (hpx::naming::detail::is_migratable(partition_id.get_gid()))
+        {
+            return hpx::get_colocation_id(hpx::launch::sync, partition_id);
+        }
+
+        return hpx::naming::get_locality_from_id(partition_id);
+    }
+
     template <typename TraitsDest, typename SegIteratorOut, typename Iterator1,
         typename Iterator2, typename OutIterator, typename Algo,
         typename ExPolicy, typename IsSeq, typename... Args>
@@ -705,52 +695,31 @@ namespace hpx::parallel::detail {
         SegIteratorOut&& sdest, Iterator1 first1, Iterator1 last1,
         Iterator2 first2, Iterator2 last2, OutIterator dest, Args&&... args)
     {
+        using iterator1_type = std::decay_t<Iterator1>;
+        using iterator2_type = std::decay_t<Iterator2>;
+        using output_iterator = std::decay_t<OutIterator>;
+        using is_seq = std::decay_t<IsSeq>;
+
         using Value1 =
-            typename std::iterator_traits<std::decay_t<Iterator1>>::value_type;
+            typename std::iterator_traits<iterator1_type>::value_type;
         using Value2 =
-            typename std::iterator_traits<std::decay_t<Iterator2>>::value_type;
-        using is_seq = std::decay_t<IsSeq>;
-
-        auto ranges1 = make_partition_ranges(first1, last1);
-        auto ranges2 = make_partition_ranges(first2, last2);
-
-        return capture_dispatch_async_impl<Value1, Value2>(
-            TraitsDest::get_id(sdest), HPX_FORWARD(Algo, algo),
-            HPX_MOVE(policy), HPX_MOVE(ranges1), HPX_MOVE(ranges2),
-            HPX_MOVE(dest), is_seq{}, HPX_FORWARD(Args, args)...);
-    }
-
-    HPX_CXX_EXPORT template <typename TraitsDest, typename SegIteratorOut,
-        typename Iterator1, typename Iterator2, typename OutIterator,
-        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE std::decay_t<OutIterator> capture_dispatch(TraitsDest,
-        Algo&& algo, ExPolicy policy, IsSeq, SegIteratorOut&& sdest,
-        Iterator1 first1, Iterator1 last1, Iterator2 first2, Iterator2 last2,
-        OutIterator dest, Args&&... args)
-    {
-        static_assert(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>,
-            "capture_dispatch cannot be used with a task policy");
-
-        using is_seq = std::decay_t<IsSeq>;
-        using Value1 = typename std::iterator_traits<Iterator1>::value_type;
-        using Value2 = typename std::iterator_traits<Iterator2>::value_type;
+            typename std::iterator_traits<iterator2_type>::value_type;
 
         using traits_in1 =
-            hpx::traits::segmented_iterator_traits<std::decay_t<Iterator1>>;
+            hpx::traits::segmented_iterator_traits<iterator1_type>;
         using traits_in2 =
-            hpx::traits::segmented_iterator_traits<std::decay_t<Iterator2>>;
+            hpx::traits::segmented_iterator_traits<iterator2_type>;
 
-        using output_iterator = std::decay_t<OutIterator>;
         using capture_result_type = typename TraitsDest::local_iterator;
 
         using algo_result_type = typename std::decay_t<Algo>::result_type;
 
+        using algo_output_iterator =
+            std::decay_t<decltype(std::declval<algo_result_type>().out)>;
+
         static_assert(
             std::is_same_v<output_iterator, std::decay_t<capture_result_type>>,
             "OutIterator must be the destination segment-local iterator");
-
-        using algo_output_iterator =
-            std::decay_t<decltype(std::declval<algo_result_type>().out)>;
 
         static_assert(std::is_same_v<output_iterator, algo_output_iterator>,
             "Algo::result_type::out must match OutIterator");
@@ -760,6 +729,7 @@ namespace hpx::parallel::detail {
 
         auto seg_first1 = traits_in1::segment(first1);
         auto seg_last1 = traits_in1::segment(std::prev(last1));
+
         auto seg_first2 = traits_in2::segment(first2);
         auto seg_last2 = traits_in2::segment(std::prev(last2));
 
@@ -771,61 +741,95 @@ namespace hpx::parallel::detail {
         auto final_last2 = traits_in2::local(std::prev(last2));
         ++final_last2;
 
-        auto dest_id = hpx::get_colocation_id(
-            hpx::launch::sync, TraitsDest::get_id(sdest));
-        auto sit1_id = hpx::get_colocation_id(
-            hpx::launch::sync, traits_in1::get_id(seg_first1));
-        auto sit2_id = hpx::get_colocation_id(
-            hpx::launch::sync, traits_in2::get_id(seg_first2));
+        hpx::id_type const destination_partition_id = TraitsDest::get_id(sdest);
 
-        bool in1_local = dest_id == sit1_id && seg_first1 == seg_last1;
-        bool in2_local = dest_id == sit2_id && seg_first2 == seg_last2;
+        hpx::id_type const input1_partition_id = traits_in1::get_id(seg_first1);
 
-        if (in1_local && in2_local)
+        hpx::id_type const input2_partition_id = traits_in2::get_id(seg_first2);
+
+        hpx::id_type const destination_locality =
+            get_partition_locality(destination_partition_id);
+
+        hpx::id_type const input1_locality =
+            get_partition_locality(input1_partition_id);
+
+        hpx::id_type const input2_locality =
+            get_partition_locality(input2_partition_id);
+
+        bool const input1_is_local =
+            destination_locality == input1_locality && seg_first1 == seg_last1;
+
+        bool const input2_is_local =
+            destination_locality == input2_locality && seg_first2 == seg_last2;
+
+        if (input1_is_local && input2_is_local)
         {
-            // both dest and input ranges are on the same segments
-            auto local_result = dispatch(TraitsDest::get_id(sdest),
+            // Neither input needs to be captured.
+            auto operation = dispatch_async(destination_partition_id,
                 HPX_FORWARD(Algo, algo), HPX_MOVE(policy), is_seq{},
-                local_first1, final_last1, local_first2, final_last2,
-                HPX_MOVE(dest), HPX_FORWARD(Args, args)...);
-            return HPX_MOVE(local_result.out);
+                HPX_MOVE(local_first1), HPX_MOVE(final_last1),
+                HPX_MOVE(local_first2), HPX_MOVE(final_last2), HPX_MOVE(dest),
+                HPX_FORWARD(Args, args)...);
+
+            return HPX_MOVE(operation).then([](auto ready) -> output_iterator {
+                auto result = get_capture_result<ExPolicy>(HPX_MOVE(ready));
+
+                return HPX_MOVE(result.out);
+            });
         }
-        else if (in1_local)
+
+        if (input1_is_local)
         {
-            // input1 range and dest range are on the same segment
+            // Input 1 is local. Capture only input 2.
             auto ranges2 = make_partition_ranges(first2, last2);
 
             return capture_dispatch_async_impl<Value1, Value2,
-                collected_input::second>(TraitsDest::get_id(sdest),
+                collected_input::second>(destination_partition_id,
                 HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges2),
                 HPX_MOVE(local_first1), HPX_MOVE(final_last1), HPX_MOVE(dest),
-                is_seq{}, HPX_FORWARD(Args, args)...)
-                .get();
+                is_seq{}, HPX_FORWARD(Args, args)...);
         }
-        else if (in2_local)
+
+        if (input2_is_local)
         {
-            // input2 range and dest range are on the same segment
+            // Input 2 is local. Capture only input 1.
             auto ranges1 = make_partition_ranges(first1, last1);
 
             return capture_dispatch_async_impl<Value1, Value2,
-                collected_input::first>(TraitsDest::get_id(sdest),
+                collected_input::first>(destination_partition_id,
                 HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges1),
                 HPX_MOVE(local_first2), HPX_MOVE(final_last2), HPX_MOVE(dest),
-                is_seq{}, HPX_FORWARD(Args, args)...)
-                .get();
+                is_seq{}, HPX_FORWARD(Args, args)...);
         }
-        else
-        {
-            // dest and input ranges are not on the same segments
-            auto ranges1 = make_partition_ranges(first1, last1);
-            auto ranges2 = make_partition_ranges(first2, last2);
 
-            return capture_dispatch_async_impl<Value1, Value2>(
-                TraitsDest::get_id(sdest), HPX_FORWARD(Algo, algo),
-                HPX_MOVE(policy), HPX_MOVE(ranges1), HPX_MOVE(ranges2),
-                HPX_MOVE(dest), is_seq{}, HPX_FORWARD(Args, args)...)
-                .get();
-        }
+        // Neither input is completely available on the destination
+        // locality. Capture both ranges.
+        auto ranges1 = make_partition_ranges(first1, last1);
+        auto ranges2 = make_partition_ranges(first2, last2);
+
+        return capture_dispatch_async_impl<Value1, Value2>(
+            destination_partition_id, HPX_FORWARD(Algo, algo), HPX_MOVE(policy),
+            HPX_MOVE(ranges1), HPX_MOVE(ranges2), HPX_MOVE(dest), is_seq{},
+            HPX_FORWARD(Args, args)...);
+    }
+
+    template <typename TraitsDest, typename SegIteratorOut, typename Iterator1,
+        typename Iterator2, typename OutIterator, typename Algo,
+        typename ExPolicy, typename IsSeq, typename... Args>
+    HPX_FORCEINLINE std::decay_t<OutIterator> capture_dispatch(TraitsDest,
+        Algo&& algo, ExPolicy policy, IsSeq, SegIteratorOut&& sdest,
+        Iterator1 first1, Iterator1 last1, Iterator2 first2, Iterator2 last2,
+        OutIterator dest, Args&&... args)
+    {
+        static_assert(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>,
+            "capture_dispatch cannot be used with a task policy");
+
+        return capture_dispatch_async(TraitsDest{}, HPX_FORWARD(Algo, algo),
+            HPX_MOVE(policy), std::decay_t<IsSeq>{},
+            HPX_FORWARD(SegIteratorOut, sdest), HPX_MOVE(first1),
+            HPX_MOVE(last1), HPX_MOVE(first2), HPX_MOVE(last2), HPX_MOVE(dest),
+            HPX_FORWARD(Args, args)...)
+            .get();
     }
 
     template <typename Value, typename TraitsDest, typename SegIteratorOut,
@@ -859,9 +863,9 @@ namespace hpx::parallel::detail {
         return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
     }
 
-    HPX_CXX_EXPORT template <typename Value, typename TraitsDest,
-        typename SegIteratorOut, typename Iterator, typename OutIterator,
-        typename ExPolicy, typename IsSeq>
+    template <typename Value, typename TraitsDest, typename SegIteratorOut,
+        typename Iterator, typename OutIterator, typename ExPolicy,
+        typename IsSeq>
     HPX_FORCEINLINE std::decay_t<OutIterator> capture_copy(TraitsDest,
         ExPolicy const& policy, IsSeq, SegIteratorOut const& seg_dest,
         Iterator first, Iterator last, OutIterator dest)

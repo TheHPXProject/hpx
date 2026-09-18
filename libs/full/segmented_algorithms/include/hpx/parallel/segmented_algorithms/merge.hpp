@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <exception>
 #include <iterator>
+#include <list>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -496,9 +497,14 @@ namespace hpx::parallel::detail {
 
                     HPX_ASSERT(!operations.empty());
 
-                    for (std::size_t i = 0; i + 1 != operations.size(); ++i)
+                    std::list<std::exception_ptr> errors;
+
+                    parallel::util::detail::handle_remote_exceptions<
+                        policy_type>::call(operations, errors);
+
+                    if (!errors.empty())
                     {
-                        operations[i].get();
+                        throw hpx::exception_list(HPX_MOVE(errors));
                     }
 
                     auto final_local = operations.back().get();
