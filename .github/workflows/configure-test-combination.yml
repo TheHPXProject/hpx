@@ -92,8 +92,7 @@ jobs:
               -DHPX_WITH_FETCH_ASIO=Off \
               -DHPX_WITH_APEX=On \
               -DHPX_WITH_FETCH_APEX=ON \
-              -DHPX_WITH_TRACY=On \
-              -DHPX_WITH_FETCH_TRACY=ON; then
+              -DHPX_WITH_TRACY=On; then
             echo "CMake succeeded when it should have failed!"
             exit 1
           fi
