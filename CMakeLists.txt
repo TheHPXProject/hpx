@@ -2742,6 +2742,29 @@ set(HPX_STATIC_PARCELPORT_PLUGINS
     ""
     CACHE INTERNAL "" FORCE
 )
+
+# Locate Python before adding libraries. Module tests and examples are
+# registered from libs/ via add_hpx_test, which prefixes hpxrun.py with
+# Python_EXECUTABLE. On Windows, CTest cannot launch a .py file as the test
+# process (BAD_COMMAND: inappropriate file type or format).
+if(POLICY CMP0148)
+  find_package(Python COMPONENTS Interpreter)
+  if(NOT Python_FOUND)
+    hpx_warn(
+      "A python interpreter could not be found. The test suite can not be run automatically."
+    )
+  endif()
+else()
+  find_package(PythonInterp)
+  if(NOT PYTHONINTERP_FOUND)
+    hpx_warn(
+      "A python interpreter could not be found. The test suite can not be run automatically."
+    )
+  else()
+    set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
+  endif()
+endif()
+
 add_subdirectory(libs)
 
 # ##############################################################################
@@ -2772,25 +2795,6 @@ add_subdirectory(components)
 # ##############################################################################
 # Tests
 # ##############################################################################
-if(POLICY CMP0148)
-  find_package(Python COMPONENTS Interpreter)
-  if(NOT Python_FOUND)
-    hpx_warn(
-      "A python interpreter could not be found. The test suite can not be run automatically."
-    )
-  endif()
-
-else()
-  find_package(PythonInterp)
-  if(NOT PYTHONINTERP_FOUND)
-    hpx_warn(
-      "A python interpreter could not be found. The test suite can not be run automatically."
-    )
-  else()
-    set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
-  endif()
-endif()
-
 if(HPX_WITH_TESTS)
   # pseudo_target added above
   add_subdirectory(tests)

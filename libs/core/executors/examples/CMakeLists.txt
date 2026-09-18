@@ -18,7 +18,7 @@ else()
 endif()
 
 set(example_programs disable_thread_stealing_executor
-                     executor_with_thread_hooks
+                     executor_with_thread_hooks parallel_scheduler
 )
 
 if(HPX_LIKWID_WITH_LIKWID)

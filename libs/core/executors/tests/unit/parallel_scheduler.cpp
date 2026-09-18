@@ -8,6 +8,7 @@
 #include <hpx/executors/parallel_scheduler.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/thread.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -774,6 +775,23 @@ int hpx_main(int, char*[])
         auto s2 = ex::get_parallel_scheduler();
         HPX_TEST(s1 == s2);
         HPX_TEST(s1.get_backend().get() == s2.get_backend().get());
+    }
+
+    // get_parallel_scheduler(pool) binds work to a given HPX pool
+    {
+        auto* pool = hpx::this_thread::get_pool();
+        HPX_TEST(pool != nullptr);
+
+        auto sched = ex::get_parallel_scheduler(*pool);
+
+        std::string seen;
+        auto snd = ex::schedule(sched) | ex::then([&seen] {
+            auto* p = hpx::this_thread::get_pool();
+            HPX_TEST(p != nullptr);
+            seen = p->get_pool_name();
+        });
+        ex::sync_wait(std::move(snd));
+        HPX_TEST_EQ(seen, pool->get_pool_name());
     }
 
     // set_parallel_scheduler_backend() actually replaces the live backend

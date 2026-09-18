@@ -37,6 +37,23 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT parallel_scheduler
     get_parallel_scheduler();
 
+    /// Return a parallel_scheduler that runs work on \p pool.
+    ///
+    /// \param pool  HPX thread pool that should execute scheduled work.
+    ///
+    /// \pre \p pool must outlive the returned scheduler and every
+    ///      operation started on it. The scheduler stores a non-owning
+    ///      pointer; it does not extend the pool's lifetime. This
+    ///      precondition is not enforced at runtime (caller
+    ///      responsibility). Debug builds assert that \p pool currently
+    ///      reports at least one OS thread.
+    ///
+    /// Look named pools up with \c hpx::resource::get_thread_pool. A
+    /// misspelled or unknown name throws \c hpx::exception; it does not
+    /// produce undefined behavior.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT parallel_scheduler
+    get_parallel_scheduler(hpx::threads::thread_pool_base& pool);
+
     // Virtual bulk dispatch infrastructure for P2079R10.
     //
     // transform_sender must return a single concrete type, but we
@@ -850,7 +867,8 @@ namespace hpx::execution::experimental {
 
     private:
         // P2079R10: Construct from a backend shared_ptr. Private; only
-        // get_parallel_scheduler() (and copy/move) may produce instances.
+        // get_parallel_scheduler() overloads (and copy/move) may produce
+        // instances.
         explicit parallel_scheduler(
             std::shared_ptr<parallel_scheduler_backend> backend) noexcept
           : backend_(HPX_MOVE(backend))
@@ -858,6 +876,8 @@ namespace hpx::execution::experimental {
         }
 
         friend HPX_CORE_EXPORT parallel_scheduler get_parallel_scheduler();
+        friend HPX_CORE_EXPORT parallel_scheduler get_parallel_scheduler(
+            hpx::threads::thread_pool_base& pool);
 
         std::shared_ptr<parallel_scheduler_backend> backend_;
     };
