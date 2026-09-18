@@ -129,13 +129,7 @@ never initialised and all API calls crash at startup. See
 :ref:`hpx_main_implementation_linux` for a detailed explanation of the
 mechanism.
 
-Windows does not support ``-Wl,-wrap=main`` (GNU ld). On Windows,
-``hpx/hpx_main.hpp`` redefines ``main`` as ``hpx_startup::user_main``, so a
-raw MSVC link of the same snippet uses ``hpx_wrap.lib``, ``hpx_init.lib``,
-``hpx.lib``, and ``hpx_core.lib`` with no wrap option. Prefer ``HPX::hpx``
-plus ``HPX::wrap_main`` from CMake. Compiler Explorer Execute runs in a
-Linux sandbox; the Windows path matters for MSVC compile-only sessions and
-for local ``godbolt-minimal`` builds on Windows.
+Windows does not support -Wl,-wrap=main (GNU ld). On Windows, hpx/hpx_main.hpp redefines main as hpx_startup::user_main, so a raw MSVC link of the same snippet uses hpx_wrap.lib, hpx_init.lib, hpx.lib, and hpx_core.lib as the base set, with no wrap option. Add each additional module .lib your program actually needs — for example hpx_include_local.lib when using hpx/experimental/sandbox.hpp — since those symbols are not merged into the four base libraries. Prefer HPX::hpx plus HPX::wrap_main from CMake, which pull in module dependencies automatically. Compiler Explorer Execute runs in a Linux sandbox; the Windows path matters for MSVC compile-only sessions and for local godbolt-minimal builds on Windows.
 
 .. important::
 
