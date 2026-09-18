@@ -256,6 +256,8 @@ namespace hpx {
         void on_abort(int) noexcept
         {
             exit_called = true;
+            // Avoid re-entering this handler when abort raises SIGABRT again.
+            std::signal(SIGABRT, SIG_DFL);
             std::abort();
         }
     }    // namespace detail
