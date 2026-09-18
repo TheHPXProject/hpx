@@ -39,7 +39,10 @@ namespace hpx { namespace collectives {
     ///                     defaults to whatever hpx::get_locality_id() returns.
     ///
     /// \returns    This function returns a future to a new communicator object
-    ///             usable with the collective operation.
+    ///             usable with the collective operation. The future becomes
+    ///             ready after the local endpoint has been registered. It does
+    ///             not wait for all participating sites to create their
+    ///             communicators.
     ///
     /// \note       The caller must ensure that the communicator object
     ///             returned by this function is kept alive (i.e., does not go
@@ -71,7 +74,10 @@ namespace hpx { namespace collectives {
     ///                     defaults to whatever hpx::get_locality_id() returns.
     ///
     /// \returns    This function returns a new communicator object usable
-    ///             with the collective operation.
+    ///             with the collective operation. It returns after the local
+    ///             endpoint has been registered and does not wait for all
+    ///             participating sites to create their communicators. It is
+    ///             not a global barrier.
     ///
     /// \note       The caller must ensure that the communicator object
     ///             returned by this function is kept alive (i.e., does not go
@@ -146,6 +152,10 @@ namespace hpx::collectives {
     // forward declarations
     HPX_CXX_EXPORT class channel_communicator;
 
+    namespace detail {
+        HPX_EXPORT void create_world_channel_communicator();
+    }
+
     HPX_CXX_EXPORT template <typename T>
     hpx::future<T> get(
         channel_communicator, that_site_arg, tag_arg = tag_arg());
@@ -187,6 +197,8 @@ namespace hpx::collectives {
         template <typename T>
         friend void set(hpx::launch::sync_policy, channel_communicator,
             that_site_arg, T&&, tag_arg);
+
+        friend void detail::create_world_channel_communicator();
 
     private:
         HPX_EXPORT channel_communicator(char const* basename,
@@ -275,7 +287,6 @@ namespace hpx::collectives {
 
     namespace detail {
 
-        HPX_EXPORT void create_world_channel_communicator();
         HPX_EXPORT void reset_world_channel_communicator();
 
         ///////////////////////////////////////////////////////////////////////

@@ -105,42 +105,11 @@ namespace hpx::collectives {
             });
     }
 
-    channel_communicator create_channel_communicator(
-        hpx::launch::sync_policy policy, char const* basename,
-        num_sites_arg num_sites, this_site_arg this_site)
+    channel_communicator create_channel_communicator(hpx::launch::sync_policy,
+        char const* basename, num_sites_arg num_sites, this_site_arg this_site)
     {
-        if (num_sites.is_default())
-        {
-            num_sites = agas::get_num_localities(hpx::launch::sync);
-        }
-        if (this_site.is_default())
-        {
-            this_site = agas::get_locality_id();
-        }
-
-        HPX_ASSERT(this_site < num_sites);
-
-        using client_type =
-            hpx::components::client<detail::channel_communicator_server>;
-
-        // create a new communicator on each locality
-        client_type c = hpx::local_new<client_type>(num_sites.argument_);
-
-        // register the communicator's id using the given basename,
-        // this keeps the communicator alive
-        auto f = c.register_as(
-            hpx::detail::name_from_basename(basename, this_site.argument_));
-
-        if (bool const result = f.get(); !result)
-        {
-            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                "hpx::collectives::detail::create_channel_communicator",
-                "the given base name for the communicator operation "
-                "was already registered: {}",
-                c.registered_name());
-        }
-
-        return {policy, basename, num_sites, this_site, HPX_MOVE(c)};
+        return create_channel_communicator(basename, num_sites, this_site)
+            .get();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -166,13 +135,38 @@ namespace hpx::collectives {
 
             if (!world_channel_communicator)
             {
+                constexpr char const* basename = "world_channel_communicator";
+
                 auto const num_sites =
                     num_sites_arg(agas::get_num_localities(hpx::launch::sync));
                 auto const this_site = this_site_arg(agas::get_locality_id());
 
+                HPX_ASSERT(this_site < num_sites);
+
+                using client_type =
+                    hpx::components::client<channel_communicator_server>;
+
+                client_type c =
+                    hpx::local_new<client_type>(num_sites.argument_);
+
+                auto f = c.register_as(hpx::detail::name_from_basename(
+                    basename, this_site.argument_));
+
+                if (bool const result = f.get(); !result)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                        "hpx::collectives::detail::"
+                        "create_world_channel_communicator",
+                        "the given base name for the communicator operation "
+                        "was already registered: {}",
+                        c.registered_name());
+                }
+
+                // Resolve all peer clients before exposing the world
+                // communicator, preserving its eager construction semantics.
                 world_channel_communicator =
-                    collectives::create_channel_communicator(hpx::launch::sync,
-                        "world_channel_communicator", num_sites, this_site);
+                    hpx::collectives::channel_communicator(hpx::launch::sync,
+                        basename, num_sites, this_site, HPX_MOVE(c));
             }
         }
 
