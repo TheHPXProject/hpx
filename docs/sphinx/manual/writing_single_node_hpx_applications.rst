@@ -316,6 +316,57 @@ for all the future or shared_future arguments to be ready before executing the c
 ``hpx::split_future()`` function is used to split a future of a tuple into a tuple of futures. The last
 line retrieves the value of the second future in the tuple using ``hpx::get()`` and prints it to the console.
 
+Common pitfalls with futures
+............................
+
+A few behaviors of :hpx:class:`hpx::future`, :hpx:func:`hpx::async` and the
+combinators surprise new users:
+
+* The callable passed to the ``then()`` member function receives the future
+  itself, not the unwrapped value. It must accept a ``hpx::future<R>`` (by
+  value or as an rvalue reference) and can call ``get()`` on it::
+
+      hpx::future<int> f = hpx::async([] { return 41; });
+      hpx::future<int> g = f.then([](hpx::future<int>&& fu) {
+          return fu.get() + 1;  // g.get() == 42
+      });
+
+  A continuation that takes the unwrapped value directly does not compile;
+  the |hpx| diagnostics mention ``continuation_not_callable`` in that case.
+  ``then()`` returns a new future of the callable's return type, so
+  continuations can be chained. If you prefer continuations that receive
+  ready values instead of futures, use ``hpx::dataflow()``.
+
+* ``hpx::when_all()`` combines futures into a future of a tuple of futures,
+  e.g. ``hpx::future<hpx::tuple<hpx::future<int>, hpx::future<double>>>``
+  for ``hpx::when_all(f1, f2)``. The callable passed to ``then()`` on that
+  future again receives the outer future (see above) and has to ``get()``
+  it to obtain the tuple, then ``get()`` the inner futures (or pass the
+  outer future to ``hpx::split_future()``).
+
+* A callable passed to :hpx:func:`hpx::async` cannot take non-const
+  reference arguments; arguments are passed by value (decay-copied) into
+  the task, and such calls do not compile::
+
+      int x = 5;
+      // error: no matching function for call to 'call'
+      auto f = hpx::async([](int& v) { v++; return v; }, x);
+
+  Return the result instead of mutating an argument::
+
+      int y = 5;
+      auto f = hpx::async([](int v) { v++; return v; }, y);
+      // f.get() == 6, y is unchanged
+
+  ``const`` references are allowed. ``std::reference_wrapper`` (i.e.
+  passing ``std::ref(x)``) compiles as well, and the task then accesses
+  the caller's object directly; this is a data race if the caller accesses
+  the object concurrently with the task, so either wait on the returned
+  future before touching the object again, or synchronize all accesses
+  (for example with :hpx:class:`hpx::mutex`). Prefer returning the result,
+  or use ``hpx::dataflow()`` to let |hpx| handle dependencies between
+  futures.
+
 .. _extend_futures:
 
 Extended facilities for futures
