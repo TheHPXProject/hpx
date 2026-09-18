@@ -61,7 +61,8 @@ namespace hpx::util {
 
         [[nodiscard]] HPX_HOST_DEVICE constexpr std::ptrdiff_t size() const
         {
-            return std::ranges::distance(_iterator, _sentinel);
+            return static_cast<std::ptrdiff_t>(
+                std::ranges::distance(_iterator, _sentinel));
         }
 
         [[nodiscard]] HPX_HOST_DEVICE constexpr bool empty() const

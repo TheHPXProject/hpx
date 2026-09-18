@@ -33,7 +33,15 @@ namespace hpx::util::detail {
 
         char const* first = buffer;
         char* last = buffer;
-        std::size_t const r = std::strtoull(first, &last, 10);
+
+        // the buffer holds one digit more than a std::size_t can represent,
+        // so saturate the way strtoull itself does when it runs out of range
+        unsigned long long const value = std::strtoull(first, &last, 10);
+        constexpr unsigned long long max_value =
+            static_cast<unsigned long long>(
+                (std::numeric_limits<std::size_t>::max)());
+        std::size_t const r =
+            static_cast<std::size_t>(value < max_value ? value : max_value);
         if (pos != nullptr)
             *pos = last - first;
         return r;

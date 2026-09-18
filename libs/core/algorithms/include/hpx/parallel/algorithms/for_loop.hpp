@@ -862,7 +862,7 @@ namespace hpx::parallel {
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
-                        part_steps -= stride_;
+                        part_steps -= static_cast<std::size_t>(stride_);
 
                         detail::next_iteration(args_, pack, current_thread);
                     }
@@ -886,7 +886,7 @@ namespace hpx::parallel {
 
                             part_begin =
                                 parallel::detail::next(part_begin, stride_);
-                            part_steps += stride_;
+                            part_steps += static_cast<std::size_t>(stride_);
 
                             detail::next_iteration(args_, pack, current_thread);
                         }
@@ -972,7 +972,7 @@ namespace hpx::parallel {
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
-                        part_steps -= stride_;
+                        part_steps -= static_cast<std::size_t>(stride_);
                     }
 
                     if (part_steps != 0)
@@ -991,7 +991,7 @@ namespace hpx::parallel {
 
                             part_begin =
                                 parallel::detail::next(part_begin, stride_);
-                            part_steps += stride_;
+                            part_steps += static_cast<std::size_t>(stride_);
                         }
 
                         if (part_steps != 0)
