@@ -22,27 +22,21 @@ jobs:
     - name: Configure
       shell: bash
       run: |
-          cmake \
-              . \
-              -Bbuild \
-              -GNinja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DHPX_WITH_MALLOC=system \
-              -DHPX_WITH_NETWORKING=OFF \
-              -DHPX_WITH_TESTS=OFF \
-              -DHPX_WITH_EXAMPLES=OFF \
-              -DHPX_WITH_DOCUMENTATION=OFF \
-              -DHPX_WITH_STATIC_LINKING=ON \
-              -DHPX_WITH_FETCH_ASIO=ON
+          cmake --preset godbolt-minimal
     - name: Build
       shell: bash
       run: |
-          cmake --build build
+          cmake --build --preset godbolt-minimal
     - name: Install
       shell: bash
       run: |
-        cmake --install build --prefix "$PWD/build/install"
-    - name: Build and run external smoke test
+        cmake --install build/godbolt-minimal --prefix "$PWD/build/install"
+        test -f "$PWD/build/install/include/hpx/experimental/sandbox.hpp"
+        test -f "$PWD/build/install/lib/libhpx_wrap.a"
+        test -f "$PWD/build/install/lib/libhpx_init.a"
+        test -f "$PWD/build/install/lib/libhpx.a"
+        test -f "$PWD/build/install/lib/libhpx_core.a"
+    - name: Build and run CMake smoke test
       shell: bash
       run: |
         mkdir -p build/smoke
@@ -54,6 +48,9 @@ jobs:
 
         add_executable(hello_world hello_world.cpp)
         target_link_libraries(hello_world PRIVATE HPX::hpx)
+
+        add_executable(hello_wrap hello_wrap.cpp)
+        target_link_libraries(hello_wrap PRIVATE HPX::hpx HPX::wrap_main)
         EOF
 
         cat > build/smoke/hello_world.cpp << 'EOF'
@@ -73,6 +70,20 @@ jobs:
         }
         EOF
 
+        cat > build/smoke/hello_wrap.cpp << 'EOF'
+        #include <hpx/hpx_main.hpp>
+        #include <hpx/experimental/sandbox.hpp>
+
+        #include <iostream>
+
+        int main()
+        {
+          hpx::experimental::sandbox::describe_environment(std::cout);
+          std::cout << "Hello wrap-main\n";
+          return 0;
+        }
+        EOF
+
         cmake \
           -Sbuild/smoke \
           -Bbuild/smoke/build \
@@ -82,3 +93,51 @@ jobs:
 
         cmake --build build/smoke/build
         build/smoke/build/hello_world
+        build/smoke/build/hello_wrap --hpx:threads=2
+    - name: Raw g++ wrap-main smoke test
+      shell: bash
+      run: |
+        PREFIX="$PWD/build/install"
+        cat > build/smoke/raw_wrap.cpp << 'EOF'
+        #include <hpx/hpx_main.hpp>
+        #include <hpx/experimental/sandbox.hpp>
+
+        #include <iostream>
+
+        int main()
+        {
+          hpx::experimental::sandbox::describe_environment(std::cout);
+          std::cout << "Hello raw g++\n";
+          return 0;
+        }
+        EOF
+
+        # Compiler Explorer invokes the compiler directly. Reuse the CMake
+        # compiler and -std= flag: default `g++` in build_env:17 is too old
+        # for -std=c++20 (it only accepts -std=c++2a).
+        #
+        # HPX static builds install one archive per module
+        # (libhpx_include_local.a, libhpx_logging.a, ...). Those objects are
+        # not merged into libhpx_core.a, so -lhpx_wrap -lhpx_init -lhpx
+        # -lhpx_core is not enough. Reuse the archives and linker flags
+        # CMake already used for hello_wrap (full-path .a/.so, Boost, hwloc).
+        COMMANDS=$(ninja -C build/smoke/build -t commands hello_wrap)
+        CXX=$(grep '^CMAKE_CXX_COMPILER:' \
+          build/smoke/build/CMakeCache.txt | head -n1 | cut -d= -f2)
+        STDFLAG=$(printf '%s\n' "$COMMANDS" | tr ' ' '\n' \
+          | grep -E '^-std=' | head -n1)
+        LINK_LINE=$(printf '%s\n' "$COMMANDS" | tail -n1)
+        EXTRA=$(printf '%s\n' "$LINK_LINE" | tr ' ' '\n' \
+          | grep -E '^-l|^-L|^-Wl,|^-pthread|\.a$|\.so(\.[0-9]+)*$' \
+          | grep -v 'hello_wrap' \
+          | tr '\n' ' ')
+        : "${CXX:=g++}"
+        : "${STDFLAG:=-std=c++20}"
+
+        "$CXX" ${STDFLAG} -O2 -o build/smoke/raw_wrap \
+          build/smoke/raw_wrap.cpp \
+          -isystem "$PREFIX/include" \
+          -DHPX_APPLICATION_EXPORTS \
+          ${EXTRA}
+
+        build/smoke/raw_wrap --hpx:threads=2

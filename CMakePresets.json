@@ -275,7 +275,7 @@
         {
             "name": "godbolt-minimal",
             "displayName": "Compiler Explorer / Godbolt (Minimal)",
-            "description": "Minimal single-node static build for Compiler Explorer (godbolt.org) and similar sandboxed environments. Statically links all HPX libraries, disables the distributed runtime and networking, fetches Asio via FetchContent, and uses the system allocator. Skips tests, examples, documentation, and tools to minimize build time. Produces libhpx_wrap.a, libhpx_init.a, libhpx.a, and libhpx_core.a suitable for use with -Wl,-wrap=main on Linux.",
+            "description": "Minimal single-node static build for Compiler Explorer (godbolt.org) and similar sandboxed environments. Statically links all HPX libraries, disables the distributed runtime and networking, fetches Asio and hwloc via FetchContent, and uses the system allocator. Skips tests, examples, documentation, and tools to minimize build time. Installs libhpx_wrap.a, libhpx_init.a, libhpx.a, libhpx_core.a, and per-module archives for use with -Wl,-wrap=main on Linux.",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/godbolt-minimal",
             "cacheVariables": {
@@ -285,6 +285,7 @@
                 "HPX_WITH_DISTRIBUTED_RUNTIME": "OFF",
                 "HPX_WITH_NETWORKING": "OFF",
                 "HPX_WITH_FETCH_ASIO": "ON",
+                "HPX_WITH_FETCH_HWLOC": "ON",
                 "HPX_WITH_MALLOC": "system",
                 "HPX_WITH_TESTS": "OFF",
                 "HPX_WITH_EXAMPLES": "OFF",

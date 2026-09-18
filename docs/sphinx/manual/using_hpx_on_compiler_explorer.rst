@@ -54,14 +54,20 @@ This preset enables:
 
 * ``HPX_WITH_STATIC_LINKING=ON`` — bundles everything into the ``.a`` archives
   that CE links against.
+* ``HPX_WITH_DISTRIBUTED_RUNTIME=OFF`` — local-only runtime. Compiler Explorer
+  cannot launch a second locality, so the distributed runtime is omitted from
+  this build.
 * ``HPX_WITH_NETWORKING=OFF`` — disables the parcelset so |hpx| never attempts
   to open a network socket.
 * ``HPX_WITH_FETCH_ASIO=ON`` — downloads Asio via FetchContent, removing the
   need for a system-level Asio installation.
+* ``HPX_WITH_FETCH_HWLOC=ON`` — fetches hwloc via FetchContent so the CE
+  install does not depend on a system hwloc package.
 * ``HPX_WITH_MALLOC=system`` — uses the system allocator; avoids a jemalloc or
   tcmalloc dependency.
 * ``HPX_WITH_TESTS=OFF``, ``HPX_WITH_EXAMPLES=OFF``,
-  ``HPX_WITH_DOCUMENTATION=OFF`` — skips everything that CE does not need.
+  ``HPX_WITH_DOCUMENTATION=OFF``, ``HPX_WITH_TOOLS=OFF`` — skips everything
+  that CE does not need.
 
 The preset produces four static libraries under ``build/godbolt-minimal/lib/``:
 
@@ -87,7 +93,13 @@ Linking without CMake
 ======================
 
 CE's backend compiles user code with a raw ``g++`` or ``clang++`` invocation.
-The complete set of flags needed is:
+A static |hpx| install ships one archive per module (``libhpx_logging.a``,
+``libhpx_include_local.a``, and so on) in addition to ``libhpx_wrap.a``,
+``libhpx_init.a``, ``libhpx.a``, and ``libhpx_core.a``. Those module objects
+are not merged into ``libhpx_core.a``, so linking only the four umbrella
+libraries leaves symbols such as ``detect_environment()`` undefined. Group
+every ``libhpx_*.a`` archive, then add Boost, hwloc, and the usual system
+libraries:
 
 .. code-block:: shell-session
 
@@ -97,15 +109,16 @@ The complete set of flags needed is:
        -L/path/to/hpx/lib                                      \
        -DHPX_APPLICATION_EXPORTS                               \
        -Wl,-wrap=main                                          \
-       -lhpx_wrap -lhpx_init -lhpx -lhpx_core                 \
+       -Wl,--start-group /path/to/hpx/lib/libhpx_*.a           \
+       -Wl,--end-group                                         \
        -lpthread -ldl -lrt
 
 Two details here are easy to get wrong:
 
-**Library link order.** The order ``hpx_wrap → hpx_init → hpx → hpx_core``
-must be preserved. Reversing it produces undefined-reference errors because
-``hpx_wrap`` depends on symbols in ``hpx_init``, which depends on the full
-runtime in ``hpx``, which in turn depends on the core library.
+**Library link order.** Put ``-Wl,-wrap=main`` and the ``libhpx_*.a`` group
+on the link line together. ``--start-group`` / ``--end-group`` is required
+because the module archives have circular references. Linking only
+``-lhpx_wrap -lhpx_init -lhpx -lhpx_core`` is not enough.
 
 **The** ``-Wl,-wrap=main`` **flag.** Including ``hpx/hpx_main.hpp`` (see
 :ref:`minimal`) works by re-routing control through |hpx|'s own entry point
@@ -115,6 +128,8 @@ command line, not merely in the compile flags. Without it, the |hpx| runtime is
 never initialised and all API calls crash at startup. See
 :ref:`hpx_main_implementation_linux` for a detailed explanation of the
 mechanism.
+
+Windows does not support -Wl,-wrap=main (GNU ld). On Windows, hpx/hpx_main.hpp redefines main as hpx_startup::user_main, so a raw MSVC link of the same snippet uses hpx_wrap.lib, hpx_init.lib, hpx.lib, and hpx_core.lib as the base set, with no wrap option. Add each additional module .lib your program actually needs — for example hpx_include_local.lib when using hpx/experimental/sandbox.hpp — since those symbols are not merged into the four base libraries. Prefer HPX::hpx plus HPX::wrap_main from CMake, which pull in module dependencies automatically. Compiler Explorer Execute runs in a Linux sandbox; the Windows path matters for MSVC compile-only sessions and for local godbolt-minimal builds on Windows.
 
 .. important::
 
@@ -166,8 +181,11 @@ API function directly:
 The ``hpx/experimental/sandbox.hpp`` header
 ============================================
 
-|hpx| ships a header-only toolkit at ``hpx/experimental/sandbox.hpp`` designed
-specifically for code running in constrained environments. It provides:
+|hpx| ships ``hpx/experimental/sandbox.hpp`` for code running in constrained
+environments. Timing helpers (``measure``, ``benchmark``) are header-only.
+``detect_environment()`` and the ``print()`` members are compiled into
+``libhpx_core`` and are available in local-only builds, including
+``godbolt-minimal``. It provides:
 
 * **Environment introspection** — ``hpx::experimental::sandbox::detect_environment()``
   returns an ``environment_info`` struct describing the number of physical cores,
@@ -244,11 +262,9 @@ efficiency, and a verdict (``Excellent scaling``, ``Good scaling``,
 Known limitations in sandboxed environments
 =============================================
 
-* **Single locality only.** The distributed runtime can be compiled in
-  (``HPX_WITH_DISTRIBUTED_RUNTIME=ON``) and actions on locality 0 work
-  normally, but there is no way to launch a second locality from within CE's
-  sandbox. Code that calls ``hpx::find_all_localities()`` or
-  ``hpx::get_num_localities()`` will always see exactly one locality.
+* **Single locality only.** ``godbolt-minimal`` sets
+  ``HPX_WITH_DISTRIBUTED_RUNTIME=OFF``. There is no second locality inside CE's
+  sandbox, and distributed APIs are not part of this build.
 
 * **Networking is disabled.** ``HPX_WITH_NETWORKING=OFF`` means all
   parcelport-dependent functionality (remote actions, distributed data
@@ -265,3 +281,7 @@ Known limitations in sandboxed environments
   On macOS the linker uses ``-Wl,-e,_initialize_main`` instead. CE runs Linux
   containers, so this only matters when building the CE integration locally on
   macOS for testing.
+
+* **Windows does not use** ``-Wl,-wrap=main``. ``HPX_WITH_DYNAMIC_HPX_MAIN``
+  is unavailable on Windows, so ``hpx/hpx_main.hpp`` uses the ``main``
+  macro instead. Link ``HPX::wrap_main`` without a GNU wrap flag.

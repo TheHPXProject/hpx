@@ -227,6 +227,8 @@ Some of the available presets include:
 
 * ``default``: Standard release build with tests and examples enabled.
 * ``minimal``: Minimal build with only core features (no tests, examples, or tools).
+* ``godbolt-minimal``: Static, local-only build for Compiler Explorer (no
+  distributed runtime, networking, tests, examples, documentation, or tools).
 * ``full``: Full build with all standard features enabled.
 * ``debug``: Debug build with symbols and debug-optimized settings.
 * ``performance``: Build optimized for performance analysis with APEX profiling.
