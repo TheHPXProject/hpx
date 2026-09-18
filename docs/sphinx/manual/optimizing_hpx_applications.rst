@@ -382,7 +382,7 @@ Features
 
 * **Heuristic Anomaly Detection**: Uses an Exponential Moving Average (EMA) to
   monitor counter trends. It automatically flags sudden spikes (+150%) or drops
-  (-60%) with prominent visual alerts like ``[⚡ SPIKE]`` and ``[⚠️ DROP]``.
+  (-60%) with visual alerts marked ``SPIKE`` and ``DROP``.
 * **Live History Sparklines**: Displays 10-tick historical trend graphs next to
   every metric, helping developers distinguish between momentary noise and
   persistent bottlenecks.
