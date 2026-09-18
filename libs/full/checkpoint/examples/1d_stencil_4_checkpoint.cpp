@@ -268,7 +268,7 @@ struct stepper
     // do all the work on 'np' partitions, 'nx' data points each, for 'nt'
     // time steps, limit depth of dependency tree to 'nd'
     static hpx::future<space> do_work(std::size_t np, std::size_t nx,
-        std::size_t nt, std::uint64_t nd, std::uint64_t cp, std::string rsf,
+        std::size_t nt, std::uint64_t nd, std::size_t cp, std::string rsf,
         std::string fn)
     {
         using hpx::dataflow;
@@ -403,16 +403,15 @@ struct stepper
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    std::uint64_t const np =
-        vm["np"].as<std::uint64_t>();    // Number of partitions.
-    std::uint64_t const nx =
-        vm["nx"].as<std::uint64_t>();    // Number of grid points.
-    std::uint64_t const nt =
-        vm["nt"].as<std::uint64_t>();    // Number of steps.
+    std::size_t const np =
+        vm["np"].as<std::size_t>();    // Number of partitions.
+    std::size_t const nx =
+        vm["nx"].as<std::size_t>();    // Number of grid points.
+    std::size_t const nt = vm["nt"].as<std::size_t>();    // Number of steps.
     std::uint64_t const nd =
         vm["nd"].as<std::uint64_t>();    // Max depth of dep tree.
-    std::uint64_t const cp =
-        vm["cp"].as<std::uint64_t>();    // Num. steps to checkpoint
+    std::size_t const cp =
+        vm["cp"].as<std::size_t>();    // Num. steps to checkpoint
     std::string const rsf = vm["restart-file"].as<std::string>();
     std::string const fn = vm["output-file"].as<std::string>();
 
@@ -456,18 +455,18 @@ int main(int argc, char* argv[])
 
     desc_commandline.add_options()(
         "results", "print generated results (default: false)")("nx",
-        value<std::uint64_t>()->default_value(10),
+        value<std::size_t>()->default_value(10),
         "Local x dimension (of each partition)")("nt",
-        value<std::uint64_t>()->default_value(45),
+        value<std::size_t>()->default_value(45),
         "Number of time steps")("nd", value<std::uint64_t>()->default_value(10),
         "Number of time steps to allow the dependency tree to grow to")("np",
-        value<std::uint64_t>()->default_value(10),
+        value<std::size_t>()->default_value(10),
         "Number of partitions")("k", value<double>(&k)->default_value(0.5),
         "Heat transfer coefficient (default: 0.5)")("dt",
         value<double>(&dt)->default_value(1.0),
         "Timestep unit (default: 1.0[s])")(
         "dx", value<double>(&dx)->default_value(1.0), "Local x dimension")("cp",
-        value<std::uint64_t>()->default_value(44),
+        value<std::size_t>()->default_value(44),
         "Number of steps to checkpoint")(
         "no-header", "do not print out the csv header row")("restart-file",
         value<std::string>()->default_value(""),
