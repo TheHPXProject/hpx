@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,6 +81,16 @@ namespace hpx::performance_counters {
         std::vector<hpx::future<bool>> start();
         bool start(launch::sync_policy, error_code& ec = throws);
 
+        /// \brief Start only the counters at index \a first and beyond.
+        ///
+        /// Used to start just the counters that were most
+        /// recently discovered (see refresh_counters()),
+        /// instead of restarting counters that are already
+        /// running.
+        std::vector<hpx::future<bool>> start(std::size_t first);
+        bool start(
+            launch::sync_policy, std::size_t first, error_code& ec = throws);
+
         /// Stop all counters in this set
         std::vector<hpx::future<bool>> stop();
         bool stop(launch::sync_policy, error_code& ec = throws);
@@ -130,6 +141,9 @@ namespace hpx::performance_counters {
         std::vector<counter_info> infos_;    // counter instance names
         std::vector<hpx::id_type> ids_;      // global ids of counter instances
         std::vector<std::uint8_t> reset_;    // != 0 if counter should be reset
+        std::set<std::string> known_names_;    // fullnames already in infos_,
+                                               // kept in sync for O(log N)
+                                               // duplicate detection
 
         mutable std::uint64_t invocation_count_;
         bool print_counters_locally_;    // handle only local counters

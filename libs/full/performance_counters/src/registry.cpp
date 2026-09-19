@@ -112,6 +112,8 @@ namespace hpx::performance_counters {
 
         LPCS_(info).format("counter type {} registered", type_name);
 
+        generation_.fetch_add(1, std::memory_order_release);
+
         if (&ec != &throws)
             ec = make_success_code();
         return counter_status::valid_data;
@@ -372,6 +374,8 @@ namespace hpx::performance_counters {
         LPCS_(info).format("counter type {} unregistered", type_name);
 
         countertypes_.erase(it);
+
+        generation_.fetch_add(1, std::memory_order_release);
 
         if (&ec != &throws)
             ec = make_success_code();

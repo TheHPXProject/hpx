@@ -52,6 +52,7 @@ namespace hpx::performance_counters {
         {
             std::lock_guard<mutex_type> l(mtx_);
             infos_.clear();
+            known_names_.clear();
             std::swap(ids_, ids);
         }
     }
@@ -88,6 +89,23 @@ namespace hpx::performance_counters {
             }
         }
 
+        // Discovery may be re-run for the same name pattern after the set
+        // has already been populated, e.g. to pick up counters that were
+        // registered only after this set was first filled (see #4627).
+        // Skip counters that are already part of this set instead of
+        // adding a duplicate entry. known_names_ mirrors the full names
+        // already stored in infos_, so this lookup is O(log N) instead of
+        // the O(N) linear scan a plain search over infos_ would need.
+        {
+            std::lock_guard<mutex_type> l(mtx_);
+            if (known_names_.find(info.fullname_) != known_names_.end())
+            {
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return true;
+            }
+        }
+
         hpx::id_type id = get_counter(info.fullname_, ec);
         if (HPX_UNLIKELY(!id))
         {
@@ -100,8 +118,21 @@ namespace hpx::performance_counters {
 
         {
             std::unique_lock<mutex_type> l(mtx_);
+
+            // Another thread may have discovered and added the same
+            // counter while get_counter() above was resolving 'id'.
+            // Re-check under the lock so a concurrent caller cannot slip
+            // a duplicate entry past the unlocked check above.
+            if (known_names_.find(info.fullname_) != known_names_.end())
+            {
+                if (&ec != &throws)
+                    ec = make_success_code();
+                return true;
+            }
+
+            known_names_.insert(info.fullname_);
             infos_.push_back(info);
-            ids_.push_back(id);
+            ids_.push_back(HPX_MOVE(id));
             reset_.push_back(reset ? 1 : 0);
         }
 
@@ -185,6 +216,49 @@ namespace hpx::performance_counters {
         try
         {
             auto v = hpx::unwrap(start());
+            return std::all_of(
+                v.begin(), v.end(), [](bool val) { return val; });
+        }
+        catch (hpx::exception const& e)
+        {
+            HPX_RETHROWS_IF(ec, e, "performance_counter_set::start");
+            return false;
+        }
+    }
+
+    std::vector<hpx::future<bool>> performance_counter_set::start(
+        std::size_t first)
+    {
+        std::vector<hpx::id_type> ids;
+
+        {
+            std::unique_lock<mutex_type> l(mtx_);
+            if (first < ids_.size())
+            {
+                ids.assign(ids_.begin() + static_cast<std::ptrdiff_t>(first),
+                    ids_.end());
+            }
+        }
+
+        std::vector<hpx::future<bool>> v;
+        v.reserve(ids.size());
+
+        // start only the counters at indices [first, size())
+        for (std::size_t i = 0; i != ids.size(); ++i)
+        {
+            performance_counters::performance_counter c(ids[i]);
+            v.emplace_back(c.start());
+        }
+
+        return v;
+    }
+
+    bool performance_counter_set::start(
+        launch::sync_policy, std::size_t first, error_code& ec)
+    {
+        try
+        {
+            auto v = hpx::unwrap(start(first));
             return std::all_of(
                 v.begin(), v.end(), [](bool val) { return val; });
         }

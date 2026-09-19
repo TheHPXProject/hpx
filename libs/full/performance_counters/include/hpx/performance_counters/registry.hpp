@@ -11,6 +11,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/performance_counters/counters.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -159,6 +160,19 @@ namespace hpx::performance_counters {
         counter_status get_counter_type(std::string const& name,
             counter_info& info, error_code& ec = throws);
 
+        /// \brief Monotonically increasing counter, bumped every time a
+        ///        counter type is added to or removed from this registry.
+        ///        Callers that repeatedly re-run discovery for the same
+        ///        name pattern (e.g. a periodic re-check for counters
+        ///        registered after startup, see #4627) can cache the
+        ///        last-seen value and skip the actual, more expensive
+        ///        discover_counter_type() call whenever this hasn't
+        ///        changed.
+        std::uint64_t generation() const noexcept
+        {
+            return generation_.load(std::memory_order_acquire);
+        }
+
     protected:
         counter_type_map_type::iterator locate_counter_type(
             std::string const& type_name);
@@ -167,6 +181,7 @@ namespace hpx::performance_counters {
 
     private:
         counter_type_map_type countertypes_;
+        std::atomic<std::uint64_t> generation_{0};
 
     public:
         static registry& instance();

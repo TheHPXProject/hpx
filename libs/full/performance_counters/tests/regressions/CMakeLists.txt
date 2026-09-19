@@ -5,7 +5,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests discover_counters_1787 statistics_2666 uptime_1737)
+set(tests discover_counters_1787 late_counter_registration_4627 statistics_2666
+          uptime_1737
+)
 
 if(NOT ${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
   set(tests ${tests} dynamic_counters_loaded_1508)
