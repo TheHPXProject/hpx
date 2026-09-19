@@ -10,6 +10,7 @@
 #include <hpx/execution/traits/executor_traits.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/execution_base.hpp>
+#include <hpx/type_support/detected.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -51,6 +52,30 @@ namespace hpx::execution::experimental {
         template <typename Category1, typename Category2>
         inline constexpr bool is_not_weaker_v =
             is_not_weaker<Category1, Category2>::value;
+
+        /// \brief The execution category of Policy, or
+        ///        hpx::execution::unsequenced_execution_tag (the weakest
+        ///        category) if Policy has no nested \c execution_category
+        ///        member. Shared by rebind_executor and by the per-axis
+        ///        customization points in rebind_policy.hpp so both places
+        ///        apply the same fallback and a Policy that predates this
+        ///        check keeps compiling everywhere, not just in one place.
+        template <typename Policy>
+        struct policy_execution_category_or_unsequenced
+        {
+        private:
+            template <typename T>
+            using execution_category_of = T::execution_category;
+
+        public:
+            using type = hpx::util::detected_or_t<
+                hpx::execution::unsequenced_execution_tag,
+                execution_category_of, Policy>;
+        };
+
+        template <typename Policy>
+        using policy_execution_category_or_unsequenced_t =
+            typename policy_execution_category_or_unsequenced<Policy>::type;
         /// \endcond
     }    // namespace detail
 
@@ -65,7 +90,8 @@ namespace hpx::execution::experimental {
         using executor_type = std::decay_t<Executor>;
         using parameters_type = std::decay_t<Parameters>;
 
-        using category1 = typename policy_type::execution_category;
+        using category1 =
+            detail::policy_execution_category_or_unsequenced_t<policy_type>;
         using category2 =
             hpx::traits::executor_execution_category_t<executor_type>;
 
@@ -83,47 +109,13 @@ namespace hpx::execution::experimental {
     using rebind_executor_t =
         typename rebind_executor<ExPolicy, Executor, Parameters>::type;
 
-    //////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT inline constexpr struct create_rebound_policy_t final
-    {
-        template <typename ExPolicy, typename Executor, typename Parameters>
-            requires(hpx::executor_any<Executor> &&
-                hpx::executor_parameters<Parameters>)
-        constexpr decltype(auto) operator()(
-            ExPolicy&&, Executor&& exec, Parameters&& parameters) const
-        {
-            using rebound_type =
-                rebind_executor_t<ExPolicy, Executor, Parameters>;
-
-            return rebound_type(HPX_FORWARD(Executor, exec),
-                HPX_FORWARD(Parameters, parameters));
-        }
-
-        template <typename ExPolicy, typename Executor>
-            requires(hpx::executor_any<Executor>)
-        constexpr decltype(auto) operator()(
-            ExPolicy&& policy, Executor&& exec) const
-        {
-            using parameters_type =
-                extract_executor_parameters_t<std::decay_t<ExPolicy>>;
-            using rebound_type =
-                rebind_executor_t<ExPolicy, Executor, parameters_type>;
-
-            return rebound_type(
-                HPX_FORWARD(Executor, exec), policy.parameters());
-        }
-
-        template <typename ExPolicy, typename Parameters>
-            requires(hpx::executor_parameters<Parameters>)
-        constexpr decltype(auto) operator()(
-            ExPolicy&& policy, Parameters&& parameters) const
-        {
-            using executor_type = std::decay_t<ExPolicy>::executor_type;
-            using rebound_type =
-                rebind_executor_t<ExPolicy, executor_type, Parameters>;
-
-            return rebound_type(
-                policy.executor(), HPX_FORWARD(Parameters, parameters));
-        }
-    } create_rebound_policy{};
+    // create_rebound_policy_t (the combined rebind customization point) is
+    // defined in hpx/execution/executors/create_rebound_policy.hpp, not
+    // here: its single-argument overloads route through
+    // hpx::execution::detail::rebind_policy_executor_t and
+    // rebind_policy_parameters_t (see rebind_policy.hpp), and rebind_policy.hpp
+    // itself includes this header, so defining it here would make the two
+    // headers include each other. Code that wants create_rebound_policy
+    // should include create_rebound_policy.hpp directly, or the umbrella
+    // hpx/execution.hpp, which already pulls it in.
 }    // namespace hpx::execution::experimental
