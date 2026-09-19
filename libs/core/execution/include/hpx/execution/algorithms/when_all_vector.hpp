@@ -548,7 +548,8 @@ namespace hpx::when_all_vector_detail {
     when_all_vector_sender_impl<Sender>::when_all_vector_sender_type::
         when_all_vector_receiver<Receiver>::set_value(Ts&&... ts) && noexcept
     {
-        if (!op_state.set_stopped_error_called)
+        if (!op_state.set_stopped_error_called.load(
+                std::memory_order_acquire))
         {
             try
             {
