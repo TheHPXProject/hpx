@@ -22,6 +22,7 @@ set(tests
     latch_cpp20
     latch_notification
     local_latch
+    local_latch_reset
     local_barrier
     local_barrier_count_up
     local_barrier_reset
@@ -49,6 +50,7 @@ set(latch_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
 set(latch_notification_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_barrier_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_latch_PARAMETERS THREADS_PER_LOCALITY 4)
+set(local_latch_reset_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_event_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_mutex_PARAMETERS THREADS_PER_LOCALITY 4)
 
