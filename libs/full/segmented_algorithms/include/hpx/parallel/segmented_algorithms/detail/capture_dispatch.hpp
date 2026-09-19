@@ -90,46 +90,6 @@ namespace hpx::parallel::detail {
             });
     }
 
-    template <typename Value, typename Iterator>
-    struct transmitter
-    {
-        using iterator_type = std::decay_t<Iterator>;
-        using result_type = std::vector<Value>;
-
-        static result_type send_values(iterator_type first, iterator_type last)
-        {
-            using iterator_traits =
-                hpx::traits::segmented_local_iterator_traits<iterator_type>;
-
-            auto raw_first = iterator_traits::local(HPX_MOVE(first));
-            auto raw_last = iterator_traits::local(HPX_MOVE(last));
-
-            result_type values;
-            values.insert(values.end(), raw_first, raw_last);
-
-            return values;
-        }
-    };
-
-    template <typename Value, typename Iterator>
-    struct send_values_action
-      : hpx::actions::make_action<std::vector<Value> (*)(std::decay_t<Iterator>,
-                                      std::decay_t<Iterator>),
-            &transmitter<Value, std::decay_t<Iterator>>::send_values,
-            send_values_action<Value, std::decay_t<Iterator>>>::type
-    {
-    };
-
-    template <typename Value, typename Iterator>
-    hpx::future<std::vector<Value>> capture_async(
-        hpx::id_type const& partition, Iterator first, Iterator last)
-    {
-        send_values_action<Value, std::decay_t<Iterator>> act;
-
-        return hpx::async(
-            act, hpx::colocated(partition), HPX_MOVE(first), HPX_MOVE(last));
-    }
-
     template <typename LocalIterator>
     struct partition_range
     {
@@ -145,6 +105,160 @@ namespace hpx::parallel::detail {
             ar & last;
         }
     };
+
+    template <typename LocalIterator>
+    struct indexed_partition_range
+    {
+        std::size_t original_index;
+        partition_range<LocalIterator> range;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & original_index;
+            ar & range;
+        }
+    };
+
+    struct collected_range_slice
+    {
+        std::size_t original_index;
+        std::size_t offset;
+        std::size_t size;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & original_index;
+            ar & offset;
+            ar & size;
+        }
+    };
+
+    template <typename Value>
+    struct collected_partition_values
+    {
+        std::vector<Value> values;
+        std::vector<collected_range_slice> slices;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & values;
+            ar & slices;
+        }
+    };
+
+    template <typename LocalIterator>
+    struct locality_range_batch
+    {
+        hpx::id_type locality_id;
+
+        hpx::id_type routing_partition_id;
+
+        std::vector<indexed_partition_range<LocalIterator>> ranges;
+    };
+
+    HPX_FORCEINLINE hpx::id_type get_partition_locality(
+        hpx::id_type const& partition_id)
+    {
+        if (hpx::naming::detail::is_migratable(partition_id.get_gid()))
+        {
+            return hpx::get_colocation_id(hpx::launch::sync, partition_id);
+        }
+
+        return hpx::naming::get_locality_from_id(partition_id);
+    }
+
+    template <typename Value, typename LocalIterator>
+    struct transmitter
+    {
+        using iterator_type =
+            std::decay_t<LocalIterator>;
+        using indexed_range_type =
+            indexed_partition_range<iterator_type>;
+        using range_list_type =
+            std::vector<indexed_range_type>;
+        using result_type =
+            collected_partition_values<Value>;
+
+        static result_type send_values(
+            range_list_type ranges)
+        {
+            using iterator_traits =
+                hpx::traits::segmented_local_iterator_traits<
+                    iterator_type>;
+
+            result_type result;
+            result.slices.reserve(ranges.size());
+
+            std::size_t total_size = 0;
+
+            for (auto const& indexed_range : ranges)
+            {
+                auto const& range =
+                    indexed_range.range;
+
+                total_size +=
+                    static_cast<std::size_t>(
+                        std::distance(
+                            range.first, range.last));
+            }
+
+            result.values.reserve(total_size);
+
+            for (auto& indexed_range : ranges)
+            {
+                auto& range = indexed_range.range;
+
+                auto raw_first = iterator_traits::local(
+                        HPX_MOVE(range.first));
+                auto raw_last = iterator_traits::local(
+                        HPX_MOVE(range.last));
+
+                std::size_t const offset =
+                    result.values.size();
+
+                result.values.insert(
+                    result.values.end(),
+                    raw_first,
+                    raw_last);
+
+                std::size_t const size =
+                    result.values.size() - offset;
+
+                result.slices.push_back(
+                    collected_range_slice{
+                        indexed_range.original_index,
+                        offset,
+                        size});
+            }
+            return result;
+        }
+    };
+
+    template <typename Value, typename LocalIterator>
+    struct send_values_action
+      : hpx::actions::make_action<
+            collected_partition_values<Value> (*)(std::vector<
+                indexed_partition_range<std::decay_t<LocalIterator>>>),
+            &transmitter<Value, std::decay_t<LocalIterator>>::send_values,
+            send_values_action<Value, std::decay_t<LocalIterator>>>::type
+    {
+    };
+
+    template <typename Value, typename LocalIterator>
+    hpx::future<collected_partition_values<Value>> capture_async(
+        hpx::id_type const& routing_partition_id,
+        std::vector<indexed_partition_range<LocalIterator>> ranges)
+    {
+        using iterator_type = std::decay_t<LocalIterator>;
+
+        send_values_action<Value, iterator_type> act;
+
+        return hpx::async(
+            act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
+    }
 
     template <typename Iterator>
     auto make_partition_ranges(Iterator first, Iterator last)
@@ -210,33 +324,21 @@ namespace hpx::parallel::detail {
         using is_seq = std::decay_t<IsSeq>;
 
         template <typename Value, typename LocalIterator>
-        static hpx::future<std::vector<Value>> get_partition_values(
-            hpx::id_type const& destination_locality,
-            hpx::id_type const& partition_id, LocalIterator local_first,
-            LocalIterator local_last)
+        static hpx::future<collected_partition_values<Value>>
+        get_partition_values(hpx::id_type const& destination_locality,
+            hpx::id_type const& source_locality,
+            hpx::id_type const& routing_partition_id,
+            std::vector<indexed_partition_range<LocalIterator>> ranges)
         {
-            using values_type = std::vector<Value>;
+            using iterator_type = std::decay_t<LocalIterator>;
+            using result_type = collected_partition_values<Value>;
 
-            using local_traits = hpx::traits::segmented_local_iterator_traits<
-                std::decay_t<LocalIterator>>;
-
-            hpx::id_type const partition_locality =
-                (hpx::naming::detail::is_migratable(partition_id.get_gid())) ?
-                hpx::get_colocation_id(hpx::launch::sync, partition_id) :
-                hpx::naming::get_locality_from_id(partition_id);
-
-            if (partition_locality == destination_locality)
+            if (source_locality == destination_locality)
             {
                 auto copy_values =
-                    [local_first = HPX_MOVE(local_first),
-                        local_last =
-                            HPX_MOVE(local_last)]() mutable -> values_type {
-                    auto raw_first = local_traits::local(HPX_MOVE(local_first));
-                    auto raw_last = local_traits::local(HPX_MOVE(local_last));
-
-                    values_type values;
-                    values.insert(values.end(), raw_first, raw_last);
-                    return values;
+                    [ranges = HPX_MOVE(ranges)]() mutable -> result_type {
+                    return transmitter<Value, iterator_type>::send_values(
+                        HPX_MOVE(ranges));
                 };
 
                 if constexpr (is_seq::value)
@@ -249,8 +351,8 @@ namespace hpx::parallel::detail {
                 }
             }
 
-            return capture_async<Value>(
-                partition_id, HPX_MOVE(local_first), HPX_MOVE(local_last));
+            return capture_async<Value, iterator_type>(
+                routing_partition_id, HPX_MOVE(ranges));
         }
 
         template <typename Value, typename LocalIterator>
@@ -258,50 +360,131 @@ namespace hpx::parallel::detail {
             std::vector<partition_range<LocalIterator>> ranges)
         {
             using values_type = std::vector<Value>;
-            values_type values;
+            using indexed_range_type = indexed_partition_range<LocalIterator>;
+            using batch_type = locality_range_batch<LocalIterator>;
+            using collected_type = collected_partition_values<Value>;
 
             if (ranges.empty())
             {
-                return values;
+                return values_type{};
             }
+
+            std::size_t const number_of_ranges = ranges.size();
 
             hpx::id_type const destination_locality = hpx::find_here();
 
-            auto append = [&values](values_type part) {
-                values.insert(values.end(),
-                    std::make_move_iterator(part.begin()),
-                    std::make_move_iterator(part.end()));
-            };
+            std::vector<batch_type> batches;
+            batches.reserve(ranges.size());
+
+            for (std::size_t index = 0; index != ranges.size(); ++index)
+            {
+                auto& range = ranges[index];
+
+                hpx::id_type const source_locality =
+                    get_partition_locality(range.partition_id);
+
+                auto batch = std::find_if(batches.begin(), batches.end(),
+                    [&source_locality](batch_type const& candidate) {
+                        return candidate.locality_id == source_locality;
+                    });
+
+                if (batch == batches.end())
+                {
+                    batches.push_back(
+                        batch_type{source_locality, range.partition_id, {}});
+
+                    batch = std::prev(batches.end());
+                }
+
+                batch->ranges.push_back(
+                    indexed_range_type{index, HPX_MOVE(range)});
+            }
+
+            std::vector<collected_type> batch_results;
+            batch_results.reserve(batches.size());
 
             if constexpr (is_seq::value)
             {
-                for (auto& range : ranges)
+                for (auto& batch : batches)
                 {
-                    append(get_partition_values<Value>(destination_locality,
-                        range.partition_id, HPX_MOVE(range.first),
-                        HPX_MOVE(range.last))
+                    batch_results.push_back(get_partition_values<Value>(
+                        destination_locality, batch.locality_id,
+                        batch.routing_partition_id, HPX_MOVE(batch.ranges))
                             .get());
                 }
             }
             else
             {
-                std::vector<hpx::future<values_type>> partition_futures;
+                std::vector<hpx::future<collected_type>> batch_futures;
 
-                partition_futures.reserve(ranges.size());
+                batch_futures.reserve(batches.size());
 
-                for (auto& range : ranges)
+                for (auto& batch : batches)
                 {
-                    partition_futures.push_back(get_partition_values<Value>(
-                        destination_locality, range.partition_id,
-                        HPX_MOVE(range.first), HPX_MOVE(range.last)));
+                    batch_futures.push_back(get_partition_values<Value>(
+                        destination_locality, batch.locality_id,
+                        batch.routing_partition_id, HPX_MOVE(batch.ranges)));
                 }
 
-                hpx::wait_all(partition_futures);
+                hpx::wait_all(batch_futures);
 
-                for (auto& future : partition_futures)
+                std::list<std::exception_ptr> errors;
+
+                parallel::util::detail::handle_remote_exceptions<
+                    hpx::execution::parallel_policy>::call(
+                        batch_futures, errors);
+
+                if (!errors.empty())
                 {
-                    append(future.get());
+                    throw hpx::exception_list(
+                        HPX_MOVE(errors));
                 }
+
+                for (auto& future : batch_futures)
+                {
+                    batch_results.push_back(
+                        future.get());
+                }
+            }
+
+            struct range_location
+            {
+                std::size_t batch_index;
+                std::size_t offset;
+                std::size_t size;
+            };
+
+            std::vector<range_location> locations(number_of_ranges);
+
+            std::size_t total_size = 0;
+
+            for (std::size_t batch_index = 0;
+                batch_index != batch_results.size(); ++batch_index)
+            {
+                auto const& result = batch_results[batch_index];
+
+                total_size += result.values.size();
+
+                for (auto const& slice : result.slices)
+                {
+                    locations[slice.original_index] =
+                        range_location{batch_index, slice.offset, slice.size};
+                }
+            }
+
+            values_type values;
+            values.reserve(total_size);
+
+            for (auto const& location : locations)
+            {
+                auto& source = batch_results[location.batch_index].values;
+
+                auto first = source.begin() + location.offset;
+
+                auto last = first + location.size;
+
+                values.insert(values.end(), std::make_move_iterator(first),
+                    std::make_move_iterator(last));
             }
 
             return values;
@@ -674,17 +857,6 @@ namespace hpx::parallel::detail {
             HPX_MOVE(ranges2), HPX_MOVE(dest), HPX_FORWARD(Args, args)...);
 
         return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
-    }
-
-    HPX_FORCEINLINE hpx::id_type get_partition_locality(
-        hpx::id_type const& partition_id)
-    {
-        if (hpx::naming::detail::is_migratable(partition_id.get_gid()))
-        {
-            return hpx::get_colocation_id(hpx::launch::sync, partition_id);
-        }
-
-        return hpx::naming::get_locality_from_id(partition_id);
     }
 
     template <typename TraitsDest, typename SegIteratorOut, typename Iterator1,
