@@ -23,6 +23,11 @@ pipeline {
 
     stages {
         stage('test-coverage') {
+            // A coverage run needs a full Debug build plus the entire test suite,
+            // which does not fit into a pull request turnaround. Restrict it to
+            // branch builds, which is what this Jenkins job indexes anyway.
+            when { not { changeRequest() } }
+
             environment{
                 CODACY_TOKEN = credentials('CODACY_TOKEN_HPX')
                 configuration_name = "test-coverage"
@@ -39,8 +44,8 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'jenkins-hpx-*', fingerprint: true
-            archiveArtifacts artifacts: 'grcov-log.txt', fingerprint: true
+            archiveArtifacts artifacts: 'jenkins-hpx-*', fingerprint: true, allowEmptyArchive: true
+            archiveArtifacts artifacts: 'grcov-log.txt', fingerprint: true, allowEmptyArchive: true
         }
     }
 }
