@@ -3619,15 +3619,24 @@ Tracy integration
 per-thread zone tracking, message logs, and fiber support. Enable it with
 :option:`HPX_WITH_TRACY`\ ``=ON`` during |cmake|_ configuration.
 
-Tracy can be supplied via a system install (point ``Tracy_ROOT`` at the install
-tree) or fetched by CMake at configure time by adding
-``HPX_WITH_FETCH_TRACY=ON``. The version fetched is pinned by
-``HPX_WITH_TRACY_TAG``, which defaults to ``v0.14.1``. When Tracy is
-fetched, |hpx| forces ``TRACY_ENABLE``, ``TRACY_ON_DEMAND`` and
-``TRACY_FIBERS`` on the built client. A system-supplied Tracy must have
-been built with the same three options; Tracy 0.14 mangles its exported
-profiler symbol based on the active define set, so a mismatch fails at
-link time rather than producing a silent inconsistency at runtime.
+Tracy is fetched by CMake at configure time from
+`github.com/wolfpld/tracy <https://github.com/wolfpld/tracy>`_. The version
+is pinned by ``HPX_WITH_TRACY_TAG`` (defaults to ``v0.14.1``). |hpx| forces
+``TRACY_ENABLE``, ``TRACY_ON_DEMAND``, ``TRACY_FIBERS`` and ``TRACY_STATIC``
+on the built client so the profiler is always active on-demand, fibers are
+tracked, and TracyClient stays a static library that links cleanly into
+``hpx_tracy`` regardless of ``BUILD_SHARED_LIBS``. For offline builds
+without GitHub access, point ``FETCHCONTENT_SOURCE_DIR_TRACY`` at a local
+Tracy source tree and CMake's FetchContent will use it in place of the
+download.
+
+On Windows, |hpx| additionally sets ``TRACY_DBGHELP_LOCK=HpxDbgHelp`` on
+the built Tracy client so DbgHelp calls from Tracy and from |hpx|'s own
+symbol lookup share a single mutex (DbgHelp is single-threaded per MSDN).
+
+Scheduler zones no longer carry callstacks. The captured frames were the
+scheduler-dispatch path itself, identical for every task, and the zone
+name and phase already identify the work.
 
 To profile a distributed run, additionally enable
 :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are

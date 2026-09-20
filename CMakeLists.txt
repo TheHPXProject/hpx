@@ -1245,14 +1245,6 @@ if(HPX_WITH_TRACY)
   hpx_add_config_define(HPX_TRACING_SAMPLE_RATE ${HPX_WITH_TRACING_SAMPLE_RATE})
 endif()
 
-hpx_option(
-  HPX_WITH_FETCH_TRACY
-  BOOL
-  "Use FetchContent to fetch Tracy. By default an installed Tracy will be used. (default: OFF)"
-  OFF
-  CATEGORY "Build Targets"
-)
-
 # Experimental settings
 hpx_option(
   HPX_WITH_IO_POOL
