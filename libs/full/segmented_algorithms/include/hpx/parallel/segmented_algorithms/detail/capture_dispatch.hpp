@@ -25,7 +25,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <list>
@@ -90,6 +89,31 @@ namespace hpx::parallel::detail {
             });
     }
 
+    template <typename ExPolicy, typename T>
+    std::vector<T> get_capture_results(std::vector<hpx::future<T>> operations)
+    {
+        hpx::wait_all(operations);
+
+        std::list<std::exception_ptr> errors;
+        parallel::util::detail::handle_remote_exceptions<
+            std::decay_t<ExPolicy>>::call(operations, errors);
+
+        if (!errors.empty())
+        {
+            throw hpx::exception_list(HPX_MOVE(errors));
+        }
+
+        std::vector<T> results;
+        results.reserve(operations.size());
+
+        for (auto& operation : operations)
+        {
+            results.push_back(operation.get());
+        }
+
+        return results;
+    }
+
     template <typename LocalIterator>
     struct partition_range
     {
@@ -103,6 +127,28 @@ namespace hpx::parallel::detail {
             ar & partition_id;
             ar & first;
             ar & last;
+        }
+    };
+
+    template <typename RangeList1, typename RangeList2, typename OutIterator>
+    struct capture_dispatch_chunk
+    {
+        std::size_t input1_size;
+        std::size_t input2_size;
+
+        RangeList1 ranges1;
+        RangeList2 ranges2;
+
+        OutIterator dest;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & input1_size;
+            ar & input2_size;
+            ar & ranges1;
+            ar & ranges2;
+            ar & dest;
         }
     };
 
@@ -173,21 +219,15 @@ namespace hpx::parallel::detail {
     template <typename Value, typename LocalIterator>
     struct transmitter
     {
-        using iterator_type =
-            std::decay_t<LocalIterator>;
-        using indexed_range_type =
-            indexed_partition_range<iterator_type>;
-        using range_list_type =
-            std::vector<indexed_range_type>;
-        using result_type =
-            collected_partition_values<Value>;
+        using iterator_type = std::decay_t<LocalIterator>;
+        using indexed_range_type = indexed_partition_range<iterator_type>;
+        using range_list_type = std::vector<indexed_range_type>;
+        using result_type = collected_partition_values<Value>;
 
-        static result_type send_values(
-            range_list_type ranges)
+        static result_type send_values(range_list_type ranges)
         {
             using iterator_traits =
-                hpx::traits::segmented_local_iterator_traits<
-                    iterator_type>;
+                hpx::traits::segmented_local_iterator_traits<iterator_type>;
 
             result_type result;
             result.slices.reserve(ranges.size());
@@ -196,13 +236,10 @@ namespace hpx::parallel::detail {
 
             for (auto const& indexed_range : ranges)
             {
-                auto const& range =
-                    indexed_range.range;
+                auto const& range = indexed_range.range;
 
-                total_size +=
-                    static_cast<std::size_t>(
-                        std::distance(
-                            range.first, range.last));
+                total_size += static_cast<std::size_t>(
+                    std::distance(range.first, range.last));
             }
 
             result.values.reserve(total_size);
@@ -211,27 +248,17 @@ namespace hpx::parallel::detail {
             {
                 auto& range = indexed_range.range;
 
-                auto raw_first = iterator_traits::local(
-                        HPX_MOVE(range.first));
-                auto raw_last = iterator_traits::local(
-                        HPX_MOVE(range.last));
+                auto raw_first = iterator_traits::local(HPX_MOVE(range.first));
+                auto raw_last = iterator_traits::local(HPX_MOVE(range.last));
 
-                std::size_t const offset =
-                    result.values.size();
+                std::size_t const offset = result.values.size();
 
-                result.values.insert(
-                    result.values.end(),
-                    raw_first,
-                    raw_last);
+                result.values.insert(result.values.end(), raw_first, raw_last);
 
-                std::size_t const size =
-                    result.values.size() - offset;
+                std::size_t const size = result.values.size() - offset;
 
-                result.slices.push_back(
-                    collected_range_slice{
-                        indexed_range.original_index,
-                        offset,
-                        size});
+                result.slices.push_back(collected_range_slice{
+                    indexed_range.original_index, offset, size});
             }
             return result;
         }
@@ -318,9 +345,10 @@ namespace hpx::parallel::detail {
         return ranges;
     }
 
-    template <typename IsSeq>
+    template <typename ExPolicy, typename IsSeq>
     struct range_collector
     {
+        using policy_type = std::decay_t<ExPolicy>;
         using is_seq = std::decay_t<IsSeq>;
 
         template <typename Value, typename LocalIterator>
@@ -426,25 +454,8 @@ namespace hpx::parallel::detail {
                         batch.routing_partition_id, HPX_MOVE(batch.ranges)));
                 }
 
-                hpx::wait_all(batch_futures);
-
-                std::list<std::exception_ptr> errors;
-
-                parallel::util::detail::handle_remote_exceptions<
-                    hpx::execution::parallel_policy>::call(
-                        batch_futures, errors);
-
-                if (!errors.empty())
-                {
-                    throw hpx::exception_list(
-                        HPX_MOVE(errors));
-                }
-
-                for (auto& future : batch_futures)
-                {
-                    batch_results.push_back(
-                        future.get());
-                }
+                batch_results =
+                    get_capture_results<policy_type>(HPX_MOVE(batch_futures));
             }
 
             struct range_location
@@ -491,570 +502,447 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename Value, typename RangeList, typename OutIterator,
-        typename IsSeq>
-    struct copy_receiver
+    template <typename OutputIterator, typename IsSeq, typename Dispatcher,
+        typename Algo, typename ExPolicy, typename... CallArgs>
+    HPX_FORCEINLINE parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::decay_t<OutputIterator>>
+    invoke_capture_dispatcher(
+        Algo const& algo, ExPolicy policy, CallArgs&&... args)
     {
-        using rangelist_type = std::decay_t<RangeList>;
-        using output_iterator = std::decay_t<OutIterator>;
-        using is_seq = std::decay_t<IsSeq>;
+        using output_iterator = std::decay_t<OutputIterator>;
 
-        static output_iterator copy_from_range(
-            rangelist_type ranges, output_iterator dest)
-        {
-            using output_local_traits =
-                hpx::traits::segmented_local_iterator_traits<output_iterator>;
-
-            auto raw_dest = output_local_traits::local(HPX_MOVE(dest));
-
-            if (ranges.empty())
+        auto complete_result = [&]() {
+            if constexpr (std::decay_t<IsSeq>::value)
             {
-                return output_local_traits::remote(HPX_MOVE(raw_dest));
+                return Dispatcher::sequential(
+                    algo, HPX_MOVE(policy), HPX_FORWARD(CallArgs, args)...);
             }
+            else
+            {
+                return Dispatcher::parallel(
+                    algo, HPX_MOVE(policy), HPX_FORWARD(CallArgs, args)...);
+            }
+        }();
 
-            auto values =
-                range_collector<is_seq>::template collect_range<Value>(
-                    HPX_MOVE(ranges));
+        auto get_output = [](auto&& value) -> output_iterator {
+            return HPX_MOVE(value.out);
+        };
 
-            auto raw_result = std::copy(values.begin(), values.end(), raw_dest);
-
-            return output_local_traits::remote(HPX_MOVE(raw_result));
+        if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+        {
+            return hpx::make_future<output_iterator>(
+                HPX_MOVE(complete_result), HPX_MOVE(get_output));
         }
-    };
+        else
+        {
+            return get_output(HPX_MOVE(complete_result));
+        }
+    }
 
-    enum class collected_input : std::uint8_t
+    template <typename Value1, typename Value2, typename Chunk, typename Algo,
+        typename ExPolicy, typename IsSeq, typename... Args>
+    struct batch_receiver
     {
-        first,
-        second,
-        all
-    };
+        using chunk_type = std::decay_t<Chunk>;
+        using chunk_list_type = std::vector<chunk_type>;
 
-    template <typename Value1, typename Value2, collected_input CollectedInput,
-        typename RangeList1, typename RangeList2, typename OutIterator,
-        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
-    struct receiver
-    {
         using values_type1 = std::vector<Value1>;
         using values_type2 = std::vector<Value2>;
+
         using buffer_iterator1 = typename values_type1::iterator;
         using buffer_iterator2 = typename values_type2::iterator;
-        using collected_value_type =
-            std::conditional_t<CollectedInput == collected_input::second,
-                Value2, Value1>;
-        using collected_values_type =
-            std::conditional_t<CollectedInput == collected_input::second,
-                values_type2, values_type1>;
-        using output_iterator = std::decay_t<OutIterator>;
+
+        using output_iterator =
+            std::decay_t<decltype(std::declval<chunk_type>().dest)>;
+
+        using batch_result_type = std::vector<output_iterator>;
+
+        using chunk_result_type =
+            parallel::util::detail::algorithm_result_t<ExPolicy,
+                output_iterator>;
+
         using result_type = parallel::util::detail::algorithm_result_t<ExPolicy,
-            output_iterator>;
+            batch_result_type>;
+
         using is_seq = std::decay_t<IsSeq>;
 
-        template <typename Dispatcher, typename... CallArgs>
-        HPX_FORCEINLINE static result_type invoke_dispatcher(
+        using range_list1_type =
+            std::decay_t<decltype(std::declval<chunk_type>().ranges1)>;
+
+        using range_list2_type =
+            std::decay_t<decltype(std::declval<chunk_type>().ranges2)>;
+
+        using dispatcher_type = dispatcher<std::decay_t<Algo>, ExPolicy,
+            buffer_iterator1, buffer_iterator1, buffer_iterator2,
+            buffer_iterator2, output_iterator, std::decay_t<Args>...>;
+
+        template <typename... CallArgs>
+        static auto invoke_dispatcher(
             Algo const& algo, ExPolicy policy, CallArgs&&... args)
         {
-            if constexpr (is_seq::value)
-            {
-                auto result = Dispatcher::sequential(
-                    algo, HPX_MOVE(policy), HPX_FORWARD(CallArgs, args)...);
-
-                if constexpr (hpx::is_async_execution_policy_v<
-                                  std::decay_t<ExPolicy>>)
-                {
-                    return hpx::make_future<output_iterator>(HPX_MOVE(result),
-                        [](auto&& complete_result) -> output_iterator {
-                            return HPX_MOVE(complete_result.out);
-                        });
-                }
-                else
-                {
-                    return HPX_MOVE(result.out);
-                }
-            }
-            else
-            {
-                auto result = Dispatcher::parallel(
-                    algo, HPX_MOVE(policy), HPX_FORWARD(CallArgs, args)...);
-
-                if constexpr (hpx::is_async_execution_policy_v<
-                                  std::decay_t<ExPolicy>>)
-                {
-                    return hpx::make_future<output_iterator>(HPX_MOVE(result),
-                        [](auto&& complete_result) -> output_iterator {
-                            return HPX_MOVE(complete_result.out);
-                        });
-                }
-                else
-                {
-                    return HPX_MOVE(result.out);
-                }
-            }
+            return invoke_capture_dispatcher<output_iterator, is_seq,
+                dispatcher_type>(
+                algo, HPX_MOVE(policy), HPX_FORWARD(CallArgs, args)...);
         }
 
-        template <typename LocIterator, typename... CallArgs>
-        HPX_FORCEINLINE static result_type invoke_one(Algo const& algo,
-            ExPolicy policy, collected_values_type& values,
-            LocIterator local_first, LocIterator final_last, OutIterator dest,
-            CallArgs&&... args)
+        template <typename InputIterator>
+        static chunk_result_type copy_chunk(
+            InputIterator first, InputIterator last, output_iterator dest)
         {
-            static_assert(CollectedInput != collected_input::all,
-                "invoke_one cannot be used when both inputs are collected");
+            using output_traits =
+                hpx::traits::segmented_local_iterator_traits<output_iterator>;
 
-            using dispatcher_type =
-                std::conditional_t<CollectedInput == collected_input::second,
-                    dispatcher<std::decay_t<Algo>, ExPolicy, LocIterator,
-                        LocIterator, buffer_iterator2, buffer_iterator2,
-                        OutIterator, std::decay_t<CallArgs>...>,
-                    dispatcher<std::decay_t<Algo>, ExPolicy, buffer_iterator1,
-                        buffer_iterator1, LocIterator, LocIterator, OutIterator,
-                        std::decay_t<CallArgs>...>>;
-
-            if constexpr (CollectedInput == collected_input::second)
-            {
-                return invoke_dispatcher<dispatcher_type>(algo,
-                    HPX_MOVE(policy), local_first, final_last, values.begin(),
-                    values.end(), dest, HPX_FORWARD(CallArgs, args)...);
-            }
-            else
-            {
-                return invoke_dispatcher<dispatcher_type>(algo,
-                    HPX_MOVE(policy), values.begin(), values.end(), local_first,
-                    final_last, dest, HPX_FORWARD(CallArgs, args)...);
-            }
-        }
-
-        HPX_FORCEINLINE static result_type getfrom_one(Algo const& algo,
-            ExPolicy policy, RangeList1 ranges, RangeList2 local_first,
-            RangeList2 final_last, OutIterator dest, Args... args)
-        {
-            collected_values_type values =
-                range_collector<is_seq>::template collect_range<
-                    collected_value_type>(HPX_MOVE(ranges));
+            auto raw_dest = output_traits::local(HPX_MOVE(dest));
+            auto raw_result = std::copy(first, last, raw_dest);
+            auto result = output_traits::remote(HPX_MOVE(raw_result));
 
             if constexpr (hpx::is_async_execution_policy_v<
                               std::decay_t<ExPolicy>>)
             {
-                auto shared_values =
-                    std::make_shared<collected_values_type>(HPX_MOVE(values));
-                auto f = invoke_one(algo, HPX_MOVE(policy), *shared_values,
-                    HPX_MOVE(local_first), HPX_MOVE(final_last), HPX_MOVE(dest),
-                    HPX_MOVE(args)...);
-                return f.then([shared_values](
-                                  auto ready) mutable { return ready.get(); });
+                return hpx::make_ready_future(HPX_MOVE(result));
             }
             else
             {
-                return invoke_one(algo, HPX_MOVE(policy), values,
-                    HPX_MOVE(local_first), HPX_MOVE(final_last), HPX_MOVE(dest),
-                    HPX_MOVE(args)...);
+                return result;
             }
         }
 
-        HPX_FORCEINLINE static result_type getfrom_two(Algo const& algo,
-            ExPolicy policy, RangeList1 ranges1, RangeList2 ranges2,
-            OutIterator dest, Args... args)
+        template <typename... CallArgs>
+        static chunk_result_type invoke_chunk(Algo const& algo, ExPolicy policy,
+            buffer_iterator1 first1, buffer_iterator1 last1,
+            buffer_iterator2 first2, buffer_iterator2 last2,
+            output_iterator dest, CallArgs&&... args)
         {
-            using dispatcher_type = dispatcher<std::decay_t<Algo>, ExPolicy,
-                buffer_iterator1, buffer_iterator1, buffer_iterator2,
-                buffer_iterator2, OutIterator, Args...>;
+            if (first1 == last1)
+            {
+                return copy_chunk(first2, last2, HPX_MOVE(dest));
+            }
+
+            if (first2 == last2)
+            {
+                return copy_chunk(first1, last1, HPX_MOVE(dest));
+            }
+
+            return invoke_dispatcher(algo, HPX_MOVE(policy), first1, last1,
+                first2, last2, HPX_MOVE(dest), HPX_FORWARD(CallArgs, args)...);
+        }
+
+        static result_type invoke_chunks(Algo const& algo, ExPolicy policy,
+            chunk_list_type chunks, std::shared_ptr<values_type1> values1,
+            std::shared_ptr<values_type2> values2, Args... args)
+        {
+            HPX_ASSERT(!chunks.empty());
+
+            using policy_type = std::decay_t<ExPolicy>;
 
             static constexpr bool is_task_policy =
-                hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>;
+                hpx::is_async_execution_policy_v<policy_type>;
 
-            values_type1 values1;
-            values_type2 values2;
+            validate_chunk_sizes(chunks, values1->size(), values2->size());
 
             if constexpr (is_seq::value)
             {
-                values1 =
-                    range_collector<is_seq>::template collect_range<Value1>(
-                        HPX_MOVE(ranges1));
+                if constexpr (!is_task_policy)
+                {
+                    batch_result_type results;
+                    results.reserve(chunks.size());
 
-                values2 =
-                    range_collector<is_seq>::template collect_range<Value2>(
-                        HPX_MOVE(ranges2));
+                    for_each_chunk(chunks, values1, values2,
+                        [&](auto first1, auto last1, auto first2, auto last2,
+                            output_iterator dest) {
+                            results.push_back(invoke_chunk(algo, policy, first1,
+                                last1, first2, last2, HPX_MOVE(dest), args...));
+                        });
+
+                    return results;
+                }
+                else
+                {
+                    hpx::future<batch_result_type> operation =
+                        hpx::make_ready_future(batch_result_type{});
+
+                    for_each_chunk(chunks, values1, values2,
+                        [&](auto first1, auto last1, auto first2, auto last2,
+                            output_iterator dest) {
+                            operation = HPX_MOVE(operation).then(
+                                [algorithm = std::decay_t<Algo>(algo),
+                                    operation_policy = policy, first1, last1,
+                                    first2, last2, dest = HPX_MOVE(dest),
+                                    values1, values2,
+                                    ... operation_args = args](
+                                    hpx::future<batch_result_type>
+                                        previous) mutable
+                                    -> hpx::future<batch_result_type> {
+                                    auto results = previous.get();
+
+                                    auto chunk_operation =
+                                        batch_receiver::invoke_chunk(algorithm,
+                                            HPX_MOVE(operation_policy), first1,
+                                            last1, first2, last2,
+                                            HPX_MOVE(dest),
+                                            HPX_MOVE(operation_args)...);
+
+                                    return HPX_MOVE(chunk_operation)
+                                        .then([results = HPX_MOVE(results),
+                                                  values1, values2](
+                                                  hpx::future<output_iterator>
+                                                      ready) mutable
+                                                  -> batch_result_type {
+                                            results.push_back(ready.get());
+
+                                            return HPX_MOVE(results);
+                                        });
+                                });
+                        });
+                    return operation;
+                }
+            }
+            else
+            {
+                std::vector<hpx::future<output_iterator>> operations;
+
+                operations.reserve(chunks.size());
+
+                for_each_chunk(chunks, values1, values2,
+                    [&](auto first1, auto last1, auto first2, auto last2,
+                        output_iterator dest) {
+                        if constexpr (is_task_policy)
+                        {
+                            operations.push_back(batch_receiver::invoke_chunk(
+                                algo, policy, first1, last1, first2, last2,
+                                HPX_MOVE(dest), args...));
+                        }
+                        else
+                        {
+                            operations.push_back(hpx::async(
+                                [algorithm = std::decay_t<Algo>(algo),
+                                    operation_policy = policy, first1, last1,
+                                    first2, last2, dest = HPX_MOVE(dest),
+                                    values1, values2,
+                                    ... operation_args =
+                                        args]() mutable -> output_iterator {
+                                    return batch_receiver::invoke_chunk(
+                                        algorithm, HPX_MOVE(operation_policy),
+                                        first1, last1, first2, last2,
+                                        HPX_MOVE(dest),
+                                        HPX_MOVE(operation_args)...);
+                                }));
+                        }
+                    });
+
+                HPX_ASSERT(!operations.empty());
+
+                auto complete =
+                    hpx::when_all(HPX_MOVE(operations))
+                        .then([values1, values2](
+                                  auto ready) mutable -> batch_result_type {
+                            return get_capture_results<policy_type>(
+                                ready.get());
+                        });
+
+                if constexpr (is_task_policy)
+                {
+                    return complete;
+                }
+                else
+                {
+                    return complete.get();
+                }
+            }
+        }
+
+        static void validate_chunk_sizes(
+            chunk_list_type const& chunks, std::size_t size1, std::size_t size2)
+        {
+            std::size_t expected_size1 = 0;
+            std::size_t expected_size2 = 0;
+
+            for (auto const& chunk : chunks)
+            {
+                if (expected_size1 > size1 ||
+                    chunk.input1_size > size1 - expected_size1 ||
+                    expected_size2 > size2 ||
+                    chunk.input2_size > size2 - expected_size2)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                        "batch_receiver::validate_chunk_sizes",
+                        "collected input sizes do not match chunk metadata");
+                }
+
+                expected_size1 += chunk.input1_size;
+                expected_size2 += chunk.input2_size;
+            }
+
+            if (expected_size1 != size1 || expected_size2 != size2)
+            {
+                HPX_THROW_EXCEPTION(hpx::error::invalid_status,
+                    "batch_receiver::validate_chunk_sizes",
+                    "collected input sizes do not match chunk metadata");
+            }
+        }
+
+        template <typename F>
+        static void for_each_chunk(chunk_list_type& chunks,
+            std::shared_ptr<values_type1> const& values1,
+            std::shared_ptr<values_type2> const& values2, F&& f)
+        {
+            std::size_t offset1 = 0;
+            std::size_t offset2 = 0;
+
+            for (auto& chunk : chunks)
+            {
+                auto first1 = values1->begin() + offset1;
+                auto first2 = values2->begin() + offset2;
+
+                offset1 += chunk.input1_size;
+                offset2 += chunk.input2_size;
+
+                HPX_INVOKE(f, first1, values1->begin() + offset1, first2,
+                    values2->begin() + offset2, HPX_MOVE(chunk.dest));
+            }
+        }
+
+        template <typename RangeList, typename GetRanges>
+        static RangeList flatten_ranges(
+            chunk_list_type& chunks, GetRanges&& get_ranges)
+        {
+            RangeList ranges;
+
+            std::size_t count = 0;
+            for (auto const& chunk : chunks)
+            {
+                count += HPX_INVOKE(get_ranges, chunk).size();
+            }
+
+            ranges.reserve(count);
+
+            for (auto& chunk : chunks)
+            {
+                auto& chunk_ranges = HPX_INVOKE(get_ranges, chunk);
+                ranges.insert(ranges.end(),
+                    std::make_move_iterator(chunk_ranges.begin()),
+                    std::make_move_iterator(chunk_ranges.end()));
+            }
+
+            return ranges;
+        }
+
+        static result_type getfrom_batch(Algo const& algo, ExPolicy policy,
+            chunk_list_type chunks, Args... args)
+        {
+            HPX_ASSERT(!chunks.empty());
+
+            auto ranges1 = flatten_ranges<range_list1_type>(
+                chunks, [](auto& chunk) -> auto& { return chunk.ranges1; });
+            auto ranges2 = flatten_ranges<range_list2_type>(
+                chunks, [](auto& chunk) -> auto& { return chunk.ranges2; });
+
+            if constexpr (is_seq::value)
+            {
+                auto shared1 = std::make_shared<values_type1>(
+                    range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                        template collect_range<Value1>(HPX_MOVE(ranges1)));
+                auto shared2 = std::make_shared<values_type2>(
+                    range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                        template collect_range<Value2>(HPX_MOVE(ranges2)));
+
+                return invoke_chunks(algo, HPX_MOVE(policy), HPX_MOVE(chunks),
+                    HPX_MOVE(shared1), HPX_MOVE(shared2), HPX_MOVE(args)...);
             }
             else
             {
                 auto values1_f = hpx::async(
-                    [ranges1 = HPX_MOVE(ranges1)]() mutable -> values_type1 {
-                        return range_collector<is_seq>::template collect_range<
-                            Value1>(HPX_MOVE(ranges1));
+                    [ranges = HPX_MOVE(ranges1)]() mutable -> values_type1 {
+                        return range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                            template collect_range<Value1>(HPX_MOVE(ranges));
+                    });
+                auto values2_f = hpx::async(
+                    [ranges = HPX_MOVE(ranges2)]() mutable -> values_type2 {
+                        return range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                            template collect_range<Value2>(HPX_MOVE(ranges));
                     });
 
-                auto values2_f = hpx::async(
-                    [ranges2 = HPX_MOVE(ranges2)]() mutable -> values_type2 {
-                        return range_collector<is_seq>::template collect_range<
-                            Value2>(HPX_MOVE(ranges2));
-                    });
+                static constexpr bool is_task_policy =
+                    hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>;
 
                 if constexpr (is_task_policy)
                 {
-                    using algo_type = std::decay_t<Algo>;
-
                     return hpx::dataflow(
-                        [algorithm = algo_type(algo), policy = HPX_MOVE(policy),
-                            dest = HPX_MOVE(dest),
+                        [algorithm = std::decay_t<Algo>(algo),
+                            policy = HPX_MOVE(policy),
+                            chunks = HPX_MOVE(chunks),
                             ... stored_args = HPX_MOVE(args)](
-                            hpx::future<values_type1> ready_values1,
-                            hpx::future<values_type2> ready_values2) mutable
+                            hpx::future<values_type1> ready1,
+                            hpx::future<values_type2> ready2) mutable
                             -> result_type {
-                            auto shared_values1 =
-                                std::make_shared<values_type1>(
-                                    ready_values1.get());
+                            auto shared1 =
+                                std::make_shared<values_type1>(ready1.get());
+                            auto shared2 =
+                                std::make_shared<values_type2>(ready2.get());
 
-                            auto shared_values2 =
-                                std::make_shared<values_type2>(
-                                    ready_values2.get());
-
-                            auto operation = invoke_dispatcher<dispatcher_type>(
-                                algorithm, HPX_MOVE(policy),
-                                shared_values1->begin(), shared_values1->end(),
-                                shared_values2->begin(), shared_values2->end(),
-                                HPX_MOVE(dest), HPX_MOVE(stored_args)...);
-
-                            return operation.then(
-                                [shared_values1, shared_values2](
-                                    auto ready) mutable -> output_iterator {
-                                    return ready.get();
-                                });
+                            return invoke_chunks(algorithm, HPX_MOVE(policy),
+                                HPX_MOVE(chunks), HPX_MOVE(shared1),
+                                HPX_MOVE(shared2), HPX_MOVE(stored_args)...);
                         },
                         HPX_MOVE(values1_f), HPX_MOVE(values2_f));
                 }
                 else
                 {
-                    values1 = values1_f.get();
-                    values2 = values2_f.get();
+                    auto shared1 =
+                        std::make_shared<values_type1>(values1_f.get());
+                    auto shared2 =
+                        std::make_shared<values_type2>(values2_f.get());
+
+                    return invoke_chunks(algo, HPX_MOVE(policy),
+                        HPX_MOVE(chunks), HPX_MOVE(shared1), HPX_MOVE(shared2),
+                        HPX_MOVE(args)...);
                 }
-            }
-
-            if constexpr (is_task_policy)
-            {
-                auto shared_values1 =
-                    std::make_shared<values_type1>(HPX_MOVE(values1));
-
-                auto shared_values2 =
-                    std::make_shared<values_type2>(HPX_MOVE(values2));
-
-                auto operation = invoke_dispatcher<dispatcher_type>(algo,
-                    HPX_MOVE(policy), shared_values1->begin(),
-                    shared_values1->end(), shared_values2->begin(),
-                    shared_values2->end(), HPX_MOVE(dest), HPX_MOVE(args)...);
-
-                return operation.then(
-                    [shared_values1, shared_values2](
-                        auto ready) mutable -> output_iterator {
-                        return ready.get();
-                    });
-            }
-            else
-            {
-                return invoke_dispatcher<dispatcher_type>(algo,
-                    HPX_MOVE(policy), values1.begin(), values1.end(),
-                    values2.begin(), values2.end(), HPX_MOVE(dest),
-                    HPX_MOVE(args)...);
             }
         }
     };
 
-    // input ranges receiver
-    template <typename Value1, typename Value2, collected_input CollectedInput,
-        typename RangeList, typename LocIterator, typename OutIterator,
-        typename Algo, typename R, typename ExPolicy, typename IsSeq,
-        typename... Args>
-    struct get_values_from_range_action
-      : hpx::actions::make_action<R (*)(Algo const&, ExPolicy, RangeList,
-                                      LocIterator, LocIterator, OutIterator,
-                                      Args...),
-            &receiver<Value1, Value2, CollectedInput, RangeList, LocIterator,
-                OutIterator, Algo, ExPolicy, IsSeq, Args...>::getfrom_one,
-            get_values_from_range_action<Value1, Value2, CollectedInput,
-                RangeList, LocIterator, OutIterator, Algo, R, ExPolicy, IsSeq,
-                Args...>>::type
+    template <typename Value1, typename Value2, typename Chunk, typename Algo,
+        typename R, typename ExPolicy, typename IsSeq, typename... Args>
+    struct get_values_from_chunk_batch_action
+      : hpx::actions::make_action<R (*)(Algo const&, ExPolicy,
+                                      std::vector<Chunk>, Args...),
+            &batch_receiver<Value1, Value2, Chunk, Algo, ExPolicy, IsSeq,
+                Args...>::getfrom_batch,
+            get_values_from_chunk_batch_action<Value1, Value2, Chunk, Algo, R,
+                ExPolicy, IsSeq, Args...>>::type
     {
     };
 
-    template <typename Value1, typename Value2, typename RangeList1,
-        typename RangeList2, typename OutIterator, typename Algo, typename R,
+    template <typename Value1, typename Value2, typename Chunk, typename Algo,
         typename ExPolicy, typename IsSeq, typename... Args>
-    struct get_values_from_ranges_action
-      : hpx::actions::make_action<R (*)(Algo const&, ExPolicy, RangeList1,
-                                      RangeList2, OutIterator, Args...),
-            &receiver<Value1, Value2, collected_input::all, RangeList1,
-                RangeList2, OutIterator, Algo, ExPolicy, IsSeq,
-                Args...>::getfrom_two,
-            get_values_from_ranges_action<Value1, Value2, RangeList1,
-                RangeList2, OutIterator, Algo, R, ExPolicy, IsSeq,
-                Args...>>::type
+    HPX_FORCEINLINE hpx::future<
+        std::vector<std::decay_t<decltype(std::declval<Chunk>().dest)>>>
+    capture_dispatch_batch_async(hpx::id_type const& routing_partition_id,
+        Algo&& algo, ExPolicy policy, IsSeq, std::vector<Chunk> chunks,
+        Args&&... args)
     {
-    };
+        HPX_ASSERT(!chunks.empty());
 
-    template <typename Value, typename RangeList, typename OutIterator,
-        typename IsSeq>
-    struct copy_values_from_range_action
-      : hpx::actions::make_action<std::decay_t<OutIterator> (*)(
-                                      std::decay_t<RangeList>,
-                                      std::decay_t<OutIterator>),
-            &copy_receiver<Value, std::decay_t<RangeList>,
-                std::decay_t<OutIterator>,
-                std::decay_t<IsSeq>>::copy_from_range,
-            copy_values_from_range_action<Value, std::decay_t<RangeList>,
-                std::decay_t<OutIterator>, std::decay_t<IsSeq>>>::type
-    {
-    };
-
-    template <typename Value1, typename Value2, collected_input CollectedInput,
-        typename RangeList, typename LocIterator, typename OutIterator,
-        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>>
-    capture_dispatch_async_impl(hpx::id_type const& id_recv, Algo&& algo,
-        ExPolicy policy, RangeList ranges, LocIterator local_first,
-        LocIterator final_last, OutIterator dest, IsSeq, Args&&... args)
-    {
+        using chunk_type = std::decay_t<Chunk>;
         using algo_type = std::decay_t<Algo>;
-        using result_type = parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::decay_t<OutIterator>>;
-        using local_iterator_type = std::decay_t<LocIterator>;
-        using rangelist_type = std::decay_t<RangeList>;
-        using output_iterator = std::decay_t<OutIterator>;
+        using is_seq = std::decay_t<IsSeq>;
 
-        get_values_from_range_action<Value1, Value2, CollectedInput,
-            rangelist_type, local_iterator_type, output_iterator, algo_type,
-            result_type, ExPolicy, std::decay_t<IsSeq>,
+        using output_iterator =
+            std::decay_t<decltype(std::declval<chunk_type>().dest)>;
+
+        using batch_result_type = std::vector<output_iterator>;
+
+        using action_result_type =
+            parallel::util::detail::algorithm_result_t<ExPolicy,
+                batch_result_type>;
+
+        get_values_from_chunk_batch_action<Value1, Value2, chunk_type,
+            algo_type, action_result_type, ExPolicy, is_seq,
             hpx::util::decay_unwrap_t<Args>...>
             act;
 
-        auto operation = hpx::async(act, hpx::colocated(id_recv),
-            HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges),
-            HPX_MOVE(local_first), HPX_MOVE(final_last), HPX_MOVE(dest),
-            HPX_FORWARD(Args, args)...);
-
-        return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
+        return handle_capture_exceptions<ExPolicy>(hpx::async(act,
+            hpx::colocated(routing_partition_id), HPX_FORWARD(Algo, algo),
+            HPX_MOVE(policy), HPX_MOVE(chunks), HPX_FORWARD(Args, args)...));
     }
-
-    template <typename Value1, typename Value2, typename RangeList1,
-        typename RangeList2, typename OutIterator, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>>
-    capture_dispatch_async_impl(hpx::id_type const& id_recv, Algo&& algo,
-        ExPolicy policy, RangeList1 ranges1, RangeList2 ranges2,
-        OutIterator dest, IsSeq, Args&&... args)
-    {
-        using algo_type = std::decay_t<Algo>;
-        using result_type = parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::decay_t<OutIterator>>;
-        using rangelist1_type = std::decay_t<RangeList1>;
-        using rangelist2_type = std::decay_t<RangeList2>;
-        using output_iterator = std::decay_t<OutIterator>;
-
-        get_values_from_ranges_action<Value1, Value2, rangelist1_type,
-            rangelist2_type, output_iterator, algo_type, result_type, ExPolicy,
-            std::decay_t<IsSeq>, hpx::util::decay_unwrap_t<Args>...>
-            act;
-
-        auto operation = hpx::async(act, hpx::colocated(id_recv),
-            HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges1),
-            HPX_MOVE(ranges2), HPX_MOVE(dest), HPX_FORWARD(Args, args)...);
-
-        return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
-    }
-
-    template <typename TraitsDest, typename SegIteratorOut, typename Iterator1,
-        typename Iterator2, typename OutIterator, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>>
-    capture_dispatch_async(TraitsDest, Algo&& algo, ExPolicy policy, IsSeq,
-        SegIteratorOut&& sdest, Iterator1 first1, Iterator1 last1,
-        Iterator2 first2, Iterator2 last2, OutIterator dest, Args&&... args)
-    {
-        using iterator1_type = std::decay_t<Iterator1>;
-        using iterator2_type = std::decay_t<Iterator2>;
-        using output_iterator = std::decay_t<OutIterator>;
-        using is_seq = std::decay_t<IsSeq>;
-
-        using Value1 =
-            typename std::iterator_traits<iterator1_type>::value_type;
-        using Value2 =
-            typename std::iterator_traits<iterator2_type>::value_type;
-
-        using traits_in1 =
-            hpx::traits::segmented_iterator_traits<iterator1_type>;
-        using traits_in2 =
-            hpx::traits::segmented_iterator_traits<iterator2_type>;
-
-        using capture_result_type = typename TraitsDest::local_iterator;
-
-        using algo_result_type = typename std::decay_t<Algo>::result_type;
-
-        using algo_output_iterator =
-            std::decay_t<decltype(std::declval<algo_result_type>().out)>;
-
-        static_assert(
-            std::is_same_v<output_iterator, std::decay_t<capture_result_type>>,
-            "OutIterator must be the destination segment-local iterator");
-
-        static_assert(std::is_same_v<output_iterator, algo_output_iterator>,
-            "Algo::result_type::out must match OutIterator");
-
-        HPX_ASSERT(first1 != last1);
-        HPX_ASSERT(first2 != last2);
-
-        auto seg_first1 = traits_in1::segment(first1);
-        auto seg_last1 = traits_in1::segment(std::prev(last1));
-
-        auto seg_first2 = traits_in2::segment(first2);
-        auto seg_last2 = traits_in2::segment(std::prev(last2));
-
-        auto local_first1 = traits_in1::local(first1);
-        auto final_last1 = traits_in1::local(std::prev(last1));
-        ++final_last1;
-
-        auto local_first2 = traits_in2::local(first2);
-        auto final_last2 = traits_in2::local(std::prev(last2));
-        ++final_last2;
-
-        hpx::id_type const destination_partition_id = TraitsDest::get_id(sdest);
-
-        hpx::id_type const input1_partition_id = traits_in1::get_id(seg_first1);
-
-        hpx::id_type const input2_partition_id = traits_in2::get_id(seg_first2);
-
-        hpx::id_type const destination_locality =
-            get_partition_locality(destination_partition_id);
-
-        hpx::id_type const input1_locality =
-            get_partition_locality(input1_partition_id);
-
-        hpx::id_type const input2_locality =
-            get_partition_locality(input2_partition_id);
-
-        bool const input1_is_local =
-            destination_locality == input1_locality && seg_first1 == seg_last1;
-
-        bool const input2_is_local =
-            destination_locality == input2_locality && seg_first2 == seg_last2;
-
-        if (input1_is_local && input2_is_local)
-        {
-            // Neither input needs to be captured.
-            auto operation = dispatch_async(destination_partition_id,
-                HPX_FORWARD(Algo, algo), HPX_MOVE(policy), is_seq{},
-                HPX_MOVE(local_first1), HPX_MOVE(final_last1),
-                HPX_MOVE(local_first2), HPX_MOVE(final_last2), HPX_MOVE(dest),
-                HPX_FORWARD(Args, args)...);
-
-            return HPX_MOVE(operation).then([](auto ready) -> output_iterator {
-                auto result = get_capture_result<ExPolicy>(HPX_MOVE(ready));
-
-                return HPX_MOVE(result.out);
-            });
-        }
-
-        if (input1_is_local)
-        {
-            // Input 1 is local. Capture only input 2.
-            auto ranges2 = make_partition_ranges(first2, last2);
-
-            return capture_dispatch_async_impl<Value1, Value2,
-                collected_input::second>(destination_partition_id,
-                HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges2),
-                HPX_MOVE(local_first1), HPX_MOVE(final_last1), HPX_MOVE(dest),
-                is_seq{}, HPX_FORWARD(Args, args)...);
-        }
-
-        if (input2_is_local)
-        {
-            // Input 2 is local. Capture only input 1.
-            auto ranges1 = make_partition_ranges(first1, last1);
-
-            return capture_dispatch_async_impl<Value1, Value2,
-                collected_input::first>(destination_partition_id,
-                HPX_FORWARD(Algo, algo), HPX_MOVE(policy), HPX_MOVE(ranges1),
-                HPX_MOVE(local_first2), HPX_MOVE(final_last2), HPX_MOVE(dest),
-                is_seq{}, HPX_FORWARD(Args, args)...);
-        }
-
-        // Neither input is completely available on the destination
-        // locality. Capture both ranges.
-        auto ranges1 = make_partition_ranges(first1, last1);
-        auto ranges2 = make_partition_ranges(first2, last2);
-
-        return capture_dispatch_async_impl<Value1, Value2>(
-            destination_partition_id, HPX_FORWARD(Algo, algo), HPX_MOVE(policy),
-            HPX_MOVE(ranges1), HPX_MOVE(ranges2), HPX_MOVE(dest), is_seq{},
-            HPX_FORWARD(Args, args)...);
-    }
-
-    template <typename TraitsDest, typename SegIteratorOut, typename Iterator1,
-        typename Iterator2, typename OutIterator, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE std::decay_t<OutIterator> capture_dispatch(TraitsDest,
-        Algo&& algo, ExPolicy policy, IsSeq, SegIteratorOut&& sdest,
-        Iterator1 first1, Iterator1 last1, Iterator2 first2, Iterator2 last2,
-        OutIterator dest, Args&&... args)
-    {
-        static_assert(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>,
-            "capture_dispatch cannot be used with a task policy");
-
-        return capture_dispatch_async(TraitsDest{}, HPX_FORWARD(Algo, algo),
-            HPX_MOVE(policy), std::decay_t<IsSeq>{},
-            HPX_FORWARD(SegIteratorOut, sdest), HPX_MOVE(first1),
-            HPX_MOVE(last1), HPX_MOVE(first2), HPX_MOVE(last2), HPX_MOVE(dest),
-            HPX_FORWARD(Args, args)...)
-            .get();
-    }
-
-    template <typename Value, typename TraitsDest, typename SegIteratorOut,
-        typename Iterator, typename OutIterator, typename ExPolicy,
-        typename IsSeq>
-    HPX_FORCEINLINE hpx::future<std::decay_t<OutIterator>> capture_copy_async(
-        TraitsDest, ExPolicy const&, IsSeq, SegIteratorOut const& seg_dest,
-        Iterator first, Iterator last, OutIterator dest)
-    {
-        using output_iterator = std::decay_t<OutIterator>;
-        using is_seq = std::decay_t<IsSeq>;
-
-        if (first == last)
-        {
-            return hpx::make_ready_future(output_iterator(HPX_MOVE(dest)));
-        }
-
-        auto ranges = make_partition_ranges(HPX_MOVE(first), HPX_MOVE(last));
-
-        using rangelist_type = std::decay_t<decltype(ranges)>;
-
-        hpx::id_type const dest_id = TraitsDest::get_id(seg_dest);
-
-        copy_values_from_range_action<Value, rangelist_type, output_iterator,
-            is_seq>
-            act;
-
-        auto operation = hpx::async(
-            act, hpx::colocated(dest_id), HPX_MOVE(ranges), HPX_MOVE(dest));
-
-        return handle_capture_exceptions<ExPolicy>(HPX_MOVE(operation));
-    }
-
-    template <typename Value, typename TraitsDest, typename SegIteratorOut,
-        typename Iterator, typename OutIterator, typename ExPolicy,
-        typename IsSeq>
-    HPX_FORCEINLINE std::decay_t<OutIterator> capture_copy(TraitsDest,
-        ExPolicy const& policy, IsSeq, SegIteratorOut const& seg_dest,
-        Iterator first, Iterator last, OutIterator dest)
-    {
-        static_assert(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>,
-            "capture_copy cannot be used with a task policy");
-
-        using output_iterator = std::decay_t<OutIterator>;
-
-        if (first == last)
-        {
-            return output_iterator(HPX_MOVE(dest));
-        }
-
-        return capture_copy_async<Value>(TraitsDest{}, policy, IsSeq{},
-            HPX_MOVE(seg_dest), HPX_MOVE(first), HPX_MOVE(last), HPX_MOVE(dest))
-            .get();
-    }
-
 }    // namespace hpx::parallel::detail
