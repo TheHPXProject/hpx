@@ -624,7 +624,8 @@ namespace hpx::threads::policies {
         std::int64_t get_queue_length(
             std::memory_order order = std::memory_order_acquire) const noexcept
         {
-            return work_items_count_.data_.load(order) +
+            return static_cast<std::int64_t>(
+                       work_items_count_.data_.load(order)) +
                 new_tasks_count_.data_.load(order);
         }
 
@@ -632,7 +633,8 @@ namespace hpx::threads::policies {
         std::int64_t get_pending_queue_length(
             std::memory_order order = std::memory_order_acquire) const noexcept
         {
-            return work_items_count_.data_.load(order);
+            return static_cast<std::int64_t>(
+                work_items_count_.data_.load(order));
         }
 
         // This returns the current length of the staged queue
@@ -863,7 +865,8 @@ namespace hpx::threads::policies {
                 }
 #endif
 
-                bool const finished = (count == ++work_items_count_.data_);
+                bool const finished = (++work_items_count_.data_ ==
+                    static_cast<std::uint64_t>(count));
                 work_items_.push(trd);
                 if (finished)
                     break;
@@ -909,8 +912,8 @@ namespace hpx::threads::policies {
         bool get_next_thread(threads::thread_id_ref_type& thrd,
             bool allow_stealing = false, bool steal = false) HPX_HOT
         {
-            std::int64_t const work_items_count =
-                work_items_count_.data_.load(std::memory_order_relaxed);
+            std::int64_t const work_items_count = static_cast<std::int64_t>(
+                work_items_count_.data_.load(std::memory_order_relaxed));
 
             if (work_items_count == 0)
             {
@@ -957,13 +960,14 @@ namespace hpx::threads::policies {
         // Return the next threads to be executed, return 0 if none are
         // available
         template <typename Iterator>
-        std::size_t get_next_threads(Iterator it, std::int64_t max_items,
+        std::size_t get_next_threads(Iterator it, std::size_t max_items,
             bool allow_stealing = false, bool steal = false)
         {
-            std::int64_t const work_items_count =
+            // the result is bounded by max_items, so it fits a std::size_t
+            std::size_t const work_items_count = static_cast<std::size_t>(
                 (std::min) (work_items_count_.data_.load(
                                 std::memory_order_relaxed),
-                    max_items);
+                    static_cast<std::uint64_t>(max_items)));
 
             if (work_items_count == 0)
             {
@@ -971,7 +975,8 @@ namespace hpx::threads::policies {
             }
 
             if (allow_stealing &&
-                parameters_.min_tasks_to_steal_pending_ > work_items_count)
+                parameters_.min_tasks_to_steal_pending_ >
+                    static_cast<std::int64_t>(work_items_count))
             {
                 return 0;
             }
@@ -1316,7 +1321,7 @@ namespace hpx::threads::policies {
                 "without changing the code here.");
 
             std::lock_guard<mutex_type> lk(mtx_);
-            for (std::uint64_t i = 0; i < parameters_.init_threads_count_; ++i)
+            for (std::size_t i = 0; i < parameters_.init_threads_count_; ++i)
             {
                 // We don't care about the init parameters since this thread
                 // will be rebound once it is actually used
@@ -1403,7 +1408,7 @@ namespace hpx::threads::policies {
         util::cache_line_data<std::atomic<std::int64_t>> new_tasks_count_;
 
         // count of active work items
-        util::cache_line_data<std::atomic<std::int64_t>> work_items_count_;
+        util::cache_line_data<std::atomic<std::uint64_t>> work_items_count_;
     };
 
 }    // namespace hpx::threads::policies

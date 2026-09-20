@@ -80,6 +80,7 @@ set(execution_headers
     hpx/execution/traits/executor_traits.hpp
     hpx/execution/traits/future_then_result_exec.hpp
     hpx/execution/traits/is_execution_policy.hpp
+    hpx/execution/traits/policy_traits.hpp
     hpx/execution/traits/vector_pack_alignment_size.hpp
     hpx/execution/traits/vector_pack_all_any_none.hpp
     hpx/execution/traits/vector_pack_conditionals.hpp

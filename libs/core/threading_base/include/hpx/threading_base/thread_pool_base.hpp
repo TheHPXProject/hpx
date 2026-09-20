@@ -71,8 +71,8 @@ namespace hpx::threads {
         hpx::threads::detail::network_background_callback_type const&
             network_background_callback_;
         std::size_t max_background_threads_;
-        std::size_t max_idle_loop_count_;
-        std::size_t max_busy_loop_count_;
+        std::int64_t max_idle_loop_count_;
+        std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
 
         thread_pool_init_parameters(std::string const& name, std::size_t index,
@@ -84,8 +84,8 @@ namespace hpx::threads {
                 network_background_callback =
                     hpx::threads::detail::network_background_callback_type(),
             std::size_t max_background_threads = static_cast<std::size_t>(-1),
-            std::size_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
-            std::size_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX,
+            std::int64_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
+            std::int64_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX,
             std::size_t shutdown_check_count = 10)
           : name_(name)
           , index_(index)

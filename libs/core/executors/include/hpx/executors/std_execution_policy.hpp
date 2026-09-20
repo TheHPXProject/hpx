@@ -23,51 +23,38 @@ namespace hpx::detail {
 
     /// \cond NOINTERNAL
     template <>
-    struct is_execution_policy<std::execution::sequenced_policy>
-      : std::true_type
+    struct policy_traits<std::execution::sequenced_policy>
+      : policy_traits_default
     {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_sequenced = true;
     };
 
     template <>
-    struct is_execution_policy<std::execution::parallel_policy> : std::true_type
+    struct policy_traits<std::execution::parallel_policy>
+      : policy_traits_default
     {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_parallel = true;
     };
 
     template <>
-    struct is_execution_policy<std::execution::parallel_unsequenced_policy>
-      : std::true_type
+    struct policy_traits<std::execution::parallel_unsequenced_policy>
+      : policy_traits_default
     {
-    };
-
-    template <>
-    struct is_parallel_execution_policy<std::execution::parallel_policy>
-      : std::true_type
-    {
-    };
-
-    template <>
-    struct is_parallel_execution_policy<
-        std::execution::parallel_unsequenced_policy> : std::true_type
-    {
-    };
-
-    template <>
-    struct is_sequenced_execution_policy<std::execution::sequenced_policy>
-      : std::true_type
-    {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_parallel = true;
+        static constexpr bool is_unsequenced = true;
     };
 
 #if defined(HPX_HAVE_CXX20_STD_EXECUTION_POLICES)
     template <>
-    struct is_execution_policy<std::execution::unsequenced_policy>
-      : std::true_type
+    struct policy_traits<std::execution::unsequenced_policy>
+      : policy_traits_default
     {
-    };
-
-    template <>
-    struct is_sequenced_execution_policy<std::execution::unsequenced_policy>
-      : std::true_type
-    {
+        static constexpr bool is_policy = true;
+        static constexpr bool is_sequenced = true;
+        static constexpr bool is_unsequenced = true;
     };
 #endif
     /// \endcond
