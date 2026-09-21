@@ -199,6 +199,15 @@ namespace hpx::parallel::detail {
     template <typename Key>
     struct projected_value_result
     {
+        static_assert(std::is_default_constructible_v<Key>,
+            "The projected key type used by segmented merge must be "
+            "default constructible because HPX must construct it "
+            "while deserializing the action result.");
+
+        static_assert(std::is_move_constructible_v<Key>,
+            "The projected key type used by segmented merge must be "
+            "move constructible.");
+
         std::vector<projected_value_target> targets;
         Key value;
 
@@ -352,9 +361,10 @@ namespace hpx::parallel::detail {
             {
                 auto raw_position =
                     local_traits::local(HPX_MOVE(request.position));
+                Key value = HPX_INVOKE(projection, *raw_position);
 
-                results.push_back(result_type{HPX_MOVE(request.targets),
-                    HPX_INVOKE(projection, *raw_position)});
+                results.push_back(
+                    result_type{HPX_MOVE(request.targets), HPX_MOVE(value)});
             }
 
             return results;

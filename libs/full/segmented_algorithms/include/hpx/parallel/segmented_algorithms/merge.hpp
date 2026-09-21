@@ -671,6 +671,50 @@ namespace hpx::parallel::detail {
         std::size_t final_chunk_position = 0;
     };
 
+    template <typename Iter1, typename Iter2, typename Iter3>
+    struct segmented_merge_types
+    {
+        using input_traits1 =
+            hpx::traits::segmented_iterator_traits<std::decay_t<Iter1>>;
+        using input_local_iterator1 = typename input_traits1::local_iterator;
+        using input_local_traits1 =
+            hpx::traits::segmented_local_iterator_traits<input_local_iterator1>;
+        using input_raw_iterator1 =
+            typename input_local_traits1::local_raw_iterator;
+        using input_reference1 =
+            typename std::iterator_traits<input_raw_iterator1>::reference;
+        using input_traits2 =
+            hpx::traits::segmented_iterator_traits<std::decay_t<Iter2>>;
+        using input_local_iterator2 = typename input_traits2::local_iterator;
+        using input_local_traits2 =
+            hpx::traits::segmented_local_iterator_traits<input_local_iterator2>;
+        using input_raw_iterator2 =
+            typename input_local_traits2::local_raw_iterator;
+        using input_reference2 =
+            typename std::iterator_traits<input_raw_iterator2>::reference;
+        template <typename Proj>
+        using projected_key_type1 =
+            std::decay_t<std::invoke_result_t<Proj&, input_reference1>>;
+        template <typename Proj>
+        using projected_key_type2 =
+            std::decay_t<std::invoke_result_t<Proj&, input_reference2>>;
+        using destination_traits =
+            hpx::traits::segmented_iterator_traits<std::decay_t<Iter3>>;
+        using local_iterator = typename destination_traits::local_iterator;
+        using value_type1 = typename std::iterator_traits<Iter1>::value_type;
+        using value_type2 = typename std::iterator_traits<Iter2>::value_type;
+        using range_list1_type = decltype(make_partition_ranges(
+            std::declval<Iter1>(), std::declval<Iter1>()));
+        using range_list2_type = decltype(make_partition_ranges(
+            std::declval<Iter2>(), std::declval<Iter2>()));
+        using chunk_type = capture_dispatch_chunk<range_list1_type,
+            range_list2_type, local_iterator>;
+        using chunk_batches_type =
+            destination_chunk_batches<destination_traits, chunk_type>;
+        using batch_type = typename chunk_batches_type::batch_type;
+        using batch_result_type = std::vector<local_iterator>;
+    };
+
     template <typename ExPolicy, typename Traits3, typename Chunk,
         typename Iter1, typename Iter2, typename Iter3, typename Comp,
         typename Proj1, typename Proj2, typename IsSeq>
@@ -685,12 +729,11 @@ namespace hpx::parallel::detail {
         using local_iterator = typename Traits3::local_iterator;
         using output_position_type =
             output_chunk_position<segment_iterator, local_iterator>;
-        using reference1 = typename std::iterator_traits<Iter1>::reference;
-        using reference2 = typename std::iterator_traits<Iter2>::reference;
+        using merge_types = segmented_merge_types<Iter1, Iter2, Iter3>;
         using key_type1 =
-            std::decay_t<std::invoke_result_t<Proj1&, reference1>>;
+            typename merge_types::template projected_key_type1<Proj1>;
         using key_type2 =
-            std::decay_t<std::invoke_result_t<Proj2&, reference2>>;
+            typename merge_types::template projected_key_type2<Proj2>;
 
         chunk_batches_type chunk_batches;
 
@@ -778,26 +821,6 @@ namespace hpx::parallel::detail {
                 return Result{HPX_MOVE(last1), HPX_MOVE(last2), ready.get()};
             });
     }
-
-    template <typename Iter1, typename Iter2, typename Iter3>
-    struct segmented_merge_types
-    {
-        using destination_traits =
-            hpx::traits::segmented_iterator_traits<Iter3>;
-        using local_iterator = typename destination_traits::local_iterator;
-        using value_type1 = typename std::iterator_traits<Iter1>::value_type;
-        using value_type2 = typename std::iterator_traits<Iter2>::value_type;
-        using range_list1_type = decltype(make_partition_ranges(
-            std::declval<Iter1>(), std::declval<Iter1>()));
-        using range_list2_type = decltype(make_partition_ranges(
-            std::declval<Iter2>(), std::declval<Iter2>()));
-        using chunk_type = capture_dispatch_chunk<range_list1_type,
-            range_list2_type, local_iterator>;
-        using chunk_batches_type =
-            destination_chunk_batches<destination_traits, chunk_type>;
-        using batch_type = typename chunk_batches_type::batch_type;
-        using batch_result_type = std::vector<local_iterator>;
-    };
 
     template <typename ExPolicy, typename Result>
     util::detail::algorithm_result_t<ExPolicy, Result>
