@@ -12,7 +12,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/thrust/policy.hpp>
+#include <hpx/modules/thrust.hpp>
 
 ///////////////////////////////////////////////////////////////////////////
 // A single policy is checked against all seven policy_traits members at

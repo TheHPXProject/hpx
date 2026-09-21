@@ -8,8 +8,8 @@ if(NOT (HPX_WITH_CUDA AND HPX_WITH_THRUST))
   return()
 endif()
 
-set(tests thrust_policy_test policy_traits)
-set(policy_traits_PARAMETERS THREADS_PER_LOCALITY 4)
+set(tests thrust_policy_test thrust_policy_traits)
+set(thrust_policy_traits_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_PARAMETERS THREADS_PER_LOCALITY 4)
 set(thrust_policy_test_CUDA ON)
 
