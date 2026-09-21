@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <memory>
@@ -35,6 +36,160 @@ namespace hpx::parallel::detail {
 
     /// \cond NOINTERNAL
 
+    template <typename LocalIterator>
+    struct segmented_range_table
+    {
+        using local_iterator = LocalIterator;
+
+        std::vector<partition_range<local_iterator>> ranges;
+        std::vector<std::size_t> partition_ends;
+        std::vector<hpx::id_type> locality_ids;
+
+        std::size_t size() const noexcept
+        {
+            return partition_ends.empty() ? 0 : partition_ends.back();
+        }
+    };
+
+    template <typename Iterator>
+    auto make_segmented_range_table(Iterator first, Iterator last)
+    {
+        using iterator_type = std::decay_t<Iterator>;
+        using traits = hpx::traits::segmented_iterator_traits<iterator_type>;
+        using local_iterator = typename traits::local_iterator;
+
+        segmented_range_table<local_iterator> table;
+
+        table.ranges = make_partition_ranges(first, last);
+        table.partition_ends.reserve(table.ranges.size());
+        table.locality_ids.reserve(table.ranges.size());
+
+        std::size_t offset = 0;
+
+        for (auto const& range : table.ranges)
+        {
+            offset += static_cast<std::size_t>(
+                std::distance(range.first, range.last));
+
+            table.partition_ends.push_back(offset);
+
+            table.locality_ids.push_back(
+                get_partition_locality(range.partition_id));
+        }
+        return table;
+    }
+
+    template <typename LocalIterator>
+    struct partition_position
+    {
+        hpx::id_type locality_id;
+        hpx::id_type partition_id;
+        LocalIterator position;
+    };
+
+    template <typename LocalIterator>
+    partition_position<LocalIterator> find_partition_position(
+        segmented_range_table<LocalIterator> const& table, std::size_t index)
+    {
+        HPX_ASSERT(index < table.size());
+
+        auto position = std::upper_bound(
+            table.partition_ends.begin(), table.partition_ends.end(), index);
+
+        std::size_t const partition_index = static_cast<std::size_t>(
+            std::distance(table.partition_ends.begin(), position));
+
+        std::size_t const partition_begin = partition_index == 0 ?
+            0 :
+            table.partition_ends[partition_index - 1];
+
+        std::size_t const local_offset = index - partition_begin;
+
+        auto const& range = table.ranges[partition_index];
+
+        return {table.locality_ids[partition_index], range.partition_id,
+            std::next(range.first, local_offset)};
+    }
+
+    template <typename LocalIterator>
+    struct locality_probe_batch
+    {
+        hpx::id_type locality_id;
+        hpx::id_type routing_partition_id;
+
+        std::vector<projected_value_request<LocalIterator>> requests;
+    };
+
+    template <typename LocalIterator>
+    void append_probe(std::vector<locality_probe_batch<LocalIterator>>& batches,
+        partition_position<LocalIterator> position, std::size_t search_index,
+        std::uint8_t operand_index)
+    {
+        auto batch = std::find_if(
+            batches.begin(), batches.end(), [&position](auto const& candidate) {
+                return candidate.locality_id == position.locality_id;
+            });
+
+        if (batch == batches.end())
+        {
+            batches.push_back(
+                {position.locality_id, position.partition_id, {}});
+            batch = std::prev(batches.end());
+        }
+
+        auto request = std::find_if(batch->requests.begin(),
+            batch->requests.end(), [&position](auto const& candidate) {
+                return candidate.partition_id == position.partition_id &&
+                    candidate.position == position.position;
+            });
+
+        projected_value_target const target{search_index, operand_index};
+
+        if (request == batch->requests.end())
+        {
+            batch->requests.push_back(
+                {position.partition_id, {target}, HPX_MOVE(position.position)});
+        }
+        else
+        {
+            request->targets.push_back(target);
+        }
+    }
+
+    struct diagonal_search_state
+    {
+        std::size_t k;
+        std::size_t a_low;
+        std::size_t a_high;
+
+        std::size_t a = 0;
+        std::size_t b = 0;
+
+        bool complete = false;
+    };
+
+    HPX_FORCEINLINE diagonal_search_state make_diagonal_state(
+        std::size_t len1, std::size_t len2, std::size_t k)
+    {
+        diagonal_search_state state{
+            k, k > len2 ? k - len2 : 0, (std::min) (k, len1)};
+
+        if (state.a_low == state.a_high)
+        {
+            state.a = state.a_low;
+            state.b = k - state.a;
+            state.complete = true;
+        }
+
+        return state;
+    }
+
+    enum : std::uint8_t
+    {
+        input_previous = 0,
+        input_current = 1
+    };
+
     // Stable Merge Path diagonal partitioning.
     // Find the stable merge-path co-rank (a, b) for output position k,
     // where a + b == k. The selected boundary satisfies:
@@ -46,53 +201,313 @@ namespace hpx::parallel::detail {
     // b == len2. The asymmetric comparisons preserve merge stability:
     // elements from the first input precede equivalent elements from
     // the second input.
-    template <typename Iter1, typename Iter2, typename Comp, typename Proj1,
-        typename Proj2>
-    std::pair<std::size_t, std::size_t> segmented_diagonal_intersection(
-        Iter1 first1, std::size_t len1, Iter2 first2, std::size_t len2,
-        std::size_t k, Comp& comp, Proj1& proj1, Proj2& proj2)
+
+    template <typename Key1, typename Key2>
+    struct diagonal_probe_values
     {
-        HPX_TRACING_MARK_EVENT("get diagonal intersection");
-        if (len1 == 0)
-            return {0, (std::min) (k, len2)};
-        if (len2 == 0)
-            return {(std::min) (k, len1), 0};
-        auto a_low = (k > len2) ? (k - len2) : 0;
-        auto a_high = (k < len1) ? k : len1;
-        if (a_low == a_high)
+        std::shared_ptr<Key1> a_previous;
+        std::shared_ptr<Key1> a_current;
+        std::shared_ptr<Key2> b_previous;
+        std::shared_ptr<Key2> b_current;
+
+        void reset()
         {
-            auto a = a_low;
-            return {a, k - a};    // Only one valid position
+            a_previous.reset();
+            a_current.reset();
+            b_previous.reset();
+            b_current.reset();
+        }
+    };
+
+    template <typename Table1, typename Table2, typename Key1, typename Key2>
+    void prepare_diagonal_probes(diagonal_search_state& state,
+        std::size_t search_index, std::size_t len1, std::size_t len2,
+        Table1 const& table1, Table2 const& table2,
+        std::vector<locality_probe_batch<typename Table1::local_iterator>>&
+            batches1,
+        std::vector<locality_probe_batch<typename Table2::local_iterator>>&
+            batches2,
+        diagonal_probe_values<Key1, Key2>& values)
+    {
+        values.reset();
+
+        if (state.complete)
+        {
+            return;
         }
 
-        while (a_low <= a_high)
+        HPX_ASSERT(state.a_low <= state.a_high);
+        if (state.a_low == state.a_high)
         {
-            auto a = (a_low + a_high) / 2;
-            auto b = k - a;
-            // cond1: a==0 || b==len2 || A[a-1] <= B[b]
-            bool cond1 = (a == 0) || (b == len2) ||
-                !HPX_INVOKE(comp, HPX_INVOKE(proj2, *std::next(first2, b)),
-                    HPX_INVOKE(proj1, *std::next(first1, a - 1)));
-
-            // cond2: b==0 || a==len1 || B[b-1] < A[a]
-            bool cond2 = (b == 0) || (a == len1) ||
-                HPX_INVOKE(comp, HPX_INVOKE(proj2, *std::next(first2, b - 1)),
-                    HPX_INVOKE(proj1, *std::next(first1, a)));
-
-            if (cond1 && cond2)
-                return {a, b};
-
-            if (!cond1)
-            {
-                a_high = a - 1;
-            }
-            else
-            {
-                a_low = a + 1;
-            }
+            state.a = state.a_low;
+            state.b = state.k - state.a;
+            state.complete = true;
+            return;
         }
-        return {a_high, k - a_high};
+
+        state.a = (state.a_low + state.a_high) / 2;
+        state.b = state.k - state.a;
+
+        if (state.a != 0 && state.b != len2)
+        {
+            append_probe(batches1, find_partition_position(table1, state.a - 1),
+                search_index, input_previous);
+            append_probe(batches2, find_partition_position(table2, state.b),
+                search_index, input_current);
+        }
+
+        if (state.b != 0 && state.a != len1)
+        {
+            append_probe(batches2, find_partition_position(table2, state.b - 1),
+                search_index, input_previous);
+            append_probe(batches1, find_partition_position(table1, state.a),
+                search_index, input_current);
+        }
     }
+
+    template <typename Key1, typename Key2>
+    void store_input1_probe_results(
+        std::vector<projected_value_result<Key1>> results,
+        std::vector<diagonal_probe_values<Key1, Key2>>& values)
+    {
+        for (auto& result : results)
+        {
+            auto shared_value = std::make_shared<Key1>(HPX_MOVE(result.value));
+
+            for (auto const& target : result.targets)
+            {
+                HPX_ASSERT(target.search_index < values.size());
+                auto& search_values = values[target.search_index];
+
+                if (target.operand_index == input_previous)
+                {
+                    search_values.a_previous = shared_value;
+                }
+                else
+                {
+                    HPX_ASSERT(target.operand_index == input_current);
+                    search_values.a_current = shared_value;
+                }
+            }
+        }
+    }
+
+    template <typename Key1, typename Key2>
+    void store_input2_probe_results(
+        std::vector<projected_value_result<Key2>> results,
+        std::vector<diagonal_probe_values<Key1, Key2>>& values)
+    {
+        for (auto& result : results)
+        {
+            auto shared_value = std::make_shared<Key2>(HPX_MOVE(result.value));
+
+            for (auto const& target : result.targets)
+            {
+                HPX_ASSERT(target.search_index < values.size());
+                auto& search_values = values[target.search_index];
+
+                if (target.operand_index == input_previous)
+                {
+                    search_values.b_previous = shared_value;
+                }
+                else
+                {
+                    HPX_ASSERT(target.operand_index == input_current);
+                    search_values.b_current = shared_value;
+                }
+            }
+        }
+    }
+
+    template <typename Key1, typename Key2, typename Comp>
+    void update_diagonal_state(diagonal_search_state& state, std::size_t len1,
+        std::size_t len2, diagonal_probe_values<Key1, Key2> const& values,
+        Comp& comp)
+    {
+        if (state.complete)
+        {
+            return;
+        }
+
+        bool cond1 = state.a == 0 || state.b == len2;
+        if (!cond1)
+        {
+            HPX_ASSERT(values.a_previous);
+            HPX_ASSERT(values.b_current);
+            cond1 = !HPX_INVOKE(comp, *values.b_current, *values.a_previous);
+        }
+
+        bool cond2 = state.b == 0 || state.a == len1;
+        if (!cond2)
+        {
+            HPX_ASSERT(values.b_previous);
+            HPX_ASSERT(values.a_current);
+            cond2 = HPX_INVOKE(comp, *values.b_previous, *values.a_current);
+        }
+
+        if (cond1 && cond2)
+        {
+            state.complete = true;
+        }
+        else if (!cond1)
+        {
+            state.a_high = state.a - 1;
+        }
+        else
+        {
+            state.a_low = state.a + 1;
+        }
+    }
+
+    template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
+        typename Table2, typename Comp, typename Proj1, typename Proj2>
+    void resolve_diagonal_intersections(
+        std::vector<diagonal_search_state>& states, std::size_t len1,
+        std::size_t len2, Table1 const& table1, Table2 const& table2,
+        Comp& comp, Proj1& proj1, Proj2& proj2, std::true_type)
+    {
+        using local_iterator1 = typename Table1::local_iterator;
+        using local_iterator2 = typename Table2::local_iterator;
+        using values_type = diagonal_probe_values<Key1, Key2>;
+
+        std::vector<values_type> values(states.size());
+
+        for (std::size_t search_index = 0; search_index != states.size();
+            ++search_index)
+        {
+            auto& state = states[search_index];
+
+            while (!state.complete)
+            {
+                std::vector<locality_probe_batch<local_iterator1>> batches1;
+                std::vector<locality_probe_batch<local_iterator2>> batches2;
+
+                prepare_diagonal_probes(state, search_index, len1, len2, table1,
+                    table2, batches1, batches2, values[search_index]);
+
+                if (state.complete)
+                {
+                    break;
+                }
+
+                for (auto& batch : batches1)
+                {
+                    auto results = capture_projected_values_async<ExPolicy,
+                        Key1, local_iterator1>(batch.routing_partition_id,
+                        HPX_MOVE(batch.requests), std::decay_t<Proj1>(proj1))
+                                       .get();
+
+                    store_input1_probe_results<Key1, Key2>(
+                        HPX_MOVE(results), values);
+                }
+
+                for (auto& batch : batches2)
+                {
+                    auto results = capture_projected_values_async<ExPolicy,
+                        Key2, local_iterator2>(batch.routing_partition_id,
+                        HPX_MOVE(batch.requests), std::decay_t<Proj2>(proj2))
+                                       .get();
+
+                    store_input2_probe_results<Key1, Key2>(
+                        HPX_MOVE(results), values);
+                }
+
+                update_diagonal_state(
+                    state, len1, len2, values[search_index], comp);
+            }
+        }
+    }
+
+    template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
+        typename Table2, typename Comp, typename Proj1, typename Proj2>
+    void resolve_diagonal_intersections(
+        std::vector<diagonal_search_state>& states, std::size_t len1,
+        std::size_t len2, Table1 const& table1, Table2 const& table2,
+        Comp& comp, Proj1& proj1, Proj2& proj2, std::false_type)
+    {
+        using local_iterator1 = typename Table1::local_iterator;
+        using local_iterator2 = typename Table2::local_iterator;
+        using values_type = diagonal_probe_values<Key1, Key2>;
+        using result_type1 = std::vector<projected_value_result<Key1>>;
+        using result_type2 = std::vector<projected_value_result<Key2>>;
+
+        std::vector<values_type> values(states.size());
+
+        for (;;)
+        {
+            bool all_complete = true;
+            std::vector<locality_probe_batch<local_iterator1>> batches1;
+            std::vector<locality_probe_batch<local_iterator2>> batches2;
+
+            for (std::size_t search_index = 0; search_index != states.size();
+                ++search_index)
+            {
+                if (!states[search_index].complete)
+                {
+                    all_complete = false;
+                    prepare_diagonal_probes(states[search_index], search_index,
+                        len1, len2, table1, table2, batches1, batches2,
+                        values[search_index]);
+                }
+            }
+
+            if (all_complete)
+            {
+                break;
+            }
+
+            std::vector<hpx::future<result_type1>> operations1;
+            std::vector<hpx::future<result_type2>> operations2;
+            operations1.reserve(batches1.size());
+            operations2.reserve(batches2.size());
+
+            for (auto& batch : batches1)
+            {
+                operations1.push_back(capture_projected_values_async<ExPolicy,
+                    Key1, local_iterator1>(batch.routing_partition_id,
+                    HPX_MOVE(batch.requests), std::decay_t<Proj1>(proj1)));
+            }
+
+            for (auto& batch : batches2)
+            {
+                operations2.push_back(capture_projected_values_async<ExPolicy,
+                    Key2, local_iterator2>(batch.routing_partition_id,
+                    HPX_MOVE(batch.requests), std::decay_t<Proj2>(proj2)));
+            }
+
+            auto completed1 =
+                get_capture_results<ExPolicy>(HPX_MOVE(operations1));
+            auto completed2 =
+                get_capture_results<ExPolicy>(HPX_MOVE(operations2));
+
+            for (auto& results : completed1)
+            {
+                store_input1_probe_results<Key1, Key2>(
+                    HPX_MOVE(results), values);
+            }
+            for (auto& results : completed2)
+            {
+                store_input2_probe_results<Key1, Key2>(
+                    HPX_MOVE(results), values);
+            }
+
+            for (std::size_t search_index = 0; search_index != states.size();
+                ++search_index)
+            {
+                update_diagonal_state(states[search_index], len1, len2,
+                    values[search_index], comp);
+            }
+        }
+    }
+
+    template <typename SegmentIterator, typename LocalIterator>
+    struct output_chunk_position
+    {
+        SegmentIterator segment;
+        LocalIterator dest;
+        std::size_t k0;
+        std::size_t k1;
+    };
 
     template <typename Chunk>
     struct destination_chunk_batch
@@ -256,58 +671,97 @@ namespace hpx::parallel::detail {
         std::size_t final_chunk_position = 0;
     };
 
-    template <typename Traits3, typename Chunk, typename Iter1, typename Iter2,
-        typename Iter3, typename Comp, typename Proj1, typename Proj2>
+    template <typename ExPolicy, typename Traits3, typename Chunk,
+        typename Iter1, typename Iter2, typename Iter3, typename Comp,
+        typename Proj1, typename Proj2, typename IsSeq>
     destination_chunk_batches<Traits3, Chunk> make_destination_chunk_batches(
         Traits3, Iter1 const& first1, std::size_t len1, Iter2 const& first2,
         std::size_t len2, Iter3 const& dest, Comp& comp, Proj1& proj1,
-        Proj2& proj2)
+        Proj2& proj2, IsSeq is_seq)
     {
         using chunk_batches_type = destination_chunk_batches<Traits3, Chunk>;
         using batch_type = typename chunk_batches_type::batch_type;
         using segment_iterator = typename Traits3::segment_iterator;
         using local_iterator = typename Traits3::local_iterator;
+        using output_position_type =
+            output_chunk_position<segment_iterator, local_iterator>;
+        using reference1 = typename std::iterator_traits<Iter1>::reference;
+        using reference2 = typename std::iterator_traits<Iter2>::reference;
+        using key_type1 =
+            std::decay_t<std::invoke_result_t<Proj1&, reference1>>;
+        using key_type2 =
+            std::decay_t<std::invoke_result_t<Proj2&, reference2>>;
 
         chunk_batches_type chunk_batches;
 
-        auto output_position = for_each_output_chunk(Traits3{}, dest,
-            len1 + len2,
-            [&](segment_iterator segment, local_iterator output_first,
-                std::size_t k0, std::size_t k1) {
-                auto const [a0, b0] = segmented_diagonal_intersection(
-                    first1, len1, first2, len2, k0, comp, proj1, proj2);
-                auto const [a1, b1] = segmented_diagonal_intersection(
-                    first1, len1, first2, len2, k1, comp, proj1, proj2);
+        auto table1 =
+            make_segmented_range_table(first1, std::next(first1, len1));
+        auto table2 =
+            make_segmented_range_table(first2, std::next(first2, len2));
 
-                Chunk chunk{a1 - a0, b1 - b0,
-                    make_partition_ranges(
-                        std::next(first1, a0), std::next(first1, a1)),
-                    make_partition_ranges(
-                        std::next(first2, b0), std::next(first2, b1)),
-                    HPX_MOVE(output_first)};
+        std::vector<output_position_type> output_positions;
 
-                hpx::id_type const partition_id = Traits3::get_id(segment);
-                hpx::id_type const locality_id =
-                    get_partition_locality(partition_id);
+        auto output_position =
+            for_each_output_chunk(Traits3{}, dest, len1 + len2,
+                [&](segment_iterator segment, local_iterator output_first,
+                    std::size_t k0, std::size_t k1) {
+                    output_positions.push_back(output_position_type{
+                        HPX_MOVE(segment), HPX_MOVE(output_first), k0, k1});
+                });
 
-                auto batch = std::find_if(chunk_batches.batches.begin(),
-                    chunk_batches.batches.end(),
-                    [&locality_id](batch_type const& candidate) {
-                        return candidate.locality_id == locality_id;
-                    });
+        std::vector<diagonal_search_state> states;
+        states.reserve(output_positions.size() + 1);
+        states.push_back(make_diagonal_state(len1, len2, 0));
 
-                if (batch == chunk_batches.batches.end())
-                {
-                    chunk_batches.batches.push_back(
-                        batch_type{locality_id, partition_id, {}});
-                    batch = std::prev(chunk_batches.batches.end());
-                }
+        for (auto const& position : output_positions)
+        {
+            states.push_back(make_diagonal_state(len1, len2, position.k1));
+        }
 
-                batch->chunks.push_back(HPX_MOVE(chunk));
-                chunk_batches.final_batch_index = static_cast<std::size_t>(
-                    std::distance(chunk_batches.batches.begin(), batch));
-                chunk_batches.final_chunk_position = batch->chunks.size() - 1;
-            });
+        resolve_diagonal_intersections<ExPolicy, key_type1, key_type2>(
+            states, len1, len2, table1, table2, comp, proj1, proj2, is_seq);
+
+        HPX_ASSERT(states.size() == output_positions.size() + 1);
+
+        for (std::size_t index = 0; index != output_positions.size(); ++index)
+        {
+            auto const& first_position = states[index];
+            auto const& last_position = states[index + 1];
+            auto& output = output_positions[index];
+
+            HPX_ASSERT(first_position.complete);
+            HPX_ASSERT(last_position.complete);
+
+            Chunk chunk{last_position.a - first_position.a,
+                last_position.b - first_position.b,
+                make_partition_ranges(std::next(first1, first_position.a),
+                    std::next(first1, last_position.a)),
+                make_partition_ranges(std::next(first2, first_position.b),
+                    std::next(first2, last_position.b)),
+                HPX_MOVE(output.dest)};
+
+            hpx::id_type const partition_id = Traits3::get_id(output.segment);
+            hpx::id_type const locality_id =
+                get_partition_locality(partition_id);
+
+            auto batch = std::find_if(chunk_batches.batches.begin(),
+                chunk_batches.batches.end(),
+                [&locality_id](batch_type const& candidate) {
+                    return candidate.locality_id == locality_id;
+                });
+
+            if (batch == chunk_batches.batches.end())
+            {
+                chunk_batches.batches.push_back(
+                    batch_type{locality_id, partition_id, {}});
+                batch = std::prev(chunk_batches.batches.end());
+            }
+
+            batch->chunks.push_back(HPX_MOVE(chunk));
+            chunk_batches.final_batch_index = static_cast<std::size_t>(
+                std::distance(chunk_batches.batches.begin(), batch));
+            chunk_batches.final_chunk_position = batch->chunks.size() - 1;
+        }
 
         HPX_ASSERT(!chunk_batches.batches.empty());
         chunk_batches.final_segment.emplace(HPX_MOVE(output_position.first));
@@ -391,23 +845,6 @@ namespace hpx::parallel::detail {
         static constexpr bool is_task_policy =
             hpx::is_async_execution_policy_v<policy_type>;
 
-        std::optional<chunk_batches_type> chunk_batches;
-
-        try
-        {
-            chunk_batches.emplace(make_destination_chunk_batches<traits3,
-                typename types::chunk_type>(traits3{}, first1, len1, first2,
-                len2, dest, comp, proj1, proj2));
-        }
-        catch (...)
-        {
-            return handle_merge_planning_exception<ExPolicy, result_value_type>(
-                std::current_exception());
-        }
-
-        HPX_ASSERT(chunk_batches.has_value());
-        HPX_ASSERT(chunk_batches->final_segment.has_value());
-
         if constexpr (is_task_policy)
         {
             using algo_type = std::decay_t<Algo>;
@@ -429,63 +866,115 @@ namespace hpx::parallel::detail {
                     HPX_MOVE(policy), HPX_FORWARD(Comp, comp),
                     HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2)});
 
-            auto final_local =
-                std::make_shared<std::optional<local_iterator>>();
-
-            hpx::future<void> chain = hpx::make_ready_future();
-
-            for (std::size_t index = 0; index != chunk_batches->batches.size();
-                ++index)
-            {
-                bool const is_final =
-                    (index == chunk_batches->final_batch_index);
-                batch_type batch = HPX_MOVE(chunk_batches->batches[index]);
-                std::size_t const final_position =
-                    chunk_batches->final_chunk_position;
-
-                chain = HPX_MOVE(chain).then(
-                    [state, batch = HPX_MOVE(batch), final_local, is_final,
-                        final_position](hpx::future<void> previous) mutable
-                        -> hpx::future<void> {
-                        previous.get();
-
-                        auto operation =
-                            capture_dispatch_batch_async<value_type1,
-                                value_type2>(batch.routing_partition_id,
-                                state->algorithm, state->execution_policy,
-                                std::true_type{}, HPX_MOVE(batch.chunks),
-                                state->comparator, state->projection1,
-                                state->projection2);
-
-                        return HPX_MOVE(operation).then(
-                            [final_local, is_final, final_position](
-                                hpx::future<batch_result_type> ready) {
-                                auto values = ready.get();
-
-                                if (is_final)
-                                {
-                                    HPX_ASSERT(final_position < values.size());
-                                    final_local->emplace(
-                                        HPX_MOVE(values[final_position]));
-                                }
-                            });
-                    });
-            }
-
-            auto end_dest = HPX_MOVE(chain).then(
-                [final_segment = HPX_MOVE(*chunk_batches->final_segment),
-                    final_local](hpx::future<void> ready) mutable -> Iter3 {
-                    ready.get();
-                    HPX_ASSERT(final_local->has_value());
-                    return traits3::compose(
-                        final_segment, HPX_MOVE(**final_local));
+            auto planning =
+                hpx::async([state, first1, first2, dest, len1,
+                               len2]() mutable -> chunk_batches_type {
+                    try
+                    {
+                        return make_destination_chunk_batches<policy_type,
+                            traits3, typename types::chunk_type>(traits3{},
+                            first1, len1, first2, len2, dest, state->comparator,
+                            state->projection1, state->projection2,
+                            std::true_type{});
+                    }
+                    catch (...)
+                    {
+                        hpx::parallel::util::detail::handle_local_exceptions<
+                            policy_type>::call(std::current_exception());
+                        std::terminate();
+                    }
                 });
 
-            return make_merge_result_future<result_value_type>(
-                HPX_MOVE(end_dest), HPX_MOVE(last1), HPX_MOVE(last2));
+            return HPX_MOVE(planning).then(
+                [state, last1 = HPX_MOVE(last1), last2 = HPX_MOVE(last2)](
+                    hpx::future<chunk_batches_type> ready_batches) mutable
+                    -> hpx::future<result_value_type> {
+                    auto chunk_batches = ready_batches.get();
+                    HPX_ASSERT(chunk_batches.final_segment.has_value());
+
+                    auto final_local =
+                        std::make_shared<std::optional<local_iterator>>();
+
+                    hpx::future<void> chain = hpx::make_ready_future();
+
+                    for (std::size_t index = 0;
+                        index != chunk_batches.batches.size(); ++index)
+                    {
+                        bool const is_final =
+                            index == chunk_batches.final_batch_index;
+                        batch_type batch =
+                            HPX_MOVE(chunk_batches.batches[index]);
+                        std::size_t const final_position =
+                            chunk_batches.final_chunk_position;
+
+                        chain = HPX_MOVE(chain).then(
+                            [state, batch = HPX_MOVE(batch), final_local,
+                                is_final, final_position](
+                                hpx::future<void> previous) mutable
+                                -> hpx::future<void> {
+                                previous.get();
+
+                                auto operation =
+                                    capture_dispatch_batch_async<value_type1,
+                                        value_type2>(batch.routing_partition_id,
+                                        state->algorithm,
+                                        state->execution_policy,
+                                        std::true_type{},
+                                        HPX_MOVE(batch.chunks),
+                                        state->comparator, state->projection1,
+                                        state->projection2);
+
+                                return HPX_MOVE(operation).then(
+                                    [final_local, is_final, final_position](
+                                        hpx::future<batch_result_type> ready) {
+                                        auto values = ready.get();
+
+                                        if (is_final)
+                                        {
+                                            HPX_ASSERT(
+                                                final_position < values.size());
+                                            final_local->emplace(HPX_MOVE(
+                                                values[final_position]));
+                                        }
+                                    });
+                            });
+                    }
+
+                    auto end_dest = HPX_MOVE(chain).then(
+                        [final_segment = HPX_MOVE(*chunk_batches.final_segment),
+                            final_local](
+                            hpx::future<void> ready) mutable -> Iter3 {
+                            ready.get();
+                            HPX_ASSERT(final_local->has_value());
+                            return traits3::compose(
+                                final_segment, HPX_MOVE(**final_local));
+                        });
+
+                    return make_merge_result_future<result_value_type>(
+                        HPX_MOVE(end_dest), HPX_MOVE(last1), HPX_MOVE(last2));
+                });
         }
         else
         {
+            std::optional<chunk_batches_type> chunk_batches;
+
+            try
+            {
+                chunk_batches.emplace(
+                    make_destination_chunk_batches<policy_type, traits3,
+                        typename types::chunk_type>(traits3{}, first1, len1,
+                        first2, len2, dest, comp, proj1, proj2,
+                        std::true_type{}));
+            }
+            catch (...)
+            {
+                return handle_merge_planning_exception<ExPolicy,
+                    result_value_type>(std::current_exception());
+            }
+
+            HPX_ASSERT(chunk_batches.has_value());
+            HPX_ASSERT(chunk_batches->final_segment.has_value());
+
             std::optional<local_iterator> final_local;
 
             for (std::size_t index = 0; index != chunk_batches->batches.size();
@@ -543,62 +1032,125 @@ namespace hpx::parallel::detail {
         static constexpr bool is_task_policy =
             hpx::is_async_execution_policy_v<policy_type>;
 
-        std::optional<chunk_batches_type> chunk_batches;
+        auto execute_batches =
+            [last1 = HPX_MOVE(last1), last2 = HPX_MOVE(last2)](auto& algorithm,
+                auto& execution_policy, auto& comparator, auto& projection1,
+                auto& projection2, chunk_batches_type chunk_batches) mutable
+            -> hpx::future<result_value_type> {
+            HPX_ASSERT(chunk_batches.final_segment.has_value());
 
-        try
-        {
-            chunk_batches.emplace(make_destination_chunk_batches<traits3,
-                typename types::chunk_type>(traits3{}, first1, len1, first2,
-                len2, dest, comp, proj1, proj2));
-        }
-        catch (...)
-        {
-            return handle_merge_planning_exception<ExPolicy, result_value_type>(
-                std::current_exception());
-        }
+            std::vector<hpx::future<batch_result_type>> operations;
+            operations.reserve(chunk_batches.batches.size());
 
-        HPX_ASSERT(chunk_batches.has_value());
-        HPX_ASSERT(chunk_batches->final_segment.has_value());
+            for (auto& batch : chunk_batches.batches)
+            {
+                operations.push_back(
+                    capture_dispatch_batch_async<value_type1, value_type2>(
+                        batch.routing_partition_id,
+                        std::decay_t<decltype(algorithm)>(algorithm),
+                        std::decay_t<decltype(execution_policy)>(
+                            execution_policy),
+                        std::false_type{}, HPX_MOVE(batch.chunks),
+                        std::decay_t<decltype(comparator)>(comparator),
+                        std::decay_t<decltype(projection1)>(projection1),
+                        std::decay_t<decltype(projection2)>(projection2)));
+            }
 
-        std::vector<hpx::future<batch_result_type>> operations;
-        operations.reserve(chunk_batches->batches.size());
+            auto end_dest =
+                hpx::when_all(HPX_MOVE(operations))
+                    .then([final_segment =
+                                  HPX_MOVE(*chunk_batches.final_segment),
+                              final_batch = chunk_batches.final_batch_index,
+                              final_chunk = chunk_batches.final_chunk_position](
+                              auto ready) mutable -> Iter3 {
+                        auto completed =
+                            get_capture_results<policy_type>(ready.get());
 
-        for (auto& batch : chunk_batches->batches)
-        {
-            operations.push_back(
-                capture_dispatch_batch_async<value_type1, value_type2>(
-                    batch.routing_partition_id, std::decay_t<Algo>(algo),
-                    policy_type(policy), std::false_type{},
-                    HPX_MOVE(batch.chunks), std::decay_t<Comp>(comp),
-                    std::decay_t<Proj1>(proj1), std::decay_t<Proj2>(proj2)));
-        }
+                        HPX_ASSERT(final_batch < completed.size());
+                        auto final_values = HPX_MOVE(completed[final_batch]);
+                        HPX_ASSERT(final_chunk < final_values.size());
 
-        auto end_dest =
-            hpx::when_all(HPX_MOVE(operations))
-                .then([final_segment = HPX_MOVE(*chunk_batches->final_segment),
-                          final_batch = chunk_batches->final_batch_index,
-                          final_chunk = chunk_batches->final_chunk_position](
-                          auto ready) mutable -> Iter3 {
-                    auto completed =
-                        get_capture_results<policy_type>(ready.get());
+                        return traits3::compose(
+                            final_segment, HPX_MOVE(final_values[final_chunk]));
+                    });
 
-                    HPX_ASSERT(final_batch < completed.size());
-                    auto final_values = HPX_MOVE(completed[final_batch]);
-                    HPX_ASSERT(final_chunk < final_values.size());
-
-                    return traits3::compose(
-                        final_segment, HPX_MOVE(final_values[final_chunk]));
-                });
-
-        auto operation = make_merge_result_future<result_value_type>(
-            HPX_MOVE(end_dest), HPX_MOVE(last1), HPX_MOVE(last2));
+            return make_merge_result_future<result_value_type>(
+                HPX_MOVE(end_dest), HPX_MOVE(last1), HPX_MOVE(last2));
+        };
 
         if constexpr (is_task_policy)
         {
-            return operation;
+            using algo_type = std::decay_t<Algo>;
+            using comp_type = std::decay_t<Comp>;
+            using proj1_type = std::decay_t<Proj1>;
+            using proj2_type = std::decay_t<Proj2>;
+
+            struct task_state
+            {
+                algo_type algorithm;
+                policy_type execution_policy;
+                comp_type comparator;
+                proj1_type projection1;
+                proj2_type projection2;
+            };
+
+            auto state =
+                std::make_shared<task_state>(task_state{HPX_FORWARD(Algo, algo),
+                    HPX_MOVE(policy), HPX_FORWARD(Comp, comp),
+                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2)});
+
+            auto planning =
+                hpx::async([state, first1, first2, dest, len1,
+                               len2]() mutable -> chunk_batches_type {
+                    try
+                    {
+                        return make_destination_chunk_batches<policy_type,
+                            traits3, typename types::chunk_type>(traits3{},
+                            first1, len1, first2, len2, dest, state->comparator,
+                            state->projection1, state->projection2,
+                            std::false_type{});
+                    }
+                    catch (...)
+                    {
+                        hpx::parallel::util::detail::handle_local_exceptions<
+                            policy_type>::call(std::current_exception());
+                        std::terminate();
+                    }
+                });
+
+            return HPX_MOVE(planning).then(
+                [state, execute_batches = HPX_MOVE(execute_batches)](
+                    hpx::future<chunk_batches_type> ready_batches) mutable
+                    -> hpx::future<result_value_type> {
+                    return execute_batches(state->algorithm,
+                        state->execution_policy, state->comparator,
+                        state->projection1, state->projection2,
+                        ready_batches.get());
+                });
         }
         else
         {
+            std::optional<chunk_batches_type> chunk_batches;
+
+            try
+            {
+                chunk_batches.emplace(
+                    make_destination_chunk_batches<policy_type, traits3,
+                        typename types::chunk_type>(traits3{}, first1, len1,
+                        first2, len2, dest, comp, proj1, proj2,
+                        std::false_type{}));
+            }
+            catch (...)
+            {
+                return handle_merge_planning_exception<ExPolicy,
+                    result_value_type>(std::current_exception());
+            }
+
+            HPX_ASSERT(chunk_batches.has_value());
+
+            auto operation = execute_batches(
+                algo, policy, comp, proj1, proj2, HPX_MOVE(*chunk_batches));
+
             return operation.get();
         }
     }

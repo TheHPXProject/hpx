@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <iterator>
 #include <list>
@@ -166,6 +167,49 @@ namespace hpx::parallel::detail {
         }
     };
 
+    struct projected_value_target
+    {
+        std::size_t search_index;
+        std::uint8_t operand_index;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & search_index;
+            ar & operand_index;
+        }
+    };
+
+    template <typename LocalIterator>
+    struct projected_value_request
+    {
+        hpx::id_type partition_id;
+        std::vector<projected_value_target> targets;
+        LocalIterator position;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & partition_id;
+            ar & targets;
+            ar & position;
+        }
+    };
+
+    template <typename Key>
+    struct projected_value_result
+    {
+        std::vector<projected_value_target> targets;
+        Key value;
+
+        template <typename Archive>
+        void serialize(Archive& ar, unsigned)
+        {
+            ar & targets;
+            ar & value;
+        }
+    };
+
     struct collected_range_slice
     {
         std::size_t original_index;
@@ -285,6 +329,67 @@ namespace hpx::parallel::detail {
 
         return hpx::async(
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
+    }
+
+    template <typename Key, typename LocalIterator, typename Proj>
+    struct projected_value_collector
+    {
+        using iterator_type = std::decay_t<LocalIterator>;
+        using projection_type = std::decay_t<Proj>;
+        using request_type = projected_value_request<iterator_type>;
+        using result_type = projected_value_result<Key>;
+
+        static std::vector<result_type> get_values(
+            std::vector<request_type> requests, projection_type projection)
+        {
+            using local_traits =
+                hpx::traits::segmented_local_iterator_traits<iterator_type>;
+
+            std::vector<result_type> results;
+            results.reserve(requests.size());
+
+            for (auto& request : requests)
+            {
+                auto raw_position =
+                    local_traits::local(HPX_MOVE(request.position));
+
+                results.push_back(result_type{HPX_MOVE(request.targets),
+                    HPX_INVOKE(projection, *raw_position)});
+            }
+
+            return results;
+        }
+    };
+
+    template <typename Key, typename LocalIterator, typename Proj>
+    struct get_projected_values_action
+      : hpx::actions::make_action<std::vector<projected_value_result<Key>> (*)(
+                                      std::vector<projected_value_request<
+                                          std::decay_t<LocalIterator>>>,
+                                      std::decay_t<Proj>),
+            &projected_value_collector<Key, std::decay_t<LocalIterator>,
+                std::decay_t<Proj>>::get_values,
+            get_projected_values_action<Key, std::decay_t<LocalIterator>,
+                std::decay_t<Proj>>>::type
+    {
+    };
+
+    template <typename ExPolicy, typename Key, typename LocalIterator,
+        typename Proj>
+    hpx::future<std::vector<projected_value_result<Key>>>
+    capture_projected_values_async(hpx::id_type const& routing_partition_id,
+        std::vector<projected_value_request<std::decay_t<LocalIterator>>>
+            requests,
+        Proj&& projection)
+    {
+        using iterator_type = std::decay_t<LocalIterator>;
+        using projection_type = std::decay_t<Proj>;
+
+        get_projected_values_action<Key, iterator_type, projection_type> act;
+
+        return handle_capture_exceptions<ExPolicy>(
+            hpx::async(act, hpx::colocated(routing_partition_id),
+                HPX_MOVE(requests), HPX_FORWARD(Proj, projection)));
     }
 
     template <typename Iterator>
