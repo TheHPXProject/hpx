@@ -8,6 +8,10 @@ set(tests lockfree_fifo_double_backend schedule_last
           schedule_hint_none_stale_queue_6978
 )
 
+if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
+  list(APPEND tests workrequesting_random_victim)
+endif()
+
 # ##############################################################################
 foreach(test ${tests})
   set(sources ${test}.cpp)

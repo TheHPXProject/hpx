@@ -10,6 +10,7 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/serialization/detail/serialize_collection.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/serialize.hpp>
 #include <hpx/serialization/traits/is_bitwise_serializable.hpp>
@@ -116,7 +117,7 @@ namespace hpx::serialization {
         std::uint64_t size;
         ar >> size;    //-V128
 
-        detail::load_collection(ar, t, size);
+        detail::load_collection(ar, t, detail::to_size(size));
     }
 
     HPX_CXX_CORE_EXPORT template <typename Key, typename Value, typename Comp,
@@ -140,7 +141,7 @@ namespace hpx::serialization {
         std::uint64_t size;
         ar >> size;
 
-        detail::load_collection(ar, t, size);
+        detail::load_collection(ar, t, detail::to_size(size));
     }
 
     HPX_CXX_EXPORT template <typename Key, typename Value, typename Comp,

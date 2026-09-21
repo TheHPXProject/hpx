@@ -9,8 +9,10 @@
 
 #include <hpx/config.hpp>
 #include <hpx/serialization/basic_archive.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -25,12 +27,14 @@ namespace hpx::serialization {
         std::uint64_t size = 0;
         ar >> size;    //-V128
 
+        std::size_t const count = detail::to_size(size);
+
         s.clear();
-        if (s.size() < size)
-            s.resize(size);
+        if (s.size() < count)
+            s.resize(count);
 
         load_binary(ar, detail::array_of_fundamental_type_v<Char>, &s[0],
-            size * sizeof(Char));
+            count * sizeof(Char));
     }
 
     // save string

@@ -16,6 +16,7 @@
 #include <hpx/serialization/basic_archive.hpp>
 #include <hpx/serialization/detail/polymorphic_nonintrusive_factory.hpp>
 #include <hpx/serialization/detail/raw_ptr.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/input_container.hpp>
 #include <hpx/serialization/traits/is_serialization_supported.hpp>
 
@@ -93,7 +94,7 @@ namespace hpx::serialization {
             }
 
             buffer_->set_zero_copy_serialization_threshold(
-                zero_copy_serialization_threshold);
+                detail::clamp_to_size(zero_copy_serialization_threshold));
 
             bool has_filter = false;
             load(has_filter);
