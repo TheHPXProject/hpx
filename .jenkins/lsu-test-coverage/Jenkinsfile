@@ -44,8 +44,15 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'jenkins-hpx-*', fingerprint: true, allowEmptyArchive: true
-            archiveArtifacts artifacts: 'grcov-log.txt', fingerprint: true, allowEmptyArchive: true
+            // Only a skipped pull request run has nothing to archive. A branch
+            // build that produced no coverage log must still fail.
+            script {
+                def skipped = env.CHANGE_ID != null
+                archiveArtifacts artifacts: 'jenkins-hpx-*', fingerprint: true,
+                    allowEmptyArchive: skipped
+                archiveArtifacts artifacts: 'grcov-log.txt', fingerprint: true,
+                    allowEmptyArchive: skipped
+            }
         }
     }
 }
