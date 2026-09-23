@@ -189,6 +189,67 @@ void test_semaphore_try_acquire_for_until()
     }
 }
 
+// Regression test: try_acquire_until must return true when a concurrent
+// release() fires before the deadline, even when the waiter was already
+// suspended inside wait_until.  Before the fix, it returned false because
+// the restart-state comparison used != unknown instead of == timeout,
+// treating thread_restart_state::signaled as a timeout.
+void test_try_acquire_until_returns_true_when_signaled_before_deadline()
+{
+    // 64 iterations: the bug is deterministically present on every one
+    // because the release() always arrives before the 5-second deadline.
+    for (int iter = 0; iter < 64; ++iter)
+    {
+        hpx::counting_semaphore<> sem(0);
+
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+
+        hpx::thread releaser([&sem]() {
+            // Yield once to maximise the chance the acquirer is already
+            // suspended in wait_until when release() fires.
+            hpx::this_thread::yield();
+            sem.release();
+        });
+
+        bool const acquired = sem.try_acquire_until(deadline);
+        releaser.join();
+
+        // Must be true: the semaphore was signaled before the deadline.
+        HPX_TEST(acquired);
+    }
+}
+
+// Multiple waiters: each release() must produce exactly one successful
+// try_acquire_until, so the total success count must equal N.
+void test_try_acquire_until_multiple_waiters_all_succeed()
+{
+    constexpr int N = 8;
+    hpx::counting_semaphore<> sem(0);
+    std::atomic<int> success_count{0};
+
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(5);
+
+    std::vector<hpx::thread> waiters;
+    waiters.reserve(N);
+    for (int i = 0; i < N; ++i)
+    {
+        waiters.emplace_back([&sem, &success_count, deadline]() {
+            if (sem.try_acquire_until(deadline))
+                ++success_count;
+        });
+    }
+
+    for (int i = 0; i < N; ++i)
+        sem.release();
+
+    for (auto& t : waiters)
+        t.join();
+
+    HPX_TEST_EQ(success_count.load(), N);
+}
+
 int hpx_main()
 {
     test_semaphore_release_acquire();
@@ -198,6 +259,8 @@ int hpx_main()
     test_semaphore_try_acquire_for();
     test_semaphore_try_acquire_until();
     test_semaphore_try_acquire_for_until();
+    test_try_acquire_until_returns_true_when_signaled_before_deadline();
+    test_try_acquire_until_multiple_waiters_all_succeed();
 
     hpx::local::finalize();
     return hpx::util::report_errors();
