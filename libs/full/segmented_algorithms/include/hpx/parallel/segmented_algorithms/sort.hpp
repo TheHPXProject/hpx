@@ -46,7 +46,10 @@ namespace hpx::parallel::detail {
             ExPolicy, InIter first, Sent last, Comp&& comp, Proj&& proj)
         {
             auto last_iter = advance_to_sentinel(first, last);
-            std::sort(first, last_iter,
+            // Sort the underlying base iterators. Apple libc++'s std::sort
+            // uses operator[], and iterator_facade's brackets proxy is not
+            // comparable for types such as std::string.
+            std::sort(first.base(), last_iter.base(),
                 util::compare_projected<Comp&, Proj&>(comp, proj));
             return last_iter;
         }

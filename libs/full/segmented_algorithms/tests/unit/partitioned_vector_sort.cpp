@@ -126,8 +126,10 @@ void initialize_mixed_n(hpx::partitioned_vector<T>& values, int n)
 
 struct throwing_less
 {
-    template <typename T>
-    bool operator()(T const&, T const&) const
+    // Two template parameters so libc++ can pass heterogeneous
+    // iterator dereference / proxy types into std::sort.
+    template <typename T, typename U>
+    bool operator()(T const&, U const&) const
     {
         throw std::runtime_error("segmented sort comparator");
     }
