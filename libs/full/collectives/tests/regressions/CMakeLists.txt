@@ -11,6 +11,7 @@ if(HPX_WITH_NETWORKING)
       barrier_hang
       broadcast_unwrap_future_2885
       broadcast_wait_for_2822
+      channel_communicator_6881
       collectives_bool_5940
       exclusive_scan_6636
       multiple_gather_ops_2001
@@ -28,6 +29,9 @@ if(HPX_WITH_NETWORKING)
   set(exclusive_scan_6636_PARAMETERS LOCALITIES 2)
   set(multiple_gather_ops_2001_PARAMETERS LOCALITIES 2)
   set(reduce_vector_bool_2001_PARAMETERS LOCALITIES 2)
+  set(channel_communicator_6881_PARAMETERS LOCALITIES 3 THREADS_PER_LOCALITY 2
+                                           TIMEOUT 60
+  )
 
   foreach(test ${tests})
     set(sources ${test}.cpp)
@@ -46,4 +50,28 @@ if(HPX_WITH_NETWORKING)
     add_hpx_regression_test("modules.collectives" ${test} ${${test}_PARAMETERS})
   endforeach()
 
+endif()
+
+if(HPX_WITH_COMPILE_ONLY_TESTS)
+  set(compile_tests)
+  if(HPX_WITH_CUDA OR HPX_WITH_HIP)
+    list(APPEND compile_tests device_headers_6740)
+    set(device_headers_6740_CUDA ON)
+  endif()
+
+  foreach(compile_test ${compile_tests})
+    if(${${compile_test}_CUDA})
+      set(sources ${compile_test}.cu)
+    else()
+      set(sources ${compile_test}.cpp)
+    endif()
+
+    source_group("Source Files" FILES ${sources})
+
+    add_hpx_regression_compile_test(
+      "modules.collectives" ${compile_test}
+      SOURCES ${sources} ${${compile_test}_FLAGS}
+      FOLDER "Tests/Regressions/Modules/Full/Collectives/CompileOnly"
+    )
+  endforeach()
 endif()

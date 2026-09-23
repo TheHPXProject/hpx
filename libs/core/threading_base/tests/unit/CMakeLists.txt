@@ -9,6 +9,10 @@ set(tests execution_agent set_thread_affinity thread_exit_callbacks
           thread_data_is_background
 )
 
+if(HPX_WITH_TRACY)
+  set(tests ${tests} task_sampling)
+endif()
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 

@@ -106,9 +106,9 @@ To give some random initial values to our matrices, we use `std::uniform_int_dis
 along with ``hpx::ranges::generate()`` to yield two matrices A and B, which contain values in the range of [0, 10] or in
 the range defined by the user at the command-line arguments. The seed to generate the values can also be defined by the user.
 
-The next step is to perform the matrix multiplication in parallel. This can be done by just using an :cpp:func:`\hpx::experimental::for_loop`
+The next step is to perform the matrix multiplication in parallel. This can be done by just using an :hpx:func:`\hpx::experimental::for_loop`
 combined with a parallel execution policy ``hpx::execution::par`` as the outer loop of the multiplication. Note that the execution
-of :cpp:func:`\hpx::experimental::for_loop` without specifying an execution policy is equivalent to specifying ``hpx::execution::seq``
+of :hpx:func:`\hpx::experimental::for_loop` without specifying an execution policy is equivalent to specifying ``hpx::execution::seq``
 as the execution policy.
 
 Finally, the matrices A, B that are multiplied as well as the resultant matrix R are printed using the following function.

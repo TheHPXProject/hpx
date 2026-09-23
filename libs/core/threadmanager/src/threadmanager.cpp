@@ -124,12 +124,12 @@ namespace hpx::threads {
             hpx::util::get_entry_as<std::int64_t>(rtcfg_,
                 "hpx.thread_queue.max_terminated_threads",
                 HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS);
-        std::uint64_t const init_threads_count =
-            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
+        std::size_t const init_threads_count =
+            hpx::util::get_entry_as<std::size_t>(rtcfg_,
                 "hpx.thread_queue.init_threads_count",
                 HPX_THREAD_QUEUE_INIT_THREADS_COUNT);
-        std::uint64_t const cached_threads_count =
-            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
+        std::size_t const cached_threads_count =
+            hpx::util::get_entry_as<std::size_t>(rtcfg_,
                 "hpx.thread_queue.cached_threads_count",
                 HPX_THREAD_QUEUE_CACHED_THREADS_COUNT);
         double const max_idle_backoff_time = hpx::util::get_entry_as<double>(
@@ -739,10 +739,10 @@ namespace hpx::threads {
         auto& rp = hpx::resource::get_partitioner();
         size_t const num_pools = rp.get_num_pools();
         std::size_t thread_offset = 0;
-        std::size_t const max_idle_loop_count =
+        std::int64_t const max_idle_loop_count =
             hpx::util::get_entry_as<std::int64_t>(
                 rtcfg_, "hpx.max_idle_loop_count", HPX_IDLE_LOOP_COUNT_MAX);
-        std::size_t const max_busy_loop_count =
+        std::int64_t const max_busy_loop_count =
             hpx::util::get_entry_as<std::int64_t>(
                 rtcfg_, "hpx.max_busy_loop_count", HPX_BUSY_LOOP_COUNT_MAX);
 

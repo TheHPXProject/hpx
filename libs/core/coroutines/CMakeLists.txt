@@ -86,6 +86,15 @@ if(MSVC)
     # ##########################################################################
     # Emulation of SwapContext on Windows
     # ##########################################################################
+    if(NOT "${__target_arch}" STREQUAL "x86_64")
+      hpx_error(
+        "The option HPX_COROUTINES_WITH_SWAP_CONTEXT_EMULATION is only \
+         implemented for x86-64 targets, src/switch_to_fiber.asm is x86-64 \
+         assembly, but the target architecture is ${__target_arch}. Please \
+         disable the emulation by setting it to Off."
+      )
+    endif()
+
     enable_language(ASM_MASM)
     if(NOT CMAKE_ASM_MASM_COMPILER)
       hpx_error(

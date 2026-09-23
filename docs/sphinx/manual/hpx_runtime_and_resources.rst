@@ -199,9 +199,9 @@ thread pool.
 Using the resource partitioner
 ------------------------------
 
-The :cpp:class:`hpx::resource::partitioner` is now created during |hpx| runtime
+The :hpx:class:`hpx::resource::partitioner` is now created during |hpx| runtime
 initialization without explicit action needed from the user. To specify some of
-the initialization parameters you can use the :cpp:struct:`hpx::init_params`.
+the initialization parameters you can use the :hpx:struct:`hpx::init_params`.
 
 .. literalinclude:: ../../libs/full/resource_partitioner/examples/simplest_resource_partitioner_1.cpp
    :start-after: //[body
@@ -210,17 +210,17 @@ the initialization parameters you can use the :cpp:struct:`hpx::init_params`.
 The resource partitioner callback is the interface to add thread pools to the
 |hpx| runtime and to assign resources to the thread pools.  In order to create
 custom thread pools you can specify the resource partitioner callback
-:cpp:member:`hpx::init_params::rp_callback` which will be called once the
+:hpx:member:`hpx::init_params::rp_callback` which will be called once the
 resource partitioner will be created , see the example below. You can also
-specify other parameters, see :cpp:struct:`hpx::init_params`.
+specify other parameters, see :hpx:struct:`hpx::init_params`.
 
 To add a thread pool use the
-:cpp:member:`hpx::resource::partitioner::create_thread_pool` method. If you
+:hpx:member:`hpx::resource::partitioner::create_thread_pool` method. If you
 simply want to use the default scheduler and scheduler options, it is enough to
 call ``rp.create_thread_pool("my-thread-pool")``.
 
 Then, to add resources to the thread pool you can use the
-:cpp:member:`hpx::resource::partitioner::add_resource` method. The resource
+:hpx:member:`hpx::resource::partitioner::add_resource` method. The resource
 partitioner exposes the hardware topology retrieved using |hwloc|_ and lets you
 iterate through the topology to add the wanted processing units to the thread
 pool. Below is an example of adding all processing units from the first NUMA
@@ -234,7 +234,7 @@ case we leave the first processing unit for the default thread pool:
 .. note::
 
    Whatever processing units are not assigned to a thread pool by the time
-   :cpp:func:`hpx::init` is called will be added to the default thread pool. It
+   :hpx:func:`hpx::init` is called will be added to the default thread pool. It
    is also possible to explicitly add processing units to the default thread
    pool, and to create the default thread pool manually (in order to e.g. set
    the scheduler type).
@@ -248,7 +248,7 @@ Difference between the old and new version
 ------------------------------------------
 
 In the old version, you had to create an instance of the
-:cpp:class:`resource_partitioner` with ``argc`` and ``argv``.
+:hpx:class:`resource_partitioner` with ``argc`` and ``argv``.
 
 .. code-block:: c++
 
@@ -344,7 +344,7 @@ Advanced usage
 --------------
 
 It is possible to customize the built in schedulers by passing scheduler options
-to :cpp:member:`hpx::resource::partitioner::create_thread_pool`. It is also possible
+to :hpx:member:`hpx::resource::partitioner::create_thread_pool`. It is also possible
 to create and use custom schedulers.
 
 .. note::
@@ -366,8 +366,8 @@ when creating the thread pool like this::
             hpx::policies::scheduler_mode::enable_elasticity));
 
 The available schedulers are documented here:
-:cpp:enum:`hpx::resource::scheduling_policy`, and the available scheduler modes
-here: :cpp:enum:`hpx::threads::policies::scheduler_mode`. Also see the examples
+:hpx:enum:`hpx::resource::scheduling_policy`, and the available scheduler modes
+here: :hpx:enum:`hpx::threads::policies::scheduler_mode`. Also see the examples
 folder for examples of advanced resource partitioner usage:
 ``simple_resource_partitioner.cpp`` and
 ``oversubscribing_resource_partitioner.cpp``.

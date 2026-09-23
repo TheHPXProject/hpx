@@ -22,6 +22,7 @@
 
 #include <cctype>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <set>
 #include <string>
@@ -81,11 +82,11 @@ namespace hpx { namespace performance_counters { namespace papi {
         {
             id = hpx::components::server::construct<papi_counter_type>(info);
         }
-        catch (hpx::exception const& e)
+        catch (hpx::exception const&)
         {
             if (&ec == &hpx::throws)
                 throw;
-            ec = make_error_code(e.get_error(), e.what());
+            ec = make_error_code(std::current_exception());
             return hpx::naming::invalid_gid;
         }
 

@@ -17,10 +17,10 @@ which are turned of during a release build.
 
 By default, the location and function where the assert has been called from are
 displayed when the assertion fires. This behavior can be modified by using
-:cpp:func:`hpx::assertion::set_assertion_handler`. When HPX initializes, it uses
+:hpx:func:`hpx::assertion::set_assertion_handler`. When HPX initializes, it uses
 this function to specify a more elaborate assertion handler. If your application
 needs to customize this, it needs to do so before calling
-:cpp:func:`hpx::init`, :ref:`hpx_main <starting_hpx>` or using the C-main
+:hpx:func:`hpx::init`, :ref:`hpx_main <starting_hpx>` or using the C-main
 wrappers.
 
 

@@ -15,6 +15,7 @@
 #include <hpx/performance_counters/counters_fwd.hpp>
 #include <hpx/performance_counters/performance_counter_set.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -45,6 +46,10 @@ namespace hpx::util {
         void stop_evaluating_counters(bool terminate = false);
         bool evaluate(bool force = false);
 
+        /// \brief Return the number of performance counters currently held
+        ///        by this object.
+        std::size_t size() const;
+
         void terminate();
 
         void start_counters(error_code& ec = throws);
@@ -56,7 +61,39 @@ namespace hpx::util {
             error_code& ec = throws);
 
     protected:
+        /// \brief Resolve the counter names this object was constructed
+        ///        with.
+        ///
+        /// Throws (or sets \a ec, for the counters_.add_counters()
+        /// overloads that take one) if any of the requested (non-empty)
+        /// name lists fails to resolve, e.g. an invalid exact counter name
+        /// or a malformed pattern. A wild-card pattern that legitimately
+        /// matches nothing yet is not treated as a failure (see #4627).
         void find_counters();
+
+        /// \brief Re-run discovery for the counter names this object was
+        ///        constructed with and merge any newly found counters into
+        ///        the existing set.
+        ///
+        /// Counters requested by wild-card patterns (for instance
+        /// \c /apex/*) can be registered with HPX only after program
+        /// startup, e.g. because the counter is not known to its provider
+        /// until the counter is sampled for the first time. Since
+        /// find_counters() only resolves names once, at startup, such
+        /// counters would never be picked up. Calling refresh_counters()
+        /// again before a final evaluation, such as the one performed when
+        /// counters are printed at shutdown, allows those late counters to
+        /// be discovered and included as well. Counters that were already
+        /// part of the set are left untouched.
+        ///
+        /// \returns false if any of the requested (non-empty) name lists
+        ///          failed to resolve without error, or if starting any
+        ///          newly discovered counters failed; true otherwise. The
+        ///          registry generation snapshot taken before discovery is
+        ///          only cached (last_known_generation_) when this returns
+        ///          true, so a partial/failed refresh is retried on the
+        ///          next evaluation rather than being silently forgotten.
+        bool refresh_counters();
 
         bool print_raw_counters(bool destination_is_cout, bool reset,
             bool no_output, char const* description,
@@ -114,6 +151,20 @@ namespace hpx::util {
         bool csv_header_;
         bool print_counters_locally_;
         bool counter_types_;
+
+        // Whether start() has run. A wildcard pattern such as /apex/* may
+        // legitimately match no counters at all when start() runs, so
+        // counters_.size() == 0 cannot be used to tell "start() was never
+        // called" apart from "start() found nothing (yet)"; see #4627.
+        std::atomic<bool> started_;
+
+        // The performance_counters::registry generation last observed by
+        // refresh_counters(). Compared against registry::instance()
+        // .generation() so that periodic evaluations can cheaply detect
+        // "nothing new was registered since last time" (a single atomic
+        // load) without paying for a full, AGAS-touching re-discovery on
+        // every tick; see #4627.
+        std::atomic<std::uint64_t> last_known_generation_;
 
         interval_timer timer_;
     };

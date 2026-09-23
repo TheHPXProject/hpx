@@ -29,7 +29,9 @@ namespace hpx {
     ///        as a compile-time constant expression.
     /// \details  The primary template is not defined. An explicit (full) or
     ///           partial specialization is required to make a type tuple-like.
-    template <typename T>
+    ///           The Enable parameter allows constraining partial
+    ///           specializations via SFINAE (mirroring hpx::tuple_element).
+    template <typename T, typename Enable = void>
     struct tuple_size;
 
     /// \brief Provides compile-time indexed access to the types of the elements
@@ -124,7 +126,7 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT template <typename... Ts>
     class tuple;
 
-    HPX_CXX_CORE_EXPORT template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
     struct tuple_size;    // undefined
 
     HPX_CXX_CORE_EXPORT template <std::size_t I, typename T,
@@ -573,7 +575,7 @@ namespace hpx {
 
     // template <class Tuple>
     // class tuple_size
-    HPX_CXX_CORE_EXPORT template <typename T>
+    HPX_CXX_CORE_EXPORT template <typename T, typename Enable>
     struct tuple_size
     {
     };

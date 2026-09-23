@@ -714,9 +714,9 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        inline std::size_t get_queue_length()
+        inline std::int64_t get_queue_length()
         {
-            std::size_t count = 0;
+            std::int64_t count = 0;
             count += owns_bp_queue() ? bp_queue_->get_queue_length() : 0;
             count += owns_hp_queue() ? hp_queue_->get_queue_length() : 0;
             count += owns_np_queue() ? np_queue_->get_queue_length() : 0;
@@ -726,7 +726,7 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        inline std::size_t get_thread_count_staged(
+        inline std::int64_t get_thread_count_staged(
             thread_priority priority) const
         {
             // Return thread count of one specific queue.
@@ -779,7 +779,7 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        inline std::size_t get_thread_count_pending(
+        inline std::int64_t get_thread_count_pending(
             thread_priority priority) const
         {
             // Return thread count of one specific queue.
@@ -830,7 +830,7 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        inline std::size_t get_thread_count(
+        inline std::int64_t get_thread_count(
             thread_schedule_state state = thread_schedule_state::unknown,
             thread_priority priority = thread_priority::default_) const
         {

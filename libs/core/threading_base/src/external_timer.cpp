@@ -229,18 +229,30 @@ namespace hpx::tracing {
         }
     }
 
-    void send_parcel(std::uint64_t const tag, std::uint64_t const size,
+    // util::external_timer::send/recv take a single uint64_t tag, so we
+    // forward tag_lsb and drop tag_msb. The two zeros below match what
+    // APEX consumes: parcel::size_ is never populated on the receive
+    // path, and APEX marks its source_thread parameter APEX_UNUSED and
+    // substitutes 0 internally.
+    void send_parcel(std::uint64_t const /*tag_msb*/,
+        std::uint64_t const tag_lsb, std::uint64_t const size,
         std::uint64_t const target_locality_id) noexcept
     {
-        util::external_timer::send(tag, size, target_locality_id);
+        util::external_timer::send(tag_lsb, size, target_locality_id);
     }
 
-    void recv_parcel(std::uint64_t const tag, std::uint64_t const size,
-        std::uint64_t const source_locality_id,
-        std::uint64_t const source_thread_id) noexcept
+    void recv_parcel(std::uint64_t const /*tag_msb*/,
+        std::uint64_t const tag_lsb,
+        std::uint64_t const source_locality_id) noexcept
     {
-        util::external_timer::recv(
-            tag, size, source_locality_id, source_thread_id);
+        util::external_timer::recv(tag_lsb, 0, source_locality_id, 0);
+    }
+
+    void parcel_scheduled(std::uint64_t const /*tag_msb*/,
+        std::uint64_t const /*tag_lsb*/,
+        std::uint64_t const /*source_locality_id*/,
+        std::uint64_t const /*source_thread_id*/) noexcept
+    {
     }
 
     void set_enable_parent_task_handler(enable_parent_task_handler_type f)

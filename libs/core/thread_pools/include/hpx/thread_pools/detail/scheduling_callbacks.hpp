@@ -27,14 +27,14 @@ namespace hpx::threads::detail {
             background_callback_type&& background = background_callback_type(),
             std::size_t max_background_threads =
                 (std::numeric_limits<std::size_t>::max)(),
-            std::size_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
-            std::size_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX)
+            std::int64_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
+            std::int64_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX)
           : outer_(HPX_MOVE(outer))
           , inner_(HPX_MOVE(inner))
           , background_(HPX_MOVE(background))
           , max_background_threads_(max_background_threads)
-          , max_idle_loop_count_(static_cast<std::int64_t>(max_idle_loop_count))
-          , max_busy_loop_count_(static_cast<std::int64_t>(max_busy_loop_count))
+          , max_idle_loop_count_(max_idle_loop_count)
+          , max_busy_loop_count_(max_busy_loop_count)
         {
         }
 

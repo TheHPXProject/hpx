@@ -1187,18 +1187,63 @@ hpx_option(
 
 if(HPX_WITH_TRACY)
   hpx_option(
-    HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.13.1"
+    HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
     CATEGORY "Profiling"
   )
-endif()
 
-hpx_option(
-  HPX_WITH_FETCH_TRACY
-  BOOL
-  "Use FetchContent to fetch Tracy. By default an installed Tracy will be used. (default: OFF)"
-  OFF
-  CATEGORY "Build Targets"
-)
+  # Per-subsystem tracing gates. Each event class is compiled out when its
+  # option is OFF so that users profiling one subsystem do not pay the cost of
+  # the others. Defaults preserve current behaviour: all three classes on.
+  hpx_option(
+    HPX_WITH_TRACING_LIFECYCLE_EVENTS
+    BOOL
+    "Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed, deleted). Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_LIFECYCLE_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_CAUSAL_EVENTS
+    BOOL
+    "Emit causal chain events (future_fulfilled, future_exception_set, continuation_run, continuation_finished, handle_on_completed_fired). Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_CAUSAL_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
+  endif()
+
+  hpx_option(
+    HPX_WITH_TRACING_WORK_STEALING_EVENTS
+    BOOL
+    "Emit work-stealing events when a worker steals a task from another. Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+  endif()
+
+  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX and ITTNotify
+  # already treat every lifecycle hook as a constexpr no-op, so sampling would
+  # gate dead code on those backends; only Tracy actually emits.
+  hpx_option(
+    HPX_WITH_TRACING_SAMPLE_RATE
+    STRING
+    "1-in-N task-lifecycle sampling rate for the Tracy backend; 1 emits every task, higher values emit correspondingly fewer (default: 1)"
+    "1"
+    ADVANCED
+  )
+  if(NOT HPX_WITH_TRACING_SAMPLE_RATE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "HPX_WITH_TRACING_SAMPLE_RATE must be a positive integer, got '${HPX_WITH_TRACING_SAMPLE_RATE}'"
+    )
+  endif()
+  hpx_add_config_define(HPX_TRACING_SAMPLE_RATE ${HPX_WITH_TRACING_SAMPLE_RATE})
+endif()
 
 # Experimental settings
 hpx_option(
@@ -1561,18 +1606,6 @@ hpx_option(
 )
 if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
-endif()
-hpx_option(
-  HPX_WITH_EXAMPLES_TBB BOOL
-  "Enable examples requiring TBB support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_TBB)
-  find_package(TBB)
-  if(NOT Tbb_FOUND)
-    set(HPX_WITH_EXAMPLES_TBB OFF)
-  endif()
 endif()
 hpx_option(
   HPX_WITH_EXAMPLES_QTHREADS BOOL

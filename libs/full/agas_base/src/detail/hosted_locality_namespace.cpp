@@ -48,7 +48,7 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::locality_namespace::free_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, locality),
-            "hosted_locality_namespace::free");
+            "hosted_locality_namespace::free", hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return false;
@@ -59,8 +59,9 @@ namespace hpx::agas::detail {
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::locality_namespace::localities_action action;
-        return hpx::wait_or_handle_timeout(
-            hpx::async(action, gid_), "hosted_locality_namespace::localities");
+        return hpx::wait_or_handle_timeout(hpx::async(action, gid_),
+            "hosted_locality_namespace::localities",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return std::vector<std::uint32_t>{};
@@ -71,10 +72,6 @@ namespace hpx::agas::detail {
         [[maybe_unused]] naming::gid_type const& locality)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
-        constexpr server::locality_namespace::resolve_locality_action action;
-        future<parcelset::endpoints_type> endpoints_future =
-            hpx::async(action, gid_, locality);
-
         if (nullptr == threads::get_self_ptr())
         {
             // This should happen only during bootstrap. If it happens later
@@ -83,13 +80,12 @@ namespace hpx::agas::detail {
             {
                 return {};
             }
-
-            while (!endpoints_future.is_ready())
-                /**/;
         }
 
-        return hpx::wait_or_handle_timeout(HPX_MOVE(endpoints_future),
-            "hosted_locality_namespace::resolve_locality");
+        constexpr server::locality_namespace::resolve_locality_action action;
+        return hpx::wait_or_handle_timeout(hpx::async(action, gid_, locality),
+            "hosted_locality_namespace::resolve_locality",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return parcelset::endpoints_type{};
@@ -101,7 +97,8 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::locality_namespace::get_num_localities_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_),
-            "hosted_locality_namespace::get_num_localities");
+            "hosted_locality_namespace::get_num_localities",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return std::uint32_t{};
@@ -125,7 +122,8 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::locality_namespace::get_num_threads_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_),
-            "hosted_locality_namespace::get_num_threads");
+            "hosted_locality_namespace::get_num_threads",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return std::vector<std::uint32_t>{};
@@ -150,7 +148,8 @@ namespace hpx::agas::detail {
         constexpr server::locality_namespace::get_num_overall_threads_action
             action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_),
-            "hosted_locality_namespace::get_num_overall_threads");
+            "hosted_locality_namespace::get_num_overall_threads",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return hpx::resource::get_num_threads();

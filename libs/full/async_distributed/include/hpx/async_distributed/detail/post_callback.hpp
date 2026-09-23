@@ -522,9 +522,55 @@ namespace hpx {
         Target&& target, Callback&& cb, Ts&&... ts)
     // clang-format on
     {
-        return hpx::post_cb(hpx::actions::reflect_action<F>{},
+        return hpx::post_cb<hpx::actions::reflect_action<F>>(
             HPX_FORWARD(Target, target), HPX_FORWARD(Callback, cb),
             HPX_FORWARD(Ts, ts)...);
+    }
+    /// \brief Reflection-based post_cb overload with explicit launch policy.
+    ///
+    /// \tparam F        A std::meta::info reflection of a free function.
+    /// \tparam Callback Callback type invoked on completion.
+    /// \tparam Ts       Additional arguments to pass to the function.
+    /// \param target    The target locality id.
+    /// \param policy    The launch policy.
+    /// \param cb        The callback invoked on completion.
+    /// \param ts        Additional arguments forwarded to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Callback,
+        typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    HPX_FORCEINLINE bool post_cb(
+        hpx::id_type const& target, hpx::launch policy,
+        Callback&& cb, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::post_p_cb<hpx::actions::reflect_action<F>>(
+            target, policy, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, ts)...);
+    }
+    /// \brief Reflection-based post_cb overload with distribution policy and launch policy.
+    ///
+    /// \tparam F          A std::meta::info reflection of a free function.
+    /// \tparam DistPolicy Distribution policy type.
+    /// \tparam Callback   Callback type invoked on completion.
+    /// \tparam Ts         Additional arguments to pass to the function.
+    /// \param dist_policy The distribution policy.
+    /// \param launch      The launch policy.
+    /// \param cb          The callback invoked on completion.
+    /// \param ts          Additional arguments forwarded to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename DistPolicy,
+        typename Callback, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            hpx::traits::is_distribution_policy_v<std::decay_t<DistPolicy>>)
+    HPX_FORCEINLINE bool post_cb(
+        DistPolicy const& dist_policy, hpx::launch launch,
+        Callback&& cb, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::post_p_cb<hpx::actions::reflect_action<F>>(dist_policy,
+            launch, HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, ts)...);
     }
 #endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx

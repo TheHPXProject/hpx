@@ -40,7 +40,8 @@ namespace hpx::agas::detail {
         constexpr server::component_namespace::bind_prefix_action action;
         return hpx::wait_or_handle_timeout(
             hpx::async(action, gid_, key, prefix),
-            "hosted_component_namespace::bind_prefix");
+            "hosted_component_namespace::bind_prefix",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return components::component_type{};
@@ -53,7 +54,8 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::component_namespace::bind_name_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, name),
-            "hosted_component_namespace::bind_name");
+            "hosted_component_namespace::bind_name",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return components::component_type{};
@@ -66,7 +68,8 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::component_namespace::resolve_id_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, key),
-            "hosted_component_namespace::resolve_id");
+            "hosted_component_namespace::resolve_id",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return std::vector<std::uint32_t>{1, std::uint32_t(0)};
@@ -79,7 +82,7 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::component_namespace::unbind_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, key),
-            "hosted_component_namespace::unbind");
+            "hosted_component_namespace::unbind", hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return true;
@@ -92,7 +95,8 @@ namespace hpx::agas::detail {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         constexpr server::component_namespace::iterate_types_action action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, f),
-            "hosted_component_namespace::iterate_types");
+            "hosted_component_namespace::iterate_types",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
 #endif
@@ -105,7 +109,8 @@ namespace hpx::agas::detail {
         constexpr server::component_namespace::get_component_type_name_action
             action;
         return hpx::wait_or_handle_timeout(hpx::async(action, gid_, type),
-            "hosted_component_namespace::get_component_type_name");
+            "hosted_component_namespace::get_component_type_name",
+            hpx::agas::get_rpc_timeout());
 #else
         HPX_ASSERT(false);
         return std::string{};

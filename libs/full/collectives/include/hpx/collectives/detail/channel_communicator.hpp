@@ -8,8 +8,6 @@
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
-
 #include <hpx/assert.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/components.hpp>
@@ -161,5 +159,3 @@ namespace hpx::collectives::detail {
         std::vector<client_type> clients_;
     };
 }    // namespace hpx::collectives::detail
-
-#endif    // COMPUTE_HOST_CODE

@@ -47,6 +47,7 @@ set(execution_headers
     hpx/execution/executors/polymorphic_executor.hpp
     hpx/execution/executors/rebind_executor.hpp
     hpx/execution/executors/rebind_executor_parameters.hpp
+    hpx/execution/executors/rebind_policy.hpp
     hpx/execution/executors/static_chunk_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_alignment_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_all_any_none.hpp
@@ -80,6 +81,7 @@ set(execution_headers
     hpx/execution/traits/executor_traits.hpp
     hpx/execution/traits/future_then_result_exec.hpp
     hpx/execution/traits/is_execution_policy.hpp
+    hpx/execution/traits/policy_traits.hpp
     hpx/execution/traits/vector_pack_alignment_size.hpp
     hpx/execution/traits/vector_pack_all_any_none.hpp
     hpx/execution/traits/vector_pack_conditionals.hpp

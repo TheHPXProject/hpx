@@ -16,6 +16,8 @@
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/program_options.hpp>
 
+#include <papi.h>
+
 ///////////////////////////////////////////////////////////////////////////////
 char const* counter_name = "/papi{locality#0/worker-thread#0}/PAPI_SR_INS";
 size_t const nstores = 1000000;
@@ -124,6 +126,24 @@ int check_(int fd)
 ///////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
+    if (PAPI_library_init(PAPI_VER_CURRENT) != PAPI_VER_CURRENT)
+    {
+        std::cerr << "PAPI library initialization failed\n";
+        return 1;
+    }
+    int const event_status = PAPI_query_event(PAPI_SR_INS);
+    if (event_status == PAPI_ENOEVNT)
+    {
+        std::cout << "SKIP: PAPI_SR_INS is unavailable on this machine\n";
+        return 0;
+    }
+    if (event_status != PAPI_OK)
+    {
+        std::cerr << "PAPI_SR_INS query failed: " << PAPI_strerror(event_status)
+                  << '\n';
+        return 1;
+    }
+
     // Prepare to grab the output stream.
     int pipefd[2];
     if (pipe(pipefd) != 0 || dup2(pipefd[1], STDOUT_FILENO) < 0)

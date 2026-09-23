@@ -9,6 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/execution/traits/policy_traits.hpp>
 #include <hpx/modules/execution_base.hpp>
 
 #include <type_traits>
@@ -17,37 +18,43 @@ namespace hpx::detail {
 
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_execution_policy : std::false_type
+    struct is_execution_policy : std::bool_constant<policy_traits<T>::is_policy>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_parallel_execution_policy : std::false_type
+    struct is_parallel_execution_policy
+      : std::bool_constant<policy_traits<T>::is_parallel>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_sequenced_execution_policy : std::false_type
+    struct is_sequenced_execution_policy
+      : std::bool_constant<policy_traits<T>::is_sequenced>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_async_execution_policy : std::false_type
+    struct is_async_execution_policy
+      : std::bool_constant<policy_traits<T>::is_async>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
-    struct is_rebound_execution_policy : std::false_type
+    struct is_rebound_execution_policy
+      : std::bool_constant<policy_traits<Executor>::is_rebound>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
-    struct is_unsequenced_execution_policy : std::false_type
+    struct is_unsequenced_execution_policy
+      : std::bool_constant<policy_traits<Executor>::is_unsequenced>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
-    struct is_vectorpack_execution_policy : std::false_type
+    struct is_vectorpack_execution_policy
+      : std::bool_constant<policy_traits<Executor>::is_vectorpack>
     {
     };
     /// \endcond

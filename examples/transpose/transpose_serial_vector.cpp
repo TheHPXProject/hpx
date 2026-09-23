@@ -13,6 +13,7 @@
 #include <hpx/init.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -28,22 +29,23 @@ HPX_REGISTER_PARTITIONED_VECTOR(double)
 bool verbose = false;
 
 double test_results(
-    std::uint64_t order, hpx::partitioned_vector<double> const& trans);
+    std::size_t order, hpx::partitioned_vector<double> const& trans);
 
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    std::uint64_t order = vm["matrix_size"].as<std::uint64_t>();
-    std::uint64_t iterations = vm["iterations"].as<std::uint64_t>();
-    std::uint64_t tile_size = order;
+    std::size_t order = vm["matrix_size"].as<std::size_t>();
+    std::size_t iterations = vm["iterations"].as<std::size_t>();
+    std::size_t tile_size = order;
 
     if (vm.count("tile_size"))
-        tile_size = vm["tile_size"].as<std::uint64_t>();
+        tile_size = vm["tile_size"].as<std::size_t>();
 
     verbose = vm.count("verbose") ? true : false;
 
+    // keep the byte count in 64 bits, order is only as wide as std::size_t
     std::uint64_t bytes =
-        static_cast<std::uint64_t>(2 * sizeof(double) * order * order);
+        2 * sizeof(double) * static_cast<std::uint64_t>(order) * order;
 
     hpx::partitioned_vector<double> A(order * order);
     hpx::partitioned_vector<double> B(order * order);
@@ -57,9 +59,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::cout << "Number of iterations  = " << iterations << "\n";
 
     // Fill the original matrix, set transpose to known garbage value.
-    for (std::uint64_t i = 0; i < order; ++i)
+    for (std::size_t i = 0; i < order; ++i)
     {
-        for (std::uint64_t j = 0; j < order; ++j)
+        for (std::size_t j = 0; j < order; ++j)
         {
             A[i * order + j] = COL_SHIFT * static_cast<double>(j) +
                 ROW_SHIFT * static_cast<double>(i);
@@ -73,21 +75,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
     double mintime =
         366.0 * 24.0 * 3600.0;    // set the minimum time to a large value;
                                   // one leap year should be enough
-    for (std::uint64_t iter = 0; iter < iterations; ++iter)
+    for (std::size_t iter = 0; iter < iterations; ++iter)
     {
         hpx::chrono::high_resolution_timer t;
 
         if (tile_size < order)
         {
-            for (std::uint64_t i = 0; i < order; i += tile_size)
+            for (std::size_t i = 0; i < order; i += tile_size)
             {
-                for (std::uint64_t j = 0; j < order; j += tile_size)
+                for (std::size_t j = 0; j < order; j += tile_size)
                 {
-                    std::uint64_t i_max = (std::min) (order, i + tile_size);
-                    for (std::uint64_t it = i; it < i_max; ++it)
+                    std::size_t i_max = (std::min) (order, i + tile_size);
+                    for (std::size_t it = i; it < i_max; ++it)
                     {
-                        std::uint64_t j_max = (std::min) (order, j + tile_size);
-                        for (std::uint64_t jt = j; jt < j_max; ++jt)
+                        std::size_t j_max = (std::min) (order, j + tile_size);
+                        for (std::size_t jt = j; jt < j_max; ++jt)
                         {
                             B[it + order * jt] = double(A[jt + order * it]);
                         }
@@ -97,9 +99,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
         }
         else
         {
-            for (std::uint64_t i = 0; i < order; ++i)
+            for (std::size_t i = 0; i < order; ++i)
             {
-                for (std::uint64_t j = 0; j < order; ++j)
+                for (std::size_t j = 0; j < order; ++j)
                 {
                     B[i + order * j] = double(A[j + order * i]);
                 }
@@ -126,7 +128,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::cout << "Solution validates\n";
         avgtime = avgtime /
             static_cast<double>(
-                (std::max) (iterations - 1, static_cast<std::uint64_t>(1)));
+                (std::max) (iterations - 1, static_cast<std::size_t>(1)));
         std::cout << "Rate (MB/s): "
                   << 1.e-6 * static_cast<double>(bytes) / mintime << ", "
                   << "Avg time (s): " << avgtime << ", "
@@ -153,11 +155,11 @@ int main(int argc, char* argv[])
     options_description desc_commandline;
     // clang-format off
     desc_commandline.add_options()
-        ("matrix_size", value<std::uint64_t>()->default_value(1024),
+        ("matrix_size", value<std::size_t>()->default_value(1024),
          "Matrix Size")
-        ("iterations", value<std::uint64_t>()->default_value(10),
+        ("iterations", value<std::size_t>()->default_value(10),
          "# iterations")
-        ("tile_size", value<std::uint64_t>(),
+        ("tile_size", value<std::size_t>(),
         "Number of tiles to divide the individual matrix blocks for improved "
          "cache and TLB performance")
         ("verbose", "Verbose output");
@@ -175,13 +177,13 @@ int main(int argc, char* argv[])
 }
 
 double test_results(
-    std::uint64_t order, hpx::partitioned_vector<double> const& trans)
+    std::size_t order, hpx::partitioned_vector<double> const& trans)
 {
     double errsq = 0.0;
 
-    for (std::uint64_t i = 0; i < order; ++i)
+    for (std::size_t i = 0; i < order; ++i)
     {
-        for (std::uint64_t j = 0; j < order; ++j)
+        for (std::size_t j = 0; j < order; ++j)
         {
             double diff = trans[i * order + j] -
                 (COL_SHIFT * static_cast<double>(i) +

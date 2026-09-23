@@ -8,9 +8,36 @@
 
 #include <hpx/config.hpp>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace hpx::components::server::detail {
+
+    /// \brief Whether the initiator should initiate another termination probe.
+    ///
+    /// A probe that leaves the initiator black means some locality was still
+    /// active, and rule 3 requires a further probe; that repetition is
+    /// deliberately unbounded. A probe that could not be handed to any
+    /// locality is a different case: the ring is missing a locality, so
+    /// repeating the probe cannot deliver it. Those are bounded, letting
+    /// shutdown proceed with a diagnostic instead of probing until the process
+    /// is killed.
+    ///
+    /// \param initiator_black           Whether the probe left the initiator
+    ///                                  black, i.e. the probe was unsuccessful.
+    /// \param undeliverable_probes      Number of consecutive probes that
+    ///                                  could not be handed to any locality
+    ///                                  other than the initiator itself.
+    /// \param max_undeliverable_probes  Bound on that count.
+    ///
+    /// \return true if another probe should be initiated.
+    HPX_CXX_EXPORT constexpr bool dijkstra_should_reprobe(
+        bool const initiator_black, std::size_t const undeliverable_probes,
+        std::size_t const max_undeliverable_probes) noexcept
+    {
+        return initiator_black &&
+            undeliverable_probes < max_undeliverable_probes;
+    }
 
     /// \brief Pure ring-walk decision logic used while forwarding the Dijkstra
     ///        termination detection token.
@@ -41,11 +68,17 @@ namespace hpx::components::server::detail {
     /// \param send_token              Callable used to attempt handing off
     ///                                the token to a candidate locality.
     ///
-    /// \return true if the token was handed off to some locality strictly
-    ///         between \p locality_id and \p initiating_locality_id, false if
-    ///         the walk reached \p initiating_locality_id without a successful
-    ///         send (the caller is then responsible for the fallback of sending
-    ///         directly to \p initiating_locality_id).
+    /// \return true if the token was handed off, false if the walk reached
+    ///         \p initiating_locality_id without a successful send (the caller
+    ///         is then responsible for the fallback of sending directly to
+    ///         \p initiating_locality_id).
+    ///
+    /// \note   The initiator is itself the last candidate of the walk when
+    ///         \p initiating_locality_id is 0, because the ring wraps through
+    ///         it. That send is local and always succeeds, so a true return
+    ///         does not on its own mean the token reached another locality;
+    ///         a caller that needs to know must check the target it was
+    ///         handed to.
     HPX_CXX_EXPORT template <typename SendToken>
     bool dijkstra_forward_token(std::uint32_t& locality_id,
         std::uint32_t const initiating_locality_id, SendToken&& send_token)

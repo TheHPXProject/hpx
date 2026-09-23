@@ -55,6 +55,9 @@
 #include <vector>
 
 #if defined(HPX_MSVC)
+#include <hpx/debugging/detail/dbghelp_lock.hpp>
+#include <hpx/debugging/detail/dbghelp_symbol_cache.hpp>
+
 #include <windows.h>
 
 #include <dbghelp.h>
@@ -356,18 +359,35 @@ namespace hpx::util::stack_trace {
 
     namespace {
 
-        HANDLE hProcess = nullptr;
+        HANDLE process_handle = nullptr;
         bool syms_ready = false;
 
         void init()
         {
-            if (hProcess == nullptr)
+            // Serialise the check-then-set and the SymInitialize call
+            // against Tracy's DbgHelp path (see dbghelp_lock.hpp). The
+            // lock also fixes the previous non-atomic init() race.
+            hpx::util::detail::dbghelp_scoped_lock const l;
+            if (process_handle == nullptr)
             {
-                hProcess = GetCurrentProcess();
-                SymSetOptions(SYMOPT_DEFERRED_LOADS);
+                process_handle = GetCurrentProcess();
 
-                if (SymInitialize(hProcess, nullptr, TRUE))
+                // OR our preference in rather than clobbering: if Tracy
+                // (or anything else) initialised the handler first, its
+                // options are already set and we do not want to reset
+                // them here.
+                SymSetOptions(SymGetOptions() | SYMOPT_DEFERRED_LOADS);
+
+                if (SymInitialize(process_handle, nullptr, TRUE))
                 {
+                    syms_ready = true;
+                }
+                else if (GetLastError() == ERROR_INVALID_PARAMETER)
+                {
+                    // Someone else (typically Tracy's SymbolWorker) has
+                    // already initialised DbgHelp for this process. The
+                    // handler is usable; we just do not own its lifetime
+                    // and therefore never call SymCleanup.
                     syms_ready = true;
                 }
             }
@@ -385,25 +405,49 @@ namespace hpx::util::stack_trace {
            << ptr;
         if (syms_ready)
         {
-            DWORD64 dwDisplacement = 0;
-            auto const dwAddress = reinterpret_cast<DWORD64>(ptr);
+            auto const address = reinterpret_cast<DWORD64>(ptr);
 
-            std::vector<char> buffer(sizeof(SYMBOL_INFO) + MAX_SYM_NAME);
-            auto const pSymbol =
-                reinterpret_cast<PSYMBOL_INFO>(&buffer.front());
+            // DbgHelp is single-threaded; serialise with Tracy and with
+            // any concurrent HPX callers on the same process. The lock is
+            // held across both the cache lookup and, on a miss, the
+            // SymFromAddr call below (dbghelp_scoped_lock wraps a
+            // recursive_mutex, so this stays deadlock-free even though
+            // nothing here actually re-enters it).
+            hpx::util::detail::dbghelp_scoped_lock const l;
+            auto& symbol_cache = hpx::util::detail::get_dbghelp_symbol_cache();
 
-            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-            pSymbol->MaxNameLen = MAX_SYM_NAME;
-
-            if (SymFromAddr(hProcess, dwAddress, &dwDisplacement, pSymbol))
+            hpx::util::detail::resolved_symbol_info resolved;
+            if (!symbol_cache.try_get(address, resolved))
             {
-                ss << ": " << pSymbol->Name << std::hex << " +0x"
-                   << dwDisplacement;
+                DWORD64 displacement = 0;
+
+                // Reused across calls under dbghelp_scoped_lock; the
+                // SizeOfStruct/MaxNameLen header fields below are
+                // re-initialised on every lookup, so a stale name from a
+                // previous call is always overwritten before use.
+                static std::vector<char> buffer(
+                    sizeof(SYMBOL_INFO) + MAX_SYM_NAME);
+                auto* const symbol =
+                    reinterpret_cast<PSYMBOL_INFO>(buffer.data());
+
+                symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                symbol->MaxNameLen = MAX_SYM_NAME;
+
+                if (SymFromAddr(process_handle, address, &displacement, symbol))
+                {
+                    resolved.name.assign(symbol->Name, symbol->NameLen);
+                    resolved.displacement = displacement;
+                    symbol_cache.insert(address, resolved);
+                }
+                else
+                {
+                    ss << ": ???";
+                    return ss.str();
+                }
             }
-            else
-            {
-                ss << ": ???";
-            }
+
+            ss << ": " << resolved.name << std::hex << " +0x"
+               << resolved.displacement;
         }
         return ss.str();
     }

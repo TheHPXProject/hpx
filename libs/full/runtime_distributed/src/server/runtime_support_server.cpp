@@ -459,6 +459,17 @@ namespace hpx::components::server {
 
         std::size_t count = 0;    // keep track of number of trials
 
+        // A probe that could not be handed to any other locality will not be
+        // delivered by repeating it, the ring is simply missing a locality.
+        // Bound those retries the way dijkstra_termination already bounds its
+        // own fallback, so an unreachable locality ends shutdown with a
+        // diagnostic instead of probing until the job hits its wall clock. A
+        // probe that is delivered and returns black is an ordinary
+        // unsuccessful probe under rule 3 and stays unbounded.
+        constexpr std::size_t max_undeliverable_probes = 3;
+        std::size_t undeliverable_probes = 0;
+        bool reprobe = false;
+
         {
             do
             {
@@ -483,13 +494,28 @@ namespace hpx::components::server {
                     target_id = num_localities;
 
                 {
+                    // The ring walk ends at the initiator, so its last hop
+                    // hands the token back to this locality, and the fallback
+                    // below targets this locality as well. Both of those sends
+                    // are local and therefore always succeed, so a probe that
+                    // reached nobody still reports a successful handoff. Track
+                    // whether some other locality accepted the token and count
+                    // undeliverable probes off that instead.
+                    bool reached_other_locality = false;
+
                     // accommodate for disconnected localities
                     bool token_sent = detail::dijkstra_forward_token(target_id,
                         initiating_locality_id,
                         [&](std::uint32_t const target_locality_id) {
-                            return send_dijkstra_termination_token(
+                            bool const sent = send_dijkstra_termination_token(
                                 target_locality_id, initiating_locality_id,
                                 num_localities, dijkstra_color_);
+                            if (sent &&
+                                target_locality_id != initiating_locality_id)
+                            {
+                                reached_other_locality = true;
+                            }
+                            return sent;
                         });
 
                     if (!token_sent)
@@ -497,6 +523,15 @@ namespace hpx::components::server {
                         token_sent = send_dijkstra_termination_token(
                             initiating_locality_id, initiating_locality_id,
                             num_localities, dijkstra_color_);
+                    }
+
+                    if (reached_other_locality)
+                    {
+                        undeliverable_probes = 0;
+                    }
+                    else
+                    {
+                        ++undeliverable_probes;
                     }
 
                     if (token_sent)
@@ -528,15 +563,36 @@ namespace hpx::components::server {
 
                 ++count;
 
-                if (dijkstra_color_)
+                // Decide once whether to probe again and report off that same
+                // answer, so the diagnostic can never disagree with the loop.
+                reprobe = detail::dijkstra_should_reprobe(dijkstra_color_,
+                    undeliverable_probes, max_undeliverable_probes);
+
+                if (reprobe)
                 {
                     LRT_(info).format(
                         "runtime_support::dijkstra_termination_detection: "
                         "After the completion of an unsuccessful probe, "
                         "initiate next probe.");
                 }
+                else if (dijkstra_color_)
+                {
+                    // Still black and out of undeliverable probes. Report this
+                    // loudly rather than blocking shutdown: the caller only
+                    // logs the trial count, so giving up here lets the runtime
+                    // shut down instead of probing forever. Termination is
+                    // abandoned here, not confirmed, which is a deliberate
+                    // best-effort relaxation for a ring that is missing a
+                    // locality.
+                    LRT_(error).format(
+                        "runtime_support::dijkstra_termination_detection: "
+                        "could not deliver the termination token to any other "
+                        "locality in {} consecutive probes (trial {}); giving "
+                        "up so shutdown can proceed.",
+                        max_undeliverable_probes, count);
+                }
 
-            } while (dijkstra_color_);
+            } while (reprobe);
 
             // We need the lock here to ensure the mutual exclusion of
             // hpx::latch::count_down and hpx::latch::~latch

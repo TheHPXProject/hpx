@@ -15,8 +15,8 @@ The supervision dispatch module provides peer discovery, cooperative
 lifecycle management, failure detection, and fenced action dispatch across
 localities, built on top of the :ref:`supervision <modules_supervision>`
 module's lifecycle events and admission checks. See that module's reference
-for the semantics of :cpp:func:`hpx::supervision::check_admission` and
-:cpp:type:`hpx::supervision::dispatch_outcome`; this page documents only the
+for the semantics of :hpx:func:`hpx::supervision::check_admission` and
+:hpx:type:`hpx::supervision::dispatch_outcome`; this page documents only the
 dispatch-specific surface layered on top of them. For the narrative on
 initialization ordering, one-shot discovery, shadow-state semantics, and
 client-side filtering versus fenced-dispatch admission, see
@@ -211,7 +211,7 @@ Fenced dispatch
     short-circuit an already-known-fenced target, then dispatches to the
     target's own locality (via ``hpx::colocated``) where an authoritative
     re-check against the same latch consulted by
-    :cpp:func:`hpx::supervision::check_admission` runs immediately before the
+    :hpx:func:`hpx::supervision::check_admission` runs immediately before the
     wrapped action executes, on the same thread, closing the
     admission/invocation race. See
     :doc:`/manual/supervision_dispatch` for the full client-side-filtering

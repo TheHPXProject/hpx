@@ -15,39 +15,39 @@ The collectives module exposes a set of distributed collective operations. Those
 can be used to exchange data between participating sites in a coordinated way.
 At this point the module exposes the following collective primitives:
 
-* :cpp:func:`hpx::collectives::all_gather`: receives a set of values from all
+* :hpx:func:`hpx::collectives::all_gather`: receives a set of values from all
   participating sites.
-* :cpp:func:`hpx::collectives::all_reduce`: performs a reduction on data from
+* :hpx:func:`hpx::collectives::all_reduce`: performs a reduction on data from
   each participating site to each participating site.
-* :cpp:func:`hpx::collectives::all_to_all`: each participating site provides its
+* :hpx:func:`hpx::collectives::all_to_all`: each participating site provides its
   element of the data to collect while all participating sites receive the data
   from every other site.
-* :cpp:func:`hpx::collectives::broadcast_to` and
-  :cpp:func:`hpx::collectives::broadcast_from`: performs a broadcast operation
+* :hpx:func:`hpx::collectives::broadcast_to` and
+  :hpx:func:`hpx::collectives::broadcast_from`: performs a broadcast operation
   from a root site to all participating sites.
-* :cpp:func:`hpx::collectives::exclusive_scan`: performs an exclusive scan operation
+* :hpx:func:`hpx::collectives::exclusive_scan`: performs an exclusive scan operation
   on a set of values received from all call sites operating on the given base name.
-* :cpp:func:`hpx::collectives::gather_here` and
-  :cpp:func:`hpx::collectives::gather_there`: gathers values from all
+* :hpx:func:`hpx::collectives::gather_here` and
+  :hpx:func:`hpx::collectives::gather_there`: gathers values from all
   participating sites.
-* :cpp:func:`hpx::collectives::inclusive_scan`: performs an inclusive scan operation
+* :hpx:func:`hpx::collectives::inclusive_scan`: performs an inclusive scan operation
   on a set of values received from all call sites operating on the given base name.
-* :cpp:func:`hpx::collectives::reduce_here` and
-  :cpp:func:`hpx::collectives::reduce_there`: performs a reduction on data from each
+* :hpx:func:`hpx::collectives::reduce_here` and
+  :hpx:func:`hpx::collectives::reduce_there`: performs a reduction on data from each
   participating site to a root site.
-* :cpp:func:`hpx::collectives::scatter_to` and
-  :cpp:func:`hpx::collectives::scatter_from`: receives an element of a set of values
+* :hpx:func:`hpx::collectives::scatter_to` and
+  :hpx:func:`hpx::collectives::scatter_from`: receives an element of a set of values
   operating on the given base name.
 
-* :cpp:func:`hpx::lcos::broadcast`: performs a given action on all given global
+* :hpx:func:`hpx::lcos::broadcast`: performs a given action on all given global
   identifiers.
-* :cpp:class:`hpx::distributed::barrier`: distributed barrier.
-* :cpp:func:`hpx::lcos::fold`: performs a fold with a given action on all given
+* :hpx:class:`hpx::distributed::barrier`: distributed barrier.
+* :hpx:func:`hpx::lcos::fold`: performs a fold with a given action on all given
   global identifiers.
-* :cpp:class:`hpx::distributed::latch`: distributed latch.
-* :cpp:func:`hpx::lcos::reduce`: performs a reduction on data from each
+* :hpx:class:`hpx::distributed::latch`: distributed latch.
+* :hpx:func:`hpx::lcos::reduce`: performs a reduction on data from each
   given global identifiers.
-* :cpp:class:`hpx::lcos::spmd_block`: performs the same operation on a local
+* :hpx:class:`hpx::lcos::spmd_block`: performs the same operation on a local
   image while providing handles to the other images.
 
 See the :ref:`API reference <modules_collectives_api>` of the module for more
@@ -67,17 +67,17 @@ Generation model
 Hierarchical collectives use two internal generations for each user generation.
 For a user generation ``k``, the first internal phase uses ``2k - 1`` and the
 second uses ``2k``. Single-pass hierarchical operations and the inter-group
-exchange of :cpp:func:`hpx::collectives::all_to_all` advance the communicator by
+exchange of :hpx:func:`hpx::collectives::all_to_all` advance the communicator by
 two generations in one step so that shared hierarchical communicators stay
 aligned with two-phase collectives.
 
 When a hierarchical communicator instance is shared between collective
 operations, callers must pass explicit, strictly consecutive positive
 generation numbers. Two-phase hierarchical collectives, including
-:cpp:func:`hpx::collectives::all_gather`,
-:cpp:func:`hpx::collectives::all_reduce`,
-:cpp:func:`hpx::collectives::all_to_all`,
-:cpp:func:`hpx::collectives::inclusive_scan`,
-:cpp:func:`hpx::collectives::exclusive_scan`, and
-:cpp:class:`hpx::distributed::barrier`, reject the default generation because
+:hpx:func:`hpx::collectives::all_gather`,
+:hpx:func:`hpx::collectives::all_reduce`,
+:hpx:func:`hpx::collectives::all_to_all`,
+:hpx:func:`hpx::collectives::inclusive_scan`,
+:hpx:func:`hpx::collectives::exclusive_scan`, and
+:hpx:class:`hpx::distributed::barrier`, reject the default generation because
 their phase generations are derived from the explicit user generation.

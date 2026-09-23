@@ -81,20 +81,20 @@ beginning with ``main()``:
 
 In this excerpt of the code we again see the use of futures. This time the
 futures are stored in a vector so that they can easily be accessed.
-:cpp:func:`hpx::wait_all` is a family of functions that wait on for an
+:hpx:func:`hpx::wait_all` is a family of functions that wait on for an
 ``std::vector<>`` of futures to become ready. In this piece of code, we are
-using the synchronous version of :cpp:func:`hpx::wait_all()`, which takes one
+using the synchronous version of :hpx:func:`hpx::wait_all()`, which takes one
 argument (the ``std::vector<>`` of futures to wait on). This function will not
 return until all the futures in the vector have been executed.
 
-In :ref:`examples_fibonacci` we used :cpp:func:`hpx::find_here()` to specify the
+In :ref:`examples_fibonacci` we used :hpx:func:`hpx::find_here()` to specify the
 target of our actions. Here, we instead use
-:cpp:func:`hpx::find_all_localities()`, which returns an ``std::vector<>``
+:hpx:func:`hpx::find_all_localities()`, which returns an ``std::vector<>``
 containing the identifiers of all the machines in the system, including the one
 that we are on.
 
 As in :ref:`examples_fibonacci` our futures are set using
-:cpp:func:`hpx::async\<>()`. The ``hello_world_foreman_action`` is declared
+:hpx:func:`hpx::async\<>()`. The ``hello_world_foreman_action`` is declared
 here:
 
 .. literalinclude:: ../../examples/quickstart/hello_world_distributed.cpp
@@ -115,15 +115,15 @@ wrapped in the action above:
    :end-before: //]
 
 Now, before we discuss ``hello_world_foreman()``, let's talk about the
-:cpp:func:`hpx::wait_each()` function.
-The version of :cpp:func:`hpx::wait_each` invokes a callback function
+:hpx:func:`hpx::wait_each()` function.
+The version of :hpx:func:`hpx::wait_each` invokes a callback function
 provided by the user, supplying the callback function with the result of the
 future.
 
 In ``hello_world_foreman()``, an ``std::set<>`` called ``attendance`` keeps
 track of which OS-threads have printed out the hello world message. When the
 OS-thread prints out the statement, the future is marked as ready, and
-:cpp:func:`hpx::wait_each` in ``hello_world_foreman()``. If it is not
+:hpx:func:`hpx::wait_each` in ``hello_world_foreman()``. If it is not
 executing on the correct OS-thread, it returns a value of -1, which causes
 ``hello_world_foreman()`` to leave the OS-thread id in ``attendance``.
 

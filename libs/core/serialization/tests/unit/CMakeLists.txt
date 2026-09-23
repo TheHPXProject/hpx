@@ -20,6 +20,7 @@ set(tests
     serialization_set
     serialization_multiset
     serialization_simple
+    serialization_size_limits
     serialization_smart_ptr
     serialization_std_tuple
     serialization_unordered_map

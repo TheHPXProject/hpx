@@ -20,6 +20,14 @@ set(tracy_headers hpx/tracy/tracy.hpp hpx/tracy/tracy_lock.hpp
 
 set(tracy_sources tracy.cpp tracy_init.cpp tracy_lock.cpp tracy_tls.cpp)
 
+# hpx_debugging carries the extern-C DbgHelp lock wrappers Tracy's
+# TRACY_DBGHELP_LOCK expansion references (see HPX_SetupTracy.cmake); the
+# symbols only exist on Windows, so the dep is only needed there.
+set(additional_dependencies "")
+if(WIN32)
+  set(additional_dependencies hpx_debugging)
+endif()
+
 include(HPX_AddModule)
 add_hpx_module(
   core tracy
@@ -27,7 +35,7 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${tracy_sources}
   HEADERS ${tracy_headers}
-  MODULE_DEPENDENCIES hpx_config
+  MODULE_DEPENDENCIES hpx_config ${additional_dependencies}
   DEPENDENCIES tracy::tracy
   CMAKE_SUBDIRS tests
 )

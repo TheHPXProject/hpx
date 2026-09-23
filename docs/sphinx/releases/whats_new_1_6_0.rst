@@ -44,7 +44,7 @@ previous CUDA features to now be compiled with hipcc and run on AMD GPUs.
 * We have added experimental support for properties as proposed in |p2220|_.
   Currently the only supported property is the scheduling hint on
   ``parallel_executor``.
-* :cpp:func:`hpx::util::annotated_function` can now be passed a dynamically
+* :hpx:func:`hpx::util::annotated_function` can now be passed a dynamically
   generated ``std::string``.
 * In moving functionality to new namespaces, old names have been deprecated.  A
   deprecation warning will be issued if you are using deprecated functionality,

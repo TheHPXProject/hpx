@@ -318,7 +318,7 @@ namespace hpx::threads::policies {
         }
 
         template <typename Iterator>
-        std::size_t pop_bulk(Iterator it, std::int64_t max_items,
+        std::size_t pop_bulk(Iterator it, std::size_t max_items,
             bool /* steal */ = true) noexcept(noexcept(std::
                 is_nothrow_copy_constructible_v<T>))
         {

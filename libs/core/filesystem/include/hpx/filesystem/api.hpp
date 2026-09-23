@@ -39,7 +39,7 @@ namespace hpx::filesystem {
     HPX_CXX_CORE_EXPORT [[nodiscard]] inline std::string to_string(
         path const& p)
     {
-#if defined(__GLIBCXX__) && __cplusplus >= 202400L
+#if defined(HPX_HAVE_CXX26_FILESYSTEM_DISPLAY_STRING)
         return p.display_string();
 #else
         return p.string();

@@ -13,8 +13,8 @@ errors
 
 This module provides support for exceptions and error codes:
 
-* :cpp:class:`hpx::exception`
-* :cpp:class:`hpx::error_code`
-* :cpp:enum:`hpx::error`
+* :hpx:class:`hpx::exception`
+* :hpx:class:`hpx::error_code`
+* :hpx:enum:`hpx::error`
 
 See the :ref:`API reference <modules_errors_api>` of the module for more details.

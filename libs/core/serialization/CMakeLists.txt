@@ -115,6 +115,7 @@ set(serialization_headers
     hpx/serialization/detail/preprocess_container.hpp
     hpx/serialization/detail/raw_ptr.hpp
     hpx/serialization/detail/serialize_collection.hpp
+    hpx/serialization/detail/to_size.hpp
     hpx/serialization/detail/vc.hpp
     hpx/serialization/detail/refl_qualified_name_of.hpp
     hpx/serialization/detail/refl_serialize_impl.hpp

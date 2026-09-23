@@ -16,12 +16,6 @@ if(HPX_WITH_EXAMPLES_QTHREADS)
   set(htts2_qthreads_INCLUDE_DIRECTORIES ${Qthreads_INCLUDE_DIR})
 endif()
 
-if(HPX_WITH_EXAMPLES_TBB)
-  set(benchmarks ${benchmarks} htts2_tbb)
-  set(htts2_tbb_LIBRARIES ${Tbb_LIBRARY})
-  set(htts2_tbb_INCLUDE_DIRECTORIES ${Tbb_INCLUDE_DIR})
-endif()
-
 foreach(benchmark ${benchmarks})
   set(sources htts2.cpp ${benchmark}.cpp)
 

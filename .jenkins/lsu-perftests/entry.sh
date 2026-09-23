@@ -10,6 +10,13 @@
 # Make undefined variables errors, print each command
 set -eux
 
+status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
+report_file="${configuration_name}-reports/reference-comparison/index.html"
+rm -f "jenkins-hpx-${configuration_name}.out" \
+    "jenkins-hpx-${configuration_name}.err" "${status_file}" "${report_file}"
+
+source .jenkins/common/slurm.sh
+
 source .jenkins/lsu-perftests/slurm-constraint-${configuration_name}.sh
 
 if [[ -z "${ghprbPullId:-}" ]]; then
@@ -21,13 +28,7 @@ else
 
     # Cancel currently running builds on the same branch, but only for pull
     # requests
-    scancel  --verbose --verbose --verbose --verbose --jobname="${job_name}"
-
-    # Wait for the job to be cancelled before launching a new job with the
-    # same name
-    while squeue --name="${job_name}" --noheader | grep -q .; do
-        sleep 1                  # adjust the interval as needed
-    done
+    hpx_slurm_cancel_previous "${job_name}"
 fi
 
 # delay things for a random amount of time
@@ -35,7 +36,7 @@ sleep $[(RANDOM % 10) + 1].$[(RANDOM % 10)]s
 
 # Start the actual build
 set +e
-sbatch \
+hpx_slurm_run "${HPX_SLURM_TIMEOUT:-4h}" \
     --verbose --verbose --verbose --verbose \
     --exclusive \
     --job-name="${job_name}" \
@@ -45,7 +46,8 @@ sbatch \
     --time="03:00:00" \
     --output="jenkins-hpx-${configuration_name}.out" \
     --error="jenkins-hpx-${configuration_name}.err" \
-    --wait .jenkins/lsu-perftests/batch.sh
+    .jenkins/lsu-perftests/batch.sh
+slurm_status=$?
 
 # Print slurm logs
 echo "= stdout =================================================="
@@ -54,14 +56,19 @@ cat jenkins-hpx-${configuration_name}.out
 echo "= stderr =================================================="
 cat jenkins-hpx-${configuration_name}.err
 
-# Get build status
-status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
-
-# Comment on the PR if any failures
-if [[ $(cat ${status_file}) != 0 ]]; then
+# Comment only when this run produced a failed comparison for a pull request.
+if [[ -n "${ghprbPullId:-}" && -s "${status_file}" &&
+    "$(cat "${status_file}")" != 0 && -s "${report_file}" ]]; then
     ./.jenkins/lsu-perftests/comment_github.sh
 fi
 
 
 set -e
-exit $(cat ${status_file})
+if [[ "${slurm_status}" -ne 0 ]]; then
+    exit "${slurm_status}"
+fi
+if [[ ! -s "${status_file}" ]]; then
+    echo "Missing performance test status: ${status_file}" >&2
+    exit 1
+fi
+exit "$(cat "${status_file}")"

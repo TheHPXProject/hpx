@@ -382,7 +382,7 @@ Features
 
 * **Heuristic Anomaly Detection**: Uses an Exponential Moving Average (EMA) to
   monitor counter trends. It automatically flags sudden spikes (+150%) or drops
-  (-60%) with prominent visual alerts like ``[⚡ SPIKE]`` and ``[⚠️ DROP]``.
+  (-60%) with visual alerts marked ``SPIKE`` and ``DROP``.
 * **Live History Sparklines**: Displays 10-tick historical trend graphs next to
   every metric, helping developers distinguish between momentary noise and
   persistent bottlenecks.
@@ -686,7 +686,7 @@ functions of the created client component instance should be called::
     hpx::cout << count.get_value<int>().get() << std::endl;
 
 For more information about the client component type, see
-:cpp:class:`hpx::performance_counters::performance_counter`
+:hpx:class:`hpx::performance_counters::performance_counter`
 
 .. note::
 
@@ -755,7 +755,7 @@ requests the counter data of this performance counter.
 
 The next step in exposing this counter to the runtime system is to register the
 function as a new raw counter type using the |hpx| API function
-:cpp:func:`hpx::performance_counters::install_counter_type`. A counter type
+:hpx:func:`hpx::performance_counters::install_counter_type`. A counter type
 represents certain common characteristics of counters, like their counter type
 name and any associated description information. The following snippet shows an
 example of how to register the function ``some_performance_data``, which is shown
@@ -780,7 +780,7 @@ Now it is possible to instantiate a new counter instance based on the naming
 scheme ``"/test{locality#*/total}/data"`` where ``*`` is a zero-based integer
 index identifying the :term:`locality` for which the counter instance should be
 accessed. The function
-:cpp:func:`hpx::performance_counters::install_counter_type` enables users to
+:hpx:func:`hpx::performance_counters::install_counter_type` enables users to
 instantiate exactly one counter instance for each :term:`locality`. Repeated
 requests to instantiate such a counter will return the same instance, i.e., the
 instance created for the first request.
@@ -789,7 +789,7 @@ If this counter needs to be accessed using the standard |hpx| command line
 options, the registration has to be performed during application startup, before
 ``hpx_main`` is executed. The best way to achieve this is to register an |hpx|
 startup function using the API function
-:cpp:func:`hpx::register_startup_function` before calling ``hpx::init`` to
+:hpx:func:`hpx::register_startup_function` before calling ``hpx::init`` to
 initialize the runtime system::
 
     int main(int argc, char* argv[])
@@ -3619,17 +3619,49 @@ Tracy integration
 per-thread zone tracking, message logs, and fiber support. Enable it with
 :option:`HPX_WITH_TRACY`\ ``=ON`` during |cmake|_ configuration.
 
-Tracy can be supplied via a system install (point ``Tracy_ROOT`` at the install
-tree) or fetched by CMake at configure time by adding
-``HPX_WITH_FETCH_TRACY=ON``. The version fetched is pinned by
-``HPX_WITH_TRACY_TAG``, which defaults to ``v0.13.1``. When Tracy is
-fetched, |hpx| forces ``TRACY_ON_DEMAND`` and ``TRACY_FIBERS`` on the built
-client. A system-supplied Tracy must have been built with both.
+Tracy is fetched by CMake at configure time from
+`github.com/wolfpld/tracy <https://github.com/wolfpld/tracy>`_. The version
+is pinned by ``HPX_WITH_TRACY_TAG`` (defaults to ``v0.14.1``). |hpx| forces
+``TRACY_ENABLE``, ``TRACY_ON_DEMAND``, ``TRACY_FIBERS`` and ``TRACY_STATIC``
+on the built client so the profiler is always active on-demand, fibers are
+tracked, and TracyClient stays a static library that links cleanly into
+``hpx_tracy`` regardless of ``BUILD_SHARED_LIBS``. For offline builds
+without GitHub access, point ``FETCHCONTENT_SOURCE_DIR_TRACY`` at a local
+Tracy source tree and CMake's FetchContent will use it in place of the
+download.
+
+On Windows, |hpx| additionally sets ``TRACY_DBGHELP_LOCK=HpxDbgHelp`` on
+the built Tracy client so DbgHelp calls from Tracy and from |hpx|'s own
+symbol lookup share a single mutex (DbgHelp is single-threaded per MSDN).
+
+Scheduler zones no longer carry callstacks. The captured frames were the
+scheduler-dispatch path itself, identical for every task, and the zone
+name and phase already identify the work.
 
 To profile a distributed run, additionally enable
 :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
 carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
 ``parcel_scheduled`` events can be correlated across localities by parcel id.
+
+Event classes can be compiled out individually to reduce the tracing cost
+when only a subset of the timeline is being investigated:
+:option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
+:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`, and
+:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
+one off compiles the wrapper for that class to a no-op, so the runtime
+connection check and the event body do not run (argument evaluation at each
+call site is unchanged). These gates affect the Tracy backend, which is the
+only backend that emits these classes today; the APEX, ITT-Notify and empty
+backends already treat all three as no-ops.
+
+:option:`HPX_WITH_TRACING_SAMPLE_RATE` sets the initial 1-in-N sampling
+rate for the per-task lifecycle events instead of gating them off
+entirely. The rate can be overridden at runtime via the
+``hpx.tracing.sample_rate`` INI entry (for example
+``--hpx:ini=hpx.tracing.sample_rate=10``); values below 1 are clamped to
+1. Causal events are not sampled and continue to fire every time.
+``task_staged`` is also unconditional because it fires before per-task
+state exists to consult.
 
 Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
 or during the run. Tracy discovers instrumented processes via UDP broadcast

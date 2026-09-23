@@ -13,6 +13,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/logging.hpp>
 #include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -22,6 +23,7 @@
 #include <hpx/performance_counters/counters.hpp>
 #include <hpx/performance_counters/performance_counter.hpp>
 #include <hpx/performance_counters/query_counters.hpp>
+#include <hpx/performance_counters/registry.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +53,8 @@ namespace hpx::util {
       , csv_header_(csv_header)
       , print_counters_locally_(print_counters_locally)
       , counter_types_(counter_types)
+      , started_(false)
+      , last_known_generation_(0)
       , timer_(hpx::bind_front(&query_counters::evaluate, this_(), false),
             hpx::bind_front(&query_counters::terminate, this_()),
             interval * 1000, "query_counters", true)
@@ -73,10 +77,22 @@ namespace hpx::util {
 
     void query_counters::find_counters()
     {
+        // performance_counter_set::add_counters() already tolerates a
+        // wild-card pattern that legitimately matches no counter type yet,
+        // e.g. because its provider has not registered one at this point
+        // (see #4627): that case never raises ec. Anything that does raise
+        // ec here is therefore a genuine problem -- an invalid exact
+        // counter name, a malformed pattern, or a discovery failure -- and
+        // must be surfaced to the caller the same way it was before #4627,
+        // instead of being downgraded to a log message.
         if (!names_.empty())
+        {
             counters_.add_counters(names_);
+        }
         if (!reset_names_.empty())
+        {
             counters_.add_counters(reset_names_, true);
+        }
 
         for (auto const& info : counters_.get_counter_infos())
         {
@@ -84,6 +100,114 @@ namespace hpx::util {
                 performance_counters::remove_counter_prefix(info.fullname_);
             hpx::tracing::create_counter(info.fullname_, real_name);
         }
+    }
+
+    bool query_counters::refresh_counters()
+    {
+        // Snapshot the registry generation before running discovery. If
+        // another counter type is registered concurrently while discovery
+        // below is in flight, this snapshot will already be stale, but
+        // that's fine: it simply means the next evaluate() will see a
+        // generation mismatch again and refresh once more.
+        std::uint64_t const current_generation =
+            performance_counters::registry::instance().generation();
+
+        // Re-discovery is opportunistic: a name pattern that legitimately
+        // matches nothing new should not abort the pending evaluation.
+        // Each call below gets its own lightweight error_code and is
+        // logged at debug level rather than thrown, so a genuine failure
+        // (for instance an AGAS resolution problem) stays visible without
+        // aborting the pending evaluation. Discovery is still tracked as
+        // failed in that case, below, so that the generation snapshot
+        // taken above is not cached and the missed counter(s) are retried
+        // on the next evaluation instead of being forgotten for good.
+        std::size_t const size_before = counters_.size();
+        bool success = true;
+
+        if (!names_.empty())
+        {
+            error_code ec(throwmode::lightweight);
+            counters_.add_counters(names_, false, ec);
+            if (ec)
+            {
+                success = false;
+                LPCS_(debug).format(
+                    "query_counters::refresh_counters: failed to refresh "
+                    "counters ({})",
+                    ec.get_message());
+            }
+        }
+        if (!reset_names_.empty())
+        {
+            error_code ec(throwmode::lightweight);
+            counters_.add_counters(reset_names_, true, ec);
+            if (ec)
+            {
+                success = false;
+                LPCS_(debug).format(
+                    "query_counters::refresh_counters: failed to refresh "
+                    "reset counters ({})",
+                    ec.get_message());
+            }
+        }
+
+        std::vector<performance_counters::counter_info> const infos =
+            counters_.get_counter_infos();
+        if (infos.size() <= size_before)
+        {
+            // Only cache a generation that discovery fully covered. If
+            // either add_counters() call above failed, storing
+            // current_generation here would let a later periodic
+            // evaluate() skip discovery while the requested counter is
+            // still missing (see review discussion on #7562).
+            if (success)
+            {
+                // Release-store so that a concurrent evaluate_counters()
+                // acquire-loading this same generation is guaranteed to
+                // also see the (mutex-protected) counter set discovery
+                // above has already populated.
+                last_known_generation_.store(
+                    current_generation, std::memory_order_release);
+            }
+            return success;    // nothing new was discovered
+        }
+
+        // Only the newly discovered counters, at indices
+        // [size_before, infos.size()), need to be started; the rest were
+        // already started by an earlier call.
+        error_code ec2(throwmode::lightweight);
+        counters_.start(launch::sync, size_before, ec2);
+        if (ec2)
+        {
+            success = false;
+            LPCS_(debug).format(
+                "query_counters::refresh_counters: failed to start newly "
+                "discovered counters ({})",
+                ec2.get_message());
+        }
+
+        for (std::size_t i = size_before; i != infos.size(); ++i)
+        {
+            std::string const real_name =
+                performance_counters::remove_counter_prefix(infos[i].fullname_);
+            hpx::tracing::create_counter(infos[i].fullname_, real_name);
+        }
+
+        // Only cache a generation that discovery, including starting any
+        // newly found counters, fully covered end to end. If any step
+        // above failed, storing current_generation here would let a
+        // later periodic evaluate() skip re-discovery while the
+        // requested counter is still missing or unstarted (see review
+        // discussion on #7562).
+        if (success)
+        {
+            // See the release-store above for why this must not be
+            // memory_order_relaxed.
+            last_known_generation_.store(
+                current_generation, std::memory_order_release);
+        }
+
+        return success;
     }
 
     void query_counters::start()
@@ -100,9 +224,32 @@ namespace hpx::util {
 #pragma GCC diagnostic pop
 #endif
 
+        // Snapshot the registry generation *before* find_counters() runs
+        // below, not after: a counter type registered concurrently while
+        // find_counters() is in flight must still be visible as "newer
+        // than what we've observed" to the generation check in
+        // evaluate_counters(), otherwise it could be acknowledged here
+        // without ever having actually been examined by discovery.
+        std::uint64_t const generation_before_discovery =
+            performance_counters::registry::instance().generation();
+
+        // find_counters() throws on a genuine discovery failure (invalid
+        // exact name, malformed pattern, ...), so reaching the line below
+        // already implies discovery of everything requested succeeded; a
+        // wild-card pattern matching nothing yet is not a failure (see
+        // #4627) and does not prevent caching this snapshot.
         find_counters();
 
+        // Release-store so that a concurrent evaluate_counters()
+        // acquire-loading this same generation is guaranteed to also see
+        // the (mutex-protected) counter set find_counters() just
+        // populated.
+        last_known_generation_.store(
+            generation_before_discovery, std::memory_order_release);
+
         counters_.start(launch::sync);
+
+        started_.store(true, std::memory_order_release);
 
         // this will invoke the evaluate function for the first time
         timer_.start();
@@ -112,6 +259,11 @@ namespace hpx::util {
     {
         timer_.stop(terminate);
         counters_.stop(launch::sync);
+    }
+
+    std::size_t query_counters::size() const
+    {
+        return counters_.size();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -415,7 +567,30 @@ namespace hpx::util {
         if (get_config_entry("hpx.print_counter.reset", "0") == "1")
             reset = true;
 
-        return evaluate_counters(reset, nullptr, force);
+        evaluate_counters(reset, nullptr, force);
+
+        // Note: deliberately not forwarding evaluate_counters()'s return
+        // value here. This function is only ever invoked as the periodic
+        // callback driving interval_timer (see the constructor), which
+        // treats a `false` return as "nothing more to do, stop
+        // rescheduling for good" (interval_timer::evaluate()). Before
+        // #4627, a counter set that matched nothing was assumed to never
+        // match anything later, so tying the two together was harmless.
+        // That assumption no longer holds: a wild-card pattern (e.g.
+        // /apex/*) can legitimately match zero counters at first and gain
+        // matches later, once its provider registers them (see
+        // refresh_counters()). If this function forwarded a `false`
+        // result from an early, empty evaluation, interval_timer would
+        // mark itself terminated immediately, and every subsequent
+        // non-forced evaluate_counters() call would then short-circuit on
+        // its `timer_.is_terminated()` check before refresh_counters()
+        // ever ran again, permanently hiding any counter registered
+        // after that point. Always returning true keeps the periodic
+        // timer alive; it is still stopped correctly, and only
+        // intentionally, via stop_evaluating_counters(true) or runtime
+        // shutdown, both of which call interval_timer::terminate()
+        // directly rather than going through this return value.
+        return true;
     }
 
     void query_counters::terminate() {}
@@ -423,7 +598,7 @@ namespace hpx::util {
     ///////////////////////////////////////////////////////////////////////////
     void query_counters::start_counters(error_code& ec)
     {
-        if (counters_.size() == 0)
+        if (!started_.load(std::memory_order_acquire))
         {
             // start has not been called yet
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
@@ -438,7 +613,7 @@ namespace hpx::util {
 
     void query_counters::stop_counters(error_code& ec)
     {
-        if (counters_.size() == 0)
+        if (!started_.load(std::memory_order_acquire))
         {
             // start has not been called yet
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
@@ -453,7 +628,7 @@ namespace hpx::util {
 
     void query_counters::reset_counters(error_code& ec)
     {
-        if (counters_.size() == 0)
+        if (!started_.load(std::memory_order_acquire))
         {
             // start has not been called yet
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
@@ -468,7 +643,7 @@ namespace hpx::util {
 
     void query_counters::reinit_counters(bool reset, error_code& ec)
     {
-        if (counters_.size() == 0)
+        if (!started_.load(std::memory_order_acquire))
         {
             // start has not been called yet
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
@@ -611,13 +786,42 @@ namespace hpx::util {
             no_output = destination_ == "none";
         }
 
-        if (counters_.size() == 0)
+        if (!started_.load(std::memory_order_acquire))
         {
-            // start has not been called yet
+            // start has not been called yet. A wildcard pattern matching
+            // no counters at all is a legitimate outcome of start(), not
+            // an error, so counters_.size() == 0 alone cannot be used to
+            // detect this (see #4627). This check must happen before
+            // refresh_counters() below: refresh_counters() can start newly
+            // discovered counter instances as a side effect, and if that
+            // ran while started_ was still false, a subsequent legitimate
+            // start() call would restart from index 0 and double-start
+            // those same counters.
             HPX_THROWS_IF(ec, hpx::error::invalid_status,
                 "query_counters::evaluate",
                 "The counters to be evaluated have not been initialized yet");
             return false;
+        }
+
+        // Re-discover the requested counter names so that counters
+        // registered after query_counters::start() was called, such as
+        // APEX counters that only become known to HPX once sampled for the
+        // first time, are still included (see #4627). A forced evaluation
+        // (e.g. the one performed when counters are printed at shutdown)
+        // always refreshes. A periodic evaluation only pays for the actual,
+        // AGAS-touching refresh_counters() call when the performance
+        // counter type registry's generation has moved since the last time
+        // this object refreshed -- a single atomic load and compare
+        // otherwise, so widening this to periodic evaluations does not add
+        // per-tick discovery overhead in the common case where nothing new
+        // has been registered.
+        std::uint64_t const current_generation =
+            performance_counters::registry::instance().generation();
+        if (force ||
+            current_generation !=
+                last_known_generation_.load(std::memory_order_acquire))
+        {
+            refresh_counters();
         }
 
         std::vector<performance_counters::counter_info> const infos =
