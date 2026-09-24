@@ -56,7 +56,7 @@ if(HPX_WITH_DOCUMENTATION)
 
     # cmake-format: off
     set(DOXYGEN_ALIASES
-        "namedrequirement{1}=\"<a href=\"https://en.cppreference.com/w/cpp/named_req/\\1\">\\1</a>\""
+        "namedrequirement{1}=<a href='https://en.cppreference.com/w/cpp/named_req/\\1'>\\1</a>"
     )
     # cmake-format: on
     set(DOXYGEN_EXCLUDE_SYMBOLS "detail")
