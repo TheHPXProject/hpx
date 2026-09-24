@@ -981,9 +981,9 @@ namespace hpx::execution::experimental {
                 else if (schedule_ == loop_schedule::shared)
                 {
                     std::size_t const size = hpx::util::size(shape);
-                    HPX_ASSERT_MSG(
-                        size <= static_cast<std::size_t>(
-                                    (std::numeric_limits<std::uint32_t>::max)()),
+                    HPX_ASSERT_MSG(size <=
+                            static_cast<std::size_t>(
+                                (std::numeric_limits<std::uint32_t>::max)()),
                         "fork_join_executor: ranges larger than"
                         " UINT32_MAX are not supported");
                     HPX_ASSERT(!queues_.empty());
@@ -1491,8 +1491,8 @@ namespace hpx::execution::experimental {
             fork_join_executor::loop_schedule::shared,
         std::chrono::nanoseconds yield_delay = std::chrono::microseconds(300))
     {
-        return fork_join_executor(priority, threads::thread_stacksize::nostack,
-            sched, yield_delay);
+        return fork_join_executor(
+            priority, threads::thread_stacksize::nostack, sched, yield_delay);
     }
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
