@@ -78,6 +78,12 @@ namespace hpx::threads::coroutines::detail::posix {
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern bool use_guard_pages;
 
+    // Controls madvise advice applied when recycling mmap'd stacks.
+    // 0: never advise (keep pages resident)
+    // 1: MADV_FREE when available, otherwise keep resident (default)
+    // 2: MADV_DONTNEED (legacy; can cause cross-CPU TLB shootdowns)
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern int unbind_on_reset;
+
 #if defined(HPX_HAVE_THREAD_STACK_MMAP) && defined(_POSIX_MAPPED_FILES) &&     \
     _POSIX_MAPPED_FILES > 0
 
@@ -145,14 +151,34 @@ namespace hpx::threads::coroutines::detail::posix {
         void** watermark = static_cast<void**>(stack) +
             ((size - EXEC_PAGESIZE) / sizeof(void*));
 
-        // If the watermark has been overwritten, then we've gone past the first
-        // page.
+        // If the watermark has been overwritten, then we've gone past the
+        // first page.
         if ((reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull)) != *watermark)
         {
-            // We never free up the first page, as it's initialized only when the
-            // stack is created.
-            ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
-            return true;
+            // Never advise the first page; it is initialized only when the
+            // stack is created. Prefer MADV_FREE over MADV_DONTNEED: the
+            // latter forces immediate TLB shootdowns and dominates cost for
+            // recursive fork-join workloads (see #6793).
+            if (unbind_on_reset == 0)
+            {
+                return false;
+            }
+
+#if defined(MADV_FREE)
+            if (unbind_on_reset != 2)
+            {
+                ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
+                return true;
+            }
+#endif
+            if (unbind_on_reset == 2)
+            {
+                ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
+                return true;
+            }
+
+            // Mode 1 without MADV_FREE: leave pages resident.
+            return false;
         }
 
         return false;
