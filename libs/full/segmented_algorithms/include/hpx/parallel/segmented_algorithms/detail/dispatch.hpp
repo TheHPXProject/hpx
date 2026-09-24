@@ -328,12 +328,12 @@ namespace hpx::parallel::detail {
                 f.get_exception_ptr(),
                 errors);    // NOLINT(bugprone-use-after-move)
 
+            // handle_remote_exceptions populates errors for non-bad_alloc
+            // failures; bad_alloc is rethrown from call() above. Assert the
+            // postcondition, then propagate as exception_list.
             // NOLINTNEXTLINE(bugprone-use-after-move)
-            HPX_ASSERT(errors.empty());
-            if (!errors.empty())
-            {
-                throw exception_list(HPX_MOVE(errors));
-            }
+            HPX_ASSERT(!errors.empty());
+            throw exception_list(HPX_MOVE(errors));
         }
         return f.get();
     }
