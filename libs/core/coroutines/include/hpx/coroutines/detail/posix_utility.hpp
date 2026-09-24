@@ -160,22 +160,19 @@ namespace hpx::threads::coroutines::detail::posix {
             // latter forces immediate TLB shootdowns and dominates cost for
             // recursive fork-join workloads (see #6793).
             bool advised = false;
-            if (unbind_on_reset != 0)
+            if (unbind_on_reset == 2)
             {
-#if defined(MADV_FREE)
-                if (unbind_on_reset != 2)
-                {
-                    ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
-                    advised = true;
-                }
-                else
-#endif
-                    if (unbind_on_reset == 2)
-                {
-                    ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
-                    advised = true;
-                }
+                ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
+                advised = true;
             }
+#if defined(MADV_FREE)
+            else if (unbind_on_reset == 1)
+            {
+                ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
+                advised = true;
+            }
+#endif
+            // Mode 0, or mode 1 without MADV_FREE: leave pages resident.
 
             // Always restore the watermark after a deep use. Without this,
             // every later recycle re-enters this path (the marker was never
