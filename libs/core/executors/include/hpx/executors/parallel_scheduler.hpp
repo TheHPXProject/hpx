@@ -24,6 +24,8 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <new>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -90,6 +92,37 @@ namespace hpx::execution::experimental {
             bool IsParallel, typename ChildSender, typename Receiver>
         struct virtual_parallel_bulk_op final : base_parallel_bulk_op
         {
+        private:
+            // ---- Stop token adaptation (parity with operation_state) ----
+            // P3804R2 Section 3.3: The bulk path must provide the same
+            // inplace_stop_token adaptation as the schedule path.
+            using receiver_env_t = env_of_t<std::decay_t<Receiver> const&>;
+            using native_stop_token_t = stop_token_of_t<receiver_env_t>;
+
+            static constexpr bool native_is_inplace =
+                std::is_same_v<native_stop_token_t, inplace_stop_token>;
+
+            struct forward_stop_request
+            {
+                inplace_stop_source& source_;
+                void operator()() noexcept
+                {
+                    source_.request_stop();
+                }
+            };
+
+            struct empty_stop_callback
+            {
+            };
+
+            // clang-format off
+            using stop_callback_t = std::conditional_t<native_is_inplace,
+                empty_stop_callback,
+                typename native_stop_token_t::template callback_type<
+                    forward_stop_request>>;
+            // clang-format on
+
+        public:
             std::shared_ptr<parallel_scheduler_backend> backend_;
             std::size_t
                 count_;    // Count passed to backend (1 for seq, shape for par)
@@ -97,6 +130,13 @@ namespace hpx::execution::experimental {
                 actual_shape_;    // P3804R2: Actual shape for proxy execution
             F f_;
             std::decay_t<Receiver> receiver_;
+
+            // P3804R2 Section 3.3: inplace_stop_source for adaptation.
+            inplace_stop_source stop_source_;
+
+            // P3804R2 Section 3.3: Stop callback bridge (registered in
+            // do_bulk when adaptation is needed).
+            std::optional<stop_callback_t> stop_callback_;
 
             // Pre-allocated storage passed to the backend as scratch space.
             alignas(parallel_scheduler_storage_alignment)
@@ -168,8 +208,12 @@ namespace hpx::execution::experimental {
                     }
                 }
 
+                // Lifetime fix: reset the stop callback BEFORE invoking
+                // the completion signal on the receiver.  This ensures
+                // the callback cannot fire into a moved-from receiver.
                 void set_value() noexcept override
                 {
+                    op_.stop_callback_.reset();
                     std::apply(
                         [&](auto&&... vals) {
                             hpx::execution::experimental::set_value(
@@ -180,20 +224,63 @@ namespace hpx::execution::experimental {
 
                 void set_error(std::exception_ptr ep) noexcept override
                 {
+                    op_.stop_callback_.reset();
                     hpx::execution::experimental::set_error(
                         HPX_MOVE(op_.receiver_), HPX_MOVE(ep));
                 }
 
                 void set_stopped() noexcept override
                 {
+                    op_.stop_callback_.reset();
                     hpx::execution::experimental::set_stopped(
                         HPX_MOVE(op_.receiver_));
                 }
 
                 bool stop_requested() const noexcept override
                 {
-                    return get_stop_token(get_env(op_.receiver_))
-                        .stop_requested();
+                    // Use the adapted source when adaptation is active,
+                    // matching operation_state behavior.
+                    if constexpr (native_is_inplace)
+                    {
+                        return get_stop_token(get_env(op_.receiver_))
+                            .stop_requested();
+                    }
+                    else
+                    {
+                        return op_.stop_source_.stop_requested();
+                    }
+                }
+
+            protected:
+                // P3804R2 Section 3.1 / 3.3: Answer get_stop_token_t
+                // queries.  Returns the adapted inplace_stop_token
+                // regardless of the native token type.
+                bool query_env_impl(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result_out) const noexcept override
+                {
+                    if (query_type !=
+                            typeid(hpx::execution::experimental::
+                                    get_stop_token_t) ||
+                        result_type != typeid(inplace_stop_token))
+                    {
+                        return false;
+                    }
+
+                    if constexpr (native_is_inplace)
+                    {
+                        // Forward the native inplace token directly.
+                        ::new (result_out) inplace_stop_token(
+                            get_stop_token(get_env(op_.receiver_)));
+                    }
+                    else
+                    {
+                        // Return the adapted token from our
+                        // inplace_stop_source.
+                        ::new (result_out) inplace_stop_token(
+                            op_.stop_source_.get_token());
+                    }
+                    return true;
                 }
             };
 
@@ -327,11 +414,26 @@ namespace hpx::execution::experimental {
             // completes. Constructs the proxy via placement new into the
             // inline buffer (no heap allocation) then dispatches to the
             // backend.
+            //
+            // P3804R2 Section 3.3: Register the stop callback bridge
+            // before dispatching to the backend, matching operation_state.
             template <typename... Vs>
             void do_bulk(Vs&&... vs) noexcept
             {
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
+                        // Register stop callback bridge before backend
+                        // dispatch when adaptation is needed.
+                        if constexpr (!native_is_inplace)
+                        {
+                            auto tok = get_stop_token(get_env(receiver_));
+                            if (tok.stop_possible())
+                            {
+                                stop_callback_.emplace(
+                                    tok, forward_stop_request{stop_source_});
+                            }
+                        }
+
                         new (proxy_buf_) proxy_t(*this, HPX_FORWARD(Vs, vs)...);
                         proxy_active_ = true;
 
@@ -348,6 +450,7 @@ namespace hpx::execution::experimental {
                         }
                     },
                     [&](std::exception_ptr ep) {
+                        stop_callback_.reset();
                         hpx::execution::experimental::set_error(
                             HPX_MOVE(receiver_), HPX_MOVE(ep));
                     });
@@ -651,55 +754,181 @@ namespace hpx::execution::experimental {
         // P2079R10: operation_state owns the receiver and manages the
         // frontend/backend boundary. On start(), it checks the stop token
         // and then delegates to the backend.
+        //
+        // P3804R2 Section 3.3: Stop token adaptation.
+        // The backend always queries for inplace_stop_token via
+        // try_query<inplace_stop_token>(get_stop_token_t{}).
+        // If the receiver's native stop token is already inplace_stop_token,
+        // we pass it through directly.  Otherwise we maintain an
+        // inplace_stop_source inside the operation_state and register a
+        // stop callback that bridges the receiver's arbitrary stop token
+        // to our internal inplace_stop_source.
         template <typename Receiver>
         struct operation_state
         {
+        private:
+            // Compute the receiver's native stop token type.
+            using receiver_env_t = env_of_t<std::decay_t<Receiver> const&>;
+            using native_stop_token_t = stop_token_of_t<receiver_env_t>;
+
+            // P3804R2: Is the native stop token already inplace?
+            static constexpr bool native_is_inplace =
+                std::is_same_v<native_stop_token_t, inplace_stop_token>;
+
+            // Stop callback functor that forwards stop requests from
+            // the receiver's arbitrary stop token to our
+            // inplace_stop_source.
+            struct forward_stop_request
+            {
+                inplace_stop_source& source_;
+                void operator()() noexcept
+                {
+                    source_.request_stop();
+                }
+            };
+
+            // The stop callback type, only instantiated when adaptation
+            // is needed (native token is not inplace).
+            // When native_is_inplace is true, this is a lightweight
+            // empty struct (zero overhead).
+            struct empty_stop_callback
+            {
+            };
+
+            // clang-format off
+            using stop_callback_t = std::conditional_t<native_is_inplace,
+                empty_stop_callback,
+                typename native_stop_token_t::template callback_type<
+                    forward_stop_request>>;
+            // clang-format on
+
+        public:
             // Concrete receiver_proxy that adapts the actual Receiver
             // to the type-erased proxy interface.
+            //
+            // P3804R2 Section 3.3: Overrides query_env_impl to provide
+            // the adapted inplace_stop_token to the backend.
             struct concrete_receiver_proxy final
               : parallel_scheduler_receiver_proxy
             {
-                std::decay_t<Receiver>& receiver_;
+                // Back-pointer to the owning operation_state so we
+                // can access the inplace_stop_source for adaptation.
+                operation_state& op_;
 
-                explicit concrete_receiver_proxy(
-                    std::decay_t<Receiver>& rcvr) noexcept
-                  : receiver_(rcvr)
+                explicit concrete_receiver_proxy(operation_state& op) noexcept
+                  : op_(op)
                 {
                 }
 
+                // Lifetime fix: reset the stop callback BEFORE
+                // invoking the completion signal on the receiver.
+                // This prevents the callback from firing into a
+                // moved-from receiver.
                 void set_value() noexcept override
                 {
+                    op_.stop_callback_.reset();
                     hpx::execution::experimental::set_value(
-                        HPX_MOVE(receiver_));
+                        HPX_MOVE(op_.receiver_));
                 }
 
                 void set_error(std::exception_ptr ep) noexcept override
                 {
+                    op_.stop_callback_.reset();
                     hpx::execution::experimental::set_error(
-                        HPX_MOVE(receiver_), HPX_MOVE(ep));
+                        HPX_MOVE(op_.receiver_), HPX_MOVE(ep));
                 }
 
                 void set_stopped() noexcept override
                 {
+                    op_.stop_callback_.reset();
                     hpx::execution::experimental::set_stopped(
-                        HPX_MOVE(receiver_));
+                        HPX_MOVE(op_.receiver_));
                 }
 
                 // P2079R10 4.2: allow backends to poll for cancellation.
                 // Forwards the stop token state of the actual receiver.
                 bool stop_requested() const noexcept override
                 {
-                    return get_stop_token(get_env(receiver_)).stop_requested();
+                    // When we have an adapted source, check it directly
+                    // (it is updated by the stop callback bridge).
+                    // Otherwise, query the native token directly.
+                    if constexpr (native_is_inplace)
+                    {
+                        return get_stop_token(get_env(op_.receiver_))
+                            .stop_requested();
+                    }
+                    else
+                    {
+                        return op_.stop_source_.stop_requested();
+                    }
+                }
+
+            protected:
+                // P3804R2 Section 3.1 / 3.3: Answer environment
+                // queries from the backend.
+                //
+                // Currently supports:
+                //   get_stop_token_t -> inplace_stop_token
+                //
+                // When the native token is already inplace, we
+                // forward it directly.  Otherwise, we return the
+                // token from our adapted inplace_stop_source.
+                bool query_env_impl(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result_out) const noexcept override
+                {
+                    // Only handle get_stop_token_t -> inplace_stop_token
+                    if (query_type !=
+                            typeid(hpx::execution::experimental::
+                                    get_stop_token_t) ||
+                        result_type != typeid(inplace_stop_token))
+                    {
+                        return false;
+                    }
+
+                    if constexpr (native_is_inplace)
+                    {
+                        // No adaptation needed: forward the native
+                        // inplace token directly.
+                        ::new (result_out) inplace_stop_token(
+                            get_stop_token(get_env(op_.receiver_)));
+                    }
+                    else
+                    {
+                        // P3804R2 Section 3.3: Return the token from
+                        // our adapted inplace_stop_source.  The stop
+                        // callback registered in start() ensures that
+                        // stop requests propagate from the receiver's
+                        // arbitrary token to this source.
+                        ::new (result_out) inplace_stop_token(
+                            op_.stop_source_.get_token());
+                    }
+                    return true;
                 }
             };
 
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver_;
             std::shared_ptr<parallel_scheduler_backend> backend_;
+
+            // P3804R2 Section 3.3: inplace_stop_source for adaptation.
+            // When the native token is already inplace_stop_token, the
+            // stop_source_ is still present but unused (the proxy
+            // returns the native token directly).  The cost is minimal
+            // (one atomic bool in inplace_stop_source).
+            inplace_stop_source stop_source_;
+
             // The proxy must be a member (not a local) because the
             // backend's schedule() posts work asynchronously. The
             // operation_state outlives the completion per the
             // sender/receiver protocol.
             concrete_receiver_proxy proxy_;
+
+            // P3804R2 Section 3.3: Stop callback that bridges the
+            // receiver's arbitrary stop token to our inplace_stop_source.
+            // For native inplace tokens, this is an empty struct.
+            // Must be declared AFTER stop_source_ so it is constructed
+            // after the source exists and destroyed before it.
+            std::optional<stop_callback_t> stop_callback_;
 
             // P2079R10 4.2: pre-allocated storage for the backend.
             alignas(parallel_scheduler_storage_alignment)
@@ -710,7 +939,7 @@ namespace hpx::execution::experimental {
                 std::shared_ptr<parallel_scheduler_backend> backend)
               : receiver_(HPX_FORWARD(Receiver_, receiver))
               , backend_(HPX_MOVE(backend))
-              , proxy_(receiver_)
+              , proxy_(*this)
             {
             }
 
@@ -728,6 +957,16 @@ namespace hpx::execution::experimental {
                 {
                     set_stopped(HPX_MOVE(receiver_));
                     return;
+                }
+
+                // P3804R2 Section 3.3: Register the stop callback
+                // bridge when adaptation is needed.  When the native
+                // token IS already inplace, we skip registration
+                // (the proxy returns the native token directly).
+                if constexpr (!native_is_inplace)
+                {
+                    stop_callback_.emplace(
+                        stop_token, forward_stop_request{stop_source_});
                 }
 
                 // Delegate to the backend via the member proxy,
