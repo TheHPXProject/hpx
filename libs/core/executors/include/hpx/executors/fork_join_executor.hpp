@@ -38,6 +38,7 @@
 #include <exception>
 #include <iosfwd>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -68,11 +69,14 @@ namespace hpx::execution::experimental {
         /// Type of loop schedule for use with the fork_join_executor.
         /// loop_schedule::static_ implies no work-stealing;
         /// loop_schedule::dynamic allows stealing when a worker has finished
-        /// its local work.
+        /// its local work;
+        /// loop_schedule::shared uses one atomic index queue for all workers
+        /// (Kokkos-style N-ary / non-suspending leaf bulk regions; see #3348).
         enum class loop_schedule : std::uint8_t
         {
             static_,
             dynamic,
+            shared,
         };
 
         /// \cond NOINTERNAL
@@ -396,11 +400,15 @@ namespace hpx::execution::experimental {
                     priority_bound = true;
                 }
 
-                // the array of queues is needed only if work-stealing was
-                // enabled
+                // the array of queues is needed for work-stealing (dynamic) or
+                // a single shared atomic index queue (shared)
                 if (schedule_ == loop_schedule::dynamic)
                 {
                     queues_.resize(num_threads_);
+                }
+                else if (schedule_ == loop_schedule::shared)
+                {
+                    queues_.resize(1);
                 }
 
                 // go over all available PUs and for each one given in the
@@ -838,6 +846,66 @@ namespace hpx::execution::experimental {
                         data.sync_with_main_thread_->count_down(1);
                     }
                 }
+
+                // Main entry point for a single parallel region (shared
+                // scheduling: one atomic index queue for all workers).
+                static void call_shared(region_data_type& rdata,
+                    std::size_t const thread_index, std::size_t,
+                    queues_type& queues, hpx::spinlock& exception_mutex,
+                    std::exception_ptr& exception) noexcept
+                {
+                    region_data& data = rdata[thread_index].data_;
+                    hpx::detail::try_catch_exception_ptr(
+                        [&] {
+                            auto& element_function =
+                                *static_cast<F*>(data.element_function_);
+                            auto& shape = *static_cast<S const*>(data.shape_);
+                            auto& argument_pack =
+                                *static_cast<Tuple*>(data.argument_pack_);
+
+                            // Shared schedule: all workers pop from queues[0],
+                            // which was reset by the parent before launch.
+                            queue_type& shared_queue = queues[0].data_;
+
+                            set_state(data.state_, thread_state::active);
+
+                            HPX_TRACING_MARK_EVENT(
+                                "fork_join_executor::call_shared");
+                            hpx::optional<std::uint32_t> index;
+                            while ((index = shared_queue.pop_left()))
+                            {
+                                auto it =
+                                    std::next(hpx::util::begin(shape), *index);
+                                if constexpr (std::is_void_v<Result>)
+                                {
+                                    invoke_helper(index_pack_type{},
+                                        element_function, *it, argument_pack);
+                                }
+                                else
+                                {
+                                    auto& results =
+                                        *static_cast<Result*>(data.results_);
+                                    results[*index] = invoke_helper(
+                                        index_pack_type{}, element_function,
+                                        *it, argument_pack);
+                                }
+                            }
+                        },
+                        [&](std::exception_ptr&& ep) {
+                            std::lock_guard<decltype(exception_mutex)> l(
+                                exception_mutex);
+                            if (!exception)
+                            {
+                                exception = HPX_MOVE(ep);
+                            }
+                        });
+
+                    set_state(data.state_, thread_state::idle);
+                    if (data.sync_with_main_thread_)
+                    {
+                        data.sync_with_main_thread_->count_down(1);
+                    }
+                }
             };
 
             template <typename Fs, typename Args>
@@ -909,6 +977,20 @@ namespace hpx::execution::experimental {
                 {
                     func = &thread_function_helper<Result, F, S,
                         Args>::call_static;
+                }
+                else if (schedule_ == loop_schedule::shared)
+                {
+                    std::size_t const size = hpx::util::size(shape);
+                    HPX_ASSERT_MSG(
+                        size <= static_cast<std::size_t>(
+                                    (std::numeric_limits<std::uint32_t>::max)()),
+                        "fork_join_executor: ranges larger than"
+                        " UINT32_MAX are not supported");
+                    HPX_ASSERT(!queues_.empty());
+                    queues_[0].data_.reset(0, static_cast<std::uint32_t>(size));
+
+                    func = &thread_function_helper<Result, F, S,
+                        Args>::call_shared;
                 }
                 else
                 {
@@ -1398,6 +1480,20 @@ namespace hpx::execution::experimental {
         }
         /// \endcond
     };
+
+    /// Create a leaf / non-suspending fork_join_executor for bulk parallel_for
+    /// style work (#3348). Forces \c nostack workers and defaults to
+    /// \c loop_schedule::shared (one atomic chunk queue). Leaf bodies must not
+    /// suspend (nested \c async / \c future::get / \c this_thread::suspend).
+    [[nodiscard]] inline fork_join_executor make_leaf_fork_join_executor(
+        threads::thread_priority priority = threads::thread_priority::bound,
+        fork_join_executor::loop_schedule sched =
+            fork_join_executor::loop_schedule::shared,
+        std::chrono::nanoseconds yield_delay = std::chrono::microseconds(300))
+    {
+        return fork_join_executor(priority, threads::thread_stacksize::nostack,
+            sched, yield_delay);
+    }
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
         std::ostream& os, fork_join_executor::loop_schedule schedule);
