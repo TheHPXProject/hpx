@@ -159,26 +159,29 @@ namespace hpx::threads::coroutines::detail::posix {
             // stack is created. Prefer MADV_FREE over MADV_DONTNEED: the
             // latter forces immediate TLB shootdowns and dominates cost for
             // recursive fork-join workloads (see #6793).
-            if (unbind_on_reset == 0)
+            bool advised = false;
+            if (unbind_on_reset != 0)
             {
-                return false;
-            }
-
 #if defined(MADV_FREE)
-            if (unbind_on_reset != 2)
-            {
-                ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
-                return true;
-            }
+                if (unbind_on_reset != 2)
+                {
+                    ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
+                    advised = true;
+                }
+                else
 #endif
-            if (unbind_on_reset == 2)
-            {
-                ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
-                return true;
+                    if (unbind_on_reset == 2)
+                {
+                    ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
+                    advised = true;
+                }
             }
 
-            // Mode 1 without MADV_FREE: leave pages resident.
-            return false;
+            // Always restore the watermark after a deep use. Without this,
+            // every later recycle re-enters this path (the marker was never
+            // rewritten on rebind).
+            *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+            return advised;
         }
 
         return false;
