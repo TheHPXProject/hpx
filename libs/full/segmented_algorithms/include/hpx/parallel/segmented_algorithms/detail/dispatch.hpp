@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/distribution_policies.hpp>
