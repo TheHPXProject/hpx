@@ -327,6 +327,8 @@ namespace hpx::parallel::detail {
                 f.get_exception_ptr(),
                 errors);    // NOLINT(bugprone-use-after-move)
 
+            // NOLINTNEXTLINE(bugprone-use-after-move)
+            HPX_ASSERT(errors.empty());
             if (!errors.empty())
             {
                 throw exception_list(HPX_MOVE(errors));
