@@ -658,7 +658,7 @@ hpx_option(
 )
 
 hpx_option(
-  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository tag or branch" "main"
+  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository tag or branch" "nvhpc-26.05"
   CATEGORY "Executor"
 )
 
