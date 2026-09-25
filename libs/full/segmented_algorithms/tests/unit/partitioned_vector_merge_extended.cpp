@@ -1003,49 +1003,39 @@ namespace {
 
     void test_capture_byte_batch_grouping()
     {
-        using policy_type =
-            std::decay_t<decltype(hpx::execution::seq)>;
+        using policy_type = std::decay_t<decltype(hpx::execution::seq)>;
 
-        using receiver_type =
-            hpx::parallel::detail::batch_receiver<int, double,
-                byte_batch_test_chunk, byte_batch_test_algorithm,
-                policy_type, std::true_type>;
+        using receiver_type = hpx::parallel::detail::batch_receiver<int, double,
+            byte_batch_test_chunk, byte_batch_test_algorithm, policy_type,
+            std::true_type>;
 
         constexpr std::size_t max_bytes =
             hpx::parallel::detail::max_capture_batch_bytes;
 
-        constexpr std::size_t quarter_int_count =
-            (max_bytes / 4) / sizeof(int);
+        constexpr std::size_t quarter_int_count = (max_bytes / 4) / sizeof(int);
 
         constexpr std::size_t quarter_double_count =
             (max_bytes / 4) / sizeof(double);
 
-        constexpr std::size_t half_int_count =
-            (max_bytes / 2) / sizeof(int);
+        constexpr std::size_t half_int_count = (max_bytes / 2) / sizeof(int);
 
         std::vector<byte_batch_test_chunk> chunks;
 
         // Estimated payload: one half of the limit.
         chunks.push_back(byte_batch_test_chunk{
-            quarter_int_count,
-            quarter_double_count,
-            {}, {}, 10});
+            quarter_int_count, quarter_double_count, {}, {}, 10});
 
-        // Estimated payload: another half of the limit. 
-        // This chunk fits in the first batch because 
+        // Estimated payload: another half of the limit.
+        // This chunk fits in the first batch because
         // the combined size is exactly the limit.
-        chunks.push_back(byte_batch_test_chunk{
-            half_int_count,
-            0, {}, {}, 20});
+        chunks.push_back(byte_batch_test_chunk{half_int_count, 0, {}, {}, 20});
 
-        // This additional value exceeds the first 
+        // This additional value exceeds the first
         //batch's remaining capacity
         // and must therefore begin a second batch.
-        chunks.push_back(
-            byte_batch_test_chunk{0, 1, {}, {}, 30});
+        chunks.push_back(byte_batch_test_chunk{0, 1, {}, {}, 30});
 
-        auto batches =
-            receiver_type::make_byte_batches(HPX_MOVE(chunks));
+        auto batches = receiver_type::make_byte_batches(HPX_MOVE(chunks));
 
         HPX_TEST_EQ(batches.size(), std::size_t{2});
 
@@ -1059,8 +1049,7 @@ namespace {
 
         // Verify the planner uses the larger input element size.
         HPX_TEST_EQ(
-            hpx::parallel::detail::
-                max_capture_batch_elements<int, double>(),
+            hpx::parallel::detail::max_capture_batch_elements<int, double>(),
             max_bytes / sizeof(double));
     }
 }    // namespace
@@ -1096,8 +1085,8 @@ int main()
         test_verified_noncontiguous_partitions);
     run_test("test_many_small_partitions_and_skew",
         test_many_small_partitions_and_skew);
-    run_test("test_capture_byte_batch_grouping",
-        ctest_capture_byte_batch_grouping);
+    run_test(
+        "test_capture_byte_batch_grouping", ctest_capture_byte_batch_grouping);
 
     return hpx::util::report_errors();
 }
