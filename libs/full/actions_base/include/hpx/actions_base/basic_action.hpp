@@ -527,3 +527,4 @@ namespace hpx::actions {
 #include <hpx/config/warnings_suffix.hpp>
 
 /// \cond NOINTERNAL
+/// \endcond

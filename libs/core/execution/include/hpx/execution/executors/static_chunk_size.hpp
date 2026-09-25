@@ -4,7 +4,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file parallel/executors/static_chunk_size.hpp
+/// \file static_chunk_size.hpp
 /// \page hpx::execution::experimental::static_chunk_size
 /// \headerfile hpx/execution.hpp
 

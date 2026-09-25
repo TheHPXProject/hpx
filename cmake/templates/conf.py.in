@@ -776,7 +776,7 @@ breathe_doxygen_config_options = {
     'PREDEFINED': '@doxygen_definitions@',
     'STRIP_FROM_PATH': hpx_source_dir,
     'EXTRACT_PRIVATE': 'NO',
-    'ALIASES': r'namedrequirement{1}="<a href=\"https://en.cppreference.com/w/cpp/named_req/\1\">\1</a>"'
+    'ALIASES': r"namedrequirement{1}=<a href='https://en.cppreference.com/w/cpp/named_req/\1'>\1</a>"
 }
 
 # ! this should work but doesn't. check after updating breathe version.

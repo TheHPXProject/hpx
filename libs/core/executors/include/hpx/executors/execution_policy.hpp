@@ -6,7 +6,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/execution/execution_policy.hpp
+/// \file execution_policy.hpp
 /// \page hpx::execution::seq, hpx::execution::par, hpx::execution::par_unseq, hpx::execution::task, hpx::execution::sequenced_policy, hpx::execution::parallel_policy, hpx::execution::parallel_unsequenced_policy, hpx::execution::sequenced_task_policy, hpx::execution::parallel_task_policy
 /// \headerfile hpx/execution.hpp
 

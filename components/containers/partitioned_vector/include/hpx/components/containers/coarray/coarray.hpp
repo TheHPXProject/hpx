@@ -5,7 +5,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/components/coarray/coarray.hpp
+/// \file coarray.hpp
 
 #pragma once
 
@@ -235,3 +235,4 @@ namespace hpx {
         std::size_t this_image_;
     };
 }    // namespace hpx
+/// \endcond

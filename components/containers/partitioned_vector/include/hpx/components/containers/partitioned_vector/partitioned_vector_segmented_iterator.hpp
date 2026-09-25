@@ -7,7 +7,7 @@
 
 #pragma once
 
-/// \file hpx/components/partitioned_vector/partitioned_vector_segmented_iterator.hpp
+/// \file partitioned_vector_segmented_iterator.hpp
 /// \brief This file contains the implementation of iterators for hpx::partitioned_vector.
 
 // The idea for these iterators is taken from
