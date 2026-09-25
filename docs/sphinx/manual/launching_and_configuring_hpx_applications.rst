@@ -339,6 +339,14 @@ The |hpx| configuration section
        avoids the cross-CPU TLB shootdowns caused by ``MADV_DONTNEED`` on
        recursive fork-join workloads (see :hpx-issue:`6793`). ``2`` restores
        the legacy ``MADV_DONTNEED`` behaviour.
+       Modes ``0`` and ``1`` do **not** guarantee that recycled stack pages
+       are zero-filled before reuse: with ``MADV_FREE``, prior contents remain
+       visible until the kernel actually reclaims the page (and mode ``0``
+       never discards them). That can expose leftover stack data from one HPX
+       thread to a later HPX thread that reuses the same stack in the same
+       process. ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero pages on
+       next touch. Prefer mode ``2`` when that residual-data behaviour is
+       unacceptable; do not rely on stack recycle advice to scrub secrets.
 
 The ``hpx.tracing`` configuration section
 .........................................

@@ -159,6 +159,13 @@ namespace hpx::threads::coroutines::detail::posix {
             // stack is created. Prefer MADV_FREE over MADV_DONTNEED: the
             // latter forces immediate TLB shootdowns and dominates cost for
             // recursive fork-join workloads (see #6793).
+            //
+            // Security note: MADV_DONTNEED (mode 2) zero-fills on next
+            // fault. MADV_FREE (mode 1) may leave prior stack contents
+            // readable until the kernel reclaims the page; mode 0 never
+            // discards them. HPX does not scrub stacks here -- that would
+            // defeat the TLB win. Use mode 2 when residual data on recycle
+            // is unacceptable.
             bool advised = false;
             if (unbind_on_reset == 2)
             {
