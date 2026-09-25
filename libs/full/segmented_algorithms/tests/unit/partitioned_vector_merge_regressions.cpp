@@ -293,6 +293,81 @@ struct regression_throwing_projection
     }
 };
 
+struct regression_non_default_key
+{
+    regression_non_default_key() = delete;
+
+    explicit regression_non_default_key(int value)
+      : value(value)
+    {
+    }
+
+    regression_non_default_key(regression_non_default_key const&) = default;
+    regression_non_default_key(regression_non_default_key&&) = default;
+
+    regression_non_default_key& operator=(
+        regression_non_default_key const&) = default;
+    regression_non_default_key& operator=(
+        regression_non_default_key&&) = default;
+
+    int value;
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+        // value is serialized as construction data below.
+    }
+};
+
+static_assert(!std::is_default_constructible_v<regression_non_default_key>);
+
+struct regression_non_default_projection
+{
+    regression_non_default_key operator()(int value) const
+    {
+        return regression_non_default_key(value);
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+struct regression_non_default_less
+{
+    bool operator()(regression_non_default_key const& lhs,
+        regression_non_default_key const& rhs) const
+    {
+        return lhs.value < rhs.value;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+namespace hpx::serialization {
+
+    template <typename Archive>
+    void save_construct_data(
+        Archive& ar, regression_non_default_key const* key, unsigned)
+    {
+        ar << key->value;
+    }
+
+    template <typename Archive>
+    void load_construct_data(
+        Archive& ar, regression_non_default_key* key, unsigned)
+    {
+        int value;
+        ar >> value;
+
+        ::new (key) regression_non_default_key(value);
+    }
+}    // namespace hpx::serialization
+
 namespace {
 
     template <typename T>
@@ -989,6 +1064,65 @@ namespace {
             stderr, "[merge-regression] done %s (%.3fs)\n", name, elapsed);
         std::fflush(stderr);
     }
+
+    void test_non_default_constructible_projected_key()
+    {
+        auto const localities = hpx::find_all_localities();
+
+        std::vector<int> const input1{1, 3, 5, 7, 9, 11};
+        std::vector<int> const input2{2, 4, 6, 8, 10, 12};
+
+        std::vector<int> expected(input1.size() + input2.size());
+
+        std::merge(input1.begin(), input1.end(), input2.begin(), input2.end(),
+            expected.begin());
+
+        std::vector<int> const initial(expected.size(), -1);
+
+        // Inputs and destination reside on different localities so that projected
+        // keys are serialized through the remote diagonal-probe actions.
+        auto source1 =
+            make_vector(input1, {2, 4}, {localities[0], localities[1]});
+
+        auto source2 =
+            make_vector(input2, {3, 3}, {localities[1], localities[0]});
+
+        auto destination = make_vector(
+            initial, {3, 4, 5}, {localities[2], localities[0], localities[2]});
+
+        regression_non_default_less compare;
+        regression_non_default_projection projection;
+
+        for_each_policy([&](auto policy) {
+            assign_values(destination, initial);
+
+            auto result = finish_result(policy,
+                hpx::ranges::merge(policy, source1.cbegin(), source1.cend(),
+                    source2.cbegin(), source2.cend(), destination.begin(),
+                    compare, projection, projection));
+
+            HPX_TEST(result.in1 == source1.cend());
+            HPX_TEST(result.in2 == source2.cend());
+            HPX_TEST(result.out == destination.end());
+
+            check_values(destination, expected);
+
+            // Also instantiate the algorithm with two empty segmented ranges.
+            // No key is produced at runtime, but the projected key type must still
+            // be accepted during template instantiation.
+            auto empty_result = finish_result(policy,
+                hpx::ranges::merge(policy, source1.cend(), source1.cend(),
+                    source2.cend(), source2.cend(), destination.end(), compare,
+                    projection, projection));
+
+            HPX_TEST(empty_result.in1 == source1.cend());
+            HPX_TEST(empty_result.in2 == source2.cend());
+            HPX_TEST(empty_result.out == destination.end());
+        });
+
+        check_values(source1, input1);
+        check_values(source2, input2);
+    }
 }    // namespace
 
 int main()
@@ -1022,6 +1156,8 @@ int main()
     run_test("test_bad_alloc_propagation", test_bad_alloc_propagation);
     run_test("test_two_task_merges_before_waiting",
         test_two_task_merges_before_waiting);
+    run_test("test_non_default_constructible_projected_key",
+        test_non_default_constructible_projected_key);
 
     return hpx::util::report_errors();
 }

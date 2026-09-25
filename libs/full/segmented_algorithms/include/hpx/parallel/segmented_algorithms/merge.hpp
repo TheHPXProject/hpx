@@ -54,9 +54,8 @@ namespace hpx::parallel::detail {
     template <typename Iterator>
     auto make_segmented_range_table(Iterator first, Iterator last)
     {
-        using iterator_type = std::decay_t<Iterator>;
-        using traits = hpx::traits::segmented_iterator_traits<iterator_type>;
-        using local_iterator = typename traits::local_iterator;
+        using traits = hpx::traits::segmented_iterator_traits<Iterator>;
+        using local_iterator = traits::local_iterator;
 
         segmented_range_table<local_iterator> table;
 
@@ -147,12 +146,12 @@ namespace hpx::parallel::detail {
 
         if (request == batch->requests.end())
         {
-            batch->requests.push_back(
-                {position.partition_id, {target}, HPX_MOVE(position.position)});
+            batch->requests.emplace_back(projected_value_request<LocalIterator>{
+                position.partition_id, {target}, HPX_MOVE(position.position)});
         }
         else
         {
-            request->targets.push_back(target);
+            request->targets.emplace_back(target);
         }
     }
 
@@ -272,7 +271,10 @@ namespace hpx::parallel::detail {
     {
         for (auto& result : results)
         {
-            auto shared_value = std::make_shared<Key1>(HPX_MOVE(result.value));
+            HPX_ASSERT(result.values.size() == 1);
+
+            auto shared_value =
+                std::make_shared<Key1>(HPX_MOVE(result.values.front()));
 
             for (auto const& target : result.targets)
             {
@@ -299,7 +301,10 @@ namespace hpx::parallel::detail {
     {
         for (auto& result : results)
         {
-            auto shared_value = std::make_shared<Key2>(HPX_MOVE(result.value));
+            HPX_ASSERT(result.values.size() == 1);
+
+            auto shared_value =
+                std::make_shared<Key2>(HPX_MOVE(result.values.front()));
 
             for (auto const& target : result.targets)
             {
@@ -366,8 +371,8 @@ namespace hpx::parallel::detail {
         std::size_t len2, Table1 const& table1, Table2 const& table2,
         Comp& comp, Proj1& proj1, Proj2& proj2, std::true_type)
     {
-        using local_iterator1 = typename Table1::local_iterator;
-        using local_iterator2 = typename Table2::local_iterator;
+        using local_iterator1 = Table1::local_iterator;
+        using local_iterator2 = Table2::local_iterator;
         using values_type = diagonal_probe_values<Key1, Key2>;
 
         std::vector<values_type> values(states.size());
@@ -394,7 +399,7 @@ namespace hpx::parallel::detail {
                 {
                     auto results = capture_projected_values_async<ExPolicy,
                         Key1, local_iterator1>(batch.routing_partition_id,
-                        HPX_MOVE(batch.requests), std::decay_t<Proj1>(proj1))
+                        HPX_MOVE(batch.requests), proj1)
                                        .get();
 
                     store_input1_probe_results<Key1, Key2>(
@@ -405,7 +410,7 @@ namespace hpx::parallel::detail {
                 {
                     auto results = capture_projected_values_async<ExPolicy,
                         Key2, local_iterator2>(batch.routing_partition_id,
-                        HPX_MOVE(batch.requests), std::decay_t<Proj2>(proj2))
+                        HPX_MOVE(batch.requests), proj2)
                                        .get();
 
                     store_input2_probe_results<Key1, Key2>(
@@ -425,8 +430,8 @@ namespace hpx::parallel::detail {
         std::size_t len2, Table1 const& table1, Table2 const& table2,
         Comp& comp, Proj1& proj1, Proj2& proj2, std::false_type)
     {
-        using local_iterator1 = typename Table1::local_iterator;
-        using local_iterator2 = typename Table2::local_iterator;
+        using local_iterator1 = Table1::local_iterator;
+        using local_iterator2 = Table2::local_iterator;
         using values_type = diagonal_probe_values<Key1, Key2>;
         using result_type1 = std::vector<projected_value_result<Key1>>;
         using result_type2 = std::vector<projected_value_result<Key2>>;
@@ -465,14 +470,14 @@ namespace hpx::parallel::detail {
             {
                 operations1.push_back(capture_projected_values_async<ExPolicy,
                     Key1, local_iterator1>(batch.routing_partition_id,
-                    HPX_MOVE(batch.requests), std::decay_t<Proj1>(proj1)));
+                    HPX_MOVE(batch.requests), proj1));
             }
 
             for (auto& batch : batches2)
             {
                 operations2.push_back(capture_projected_values_async<ExPolicy,
                     Key2, local_iterator2>(batch.routing_partition_id,
-                    HPX_MOVE(batch.requests), std::decay_t<Proj2>(proj2)));
+                    HPX_MOVE(batch.requests), proj2));
             }
 
             auto completed1 =
@@ -523,8 +528,8 @@ namespace hpx::parallel::detail {
         -> std::pair<typename Traits3::segment_iterator,
             typename Traits3::local_iterator>
     {
-        using segment_iterator_out = typename Traits3::segment_iterator;
-        using out_local_iterator_type = typename Traits3::local_iterator;
+        using segment_iterator_out = Traits3::segment_iterator;
+        using out_local_iterator_type = Traits3::local_iterator;
 
         segment_iterator_out seg_out = Traits3::segment(dest);
         out_local_iterator_type loc_output = Traits3::local(dest);
@@ -662,11 +667,11 @@ namespace hpx::parallel::detail {
     template <typename Traits, typename Chunk>
     struct destination_chunk_batches
     {
-        using segment_iterator = typename Traits::segment_iterator;
+        using segment_iterator = Traits::segment_iterator;
         using batch_type = destination_chunk_batch<Chunk>;
 
         std::vector<batch_type> batches;
-        std::optional<segment_iterator> final_segment;
+        segment_iterator final_segment;
         std::size_t final_batch_index = 0;
         std::size_t final_chunk_position = 0;
     };
@@ -676,22 +681,20 @@ namespace hpx::parallel::detail {
     {
         using input_traits1 =
             hpx::traits::segmented_iterator_traits<std::decay_t<Iter1>>;
-        using input_local_iterator1 = typename input_traits1::local_iterator;
+        using input_local_iterator1 = input_traits1::local_iterator;
         using input_local_traits1 =
             hpx::traits::segmented_local_iterator_traits<input_local_iterator1>;
-        using input_raw_iterator1 =
-            typename input_local_traits1::local_raw_iterator;
+        using input_raw_iterator1 = input_local_traits1::local_raw_iterator;
         using input_reference1 =
-            typename std::iterator_traits<input_raw_iterator1>::reference;
+            std::iterator_traits<input_raw_iterator1>::reference;
         using input_traits2 =
             hpx::traits::segmented_iterator_traits<std::decay_t<Iter2>>;
-        using input_local_iterator2 = typename input_traits2::local_iterator;
+        using input_local_iterator2 = input_traits2::local_iterator;
         using input_local_traits2 =
             hpx::traits::segmented_local_iterator_traits<input_local_iterator2>;
-        using input_raw_iterator2 =
-            typename input_local_traits2::local_raw_iterator;
+        using input_raw_iterator2 = input_local_traits2::local_raw_iterator;
         using input_reference2 =
-            typename std::iterator_traits<input_raw_iterator2>::reference;
+            std::iterator_traits<input_raw_iterator2>::reference;
         template <typename Proj>
         using projected_key_type1 =
             std::decay_t<std::invoke_result_t<Proj&, input_reference1>>;
@@ -700,9 +703,9 @@ namespace hpx::parallel::detail {
             std::decay_t<std::invoke_result_t<Proj&, input_reference2>>;
         using destination_traits =
             hpx::traits::segmented_iterator_traits<std::decay_t<Iter3>>;
-        using local_iterator = typename destination_traits::local_iterator;
-        using value_type1 = typename std::iterator_traits<Iter1>::value_type;
-        using value_type2 = typename std::iterator_traits<Iter2>::value_type;
+        using local_iterator = destination_traits::local_iterator;
+        using value_type1 = std::iterator_traits<Iter1>::value_type;
+        using value_type2 = std::iterator_traits<Iter2>::value_type;
         using range_list1_type = decltype(make_partition_ranges(
             std::declval<Iter1>(), std::declval<Iter1>()));
         using range_list2_type = decltype(make_partition_ranges(
@@ -711,7 +714,7 @@ namespace hpx::parallel::detail {
             range_list2_type, local_iterator>;
         using chunk_batches_type =
             destination_chunk_batches<destination_traits, chunk_type>;
-        using batch_type = typename chunk_batches_type::batch_type;
+        using batch_type = chunk_batches_type::batch_type;
         using batch_result_type = std::vector<local_iterator>;
     };
 
@@ -724,18 +727,14 @@ namespace hpx::parallel::detail {
         Proj2& proj2, IsSeq is_seq)
     {
         using chunk_batches_type = destination_chunk_batches<Traits3, Chunk>;
-        using batch_type = typename chunk_batches_type::batch_type;
-        using segment_iterator = typename Traits3::segment_iterator;
-        using local_iterator = typename Traits3::local_iterator;
+        using batch_type = chunk_batches_type::batch_type;
+        using segment_iterator = Traits3::segment_iterator;
+        using local_iterator = Traits3::local_iterator;
         using output_position_type =
             output_chunk_position<segment_iterator, local_iterator>;
         using merge_types = segmented_merge_types<Iter1, Iter2, Iter3>;
-        using key_type1 =
-            typename merge_types::template projected_key_type1<Proj1>;
-        using key_type2 =
-            typename merge_types::template projected_key_type2<Proj2>;
-
-        chunk_batches_type chunk_batches;
+        using key_type1 = merge_types::template projected_key_type1<Proj1>;
+        using key_type2 = merge_types::template projected_key_type2<Proj2>;
 
         auto table1 =
             make_segmented_range_table(first1, std::next(first1, len1));
@@ -751,6 +750,8 @@ namespace hpx::parallel::detail {
                     output_positions.push_back(output_position_type{
                         HPX_MOVE(segment), HPX_MOVE(output_first), k0, k1});
                 });
+
+        chunk_batches_type chunk_batches{{}, HPX_MOVE(output_position.first)};
 
         std::vector<diagonal_search_state> states;
         states.reserve(output_positions.size() + 1);
@@ -805,9 +806,8 @@ namespace hpx::parallel::detail {
                 std::distance(chunk_batches.batches.begin(), batch));
             chunk_batches.final_chunk_position = batch->chunks.size() - 1;
         }
-
         HPX_ASSERT(!chunk_batches.batches.empty());
-        chunk_batches.final_segment.emplace(HPX_MOVE(output_position.first));
+
         return chunk_batches;
     }
 
@@ -853,13 +853,13 @@ namespace hpx::parallel::detail {
         Proj1&& proj1, Proj2&& proj2, std::size_t len1, std::size_t len2)
     {
         using types = segmented_merge_types<Iter1, Iter2, Iter3>;
-        using traits3 = typename types::destination_traits;
-        using local_iterator = typename types::local_iterator;
-        using value_type1 = typename types::value_type1;
-        using value_type2 = typename types::value_type2;
-        using chunk_batches_type = typename types::chunk_batches_type;
-        using batch_type = typename types::batch_type;
-        using batch_result_type = typename types::batch_result_type;
+        using traits3 = types::destination_traits;
+        using local_iterator = types::local_iterator;
+        using value_type1 = types::value_type1;
+        using value_type2 = types::value_type2;
+        using chunk_batches_type = types::chunk_batches_type;
+        using batch_type = types::batch_type;
+        using batch_result_type = types::batch_result_type;
         using policy_type = std::decay_t<ExPolicy>;
         using result_value_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
         using result =
@@ -913,7 +913,6 @@ namespace hpx::parallel::detail {
                     hpx::future<chunk_batches_type> ready_batches) mutable
                     -> hpx::future<result_value_type> {
                     auto chunk_batches = ready_batches.get();
-                    HPX_ASSERT(chunk_batches.final_segment.has_value());
 
                     auto final_local =
                         std::make_shared<std::optional<local_iterator>>();
@@ -964,7 +963,7 @@ namespace hpx::parallel::detail {
                     }
 
                     auto end_dest = HPX_MOVE(chain).then(
-                        [final_segment = HPX_MOVE(*chunk_batches.final_segment),
+                        [final_segment = HPX_MOVE(chunk_batches.final_segment),
                             final_local](
                             hpx::future<void> ready) mutable -> Iter3 {
                             ready.get();
@@ -996,7 +995,6 @@ namespace hpx::parallel::detail {
             }
 
             HPX_ASSERT(chunk_batches.has_value());
-            HPX_ASSERT(chunk_batches->final_segment.has_value());
 
             std::optional<local_iterator> final_local;
 
@@ -1007,10 +1005,9 @@ namespace hpx::parallel::detail {
 
                 auto values =
                     capture_dispatch_batch_async<value_type1, value_type2>(
-                        batch.routing_partition_id, std::decay_t<Algo>(algo),
-                        policy_type(policy), std::true_type{},
-                        HPX_MOVE(batch.chunks), std::decay_t<Comp>(comp),
-                        std::decay_t<Proj1>(proj1), std::decay_t<Proj2>(proj2))
+                        batch.routing_partition_id, algo, policy,
+                        std::true_type{}, HPX_MOVE(batch.chunks), comp, proj1,
+                        proj2)
                         .get();
 
                 if (index == chunk_batches->final_batch_index)
@@ -1025,7 +1022,7 @@ namespace hpx::parallel::detail {
             HPX_ASSERT(final_local.has_value());
 
             Iter3 end_dest = traits3::compose(
-                *chunk_batches->final_segment, HPX_MOVE(*final_local));
+                chunk_batches->final_segment, HPX_MOVE(*final_local));
 
             return result::get(result_value_type{
                 HPX_MOVE(last1), HPX_MOVE(last2), HPX_MOVE(end_dest)});
@@ -1044,11 +1041,11 @@ namespace hpx::parallel::detail {
         Proj1&& proj1, Proj2&& proj2, std::size_t len1, std::size_t len2)
     {
         using types = segmented_merge_types<Iter1, Iter2, Iter3>;
-        using traits3 = typename types::destination_traits;
-        using value_type1 = typename types::value_type1;
-        using value_type2 = typename types::value_type2;
-        using chunk_batches_type = typename types::chunk_batches_type;
-        using batch_result_type = typename types::batch_result_type;
+        using traits3 = types::destination_traits;
+        using value_type1 = types::value_type1;
+        using value_type2 = types::value_type2;
+        using chunk_batches_type = types::chunk_batches_type;
+        using batch_result_type = types::batch_result_type;
         using policy_type = std::decay_t<ExPolicy>;
         using result_value_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
 
@@ -1060,8 +1057,6 @@ namespace hpx::parallel::detail {
                 auto& execution_policy, auto& comparator, auto& projection1,
                 auto& projection2, chunk_batches_type chunk_batches) mutable
             -> hpx::future<result_value_type> {
-            HPX_ASSERT(chunk_batches.final_segment.has_value());
-
             std::vector<hpx::future<batch_result_type>> operations;
             operations.reserve(chunk_batches.batches.size());
 
@@ -1069,20 +1064,15 @@ namespace hpx::parallel::detail {
             {
                 operations.push_back(
                     capture_dispatch_batch_async<value_type1, value_type2>(
-                        batch.routing_partition_id,
-                        std::decay_t<decltype(algorithm)>(algorithm),
-                        std::decay_t<decltype(execution_policy)>(
-                            execution_policy),
-                        std::false_type{}, HPX_MOVE(batch.chunks),
-                        std::decay_t<decltype(comparator)>(comparator),
-                        std::decay_t<decltype(projection1)>(projection1),
-                        std::decay_t<decltype(projection2)>(projection2)));
+                        batch.routing_partition_id, algorithm, execution_policy,
+                        std::false_type{}, HPX_MOVE(batch.chunks), comparator,
+                        projection1, projection2));
             }
 
             auto end_dest =
                 hpx::when_all(HPX_MOVE(operations))
                     .then([final_segment =
-                                  HPX_MOVE(*chunk_batches.final_segment),
+                                  HPX_MOVE(chunk_batches.final_segment),
                               final_batch = chunk_batches.final_batch_index,
                               final_chunk = chunk_batches.final_chunk_position](
                               auto ready) mutable -> Iter3 {
@@ -1248,7 +1238,7 @@ namespace hpx::segmented {
         Iter2 first2, Iter2 last2, Iter3 dest, Comp comp = Comp())
     {
         using traits3 = hpx::traits::segmented_iterator_traits<Iter3>;
-        using output_local_iterator = typename traits3::local_iterator;
+        using output_local_iterator = traits3::local_iterator;
 
         return hpx::parallel::util::get_third_element(
             hpx::parallel::detail::segmented_merge(
@@ -1266,7 +1256,7 @@ namespace hpx::segmented {
         Iter2 last2, Iter3 dest, Comp comp = Comp())
     {
         using traits3 = hpx::traits::segmented_iterator_traits<Iter3>;
-        using output_local_iterator = typename traits3::local_iterator;
+        using output_local_iterator = traits3::local_iterator;
 
         return hpx::parallel::util::get_third_element(
             hpx::parallel::detail::segmented_merge(
@@ -1289,7 +1279,7 @@ namespace hpx::segmented {
         Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
     {
         using traits3 = hpx::traits::segmented_iterator_traits<Iter3>;
-        using output_local_iterator = typename traits3::local_iterator;
+        using output_local_iterator = traits3::local_iterator;
 
         return hpx::parallel::detail::segmented_merge(
             hpx::parallel::detail::captured_merge<output_local_iterator>{},
@@ -1309,7 +1299,7 @@ namespace hpx::segmented {
         Proj2 proj2 = Proj2())
     {
         using traits3 = hpx::traits::segmented_iterator_traits<Iter3>;
-        using output_local_iterator = typename traits3::local_iterator;
+        using output_local_iterator = traits3::local_iterator;
 
         return hpx::parallel::detail::segmented_merge(
             hpx::parallel::detail::captured_merge<output_local_iterator>{},

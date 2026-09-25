@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <exception>
 #include <iterator>
+#include <limits>
 #include <list>
 #include <memory>
 #include <type_traits>
@@ -78,30 +79,38 @@ namespace hpx::parallel::detail {
     HPX_FORCEINLINE hpx::future<T> handle_capture_exceptions(
         hpx::future<hpx::future<T>>&& operation)
     {
-        return HPX_MOVE(operation).then(
-            [](hpx::future<hpx::future<T>> outer) -> hpx::future<T> {
-                // Handles an exception thrown before the inner
-                // operation was returned.
-                hpx::future<T> inner =
-                    get_capture_result<ExPolicy>(HPX_MOVE(outer));
+        hpx::future<T> flattened = HPX_MOVE(operation);
 
-                // Handles an exception stored in the inner future.
-                return handle_capture_exceptions<ExPolicy>(HPX_MOVE(inner));
-            });
+        return handle_capture_exceptions<ExPolicy>(HPX_MOVE(flattened));
     }
 
     template <typename ExPolicy, typename T>
     std::vector<T> get_capture_results(std::vector<hpx::future<T>> operations)
     {
-        hpx::wait_all(operations);
+        bool const has_exceptions = hpx::wait_all_nothrow(operations);
 
-        std::list<std::exception_ptr> errors;
-        parallel::util::detail::handle_remote_exceptions<
-            std::decay_t<ExPolicy>>::call(operations, errors);
-
-        if (!errors.empty())
+        if (has_exceptions)
         {
-            throw hpx::exception_list(HPX_MOVE(errors));
+            std::list<std::exception_ptr> errors;
+            parallel::util::detail::handle_remote_exceptions<
+                std::decay_t<ExPolicy>>::call(operations, errors);
+
+            if (!errors.empty())
+            {
+                throw hpx::exception_list(HPX_MOVE(errors));
+            }
+
+            // Defensive fallback: an exceptional future was detected,
+            // but the policy handler neither threw nor recorded it.
+            for (auto& operation : operations)
+            {
+                if (operation.has_exception())
+                {
+                    operation.get();    // rethrow the exception
+                }
+            }
+
+            HPX_UNREACHABLE;
         }
 
         std::vector<T> results;
@@ -121,14 +130,6 @@ namespace hpx::parallel::detail {
         hpx::id_type partition_id;
         LocalIterator first;
         LocalIterator last;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & partition_id;
-            ar & first;
-            ar & last;
-        }
     };
 
     template <typename RangeList1, typename RangeList2, typename OutIterator>
@@ -141,16 +142,6 @@ namespace hpx::parallel::detail {
         RangeList2 ranges2;
 
         OutIterator dest;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & input1_size;
-            ar & input2_size;
-            ar & ranges1;
-            ar & ranges2;
-            ar & dest;
-        }
     };
 
     template <typename LocalIterator>
@@ -158,26 +149,12 @@ namespace hpx::parallel::detail {
     {
         std::size_t original_index;
         partition_range<LocalIterator> range;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & original_index;
-            ar & range;
-        }
     };
 
     struct projected_value_target
     {
         std::size_t search_index;
         std::uint8_t operand_index;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & search_index;
-            ar & operand_index;
-        }
     };
 
     template <typename LocalIterator>
@@ -186,37 +163,21 @@ namespace hpx::parallel::detail {
         hpx::id_type partition_id;
         std::vector<projected_value_target> targets;
         LocalIterator position;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & partition_id;
-            ar & targets;
-            ar & position;
-        }
     };
 
     template <typename Key>
     struct projected_value_result
     {
-        static_assert(std::is_default_constructible_v<Key>,
-            "The projected key type used by segmented merge must be "
-            "default constructible because HPX must construct it "
-            "while deserializing the action result.");
-
         static_assert(std::is_move_constructible_v<Key>,
             "The projected key type used by segmented merge must be "
             "move constructible.");
 
         std::vector<projected_value_target> targets;
-        Key value;
 
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & targets;
-            ar & value;
-        }
+        // Contains exactly one projected key.
+        // Keeping the key in collection allows HPX
+        // to use construction-aware deserialisation for Key
+        std::vector<Key> values;
     };
 
     struct collected_range_slice
@@ -224,14 +185,6 @@ namespace hpx::parallel::detail {
         std::size_t original_index;
         std::size_t offset;
         std::size_t size;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & original_index;
-            ar & offset;
-            ar & size;
-        }
     };
 
     template <typename Value>
@@ -239,13 +192,6 @@ namespace hpx::parallel::detail {
     {
         std::vector<Value> values;
         std::vector<collected_range_slice> slices;
-
-        template <typename Archive>
-        void serialize(Archive& ar, unsigned)
-        {
-            ar & values;
-            ar & slices;
-        }
     };
 
     template <typename LocalIterator>
@@ -272,15 +218,14 @@ namespace hpx::parallel::detail {
     template <typename Value, typename LocalIterator>
     struct transmitter
     {
-        using iterator_type = std::decay_t<LocalIterator>;
-        using indexed_range_type = indexed_partition_range<iterator_type>;
+        using indexed_range_type = indexed_partition_range<LocalIterator>;
         using range_list_type = std::vector<indexed_range_type>;
         using result_type = collected_partition_values<Value>;
 
         static result_type send_values(range_list_type ranges)
         {
             using iterator_traits =
-                hpx::traits::segmented_local_iterator_traits<iterator_type>;
+                hpx::traits::segmented_local_iterator_traits<LocalIterator>;
 
             result_type result;
             result.slices.reserve(ranges.size());
@@ -310,7 +255,7 @@ namespace hpx::parallel::detail {
 
                 std::size_t const size = result.values.size() - offset;
 
-                result.slices.push_back(collected_range_slice{
+                result.slices.emplace_back(collected_range_slice{
                     indexed_range.original_index, offset, size});
             }
             return result;
@@ -320,10 +265,10 @@ namespace hpx::parallel::detail {
     template <typename Value, typename LocalIterator>
     struct send_values_action
       : hpx::actions::make_action<
-            collected_partition_values<Value> (*)(std::vector<
-                indexed_partition_range<std::decay_t<LocalIterator>>>),
-            &transmitter<Value, std::decay_t<LocalIterator>>::send_values,
-            send_values_action<Value, std::decay_t<LocalIterator>>>::type
+            collected_partition_values<Value> (*)(
+                std::vector<indexed_partition_range<LocalIterator>>),
+            &transmitter<Value, LocalIterator>::send_values,
+            send_values_action<Value, LocalIterator>>::type
     {
     };
 
@@ -343,16 +288,14 @@ namespace hpx::parallel::detail {
     template <typename Key, typename LocalIterator, typename Proj>
     struct projected_value_collector
     {
-        using iterator_type = std::decay_t<LocalIterator>;
-        using projection_type = std::decay_t<Proj>;
-        using request_type = projected_value_request<iterator_type>;
+        using request_type = projected_value_request<LocalIterator>;
         using result_type = projected_value_result<Key>;
 
         static std::vector<result_type> get_values(
-            std::vector<request_type> requests, projection_type projection)
+            std::vector<request_type> requests, Proj projection)
         {
             using local_traits =
-                hpx::traits::segmented_local_iterator_traits<iterator_type>;
+                hpx::traits::segmented_local_iterator_traits<LocalIterator>;
 
             std::vector<result_type> results;
             results.reserve(requests.size());
@@ -363,8 +306,12 @@ namespace hpx::parallel::detail {
                     local_traits::local(HPX_MOVE(request.position));
                 Key value = HPX_INVOKE(projection, *raw_position);
 
-                results.push_back(
-                    result_type{HPX_MOVE(request.targets), HPX_MOVE(value)});
+                std::vector<Key> values;
+                values.reserve(1);
+                values.emplace_back(HPX_MOVE(value));
+
+                results.emplace_back(
+                    result_type{HPX_MOVE(request.targets), HPX_MOVE(values)});
             }
 
             return results;
@@ -373,14 +320,11 @@ namespace hpx::parallel::detail {
 
     template <typename Key, typename LocalIterator, typename Proj>
     struct get_projected_values_action
-      : hpx::actions::make_action<std::vector<projected_value_result<Key>> (*)(
-                                      std::vector<projected_value_request<
-                                          std::decay_t<LocalIterator>>>,
-                                      std::decay_t<Proj>),
-            &projected_value_collector<Key, std::decay_t<LocalIterator>,
-                std::decay_t<Proj>>::get_values,
-            get_projected_values_action<Key, std::decay_t<LocalIterator>,
-                std::decay_t<Proj>>>::type
+      : hpx::actions::make_action<
+            std::vector<projected_value_result<Key>> (*)(
+                std::vector<projected_value_request<LocalIterator>>, Proj),
+            &projected_value_collector<Key, LocalIterator, Proj>::get_values,
+            get_projected_values_action<Key, LocalIterator, Proj>>::type
     {
     };
 
@@ -405,11 +349,10 @@ namespace hpx::parallel::detail {
     template <typename Iterator>
     auto make_partition_ranges(Iterator first, Iterator last)
     {
-        using iterator_type = std::decay_t<Iterator>;
-        using traits = hpx::traits::segmented_iterator_traits<iterator_type>;
+        using traits = hpx::traits::segmented_iterator_traits<Iterator>;
 
-        using segment_iterator = typename traits::segment_iterator;
-        using local_iterator = typename traits::local_iterator;
+        using segment_iterator = traits::segment_iterator;
+        using local_iterator = traits::local_iterator;
 
         using range_type = partition_range<local_iterator>;
 
@@ -424,6 +367,11 @@ namespace hpx::parallel::detail {
         segment_iterator seg_first = traits::segment(first);
         segment_iterator seg_last = traits::segment(final_element);
 
+        auto const segment_count =
+            static_cast<std::size_t>(std::distance(seg_first, seg_last) + 1);
+
+        ranges.reserve(segment_count);
+
         local_iterator local_first = traits::local(first);
         local_iterator final_last = traits::local(final_element);
         ++final_last;
@@ -433,7 +381,7 @@ namespace hpx::parallel::detail {
                                 local_iterator range_last) {
             if (range_first != range_last)
             {
-                ranges.push_back(range_type{traits::get_id(segment),
+                ranges.emplace_back(range_type{traits::get_id(segment),
                     HPX_MOVE(range_first), HPX_MOVE(range_last)});
             }
         };
@@ -533,24 +481,25 @@ namespace hpx::parallel::detail {
 
                 if (batch == batches.end())
                 {
-                    batches.push_back(
+                    batches.emplace_back(
                         batch_type{source_locality, range.partition_id, {}});
 
                     batch = std::prev(batches.end());
                 }
 
-                batch->ranges.push_back(
+                batch->ranges.emplace_back(
                     indexed_range_type{index, HPX_MOVE(range)});
             }
 
             std::vector<collected_type> batch_results;
-            batch_results.reserve(batches.size());
 
             if constexpr (is_seq::value)
             {
+                batch_results.reserve(batches.size());
+
                 for (auto& batch : batches)
                 {
-                    batch_results.push_back(get_partition_values<Value>(
+                    batch_results.emplace_back(get_partition_values<Value>(
                         destination_locality, batch.locality_id,
                         batch.routing_partition_id, HPX_MOVE(batch.ranges))
                             .get());
@@ -564,7 +513,7 @@ namespace hpx::parallel::detail {
 
                 for (auto& batch : batches)
                 {
-                    batch_futures.push_back(get_partition_values<Value>(
+                    batch_futures.emplace_back(get_partition_values<Value>(
                         destination_locality, batch.locality_id,
                         batch.routing_partition_id, HPX_MOVE(batch.ranges)));
                 }
@@ -580,7 +529,11 @@ namespace hpx::parallel::detail {
                 std::size_t size;
             };
 
-            std::vector<range_location> locations(number_of_ranges);
+            constexpr std::size_t invalid_index =
+                (std::numeric_limits<std::size_t>::max)();
+
+            std::vector<range_location> locations(
+                number_of_ranges, range_location{invalid_index, 0, 0});
 
             std::size_t total_size = 0;
 
@@ -593,7 +546,13 @@ namespace hpx::parallel::detail {
 
                 for (auto const& slice : result.slices)
                 {
-                    locations[slice.original_index] =
+                    HPX_ASSERT(slice.original_index < locations.size());
+
+                    auto& location = locations[slice.original_index];
+
+                    HPX_ASSERT(location.batch_index == invalid_index);
+
+                    location =
                         range_location{batch_index, slice.offset, slice.size};
                 }
             }
@@ -603,7 +562,14 @@ namespace hpx::parallel::detail {
 
             for (auto const& location : locations)
             {
+                HPX_ASSERT(location.batch_index != invalid_index);
+
+                HPX_ASSERT(location.batch_index < batch_results.size());
+
                 auto& source = batch_results[location.batch_index].values;
+
+                HPX_ASSERT(location.offset < source.size());
+                HPX_ASSERT(location.offset + location.size <= source.size());
 
                 auto first = source.begin() + location.offset;
 
@@ -664,11 +630,10 @@ namespace hpx::parallel::detail {
         using values_type1 = std::vector<Value1>;
         using values_type2 = std::vector<Value2>;
 
-        using buffer_iterator1 = typename values_type1::iterator;
-        using buffer_iterator2 = typename values_type2::iterator;
+        using buffer_iterator1 = values_type1::iterator;
+        using buffer_iterator2 = values_type2::iterator;
 
-        using output_iterator =
-            std::decay_t<decltype(std::declval<chunk_type>().dest)>;
+        using output_iterator = decltype(std::declval<chunk_type>().dest);
 
         using batch_result_type = std::vector<output_iterator>;
 
@@ -701,24 +666,26 @@ namespace hpx::parallel::detail {
         }
 
         template <typename InputIterator>
-        static chunk_result_type copy_chunk(
+        static chunk_result_type copy_chunk(ExPolicy policy,
             InputIterator first, InputIterator last, output_iterator dest)
         {
             using output_traits =
                 hpx::traits::segmented_local_iterator_traits<output_iterator>;
 
             auto raw_dest = output_traits::local(HPX_MOVE(dest));
-            auto raw_result = std::copy(first, last, raw_dest);
-            auto result = output_traits::remote(HPX_MOVE(raw_result));
+            auto raw_result = hpx::copy(policy, first, last, raw_dest);
 
             if constexpr (hpx::is_async_execution_policy_v<
                               std::decay_t<ExPolicy>>)
             {
-                return hpx::make_ready_future(HPX_MOVE(result));
+                return raw_result.then([](auto ready) {
+                    return output_traits::remote(ready.get());
+                });
             }
             else
             {
-                return result;
+                return output_traits::remote(HPX_MOVE(raw_result));
+                ;
             }
         }
 
@@ -730,16 +697,137 @@ namespace hpx::parallel::detail {
         {
             if (first1 == last1)
             {
-                return copy_chunk(first2, last2, HPX_MOVE(dest));
+                return copy_chunk(policy, first2, last2, HPX_MOVE(dest));
             }
 
             if (first2 == last2)
             {
-                return copy_chunk(first1, last1, HPX_MOVE(dest));
+                return copy_chunk(policy, first1, last1, HPX_MOVE(dest));
             }
 
             return invoke_dispatcher(algo, HPX_MOVE(policy), first1, last1,
                 first2, last2, HPX_MOVE(dest), HPX_FORWARD(CallArgs, args)...);
+        }
+
+        static result_type invoke_chunks_sequential(Algo const& algo,
+            ExPolicy policy, chunk_list_type chunks,
+            std::shared_ptr<values_type1> values1,
+            std::shared_ptr<values_type2> values2, Args... args)
+        {
+            using policy_type = std::decay_t<ExPolicy>;
+
+            static constexpr bool is_task_policy =
+                hpx::is_async_execution_policy_v<policy_type>;
+
+            if constexpr (!is_task_policy)
+            {
+                batch_result_type results;
+                results.reserve(chunks.size());
+
+                for_each_chunk(chunks, values1, values2,
+                    [&](auto first1, auto last1, auto first2, auto last2,
+                        output_iterator dest) {
+                        results.emplace_back(invoke_chunk(algo, policy, first1,
+                            last1, first2, last2, HPX_MOVE(dest), args...));
+                    });
+
+                return results;
+            }
+            else
+            {
+                hpx::future<batch_result_type> operation =
+                    hpx::make_ready_future(batch_result_type{});
+
+                for_each_chunk(chunks, values1, values2,
+                    [&](auto first1, auto last1, auto first2, auto last2,
+                        output_iterator dest) {
+                        operation = HPX_MOVE(operation).then(
+                            [algorithm = algo, operation_policy = policy,
+                                first1, last1, first2, last2,
+                                dest = HPX_MOVE(dest), values1, values2,
+                                ... operation_args = args](
+                                hpx::future<batch_result_type> previous) mutable
+                                -> hpx::future<batch_result_type> {
+                                auto results = previous.get();
+
+                                auto chunk_operation =
+                                    batch_receiver::invoke_chunk(algorithm,
+                                        HPX_MOVE(operation_policy), first1,
+                                        last1, first2, last2, HPX_MOVE(dest),
+                                        HPX_MOVE(operation_args)...);
+
+                                return HPX_MOVE(chunk_operation)
+                                    .then([results = HPX_MOVE(results), values1,
+                                              values2](
+                                              hpx::future<output_iterator>
+                                                  ready) mutable
+                                              -> batch_result_type {
+                                        results.push_back(ready.get());
+
+                                        return HPX_MOVE(results);
+                                    });
+                            });
+                    });
+                return operation;
+            }
+        }
+
+        static result_type invoke_chunks_parallel(Algo const& algo,
+            ExPolicy policy, chunk_list_type chunks,
+            std::shared_ptr<values_type1> values1,
+            std::shared_ptr<values_type2> values2, Args... args)
+        {
+            using policy_type = std::decay_t<ExPolicy>;
+
+            static constexpr bool is_task_policy =
+                hpx::is_async_execution_policy_v<policy_type>;
+
+            std::vector<hpx::future<output_iterator>> operations;
+
+            operations.reserve(chunks.size());
+
+            for_each_chunk(chunks, values1, values2,
+                [&](auto first1, auto last1, auto first2, auto last2,
+                    output_iterator dest) {
+                    if constexpr (is_task_policy)
+                    {
+                        operations.push_back(
+                            batch_receiver::invoke_chunk(algo, policy, first1,
+                                last1, first2, last2, HPX_MOVE(dest), args...));
+                    }
+                    else
+                    {
+                        operations.push_back(hpx::async(
+                            [algorithm = algo, operation_policy = policy,
+                                first1, last1, first2, last2,
+                                dest = HPX_MOVE(dest), values1, values2,
+                                ... operation_args =
+                                    args]() mutable -> output_iterator {
+                                return batch_receiver::invoke_chunk(algorithm,
+                                    HPX_MOVE(operation_policy), first1, last1,
+                                    first2, last2, HPX_MOVE(dest),
+                                    HPX_MOVE(operation_args)...);
+                            }));
+                    }
+                });
+
+            HPX_ASSERT(!operations.empty());
+
+            auto complete =
+                hpx::when_all(HPX_MOVE(operations))
+                    .then([values1, values2](
+                              auto ready) mutable -> batch_result_type {
+                        return get_capture_results<policy_type>(ready.get());
+                    });
+
+            if constexpr (is_task_policy)
+            {
+                return complete;
+            }
+            else
+            {
+                return complete.get();
+            }
         }
 
         static result_type invoke_chunks(Algo const& algo, ExPolicy policy,
@@ -748,121 +836,19 @@ namespace hpx::parallel::detail {
         {
             HPX_ASSERT(!chunks.empty());
 
-            using policy_type = std::decay_t<ExPolicy>;
-
-            static constexpr bool is_task_policy =
-                hpx::is_async_execution_policy_v<policy_type>;
-
             validate_chunk_sizes(chunks, values1->size(), values2->size());
 
             if constexpr (is_seq::value)
             {
-                if constexpr (!is_task_policy)
-                {
-                    batch_result_type results;
-                    results.reserve(chunks.size());
-
-                    for_each_chunk(chunks, values1, values2,
-                        [&](auto first1, auto last1, auto first2, auto last2,
-                            output_iterator dest) {
-                            results.push_back(invoke_chunk(algo, policy, first1,
-                                last1, first2, last2, HPX_MOVE(dest), args...));
-                        });
-
-                    return results;
-                }
-                else
-                {
-                    hpx::future<batch_result_type> operation =
-                        hpx::make_ready_future(batch_result_type{});
-
-                    for_each_chunk(chunks, values1, values2,
-                        [&](auto first1, auto last1, auto first2, auto last2,
-                            output_iterator dest) {
-                            operation = HPX_MOVE(operation).then(
-                                [algorithm = std::decay_t<Algo>(algo),
-                                    operation_policy = policy, first1, last1,
-                                    first2, last2, dest = HPX_MOVE(dest),
-                                    values1, values2,
-                                    ... operation_args = args](
-                                    hpx::future<batch_result_type>
-                                        previous) mutable
-                                    -> hpx::future<batch_result_type> {
-                                    auto results = previous.get();
-
-                                    auto chunk_operation =
-                                        batch_receiver::invoke_chunk(algorithm,
-                                            HPX_MOVE(operation_policy), first1,
-                                            last1, first2, last2,
-                                            HPX_MOVE(dest),
-                                            HPX_MOVE(operation_args)...);
-
-                                    return HPX_MOVE(chunk_operation)
-                                        .then([results = HPX_MOVE(results),
-                                                  values1, values2](
-                                                  hpx::future<output_iterator>
-                                                      ready) mutable
-                                                  -> batch_result_type {
-                                            results.push_back(ready.get());
-
-                                            return HPX_MOVE(results);
-                                        });
-                                });
-                        });
-                    return operation;
-                }
+                return invoke_chunks_sequential(algo, HPX_MOVE(policy),
+                    HPX_MOVE(chunks), HPX_MOVE(values1), HPX_MOVE(values2),
+                    HPX_MOVE(args)...);
             }
             else
             {
-                std::vector<hpx::future<output_iterator>> operations;
-
-                operations.reserve(chunks.size());
-
-                for_each_chunk(chunks, values1, values2,
-                    [&](auto first1, auto last1, auto first2, auto last2,
-                        output_iterator dest) {
-                        if constexpr (is_task_policy)
-                        {
-                            operations.push_back(batch_receiver::invoke_chunk(
-                                algo, policy, first1, last1, first2, last2,
-                                HPX_MOVE(dest), args...));
-                        }
-                        else
-                        {
-                            operations.push_back(hpx::async(
-                                [algorithm = std::decay_t<Algo>(algo),
-                                    operation_policy = policy, first1, last1,
-                                    first2, last2, dest = HPX_MOVE(dest),
-                                    values1, values2,
-                                    ... operation_args =
-                                        args]() mutable -> output_iterator {
-                                    return batch_receiver::invoke_chunk(
-                                        algorithm, HPX_MOVE(operation_policy),
-                                        first1, last1, first2, last2,
-                                        HPX_MOVE(dest),
-                                        HPX_MOVE(operation_args)...);
-                                }));
-                        }
-                    });
-
-                HPX_ASSERT(!operations.empty());
-
-                auto complete =
-                    hpx::when_all(HPX_MOVE(operations))
-                        .then([values1, values2](
-                                  auto ready) mutable -> batch_result_type {
-                            return get_capture_results<policy_type>(
-                                ready.get());
-                        });
-
-                if constexpr (is_task_policy)
-                {
-                    return complete;
-                }
-                else
-                {
-                    return complete.get();
-                }
+                return invoke_chunks_parallel(algo, HPX_MOVE(policy),
+                    HPX_MOVE(chunks), HPX_MOVE(values1), HPX_MOVE(values2),
+                    HPX_MOVE(args)...);
             }
         }
 
@@ -955,11 +941,11 @@ namespace hpx::parallel::detail {
             if constexpr (is_seq::value)
             {
                 auto shared1 = std::make_shared<values_type1>(
-                    range_collector<ExPolicy, std::decay_t<IsSeq>>::
-                        template collect_range<Value1>(HPX_MOVE(ranges1)));
+                    range_collector<ExPolicy, is_seq>::template collect_range<
+                        Value1>(HPX_MOVE(ranges1)));
                 auto shared2 = std::make_shared<values_type2>(
-                    range_collector<ExPolicy, std::decay_t<IsSeq>>::
-                        template collect_range<Value2>(HPX_MOVE(ranges2)));
+                    range_collector<ExPolicy, is_seq>::template collect_range<
+                        Value2>(HPX_MOVE(ranges2)));
 
                 return invoke_chunks(algo, HPX_MOVE(policy), HPX_MOVE(chunks),
                     HPX_MOVE(shared1), HPX_MOVE(shared2), HPX_MOVE(args)...);
@@ -968,12 +954,12 @@ namespace hpx::parallel::detail {
             {
                 auto values1_f = hpx::async(
                     [ranges = HPX_MOVE(ranges1)]() mutable -> values_type1 {
-                        return range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                        return range_collector<ExPolicy, is_seq>::
                             template collect_range<Value1>(HPX_MOVE(ranges));
                     });
                 auto values2_f = hpx::async(
                     [ranges = HPX_MOVE(ranges2)]() mutable -> values_type2 {
-                        return range_collector<ExPolicy, std::decay_t<IsSeq>>::
+                        return range_collector<ExPolicy, is_seq>::
                             template collect_range<Value2>(HPX_MOVE(ranges));
                     });
 
@@ -983,8 +969,7 @@ namespace hpx::parallel::detail {
                 if constexpr (is_task_policy)
                 {
                     return hpx::dataflow(
-                        [algorithm = std::decay_t<Algo>(algo),
-                            policy = HPX_MOVE(policy),
+                        [algorithm = algo, policy = HPX_MOVE(policy),
                             chunks = HPX_MOVE(chunks),
                             ... stored_args = HPX_MOVE(args)](
                             hpx::future<values_type1> ready1,
@@ -1030,20 +1015,18 @@ namespace hpx::parallel::detail {
 
     template <typename Value1, typename Value2, typename Chunk, typename Algo,
         typename ExPolicy, typename IsSeq, typename... Args>
-    HPX_FORCEINLINE hpx::future<
-        std::vector<std::decay_t<decltype(std::declval<Chunk>().dest)>>>
-    capture_dispatch_batch_async(hpx::id_type const& routing_partition_id,
-        Algo&& algo, ExPolicy policy, IsSeq, std::vector<Chunk> chunks,
-        Args&&... args)
+    HPX_FORCEINLINE
+        hpx::future<std::vector<decltype(std::declval<Chunk>().dest)>>
+        capture_dispatch_batch_async(hpx::id_type const& routing_partition_id,
+            Algo&& algo, ExPolicy policy, IsSeq, std::vector<Chunk> chunks,
+            Args&&... args)
     {
         HPX_ASSERT(!chunks.empty());
 
-        using chunk_type = std::decay_t<Chunk>;
+        using chunk_type = Chunk;
         using algo_type = std::decay_t<Algo>;
-        using is_seq = std::decay_t<IsSeq>;
 
-        using output_iterator =
-            std::decay_t<decltype(std::declval<chunk_type>().dest)>;
+        using output_iterator = decltype(std::declval<chunk_type>().dest);
 
         using batch_result_type = std::vector<output_iterator>;
 
@@ -1052,7 +1035,7 @@ namespace hpx::parallel::detail {
                 batch_result_type>;
 
         get_values_from_chunk_batch_action<Value1, Value2, chunk_type,
-            algo_type, action_result_type, ExPolicy, is_seq,
+            algo_type, action_result_type, ExPolicy, IsSeq,
             hpx::util::decay_unwrap_t<Args>...>
             act;
 
