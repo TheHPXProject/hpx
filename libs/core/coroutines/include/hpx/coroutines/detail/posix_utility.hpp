@@ -169,22 +169,35 @@ namespace hpx::threads::coroutines::detail::posix {
             bool advised = false;
             if (unbind_on_reset == 2)
             {
-                ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
-                advised = true;
+                // Mode 2 promises DONTNEED zero-fill. If advice fails (e.g.
+                // locked pages), leave the watermark dirty so a later
+                // reset_stack can retry; restoring it here would permanently
+                // skip the scrub.
+                if (::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED) == 0)
+                {
+                    advised = true;
+                    *watermark =
+                        reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+                }
             }
 #if defined(MADV_FREE)
             else if (unbind_on_reset == 1)
             {
-                ::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE);
-                advised = true;
+                if (::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE) == 0)
+                {
+                    advised = true;
+                }
+                // Mode 1 does not promise zero-fill; always restore the
+                // watermark so shallow recycles do not remadvise every time.
+                *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
             }
 #endif
-            // Mode 0, or mode 1 without MADV_FREE: leave pages resident.
+            else
+            {
+                // Mode 0, or mode 1 without MADV_FREE: leave pages resident.
+                *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+            }
 
-            // Always restore the watermark after a deep use. Without this,
-            // every later recycle re-enters this path (the marker was never
-            // rewritten on rebind).
-            *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
             return advised;
         }
 
