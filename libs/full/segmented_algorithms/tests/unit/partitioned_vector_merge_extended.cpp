@@ -55,6 +55,22 @@ bool operator<(stable_value const& lhs, stable_value const& rhs)
 
 HPX_REGISTER_PARTITIONED_VECTOR(stable_value);
 
+struct byte_batch_test_algorithm
+{
+    using result_type = std::size_t;
+};
+
+struct byte_batch_test_chunk
+{
+    std::size_t input1_size;
+    std::size_t input2_size;
+
+    std::vector<int> ranges1;
+    std::vector<int> ranges2;
+
+    std::size_t dest;
+};
+
 namespace {
 
     // Transfer whole partitions, rather than issuing one remote action per
@@ -984,6 +1000,69 @@ namespace {
         run_merge_case(hpx::execution::seq, progression(32, 1, 0),
             std::vector<int>{5, 15, 25, 35}, layout8, layout4, layout4);
     }
+
+    void test_capture_byte_batch_grouping()
+    {
+        using policy_type =
+            std::decay_t<decltype(hpx::execution::seq)>;
+
+        using receiver_type =
+            hpx::parallel::detail::batch_receiver<int, double,
+                byte_batch_test_chunk, byte_batch_test_algorithm,
+                policy_type, std::true_type>;
+
+        constexpr std::size_t max_bytes =
+            hpx::parallel::detail::max_capture_batch_bytes;
+
+        constexpr std::size_t quarter_int_count =
+            (max_bytes / 4) / sizeof(int);
+
+        constexpr std::size_t quarter_double_count =
+            (max_bytes / 4) / sizeof(double);
+
+        constexpr std::size_t half_int_count =
+            (max_bytes / 2) / sizeof(int);
+
+        std::vector<byte_batch_test_chunk> chunks;
+
+        // Estimated payload: one half of the limit.
+        chunks.push_back(byte_batch_test_chunk{
+            quarter_int_count,
+            quarter_double_count,
+            {}, {}, 10});
+
+        // Estimated payload: another half of the limit. 
+        // This chunk fits in the first batch because 
+        // the combined size is exactly the limit.
+        chunks.push_back(byte_batch_test_chunk{
+            half_int_count,
+            0, {}, {}, 20});
+
+        // This additional value exceeds the first 
+        //batch's remaining capacity
+        // and must therefore begin a second batch.
+        chunks.push_back(
+            byte_batch_test_chunk{0, 1, {}, {}, 30});
+
+        auto batches =
+            receiver_type::make_byte_batches(HPX_MOVE(chunks));
+
+        HPX_TEST_EQ(batches.size(), std::size_t{2});
+
+        HPX_TEST_EQ(batches[0].size(), std::size_t{2});
+        HPX_TEST_EQ(batches[1].size(), std::size_t{1});
+
+        // Verify that batching preserves the original chunk order.
+        HPX_TEST_EQ(batches[0][0].dest, std::size_t{10});
+        HPX_TEST_EQ(batches[0][1].dest, std::size_t{20});
+        HPX_TEST_EQ(batches[1][0].dest, std::size_t{30});
+
+        // Verify the planner uses the larger input element size.
+        HPX_TEST_EQ(
+            hpx::parallel::detail::
+                max_capture_batch_elements<int, double>(),
+            max_bytes / sizeof(double));
+    }
 }    // namespace
 
 int main()
@@ -1017,6 +1096,8 @@ int main()
         test_verified_noncontiguous_partitions);
     run_test("test_many_small_partitions_and_skew",
         test_many_small_partitions_and_skew);
+    run_test("test_capture_byte_batch_grouping",
+        ctest_capture_byte_batch_grouping);
 
     return hpx::util::report_errors();
 }

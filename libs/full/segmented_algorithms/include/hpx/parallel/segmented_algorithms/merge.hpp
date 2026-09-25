@@ -616,7 +616,7 @@ namespace hpx::parallel::detail {
         std::vector<Chunk> chunks;
     };
 
-    // Divide the destination range at destination-partition boundaries.
+    // Divide the destination at partition and payload-size boundaries.
     //
     // Every emitted chunk is a half-open output diagonal interval [k0, k1) and
     // starts at a partition-relative destination iterator. Chunks never cross a
@@ -625,15 +625,21 @@ namespace hpx::parallel::detail {
     //
     // The callback records or processes each chunk while this function advances
     // through the segmented destination range.
+    // Large destination partitions may produce multiple chunks so each chunk's
+    // estimated captured input payload remains within the configured limit.
 
     template <typename Traits3, typename Iter3, typename F>
-    HPX_FORCEINLINE auto for_each_output_chunk(
-        Traits3, Iter3 const& dest, std::size_t total_size, F&& handle_chunk)
+    HPX_FORCEINLINE auto for_each_output_chunk(Traits3, Iter3 const& dest,
+        std::size_t total_size, std::size_t max_chunk_size, F&& handle_chunk)
         -> std::pair<typename Traits3::segment_iterator,
             typename Traits3::local_iterator>
     {
         using segment_iterator_out = Traits3::segment_iterator;
         using out_local_iterator_type = Traits3::local_iterator;
+        using difference_type =
+            std::iterator_traits<out_local_iterator_type>::difference_type;
+
+        HPX_ASSERT(max_chunk_size != 0);
 
         segment_iterator_out seg_out = Traits3::segment(dest);
         out_local_iterator_type loc_output = Traits3::local(dest);
@@ -654,7 +660,9 @@ namespace hpx::parallel::detail {
             std::size_t const available = static_cast<std::size_t>(
                 std::distance(loc_output, partition_end));
             std::size_t const remaining = total_size - global_offset;
-            std::size_t const chunk_size = (std::min) (available, remaining);
+
+            std::size_t const chunk_size =
+                (std::min) ((std::min) (available, remaining), max_chunk_size);
 
             HPX_ASSERT(chunk_size != 0);
 
@@ -664,13 +672,16 @@ namespace hpx::parallel::detail {
             HPX_INVOKE(handle_chunk, seg_out, loc_output, k0, k1);
 
             global_offset = k1;
+            loc_output =
+                std::next(loc_output, static_cast<difference_type>(chunk_size));
 
-            if (global_offset != total_size)
+            if (global_offset != total_size && loc_output == partition_end)
             {
                 ++seg_out;
                 loc_output = Traits3::begin(seg_out);
             }
         }
+
         return {HPX_MOVE(seg_out), HPX_MOVE(loc_output)};
     }
 
@@ -824,14 +835,13 @@ namespace hpx::parallel::detail {
 
     // Construct all remote work required for the segmented merge.
     //
-    // Destination partitions first define output chunks and their merge
-    // diagonals. All diagonal intersections are then resolved to determine
-    // exactly which portion of each input contributes to every chunk.
+    // Destination partition and payload-size boundaries define output chunks.
+    // Their diagonal intersections are then resolved to determine which part
+    // of each input contributes to every chunk.
     //
     // Each chunk stores its input sizes, partition-relative input ranges, and
-    // local destination iterator. Chunks are grouped by destination locality so
-    // one remote action can process multiple destination partitions on that
-    // locality.
+    // local destination iterator. Chunks are grouped by destination locality
+    // so one remote action can process multiple destination partitions there.
     //
     // final_batch_index and final_chunk_position identify the chunk producing
     // the algorithm's final output iterator.
@@ -851,6 +861,11 @@ namespace hpx::parallel::detail {
         using output_position_type =
             output_chunk_position<segment_iterator, local_iterator>;
         using merge_types = segmented_merge_types<Iter1, Iter2, Iter3>;
+        using value_type1 = merge_types::value_type1;
+        using value_type2 = merge_types::value_type2;
+
+        constexpr std::size_t max_chunk_size =
+            max_capture_batch_elements<value_type1, value_type2>();
         using key_type1 = merge_types::template projected_key_type1<Proj1>;
         using key_type2 = merge_types::template projected_key_type2<Proj2>;
 
@@ -862,7 +877,7 @@ namespace hpx::parallel::detail {
         std::vector<output_position_type> output_positions;
 
         auto output_position =
-            for_each_output_chunk(Traits3{}, dest, len1 + len2,
+            for_each_output_chunk(Traits3{}, dest, len1 + len2, max_chunk_size,
                 [&](segment_iterator segment, local_iterator output_first,
                     std::size_t k0, std::size_t k1) {
                     output_positions.push_back(output_position_type{

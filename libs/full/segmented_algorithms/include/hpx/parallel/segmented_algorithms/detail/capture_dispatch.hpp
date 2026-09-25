@@ -144,6 +144,24 @@ namespace hpx::parallel::detail {
         OutIterator dest;
     };
 
+    // Maximum estimated input payload assigned to one chunk group.
+    //
+    // Collection may temporarily hold both locality-grouped and reordered
+    // buffers, so direct element storage can approach twice this value.
+    // Container overhead and dynamic storage owned by elements are excluded.
+    inline constexpr std::size_t max_capture_batch_bytes = 128 * 1024 * 1024;
+
+    template <typename Value1, typename Value2>
+    constexpr std::size_t max_capture_batch_elements() noexcept
+    {
+        constexpr std::size_t element_bytes =
+            (std::max) (sizeof(Value1), sizeof(Value2));
+
+        constexpr std::size_t count = max_capture_batch_bytes / element_bytes;
+
+        return count == 0 ? 1 : count;
+    }
+
     template <typename LocalIterator>
     struct indexed_partition_range
     {
@@ -739,6 +757,86 @@ namespace hpx::parallel::detail {
             buffer_iterator1, buffer_iterator1, buffer_iterator2,
             buffer_iterator2, output_iterator, std::decay_t<Args>...>;
 
+        template <typename Value>
+        static std::size_t estimate_input_bytes(std::size_t count) noexcept
+        {
+            constexpr std::size_t maximum =
+                (std::numeric_limits<std::size_t>::max)();
+
+            if (count > maximum / sizeof(Value))
+            {
+                return maximum;
+            }
+
+            return count * sizeof(Value);
+        }
+
+        static std::size_t estimate_chunk_bytes(
+            chunk_type const& chunk) noexcept
+        {
+            constexpr std::size_t maximum =
+                (std::numeric_limits<std::size_t>::max)();
+
+            std::size_t const bytes1 =
+                estimate_input_bytes<Value1>(chunk.input1_size);
+            std::size_t const bytes2 =
+                estimate_input_bytes<Value2>(chunk.input2_size);
+
+            if (bytes1 > maximum - bytes2)
+            {
+                return maximum;
+            }
+
+            return bytes1 + bytes2;
+        }
+
+        static std::vector<chunk_list_type> make_byte_batches(
+            chunk_list_type chunks)
+        {
+            HPX_ASSERT(!chunks.empty());
+
+            std::vector<chunk_list_type> batches;
+            chunk_list_type current;
+            std::size_t current_bytes = 0;
+
+            for (auto& chunk : chunks)
+            {
+                std::size_t const chunk_bytes = estimate_chunk_bytes(chunk);
+
+                bool const exceeds_limit = !current.empty() &&
+                    (current_bytes > max_capture_batch_bytes ||
+                        chunk_bytes > max_capture_batch_bytes - current_bytes);
+
+                if (exceeds_limit)
+                {
+                    batches.push_back(HPX_MOVE(current));
+                    current = chunk_list_type{};
+                    current_bytes = 0;
+                }
+
+                if (current_bytes >
+                    (std::numeric_limits<std::size_t>::max)() - chunk_bytes)
+                {
+                    current_bytes = (std::numeric_limits<std::size_t>::max)();
+                }
+                else
+                {
+                    current_bytes += chunk_bytes;
+                }
+
+                current.push_back(HPX_MOVE(chunk));
+            }
+
+            if (!current.empty())
+            {
+                batches.push_back(HPX_MOVE(current));
+            }
+
+            HPX_ASSERT(!batches.empty());
+
+            return batches;
+        }
+
         template <typename... CallArgs>
         static auto invoke_dispatcher(
             Algo const& algo, ExPolicy policy, CallArgs&&... args)
@@ -1081,23 +1179,17 @@ namespace hpx::parallel::detail {
             return ranges;
         }
 
-        // Execute all output chunks assigned to one destination locality.
+        // Collect and execute one byte-bounded group of output chunks.
         //
-        // The function first combines the input ranges of every chunk so
-        // collection can coalesce source requests by locality. It then
-        // materializes complete input vectors and invokes the local copy/merge
-        // operation for every output chunk.
+        // Input ranges are flattened so collection can coalesce requests by
+        // source locality within this group. The two captured input vectors
+        // remain alive until all chunk operations in the group complete.
         //
-        // Sequenced execution collects both inputs directly. Parallel execution
-        // starts both collections as independent HPX tasks so their remote
-        // transfers can overlap.
-        //
-        // For task policies, dataflow waits for both collections without
-        // blocking the original caller. The captured vectors are placed in
-        // shared_ptr objects because asynchronous chunk operations retain
-        // iterators into them.
+        // Sequenced execution collects and processes the inputs directly.
+        // Parallel execution starts both input collections independently.
+        // Task policies use continuations instead of blocking the caller.
 
-        static result_type getfrom_batch(Algo const& algo, ExPolicy policy,
+        static result_type getfrom_chunks(Algo const& algo, ExPolicy policy,
             chunk_list_type chunks, Args... args)
         {
             HPX_ASSERT(!chunks.empty());
@@ -1166,6 +1258,83 @@ namespace hpx::parallel::detail {
                         HPX_MOVE(chunks), HPX_MOVE(shared1), HPX_MOVE(shared2),
                         HPX_MOVE(args)...);
                 }
+            }
+        }
+
+        // Process all chunks assigned to one destination locality.
+        //
+        // Chunk descriptions are divided by estimated input bytes. Groups are
+        // processed sequentially so one group's captured buffers are released
+        // before collection of the next group begins. Parallel policies still
+        // execute the independent chunks inside each group concurrently.
+        static result_type getfrom_batch(Algo const& algo, ExPolicy policy,
+            chunk_list_type chunks, Args... args)
+        {
+            HPX_ASSERT(!chunks.empty());
+
+            std::size_t const result_count = chunks.size();
+
+            auto batches = make_byte_batches(HPX_MOVE(chunks));
+
+            constexpr bool is_task_policy =
+                hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>;
+
+            if constexpr (!is_task_policy)
+            {
+                batch_result_type results;
+                results.reserve(result_count);
+
+                for (auto& batch : batches)
+                {
+                    auto current =
+                        getfrom_chunks(algo, policy, HPX_MOVE(batch), args...);
+
+                    results.insert(results.end(),
+                        std::make_move_iterator(current.begin()),
+                        std::make_move_iterator(current.end()));
+                }
+
+                return results;
+            }
+            else
+            {
+                batch_result_type initial;
+                initial.reserve(result_count);
+
+                hpx::future<batch_result_type> operation =
+                    hpx::make_ready_future(HPX_MOVE(initial));
+
+                for (auto& batch : batches)
+                {
+                    operation = HPX_MOVE(operation).then(
+                        [algorithm = algo, operation_policy = policy,
+                            batch = HPX_MOVE(batch), ... operation_args = args](
+                            hpx::future<batch_result_type> previous) mutable
+                            -> hpx::future<batch_result_type> {
+                            auto results = previous.get();
+
+                            auto current = batch_receiver::getfrom_chunks(
+                                algorithm, HPX_MOVE(operation_policy),
+                                HPX_MOVE(batch), HPX_MOVE(operation_args)...);
+
+                            return HPX_MOVE(current).then(
+                                [results = HPX_MOVE(results)](
+                                    hpx::future<batch_result_type>
+                                        ready) mutable -> batch_result_type {
+                                    auto current_results = ready.get();
+
+                                    results.insert(results.end(),
+                                        std::make_move_iterator(
+                                            current_results.begin()),
+                                        std::make_move_iterator(
+                                            current_results.end()));
+
+                                    return HPX_MOVE(results);
+                                });
+                        });
+                }
+
+                return operation;
             }
         }
     };
