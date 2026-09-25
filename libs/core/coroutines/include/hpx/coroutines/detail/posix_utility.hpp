@@ -176,8 +176,7 @@ namespace hpx::threads::coroutines::detail::posix {
                 if (::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED) == 0)
                 {
                     advised = true;
-                    *watermark =
-                        reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+                    *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
                 }
             }
 #if defined(MADV_FREE)
