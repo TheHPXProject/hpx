@@ -224,14 +224,16 @@ namespace hpx::parallel::detail {
 
         // Copy several partition-relative ranges into one transportable result.
         //
-        // This function executes on the source locality. Each segmented local iterator
-        // is converted into its raw local iterator before its values are copied.
+        // This function executes on the source locality. Each segmented local
+        // iterator is converted into its raw local iterator before its values
+        // are copied.
         //
         // The ranges can originate from different partitions, provided those
-        // partitions are hosted by this locality. Their values are concatenated into
-        // one vector to reduce the number of remote actions. For each range, a slice
-        // records its original index, offset, and size so collect_range can restore the
-        // caller's original range order after receiving locality-batched results.
+        // partitions are hosted by this locality. Their values are concatenated
+        // into one vector to reduce the number of remote actions. For each
+        // range, a slice records its original index, offset, and size so
+        // collect_range can restore the caller's original range order after
+        // receiving locality-batched results.
 
         static result_type send_values(range_list_type ranges)
         {
@@ -285,9 +287,9 @@ namespace hpx::parallel::detail {
 
     // Invoke send_values on the locality hosting routing_partition_id.
     //
-    // routing_partition_id is used only to route the action to the correct source
-    // locality. The action receives all ranges that were grouped for that locality
-    // and returns their copied values asynchronously.
+    // routing_partition_id is used only to route the action to the correct
+    // source locality. The action receives all ranges that were grouped for
+    // that locality and returns their copied values asynchronously.
 
     template <typename Value, typename LocalIterator>
     hpx::future<collected_partition_values<Value>> capture_async(
@@ -310,13 +312,15 @@ namespace hpx::parallel::detail {
 
         // Evaluate a projection for each requested diagonal-search position.
         //
-        // This function executes on the source locality. It converts every transported
-        // segmented local iterator into a raw local iterator, dereferences it, and
-        // applies the projection locally. Only the projected key is returned.
+        // This function executes on the source locality. It converts every
+        // transported segmented local iterator into a raw local iterator,
+        // dereferences it, and applies the projection locally. Only the
+        // projected key is returned.
         //
-        // Each result retains all targets that requested the same position. The key is
-        // stored in a single-element vector so HPX's collection deserializer can use
-        // construction-aware deserialization for non-default-constructible key types.
+        // Each result retains all targets that requested the same position. The
+        // key is stored in a single-element vector so HPX's collection
+        // deserializer can use construction-aware deserialization for
+        // non-default-constructible key types.
 
         static std::vector<result_type> get_values(
             std::vector<request_type> requests, Proj projection)
@@ -358,12 +362,12 @@ namespace hpx::parallel::detail {
     // Fetch projected diagonal-search keys from a source locality.
     //
     // All requests in the vector belong to the locality identified through
-    // routing_partition_id. The projection is transported with the action and is
-    // evaluated next to the partition data, avoiding transport of complete input
-    // elements.
+    // routing_partition_id. The projection is transported with the action and
+    // is evaluated next to the partition data, avoiding transport of complete
+    // input elements.
     //
-    // Remote exceptions are normalized according to ExPolicy before the returned
-    // future is made ready.
+    // Remote exceptions are normalized according to ExPolicy before the
+    // returned future is made ready.
 
     template <typename ExPolicy, typename Key, typename LocalIterator,
         typename Proj>
@@ -391,8 +395,8 @@ namespace hpx::parallel::detail {
     // ranges are omitted.
     //
     // std::prev(last) is used to identify the partition containing the final
-    // element because last may be the global end sentinel and may not belong to an
-    // accessible partition. Incrementing its local iterator reconstructs the
+    // element because last may be the global end sentinel and may not belong to
+    // an accessible partition. Incrementing its local iterator reconstructs the
     // correct local half-open end position.
 
     template <typename Iterator>
@@ -465,12 +469,14 @@ namespace hpx::parallel::detail {
 
         // Obtain all requested values belonging to one source locality.
         //
-        // If the source and destination are the same locality, the values are copied
-        // directly without creating a distributed action. Sequenced execution performs
-        // that copy immediately; parallel execution schedules it as a local HPX task.
+        // If the source and destination are the same locality, the values are
+        // copied directly without creating a distributed action. Sequenced
+        // execution performs that copy immediately; parallel execution
+        // schedules it as a local HPX task.
         //
-        // Otherwise, capture_async sends one action to the source locality. The return
-        // type is always a future so local and remote collection use one interface.
+        // Otherwise, capture_async sends one action to the source locality. The
+        // return type is always a future so local and remote collection use one
+        // interface.
 
         template <typename Value, typename LocalIterator>
         static hpx::future<collected_partition_values<Value>>
@@ -504,22 +510,24 @@ namespace hpx::parallel::detail {
                 routing_partition_id, HPX_MOVE(ranges));
         }
 
-        // Collect a logical input range that may span partitions and localities.
+        // Collect a logical input range that may span partitions and
+        // localities.
         //
-        // The incoming partition ranges are first grouped by their hosting locality.
-        // Every locality is contacted at most once for this collection operation.
+        // The incoming partition ranges are first grouped by their hosting
+        // locality. Every locality is contacted at most once for this
+        // collection operation.
         //
-        // For sequenced execution, locality groups are collected one after another.
-        // For parallel execution, all locality requests are launched before waiting,
-        // allowing communication and local copies to overlap.
+        // For sequenced execution, locality groups are collected one after
+        // another. For parallel execution, all locality requests are launched
+        // before waiting, allowing communication and local copies to overlap.
         //
-        // Because locality grouping changes range order, each returned slice is mapped
-        // back to its original range index. The final vector is then assembled in the
-        // same order as the original global input range.
+        // Because locality grouping changes range order, each returned slice is
+        // mapped back to its original range index. The final vector is then
+        // assembled in the same order as the original global input range.
         //
-        // batch_results temporarily owns the locality-grouped receive buffers while
-        // values owns the final reordered buffer. This means reassembly temporarily
-        // requires both representations to remain alive.
+        // batch_results temporarily owns the locality-grouped receive buffers
+        // while values owns the final reordered buffer. This means reassembly
+        // temporarily requires both representations to remain alive.
 
         template <typename Value, typename LocalIterator>
         static std::vector<Value> collect_range(
@@ -742,13 +750,13 @@ namespace hpx::parallel::detail {
 
         // Copy the only non-empty input of a merge chunk into its destination.
         //
-        // The destination's segmented local iterator is converted into a raw iterator
-        // before calling policy-aware hpx::copy. Consequently seq, par, seq(task), and
-        // par(task) retain their normal execution behavior.
+        // The destination's segmented local iterator is converted into a raw
+        // iterator before calling policy-aware hpx::copy. Consequently seq,
+        // par, seq(task), and par(task) retain their normal execution behavior.
         //
-        // The returned raw destination iterator is converted back into a transportable
-        // segmented local iterator. Task-policy conversion is performed in a
-        // continuation so the operation remains asynchronous.
+        // The returned raw destination iterator is converted back into a
+        // transportable segmented local iterator. Task-policy conversion is
+        // performed in a continuation so the operation remains asynchronous.
 
         template <typename InputIterator>
         static chunk_result_type copy_chunk(ExPolicy policy,
@@ -770,18 +778,17 @@ namespace hpx::parallel::detail {
             else
             {
                 return output_traits::remote(HPX_MOVE(raw_result));
-                ;
             }
         }
 
         // Execute the operation represented by one destination chunk.
         //
-        // If one captured input range is empty, merge reduces to copying the other
-        // range. If both ranges contain values, the policy-aware merge dispatcher is
-        // invoked.
+        // If one captured input range is empty, merge reduces to copying the
+        // other range. If both ranges contain values, the policy-aware merge
+        // dispatcher is invoked.
         //
-        // The two input iterator pairs refer into captured vectors whose lifetime is
-        // maintained by the surrounding invoke_chunks operation.
+        // The two input iterator pairs refer into captured vectors whose
+        // lifetime is maintained by the surrounding invoke_chunks operation.
 
         template <typename... CallArgs>
         static chunk_result_type invoke_chunk(Algo const& algo, ExPolicy policy,
@@ -805,12 +812,13 @@ namespace hpx::parallel::detail {
 
         // Execute the destination chunks in their original order.
         //
-        // A synchronous sequenced policy invokes every chunk directly and appends its
-        // returned output iterator.
+        // A synchronous sequenced policy invokes every chunk directly and
+        // appends its returned output iterator.
         //
-        // For a sequenced task policy, futures are chained so that the next chunk does
-        // not start until the previous chunk completes. The captured vectors are held
-        // by the continuations because every chunk iterator refers into those vectors.
+        // For a sequenced task policy, futures are chained so that the next
+        // chunk does not start until the previous chunk completes. The captured
+        // vectors are held by the continuations because every chunk iterator
+        // refers into those vectors.
 
         static result_type invoke_chunks_sequential(Algo const& algo,
             ExPolicy policy, chunk_list_type chunks,
@@ -878,13 +886,14 @@ namespace hpx::parallel::detail {
         // Execute independent destination chunks concurrently.
         //
         // Each chunk writes to a disjoint destination range. For a task policy,
-        // invoke_chunk already returns a future. For a non-task parallel policy, each
-        // synchronous invoke_chunk call is placed in a separate HPX task.
+        // invoke_chunk already returns a future. For a non-task parallel
+        // policy, each synchronous invoke_chunk call is placed in a separate
+        // HPX task.
         //
         // when_all observes completion of every chunk, and get_capture_results
-        // aggregates policy-dependent exceptions instead of losing failures from later
-        // chunks. Capturing values1 and values2 keeps all input iterators valid until
-        // every operation completes.
+        // aggregates policy-dependent exceptions instead of losing failures
+        // from later chunks. Capturing values1 and values2 keeps all input
+        // iterators valid until every operation completes.
 
         static result_type invoke_chunks_parallel(Algo const& algo,
             ExPolicy policy, chunk_list_type chunks,
@@ -946,9 +955,10 @@ namespace hpx::parallel::detail {
 
         // Validate and execute one complete destination-locality chunk batch.
         //
-        // The collected input-vector sizes are checked against the input sizes recorded
-        // in the chunk metadata before any iterator offsets are formed. IsSeq then
-        // selects the ordered or concurrent chunk-execution implementation.
+        // The collected input-vector sizes are checked against the input sizes
+        // recorded in the chunk metadata before any iterator offsets are
+        // formed. IsSeq then selects the ordered or concurrent chunk-execution
+        // implementation.
 
         static result_type invoke_chunks(Algo const& algo, ExPolicy policy,
             chunk_list_type chunks, std::shared_ptr<values_type1> values1,
@@ -1002,15 +1012,17 @@ namespace hpx::parallel::detail {
             }
         }
 
-        // Map chunk metadata to concrete iterator ranges in the captured vectors.
+        // Map chunk metadata to concrete iterator ranges in the captured
+        // vectors.
         //
-        // Chunks store input sizes rather than iterators because their values have not
-        // yet been captured when the chunks are created. This function maintains one
-        // running offset per input vector and reconstructs each chunk's two half-open
-        // iterator ranges.
+        // Chunks store input sizes rather than iterators because their values
+        // have not yet been captured when the chunks are created. This function
+        // maintains one running offset per input vector and reconstructs each
+        // chunk's two half-open iterator ranges.
         //
-        // Chunks are visited in order, and their destination iterators are moved to the
-        // supplied callable because each destination is consumed exactly once.
+        // Chunks are visited in order, and their destination iterators are
+        // moved to the supplied callable because each destination is consumed
+        // exactly once.
 
         template <typename F>
         static void for_each_chunk(chunk_list_type& chunks,
@@ -1033,15 +1045,16 @@ namespace hpx::parallel::detail {
             }
         }
 
-        // Move one input's partition ranges from every chunk into one ordered list.
+        // Move one input's partition ranges from every chunk into one ordered
+        // list.
         //
-        // Flattening allows collect_range to coalesce requests by source locality
-        // across all chunks in the destination batch. Range order remains chunk order,
-        // which lets for_each_chunk later reconstruct chunk boundaries from the stored
-        // input sizes.
+        // Flattening allows collect_range to coalesce requests by source
+        // locality across all chunks in the destination batch. Range order
+        // remains chunk order, which lets for_each_chunk later reconstruct
+        // chunk boundaries from the stored input sizes.
         //
-        // The destination vector reserves the complete number of ranges before moving
-        // them, avoiding repeated allocation during flattening.
+        // The destination vector reserves the complete number of ranges before
+        // moving them, avoiding repeated allocation during flattening.
 
         template <typename RangeList, typename GetRanges>
         static RangeList flatten_ranges(
@@ -1070,17 +1083,19 @@ namespace hpx::parallel::detail {
 
         // Execute all output chunks assigned to one destination locality.
         //
-        // The function first combines the input ranges of every chunk so collection can
-        // coalesce source requests by locality. It then materializes complete input
-        // vectors and invokes the local copy/merge operation for every output chunk.
+        // The function first combines the input ranges of every chunk so
+        // collection can coalesce source requests by locality. It then
+        // materializes complete input vectors and invokes the local copy/merge
+        // operation for every output chunk.
         //
-        // Sequenced execution collects both inputs directly. Parallel execution starts
-        // both collections as independent HPX tasks so their remote transfers can
-        // overlap.
+        // Sequenced execution collects both inputs directly. Parallel execution
+        // starts both collections as independent HPX tasks so their remote
+        // transfers can overlap.
         //
-        // For task policies, dataflow waits for both collections without blocking the
-        // original caller. The captured vectors are placed in shared_ptr objects
-        // because asynchronous chunk operations retain iterators into them.
+        // For task policies, dataflow waits for both collections without
+        // blocking the original caller. The captured vectors are placed in
+        // shared_ptr objects because asynchronous chunk operations retain
+        // iterators into them.
 
         static result_type getfrom_batch(Algo const& algo, ExPolicy policy,
             chunk_list_type chunks, Args... args)
@@ -1170,12 +1185,13 @@ namespace hpx::parallel::detail {
     // Send one chunk batch to its destination locality.
     //
     // routing_partition_id identifies a destination partition used to route the
-    // action. The action transports the algorithm object, execution policy, chunk
-    // descriptions, comparator, and projections to that locality.
+    // action. The action transports the algorithm object, execution policy,
+    // chunk descriptions, comparator, and projections to that locality.
     //
-    // The action result depends on ExPolicy and can therefore itself be a future.
-    // handle_capture_exceptions flattens that result when necessary and normalizes
-    // local and remote exceptions into the execution-policy-required form.
+    // The action result depends on ExPolicy and can therefore itself be a
+    // future. handle_capture_exceptions flattens that result when necessary and
+    // normalizes local and remote exceptions into the execution-policy-required
+    // form.
 
     template <typename Value1, typename Value2, typename Chunk, typename Algo,
         typename ExPolicy, typename IsSeq, typename... Args>

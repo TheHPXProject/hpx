@@ -53,10 +53,10 @@ namespace hpx::parallel::detail {
 
     // Build searchable metadata for a global segmented input range.
     //
-    // make_partition_ranges supplies the partition-relative ranges. For each range,
-    // this function records its cumulative global end offset and hosting locality.
-    // The resulting table maps a logical input index to a partition, locality, and
-    // local iterator without transferring the element itself.
+    // make_partition_ranges supplies the partition-relative ranges. For each
+    // range, this function records its cumulative global end offset and hosting
+    // locality. The resulting table maps a logical input index to a partition,
+    // locality, and local iterator without transferring the element itself.
 
     template <typename Iterator>
     auto make_segmented_range_table(Iterator first, Iterator last)
@@ -93,12 +93,14 @@ namespace hpx::parallel::detail {
         LocalIterator position;
     };
 
-    // Translate a zero-based logical input index into its partition-local position.
+    // Translate a zero-based logical input index into its partition-local
+    // position.
     //
-    // upper_bound locates the first cumulative partition end greater than index.
-    // Subtracting the preceding cumulative end gives the offset inside that
-    // partition. The result contains all information needed to route a projected
-    // value request and dereference the position on its owning locality.
+    // upper_bound locates the first cumulative partition end greater than
+    // index. Subtracting the preceding cumulative end gives the offset inside
+    // that partition. The result contains all information needed to route a
+    // projected value request and dereference the position on its owning
+    // locality.
 
     template <typename LocalIterator>
     partition_position<LocalIterator> find_partition_position(
@@ -135,13 +137,13 @@ namespace hpx::parallel::detail {
 
     // Add one projected-value request to the batch for its source locality.
     //
-    // Requests are first coalesced by locality so all required positions on that
-    // locality can be obtained with one action. Within the locality batch,
+    // Requests are first coalesced by locality so all required positions on
+    // that locality can be obtained with one action. Within the locality batch,
     // identical partition positions are deduplicated.
     //
-    // A deduplicated request stores multiple targets, allowing one transported key
-    // to satisfy several diagonal searches or both boundaries of adjacent output
-    // chunks.
+    // A deduplicated request stores multiple targets, allowing one transported
+    // key to satisfy several diagonal searches or both boundaries of adjacent
+    // output chunks.
 
     template <typename LocalIterator>
     void append_probe(std::vector<locality_probe_batch<LocalIterator>>& batches,
@@ -193,9 +195,9 @@ namespace hpx::parallel::detail {
 
     // Initialize the binary-search state for merge diagonal k.
     //
-    // The desired intersection satisfies a + b == k, where a and b are the numbers
-    // consumed from the first and second inputs. The initial bounds restrict a so
-    // both a and b remain within their respective input ranges.
+    // The desired intersection satisfies a + b == k, where a and b are the
+    // numbers consumed from the first and second inputs. The initial bounds
+    // restrict a so both a and b remain within their respective input ranges.
     //
     // If the bounds already identify one possible value, the intersection is
     // complete and no projected-value probes are required.
@@ -253,15 +255,15 @@ namespace hpx::parallel::detail {
 
     // Prepare the projected values needed for one diagonal-search iteration.
     //
-    // The midpoint a is chosen inside the current search interval and b is derived
-    // from a + b == k. Depending on range boundaries, the stable merge conditions
-    // require up to four values:
+    // The midpoint a is chosen inside the current search interval and b is
+    // derived from a + b == k. Depending on range boundaries, the stable merge
+    // conditions require up to four values:
     //
     //     A[a - 1], A[a], B[b - 1], and B[b].
     //
-    // Instead of dereferencing global segmented iterators, the required positions
-    // are translated through the range tables and appended to locality batches.
-    // Boundary values that cannot be referenced are omitted.
+    // Instead of dereferencing global segmented iterators, the required
+    // positions are translated through the range tables and appended to
+    // locality batches. Boundary values that cannot be referenced are omitted.
 
     template <typename Table1, typename Table2, typename Key1, typename Key2>
     void prepare_diagonal_probes(diagonal_search_state& state,
@@ -312,11 +314,12 @@ namespace hpx::parallel::detail {
     // Distribute projected keys returned from the first input to their targets.
     //
     // A source position may have been requested by several diagonal searches.
-    // One shared key object is therefore created and assigned to every referenced
-    // target, avoiding additional key copies.
+    // One shared key object is therefore created and assigned to every
+    // referenced target, avoiding additional key copies.
     //
     // Each result must contain exactly one key; the one-element vector supports
-    // construction-aware deserialization of non-default-constructible key types.
+    // construction-aware deserialization of non-default-constructible key
+    // types.
 
     template <typename Key1, typename Key2>
     void store_input1_probe_results(
@@ -348,11 +351,12 @@ namespace hpx::parallel::detail {
         }
     }
 
-    // Distribute projected keys returned from the second input to their targets.
+    // Distribute projected keys returned from the second input to their
+    // targets.
     //
     // This is the second-input counterpart of store_input1_probe_results. The
-    // target metadata determines whether the key represents B[b - 1] or B[b] for
-    // the corresponding diagonal-search state.
+    // target metadata determines whether the key represents B[b - 1] or B[b]
+    // for the corresponding diagonal-search state.
 
     template <typename Key1, typename Key2>
     void store_input2_probe_results(
@@ -386,13 +390,14 @@ namespace hpx::parallel::detail {
 
     // Apply the stable merge-path boundary conditions to one search state.
     //
-    // cond1 checks that A[a - 1] must not follow B[b]. cond2 checks that B[b - 1]
-    // must strictly precede A[a]. Their asymmetry ensures that equivalent values
-    // from the first input remain before equivalent values from the second input.
+    // cond1 checks that A[a - 1] must not follow B[b]. cond2 checks that B[b -
+    // 1] must strictly precede A[a]. Their asymmetry ensures that equivalent
+    // values from the first input remain before equivalent values from the
+    // second input.
     //
-    // If both conditions hold, (a, b) is the required intersection. Otherwise the
-    // binary-search bounds are reduced in the direction indicated by the failed
-    // condition.
+    // If both conditions hold, (a, b) is the required intersection. Otherwise
+    // the binary-search bounds are reduced in the direction indicated by the
+    // failed condition.
 
     template <typename Key1, typename Key2, typename Comp>
     void update_diagonal_state(diagonal_search_state& state, std::size_t len1,
@@ -440,8 +445,8 @@ namespace hpx::parallel::detail {
     // binary-search iteration, required projected values are grouped by source
     // locality and fetched through projected-value actions.
     //
-    // This path minimizes parallel scheduling overhead for sequenced policies while
-    // still supporting remote partitions.
+    // This path minimizes parallel scheduling overhead for sequenced policies
+    // while still supporting remote partitions.
 
     template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
         typename Table2, typename Comp, typename Proj1, typename Proj2>
@@ -505,11 +510,12 @@ namespace hpx::parallel::detail {
     // Resolve multiple diagonal intersections in parallel search rounds.
     //
     // Each round prepares probes for every incomplete diagonal. Requests are
-    // coalesced by source locality across all searches, and the resulting remote
-    // actions are launched before waiting.
+    // coalesced by source locality across all searches, and the resulting
+    // remote actions are launched before waiting.
     //
-    // After all projected keys for the round arrive, every search state advances
-    // one binary-search step. Rounds continue until all intersections are complete.
+    // After all projected keys for the round arrive, every search state
+    // advances one binary-search step. Rounds continue until all intersections
+    // are complete.
 
     template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
         typename Table2, typename Comp, typename Proj1, typename Proj2>
@@ -614,8 +620,8 @@ namespace hpx::parallel::detail {
     //
     // Every emitted chunk is a half-open output diagonal interval [k0, k1) and
     // starts at a partition-relative destination iterator. Chunks never cross a
-    // destination partition, allowing each one to execute on the locality owning
-    // its output.
+    // destination partition, allowing each one to execute on the locality
+    // owning its output.
     //
     // The callback records or processes each chunk while this function advances
     // through the segmented destination range.
@@ -818,16 +824,17 @@ namespace hpx::parallel::detail {
 
     // Construct all remote work required for the segmented merge.
     //
-    // Destination partitions first define output chunks and their merge diagonals.
-    // All diagonal intersections are then resolved to determine exactly which
-    // portion of each input contributes to every chunk.
+    // Destination partitions first define output chunks and their merge
+    // diagonals. All diagonal intersections are then resolved to determine
+    // exactly which portion of each input contributes to every chunk.
     //
-    // Each chunk stores its input sizes, partition-relative input ranges, and local
-    // destination iterator. Chunks are grouped by destination locality so one
-    // remote action can process multiple destination partitions on that locality.
+    // Each chunk stores its input sizes, partition-relative input ranges, and
+    // local destination iterator. Chunks are grouped by destination locality so
+    // one remote action can process multiple destination partitions on that
+    // locality.
     //
-    // final_batch_index and final_chunk_position identify the chunk producing the
-    // algorithm's final output iterator.
+    // final_batch_index and final_chunk_position identify the chunk producing
+    // the algorithm's final output iterator.
 
     template <typename ExPolicy, typename Traits3, typename Chunk,
         typename Iter1, typename Iter2, typename Iter3, typename Comp,
