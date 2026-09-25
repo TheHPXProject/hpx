@@ -18,6 +18,7 @@
 #include <set>
 #include <span>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -28,6 +29,48 @@ namespace ex = hpx::execution::experimental;
 
 // Include stdexec async_scope for stop token testing
 #include <exec/async_scope.hpp>
+
+// Helper receiver with a non-inplace stop token (std::stop_token) for
+// testing P3804R2 Section 3.3 stop token adaptation across proxy boundaries.
+struct non_inplace_stop_receiver
+{
+    using receiver_concept = ex::receiver_t;
+    std::stop_token stop_token_;
+    bool* set_value_called_ = nullptr;
+
+    struct env
+    {
+        std::stop_token token_;
+
+        std::stop_token query(ex::get_stop_token_t) const noexcept
+        {
+            return token_;
+        }
+    };
+
+    env get_env() const noexcept
+    {
+        return env{stop_token_};
+    }
+
+    template <typename... Ts>
+    void set_value(Ts&&...) && noexcept
+    {
+        if (set_value_called_)
+        {
+            *set_value_called_ = true;
+        }
+    }
+
+    void set_error(std::exception_ptr) && noexcept
+    {
+        HPX_TEST(false);
+    }
+
+    void set_stopped() && noexcept
+    {
+    }
+};
 
 int hpx_main(int, char*[])
 {
@@ -1100,6 +1143,473 @@ int hpx_main(int, char*[])
         {
             HPX_TEST_EQ(counters[i].load(), 1);
         }
+    }
+
+    // ========================================================================
+    // P3804R2 TRY_QUERY AND STOP TOKEN ADAPTATION TESTS
+    // ========================================================================
+
+    // P3804R2 Section 3.1: try_query<inplace_stop_token>(get_stop_token_t{})
+    // returns a valid token through the proxy.
+    {
+        bool got_token = false;
+        bool token_not_stopped = false;
+
+        struct try_query_backend final : ex::parallel_scheduler_backend
+        {
+            bool& got_token_;
+            bool& token_not_stopped_;
+
+            try_query_backend(bool& g, bool& ns)
+              : got_token_(g)
+              , token_not_stopped_(ns)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& proxy,
+                std::span<std::byte>) noexcept override
+            {
+                // P3804R2: Backend queries the proxy for an
+                // inplace_stop_token.
+                auto tok = proxy.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                got_token_ = tok.has_value();
+                if (tok)
+                {
+                    token_not_stopped_ = !tok->stop_requested();
+                }
+                proxy.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            void schedule_bulk_unchunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b =
+            std::make_shared<try_query_backend>(got_token, token_not_stopped);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+        ex::sync_wait(ex::schedule(sched));
+
+        // The proxy should have returned a valid inplace_stop_token
+        HPX_TEST(got_token);
+        // And it should not have been stopped (no stop request in flight)
+        HPX_TEST(token_not_stopped);
+
+        ex::set_parallel_scheduler_backend(orig);
+    }
+
+    // P3804R2 Section 3.1: try_query with an unsupported query type
+    // returns std::nullopt.
+    {
+        bool query_returned_nullopt = false;
+
+        struct unsupported_query_backend final : ex::parallel_scheduler_backend
+        {
+            bool& result_;
+            explicit unsupported_query_backend(bool& r)
+              : result_(r)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& proxy,
+                std::span<std::byte>) noexcept override
+            {
+                // Query for an unsupported type (get_allocator_t -> int)
+                auto val = proxy.try_query<int>(ex::get_allocator_t{});
+                result_ = !val.has_value();
+                proxy.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            void schedule_bulk_unchunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b =
+            std::make_shared<unsupported_query_backend>(query_returned_nullopt);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+        ex::sync_wait(ex::schedule(sched));
+
+        HPX_TEST(query_returned_nullopt);
+        ex::set_parallel_scheduler_backend(orig);
+    }
+
+
+    // P3804R2 Section 3.3: Schedule path -- Receiver with a non-inplace stop
+    // token (e.g. std::stop_token) requests a stop, and the proxy correctly
+    // reports stop_requested() == true across the boundary.
+    {
+        std::stop_source stop_src;
+        bool proxy_saw_initial_false = false;
+        bool proxy_saw_stop_requested = false;
+        bool proxy_tok_saw_stop = false;
+        bool receiver_completed = false;
+
+        struct non_inplace_stop_backend final : ex::parallel_scheduler_backend
+        {
+            std::stop_source& stop_src_;
+            bool& saw_initial_false_;
+            bool& saw_stop_requested_;
+            bool& tok_saw_stop_;
+
+            non_inplace_stop_backend(std::stop_source& src, bool& init_f,
+                bool& saw_stop, bool& tok_stop)
+              : stop_src_(src)
+              , saw_initial_false_(init_f)
+              , saw_stop_requested_(saw_stop)
+              , tok_saw_stop_(tok_stop)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& proxy,
+                std::span<std::byte>) noexcept override
+            {
+                // Prior to stop request, proxy should report false
+                saw_initial_false_ = !proxy.stop_requested();
+
+                // Non-inplace receiver requests stop
+                stop_src_.request_stop();
+
+                // Proxy must now report stop_requested() == true
+                saw_stop_requested_ = proxy.stop_requested();
+
+                // Querying adapted inplace_stop_token must also reflect stop
+                auto tok = proxy.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                if (tok)
+                {
+                    tok_saw_stop_ = tok->stop_requested();
+                }
+
+                proxy.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            void schedule_bulk_unchunked(std::size_t,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b = std::make_shared<non_inplace_stop_backend>(stop_src,
+            proxy_saw_initial_false, proxy_saw_stop_requested,
+            proxy_tok_saw_stop);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+
+        auto op = ex::connect(ex::schedule(sched),
+            non_inplace_stop_receiver{
+                stop_src.get_token(), &receiver_completed});
+        ex::start(op);
+
+        HPX_TEST(proxy_saw_initial_false);
+        HPX_TEST(proxy_saw_stop_requested);
+        HPX_TEST(proxy_tok_saw_stop);
+        HPX_TEST(receiver_completed);
+
+        ex::set_parallel_scheduler_backend(orig);
+    }
+
+    // P3804R2 Section 3.1 & 3.3: try_query<inplace_stop_token>(get_stop_token_t{})
+    // successfully returns a token on the bulk path.
+    {
+        bool bulk_got_token = false;
+        bool bulk_token_not_stopped = false;
+
+        struct bulk_query_backend final : ex::parallel_scheduler_backend
+        {
+            bool& got_token_;
+            bool& token_not_stopped_;
+
+            bulk_query_backend(bool& g, bool& ns)
+              : got_token_(g)
+              , token_not_stopped_(ns)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                auto tok = p.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                got_token_ = tok.has_value();
+                if (tok)
+                {
+                    token_not_stopped_ = !tok->stop_requested();
+                }
+                if (count > 0)
+                {
+                    p.execute(0, count);
+                }
+                p.set_value();
+            }
+
+            void schedule_bulk_unchunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                auto tok = p.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                got_token_ = tok.has_value();
+                if (tok)
+                {
+                    token_not_stopped_ = !tok->stop_requested();
+                }
+                for (std::size_t i = 0; i < count; ++i)
+                {
+                    p.execute(i, i + 1);
+                }
+                p.set_value();
+            }
+
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b = std::make_shared<bulk_query_backend>(
+            bulk_got_token, bulk_token_not_stopped);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+
+        std::vector<int> results(5, 0);
+        auto snd = ex::schedule(sched) |
+            ex::bulk_unchunked(
+                ex::par, 5, [&results](std::size_t i) { results[i] = 1; });
+        ex::sync_wait(std::move(snd));
+
+        HPX_TEST(bulk_got_token);
+        HPX_TEST(bulk_token_not_stopped);
+        for (int i = 0; i < 5; ++i)
+        {
+            HPX_TEST_EQ(results[i], 1);
+        }
+
+        ex::set_parallel_scheduler_backend(orig);
+    }
+
+    // P3804R2 Section 3.1: Bulk path -- Unsupported query returns std::nullopt.
+    {
+        bool query_returned_nullopt = false;
+
+        struct bulk_unsupported_query_backend final
+          : ex::parallel_scheduler_backend
+        {
+            bool& result_;
+            explicit bulk_unsupported_query_backend(bool& r)
+              : result_(r)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& proxy,
+                std::span<std::byte>) noexcept override
+            {
+                proxy.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                auto val = p.try_query<int>(ex::get_allocator_t{});
+                result_ = !val.has_value();
+                if (count > 0)
+                {
+                    p.execute(0, count);
+                }
+                p.set_value();
+            }
+
+            void schedule_bulk_unchunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                auto val = p.try_query<int>(ex::get_allocator_t{});
+                result_ = !val.has_value();
+                for (std::size_t i = 0; i < count; ++i)
+                {
+                    p.execute(i, i + 1);
+                }
+                p.set_value();
+            }
+
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b = std::make_shared<bulk_unsupported_query_backend>(
+            query_returned_nullopt);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+
+        auto snd = ex::schedule(sched) |
+            ex::bulk_unchunked(ex::par, 5, [](std::size_t) {});
+        ex::sync_wait(std::move(snd));
+
+        HPX_TEST(query_returned_nullopt);
+        ex::set_parallel_scheduler_backend(orig);
+    }
+
+    // P3804R2 Section 3.3: Bulk path -- Receiver with a non-inplace stop token
+    // (e.g. std::stop_token) requests a stop, and the bulk proxy correctly
+    // reports stop_requested() == true across the boundary.
+    {
+        std::stop_source stop_src;
+        bool proxy_saw_initial_false = false;
+        bool proxy_saw_stop_requested = false;
+        bool proxy_tok_saw_stop = false;
+        bool receiver_completed = false;
+
+        struct non_inplace_stop_bulk_backend final
+          : ex::parallel_scheduler_backend
+        {
+            std::stop_source& stop_src_;
+            bool& saw_initial_false_;
+            bool& saw_stop_requested_;
+            bool& tok_saw_stop_;
+
+            non_inplace_stop_bulk_backend(std::stop_source& src, bool& init_f,
+                bool& saw_stop, bool& tok_stop)
+              : stop_src_(src)
+              , saw_initial_false_(init_f)
+              , saw_stop_requested_(saw_stop)
+              , tok_saw_stop_(tok_stop)
+            {
+            }
+
+            void schedule(ex::parallel_scheduler_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                p.set_value();
+            }
+
+            void schedule_bulk_chunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                saw_initial_false_ = !p.stop_requested();
+                stop_src_.request_stop();
+                saw_stop_requested_ = p.stop_requested();
+                auto tok = p.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                if (tok)
+                {
+                    tok_saw_stop_ = tok->stop_requested();
+                }
+                if (count > 0)
+                {
+                    p.execute(0, count);
+                }
+                p.set_value();
+            }
+
+            void schedule_bulk_unchunked(std::size_t count,
+                ex::parallel_scheduler_bulk_item_receiver_proxy& p,
+                std::span<std::byte>) noexcept override
+            {
+                saw_initial_false_ = !p.stop_requested();
+                stop_src_.request_stop();
+                saw_stop_requested_ = p.stop_requested();
+                auto tok = p.try_query<ex::inplace_stop_token>(
+                    ex::get_stop_token_t{});
+                if (tok)
+                {
+                    tok_saw_stop_ = tok->stop_requested();
+                }
+                for (std::size_t i = 0; i < count; ++i)
+                {
+                    p.execute(i, i + 1);
+                }
+                p.set_value();
+            }
+
+            bool equal_to(
+                ex::parallel_scheduler_backend const& o) const noexcept override
+            {
+                return this == &o;
+            }
+        };
+
+        auto b = std::make_shared<non_inplace_stop_bulk_backend>(stop_src,
+            proxy_saw_initial_false, proxy_saw_stop_requested,
+            proxy_tok_saw_stop);
+        auto orig = ex::query_parallel_scheduler_backend();
+        ex::set_parallel_scheduler_backend(b);
+        auto sched = ex::get_parallel_scheduler();
+
+        auto snd = ex::schedule(sched) |
+            ex::bulk_unchunked(ex::par, 5, [](std::size_t) {});
+        auto op = ex::connect(std::move(snd),
+            non_inplace_stop_receiver{
+                stop_src.get_token(), &receiver_completed});
+        ex::start(op);
+
+        HPX_TEST(proxy_saw_initial_false);
+        HPX_TEST(proxy_saw_stop_requested);
+        HPX_TEST(proxy_tok_saw_stop);
+        HPX_TEST(receiver_completed);
+
+        ex::set_parallel_scheduler_backend(orig);
     }
 
     return hpx::local::finalize();

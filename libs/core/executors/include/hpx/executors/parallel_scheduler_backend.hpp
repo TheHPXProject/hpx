@@ -25,6 +25,7 @@
 #include <new>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <typeinfo>
 #include <utility>
 
@@ -80,6 +81,13 @@ namespace hpx::execution::experimental {
         template <typename P, typename Query>
         std::optional<P> try_query(Query /* q */) const noexcept
         {
+            static_assert(
+                std::is_object_v<P> && !std::is_array_v<P> &&
+                    std::is_same_v<P, std::remove_cv_t<P>>,
+                "P must be a cv-unqualified, non-array object type");
+            static_assert(std::is_nothrow_move_constructible_v<P>,
+                "P must be nothrow move constructible");
+
             alignas(P) std::byte storage[sizeof(P)];
             if (query_env_impl(
                     typeid(Query), typeid(P), static_cast<void*>(&storage)))
@@ -98,6 +106,10 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT struct parallel_scheduler_bulk_item_receiver_proxy
       : parallel_scheduler_receiver_proxy
     {
+    protected:
+        ~parallel_scheduler_bulk_item_receiver_proxy() = default;
+
+    public:
         virtual void execute(std::size_t begin, std::size_t end) noexcept = 0;
     };
 
