@@ -149,7 +149,8 @@ namespace hpx::parallel::detail {
     // Collection may temporarily hold both locality-grouped and reordered
     // buffers, so direct element storage can approach twice this value.
     // Container overhead and dynamic storage owned by elements are excluded.
-    inline constexpr std::size_t max_capture_batch_bytes = 128 * 1024 * 1024;
+    inline constexpr std::size_t max_capture_batch_bytes =
+        std::size_t{128} * 1024 * 1024;
 
     template <typename Value1, typename Value2>
     constexpr std::size_t max_capture_batch_elements() noexcept

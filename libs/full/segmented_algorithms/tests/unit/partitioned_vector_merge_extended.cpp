@@ -1047,10 +1047,10 @@ namespace {
         HPX_TEST_EQ(batches[0][1].dest, std::size_t{20});
         HPX_TEST_EQ(batches[1][0].dest, std::size_t{30});
 
+        constexpr std::size_t max_elements =
+            hpx::parallel::detail::max_capture_batch_elements<int, double>();
         // Verify the planner uses the larger input element size.
-        HPX_TEST_EQ(
-            hpx::parallel::detail::max_capture_batch_elements<int, double>(),
-            max_bytes / sizeof(double));
+        HPX_TEST_EQ(max_elements, max_bytes / sizeof(double));
     }
 }    // namespace
 
@@ -1086,7 +1086,7 @@ int main()
     run_test("test_many_small_partitions_and_skew",
         test_many_small_partitions_and_skew);
     run_test(
-        "test_capture_byte_batch_grouping", ctest_capture_byte_batch_grouping);
+        "test_capture_byte_batch_grouping", test_capture_byte_batch_grouping);
 
     return hpx::util::report_errors();
 }
