@@ -44,6 +44,14 @@ if command == 'ctest':
         if name == 'Test':
             status = os.environ.get('TEST_STATUS', 'passed')
             body = '<Test Status="' + status + '"><Name>fixture</Name></Test>'
+            skipped = os.environ.get('SKIPPED_TEST')
+            if skipped:
+                # CTest records a self-skipped test as not run and names the
+                # skip in its completion status.
+                body += ('<Test Status="notrun"><Name>skipped</Name><Results>'
+                         '<NamedMeasurement name="Completion Status">'
+                         '<Value>' + skipped + '</Value></NamedMeasurement>'
+                         '</Results></Test>')
         else:
             body = '<Error>fixture</Error>' if os.environ.get(name) else ''
         (results / (name + '.xml')).write_text('<Site>' + body + '</Site>')
@@ -184,6 +192,16 @@ class BuildResultsTest(unittest.TestCase):
             with self.subTest(failure=failure):
                 commands = self.run_batch(1, existing=True, **failure)
                 self.assertNotIn('cmake', commands)
+
+    def test_skipped_test_is_not_a_failure(self):
+        for marker in ('SKIP_REGULAR_EXPRESSION_MATCHED', 'SKIP_RETURN_CODE=77'):
+            with self.subTest(marker=marker):
+                self.run_batch(0, SKIPPED_TEST=marker)
+        # A test that could not run at all is still an error next to a skip.
+        commands = self.run_batch(
+            1, SKIPPED_TEST='SKIP_RETURN_CODE=77', TEST_STATUS='notrun',
+            existing=True)
+        self.assertNotIn('cmake', commands)
 
     def test_missing_results(self):
         for name in ('TAG', 'Configure', 'Build', 'Test'):

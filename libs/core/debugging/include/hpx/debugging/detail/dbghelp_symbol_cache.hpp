@@ -22,6 +22,8 @@
 
 #include <windows.h>
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx::util::detail {
 
     /// \brief The result of a single SymFromAddr lookup, as needed by
@@ -30,6 +32,12 @@ namespace hpx::util::detail {
     {
         std::string name;
         DWORD64 displacement = 0;
+
+        /// The AllocationBase (as reported by VirtualQuery) of the memory
+        /// region containing the address when it was resolved. Used to
+        /// detect a cached entry whose module was unloaded and whose
+        /// address range was reused by another module (see #7608).
+        DWORD64 allocation_base = 0;
     };
 
     /// \brief A process-wide cache mapping addresses already resolved by
@@ -61,6 +69,16 @@ namespace hpx::util::detail {
         ///        already at capacity.
         void insert(DWORD64 address, resolved_symbol_info const& value);
 
+        /// \brief Drop every cached resolution.
+        ///
+        /// \note Used after a DbgHelp module-list refresh (see #7608):
+        ///       once the set of loaded modules has changed, an address
+        ///       already in the cache may now belong to a different
+        ///       module (or one that no longer exists), so the safe
+        ///       choice is to forget everything rather than reason
+        ///       about which entries are still valid.
+        void clear();
+
     private:
         struct impl;
         std::unique_ptr<impl> impl_;
@@ -70,5 +88,7 @@ namespace hpx::util::detail {
     ///        \a get_symbol().
     HPX_CORE_EXPORT dbghelp_symbol_cache& get_dbghelp_symbol_cache();
 }    // namespace hpx::util::detail
+
+#include <hpx/config/warnings_suffix.hpp>
 
 #endif    // HPX_WINDOWS

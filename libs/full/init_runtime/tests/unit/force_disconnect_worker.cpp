@@ -18,6 +18,7 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/actions.hpp>
 #include <hpx/modules/collectives.hpp>
+#include <hpx/modules/runtime_local.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -29,6 +30,12 @@ std::uint32_t ping_locality()
     return hpx::get_locality_id();
 }
 HPX_PLAIN_ACTION(ping_locality, ping_locality_action)
+
+bool worker_is_running()
+{
+    return hpx::is_running();
+}
+HPX_PLAIN_ACTION(worker_is_running, worker_is_running_action)
 
 // A long-running action used to simulate a parcel that is still in flight while
 // the target locality is being force-disconnected.

@@ -196,6 +196,30 @@ function(add_hpx_module libname modulename)
       endif()
     endforeach(header_file)
     if(NOT ${modulename}_NO_CONFIG_IN_GENERATED_HEADERS)
+      if(MSVC)
+        if(HPX_WITH_STATIC_LINKING AND HPX_WITH_MODULES_AS_STATIC_LIBRARIES)
+          set(autolink_lib_name "hpx_${modulename}")
+        else()
+          if("${libname}" STREQUAL "core")
+            set(autolink_lib_name "hpx_core")
+          else()
+            set(autolink_lib_name "hpx")
+          endif()
+        endif()
+        set(module_headers
+            "${module_headers}\n#if defined(HPX_HAVE_STATIC_LINKING) && \\\n"
+        )
+        set(module_headers
+            "${module_headers}    !defined(HPX_${libname_upper}_EXPORTS)\n"
+        )
+        set(module_headers
+            "${module_headers}#define HPX_AUTOLINK_LIB_NAME \"${autolink_lib_name}\"\n"
+        )
+        set(module_headers
+            "${module_headers}#include <hpx/config/autolink.hpp>\n"
+        )
+        set(module_headers "${module_headers}#endif\n")
+      endif()
       set(module_headers "${module_headers}#endif\n")
     endif()
 

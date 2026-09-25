@@ -14,8 +14,6 @@ if(UNIX)
   )
 
   add_hpx_regression_test(
-    "modules.runtime_local" abort_signal
-    THREADS_PER_LOCALITY 2
-    TIMEOUT 30
+    "modules.runtime_local" abort_signal THREADS_PER_LOCALITY 2
   )
 endif()

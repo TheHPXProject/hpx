@@ -70,8 +70,10 @@ namespace hpx::components {
         static std::pair<bool, components::pinned_ptr> was_object_migrated(
             hpx::naming::gid_type const& id, naming::address_type lva)
         {
-            return get_lva<abstract_base_migration_support>::call(lva)
-                ->was_object_migrated_v(id, lva);
+            // Check the migration state before any virtual call through lva.
+            return agas::was_object_migrated(id, lva, [lva] {
+                return components::pinned_ptr::create<this_component_type>(lva);
+            });
         }
 
         using decorates_action = void;

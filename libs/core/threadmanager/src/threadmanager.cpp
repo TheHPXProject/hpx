@@ -757,9 +757,21 @@ namespace hpx::threads {
                 "hpx.max_background_threads",
                 (std::numeric_limits<std::size_t>::max)());
 
+        // The distributed runtime's background callback also performs
+        // non-network work, such as AGAS garbage collection. Keep one worker
+        // eligible when the callback is nonempty and the configured maximum
+        // is nonzero.
         if (!rtcfg_.enable_networking())
         {
-            max_background_threads = 0;
+            if (network_background_callback_.empty() ||
+                max_background_threads == 0)
+            {
+                max_background_threads = 0;
+            }
+            else
+            {
+                max_background_threads = 1;
+            }
         }
 
         // instantiate the pools

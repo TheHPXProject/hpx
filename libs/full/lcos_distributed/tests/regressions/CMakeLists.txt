@@ -5,7 +5,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests channel_2916 channel_not_empty_2890 channel_register_as_2722)
+set(tests channel_2916 channel_not_empty_2890 channel_register_as_2722
+          channel_register_2arg_macro_7613
+)
 
 set(channel_2916_FLAGS DEPENDENCIES iostreams_component)
 set(channel_2916_PARAMETERS THREADS_PER_LOCALITY 4)

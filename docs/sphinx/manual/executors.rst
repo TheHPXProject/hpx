@@ -586,3 +586,36 @@ We then use hpx::for_each with a parallel execution policy and attach our custom
 
 This pattern is especially useful in larger applications with many tasks, as annotations make it much easier
 to trace and debug the execution of parallel algorithms.
+
+.. _parallel_scheduler:
+
+P2079 parallel scheduler
+========================
+
+C++26 (`P2079 <https://wg21.link/p2079>`_)
+exposes ``std::execution::get_parallel_scheduler()``. |hpx| implements this as
+``hpx::execution::experimental::get_parallel_scheduler()``.
+
+Earlier drafts of the same paper (P2079R2) used the names ``system_context`` and
+``system_scheduler``. Those public types were dropped. The default backend in
+|hpx| reuses the default thread pool's worker threads instead of spawning a
+separate thread pool for the scheduler.
+
+.. literalinclude:: ../../libs/core/executors/examples/parallel_scheduler.cpp
+   :language: c++
+   :start-after: //[get_parallel_scheduler_default
+   :end-before: //get_parallel_scheduler_default]
+
+To bind the scheduler to a named HPX pool created with the resource
+partitioner, pass that pool to ``get_parallel_scheduler``. There is no
+need to write a custom ``parallel_scheduler_backend`` class:
+
+.. literalinclude:: ../../libs/core/executors/examples/parallel_scheduler.cpp
+   :language: c++
+   :start-after: //[get_parallel_scheduler_named_pool
+   :end-before: //get_parallel_scheduler_named_pool]
+
+``get_thread_pool`` throws ``hpx::exception`` for an unknown pool name.
+The pool must outlive the scheduler; HPX does not extend the pool's
+lifetime or diagnose a dangling pool.
+

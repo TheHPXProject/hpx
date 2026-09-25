@@ -47,8 +47,7 @@ namespace hpx::detail {
     HPX_CXX_EXPORT template <typename Action, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
-    async_colocated(
-        [[maybe_unused]] hpx::id_type const& id, [[maybe_unused]] Ts&&... vs)
+    async_colocated(hpx::id_type const& id, Ts&&... vs)
     {
         // Attach the requested action as a continuation to a resolve_async
         // call on the locality responsible for the target gid.
@@ -56,7 +55,6 @@ namespace hpx::detail {
             agas::primary_namespace::get_service_instance(id.get_gid()),
             hpx::id_type::management_type::unmanaged);
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
         using remote_result_type =
             hpx::traits::extract_action<Action>::remote_result_type;
         using action_type = agas::server::primary_namespace::colocate_action;
@@ -67,11 +65,6 @@ namespace hpx::detail {
                 hpx::bind(util::functional::extract_locality(), _2, id),
                 HPX_FORWARD(Ts, vs)...)),
             service_target, id.get_gid());
-#else
-        HPX_ASSERT(false);
-        return hpx::future<typename traits::promise_local_result<typename hpx::
-                traits::extract_action<Action>::remote_result_type>::type>{};
-#endif
     }
 
     HPX_CXX_EXPORT template <typename Component, typename Signature,
@@ -91,12 +84,8 @@ namespace hpx::detail {
         requires(traits::is_continuation_v<Continuation>)
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
-    async_colocated([[maybe_unused]] Continuation&& cont,
-        [[maybe_unused]] hpx::id_type const& id, [[maybe_unused]] Ts&&... vs)
+    async_colocated(Continuation&& cont, hpx::id_type const& id, Ts&&... vs)
     {
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-        HPX_ASSERT(false);
-#else
         // Attach the requested action as a continuation to a resolve_async
         // call on the locality responsible for the target gid.
         hpx::id_type service_target(
@@ -115,7 +104,6 @@ namespace hpx::detail {
                     HPX_FORWARD(Ts, vs)...),
                 HPX_FORWARD(Continuation, cont)),
             service_target, id.get_gid());
-#endif
     }
 
     HPX_CXX_EXPORT template <typename Continuation, typename Component,

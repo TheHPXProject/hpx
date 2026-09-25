@@ -41,7 +41,7 @@ namespace hpx::components::server {
 
             // The object is local, we can destroy it locally...
             if (auto const r = agas::was_object_migrated(
-                    gid, []() { return pinned_ptr(); });
+                    gid, addr.address_, []() { return pinned_ptr(); });
                 !r.first)
             {
                 if (naming::refers_to_virtual_memory(gid))
@@ -58,6 +58,19 @@ namespace hpx::components::server {
                     "successfully destroyed component {} of type: {}", gid,
                     components::get_component_type_name(addr.type_));
 
+                return;
+            }
+
+            // The address may have been resolved before the component migrated
+            // away and back. Forwarding it unchanged would bring the request
+            // straight back here with the same address, so look it up again
+            // and retry once if it moved.
+            naming::address current;
+            error_code ec(throwmode::lightweight);
+            if (agas::resolve_local(gid, current, ec) && !ec &&
+                current.address_ != addr.address_)
+            {
+                destroy_component(gid, current);
                 return;
             }
         }

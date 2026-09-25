@@ -196,10 +196,8 @@ namespace hpx::lcos {
             base_lco_with_value>::type;
         using base_type_holder = base_lco_with_value;
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
         // refer to base type for the corresponding implementation
         using set_value_action = base_lco::set_event_action;
-#endif
 
         // dummy action definition
         void get_value() {}

@@ -60,6 +60,11 @@ namespace hpx::util::detail {
             hpx::util::cache::entries::lru_entry<resolved_symbol_info>(value));
     }
 
+    void dbghelp_symbol_cache::clear()
+    {
+        impl_->cache.clear();
+    }
+
     dbghelp_symbol_cache& get_dbghelp_symbol_cache()
     {
         // Function-local static: constructed on first use, same

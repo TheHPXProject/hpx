@@ -416,8 +416,33 @@ namespace hpx::util::stack_trace {
             hpx::util::detail::dbghelp_scoped_lock const l;
             auto& symbol_cache = hpx::util::detail::get_dbghelp_symbol_cache();
 
+            auto const query_allocation_base = [](DWORD64 addr) -> DWORD64 {
+                MEMORY_BASIC_INFORMATION mbi;
+                if (VirtualQuery(reinterpret_cast<LPCVOID>(addr), &mbi,
+                        sizeof(mbi)) == 0)
+                {
+                    return 0;
+                }
+                return reinterpret_cast<DWORD64>(mbi.AllocationBase);
+            };
+
             hpx::util::detail::resolved_symbol_info resolved;
-            if (!symbol_cache.try_get(address, resolved))
+            bool cache_hit = symbol_cache.try_get(address, resolved);
+
+            // A cached entry is only valid if the memory region it was
+            // resolved in is still the same one. If the module was
+            // unloaded and its address range reused, drop the cache and
+            // resolve again (#7608).
+            bool force_refresh = false;
+            if (cache_hit &&
+                resolved.allocation_base != query_allocation_base(address))
+            {
+                symbol_cache.clear();
+                cache_hit = false;
+                force_refresh = true;
+            }
+
+            if (!cache_hit)
             {
                 DWORD64 displacement = 0;
 
@@ -430,13 +455,62 @@ namespace hpx::util::stack_trace {
                 auto* const symbol =
                     reinterpret_cast<PSYMBOL_INFO>(buffer.data());
 
-                symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-                symbol->MaxNameLen = MAX_SYM_NAME;
+                auto const try_resolve = [&]() -> bool {
+                    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                    symbol->MaxNameLen = MAX_SYM_NAME;
+                    return SymFromAddr(process_handle, address, &displacement,
+                               symbol) != FALSE;
+                };
 
-                if (SymFromAddr(process_handle, address, &displacement, symbol))
+                bool resolved_ok = !force_refresh && try_resolve();
+                if (!resolved_ok)
+                {
+                    // SymInitialize(..., TRUE) only snapshots the loaded
+                    // modules once, at startup (#7608). A failed lookup
+                    // may simply mean a module was loaded (or unloaded)
+                    // afterwards and DbgHelp's view of the process is
+                    // stale, so refresh it and retry exactly once.
+                    //
+                    // Throttled to at most once per refresh_interval_ms:
+                    // without this, a stack containing an address that
+                    // will never resolve (JIT-generated code, a
+                    // corrupted frame, garbage past the top of the
+                    // stack) would call the relatively expensive
+                    // SymRefreshModuleList on every single backtrace
+                    // that touches it. The throttle window is updated
+                    // whether or not the refresh call itself succeeds,
+                    // so a persistently failing refresh cannot be
+                    // retried in a tight loop either.
+                    static ULONGLONG last_refresh_tick = 0;
+                    constexpr ULONGLONG refresh_interval_ms = 500;
+
+                    ULONGLONG const now = GetTickCount64();
+                    if (force_refresh || last_refresh_tick == 0 ||
+                        now - last_refresh_tick >= refresh_interval_ms)
+                    {
+                        last_refresh_tick = now;
+
+                        if (SymRefreshModuleList(process_handle))
+                        {
+                            // The set of loaded modules changed shape;
+                            // any address already cached could now
+                            // belong to a different module than when it
+                            // was resolved (or to one that no longer
+                            // exists), so drop everything rather than
+                            // try to reason about which entries are
+                            // still valid.
+                            symbol_cache.clear();
+
+                            resolved_ok = try_resolve();
+                        }
+                    }
+                }
+
+                if (resolved_ok)
                 {
                     resolved.name.assign(symbol->Name, symbol->NameLen);
                     resolved.displacement = displacement;
+                    resolved.allocation_base = query_allocation_base(address);
                     symbol_cache.insert(address, resolved);
                 }
                 else

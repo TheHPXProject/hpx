@@ -116,6 +116,15 @@ namespace hpx::local::detail {
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::string reconstruct_command_line(
         int argc, char* argv[]);
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool parse_commandline(
+        util::section const& rtcfg, options_map& all_options,
+        hpx::program_options::options_description const& app_options,
+        std::vector<std::string> const& args,
+        hpx::program_options::variables_map& vm,
+        hpx::program_options::ext_parser const& parser,
+        util::commandline_error_mode error_mode,
+        hpx::program_options::options_description* visible,
+        std::vector<std::string>* unregistered_options);
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool parse_commandline(
         util::section const& rtcfg, options_map& all_options,

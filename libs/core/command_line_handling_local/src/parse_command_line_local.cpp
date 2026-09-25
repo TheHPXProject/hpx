@@ -336,6 +336,7 @@ namespace hpx::local::detail {
         hpx::program_options::options_description const& app_options,
         std::vector<std::string> const& args,
         hpx::program_options::variables_map& vm,
+        hpx::program_options::ext_parser const& parser,
         util::commandline_error_mode error_mode,
         hpx::program_options::options_description* visible,
         std::vector<std::string>* unregistered_options)
@@ -367,8 +368,6 @@ namespace hpx::local::detail {
             pd.add("hpx:positional", -1);
 
             // parse command line, allow for unregistered options this point
-            util::commandline_error_mode const mode =
-                error_mode & util::commandline_error_mode::ignore_aliases;
             util::commandline_error_mode const notmode =
                 error_mode & ~util::commandline_error_mode::ignore_aliases;
 
@@ -377,7 +376,7 @@ namespace hpx::local::detail {
                     .options(all_options[options_type::desc_cmdline])
                     .positional(pd)
                     .style(unix_style)
-                    .extra_parser(option_parser(rtcfg, as_bool(mode))),
+                    .extra_parser(parser),
                 notmode)
                     .run());
 
@@ -398,8 +397,6 @@ namespace hpx::local::detail {
         else
         {
             // parse command line, allow for unregistered options this point
-            util::commandline_error_mode const mode =
-                error_mode & util::commandline_error_mode::ignore_aliases;
             util::commandline_error_mode const notmode =
                 error_mode & ~util::commandline_error_mode::ignore_aliases;
 
@@ -407,7 +404,7 @@ namespace hpx::local::detail {
                 command_line_parser(args)
                     .options(all_options[options_type::desc_cmdline])
                     .style(unix_style)
-                    .extra_parser(option_parser(rtcfg, as_bool(mode))),
+                    .extra_parser(parser),
                 notmode)
                     .run());
 
@@ -444,6 +441,24 @@ namespace hpx::local::detail {
         notify(vm);
 
         return true;
+    }
+
+    bool parse_commandline(util::section const& rtcfg, options_map& all_options,
+        hpx::program_options::options_description const& app_options,
+        std::vector<std::string> const& args,
+        hpx::program_options::variables_map& vm,
+        util::commandline_error_mode error_mode,
+        hpx::program_options::options_description* visible,
+        std::vector<std::string>* unregistered_options)
+    {
+        util::commandline_error_mode const mode =
+            error_mode & util::commandline_error_mode::ignore_aliases;
+
+        hpx::program_options::ext_parser const parser(
+            option_parser(rtcfg, as_bool(mode)));
+
+        return parse_commandline(rtcfg, all_options, app_options, args, vm,
+            parser, error_mode, visible, unregistered_options);
     }
 
     // Special type to be able to enforce an argument value if a parameter
@@ -621,7 +636,20 @@ namespace hpx::local::detail {
         ;
 
         all_options[options_type::hidden_options].add_options()
-            ("hpx:ignore", "this option will be silently ignored")
+            ("hpx:ignore",
+                value<std::vector<std::string> >()->zero_tokens()->composing(),
+                "this option will be silently ignored")
+            ("hpx:ignore-value",
+                value<std::vector<std::string> >()->composing(),
+                "this option and its value will be silently ignored")
+            ("hpx:ignore-optional-value",
+                value<std::vector<std::string> >()
+                    ->implicit_value(std::vector<std::string>{}, "")
+                    ->composing(),
+                "this option and its optional value will be silently ignored")
+            ("hpx:ignore-multitoken",
+                value<std::vector<std::string> >()->multitoken()->composing(),
+                "this option and its values will be silently ignored")
         ;
         // clang-format on
 

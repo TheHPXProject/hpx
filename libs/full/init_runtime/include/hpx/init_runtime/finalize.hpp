@@ -15,8 +15,11 @@
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
 #include <hpx/modules/naming_base.hpp>
 #endif
+#include <hpx/modules/timing.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
+
+#include <chrono>
 
 /// \namespace hpx
 namespace hpx {
@@ -33,14 +36,14 @@ namespace hpx {
     /// all registered shutdown functions (see \a hpx::init) on all localities.
     ///
     /// \param shutdown_timeout This parameter allows to specify a timeout (in
-    ///           microseconds), specifying how long any of the connected
+    ///           seconds), specifying how long any of the connected
     ///           localities should wait for pending tasks to be executed.
     ///           After this timeout, all suspended HPX-threads will be aborted.
     ///           Note, that this function will not abort any running
     ///           HPX-threads. In any case the shutdown will not proceed as long
     ///           as there is at least one pending/running HPX-thread.
     ///
-    ///           The default value (`-1.0`) will try to find a globally set
+    ///           The value (`-1.0`) will try to find a globally set
     ///           timeout value (can be set as the configuration parameter
     ///           `hpx.shutdown_timeout`), and if that is not set or `-1.0` as
     ///           well, it will disable any timeout, each connected
@@ -50,7 +53,7 @@ namespace hpx {
     ///           (in microseconds) before the connected localities will be
     ///           notified and the overall shutdown process starts.
     ///
-    ///           The default value (`-1.0`) will try to find a globally set
+    ///           The value (`-1.0`) will try to find a globally set
     ///           wait time value (can be set as the configuration parameter
     ///           "hpx.finalize_wait_time"), and if this is not set or `-1.0`
     ///           as well, it will disable any addition local wait time before
@@ -67,14 +70,72 @@ namespace hpx {
     ///           parameter \a ec. Otherwise, it throws an instance of
     ///           hpx::exception.
     ///
-    /// This function will block and wait for all connected localities to exit
-    /// before returning to the caller. It should be the last HPX-function
-    /// called by any application.
+    /// \note     This overload is deprecated, use the overload taking
+    ///           hpx::chrono::steady_duration arguments instead.
+    ///
+    /// This function will not wait for all connected localities to exit,
+    /// rather it informs all connected localities that they should exit
+    /// whenever there is no more work to be done.
     ///
     /// Using this function is an alternative to \a hpx::disconnect, these
     /// functions do not need to be called both.
-    HPX_CXX_EXPORT HPX_EXPORT int finalize(double shutdown_timeout,
-        double localwait = -1.0, hpx::error_code& ec = throws);
+    HPX_CXX_EXPORT HPX_DEPRECATED_V(2, 0,
+        "hpx::finalize with double timeout arguments is deprecated, use "
+        "the overload taking hpx::chrono::steady_duration arguments instead")
+        HPX_EXPORT int finalize(double shutdown_timeout, double localwait,
+            hpx::error_code& ec = throws);
+
+    /// \brief Main function to gracefully terminate the HPX runtime system.
+    ///
+    /// The function \a hpx::finalize is the main way to (gracefully) exit any
+    /// HPX application. It must be called at least once, but can be called
+    /// multiple times as well. However, only the first invocation will have
+    /// effect. It will notify all connected localities to finish execution.
+    /// Only after all other localities have exited this function will return,
+    /// allowing to exit the console locality as well.
+    ///
+    /// During the execution of this function the runtime system will invoke
+    /// all registered shutdown functions (see \a hpx::init) on all localities.
+    ///
+    /// \param shutdown_timeout This parameter allows to specify a timeout (in
+    ///           seconds), specifying how long any of the connected
+    ///           localities should wait for pending tasks to be executed.
+    ///           After this timeout, all suspended HPX-threads will be aborted.
+    ///           Note, that this function will not abort any running
+    ///           HPX-threads. In any case the shutdown will not proceed as long
+    ///           as there is at least one pending/running HPX-thread.
+    ///
+    ///           The value (`-1.0`) will try to find a globally set
+    ///           timeout value (can be set as the configuration parameter
+    ///           `hpx.shutdown_timeout`), and if that is not set or `-1.0` as
+    ///           well, it will disable any timeout, each connected
+    ///           locality will wait for all existing HPX-threads to terminate.
+    ///
+    /// \param ec [in,out] this represents the error status on exit, if this
+    ///           is pre-initialized to \a hpx#throws the function will throw
+    ///           on error instead.
+    ///
+    /// \returns  This function will always return zero.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise, it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// \note     This overload is deprecated, use the overload taking
+    ///           hpx::chrono::steady_duration arguments instead.
+    ///
+    /// This function will not wait for all connected localities to exit,
+    /// rather it informs all connected localities that they should exit
+    /// whenever there is no more work to be done.
+    ///
+    /// Using this function is an alternative to \a hpx::disconnect, these
+    /// functions do not need to be called both.
+    HPX_CXX_EXPORT HPX_DEPRECATED_V(2, 0,
+        "hpx::finalize with double timeout arguments is deprecated, use "
+        "the overload taking hpx::chrono::steady_duration arguments instead")
+        HPX_EXPORT
+        int finalize(double shutdown_timeout, hpx::error_code& ec = throws);
 
     /// \brief Main function to gracefully terminate the HPX runtime system.
     ///
@@ -99,16 +160,61 @@ namespace hpx {
     ///           parameter \a ec. Otherwise, it throws an instance of
     ///           hpx::exception.
     ///
-    /// This function will block and wait for all connected localities to exit
-    /// before returning to the caller. It should be the last HPX-function
-    /// called by any application.
+    /// This function will not wait for all connected localities to exit,
+    /// rather it informs all connected localities that they should exit
+    /// whenever there is no more work to be done.
     ///
     /// Using this function is an alternative to \a hpx::disconnect, these
     /// functions do not need to be called both.
-    HPX_CXX_EXPORT inline int finalize(hpx::error_code& ec = throws)
-    {
-        return finalize(-1.0, -1.0, ec);
-    }
+    HPX_CXX_EXPORT HPX_EXPORT int finalize(hpx::error_code& ec = throws);
+
+    /// \brief Main function to gracefully terminate the HPX runtime system.
+    ///
+    /// The function \a hpx::finalize is the main way to (gracefully) exit any
+    /// HPX application. It must be called at least once, but can be called
+    /// multiple times as well. However, only the first invocation will have
+    /// effect. It will notify all connected localities to finish execution.
+    /// Only after all other localities have exited this function will return,
+    /// allowing to exit the console locality as well.
+    ///
+    /// During the execution of this function the runtime system will invoke
+    /// all registered shutdown functions (see \a hpx::init) on all localities.
+    ///
+    /// \param shutdown_timeout This parameter allows to specify a timeout,
+    ///           specifying how long any of the connected localities should
+    ///           wait for pending tasks to be executed. After this timeout,
+    ///           all suspended HPX-threads will be aborted. Note, that this
+    ///           function will not abort any running HPX-threads. In any case
+    ///           the shutdown will not proceed as long as there is at least
+    ///           one pending/running HPX-thread.
+    ///
+    ///           Any std::chrono::duration is implicitly convertible to
+    ///           hpx::chrono::steady_duration, e.g.
+    ///           `hpx::finalize(std::chrono::seconds(60))`. Pass the timeout
+    ///           explicitly to use it; call the overload taking no arguments
+    ///           to use the globally configured default (see configuration
+    ///           parameter `hpx.shutdown_timeout`).
+    ///
+    /// \param ec [in,out] this represents the error status on exit, if this
+    ///           is pre-initialized to \a hpx#throws the function will throw
+    ///           on error instead.
+    ///
+    /// \returns  This function will always return zero.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise, it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// This function will not wait for all connected localities to exit,
+    /// rather it informs all connected localities that they should exit
+    /// whenever there is no more work to be done.
+    ///
+    /// Using this function is an alternative to \a hpx::disconnect, these
+    /// functions do not need to be called both.
+    HPX_CXX_EXPORT HPX_EXPORT int finalize(
+        hpx::chrono::steady_duration shutdown_timeout,
+        hpx::error_code& ec = throws);
 
     /// \brief Terminate any application non-gracefully.
     ///
@@ -131,14 +237,14 @@ namespace hpx {
     /// all registered shutdown functions (see \a hpx::init) on this locality.
     //
     /// \param shutdown_timeout This parameter allows to specify a timeout (in
-    ///           microseconds), specifying how long this locality should wait
+    ///           seconds), specifying how long this locality should wait
     ///           for pending tasks to be executed. After this timeout, all
     ///           suspended HPX-threads will be aborted.
     ///           Note, that this function will not abort any running
     ///           HPX-threads. In any case the shutdown will not proceed as long
     ///           as there is at least one pending/running HPX-thread.
     ///
-    ///           The default value (`-1.0`) will try to find a globally set
+    ///           The value (`-1.0`) will try to find a globally set
     ///           timeout value (can be set as the configuration parameter
     ///           "hpx.shutdown_timeout"), and if that is not set or `-1.0` as
     ///           well, it will disable any timeout, each connected
@@ -148,7 +254,7 @@ namespace hpx {
     ///           (in microseconds) before the connected localities will be
     ///           notified and the overall shutdown process starts.
     ///
-    ///           The default value (`-1.0`) will try to find a globally set
+    ///           The value (`-1.0`) will try to find a globally set
     ///           wait time value (can be set as the configuration parameter
     ///           `hpx.finalize_wait_time`), and if this is not set or `-1.0`
     ///           as well, it will disable any addition local wait time before
@@ -165,12 +271,64 @@ namespace hpx {
     ///           parameter \a ec. Otherwise, it throws an instance of
     ///           hpx::exception.
     ///
-    /// This function will block and wait for this locality to finish executing
-    /// before returning to the caller. It should be the last HPX-function
-    /// called by any locality being disconnected.
+    /// \note     This overload is deprecated, use the overload taking
+    ///           hpx::chrono::steady_duration arguments instead.
     ///
-    HPX_CXX_EXPORT HPX_EXPORT int disconnect(double shutdown_timeout,
-        double localwait = -1.0, hpx::error_code& ec = throws);
+    /// This function will not wait for this locality to finish executing,
+    /// rather it informs this locality that it should disconnect whenever
+    /// there is no more work to be done.
+    ///
+    HPX_CXX_EXPORT HPX_DEPRECATED_V(2, 0,
+        "hpx::disconnect with double timeout arguments is deprecated, use "
+        "the overload taking hpx::chrono::steady_duration arguments instead")
+        HPX_EXPORT int disconnect(double shutdown_timeout, double localwait,
+            hpx::error_code& ec = throws);
+
+    /// \brief Disconnect this locality from the application.
+    ///
+    /// The function \a hpx::disconnect can be used to disconnect a locality
+    /// from a running HPX application.
+    ///
+    /// During the execution of this function the runtime system will invoke
+    /// all registered shutdown functions (see \a hpx::init) on this locality.
+    ///
+    /// \param shutdown_timeout This parameter allows to specify a timeout (in
+    ///           seconds), specifying how long this locality should wait
+    ///           for pending tasks to be executed. After this timeout, all
+    ///           suspended HPX-threads will be aborted.
+    ///           Note, that this function will not abort any running
+    ///           HPX-threads. In any case the shutdown will not proceed as long
+    ///           as there is at least one pending/running HPX-thread.
+    ///
+    ///           The value (`-1.0`) will try to find a globally set
+    ///           timeout value (can be set as the configuration parameter
+    ///           "hpx.shutdown_timeout"), and if that is not set or `-1.0` as
+    ///           well, it will disable any timeout, each connected
+    ///           locality will wait for all existing HPX-threads to terminate.
+    ///
+    /// \param ec [in,out] this represents the error status on exit, if this
+    ///           is pre-initialized to \a hpx#throws the function will throw
+    ///           on error instead.
+    ///
+    /// \returns  This function will always return zero if successful, -1 otherwise.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise, it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// This function will not wait for this locality to finish executing,
+    /// rather it informs this locality that it should disconnect whenever
+    /// there is no more work to be done.
+    ///
+    /// \note     This overload is deprecated, use the overload taking
+    ///           hpx::chrono::steady_duration arguments instead.
+    ///
+    HPX_CXX_EXPORT HPX_DEPRECATED_V(2, 0,
+        "hpx::disconnect with double timeout arguments is deprecated, use "
+        "the overload taking hpx::chrono::steady_duration arguments instead")
+        HPX_EXPORT
+        int disconnect(double shutdown_timeout, hpx::error_code& ec = throws);
 
     /// \brief Disconnect this locality from the application.
     ///
@@ -191,14 +349,53 @@ namespace hpx {
     ///           parameter \a ec. Otherwise, it throws an instance of
     ///           hpx::exception.
     ///
-    /// This function will block and wait for this locality to finish executing
-    /// before returning to the caller. It should be the last HPX-function
-    /// called by any locality being disconnected.
+    /// This function will not wait for this locality to finish executing,
+    /// rather it informs this locality that it should disconnect whenever
+    /// there is no more work to be done.
     ///
-    HPX_CXX_EXPORT inline int disconnect(hpx::error_code& ec = throws)
-    {
-        return disconnect(-1.0, -1.0, ec);
-    }
+    HPX_CXX_EXPORT HPX_EXPORT int disconnect(hpx::error_code& ec = throws);
+
+    /// \brief Disconnect this locality from the application.
+    ///
+    /// The function \a hpx::disconnect can be used to disconnect a locality
+    /// from a running HPX application.
+    ///
+    /// During the execution of this function the runtime system will invoke
+    /// all registered shutdown functions (see \a hpx::init) on this locality.
+    ///
+    /// \param shutdown_timeout This parameter allows to specify a timeout,
+    ///           specifying how long this locality should wait for pending
+    ///           tasks to be executed. After this timeout, all suspended
+    ///           HPX-threads will be aborted. Note, that this function will
+    ///           not abort any running HPX-threads. In any case the shutdown
+    ///           will not proceed as long as there is at least one
+    ///           pending/running HPX-thread.
+    ///
+    ///           Any std::chrono::duration is implicitly convertible to
+    ///           hpx::chrono::steady_duration, e.g.
+    ///           `hpx::disconnect(std::chrono::seconds(60))`. Pass the timeout
+    ///           explicitly to use it; call the overload taking no arguments
+    ///           to use the globally configured default (see configuration
+    ///           parameter `hpx.shutdown_timeout`).
+    ///
+    /// \param ec [in,out] this represents the error status on exit, if this
+    ///           is pre-initialized to \a hpx#throws the function will throw
+    ///           on error instead.
+    ///
+    /// \returns  This function will always return zero.
+    ///
+    /// \note     As long as \a ec is not pre-initialized to \a hpx::throws this
+    ///           function doesn't throw but returns the result code using the
+    ///           parameter \a ec. Otherwise, it throws an instance of
+    ///           hpx::exception.
+    ///
+    /// This function will not wait for this locality to finish executing,
+    /// rather it informs this locality that it should disconnect whenever
+    /// there is no more work to be done.
+    ///
+    HPX_CXX_EXPORT HPX_EXPORT int disconnect(
+        hpx::chrono::steady_duration shutdown_timeout,
+        hpx::error_code& ec = throws);
 
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     /// \brief Force disconnecting the given locality from the application.

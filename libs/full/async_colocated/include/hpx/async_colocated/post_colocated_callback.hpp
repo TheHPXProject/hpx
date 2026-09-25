@@ -8,7 +8,6 @@
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/agas_base.hpp>
 #include <hpx/modules/async_base.hpp>
@@ -104,5 +103,3 @@ namespace hpx::detail {
             HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, vs)...);
     }
 }    // namespace hpx::detail
-
-#endif

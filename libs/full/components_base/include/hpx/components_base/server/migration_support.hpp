@@ -160,9 +160,10 @@ namespace hpx::components {
         bool unpin()
         {
             // pin() acquired an additional reference count that needs to be
-            // released after unpinning.
+            // released after unpinning. Migration may destroy this component
+            // once its last pin is released, so retain the state independently.
             auto on_exit = hpx::experimental::scope_exit(
-                [this] { intrusive_ptr_release(data_.get()); });
+                [data = data_] { intrusive_ptr_release(data.get()); });
 
             {
                 // no need to go through AGAS if the object is currently pinned
@@ -190,8 +191,9 @@ namespace hpx::components {
 
             // make sure to always grab the AGAS lock first
             bool was_migrated = false;
+            naming::gid_type const gid(this->gid_);
             agas::mark_as_migrated(
-                this->gid_,
+                gid,
                 [this, &was_migrated]() -> std::pair<bool, hpx::future<void>> {
                     std::unique_lock l(data_->mtx_);
 
@@ -290,7 +292,11 @@ namespace hpx::components {
         {
             // we need to first lock the AGAS migrated objects table, only then
             // access (lock) the object
-            agas::unmark_as_migrated(to_migrate.get_gid(), [this] {
+            naming::address_type const lva =
+                static_cast<this_component_type const&>(*this)
+                    .get_current_address()
+                    .address_;
+            agas::unmark_as_migrated(to_migrate.get_gid(), lva, [this] {
                 auto const data = data_;    // keep alive
                 std::unique_lock l(data->mtx_);
 
@@ -331,7 +337,7 @@ namespace hpx::components {
             hpx::naming::gid_type const& id, naming::address_type lva)
         {
             return agas::was_object_migrated(
-                id, [lva]() -> components::pinned_ptr {
+                id, lva, [lva]() -> components::pinned_ptr {
                     return components::pinned_ptr::create<this_component_type>(
                         lva);
                 });

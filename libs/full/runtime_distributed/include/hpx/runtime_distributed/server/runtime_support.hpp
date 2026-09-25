@@ -565,14 +565,13 @@ namespace hpx::components::server {
             "successfully migrated component {} of type: {} to locality: {}",
             id, components::get_component_type_name(type), find_here());
 
-        // At this point the object has been fully migrated. We now remove
-        // the object from the AGAS table of migrated objects. This is
-        // necessary as this object might have been migrated off this locality
-        // before it was migrated back.
-        agas::unmark_as_migrated(id, [&] {
-            // inform the newly created component that it has been migrated
-            new_instance->on_migrated();
-        });
+        // At this point the object has been fully migrated. Record its current
+        // LVA so parcels resolved before an earlier migration can be rejected.
+        agas::unmark_as_migrated(
+            id, new_instance->get_current_address().address_, [&] {
+                // inform the newly created component that it has been migrated
+                new_instance->on_migrated();
+            });
 
         to_migrate.make_unmanaged();
 

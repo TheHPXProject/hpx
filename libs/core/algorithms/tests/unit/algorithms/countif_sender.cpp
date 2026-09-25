@@ -32,6 +32,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    gen.seed(seed);
 
     count_if_sender_test<std::forward_iterator_tag>();
     count_if_sender_test<std::random_access_iterator_tag>();

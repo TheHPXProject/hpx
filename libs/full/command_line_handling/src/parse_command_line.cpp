@@ -31,6 +31,7 @@ namespace hpx::util {
         // should be usable as --hpx:N:foo, where N is the node number this
         // option should be exclusively used for.
         bool handle_node_specific_option(std::string const& s, std::size_t node,
+            hpx::program_options::options_description const& desc,
             std::pair<std::string, std::string>& opt)
         {
             // any option not starting with --hpx: will be handled elsewhere
@@ -78,7 +79,45 @@ namespace hpx::util {
             }
 
             // This option is specifically not for us, so we return an option
-            // which will be silently ignored.
+            // which will be silently ignored. Preserve its value semantics so
+            // that space-separated values are consumed as well.
+            using hpx::local::detail::trim_whitespace;
+
+            std::string::size_type const p1 = s.find_first_of('=', p);
+            std::string const option_name = "hpx:" +
+                trim_whitespace(s.substr(p + 1,
+                    p1 == std::string::npos ? std::string::npos : p1 - p - 1));
+            std::string const value = p1 == std::string::npos ?
+                std::string() :
+                trim_whitespace(s.substr(p1 + 1));
+
+            // Command-line parsing uses unix_style, which allows
+            // unambiguous long-option abbreviations. Use the same matching
+            // rule when determining the value semantics of an ignored option.
+            if (auto const* d = desc.find_nothrow(option_name, true);
+                d != nullptr)
+            {
+                auto const semantic = d->semantic();
+
+                if (semantic->max_tokens() > 1)
+                {
+                    opt = std::make_pair("hpx:ignore-multitoken", value);
+                    return true;
+                }
+
+                if (semantic->min_tokens() > 0)
+                {
+                    opt = std::make_pair("hpx:ignore-value", value);
+                    return true;
+                }
+
+                if (semantic->max_tokens() > 0)
+                {
+                    opt = std::make_pair("hpx:ignore-optional-value", value);
+                    return true;
+                }
+            }
+
             opt = std::make_pair(std::string("hpx:ignore"), std::string());
             return true;
         }
@@ -91,9 +130,11 @@ namespace hpx::util {
         {
             using base_type = hpx::local::detail::option_parser;
 
-            option_parser(util::section const& ini, std::size_t node,
-                bool ignore_aliases) noexcept
+            option_parser(util::section const& ini,
+                hpx::program_options::options_description const& desc,
+                std::size_t node, bool ignore_aliases) noexcept
               : base_type(ini, ignore_aliases)
+              , desc_(desc)
               , node_(node)
             {
             }
@@ -103,13 +144,14 @@ namespace hpx::util {
             {
                 // handle node specific options
                 std::pair<std::string, std::string> opt;
-                if (handle_node_specific_option(s, node_, opt))
+                if (handle_node_specific_option(s, node_, desc_, opt))
                     return opt;
 
                 // handle aliasing, if enabled
                 return static_cast<base_type const&>(*this)(s);
             }
 
+            hpx::program_options::options_description const& desc_;
             std::size_t node_;
         };
 
@@ -138,7 +180,7 @@ namespace hpx::util {
                               .options(desc)
                               .style(unix_style)
                               .extra_parser(hpx::util::detail::option_parser(
-                                  rtcfg, node, as_bool(mode))),
+                                  rtcfg, desc, node, as_bool(mode))),
                           notmode)
                           .run(),
                     vm);
@@ -454,8 +496,15 @@ namespace hpx::util {
             all_options[options_type::desc_cfgfile].add(
                 all_options[options_type::counter_options]);
 #endif
+            util::commandline_error_mode const parser_mode =
+                error_mode & util::commandline_error_mode::ignore_aliases;
+
+            hpx::program_options::ext_parser const parser{detail::option_parser(
+                rtcfg, all_options[options_type::desc_cmdline], node,
+                as_bool(parser_mode))};
+
             bool const result = hpx::local::detail::parse_commandline(rtcfg,
-                all_options, app_options, args, vm, error_mode, visible,
+                all_options, app_options, args, vm, parser, error_mode, visible,
                 unregistered_options);
 
             if (result && visible != nullptr)

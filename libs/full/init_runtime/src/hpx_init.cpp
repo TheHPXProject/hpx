@@ -63,6 +63,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -1017,10 +1018,16 @@ namespace hpx {
             }
             return default_;
         }
+
+        int finalize_impl(
+            double shutdown_timeout, double localwait, error_code& ec);
+        int disconnect_impl(
+            double shutdown_timeout, double localwait, error_code& ec);
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    int finalize(double shutdown_timeout, double localwait, error_code& ec)
+    int detail::finalize_impl(
+        double shutdown_timeout, double localwait, error_code& ec)
     {
         if (!threads::get_self_ptr())
         {
@@ -1068,7 +1075,35 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    int disconnect([[maybe_unused]] double shutdown_timeout,
+    int finalize(double shutdown_timeout, double localwait, error_code& ec)
+    {
+        return detail::finalize_impl(shutdown_timeout, localwait, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(double shutdown_timeout, error_code& ec)
+    {
+        return detail::finalize_impl(shutdown_timeout, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(error_code& ec)
+    {
+        return detail::finalize_impl(-1.0, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(hpx::chrono::steady_duration shutdown_timeout, error_code& ec)
+    {
+        // the runtime expects the timeout in seconds
+        auto const shutdown_timeout_s =
+            std::chrono::duration_cast<std::chrono::duration<double>>(
+                shutdown_timeout.value());
+        return detail::finalize_impl(shutdown_timeout_s.count(), -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int detail::disconnect_impl([[maybe_unused]] double shutdown_timeout,
         [[maybe_unused]] double localwait, [[maybe_unused]] error_code& ec)
     {
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
@@ -1124,6 +1159,35 @@ namespace hpx {
 #endif
 
         return 0;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(double shutdown_timeout, double localwait, error_code& ec)
+    {
+        return detail::disconnect_impl(shutdown_timeout, localwait, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(double shutdown_timeout, error_code& ec)
+    {
+        return detail::disconnect_impl(shutdown_timeout, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(error_code& ec)
+    {
+        return detail::disconnect_impl(-1.0, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(
+        hpx::chrono::steady_duration shutdown_timeout, error_code& ec)
+    {
+        // the runtime expects the timeout in seconds
+        auto const shutdown_timeout_s =
+            std::chrono::duration_cast<std::chrono::duration<double>>(
+                shutdown_timeout.value());
+        return detail::disconnect_impl(shutdown_timeout_s.count(), -1.0, ec);
     }
 
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)

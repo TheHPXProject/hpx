@@ -8,7 +8,6 @@
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -565,5 +564,3 @@ namespace hpx::distributed {
 
     HPX_CXX_EXPORT using hpx::lcos::channel;
 }    // namespace hpx::distributed
-
-#endif

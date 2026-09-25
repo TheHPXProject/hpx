@@ -23,9 +23,9 @@
 // concurrent access must not have corrupted the registry.
 //
 // Two further tests below exercise the two other bits registry.cpp touches
-// on that the above race doesn't: concurrent registry::remove_counter_type()
+// on that the above race doesn't: concurrent remove_counter_type()
 // (several HPX threads erasing the *same* countertypes_ entry at once) and
-// concurrent registry::create_raw_counter() (several HPX threads
+// concurrent create_raw_counter() (several HPX threads
 // constructing counter instances of a *shared*, already-registered type at
 // once, so the component-construction work that happens after mtx_ is
 // released genuinely overlaps).
@@ -34,9 +34,9 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx.hpp>
 #include <hpx/hpx_main.hpp>
-#include <hpx/include/performance_counters.hpp>
-#include <hpx/include/runtime.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/performance_counters.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
@@ -233,7 +233,7 @@ namespace {
     }
 
     ///////////////////////////////////////////////////////////////////////
-    // Concurrent registry::remove_counter_type(): several HPX threads race
+    // Concurrent remove_counter_type(): several HPX threads race
     // to erase the *same* countertypes_ entry. remove_counter_type() holds
     // mtx_ across locate_counter_type() and the erase() together (unlike
     // add_counter_type(), it doesn't need to release the lock before doing
@@ -272,14 +272,13 @@ namespace {
     {
         using hpx::performance_counters::counter_info;
         using hpx::performance_counters::counter_status;
-        using hpx::performance_counters::registry;
 
         counter_info info;
         info.fullname_ = removal_counter_name_base + std::to_string(index);
 
         hpx::error_code ec(hpx::throwmode::lightweight);
         counter_status const status =
-            registry::instance().remove_counter_type(info, ec);
+            hpx::performance_counters::remove_counter_type(info, ec);
 
         if (status == counter_status::valid_data)
         {
@@ -331,20 +330,19 @@ namespace {
         {
             using hpx::performance_counters::counter_info;
             using hpx::performance_counters::counter_status;
-            using hpx::performance_counters::registry;
 
             counter_info info;
             info.fullname_ = removal_counter_name_base + std::to_string(i);
 
             hpx::error_code ec(hpx::throwmode::lightweight);
             counter_status const status =
-                registry::instance().remove_counter_type(info, ec);
+                hpx::performance_counters::remove_counter_type(info, ec);
             HPX_TEST_EQ(status, counter_status::counter_type_unknown);
         }
     }
 
     ///////////////////////////////////////////////////////////////////////
-    // Concurrent registry::create_raw_counter(): several HPX threads race
+    // Concurrent create_raw_counter(): several HPX threads race
     // to create distinct counter *instances* of one *shared*, already
     // registered counter type. The type lookup in create_raw_counter() is
     // done under mtx_ and a copy of the type's counter_info is taken before
@@ -372,21 +370,17 @@ namespace {
         std::atomic<std::size_t>& failures)
     {
         using hpx::performance_counters::counter_info;
-        using hpx::performance_counters::counter_status;
-        using hpx::performance_counters::registry;
 
         counter_info info;
         info.fullname_ = create_counter_type_name + "@" + std::to_string(index);
 
-        hpx::naming::gid_type id;
         hpx::error_code ec(hpx::throwmode::lightweight);
 
         hpx::function<std::int64_t(bool)> const f(&counter_value);
-        counter_status const status =
-            registry::instance().create_raw_counter(info, f, id, ec);
+        hpx::naming::gid_type const id =
+            hpx::performance_counters::detail::create_raw_counter(info, f, ec);
 
-        if (status == counter_status::valid_data && !ec &&
-            id != hpx::naming::invalid_gid)
+        if (!ec && id != hpx::naming::invalid_gid)
         {
             ++created_ok;
         }

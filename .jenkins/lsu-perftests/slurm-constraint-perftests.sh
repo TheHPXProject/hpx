@@ -6,4 +6,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 configuration_slurm_partition="jenkins-compute"
+# The build matrix and the coverage lane exclude this node through
+# configuration_slurm_exclude in their Slurm configuration files. Change
+# those too if the performance tests move to another node.
 configuration_slurm_nodelist="medusa08"

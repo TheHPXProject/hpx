@@ -93,29 +93,18 @@ namespace hpx {
         {
             HPX_ASSERT(update >= 0);
 
-            // Explicit atomic RMW for clearer memory-order intent.
-            std::ptrdiff_t const new_count =
-                counter_.fetch_sub(update, std::memory_order_acq_rel) - update;
+            std::unique_lock<mutex_type> l(mtx_.data_);
 
-            HPX_ASSERT(new_count >= 0);
+            std::ptrdiff_t const old_count =
+                counter_.fetch_sub(update, std::memory_order_acq_rel);
 
-            // 26111: Caller failing to release lock 'this->mtx_.data_'
-            // 26115: Failing to release lock 'this->mtx_.data_'
-            // 26117: Releasing unheld lock 'this->mtx_.data_'
-#if defined(HPX_MSVC)
-#pragma warning(push)
-#pragma warning(disable : 26111 26115 26117)
-#endif
-            if (new_count == 0)
+            HPX_ASSERT(old_count >= update);
+
+            if (old_count == update)
             {
-                std::unique_lock l(mtx_.data_);
                 notified_ = true;
-
                 notify_waiters(HPX_MOVE(l));
             }
-#if defined(HPX_MSVC)
-#pragma warning(pop)
-#endif
         }
 
         /// Returns:        With very low probability false. Otherwise,
@@ -142,11 +131,7 @@ namespace hpx {
 
             std::unique_lock l(mtx_.data_);
 
-            // Robust predicate loop.
-            while (counter_.load(std::memory_order_acquire) > 0 || !notified_)
-            {
-                cond_.data_.wait(l, "hpx::latch::wait");
-            }
+            wait_locked(l);
 
             HPX_ASSERT_LOCKED(l, counter_.load(std::memory_order_relaxed) == 0);
             HPX_ASSERT_LOCKED(l, notified_);
@@ -179,12 +164,7 @@ namespace hpx {
 #endif
             if (old_count > update)
             {
-                // Robust predicate loop.
-                while (
-                    counter_.load(std::memory_order_acquire) > 0 || !notified_)
-                {
-                    cond_.data_.wait(l, "hpx::latch::arrive_and_wait");
-                }
+                wait_locked(l);
 
                 HPX_ASSERT_LOCKED(
                     l, counter_.load(std::memory_order_relaxed) == 0);
@@ -194,6 +174,15 @@ namespace hpx {
             {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
+            }
+        }
+
+    private:
+        void wait_locked(std::unique_lock<mutex_type>& l) const
+        {
+            while (counter_.load(std::memory_order_acquire) > 0 || !notified_)
+            {
+                cond_.data_.wait(l, "hpx::latch::wait");
             }
         }
 
@@ -336,14 +325,14 @@ namespace hpx::lcos::local {
         {
             HPX_ASSERT(n >= 0);
 
-            std::ptrdiff_t const old_count =
-                counter_.exchange(n, std::memory_order_acq_rel);
+            std::unique_lock<mutex_type> l(mtx_.data_);
+            counter_.store(n, std::memory_order_release);
+            notified_ = (n == 0);
 
-            HPX_ASSERT(old_count == 0);
-            HPX_UNUSED(old_count);
-
-            std::scoped_lock l(mtx_.data_);
-            notified_ = false;
+            if (notified_)
+            {
+                notify_waiters(HPX_MOVE(l));
+            }
         }
 
         /// Effects: Equivalent to:
