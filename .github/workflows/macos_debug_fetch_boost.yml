@@ -59,6 +59,7 @@ jobs:
           tests.regressions.modules.async_combinators.wait_all_hang_1946|\
           tests.regressions.modules.collectives.distributed.tcp.broadcast_apply|\
           tests.regressions.modules.collectives.distributed.tcp.broadcast_unwrap_future_2885|\
+          tests.regressions.modules.collectives.distributed.tcp.channel_communicator_6881|\
           tests.regressions.modules.collectives.distributed.tcp.remote_latch|\
           tests.regressions.modules.compute_local.parallel_fill_4132|\
           tests.regressions.util.distributed.tcp.zero_copy_parcels_1001_no_zero_copy_optimization|\
