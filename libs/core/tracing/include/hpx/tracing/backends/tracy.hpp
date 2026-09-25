@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <hpx/modules/tracy.hpp>
 
@@ -631,10 +632,12 @@ namespace hpx::tracing {
         detail::os_thread_sleep_impl(num_thread);
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void tracing_init(
-        char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
-    {
-    }
+    // Non-empty version_info is recorded as a Tracy App Info line so a
+    // capture can be correlated with the HPX build. Buffered by Tracy
+    // until a profiler attaches.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const*, int,
+        char**, std::uint32_t = 0, std::uint32_t = 1,
+        std::string_view version_info = {}) noexcept;
 
     HPX_CXX_CORE_EXPORT constexpr void tracing_finalize() noexcept {}
 

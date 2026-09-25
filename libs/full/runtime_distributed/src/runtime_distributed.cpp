@@ -452,9 +452,11 @@ namespace hpx {
 #endif
         // {{{ early startup code - local
 
-        // initialize instrumentation system
+        // initialize instrumentation system; pass build metadata so a
+        // capture can be correlated with the HPX build that produced it
+        auto const version_info = hpx::complete_version();
         hpx::tracing::tracing_init(nullptr, 0, nullptr, hpx::get_locality_id(),
-            hpx::get_initial_num_localities());
+            hpx::get_initial_num_localities(), version_info);
 
         LRT_(info).format("cmd_line: {}", get_config().get_cmd_line());
 

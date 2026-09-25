@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace hpx::tracing {
 
@@ -292,7 +293,8 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT constexpr void os_thread_sleep(std::size_t) noexcept {}
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const* name,
-        int argc, char** argv, std::uint32_t rank = 0, std::uint32_t size = 1);
+        int argc, char** argv, std::uint32_t rank = 0, std::uint32_t size = 1,
+        std::string_view version_info = {});
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_finalize();
 

@@ -139,8 +139,18 @@ namespace hpx::threads::detail {
             hpx::likwid::suspend_region region;
 #endif
             hpx::tracing::fiber_suspend_region tracy_suspend("timer_wait");
+
+            // Mirror the suspend/resume message pair from
+            // execution_agent.cpp and thread_helpers.cpp so the profiler
+            // sees the timer wait as a task suspension, not just a fiber
+            // zone. The yield below always uses state=suspended, so no
+            // task_yielded branch is needed here.
+            hpx::tracing::task_suspended(self_id.noref(), "timer_wait");
+
             statex = get_self().yield(thread_result_type(
                 thread_schedule_state::suspended, invalid_thread_id));
+
+            hpx::tracing::task_resumed(self_id.noref(), statex);
         }
 
         HPX_ASSERT(statex == thread_restart_state::abort ||

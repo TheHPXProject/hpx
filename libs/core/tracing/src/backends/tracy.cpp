@@ -12,12 +12,15 @@
 #include <hpx/modules/tracy.hpp>
 #include <hpx/tracing/tracing.hpp>
 
+#include <tracy/TracyC.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 namespace hpx::tracing {
 
@@ -574,6 +577,18 @@ namespace hpx::tracing {
         double value) noexcept
     {
         hpx::tracy::sample_value(short_name, value);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // tracing_init -- caller builds the metadata string (typically
+    // hpx::complete_version()) so this module does not need to depend
+    // on hpx_version.
+
+    void tracing_init(char const*, int, char**, std::uint32_t, std::uint32_t,
+        std::string_view version_info) noexcept
+    {
+        if (!version_info.empty())
+            TracyCAppInfo(version_info.data(), version_info.size());
     }
 
 }    // namespace hpx::tracing
