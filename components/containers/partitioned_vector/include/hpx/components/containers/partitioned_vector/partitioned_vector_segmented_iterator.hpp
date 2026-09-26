@@ -47,6 +47,10 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Underlying Data::iterator references are stable; Apple libc++'s
+        // std::sort path needs a real reference from operator[], not a proxy.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;
@@ -96,6 +100,9 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Matches local_raw_vector_iterator: stable underlying references.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::const_local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;

@@ -56,6 +56,7 @@ set(tests
     partitioned_vector_reduce
     partitioned_vector_replace
     partitioned_vector_replace_copy
+    partitioned_vector_sort
 )
 
 set(partitioned_vector_inclusive_scan_PARAMETERS RUN_SERIAL)
@@ -85,9 +86,16 @@ foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 2
-                         THREADS_PER_LOCALITY 4
-  )
+  if("${test}" STREQUAL "partitioned_vector_sort")
+    # Four localities so k-way merge of more than two runs is exercised.
+    set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 4
+                           THREADS_PER_LOCALITY 4
+    )
+  else()
+    set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 2
+                           THREADS_PER_LOCALITY 4
+    )
+  endif()
 
   source_group("Source Files" FILES ${sources})
 
