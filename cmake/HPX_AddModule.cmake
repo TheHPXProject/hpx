@@ -206,19 +206,18 @@ function(add_hpx_module libname modulename)
             set(autolink_lib_name "hpx")
           endif()
         endif()
-        set(module_headers
-            "${module_headers}\n#if defined(HPX_HAVE_STATIC_LINKING) && \\\n"
+        set(autolink_guard "\n#if defined(HPX_HAVE_STATIC_LINKING) && \\\n")
+        set(autolink_guard
+            "${autolink_guard}    !defined(HPX_${libname_upper}_EXPORTS)\n"
         )
-        set(module_headers
-            "${module_headers}    !defined(HPX_${libname_upper}_EXPORTS)\n"
+        set(autolink_define
+            "#define HPX_AUTOLINK_LIB_NAME \"${autolink_lib_name}\"\n"
         )
-        set(module_headers
-            "${module_headers}#define HPX_AUTOLINK_LIB_NAME \"${autolink_lib_name}\"\n"
+        set(autolink_include "#include <hpx/config/autolink.hpp>\n#endif\n")
+        set(autolink_block
+            "${autolink_guard}${autolink_define}${autolink_include}"
         )
-        set(module_headers
-            "${module_headers}#include <hpx/config/autolink.hpp>\n"
-        )
-        set(module_headers "${module_headers}#endif\n")
+        set(module_headers "${module_headers}${autolink_block}")
       endif()
       set(module_headers "${module_headers}#endif\n")
     endif()
@@ -237,6 +236,11 @@ function(add_hpx_module libname modulename)
             "${module_macro_headers}#include <${header_file}>\n"
         )
       endforeach()
+      if(NOT ${modulename}_NO_CONFIG_IN_GENERATED_HEADERS)
+        if(MSVC)
+          set(module_macro_headers "${module_macro_headers}${autolink_block}")
+        endif()
+      endif()
       set(template_file "global_module_header_modules.hpp.in")
     else()
       set(template_file "global_module_header.hpp.in")
