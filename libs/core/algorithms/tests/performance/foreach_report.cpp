@@ -105,6 +105,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 [&]() { measure_parallel_foreach(data_representation, exec); });
         }
 
+        {
+            auto exec =
+                hpx::execution::experimental::make_leaf_fork_join_executor();
+            hpx::util::perftests_report("for_each", "leaf_fork_join_executor",
+                test_count,
+                [&]() { measure_parallel_foreach(data_representation, exec); });
+        }
+
         hpx::util::perftests_print_times();
     }
 

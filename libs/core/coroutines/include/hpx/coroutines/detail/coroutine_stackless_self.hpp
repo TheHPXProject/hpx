@@ -31,8 +31,10 @@ namespace hpx::threads::coroutines::detail {
 
         arg_type yield_impl(result_type) override
         {
-            // stackless coroutines don't support suspension
-            HPX_ASSERT(false);
+            // stackless coroutines don't support suspension (leaf / nostack)
+            HPX_ASSERT_MSG(false,
+                "non-suspending (nostack) leaf task attempted to "
+                "suspend/yield");
             return threads::thread_restart_state::abort;
         }
 
