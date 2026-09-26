@@ -33,6 +33,7 @@ set(execution_headers
     hpx/execution/executors/adaptive_static_chunk_size.hpp
     hpx/execution/executors/auto_chunk_size.hpp
     hpx/execution/executors/collect_chunking_parameters.hpp
+    hpx/execution/executors/create_rebound_policy.hpp
     hpx/execution/executors/default_parameters.hpp
     hpx/execution/executors/dynamic_chunk_size.hpp
     hpx/execution/executors/execution.hpp
