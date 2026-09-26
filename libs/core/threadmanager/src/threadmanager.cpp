@@ -39,6 +39,7 @@
 #include <mutex>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -451,10 +452,16 @@ namespace hpx::threads {
         detail::check_num_high_priority_queues(
             thread_pool_init.num_threads_, num_high_priority_queues);
 
-        // instantiate the scheduler
+        // instantiate the scheduler (ABP FIFO backend - see #6793)
         using local_sched_type =
             hpx::threads::policies::local_priority_queue_scheduler<std::mutex,
-                hpx::threads::policies::lockfree_fifo>;
+                hpx::threads::policies::lockfree_abp_fifo>;
+        // Negative guard: catch silent reversion to the pre-#6793 backend.
+        static_assert(
+            !std::is_same_v<local_sched_type,
+                hpx::threads::policies::local_priority_queue_scheduler<
+                    std::mutex, hpx::threads::policies::lockfree_fifo>>,
+            "create_scheduler_abp_priority_fifo must not use lockfree_fifo");
 
         local_sched_type::init_parameter_type init(
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
@@ -503,10 +510,16 @@ namespace hpx::threads {
         detail::check_num_high_priority_queues(
             thread_pool_init.num_threads_, num_high_priority_queues);
 
-        // instantiate the scheduler
+        // instantiate the scheduler (ABP LIFO backend - see #6793)
         using local_sched_type =
             hpx::threads::policies::local_priority_queue_scheduler<std::mutex,
-                hpx::threads::policies::lockfree_lifo>;
+                hpx::threads::policies::lockfree_abp_lifo>;
+        // Negative guard: catch silent reversion to the pre-#6793 backend.
+        static_assert(
+            !std::is_same_v<local_sched_type,
+                hpx::threads::policies::local_priority_queue_scheduler<
+                    std::mutex, hpx::threads::policies::lockfree_lifo>>,
+            "create_scheduler_abp_priority_lifo must not use lockfree_lifo");
 
         local_sched_type::init_parameter_type init(
             thread_pool_init.num_threads_, thread_pool_init.affinity_data_,
