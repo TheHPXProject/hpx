@@ -757,6 +757,7 @@ namespace hpx { namespace experimental {
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <ranges>
 #include <type_traits>
 #include <utility>
@@ -862,7 +863,7 @@ namespace hpx::parallel {
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
-                        part_steps -= stride_;
+                        part_steps -= static_cast<std::size_t>(stride_);
 
                         detail::next_iteration(args_, pack, current_thread);
                     }
@@ -879,6 +880,11 @@ namespace hpx::parallel {
                     // Silence unary minus warning for unsigned types
                     if constexpr (std::is_signed_v<S>)
                     {
+                        // the magnitude of the stride is taken below and in
+                        // the loop condition, which rules out the smallest
+                        // value a signed type can hold
+                        HPX_ASSERT(stride_ != (std::numeric_limits<S>::min)());
+
                         while (part_steps >= static_cast<std::size_t>(-stride_))
                         {
                             detail::invoke_iteration(
@@ -886,7 +892,7 @@ namespace hpx::parallel {
 
                             part_begin =
                                 parallel::detail::next(part_begin, stride_);
-                            part_steps += stride_;
+                            part_steps -= static_cast<std::size_t>(-stride_);
 
                             detail::next_iteration(args_, pack, current_thread);
                         }
@@ -972,7 +978,7 @@ namespace hpx::parallel {
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
-                        part_steps -= stride_;
+                        part_steps -= static_cast<std::size_t>(stride_);
                     }
 
                     if (part_steps != 0)
@@ -985,13 +991,18 @@ namespace hpx::parallel {
                     // Silence unary minus warning for unsigned types
                     if constexpr (std::is_signed_v<S>)
                     {
+                        // the magnitude of the stride is taken below and in
+                        // the loop condition, which rules out the smallest
+                        // value a signed type can hold
+                        HPX_ASSERT(stride_ != (std::numeric_limits<S>::min)());
+
                         while (part_steps >= static_cast<std::size_t>(-stride_))
                         {
                             HPX_INVOKE(f_, part_begin);
 
                             part_begin =
                                 parallel::detail::next(part_begin, stride_);
-                            part_steps += stride_;
+                            part_steps -= static_cast<std::size_t>(-stride_);
                         }
 
                         if (part_steps != 0)
