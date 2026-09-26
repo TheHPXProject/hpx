@@ -1134,6 +1134,10 @@ namespace hpx::execution::experimental {
                         // the main thread must be put to sleep to avoid
                         // over-subscription of the cores
                         sync_with_main_thread->arrive_and_wait();
+                        if (exception_)
+                        {
+                            std::rethrow_exception(HPX_MOVE(exception_));
+                        }
                     }
                 }
                 else
@@ -1156,6 +1160,10 @@ namespace hpx::execution::experimental {
                         // the main thread must be put to sleep to avoid
                         // over-subscription of the cores
                         sync_with_main_thread->arrive_and_wait();
+                        if (exception_)
+                        {
+                            std::rethrow_exception(HPX_MOVE(exception_));
+                        }
                     }
 
                     return results;
