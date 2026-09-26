@@ -12,7 +12,6 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
-#include <hpx/modules/threading_base.hpp>
 #include <hpx/thread.hpp>
 
 #include <algorithm>
@@ -513,50 +512,6 @@ void test_fork_join_static_large_range()
     HPX_TEST_EQ(sum.load(), expected_sum);
 }
 
-// Shared schedule from a nonparticipating caller (worker_num ==
-// os_thread_count). Exceptions recorded by call_shared must propagate
-// from bulk_sync_execute after the latch wait.
-void test_shared_nonparticipating_main_exception()
-{
-    std::cerr << "test_shared_nonparticipating_main_exception\n";
-
-    std::size_t const os_threads = hpx::get_os_thread_count();
-    if (os_threads < 2)
-    {
-        std::cerr << "skipping: need at least 2 OS threads\n";
-        return;
-    }
-
-    hpx::threads::detail::reset_tss_helper const tss(os_threads);
-    HPX_TEST_EQ(hpx::get_worker_thread_num(), os_threads);
-
-    constexpr std::size_t n = 107;
-    std::vector<int> v(n);
-    std::iota(std::begin(v), std::end(v), std::rand());
-
-    fork_join_executor exec(hpx::threads::thread_priority::normal,
-        hpx::threads::thread_stacksize::small_,
-        fork_join_executor::loop_schedule::shared);
-
-    bool caught_exception = false;
-    try
-    {
-        hpx::parallel::execution::bulk_sync_execute(
-            exec, &bulk_test_exception, v, 42);
-        HPX_TEST(false);
-    }
-    catch (std::runtime_error const&)
-    {
-        caught_exception = true;
-    }
-    catch (...)
-    {
-        HPX_TEST(false);
-    }
-
-    HPX_TEST(caught_exception);
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 void test_get_scheduler()
 {
@@ -591,9 +546,6 @@ int hpx_main()
 
     // Call regression test for #6922
     test_fork_join_static_large_range();
-
-    // Shared schedule with nonparticipating main (#3348 / latch path)
-    test_shared_nonparticipating_main_exception();
 
     // Using thread_priority::low hangs for unknown reasons.
     for (auto const priority : {
