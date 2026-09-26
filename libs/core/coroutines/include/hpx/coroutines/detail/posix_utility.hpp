@@ -78,6 +78,12 @@ namespace hpx::threads::coroutines::detail::posix {
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern bool use_guard_pages;
 
+    // Controls madvise advice applied when recycling mmap'd stacks.
+    // 0: never advise (keep pages resident)
+    // 1: MADV_FREE when available, otherwise keep resident (default)
+    // 2: MADV_DONTNEED (legacy; can cause cross-CPU TLB shootdowns)
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT extern int unbind_on_reset;
+
 #if defined(HPX_HAVE_THREAD_STACK_MMAP) && defined(_POSIX_MAPPED_FILES) &&     \
     _POSIX_MAPPED_FILES > 0
 
@@ -145,14 +151,56 @@ namespace hpx::threads::coroutines::detail::posix {
         void** watermark = static_cast<void**>(stack) +
             ((size - EXEC_PAGESIZE) / sizeof(void*));
 
-        // If the watermark has been overwritten, then we've gone past the first
-        // page.
+        // If the watermark has been overwritten, then we've gone past the
+        // first page.
         if ((reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull)) != *watermark)
         {
-            // We never free up the first page, as it's initialized only when the
-            // stack is created.
-            ::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED);
-            return true;
+            // Never advise the first page; it is initialized only when the
+            // stack is created. Prefer MADV_FREE over MADV_DONTNEED: the
+            // latter forces immediate TLB shootdowns and dominates cost for
+            // recursive fork-join workloads (see #6793).
+            //
+            // Security note: mode 2 uses MADV_DONTNEED. On Linux that
+            // zero-fills anonymous pages on the next fault; FreeBSD only
+            // lowers page priority and may retain prior contents. Mode 1
+            // (MADV_FREE) may also leave prior stack contents readable
+            // until reclaim; mode 0 never discards them. HPX does not scrub
+            // stacks here -- that would defeat the TLB win. Prefer mode 2
+            // on Linux when residual data on recycle is unacceptable; do
+            // not rely on recycle advice to scrub secrets on FreeBSD.
+            bool advised = false;
+            if (unbind_on_reset == 2)
+            {
+                // Mode 2 provides zero-fill only where the platform
+                // contract guarantees it (Linux). If advice fails (e.g.
+                // locked pages), leave the watermark dirty so a later
+                // reset_stack can retry; restoring it here would
+                // permanently skip a successful scrub where available.
+                if (::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED) == 0)
+                {
+                    advised = true;
+                    *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+                }
+            }
+#if defined(MADV_FREE)
+            else if (unbind_on_reset == 1)
+            {
+                if (::madvise(stack, size - EXEC_PAGESIZE, MADV_FREE) == 0)
+                {
+                    advised = true;
+                }
+                // Mode 1 does not promise zero-fill; always restore the
+                // watermark so shallow recycles do not remadvise every time.
+                *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+            }
+#endif
+            else
+            {
+                // Mode 0, or mode 1 without MADV_FREE: leave pages resident.
+                *watermark = reinterpret_cast<void*>(0xDEADBEEFDEADBEEFull);
+            }
+
+            return advised;
         }
 
         return false;

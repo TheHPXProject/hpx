@@ -193,6 +193,7 @@ The |hpx| configuration section
    large_size = ${HPX_LARGE_STACK_SIZE:<hpx_large_stack_size>}
    huge_size = ${HPX_HUGE_STACK_SIZE:<hpx_huge_stack_size>}
    use_guard_pages = ${HPX_THREAD_GUARD_PAGE:1}
+   unbind_on_reset = ${HPX_STACKS_UNBIND_ON_RESET:1}
 
 .. _ini_hpx:
 
@@ -329,6 +330,26 @@ The |hpx| configuration section
        the ``HPX_USE_GENERIC_COROUTINE_CONTEXT`` option is not enabled and the
        ``HPX_WITH_THREAD_GUARD_PAGE`` is set to 1 while configuring the build
        system. It is set by default to ``1``.
+   * * ``hpx.stacks.unbind_on_reset``
+     * Controls how recycled mmap'd coroutine stacks are advised when an HPX
+       thread terminates (Linux/FreeBSD with ``HPX_WITH_THREAD_STACK_MMAP=ON``;
+       not used on Apple Silicon, which allocates stacks via ``calloc``).
+       ``0`` never advises (pages stay resident). ``1`` (default) uses
+       ``MADV_FREE`` when available, otherwise keeps pages resident; this
+       avoids the cross-CPU TLB shootdowns caused by ``MADV_DONTNEED`` on
+       recursive fork-join workloads (see :hpx-issue:`6793`). ``2`` restores
+       the legacy ``MADV_DONTNEED`` behaviour.
+       Modes ``0`` and ``1`` do **not** guarantee that recycled stack pages
+       are zero-filled before reuse: with ``MADV_FREE``, prior contents remain
+       visible until the kernel actually reclaims the page (and mode ``0``
+       never discards them). That can expose leftover stack data from one HPX
+       thread to a later HPX thread that reuses the same stack in the same
+       process. On Linux, ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero
+       pages on next touch. FreeBSD's ``MADV_DONTNEED`` only lowers page
+       priority and does **not** scrub residual stack data; ``MADV_FREE`` is
+       not a substitute for that guarantee either. Prefer mode ``2`` on Linux
+       when residual-data behaviour is unacceptable; do not rely on stack
+       recycle advice to scrub secrets.
 
 The ``hpx.tracing`` configuration section
 .........................................
