@@ -987,7 +987,8 @@ namespace hpx::execution::experimental {
                                    (std::numeric_limits<std::uint32_t>::max)()))
                     {
                         HPX_THROW_EXCEPTION(error::bad_parameter,
-                            "fork_join_executor::set_all_states_and_region_data",
+                            "fork_join_executor::set_all_states_and_region_"
+                            "data",
                             "fork_join_executor: ranges larger than"
                             " UINT32_MAX are not supported");
                     }
@@ -1490,7 +1491,8 @@ namespace hpx::execution::experimental {
     /// style work (#3348). Forces \c nostack workers and defaults to
     /// \c loop_schedule::shared (one atomic chunk queue). Leaf bodies must not
     /// suspend (nested \c async / \c future::get / \c this_thread::suspend).
-    [[nodiscard]] inline fork_join_executor make_leaf_fork_join_executor(
+    HPX_CXX_CORE_EXPORT [[nodiscard]] inline fork_join_executor
+    make_leaf_fork_join_executor(
         threads::thread_priority priority = threads::thread_priority::bound,
         fork_join_executor::loop_schedule sched =
             fork_join_executor::loop_schedule::shared,
