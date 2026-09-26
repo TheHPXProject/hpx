@@ -23,7 +23,12 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <new>
+#include <optional>
 #include <span>
+#include <type_traits>
+#include <typeinfo>
+#include <utility>
 
 namespace hpx::execution::experimental {
 
@@ -42,28 +47,59 @@ namespace hpx::execution::experimental {
 
     // P2079R10 / P3804R2 receiver_proxy: type-erased completion interface.
     // The backend calls these to signal completion back to the frontend.
-    // stop_requested() allows the backend to poll for cancellation during
-    // execution (partial substitute for try_query<inplace_stop_token>).
     //
-    // P3804R2: No virtual destructor - objects are never destroyed polymorphically.
-    // The frontend knows the concrete type and destroys it directly.
+    // P3804R2 Section 3.2: No virtual destructor -- objects are never
+    // destroyed polymorphically.  The frontend knows the concrete type and
+    // destroys it directly.
+    //
+    // P3804R2 Section 3.1: try_query<P>(Query) const noexcept provides a
+    // generic, type-safe way for backends to query the receiver's
+    // environment (e.g. stop tokens, allocators).  Internally it routes
+    // through the protected virtual query_env_impl() which the frontend's
+    // concrete proxy overrides.
+    //
+    // P3804R2 Section 3.3: When the backend queries for an
+    // inplace_stop_token, the frontend proxy adapts whatever stop token
+    // the actual receiver provides.  See concrete_receiver_proxy in
+    // parallel_scheduler.hpp.
     HPX_CXX_CORE_EXPORT struct parallel_scheduler_receiver_proxy
     {
+    protected:
+        ~parallel_scheduler_receiver_proxy() = default;
+
+        // P3804R2: Type-erased virtual bridge for environment queries
+        virtual bool query_env_impl(std::type_info const& query_type,
+            std::type_info const& result_type,
+            void* result_out) const noexcept = 0;
+
+    public:
         virtual void set_value() noexcept = 0;
         virtual void set_error(std::exception_ptr) noexcept = 0;
         virtual void set_stopped() noexcept = 0;
-        // P2079R10 4.2 / P3804R2: backends can poll this to check if work should stop.
-        // Returns true if the associated stop token has been signalled.
-        // const-qualified per P3804R2 (aligns with try_query being const).
-        virtual bool stop_requested() const noexcept
-        {
-            return false;
-        }
+        virtual bool stop_requested() const noexcept = 0;
 
-    protected:
-        // P3804R2: Protected non-virtual destructor.
-        // Prevents polymorphic deletion while allowing derived classes to clean up.
-        ~parallel_scheduler_receiver_proxy() = default;
+        // P3804R2 Section 3.1: Const-qualified try_query
+        template <typename P, typename Query>
+        std::optional<P> try_query(Query /* q */) const noexcept
+        {
+            static_assert(
+                std::is_object_v<P> && !std::is_array_v<P> &&
+                    std::is_same_v<P, std::remove_cv_t<P>>,
+                "P must be a cv-unqualified, non-array object type");
+            static_assert(std::is_nothrow_move_constructible_v<P>,
+                "P must be nothrow move constructible");
+
+            alignas(P) std::byte storage[sizeof(P)];
+            if (query_env_impl(
+                    typeid(Query), typeid(P), static_cast<void*>(&storage)))
+            {
+                P* ptr = std::launder(reinterpret_cast<P*>(&storage));
+                std::optional<P> result(std::move(*ptr));
+                ptr->~P();
+                return result;
+            }
+            return std::nullopt;
+        }
     };
 
     // P2079R10 bulk_item_receiver_proxy: extends receiver_proxy with
@@ -71,6 +107,10 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT struct parallel_scheduler_bulk_item_receiver_proxy
       : parallel_scheduler_receiver_proxy
     {
+    protected:
+        ~parallel_scheduler_bulk_item_receiver_proxy() = default;
+
+    public:
         virtual void execute(std::size_t begin, std::size_t end) noexcept = 0;
     };
 
