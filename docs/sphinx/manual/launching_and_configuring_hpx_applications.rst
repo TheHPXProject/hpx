@@ -344,9 +344,12 @@ The |hpx| configuration section
        visible until the kernel actually reclaims the page (and mode ``0``
        never discards them). That can expose leftover stack data from one HPX
        thread to a later HPX thread that reuses the same stack in the same
-       process. ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero pages on
-       next touch. Prefer mode ``2`` when that residual-data behaviour is
-       unacceptable; do not rely on stack recycle advice to scrub secrets.
+       process. On Linux, ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero
+       pages on next touch. FreeBSD's ``MADV_DONTNEED`` only lowers page
+       priority and does **not** scrub residual stack data; ``MADV_FREE`` is
+       not a substitute for that guarantee either. Prefer mode ``2`` on Linux
+       when residual-data behaviour is unacceptable; do not rely on stack
+       recycle advice to scrub secrets.
 
 The ``hpx.tracing`` configuration section
 .........................................

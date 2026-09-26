@@ -160,19 +160,22 @@ namespace hpx::threads::coroutines::detail::posix {
             // latter forces immediate TLB shootdowns and dominates cost for
             // recursive fork-join workloads (see #6793).
             //
-            // Security note: MADV_DONTNEED (mode 2) zero-fills on next
-            // fault. MADV_FREE (mode 1) may leave prior stack contents
-            // readable until the kernel reclaims the page; mode 0 never
-            // discards them. HPX does not scrub stacks here -- that would
-            // defeat the TLB win. Use mode 2 when residual data on recycle
-            // is unacceptable.
+            // Security note: mode 2 uses MADV_DONTNEED. On Linux that
+            // zero-fills anonymous pages on the next fault; FreeBSD only
+            // lowers page priority and may retain prior contents. Mode 1
+            // (MADV_FREE) may also leave prior stack contents readable
+            // until reclaim; mode 0 never discards them. HPX does not scrub
+            // stacks here -- that would defeat the TLB win. Prefer mode 2
+            // on Linux when residual data on recycle is unacceptable; do
+            // not rely on recycle advice to scrub secrets on FreeBSD.
             bool advised = false;
             if (unbind_on_reset == 2)
             {
-                // Mode 2 promises DONTNEED zero-fill. If advice fails (e.g.
+                // Mode 2 provides zero-fill only where the platform
+                // contract guarantees it (Linux). If advice fails (e.g.
                 // locked pages), leave the watermark dirty so a later
-                // reset_stack can retry; restoring it here would permanently
-                // skip the scrub.
+                // reset_stack can retry; restoring it here would
+                // permanently skip a successful scrub where available.
                 if (::madvise(stack, size - EXEC_PAGESIZE, MADV_DONTNEED) == 0)
                 {
                     advised = true;
