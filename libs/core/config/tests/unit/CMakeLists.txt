@@ -4,10 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-if(MSVC
-   AND HPX_WITH_STATIC_LINKING
-   AND NOT HPX_WITH_CXX_MODULES
-)
+if(MSVC AND NOT HPX_WITH_CXX_MODULES)
   set(tests autolink)
 
   set(autolink_SOURCES autolink.cpp autolink_exports.cpp

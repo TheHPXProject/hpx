@@ -25,10 +25,6 @@
 #if defined(HPX_DEBUG) && defined(HPX_HAVE_DEBUG_POSTFIX)
 #pragma comment(lib,                                                           \
     HPX_AUTOLINK_LIB_NAME HPX_PP_STRINGIZE(HPX_HAVE_DEBUG_POSTFIX) ".lib")
-#elif defined(HPX_DEBUG)
-#pragma comment(lib,                                                           \
-    HPX_AUTOLINK_LIB_NAME "d"                                                  \
-                          ".lib")
 #else
 #pragma comment(lib, HPX_AUTOLINK_LIB_NAME ".lib")
 #endif

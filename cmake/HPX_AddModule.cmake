@@ -207,10 +207,7 @@ function(add_hpx_module libname modulename)
           endif()
         endif()
         set(module_headers
-            "${module_headers}\n#if defined(HPX_HAVE_STATIC_LINKING) && \\\n"
-        )
-        set(module_headers
-            "${module_headers}    !defined(HPX_${libname_upper}_EXPORTS)\n"
+            "${module_headers}\n#if !defined(HPX_${libname_upper}_EXPORTS)\n"
         )
         set(module_headers
             "${module_headers}#define HPX_AUTOLINK_LIB_NAME \"${autolink_lib_name}\"\n"
