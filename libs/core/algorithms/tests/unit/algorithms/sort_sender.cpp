@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Pratyksh Gupta
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
