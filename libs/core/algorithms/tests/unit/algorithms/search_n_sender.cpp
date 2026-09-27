@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <vector>
 
 template <typename Policy>
@@ -16,7 +17,8 @@ void test(Policy policy)
     for (std::size_t n : {0, 1, 17, 10007})
     {
         std::vector<int> data(n, 1);
-        std::fill(data.begin() + n / 3, data.begin() + 2 * n / 3, 7);
+        auto size = std::ssize(data);
+        std::fill(data.begin() + size / 3, data.begin() + 2 * size / 3, 7);
         for (std::size_t count :
             {std::size_t(0), std::size_t(1), std::size_t(3), n + 1})
         {

@@ -23,7 +23,7 @@ void test(Policy policy)
             auto original = data;
             auto expected = data;
             std::sort(expected.begin(), expected.end());
-            auto middle = data.begin() + position;
+            auto middle = data.begin() + static_cast<std::ptrdiff_t>(position);
             auto sender =
                 hpx::partial_sort(policy, data.begin(), middle, data.end());
             HPX_TEST(data == original);

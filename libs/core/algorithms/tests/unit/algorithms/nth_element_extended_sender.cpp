@@ -21,7 +21,7 @@ void test(Policy policy)
             auto original = data;
             auto expected = data;
             std::sort(expected.begin(), expected.end());
-            auto nth = data.begin() + position;
+            auto nth = data.begin() + static_cast<std::ptrdiff_t>(position);
             auto sender =
                 hpx::nth_element(policy, data.begin(), nth, data.end());
             HPX_TEST(data == original);

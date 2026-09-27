@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <new>
 #include <numeric>
@@ -95,7 +96,7 @@ void test(Policy policy)
     std::vector<int> output(data.size());
     auto first = data.begin();
     auto last = data.end();
-    auto middle = first + data.size() / 2;
+    auto middle = first + std::ssize(data) / 2;
     test_errors(
         "sort", [&](auto op) { return hpx::sort(policy, first, last, op); });
     test_errors("stable_sort",
