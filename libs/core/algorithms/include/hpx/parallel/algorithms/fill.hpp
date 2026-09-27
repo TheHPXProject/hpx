@@ -161,6 +161,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/fill.hpp>
@@ -190,7 +191,7 @@ namespace hpx::parallel {
             template <typename U>
             HPX_HOST_DEVICE void operator()(U&& u) const
             {
-                u = val_;
+                u = unwrap_algorithm_value(val_);
             }
         };
 
@@ -207,8 +208,8 @@ namespace hpx::parallel {
             HPX_HOST_DEVICE static constexpr InIter sequential(
                 ExPolicy&& policy, InIter first, Sent last, T const& val)
             {
-                return detail::sequential_fill(
-                    HPX_FORWARD(ExPolicy, policy), first, last, val);
+                return detail::sequential_fill(HPX_FORWARD(ExPolicy, policy),
+                    first, last, unwrap_algorithm_value(val));
             }
 
             template <typename ExPolicy, typename FwdIter, typename Sent,
@@ -253,8 +254,8 @@ namespace hpx::parallel {
             static constexpr InIter sequential(ExPolicy&& policy, InIter first,
                 std::size_t count, T const& val)
             {
-                return detail::sequential_fill_n(
-                    HPX_FORWARD(ExPolicy, policy), first, count, val);
+                return detail::sequential_fill_n(HPX_FORWARD(ExPolicy, policy),
+                    first, count, unwrap_algorithm_value(val));
             }
 
             template <typename ExPolicy, typename FwdIter_, typename T>
@@ -263,7 +264,9 @@ namespace hpx::parallel {
             {
                 return for_each_n<FwdIter_>().call(
                     HPX_FORWARD(ExPolicy, policy), first, count,
-                    [val](auto&& v) -> void { v = val; }, hpx::identity_v);
+                    [val](
+                        auto&& v) -> void { v = unwrap_algorithm_value(val); },
+                    hpx::identity_v);
             }
         };
         /// \endcond

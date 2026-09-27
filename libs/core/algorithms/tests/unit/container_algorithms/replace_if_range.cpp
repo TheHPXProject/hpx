@@ -17,6 +17,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -71,7 +72,8 @@ void test_replace_if_sent(ExPolicy policy)
     auto pred = [](std::int16_t const& a) -> bool { return a % 42 == 0; };
 
     auto pre_result = std::count_if(std::begin(c), std::end(c), pred);
-    hpx::ranges::replace_if(policy, std::begin(c), sentinel<std::int16_t>{50},
+    hpx::ranges::replace_if(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::int16_t>{50}),
         pred, std::int16_t(1));
     auto post_result = std::count_if(std::begin(c), std::end(c), pred);
 
@@ -168,12 +170,15 @@ void test_replace_if()
 {
     using namespace hpx::execution;
     test_replace_if(IteratorTag());
-    test_replace_if(seq, IteratorTag());
-    test_replace_if(par, IteratorTag());
-    test_replace_if(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_replace_if(seq, IteratorTag());
+        test_replace_if(par, IteratorTag());
+        test_replace_if(par_unseq, IteratorTag());
 
-    test_replace_if_async(seq(task), IteratorTag());
-    test_replace_if_async(par(task), IteratorTag());
+        test_replace_if_async(seq(task), IteratorTag());
+        test_replace_if_async(par(task), IteratorTag());
+    }
 }
 
 void replace_if_test()
@@ -303,16 +308,19 @@ void test_replace_if_exception()
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
     test_replace_if_exception(IteratorTag());
-    test_replace_if_exception(seq, IteratorTag());
-    test_replace_if_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_replace_if_exception(seq, IteratorTag());
+        test_replace_if_exception(par, IteratorTag());
 
-    test_replace_if_exception_async(seq(task), IteratorTag());
-    test_replace_if_exception_async(par(task), IteratorTag());
+        test_replace_if_exception_async(seq(task), IteratorTag());
+        test_replace_if_exception_async(par(task), IteratorTag());
 
-    test_replace_if_sent();
-    test_replace_if_sent(seq);
-    test_replace_if_sent(par);
-    test_replace_if_sent(par_unseq);
+        test_replace_if_sent();
+        test_replace_if_sent(seq);
+        test_replace_if_sent(par);
+        test_replace_if_sent(par_unseq);
+    }
 }
 
 void replace_if_exception_test()
@@ -435,11 +443,14 @@ void test_replace_if_bad_alloc()
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
     test_replace_if_bad_alloc(IteratorTag());
-    test_replace_if_bad_alloc(seq, IteratorTag());
-    test_replace_if_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_replace_if_bad_alloc(seq, IteratorTag());
+        test_replace_if_bad_alloc(par, IteratorTag());
 
-    test_replace_if_bad_alloc_async(seq(task), IteratorTag());
-    test_replace_if_bad_alloc_async(par(task), IteratorTag());
+        test_replace_if_bad_alloc_async(seq(task), IteratorTag());
+        test_replace_if_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void replace_if_bad_alloc_test()

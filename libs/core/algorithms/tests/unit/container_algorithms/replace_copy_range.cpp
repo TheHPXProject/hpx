@@ -58,7 +58,8 @@ void test_replace_copy_sent(ExPolicy policy)
     int old_value = 42;
     int new_value = 1;
 
-    hpx::ranges::replace_copy(policy, std::begin(c), sentinel<std::int16_t>{50},
+    hpx::ranges::replace_copy(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::int16_t>{50}),
         std::begin(d), old_value, new_value);
     auto result1 = std::count(std::begin(d), std::end(d), old_value);
     auto result2 = std::count(std::begin(d), std::end(d), new_value);

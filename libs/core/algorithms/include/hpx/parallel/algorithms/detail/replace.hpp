@@ -11,6 +11,7 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
@@ -91,7 +92,7 @@ namespace hpx::parallel::detail {
                     [&f, new_value, &proj](auto&& v) {
                         if (HPX_INVOKE(f, HPX_INVOKE(proj, *v)))
                         {
-                            *v = new_value;
+                            *v = unwrap_algorithm_value(new_value);
                         }
                     });
             }
@@ -107,7 +108,7 @@ namespace hpx::parallel::detail {
                         type& t) mutable -> void {
                         if (HPX_INVOKE(f, HPX_INVOKE(proj, t)))
                         {
-                            t = new_value;
+                            t = unwrap_algorithm_value(new_value);
                         }
                     },
                     hpx::identity_v);
@@ -203,7 +204,7 @@ namespace hpx::parallel::detail {
                 {
                     if (HPX_INVOKE(f, HPX_INVOKE(proj, *first)))
                     {
-                        *dest++ = new_value;
+                        *dest++ = unwrap_algorithm_value(new_value);
                     }
                     else
                     {
@@ -228,7 +229,7 @@ namespace hpx::parallel::detail {
                             using hpx::get;
                             if (HPX_INVOKE(f, HPX_INVOKE(proj, get<0>(t))))
                             {
-                                get<1>(t) = new_value;
+                                get<1>(t) = unwrap_algorithm_value(new_value);
                             }
                             else
                             {

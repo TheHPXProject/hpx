@@ -14,6 +14,7 @@
 #include <iostream>
 #include <iterator>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -54,7 +55,9 @@ void test_generate_sent(ExPolicy policy)
     auto gen = []() { return std::size_t(10); };
 
     hpx::ranges::generate(policy, std::begin(c),
-        sentinel<std::size_t>{*(std::begin(c) + 100)}, gen);
+        test::make_sized_sentinel(
+            std::begin(c), sentinel<std::size_t>{*(std::begin(c) + 100)}),
+        gen);
 
     // verify values
     std::size_t count = 0;
@@ -145,17 +148,23 @@ void test_generate()
 
     test_generate(IteratorTag());
 
-    test_generate(seq, IteratorTag());
-    test_generate(par, IteratorTag());
-    test_generate(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_generate(seq, IteratorTag());
+        test_generate(par, IteratorTag());
+        test_generate(par_unseq, IteratorTag());
 
-    test_generate_async(seq(task), IteratorTag());
-    test_generate_async(par(task), IteratorTag());
+        test_generate_async(seq(task), IteratorTag());
+        test_generate_async(par(task), IteratorTag());
+    }
 
     test_generate_sent();
-    test_generate_sent(seq);
-    test_generate_sent(par);
-    test_generate_sent(par_unseq);
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_generate_sent(seq);
+        test_generate_sent(par);
+        test_generate_sent(par_unseq);
+    }
 }
 
 void generate_test()
@@ -287,11 +296,14 @@ void test_generate_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_generate_exception(seq, IteratorTag());
-    test_generate_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_generate_exception(seq, IteratorTag());
+        test_generate_exception(par, IteratorTag());
 
-    test_generate_exception_async(seq(task), IteratorTag());
-    test_generate_exception_async(par(task), IteratorTag());
+        test_generate_exception_async(seq(task), IteratorTag());
+        test_generate_exception_async(par(task), IteratorTag());
+    }
 }
 
 void generate_exception_test()
@@ -383,11 +395,14 @@ void test_generate_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_generate_bad_alloc(seq, IteratorTag());
-    test_generate_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_generate_bad_alloc(seq, IteratorTag());
+        test_generate_bad_alloc(par, IteratorTag());
 
-    test_generate_bad_alloc_async(seq(task), IteratorTag());
-    test_generate_bad_alloc_async(par(task), IteratorTag());
+        test_generate_bad_alloc_async(seq(task), IteratorTag());
+        test_generate_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void generate_bad_alloc_test()

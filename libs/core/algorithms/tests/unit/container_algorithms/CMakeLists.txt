@@ -87,6 +87,7 @@ set(tests
     partition_copy_range
     p3179_search_range
     p3179_iterator_range
+    p3179_mutating_range
     p3179_query_range
     reduce_range
     remove_range

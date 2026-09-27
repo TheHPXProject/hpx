@@ -229,8 +229,8 @@ namespace hpx::parallel {
                 pivot3(first, end, comp);
             }
 
-            typename std::iterator_traits<Iter>::value_type const pivot =
-                *first;
+            // The pivot stays at first until partitioning is complete.
+            auto&& pivot = *first;
 
             Iter c_first = first + 1, c_last = end - 1;
             while (c_first < end && HPX_INVOKE(comp, *c_first, pivot))

@@ -17,6 +17,7 @@
 #include <iostream>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -76,7 +77,8 @@ void test_partial_sort_range_sent(ExPolicy policy, IteratorTag)
         B = A;
         hpx::ranges::partial_sort(policy, B.begin(),
             B.begin() + static_cast<std::ptrdiff_t>(i),
-            sentinel<std::uint64_t>{SIZE}, compare_t());
+            test::make_sized_sentinel(B.begin(), sentinel<std::uint64_t>{SIZE}),
+            compare_t());
 
         for (std::uint64_t j = 0; j < i; ++j)
         {
@@ -105,7 +107,8 @@ void test_partial_sort_range_async_sent(ExPolicy p, IteratorTag)
         B = A;
         auto result = hpx::ranges::partial_sort(p, B.begin(),
             B.begin() + static_cast<std::ptrdiff_t>(i),
-            sentinel<std::uint64_t>{SIZE}, compare_t());
+            test::make_sized_sentinel(B.begin(), sentinel<std::uint64_t>{SIZE}),
+            compare_t());
         result.wait();
 
         for (std::uint64_t j = 0; j < i; ++j)
@@ -206,20 +209,26 @@ void test_partial_sort_range()
     using namespace hpx::execution;
 
     test_partial_sort_range(IteratorTag());
-    test_partial_sort_range(seq, IteratorTag());
-    test_partial_sort_range(par, IteratorTag());
-    test_partial_sort_range(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partial_sort_range(seq, IteratorTag());
+        test_partial_sort_range(par, IteratorTag());
+        test_partial_sort_range(par_unseq, IteratorTag());
 
-    test_partial_sort_range_async(seq(task), IteratorTag());
-    test_partial_sort_range_async(par(task), IteratorTag());
+        test_partial_sort_range_async(seq(task), IteratorTag());
+        test_partial_sort_range_async(par(task), IteratorTag());
+    }
 
     test_partial_sort_range_sent(IteratorTag());
-    test_partial_sort_range_sent(seq, IteratorTag());
-    test_partial_sort_range_sent(par, IteratorTag());
-    test_partial_sort_range_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partial_sort_range_sent(seq, IteratorTag());
+        test_partial_sort_range_sent(par, IteratorTag());
+        test_partial_sort_range_sent(par_unseq, IteratorTag());
 
-    test_partial_sort_range_async_sent(seq(task), IteratorTag());
-    test_partial_sort_range_async_sent(par(task), IteratorTag());
+        test_partial_sort_range_async_sent(seq(task), IteratorTag());
+        test_partial_sort_range_async_sent(par(task), IteratorTag());
+    }
 }
 
 void partial_sort_range_test()

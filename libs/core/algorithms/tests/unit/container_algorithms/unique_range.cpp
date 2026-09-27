@@ -100,8 +100,8 @@ void test_unique_sent(ExPolicy policy)
     auto end_len = std::rand() % 10006 + 1;
     c[end_len] = 10;
 
-    auto result =
-        hpx::ranges::unique(policy, std::begin(c), sentinel<std::size_t>{10});
+    auto result = hpx::ranges::unique(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::size_t>{10}));
     auto solution = std::unique(std::begin(d), std::begin(d) + end_len);
 
     bool equality =
@@ -264,7 +264,7 @@ void test_unique_sentinel(ExPolicy policy, DataType)
         "hpx::is_execution_policy<ExPolicy>::value");
 
     using test_vector = test::test_sentinel_container<std::vector<DataType>,
-        std::forward_iterator_tag>;
+        std::random_access_iterator_tag>;
 
     std::size_t const size = 10007;
     test_vector c(size);

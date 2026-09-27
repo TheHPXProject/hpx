@@ -256,8 +256,8 @@ namespace hpx::parallel {
             {
                 auto end = detail::advance_to_sentinel(first, last);
                 auto nelem = end - first;
-                if (nelem == 0)
-                    return first;
+                if (nelem == 0 || nth == end)
+                    return end;
 
                 HPX_ASSERT(nelem >= 0 && nth - first + 1 > 0 &&
                     nth - first + 1 <= nelem);
@@ -294,8 +294,15 @@ namespace hpx::parallel {
                             auto last_iter =
                                 detail::advance_to_sentinel(begin, end);
 
-                            while (begin != last_iter)
+                            auto const result_end = last_iter;
+                            while (begin != last_iter && nth_it != last_iter)
                             {
+                                if (last_iter - begin < 9)
+                                {
+                                    std::nth_element(
+                                        begin, nth_it, last_iter, comp);
+                                    break;
+                                }
                                 detail::pivot9(begin, last_iter, comp);
 
                                 RandomIt partition_iter =
@@ -303,10 +310,9 @@ namespace hpx::parallel {
                                         .sequential(
                                             hpx::execution::seq, begin + 1,
                                             last_iter,
-                                            [val = *begin, &comp](
-                                                auto const& elem) {
+                                            [begin, &comp](auto&& elem) {
                                                 return HPX_INVOKE(
-                                                    comp, elem, val);
+                                                    comp, elem, *begin);
                                             },
                                             hpx::identity_v);
 
@@ -334,7 +340,7 @@ namespace hpx::parallel {
                                 }
                             }
 
-                            return last_iter;
+                            return result_end;
                         });
                 }
                 else
@@ -363,6 +369,11 @@ namespace hpx::parallel {
                             HPX_FORWARD(Pred, pred), HPX_FORWARD(Proj, proj));
                         while (first != last_iter)
                         {
+                            if (last_iter - first < 9)
+                            {
+                                std::nth_element(first, nth, last_iter, comp);
+                                break;
+                            }
                             detail::pivot9(first, last_iter, comp);
 
                             partition_iter =
@@ -370,9 +381,9 @@ namespace hpx::parallel {
                                     .call(
                                         policy(hpx::execution::non_task),
                                         first + 1, last_iter,
-                                        [val = *first, &comp](
-                                            auto const& elem) {
-                                            return HPX_INVOKE(comp, elem, val);
+                                        [first, &comp](auto&& elem) {
+                                            return HPX_INVOKE(
+                                                comp, elem, *first);
                                         },
                                         hpx::identity_v);
 

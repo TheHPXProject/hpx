@@ -18,6 +18,7 @@
 #include <iterator>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -78,7 +79,7 @@ void test_nth_element_sent(ExPolicy policy, IteratorTag)
 
     using base_iterator = std::vector<std::size_t>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
-    using sentinel = test::sentinel_from_iterator<iterator>;
+    using sentinel = test::sized_sentinel_from_iterator<iterator>;
 
     std::vector<std::size_t> c(SIZE);
     std::iota(c.begin(), c.end(), 1);
@@ -237,7 +238,7 @@ void test_nth_element_sent_projection(ExPolicy policy, IteratorTag)
 
     using base_iterator = std::vector<S>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
-    using sentinel = test::sentinel_from_iterator<iterator>;
+    using sentinel = test::sized_sentinel_from_iterator<iterator>;
 
     std::vector<S> c(SIZE);
     for (std::size_t i = 0; i < SIZE; ++i)
@@ -268,25 +269,31 @@ void test_nth_element()
     using namespace hpx::execution;
 
     test_nth_element(IteratorTag());
-    test_nth_element(seq, IteratorTag());
-    test_nth_element(par, IteratorTag());
-    test_nth_element(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_nth_element(seq, IteratorTag());
+        test_nth_element(par, IteratorTag());
+        test_nth_element(par_unseq, IteratorTag());
 
-    test_nth_element_async(seq(task), IteratorTag());
-    test_nth_element_async(par(task), IteratorTag());
+        test_nth_element_async(seq(task), IteratorTag());
+        test_nth_element_async(par(task), IteratorTag());
+    }
 
     test_nth_element_sent(IteratorTag());
-    test_nth_element_sent(seq, IteratorTag());
-    test_nth_element_sent(par, IteratorTag());
-    test_nth_element_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_nth_element_sent(seq, IteratorTag());
+        test_nth_element_sent(par, IteratorTag());
+        test_nth_element_sent(par_unseq, IteratorTag());
 
-    test_nth_element_projection(seq);
-    test_nth_element_projection(par);
-    test_nth_element_projection(par_unseq);
+        test_nth_element_projection(seq);
+        test_nth_element_projection(par);
+        test_nth_element_projection(par_unseq);
 
-    test_nth_element_sent_projection(seq, IteratorTag());
-    test_nth_element_sent_projection(par, IteratorTag());
-    test_nth_element_sent_projection(par_unseq, IteratorTag());
+        test_nth_element_sent_projection(seq, IteratorTag());
+        test_nth_element_sent_projection(par, IteratorTag());
+        test_nth_element_sent_projection(par_unseq, IteratorTag());
+    }
 }
 
 void nth_element_test()

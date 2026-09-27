@@ -213,10 +213,8 @@ namespace hpx::parallel {
             // pivot selections
             pivot9(first, last, comp);
 
-            using value_type =
-                typename std::iterator_traits<RandomIt>::value_type;
-
-            value_type val = *first;
+            // The pivot stays at first until partitioning is complete.
+            auto&& val = *first;
             RandomIt c_first = first + 1, c_last = last - 1;
 
             while (c_first < last && comp(*c_first, val))

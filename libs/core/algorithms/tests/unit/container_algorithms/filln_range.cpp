@@ -13,6 +13,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -82,12 +83,15 @@ void test_fill_n()
 
     test_fill_n(IteratorTag());
 
-    test_fill_n(seq, IteratorTag());
-    test_fill_n(par, IteratorTag());
-    test_fill_n(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_fill_n(seq, IteratorTag());
+        test_fill_n(par, IteratorTag());
+        test_fill_n(par_unseq, IteratorTag());
 
-    test_fill_n_async(seq(task), IteratorTag());
-    test_fill_n_async(par(task), IteratorTag());
+        test_fill_n_async(seq(task), IteratorTag());
+        test_fill_n_async(par(task), IteratorTag());
+    }
 }
 
 void fill_test()

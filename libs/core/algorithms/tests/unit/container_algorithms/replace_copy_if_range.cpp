@@ -76,7 +76,8 @@ void test_replace_copy_if_sent(ExPolicy policy)
     auto pred = [](std::int16_t const& a) -> bool { return a == 42; };
 
     hpx::ranges::replace_copy_if(policy, std::begin(c),
-        sentinel<std::int16_t>{50}, std::begin(d), pred, new_value);
+        test::make_sized_sentinel(std::begin(c), sentinel<std::int16_t>{50}),
+        std::begin(d), pred, new_value);
     auto result1 = std::count_if(std::begin(d), std::end(d), pred);
 
     HPX_TEST(result1 == 0);

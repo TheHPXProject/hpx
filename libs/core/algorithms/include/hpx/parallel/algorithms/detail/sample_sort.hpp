@@ -325,8 +325,13 @@ namespace hpx::parallel::detail {
             Iter itaux = vmem_thread[i].begin();
             for (std::uint32_t k = 0; k < nintervals - 1; ++k)
             {
-                Iter it2 = std::upper_bound(
-                    itaux, vmem_thread[i].end(), *vmilestone[k], comp);
+                // Pass the milestone iterator so upper_bound does not add
+                // const to the element passed to a projection.
+                Iter it2 = std::upper_bound(itaux, vmem_thread[i].end(),
+                    vmilestone[k], [this](Iter milestone, auto&& value) {
+                        return comp(
+                            *milestone, HPX_FORWARD(decltype(value), value));
+                    });
 
                 vv_range_first[i].emplace_back(itaux, it2);
                 itaux = it2;

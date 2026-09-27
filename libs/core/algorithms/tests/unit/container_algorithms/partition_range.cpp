@@ -148,8 +148,9 @@ void test_partition_sent(ExPolicy policy)
     c_org = c;
     c[size - 1] = INT_MAX;
 
-    auto result = hpx::ranges::partition(
-        policy, std::begin(c), sentinel<DataType>{INT_MAX}, pred);
+    auto result = hpx::ranges::partition(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<DataType>{INT_MAX}),
+        pred);
 
     bool is_partitioned =
         std::is_partitioned(std::begin(c), std::end(c) - 1, pred);
@@ -331,7 +332,7 @@ void test_partition_sentinel(ExPolicy policy, DataType)
                     DataType const& t) -> bool { return t < rand_base; };
 
     using test_vector = test::test_sentinel_container<std::vector<DataType>,
-        std::forward_iterator_tag>;
+        std::random_access_iterator_tag>;
 
     std::size_t const size = 10007;
     test_vector c(size);

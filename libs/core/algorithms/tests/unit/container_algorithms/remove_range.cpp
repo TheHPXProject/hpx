@@ -107,8 +107,9 @@ void test_remove_sent(ExPolicy policy)
     int value = 42;
 
     auto pre_result = std::count(std::begin(c), std::end(c), value);
-    hpx::ranges::remove(
-        policy, std::begin(c), sentinel<std::int16_t>{50}, value);
+    hpx::ranges::remove(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::int16_t>{50}),
+        value);
     auto post_result = std::count(std::begin(c), std::end(c), value);
 
     HPX_TEST(pre_result == 2 && post_result == 1);
@@ -259,7 +260,7 @@ void test_remove_sentinel(ExPolicy policy, DataType)
     using hpx::get;
 
     using test_vector = test::test_sentinel_container<std::vector<DataType>,
-        std::forward_iterator_tag>;
+        std::random_access_iterator_tag>;
 
     std::size_t const size = 10007;
     test_vector c(size);
