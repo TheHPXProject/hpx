@@ -204,6 +204,8 @@ set(sender_tests
     none_of_sender
     nth_element_extended_sender
     nth_element_sender
+    partial_sort_copy_sender
+    partial_sort_extended_sender
     partial_sort_sender
     reduce_sender
     remove_copy_if_sender

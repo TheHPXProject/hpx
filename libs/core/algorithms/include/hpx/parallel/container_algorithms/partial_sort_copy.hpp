@@ -410,10 +410,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            partial_sort_copy_result<FwdIter, RandIter>>
-        invoke_default(ExPolicy&& policy, FwdIter first, Sent1 last,
-            RandIter r_first, Sent2 r_last, Comp comp = Comp(),
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            Sent1 last, RandIter r_first, Sent2 r_last, Comp comp = Comp(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
             static_assert(
@@ -484,11 +482,9 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            partial_sort_copy_result<std::ranges::iterator_t<Rng1>,
-                std::ranges::iterator_t<Rng2>>>
-        invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
-            Comp comp = Comp(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng1&& rng1,
+            Rng2&& rng2, Comp comp = Comp(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
             using iterator_type1 = std::ranges::iterator_t<Rng1>;
             using iterator_type2 = std::ranges::iterator_t<Rng2>;

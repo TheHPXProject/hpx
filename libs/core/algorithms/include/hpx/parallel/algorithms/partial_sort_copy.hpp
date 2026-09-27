@@ -180,6 +180,8 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter>
     struct partial_sort_copy : public algorithm<partial_sort_copy<Iter>, Iter>
     {
+        static constexpr bool uses_futures = true;
+
         constexpr partial_sort_copy() noexcept
           : algorithm<partial_sort_copy, Iter>("partial_sort_copy")
         {
@@ -284,10 +286,9 @@ namespace hpx::parallel::detail {
         template <typename ExPolicy, typename FwdIter, typename Sent1,
             typename RandIter, typename Sent2, typename Compare, typename Proj1,
             typename Proj2>
-        static util::detail::algorithm_result_t<ExPolicy,
-            util::in_out_result<FwdIter, RandIter>>
-        parallel(ExPolicy&& policy, FwdIter first, Sent1 last, RandIter d_first,
-            Sent2 d_last, Compare&& comp, Proj1&& proj1, Proj2&& proj2)
+        static decltype(auto) parallel(ExPolicy&& policy, FwdIter first,
+            Sent1 last, RandIter d_first, Sent2 d_last, Compare&& comp,
+            Proj1&& proj1, Proj2&& proj2)
         {
             using result_type = util::detail::algorithm_result<ExPolicy,
                 util::in_out_result<FwdIter, RandIter>>;
@@ -402,9 +403,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, RandIter>
-        invoke_default(ExPolicy&& policy, FwdIter first, FwdIter last,
-            RandIter d_first, RandIter d_last, Comp comp = Comp())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            FwdIter last, RandIter d_first, RandIter d_last, Comp comp = Comp())
             HPX_PRE(d_first <= d_last)
         {
             static_assert(std::forward_iterator<FwdIter>,
