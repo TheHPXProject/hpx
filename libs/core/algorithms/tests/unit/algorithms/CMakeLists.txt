@@ -238,6 +238,8 @@ set(sender_tests
     search_sender
     set_difference_sender
     set_intersection_sender
+    set_symmetric_difference_sender
+    set_union_sender
     shift_left_sender
     shift_right_sender
     sort_by_key_sender
