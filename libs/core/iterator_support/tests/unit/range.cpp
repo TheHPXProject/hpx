@@ -8,7 +8,18 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <iterator>
+#include <ranges>
 #include <vector>
+
+using iterator_range = hpx::util::iterator_range<int*>;
+using unsized_iterator_range =
+    hpx::util::iterator_range<int*, std::unreachable_sentinel_t>;
+
+static_assert(std::ranges::borrowed_range<iterator_range>);
+static_assert(std::ranges::sized_range<iterator_range>);
+static_assert(std::ranges::borrowed_range<unsized_iterator_range>);
+static_assert(!std::ranges::sized_range<unsized_iterator_range>);
 
 ///////////////////////////////////////////////////////////////////////////////
 void array_range()

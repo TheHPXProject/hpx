@@ -131,11 +131,11 @@ namespace std::ranges {
     // The range owns only its iterators; destroying it does not invalidate
     // them. Its legacy size() member may traverse an unsized sentinel, which
     // does not satisfy the constant-time requirement of sized_range.
-    HPX_CXX_CORE_EXPORT template <typename I, typename S>
+    template <typename I, typename S>
     inline constexpr bool
         enable_borrowed_range<hpx::util::iterator_range<I, S>> = true;
 
-    HPX_CXX_CORE_EXPORT template <typename I, typename S>
+    template <typename I, typename S>
     inline constexpr bool disable_sized_range<hpx::util::iterator_range<I, S>> =
         !std::sized_sentinel_for<S, I>;
 }    // namespace std::ranges
