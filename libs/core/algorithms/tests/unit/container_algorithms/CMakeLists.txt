@@ -85,6 +85,7 @@ set(tests
     partial_sort_copy_range
     partition_range
     partition_copy_range
+    p3179_bounded_range
     p3179_search_range
     p3179_iterator_range
     p3179_mutating_range

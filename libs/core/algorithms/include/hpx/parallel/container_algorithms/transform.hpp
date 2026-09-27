@@ -682,6 +682,95 @@ namespace hpx { namespace ranges {
         Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
 
     // clang-format on
+
+    /// \brief Execution-policy overload of \c transform.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, std::copy_constructible F,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_writable<O,
+            std::indirect_result_t<F&, std::projected<I, Proj>>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        unary_transform_result<I, O>>
+    transform(ExPolicy&& policy, I first, S last, O dest, OutS dest_last, F f,
+        Proj proj = {});
+
+    /// \brief Execution-policy overload of \c transform.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        std::ranges::random_access_range OutR, std::copy_constructible F,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+        std::indirectly_writable<std::ranges::iterator_t<OutR>,
+            std::indirect_result_t<F&,
+                std::projected<std::ranges::iterator_t<R>, Proj>>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        unary_transform_result<std::ranges::borrowed_iterator_t<R>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    transform(ExPolicy&& policy, R&& rng, OutR&& output, F f, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c transform.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I1,
+        std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+        std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, std::copy_constructible F,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_writable<O,
+            std::indirect_result_t<F&, std::projected<I1, Proj1>,
+                std::projected<I2, Proj2>>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        binary_transform_result<I1, I2, O>>
+    transform(ExPolicy&& policy, I1 first1, S1 last1, I2 first2, S2 last2,
+        O dest, OutS dest_last, F f, Proj1 proj1 = {}, Proj2 proj2 = {});
+
+    /// \brief Execution-policy overload of \c transform.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R1,
+        std::ranges::random_access_range R2,
+        std::ranges::random_access_range OutR, std::copy_constructible F,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+        std::ranges::sized_range<OutR> &&
+        std::indirectly_writable<std::ranges::iterator_t<OutR>,
+            std::indirect_result_t<F&,
+                std::projected<std::ranges::iterator_t<R1>, Proj1>,
+                std::projected<std::ranges::iterator_t<R2>, Proj2>>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        binary_transform_result<std::ranges::borrowed_iterator_t<R1>,
+            std::ranges::borrowed_iterator_t<R2>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    transform(ExPolicy&& policy, R1&& rng1, R2&& rng2, OutR&& output, F f,
+        Proj1 proj1 = {}, Proj2 proj2 = {});
 }}    // namespace hpx::ranges
 #else    // DOXYGEN
 
@@ -694,6 +783,7 @@ namespace hpx { namespace ranges {
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <algorithm>
 #include <iterator>
 #include <ranges>
 #include <type_traits>
@@ -720,7 +810,11 @@ namespace hpx::ranges {
                 hpx::is_execution_policy_v<ExPolicy> &&
                 hpx::traits::is_iterator_v<FwdIter1> &&
                 std::sentinel_for<Sent1, FwdIter1> &&
-                hpx::traits::is_iterator_v<FwdIter2>
+                hpx::traits::is_iterator_v<FwdIter2> &&
+                std::copy_constructible<F> &&
+                std::indirectly_writable<FwdIter2,
+                    std::indirect_result_t<F&,
+                        std::projected<FwdIter1, Proj>>>
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
@@ -769,7 +863,11 @@ namespace hpx::ranges {
                 std::sentinel_for<Sent1, FwdIter1> &&
                 hpx::traits::is_iterator_v<FwdIter2> &&
                 std::sentinel_for<Sent2, FwdIter2> &&
-                hpx::traits::is_iterator_v<FwdIter3>
+                hpx::traits::is_iterator_v<FwdIter3> &&
+                std::copy_constructible<F> &&
+                std::indirectly_writable<FwdIter3,
+                    std::indirect_result_t<F&, std::projected<FwdIter1, Proj1>,
+                        std::projected<FwdIter2, Proj2>>>
             )
         // clang-format on
         static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first1,
@@ -920,6 +1018,124 @@ namespace hpx::ranges {
                     hpx::util::end(rng1), hpx::util::begin(rng2),
                     hpx::util::end(rng2), dest, HPX_MOVE(f), HPX_MOVE(proj1),
                     HPX_MOVE(proj2));
+        }
+
+        /// \brief Transform elements up to the end of either bounded range.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, std::copy_constructible F,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_writable<O,
+                std::indirect_result_t<F&, std::projected<I, Proj>>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first, S last,
+            O dest, OutS dest_last, F f, Proj proj = {})
+        {
+            using difference_type =
+                std::common_type_t<std::iter_difference_t<I>,
+                    std::iter_difference_t<O>>;
+            auto const count = (std::min) (difference_type(last - first),
+                difference_type(dest_last - dest));
+            return parallel::detail::transform<unary_transform_result<I, O>>()
+                .call(HPX_FORWARD(ExPolicy, policy), first, first + count, dest,
+                    HPX_MOVE(f), HPX_MOVE(proj));
+        }
+
+        /// \brief Transform between bounded ranges.
+        /// \returns Borrowed resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR, std::copy_constructible F,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_writable<std::ranges::iterator_t<OutR>,
+                std::indirect_result_t<F&,
+                    std::projected<std::ranges::iterator_t<R>, Proj>>>
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, R&& rng, OutR&& output, F f, Proj proj = {})
+        {
+            using result_type =
+                unary_transform_result<std::ranges::borrowed_iterator_t<R>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            using iterator_result =
+                unary_transform_result<std::ranges::iterator_t<R>,
+                    std::ranges::iterator_t<OutR>>;
+            auto first = std::ranges::begin(rng);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first,
+                    first + std::ranges::distance(rng), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(f),
+                    HPX_MOVE(proj)),
+                [](iterator_result result) -> result_type {
+                    return {result.in, result.out};
+                });
+        }
+
+        /// \brief Transform up to the shortest of three bounded ranges.
+        /// \returns Both input and output resume positions, or their future.
+        template <typename ExPolicy, std::random_access_iterator I1,
+            std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+            std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, std::copy_constructible F,
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_writable<O,
+                std::indirect_result_t<F&, std::projected<I1, Proj1>,
+                    std::projected<I2, Proj2>>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I1 first1,
+            S1 last1, I2 first2, S2 last2, O dest, OutS dest_last, F f,
+            Proj1 proj1 = {}, Proj2 proj2 = {})
+        {
+            using difference_type =
+                std::common_type_t<std::iter_difference_t<I1>,
+                    std::iter_difference_t<I2>, std::iter_difference_t<O>>;
+            auto const count = (std::min) ({difference_type(last1 - first1),
+                difference_type(last2 - first2),
+                difference_type(dest_last - dest)});
+            return parallel::detail::transform_binary2<
+                binary_transform_result<I1, I2, O>>()
+                .call(HPX_FORWARD(ExPolicy, policy), first1, first1 + count,
+                    first2, first2 + count, dest, HPX_MOVE(f), HPX_MOVE(proj1),
+                    HPX_MOVE(proj2));
+        }
+
+        /// \brief Transform two input ranges into a bounded output range.
+        /// \returns Borrowed resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R1,
+            std::ranges::random_access_range R2,
+            std::ranges::random_access_range OutR, std::copy_constructible F,
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+            std::ranges::sized_range<OutR> &&
+            std::indirectly_writable<std::ranges::iterator_t<OutR>,
+                std::indirect_result_t<F&,
+                    std::projected<std::ranges::iterator_t<R1>, Proj1>,
+                    std::projected<std::ranges::iterator_t<R2>, Proj2>>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R1&& rng1,
+            R2&& rng2, OutR&& output, F f, Proj1 proj1 = {}, Proj2 proj2 = {})
+        {
+            using result_type =
+                binary_transform_result<std::ranges::borrowed_iterator_t<R1>,
+                    std::ranges::borrowed_iterator_t<R2>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            using iterator_result =
+                binary_transform_result<std::ranges::iterator_t<R1>,
+                    std::ranges::iterator_t<R2>, std::ranges::iterator_t<OutR>>;
+            auto first1 = std::ranges::begin(rng1);
+            auto first2 = std::ranges::begin(rng2);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first1,
+                    first1 + std::ranges::distance(rng1), first2,
+                    first2 + std::ranges::distance(rng2), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(f),
+                    HPX_MOVE(proj1), HPX_MOVE(proj2)),
+                [](iterator_result result) -> result_type {
+                    return {result.in1, result.in2, result.out};
+                });
         }
     } transform{};
 }    // namespace hpx::ranges

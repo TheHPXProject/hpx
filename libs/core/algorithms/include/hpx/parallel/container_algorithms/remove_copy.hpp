@@ -574,6 +574,94 @@ namespace hpx { namespace ranges {
     ranges::remove_copy(ExPolicy&& policy, Rng&& rng, O dest, T const& value,
         Proj&& proj = Proj());
 
+    /// \brief Execution-policy overload of \c remove_copy_if.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, typename Pred,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_copyable<I, O> &&
+        std::indirect_unary_predicate<Pred, std::projected<I, Proj>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        remove_copy_if_result<I, O>>
+    remove_copy_if(ExPolicy&& policy, I first, S last, O dest, OutS dest_last,
+        Pred pred, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c remove_copy_if.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        std::ranges::random_access_range OutR, typename Pred,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+        std::indirectly_copyable<std::ranges::iterator_t<R>,
+            std::ranges::iterator_t<OutR>> &&
+        std::indirect_unary_predicate<Pred,
+            std::projected<std::ranges::iterator_t<R>, Proj>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        remove_copy_if_result<std::ranges::borrowed_iterator_t<R>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    remove_copy_if(
+        ExPolicy&& policy, R&& rng, OutR&& output, Pred pred, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c remove_copy.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, typename Proj = hpx::identity,
+        typename T = std::remove_cvref_t<
+            std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_copyable<I, O> &&
+        std::indirect_binary_predicate<std::ranges::equal_to,
+            std::projected<I, Proj>, T const*>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        remove_copy_result<I, O>>
+    remove_copy(ExPolicy&& policy, I first, S last, O dest, OutS dest_last,
+        T const& value, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c remove_copy.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        std::ranges::random_access_range OutR, typename Proj = hpx::identity,
+        typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
+            std::iter_value_t<std::ranges::iterator_t<R>>&>>>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+        std::indirectly_copyable<std::ranges::iterator_t<R>,
+            std::ranges::iterator_t<OutR>> &&
+        std::indirect_binary_predicate<std::ranges::equal_to,
+            std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        remove_copy_result<std::ranges::borrowed_iterator_t<R>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    remove_copy(ExPolicy&& policy, R&& rng, OutR&& output, T const& value,
+        Proj proj = {});
 }}    // namespace hpx::ranges
 
 #else    // DOXYGEN
@@ -584,11 +672,14 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
+#include <hpx/parallel/algorithms/detail/bounded_copy.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/remove_copy.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <algorithm>
 #include <iterator>
 #include <ranges>
 #include <type_traits>
@@ -641,6 +732,7 @@ namespace hpx::ranges {
         // clang-format off
             requires(
                 std::ranges::range<Rng> &&
+                std::input_or_output_iterator<O> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
                 hpx::parallel::traits::is_indirect_callable_v<
                     hpx::execution::sequenced_policy, Pred,
@@ -698,6 +790,7 @@ namespace hpx::ranges {
             requires(
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::range<Rng> &&
+                std::input_or_output_iterator<O> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
                 hpx::parallel::traits::is_indirect_callable_v<
                     ExPolicy, Pred,
@@ -717,6 +810,61 @@ namespace hpx::ranges {
                     in_out_result<std::ranges::iterator_t<Rng>, O>>()
                 .call(HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng),
                     hpx::util::end(rng), dest, HPX_MOVE(pred), HPX_MOVE(proj));
+        }
+
+        /// \brief Copy selected elements into a bounded destination.
+        /// \returns The first selected input that did not fit and the output
+        /// end position, or their future. If all selected elements fit, the
+        /// input position is last.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Pred,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O> &&
+            std::indirect_unary_predicate<Pred, std::projected<I, Proj>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first, S last,
+            O dest, OutS dest_last, Pred pred, Proj proj = {})
+        {
+            auto select = [pred = HPX_MOVE(pred), proj = HPX_MOVE(proj)](
+                              I current) mutable {
+                return !HPX_INVOKE(pred, HPX_INVOKE(proj, *current));
+            };
+            return parallel::detail::bounded_copy_selected<I, O>().call(
+                HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
+                dest, dest + (dest_last - dest), HPX_MOVE(select));
+        }
+
+        /// \brief Copy selected elements between bounded ranges.
+        /// \returns Borrowed resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR, typename Pred,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_copyable<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>> &&
+            std::indirect_unary_predicate<Pred,
+                std::projected<std::ranges::iterator_t<R>, Proj>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R&& rng,
+            OutR&& output, Pred pred, Proj proj = {})
+        {
+            using iterator_result =
+                remove_copy_if_result<std::ranges::iterator_t<R>,
+                    std::ranges::iterator_t<OutR>>;
+            using result_type =
+                remove_copy_if_result<std::ranges::borrowed_iterator_t<R>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            auto first = std::ranges::begin(rng);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first,
+                    first + std::ranges::distance(rng), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(pred),
+                    HPX_MOVE(proj)),
+                [](iterator_result result) -> result_type {
+                    return {result.in, result.out};
+                });
         }
     } remove_copy_if{};
 
@@ -756,6 +904,7 @@ namespace hpx::ranges {
         // clang-format off
             requires(
                 std::ranges::range<Rng> &&
+                std::input_or_output_iterator<O> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
         // clang-format on
@@ -806,6 +955,7 @@ namespace hpx::ranges {
             requires(
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::range<Rng> &&
+                std::input_or_output_iterator<O> &&
                 hpx::parallel::traits::is_projected_range_v<Proj, Rng>
             )
         // clang-format on
@@ -820,6 +970,103 @@ namespace hpx::ranges {
             return hpx::ranges::remove_copy_if(
                 HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Rng, rng), dest,
                 [value](T const& a) -> bool { return value == a; },
+                HPX_MOVE(proj));
+        }
+
+        /// \brief Copy into a bounded destination with replacements or filtering.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<
+                std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O> &&
+            std::indirect_binary_predicate<std::ranges::equal_to,
+                std::projected<I, Proj>, T const*>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first, S last,
+            O dest, OutS dest_last, T const& value, Proj proj = {})
+        {
+            auto select = [pred = parallel::detail::equal_to_value(value),
+                              proj = HPX_MOVE(proj)](I current) mutable {
+                return !pred(HPX_INVOKE(proj, *current));
+            };
+            return parallel::detail::bounded_copy_selected<I, O>().call(
+                HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
+                dest, dest + (dest_last - dest), HPX_MOVE(select));
+        }
+
+        /// \brief Copy into a bounded destination with replacements or filtering.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR,
+            typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
+                std::iter_value_t<std::ranges::iterator_t<R>>&>>>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_copyable<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>> &&
+            std::indirect_binary_predicate<std::ranges::equal_to,
+                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R&& rng,
+            OutR&& output, T const& value, Proj proj = {})
+        {
+            using iterator_result =
+                remove_copy_result<std::ranges::iterator_t<R>,
+                    std::ranges::iterator_t<OutR>>;
+            using result_type =
+                remove_copy_result<std::ranges::borrowed_iterator_t<R>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            auto first = std::ranges::begin(rng);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first,
+                    first + std::ranges::distance(rng), dest,
+                    dest + std::ranges::distance(output), value,
+                    HPX_MOVE(proj)),
+                [](iterator_result result) -> result_type {
+                    return {result.in, result.out};
+                });
+        }
+
+        using base_type = hpx::detail::tag_dispatch<remove_copy_t,
+            hpx::detail::tag_parallel_algorithm<remove_copy_t>>;
+        using base_type::operator();
+
+        // Typed value parameters permit list-initialized arguments.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<
+                std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O> &&
+            std::indirect_binary_predicate<std::ranges::equal_to,
+                std::projected<I, Proj>, T const*>
+        decltype(auto) operator()(ExPolicy&& policy, I first, S last, O dest,
+            OutS dest_last, T const& value, Proj proj = {}) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                last, dest, dest_last, value, HPX_MOVE(proj));
+        }
+
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR,
+            typename Proj = hpx::identity,
+            typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
+                std::iter_value_t<std::ranges::iterator_t<R>>&>>>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_copyable<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>> &&
+            std::indirect_binary_predicate<std::ranges::equal_to,
+                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+        decltype(auto) operator()(ExPolicy&& policy, R&& rng, OutR&& output,
+            T const& value, Proj proj = {}) const
+        {
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
+                HPX_FORWARD(R, rng), HPX_FORWARD(OutR, output), value,
                 HPX_MOVE(proj));
         }
     } remove_copy{};

@@ -506,6 +506,98 @@ namespace hpx { namespace ranges {
         Proj&& proj = Proj());
 
     // clang-format on
+
+    /// \brief Execution-policy overload of \c copy.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_copyable<I, O>
+    parallel::util::detail::algorithm_result_t<ExPolicy, copy_result<I, O>>
+    copy(ExPolicy&& policy, I first, S last, O dest, OutS dest_last);
+
+    /// \brief Execution-policy overload of \c copy.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        std::ranges::random_access_range OutR>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+        std::indirectly_copyable<std::ranges::iterator_t<R>,
+            std::ranges::iterator_t<OutR>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        copy_result<std::ranges::borrowed_iterator_t<R>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    copy(ExPolicy&& policy, R&& rng, OutR&& output);
+
+    /// \brief Execution-policy overload of \c copy_n.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::random_access_iterator O, std::sized_sentinel_for<O> OutS>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_copyable<I, O>
+    parallel::util::detail::algorithm_result_t<ExPolicy, copy_n_result<I, O>>
+    copy_n(ExPolicy&& policy, I first, std::iter_difference_t<I> count, O dest,
+        OutS dest_last);
+
+    /// \brief Execution-policy overload of \c copy_if.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, typename Pred,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::indirectly_copyable<I, O> &&
+        std::indirect_unary_predicate<Pred, std::projected<I, Proj>>
+    parallel::util::detail::algorithm_result_t<ExPolicy, copy_if_result<I, O>>
+    copy_if(ExPolicy&& policy, I first, S last, O dest, OutS dest_last,
+        Pred pred, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c copy_if.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        std::ranges::random_access_range OutR, typename Pred,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+        std::indirectly_copyable<std::ranges::iterator_t<R>,
+            std::ranges::iterator_t<OutR>> &&
+        std::indirect_unary_predicate<Pred,
+            std::projected<std::ranges::iterator_t<R>, Proj>>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        copy_if_result<std::ranges::borrowed_iterator_t<R>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    copy_if(
+        ExPolicy&& policy, R&& rng, OutR&& output, Pred pred, Proj proj = {});
 }}    // namespace hpx::ranges
 
 #else    // DOXYGEN
@@ -517,10 +609,12 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/copy.hpp>
+#include <hpx/parallel/algorithms/detail/bounded_copy.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iterator>
 #include <ranges>
@@ -626,6 +720,54 @@ namespace hpx::ranges {
                 hpx::execution::seq, hpx::util::begin(rng), hpx::util::end(rng),
                 dest);
         }
+
+        /// \brief Transfer up to the capacity of the destination range.
+        /// \returns The input and output positions after the transfer, wrapped
+        /// in a future for task policies.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O>
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, I first, S last, O dest, OutS dest_last)
+        {
+            using difference_type =
+                std::common_type_t<std::iter_difference_t<I>,
+                    std::iter_difference_t<O>>;
+            auto const count = (std::min) (difference_type(last - first),
+                difference_type(dest_last - dest));
+            return parallel::detail::transfer<
+                parallel::detail::copy_iter<I, O>>(
+                HPX_FORWARD(ExPolicy, policy), first, first + count, dest);
+        }
+
+        /// \brief Transfer between bounded random access ranges.
+        /// \returns Borrowed input and output positions, wrapped in a future
+        /// for task policies. Positions in non-borrowed temporaries dangle.
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_copyable<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>>
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, R&& rng, OutR&& output)
+        {
+            using result_type = copy_result<std::ranges::borrowed_iterator_t<R>,
+                std::ranges::borrowed_iterator_t<OutR>>;
+            using iterator_result = copy_result<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>>;
+            auto first = std::ranges::begin(rng);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first,
+                    first + std::ranges::distance(rng), dest,
+                    dest + std::ranges::distance(output)),
+                [](iterator_result result) -> result_type {
+                    return {result.in, result.out};
+                });
+        }
     } copy{};
 
     ///////////////////////////////////////////////////////////////////////////
@@ -696,6 +838,29 @@ namespace hpx::ranges {
                 ranges::copy_n_result<FwdIter1, FwdIter2>>()
                 .call(hpx::execution::seq, first,
                     static_cast<std::size_t>(count), dest);
+        }
+
+        /// \brief Copy at most count elements without exceeding dest_last.
+        /// \returns The input and output resume positions, wrapped in a
+        /// future for task policies.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::random_access_iterator O, std::sized_sentinel_for<O> OutS>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first,
+            std::iter_difference_t<I> count, O dest, OutS dest_last)
+        {
+            using difference_type =
+                std::common_type_t<std::iter_difference_t<I>,
+                    std::iter_difference_t<O>>;
+            auto const size =
+                (std::min) (difference_type(
+                                (std::max) (std::iter_difference_t<I>(0),
+                                    count)),
+                    difference_type(dest_last - dest));
+            return parallel::detail::copy_n<copy_n_result<I, O>>().call(
+                HPX_FORWARD(ExPolicy, policy), first,
+                static_cast<std::size_t>(size), dest);
         }
     } copy_n{};
 
@@ -833,6 +998,60 @@ namespace hpx::ranges {
                     FwdIter>>()
                 .call(hpx::execution::seq, hpx::util::begin(rng),
                     hpx::util::end(rng), dest, HPX_MOVE(pred), HPX_MOVE(proj));
+        }
+
+        /// \brief Copy selected elements into a bounded destination.
+        /// \returns The first selected input that did not fit and the output
+        /// end position, or their future. If all selected elements fit, the
+        /// input position is last.
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Pred,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_copyable<I, O> &&
+            std::indirect_unary_predicate<Pred, std::projected<I, Proj>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first, S last,
+            O dest, OutS dest_last, Pred pred, Proj proj = {})
+        {
+            auto select = [pred = HPX_MOVE(pred), proj = HPX_MOVE(proj)](
+                              I current) mutable {
+                return HPX_INVOKE(pred, HPX_INVOKE(proj, *current));
+            };
+            return parallel::detail::bounded_copy_selected<I, O>().call(
+                HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
+                dest, dest + (dest_last - dest), HPX_MOVE(select));
+        }
+
+        /// \brief Copy selected elements between bounded ranges.
+        /// \returns Borrowed resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            std::ranges::random_access_range OutR, typename Pred,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> && std::ranges::sized_range<OutR> &&
+            std::indirectly_copyable<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>> &&
+            std::indirect_unary_predicate<Pred,
+                std::projected<std::ranges::iterator_t<R>, Proj>>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R&& rng,
+            OutR&& output, Pred pred, Proj proj = {})
+        {
+            using iterator_result = copy_if_result<std::ranges::iterator_t<R>,
+                std::ranges::iterator_t<OutR>>;
+            using result_type =
+                copy_if_result<std::ranges::borrowed_iterator_t<R>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            auto first = std::ranges::begin(rng);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first,
+                    first + std::ranges::distance(rng), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(pred),
+                    HPX_MOVE(proj)),
+                [](iterator_result result) -> result_type {
+                    return {result.in, result.out};
+                });
         }
     } copy_if{};
 }    // namespace hpx::ranges
