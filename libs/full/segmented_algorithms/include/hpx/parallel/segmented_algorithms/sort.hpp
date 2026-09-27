@@ -11,15 +11,14 @@
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/executors.hpp>
-#include <hpx/runtime_distributed/find_here.hpp>
+#include <hpx/modules/runtime_distributed.hpp>
 
-#include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
-#include <hpx/parallel/util/detail/handle_remote_exceptions.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <exception>
+#include <functional>
 #include <iterator>
 #include <list>
 #include <type_traits>
@@ -55,7 +54,8 @@ namespace hpx::parallel::detail {
             hpx::sort(hpx::execution::experimental::to_non_task(
                           HPX_FORWARD(ExPolicy, policy)),
                 local_traits::local(first), local_traits::local(last_iter),
-                util::compare_projected<Comp&, Proj&>(comp, proj));
+                util::compare_projected<Comp&&, Proj&&>(
+                    HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj)));
             return last_iter;
         }
 
@@ -75,6 +75,11 @@ namespace hpx::parallel::detail {
         hpx::id_type id{};
         LocalIter first{};
         LocalIter last{};
+
+        std::ptrdiff_t size() const
+        {
+            return last - first;
+        }
     };
 
     template <typename SegIter>
@@ -91,40 +96,27 @@ namespace hpx::parallel::detail {
         std::vector<run_type> runs;
         runs.reserve(static_cast<std::size_t>(std::distance(sit, send)) + 1);
 
-        if (sit == send)
-        {
-            local_iterator beg = traits::local(first);
-            local_iterator end = traits::local(last);
+        auto add_run = [&](segment_iterator const& segment,
+                           local_iterator const& beg,
+                           local_iterator const& end) {
             if (beg != end)
             {
-                runs.emplace_back(traits::get_id(sit), beg, end);
+                runs.emplace_back(traits::get_id(segment), beg, end);
             }
+        };
+
+        if (sit == send)
+        {
+            add_run(sit, traits::local(first), traits::local(last));
             return runs;
         }
 
-        local_iterator beg = traits::local(first);
-        local_iterator end = traits::end(sit);
-        if (beg != end)
-        {
-            runs.emplace_back(traits::get_id(sit), beg, end);
-        }
-
+        add_run(sit, traits::local(first), traits::end(sit));
         for (++sit; sit != send; ++sit)
         {
-            beg = traits::begin(sit);
-            end = traits::end(sit);
-            if (beg != end)
-            {
-                runs.emplace_back(traits::get_id(sit), beg, end);
-            }
+            add_run(sit, traits::begin(sit), traits::end(sit));
         }
-
-        beg = traits::begin(sit);
-        end = traits::local(last);
-        if (beg != end)
-        {
-            runs.emplace_back(traits::get_id(sit), beg, end);
-        }
+        add_run(sit, traits::begin(sit), traits::local(last));
         return runs;
     }
 
@@ -210,10 +202,8 @@ namespace hpx::parallel::detail {
     std::size_t segmented_sort_host_index(
         std::vector<segmented_sort_run<LocalIter>> const& runs)
     {
-        auto const it = std::max_element(
-            runs.begin(), runs.end(), [](auto const& a, auto const& b) {
-                return (a.last - a.first) < (b.last - b.first);
-            });
+        auto const it = std::max_element(runs.begin(), runs.end(),
+            [](auto const& a, auto const& b) { return a.size() < b.size(); });
         return static_cast<std::size_t>(std::distance(runs.begin(), it));
     }
 
@@ -319,30 +309,22 @@ namespace hpx::parallel::detail {
 
         std::size_t const n = runs.size();
         std::vector<std::vector<value_type>> parts(n);
-        std::vector<std::ptrdiff_t> counts(n);
         hpx::id_type const here = hpx::find_here();
         using local_traits =
             hpx::traits::segmented_local_iterator_traits<LocalIter>;
 
         for (std::size_t i = 0; i != n; ++i)
         {
-            counts[i] = runs[i].last - runs[i].first;
-
             if (i == host)
             {
-                auto local_last = first;
-                auto const size =
-                    advance_and_get_distance(local_last, last_iter);
-                parts[i] =
-                    std::vector<value_type>(static_cast<std::size_t>(size));
-                hpx::copy(policy, first, local_last, parts[i].begin());
+                parts[i] = segmented_fetch_values<InIter>::sequential(
+                    policy, first, last_iter);
             }
             else if (runs[i].id == here)
             {
-                parts[i] = std::vector<value_type>(
-                    static_cast<std::size_t>(counts[i]));
-                hpx::copy(policy, local_traits::local(runs[i].first),
-                    local_traits::local(runs[i].last), parts[i].begin());
+                parts[i] = segmented_fetch_values<LocalIter>::sequential(policy,
+                    local_traits::local(runs[i].first),
+                    local_traits::local(runs[i].last));
             }
             else
             {
@@ -352,15 +334,16 @@ namespace hpx::parallel::detail {
             }
         }
 
-        util::compare_projected<Comp&, Proj&> pred(comp, proj);
+        util::compare_projected<Comp&&, Proj&&> pred(
+            HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
         std::vector<value_type> merged =
-            segmented_sort_merge_parts(policy, parts, pred);
+            segmented_sort_merge_parts(policy, parts, std::ref(pred));
 
         std::ptrdiff_t offset = 0;
         for (std::size_t dest = 0; dest != n; ++dest)
         {
             auto const piece_first = merged.begin() + offset;
-            auto const piece_last = piece_first + counts[dest];
+            auto const piece_last = piece_first + runs[dest].size();
 
             if (dest == host)
             {
@@ -378,7 +361,7 @@ namespace hpx::parallel::detail {
                     policy, std::true_type(), runs[dest].first, runs[dest].last,
                     piece);
             }
-            offset += counts[dest];
+            offset += runs[dest].size();
         }
 
         return last_iter;
@@ -395,7 +378,6 @@ namespace hpx::parallel::detail {
 
         std::size_t const n = runs.size();
         std::vector<std::vector<value_type>> parts(n);
-        std::vector<std::ptrdiff_t> counts(n);
         hpx::id_type const here = hpx::find_here();
         using local_traits =
             hpx::traits::segmented_local_iterator_traits<LocalIter>;
@@ -411,7 +393,6 @@ namespace hpx::parallel::detail {
         // so they overlap outstanding RPCs.
         for (std::size_t i = 0; i != n; ++i)
         {
-            counts[i] = runs[i].last - runs[i].first;
             if (i == host)
             {
                 continue;
@@ -427,20 +408,14 @@ namespace hpx::parallel::detail {
                     policy, std::false_type(), runs[i].first, runs[i].last));
         }
 
-        {
-            auto local_last = first;
-            auto const size = advance_and_get_distance(local_last, last_iter);
-            parts[host] =
-                std::vector<value_type>(static_cast<std::size_t>(size));
-            hpx::copy(policy, first, local_last, parts[host].begin());
-        }
+        parts[host] = segmented_fetch_values<InIter>::sequential(
+            policy, first, last_iter);
 
         for (std::size_t const i : local_parts)
         {
-            parts[i] =
-                std::vector<value_type>(static_cast<std::size_t>(counts[i]));
-            hpx::copy(policy, local_traits::local(runs[i].first),
-                local_traits::local(runs[i].last), parts[i].begin());
+            parts[i] = segmented_fetch_values<LocalIter>::sequential(policy,
+                local_traits::local(runs[i].first),
+                local_traits::local(runs[i].last));
         }
 
         segmented_sort_wait_all<ExPolicy>(fetches);
@@ -449,9 +424,10 @@ namespace hpx::parallel::detail {
             parts[remote[j]] = fetches[j].get();
         }
 
-        util::compare_projected<Comp&, Proj&> pred(comp, proj);
+        util::compare_projected<Comp&&, Proj&&> pred(
+            HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
         std::vector<value_type> merged =
-            segmented_sort_merge_parts(policy, parts, pred);
+            segmented_sort_merge_parts(policy, parts, std::ref(pred));
 
         std::vector<hpx::future<LocalIter>> stores;
         stores.reserve(remote.size());
@@ -473,23 +449,23 @@ namespace hpx::parallel::detail {
             if (dest == host)
             {
                 host_offset = offset;
-                host_count = counts[dest];
+                host_count = runs[dest].size();
             }
             else if (runs[dest].id == here)
             {
-                local_stores.push_back(local_piece{dest, offset, counts[dest]});
+                local_stores.emplace_back(dest, offset, runs[dest].size());
             }
             else
             {
                 auto const piece_first = merged.begin() + offset;
-                auto const piece_last = piece_first + counts[dest];
+                auto const piece_last = piece_first + runs[dest].size();
                 std::vector<value_type> piece(piece_first, piece_last);
                 stores.push_back(dispatch_async(runs[dest].id,
                     segmented_store_values<LocalIter>(), policy,
                     std::false_type(), runs[dest].first, runs[dest].last,
                     HPX_MOVE(piece)));
             }
-            offset += counts[dest];
+            offset += runs[dest].size();
         }
 
         // Host and co-located writes overlap remote stores.
@@ -547,17 +523,14 @@ namespace hpx::parallel::detail {
         std::vector<segmented_sort_run<LocalIter>>& runs, Comp&& comp,
         Proj&& proj, std::true_type)
     {
-        using local_traits =
-            hpx::traits::segmented_local_iterator_traits<LocalIter>;
         hpx::id_type const here = hpx::find_here();
 
         for (auto const& run : runs)
         {
             if (run.id == here)
             {
-                hpx::sort(policy, local_traits::local(run.first),
-                    local_traits::local(run.last),
-                    util::compare_projected<Comp&, Proj&>(comp, proj));
+                segmented_local_sort<LocalIter>::sequential(
+                    policy, run.first, run.last, comp, proj);
             }
             else
             {
@@ -574,20 +547,19 @@ namespace hpx::parallel::detail {
         Proj&& proj, std::false_type)
     {
         using forced_seq = std::false_type;
-        using local_traits =
-            hpx::traits::segmented_local_iterator_traits<LocalIter>;
         hpx::id_type const here = hpx::find_here();
 
         std::vector<hpx::future<LocalIter>> segments;
         segments.reserve(runs.size());
-        std::vector<segmented_sort_run<LocalIter> const*> local_runs;
+        std::vector<std::reference_wrapper<segmented_sort_run<LocalIter> const>>
+            local_runs;
         local_runs.reserve(runs.size());
 
         for (auto const& run : runs)
         {
             if (run.id == here)
             {
-                local_runs.push_back(&run);
+                local_runs.emplace_back(run);
             }
             else
             {
@@ -598,11 +570,10 @@ namespace hpx::parallel::detail {
         }
 
         // Local sorts run synchronously while remotes are in flight.
-        for (auto const* run : local_runs)
+        for (segmented_sort_run<LocalIter> const& run : local_runs)
         {
-            hpx::sort(policy, local_traits::local(run->first),
-                local_traits::local(run->last),
-                util::compare_projected<Comp&, Proj&>(comp, proj));
+            segmented_local_sort<LocalIter>::sequential(
+                policy, run.first, run.last, comp, proj);
         }
 
         segmented_sort_wait_all<ExPolicy>(segments);

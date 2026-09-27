@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -285,6 +286,43 @@ void run_cases(std::vector<hpx::id_type>& localities)
     test_sort_once(empty);
 }
 
+template <typename ExPolicy>
+void test_sort_subranges(
+    ExPolicy const& policy, std::vector<hpx::id_type> const& localities)
+{
+    // Eight partitions put multiple partitions on each locality. The
+    // [3, 47) subrange spans five runs, exercising an odd merge tree.
+    // [33, 77) selects a remote merge host with two or four localities.
+    hpx::partitioned_vector<int> values(
+        80, 0, hpx::container_layout(8, localities));
+    std::pair<std::ptrdiff_t, std::ptrdiff_t> const ranges[] = {
+        {0, 0}, {3, 4}, {2, 7}, {3, 10}, {10, 20}, {3, 47}, {33, 77}, {0, 80}};
+
+    for (auto const& [begin, end] : ranges)
+    {
+        initialize_mixed_n(values, 80);
+        auto expected = copy_values(values);
+        std::sort(expected.begin() + begin, expected.begin() + end,
+            std::greater<int>{});
+
+        if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+        {
+            hpx::sort(policy, values.begin() + begin, values.begin() + end,
+                std::greater<int>{})
+                .get();
+        }
+        else
+        {
+            hpx::sort(policy, values.begin() + begin, values.begin() + end,
+                std::greater<int>{});
+        }
+
+        // Comparing the whole vector also checks that values outside the
+        // requested subrange remain unchanged.
+        HPX_TEST(copy_values(values) == expected);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
@@ -293,6 +331,10 @@ int main()
     run_cases<std::string>(localities);
     test_sort_large<int>(localities);
     test_sort_throwing<int>(localities);
+    test_sort_subranges(hpx::execution::seq, localities);
+    test_sort_subranges(hpx::execution::par, localities);
+    test_sort_subranges(hpx::execution::seq(hpx::execution::task), localities);
+    test_sort_subranges(hpx::execution::par(hpx::execution::task), localities);
     return hpx::util::report_errors();
 }
 #endif
