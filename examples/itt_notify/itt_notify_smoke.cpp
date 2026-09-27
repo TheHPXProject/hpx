@@ -16,6 +16,7 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/itt_notify.hpp>
+#include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
 
@@ -28,6 +29,18 @@ int hpx_main()
 
     {
         hpx::util::itt::task t(domain, task_name);
+    }
+
+    // Fire one call per new tracing entry point under the shared "hpx"
+    // domain so CI observes each one land in the ref-collector log.
+    hpx::tracing::mark_event ev("smoke.mark_event");
+    hpx::tracing::frame_mark("smoke.frame");
+    hpx::tracing::os_thread_sleep(0);
+    {
+        hpx::tracing::fiber_region_init_data rd{"smoke.fiber_region"};
+        hpx::tracing::fiber_region fr(rd, 0);
+        hpx::tracing::fiber_suspend_region fsr("smoke.fiber_suspend");
+        hpx::tracing::background_work_region bwr(0);
     }
 
     // Spawn async work so the scheduler exercises its ITT instrumentation
