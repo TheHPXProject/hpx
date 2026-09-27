@@ -209,6 +209,8 @@ set(sender_tests
     partial_sort_copy_sender
     partial_sort_extended_sender
     partial_sort_sender
+    partition_copy_sender
+    partition_sender
     reduce_sender
     remove_copy_if_sender
     remove_copy_sender
@@ -228,6 +230,7 @@ set(sender_tests
     shift_left_sender
     shift_right_sender
     sort_sender
+    stable_partition_sender
     stable_sort_sender
     starts_with_sender
     swapranges_sender

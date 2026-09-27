@@ -493,6 +493,17 @@ namespace hpx {
 
 namespace hpx::parallel {
 
+    HPX_CXX_CORE_EXPORT template <typename Sender>
+        requires(hpx::execution::experimental::is_sender_v<Sender> &&
+            !hpx::traits::is_future_v<std::decay_t<Sender>>)
+    auto tuple_to_pair(Sender&& sender)
+    {
+        return hpx::execution::experimental::then(
+            HPX_FORWARD(Sender, sender), [](auto&& t) {
+                return std::make_pair(hpx::get<1>(t), hpx::get<2>(t));
+            });
+    }
+
     HPX_CXX_CORE_EXPORT template <typename Tuple>
     constexpr HPX_FORCEINLINE
         std::pair<typename hpx::tuple_element<1, Tuple>::type,
@@ -538,8 +549,17 @@ namespace hpx::parallel {
                     return execution::async_execute(policy.executor(),
                         [first, last, f = HPX_FORWARD(F, f),
                             proj = HPX_FORWARD(Proj, proj)]() -> RandIter {
-                            return std::stable_partition(first, last,
-                                util::invoke_projected<F, Proj>(f, proj));
+                            try
+                            {
+                                return std::stable_partition(first, last,
+                                    util::invoke_projected<F, Proj>(f, proj));
+                            }
+                            catch (...)
+                            {
+                                util::detail::handle_local_exceptions<
+                                    ExPolicy>::call(std::current_exception());
+                            }
+                            HPX_UNREACHABLE;
                         });
                 }
 
@@ -628,6 +648,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename Iter>
         struct stable_partition : public algorithm<stable_partition<Iter>, Iter>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr stable_partition() noexcept
               : algorithm<stable_partition, Iter>("stable_partition")
             {
@@ -644,9 +666,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename RandIter, typename Sent,
                 typename F, typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, RandIter>
-            parallel(ExPolicy&& policy, RandIter first, Sent last, F&& f,
-                Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, RandIter first,
+                Sent last, F&& f, Proj&& proj)
             {
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, RandIter>;
@@ -683,7 +704,7 @@ namespace hpx::parallel {
                                 policy.executor(), cores, size);
 
                         util::detail::adjust_chunk_size_and_max_chunks(
-                            cores, size, chunk_size, max_chunks);
+                            cores, size, max_chunks, chunk_size);
 
                         result = stable_partition_helper()(
                             HPX_FORWARD(ExPolicy, policy), first, last_iter,
@@ -693,15 +714,9 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
-                    result = hpx::make_exceptional_future<RandIter>(
-                        std::current_exception());
-                }
-
-                if (result.has_exception())
-                {
                     return algorithm_result::get(
                         detail::handle_exception<ExPolicy, RandIter>::call(
-                            HPX_MOVE(result)));
+                            std::current_exception()));
                 }
 
                 return algorithm_result::get(HPX_MOVE(result));
@@ -1374,6 +1389,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename FwdIter>
         struct partition : algorithm<partition<FwdIter>, FwdIter>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr partition() noexcept
               : algorithm<partition, FwdIter>("partition")
             {
@@ -1391,9 +1408,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename Sent, typename Pred,
                 typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, FwdIter> parallel(
-                ExPolicy&& policy, FwdIter first, Sent last, Pred&& pred,
-                Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter first,
+                Sent last, Pred&& pred, Proj&& proj)
             {
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, FwdIter>;
@@ -1447,6 +1463,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterTuple>
         struct partition_copy : algorithm<partition_copy<IterTuple>, IterTuple>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr partition_copy() noexcept
               : algorithm<partition_copy, IterTuple>("partition_copy")
             {
@@ -1468,10 +1486,8 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename FwdIter3, typename Pred,
                 typename Proj = hpx::identity>
-            static util::detail::algorithm_result_t<ExPolicy,
-                hpx::tuple<FwdIter1, FwdIter2, FwdIter3>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest_true, FwdIter3 dest_false, Pred&& pred,
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest_true, FwdIter3 dest_false, Pred&& pred,
                 Proj&& proj)
             {
                 using zip_iterator = hpx::util::zip_iterator<FwdIter1, bool*>;
@@ -1597,9 +1613,8 @@ namespace hpx::parallel {
                 traits::projected<Proj, FwdIter1>>
         )
     // clang-format on
-    util::detail::algorithm_result_t<ExPolicy, std::pair<FwdIter2, FwdIter3>>
-    partition_copy(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-        FwdIter2 dest_true, FwdIter3 dest_false, Pred&& pred,
+    decltype(auto) partition_copy(ExPolicy&& policy, FwdIter1 first,
+        FwdIter1 last, FwdIter2 dest_true, FwdIter3 dest_false, Pred&& pred,
         Proj&& proj = Proj())
     {
         static_assert(std::forward_iterator<FwdIter1>,
@@ -1658,8 +1673,8 @@ namespace hpx {
                 hpx::is_invocable_v<F, hpx::traits::iter_value_t<BidirIter>>
         )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, BidirIter>
-        invoke_default(ExPolicy&& policy, BidirIter first, BidirIter last, F f)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, BidirIter first, BidirIter last, F f)
         {
             static_assert(std::bidirectional_iterator<BidirIter>,
                 "Requires at least bidirectional iterator.");
@@ -1705,8 +1720,7 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter>>
         )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter first, FwdIter last, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter>,
@@ -1763,10 +1777,8 @@ namespace hpx {
                 hpx::is_invocable_v<Pred, hpx::traits::iter_value_t<FwdIter1>>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::pair<FwdIter2, FwdIter3>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest_true, FwdIter3 dest_false, Pred pred)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest_true, FwdIter3 dest_false, Pred pred)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Required at least forward iterator.");
