@@ -184,6 +184,13 @@ set(sender_tests
     findfirstof_sender
     findif_sender
     findifnot_sender
+    for_loop_induction_sender
+    for_loop_n_sender
+    for_loop_n_strided_sender
+    for_loop_reduction_sender
+    for_loop_sender
+    for_loop_strided_sender
+    for_loop_strided_induction_sender
     foreach_sender
     foreachn_sender
     generate_sender

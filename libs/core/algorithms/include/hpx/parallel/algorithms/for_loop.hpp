@@ -842,16 +842,22 @@ namespace hpx::parallel {
                     current_thread = hpx::get_worker_thread_num();
                 }
 
+                // Bulk senders may share this function between chunks.
+                // Keep mutable induction counters local to this invocation.
+                auto args = args_;
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                detail::init_iteration(args_, pack, part_index, current_thread);
+                auto const stride_size =
+                    static_cast<std::size_t>(parallel::detail::abs(stride_));
+                detail::init_iteration(
+                    args, pack, part_index / stride_size, current_thread);
 
                 if (stride_ == 1)
                 {
                     while (part_steps-- != 0)
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin++, current_thread);
-                        detail::next_iteration(args_, pack, current_thread);
+                            args, pack, f_, part_begin++, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
                 }
                 else if (stride_ > 0)
@@ -859,20 +865,20 @@ namespace hpx::parallel {
                     while (part_steps >= static_cast<std::size_t>(stride_))
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin, current_thread);
+                            args, pack, f_, part_begin, current_thread);
 
                         part_begin =
                             parallel::detail::next(part_begin, stride_);
                         part_steps -= static_cast<std::size_t>(stride_);
 
-                        detail::next_iteration(args_, pack, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
 
                     if (part_steps != 0)
                     {
                         detail::invoke_iteration(
-                            args_, pack, f_, part_begin, current_thread);
-                        detail::next_iteration(args_, pack, current_thread);
+                            args, pack, f_, part_begin, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
                     }
                 }
                 else
@@ -888,20 +894,20 @@ namespace hpx::parallel {
                         while (part_steps >= static_cast<std::size_t>(-stride_))
                         {
                             detail::invoke_iteration(
-                                args_, pack, f_, part_begin, current_thread);
+                                args, pack, f_, part_begin, current_thread);
 
                             part_begin =
                                 parallel::detail::next(part_begin, stride_);
                             part_steps -= static_cast<std::size_t>(-stride_);
 
-                            detail::next_iteration(args_, pack, current_thread);
+                            detail::next_iteration(args, pack, current_thread);
                         }
 
                         if (part_steps != 0)
                         {
                             detail::invoke_iteration(
-                                args_, pack, f_, part_begin, current_thread);
-                            detail::next_iteration(args_, pack, current_thread);
+                                args, pack, f_, part_begin, current_thread);
+                            detail::next_iteration(args, pack, current_thread);
                         }
                     }
                     else
@@ -1048,14 +1054,17 @@ namespace hpx::parallel {
                 B part_begin, E part_end, std::size_t part_index,
                 std::uint32_t current_thread)
             {
+                // Bulk senders may share this function between chunks.
+                // Keep mutable induction counters local to this invocation.
+                auto args = args_;
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                detail::init_iteration(args_, pack, part_index, current_thread);
+                detail::init_iteration(args, pack, part_index, current_thread);
 
                 while (part_begin != part_end)
                 {
                     detail::invoke_iteration(
-                        args_, pack, f_, part_begin++, current_thread);
-                    detail::next_iteration(args_, pack, current_thread);
+                        args, pack, f_, part_begin++, current_thread);
+                    detail::next_iteration(args, pack, current_thread);
                 }
             }
 
@@ -1084,15 +1093,18 @@ namespace hpx::parallel {
                 }
                 else
                 {
+                    // Bulk senders may share this function between chunks.
+                    // Keep induction counters local to this invocation.
+                    auto args = args_;
                     auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
                     detail::init_iteration(
-                        args_, pack, part_index, current_thread);
+                        args, pack, part_index, current_thread);
 
                     parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         part_begin, part_steps, [&](auto it) {
                             detail::invoke_iteration(
-                                args_, pack, f_, it, current_thread);
-                            detail::next_iteration(args_, pack, current_thread);
+                                args, pack, f_, it, current_thread);
+                            detail::next_iteration(args, pack, current_thread);
                         });
                 }
             }
@@ -1336,56 +1348,19 @@ namespace hpx::parallel {
                 ExPolicy&&, InIter first, Size size, S stride, F&& f, Arg&& arg,
                 Args&&... args)
             {
-                std::size_t current_thread = -1;
-                if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Args>...>>)
-                {
-                    current_thread = hpx::get_worker_thread_num();
-                }
+                using args_type =
+                    hpx::tuple<std::decay_t<Arg>, std::decay_t<Args>...>;
+                args_type all_args = hpx::forward_as_tuple(
+                    HPX_FORWARD(Arg, arg), HPX_FORWARD(Args, args)...);
+                auto iter = part_iterations<ExPolicy, F, S, args_type>{
+                    HPX_FORWARD(F, f), stride, all_args};
+                iter(first, size, 0);
 
-                arg.init_iteration(0, current_thread);
-                (args.init_iteration(0, current_thread), ...);
-
-                std::size_t count = size;
-                if (stride > 0)
-                {
-                    while (count >= static_cast<std::size_t>(stride))
-                    {
-                        HPX_INVOKE(f, first, arg.iteration_value(),
-                            args.iteration_value()...);
-
-                        first = parallel::detail::next(first, stride);
-                        count -= stride;
-
-                        arg.next_iteration(current_thread);
-                        (args.next_iteration(current_thread), ...);
-                    }
-                }
-                else
-                {
-                    while (count >= static_cast<std::size_t>(-stride))
-                    {
-                        HPX_INVOKE(f, first,
-                            arg.iteration_value(current_thread),
-                            args.iteration_value(current_thread)...);
-
-                        first = parallel::detail::next(first, stride);
-                        count += stride;
-
-                        arg.next_iteration(current_thread);
-                        (args.next_iteration(current_thread), ...);
-                    }
-                }
-
-                if (count != 0)
-                {
-                    HPX_INVOKE(f, first, arg.iteration_value(current_thread),
-                        args.iteration_value(current_thread)...);
-                }
-
-                // make sure live-out variables are properly set on return
-                arg.exit_iteration(size);
-                (args.exit_iteration(size), ...);
+                auto const stride_size =
+                    static_cast<std::size_t>(parallel::detail::abs(stride));
+                auto pack = hpx::util::make_index_pack_t<sizeof...(Args) + 1>();
+                detail::exit_iteration(all_args, pack,
+                    size / stride_size + (size % stride_size != 0));
 
                 return {};
             }
@@ -1474,7 +1449,12 @@ namespace hpx::parallel {
                                         Ts)>();
                                 // make sure live-out variables are properly set on
                                 // return
-                                detail::exit_iteration(args, pack, size);
+                                auto const stride_size =
+                                    static_cast<std::size_t>(
+                                        parallel::detail::abs(stride));
+                                detail::exit_iteration(args, pack,
+                                    size / stride_size +
+                                        (size % stride_size != 0));
                                 return hpx::util::unused;
                             }));
                 }
@@ -1628,9 +1608,8 @@ namespace hpx::parallel {
         // reshuffle arguments, last argument is function object, will go first
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename B,
             typename Size, typename S, std::size_t... Is, typename... Args>
-        util::detail::algorithm_result_t<ExPolicy> for_loop_n(ExPolicy&& policy,
-            B first, Size size, S stride, hpx::util::index_pack<Is...>,
-            Args&&... args)
+        decltype(auto) for_loop_n(ExPolicy&& policy, B first, Size size,
+            S stride, hpx::util::index_pack<Is...>, Args&&... args)
         {
             // stride shall not be zero
             HPX_ASSERT(stride != 0);
@@ -1712,9 +1691,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, std::decay_t<I> first, I last,
-            S stride, Args&&... args)
+        static decltype(auto) invoke_default(ExPolicy&& policy,
+            std::decay_t<I> first, I last, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_strided must be called with at least a function "
@@ -1762,8 +1740,8 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, I first, Size size, Args&&... args)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, I first, Size size, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_n must be called with at least a function object");
@@ -1809,8 +1787,7 @@ namespace hpx::experimental {
             (hpx::traits::is_iterator_v<I> || std::is_integral_v<I>)
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, I first, Size size, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
