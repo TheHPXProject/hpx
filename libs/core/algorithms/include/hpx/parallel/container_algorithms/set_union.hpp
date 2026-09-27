@@ -416,6 +416,52 @@ namespace hpx { namespace ranges {
         Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
 
     // clang-format on
+
+    /// \brief Execution-policy overload of \c set_union.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I1,
+        std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+        std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, typename Comp = std::ranges::less,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::mergeable<I1, I2, O, Comp, Proj1, Proj2>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        set_union_result<I1, I2, O>>
+    set_union(ExPolicy&& policy, I1 first1, S1 last1, I2 first2, S2 last2,
+        O dest, OutS dest_last, Comp comp = {}, Proj1 proj1 = {},
+        Proj2 proj2 = {});
+
+    /// \brief Execution-policy overload of \c set_union.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R1,
+        std::ranges::random_access_range R2,
+        std::ranges::random_access_range OutR,
+        typename Comp = std::ranges::less, typename Proj1 = hpx::identity,
+        typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+        std::ranges::sized_range<OutR> &&
+        std::mergeable<std::ranges::iterator_t<R1>, std::ranges::iterator_t<R2>,
+            std::ranges::iterator_t<OutR>, Comp, Proj1, Proj2>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        set_union_result<std::ranges::borrowed_iterator_t<R1>,
+            std::ranges::borrowed_iterator_t<R2>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    set_union(ExPolicy&& policy, R1&& rng1, R2&& rng2, OutR&& output,
+        Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {});
 }}    // namespace hpx::ranges
 
 #else    // DOXYGEN
@@ -426,6 +472,7 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/bounded_set_operation.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/set_union.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -625,6 +672,65 @@ namespace hpx::ranges {
                 hpx::util::end(rng1), hpx::util::begin(rng2),
                 hpx::util::end(rng2), dest, HPX_MOVE(op), HPX_MOVE(proj1),
                 HPX_MOVE(proj2));
+        }
+
+        /// \brief Produce the bounded prefix of an ordered operation.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::random_access_iterator I1,
+            std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+            std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Comp = std::ranges::less,
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::mergeable<I1, I2, O, Comp, Proj1, Proj2>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I1 first1,
+            S1 last1, I2 first2, S2 last2, O dest, OutS dest_last,
+            Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {})
+        {
+            return parallel::detail::bounded_set_operation<
+                parallel::detail::bounded_set_kind::set_union, I1, I2, O>()
+                .call(HPX_FORWARD(ExPolicy, policy), first1,
+                    first1 + (last1 - first1), first2,
+                    first2 + (last2 - first2), dest, dest + (dest_last - dest),
+                    HPX_MOVE(comp), HPX_MOVE(proj1), HPX_MOVE(proj2));
+        }
+
+        /// \brief Produce the bounded prefix of an ordered operation.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R1,
+            std::ranges::random_access_range R2,
+            std::ranges::random_access_range OutR,
+            typename Comp = std::ranges::less, typename Proj1 = hpx::identity,
+            typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+            std::ranges::sized_range<OutR> &&
+            std::mergeable<std::ranges::iterator_t<R1>,
+                std::ranges::iterator_t<R2>, std::ranges::iterator_t<OutR>,
+                Comp, Proj1, Proj2>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R1&& rng1,
+            R2&& rng2, OutR&& output, Comp comp = {}, Proj1 proj1 = {},
+            Proj2 proj2 = {})
+        {
+            using iterator_result =
+                set_union_result<std::ranges::iterator_t<R1>,
+                    std::ranges::iterator_t<R2>, std::ranges::iterator_t<OutR>>;
+            using result_type =
+                set_union_result<std::ranges::borrowed_iterator_t<R1>,
+                    std::ranges::borrowed_iterator_t<R2>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            auto first1 = std::ranges::begin(rng1);
+            auto first2 = std::ranges::begin(rng2);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first1,
+                    first1 + std::ranges::distance(rng1), first2,
+                    first2 + std::ranges::distance(rng2), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(comp),
+                    HPX_MOVE(proj1), HPX_MOVE(proj2)),
+                [](iterator_result result) -> result_type {
+                    return {result.in1, result.in2, result.out};
+                });
         }
     } set_union{};
 }    // namespace hpx::ranges

@@ -19,6 +19,7 @@
 #include <list>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -72,7 +73,7 @@ template <typename ExPolicy, typename IteratorTag>
 void test_partial_sort_range_sent(ExPolicy policy, IteratorTag)
 {
     using compare_t = std::less<std::uint64_t>;
-    std::list<std::uint64_t> lst;
+    std::vector<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
     A.reserve(SIZE + 1);
     B.reserve(SIZE + 1);
@@ -91,9 +92,12 @@ void test_partial_sort_range_sent(ExPolicy policy, IteratorTag)
         A = B;
 
         hpx::ranges::partial_sort_copy(policy, lst.begin(),
-            sentinel<std::uint64_t>{SIZE}, A.begin(),
-            sentinel<std::uint64_t>{
-                *(A.begin() + static_cast<std::ptrdiff_t>(i))},
+            test::make_sized_sentinel(
+                lst.begin(), sentinel<std::uint64_t>{SIZE}),
+            A.begin(),
+            test::make_sized_sentinel(A.begin(),
+                sentinel<std::uint64_t>{
+                    *(A.begin() + static_cast<std::ptrdiff_t>(i))}),
             compare_t());
 
         for (std::uint64_t j = 0; j < i; ++j)
@@ -107,7 +111,7 @@ template <typename ExPolicy, typename IteratorTag>
 void test_partial_sort_range_async_sent(ExPolicy p, IteratorTag)
 {
     using compare_t = std::less<std::uint64_t>;
-    std::list<std::uint64_t> lst;
+    std::vector<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
     A.reserve(SIZE + 1);
     B.reserve(SIZE + 1);
@@ -126,9 +130,12 @@ void test_partial_sort_range_async_sent(ExPolicy p, IteratorTag)
         A = B;
 
         auto result = hpx::ranges::partial_sort_copy(p, lst.begin(),
-            sentinel<std::uint64_t>{SIZE}, A.begin(),
-            sentinel<std::uint64_t>{
-                *(A.begin() + static_cast<std::ptrdiff_t>(i))},
+            test::make_sized_sentinel(
+                lst.begin(), sentinel<std::uint64_t>{SIZE}),
+            A.begin(),
+            test::make_sized_sentinel(A.begin(),
+                sentinel<std::uint64_t>{
+                    *(A.begin() + static_cast<std::ptrdiff_t>(i))}),
             compare_t());
         result.get();
 
@@ -174,7 +181,7 @@ template <typename ExPolicy, typename IteratorTag>
 void test_partial_sort_range(ExPolicy policy, IteratorTag)
 {
     using compare_t = std::less<std::uint64_t>;
-    std::list<std::uint64_t> lst;
+    std::vector<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
     A.reserve(SIZE);
     B.reserve(SIZE);
@@ -205,7 +212,7 @@ template <typename ExPolicy, typename IteratorTag>
 void test_partial_sort_range_async(ExPolicy p, IteratorTag)
 {
     using compare_t = std::less<std::uint64_t>;
-    std::list<std::uint64_t> lst;
+    std::vector<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
     A.reserve(SIZE);
     B.reserve(SIZE);
@@ -239,20 +246,26 @@ void test_partial_sort_range()
     using namespace hpx::execution;
 
     test_partial_sort_range(IteratorTag());
-    test_partial_sort_range(seq, IteratorTag());
-    test_partial_sort_range(par, IteratorTag());
-    test_partial_sort_range(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partial_sort_range(seq, IteratorTag());
+        test_partial_sort_range(par, IteratorTag());
+        test_partial_sort_range(par_unseq, IteratorTag());
 
-    test_partial_sort_range_async(seq(task), IteratorTag());
-    test_partial_sort_range_async(par(task), IteratorTag());
+        test_partial_sort_range_async(seq(task), IteratorTag());
+        test_partial_sort_range_async(par(task), IteratorTag());
+    }
 
     test_partial_sort_range_sent(IteratorTag());
-    test_partial_sort_range_sent(seq, IteratorTag());
-    test_partial_sort_range_sent(par, IteratorTag());
-    test_partial_sort_range_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partial_sort_range_sent(seq, IteratorTag());
+        test_partial_sort_range_sent(par, IteratorTag());
+        test_partial_sort_range_sent(par_unseq, IteratorTag());
 
-    test_partial_sort_range_async_sent(seq(task), IteratorTag());
-    test_partial_sort_range_async_sent(par(task), IteratorTag());
+        test_partial_sort_range_async_sent(seq(task), IteratorTag());
+        test_partial_sort_range_async_sent(par(task), IteratorTag());
+    }
 }
 
 void partial_sort_range_test()

@@ -25,6 +25,8 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/advance_to_sentinel.hpp
     hpx/parallel/algorithms/detail/algorithm_value.hpp
     hpx/parallel/algorithms/detail/bounded_copy.hpp
+    hpx/parallel/algorithms/detail/bounded_merge.hpp
+    hpx/parallel/algorithms/detail/bounded_set_operation.hpp
     hpx/parallel/algorithms/detail/contains.hpp
     hpx/parallel/algorithms/detail/dispatch.hpp
     hpx/parallel/algorithms/detail/distance.hpp

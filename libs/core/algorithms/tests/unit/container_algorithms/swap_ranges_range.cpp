@@ -17,6 +17,7 @@
 #include <iterator>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -101,8 +102,10 @@ void test_swap_ranges_sent(ExPolicy policy, IteratorTag)
     std::fill(
         std::begin(d) + static_cast<std::ptrdiff_t>(len), std::end(d), 200);
 
-    hpx::ranges::swap_ranges(policy, std::begin(c), sentinel<std::size_t>{100},
-        std::begin(d), sentinel<std::size_t>{200});
+    hpx::ranges::swap_ranges(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::size_t>{100}),
+        std::begin(d),
+        test::make_sized_sentinel(std::begin(d), sentinel<std::size_t>{200}));
 
     std::size_t count = 0;
     std::for_each(
@@ -199,17 +202,23 @@ void test_swap_ranges()
     using namespace hpx::execution;
 
     test_swap_ranges(IteratorTag());
-    test_swap_ranges(seq, IteratorTag());
-    test_swap_ranges(par, IteratorTag());
-    test_swap_ranges(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_swap_ranges(seq, IteratorTag());
+        test_swap_ranges(par, IteratorTag());
+        test_swap_ranges(par_unseq, IteratorTag());
 
-    test_swap_ranges_async(seq(task), IteratorTag());
-    test_swap_ranges_async(par(task), IteratorTag());
+        test_swap_ranges_async(seq(task), IteratorTag());
+        test_swap_ranges_async(par(task), IteratorTag());
+    }
 
     test_swap_ranges_sent(IteratorTag());
-    test_swap_ranges_sent(seq, IteratorTag());
-    test_swap_ranges_sent(par, IteratorTag());
-    test_swap_ranges_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_swap_ranges_sent(seq, IteratorTag());
+        test_swap_ranges_sent(par, IteratorTag());
+        test_swap_ranges_sent(par_unseq, IteratorTag());
+    }
 }
 
 void swap_ranges_test()

@@ -400,160 +400,6 @@ namespace hpx { namespace ranges {
     /// \note   Complexity: Performs O(std::distance(first, last))
     ///         applications of the comparison \a comp and the each projection.
     ///
-    /// \tparam ExPolicy    The type of the execution policy to use (deduced).
-    ///                     It describes the manner in which the execution
-    ///                     of the algorithm may be parallelized and the manner
-    ///                     in which it executes the assignments.
-    /// \tparam Rng         The type of the source range used (deduced).
-    ///                     The iterators extracted from this range type must
-    ///                     meet the requirements of an random access iterator.
-    /// \tparam Iter        The type of the source iterators used (deduced).
-    ///                     This iterator type must meet the requirements of an
-    ///                     random access iterator.
-    /// \tparam Comp        The type of the function/function object to use
-    ///                     (deduced). Unlike its sequential form, the parallel
-    ///                     overload of \a inplace_merge requires \a Comp
-    ///                     to meet the requirements of \a CopyConstructible.
-    ///                     This defaults to std::less<>
-    /// \tparam Proj        The type of an optional projection function. This
-    ///                     defaults to \a hpx::identity
-    ///
-    /// \param policy       The execution policy to use for the scheduling of
-    ///                     the iterations.
-    /// \param rng          Refers to the range of elements the algorithm
-    ///                     will be applied to.
-    /// \param middle       Refers to the end of the first sorted range and
-    ///                     the beginning of the second sorted range
-    ///                     the algorithm will be applied to.
-    /// \param comp         \a comp is a callable object which returns true if
-    ///                     the first argument is less than the second,
-    ///                     and false otherwise. The signature of this
-    ///                     comparison should be equivalent to:
-    ///                     \code
-    ///                     bool comp(const Type1 &a, const Type2 &b);
-    ///                     \endcode \n
-    ///                     The signature does not need to have const&, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The types \a Type1 and \a Type2 must be
-    ///                     such that objects of types \a Iter can be
-    ///                     dereferenced and then implicitly converted to both
-    ///                     \a Type1 and \a Type2
-    /// \param proj         Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements as a
-    ///                     projection operation before the actual predicate
-    ///                     \a is invoked.
-    ///
-    /// The assignments in the parallel \a inplace_merge algorithm invoked
-    /// with an execution policy object of type \a sequenced_policy
-    /// execute in sequential order in the calling thread.
-    ///
-    /// The assignments in the parallel \a inplace_merge algorithm invoked
-    /// with an execution policy object of type \a parallel_policy or
-    /// \a parallel_task_policy are permitted to execute in an unordered
-    /// fashion in unspecified threads, and indeterminately sequenced
-    /// within each thread.
-    ///
-    /// \returns  The \a inplace_merge algorithm returns a
-    ///           \a hpx::future<Iter> if the execution policy is of type
-    ///           \a sequenced_task_policy or \a parallel_task_policy
-    ///           and returns \a Iter otherwise.
-    ///           The \a inplace_merge algorithm returns
-    ///           the source iterator \a last
-    ///
-    template <typename ExPolicy, typename Rng, typename Iter,
-        typename Comp = hpx::ranges::less,
-        typename Proj = hpx::identity>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-    inplace_merge(ExPolicy&& policy, Rng&& rng, Iter middle,
-        Comp&& comp = Comp(), Proj&& proj = Proj());
-
-    /// Merges two consecutive sorted ranges [first, middle) and
-    /// [middle, last) into one sorted range [first, last). The order of
-    /// equivalent elements in the each of original two ranges is preserved.
-    /// For equivalent elements in the original two ranges, the elements from
-    /// the first range precede the elements from the second range.
-    ///
-    /// \note   Complexity: Performs O(std::distance(first, last))
-    ///         applications of the comparison \a comp and the each projection.
-    ///
-    /// \tparam ExPolicy    The type of the execution policy to use (deduced).
-    ///                     It describes the manner in which the execution
-    ///                     of the algorithm may be parallelized and the manner
-    ///                     in which it executes the assignments.
-    /// \tparam Iter        The type of the source iterators used (deduced).
-    ///                     This iterator type must meet the requirements of an
-    ///                     random access iterator.
-    /// \tparam Sent        The type of the end source iterators used (deduced).
-    ///                     This iterator type must meet the requirements of an
-    ///                     sentinel for Iter1.
-    /// \tparam Comp        The type of the function/function object to use
-    ///                     (deduced). Unlike its sequential form, the parallel
-    ///                     overload of \a inplace_merge requires \a Comp
-    ///                     to meet the requirements of \a CopyConstructible.
-    ///                     This defaults to std::less<>
-    /// \tparam Proj        The type of an optional projection function. This
-    ///                     defaults to \a hpx::identity
-    ///
-    /// \param policy       The execution policy to use for the scheduling of
-    ///                     the iterations.
-    /// \param first        Refers to the beginning of the first sorted range
-    ///                     the algorithm will be applied to.
-    /// \param middle       Refers to the end of the first sorted range and
-    ///                     the beginning of the second sorted range
-    ///                     the algorithm will be applied to.
-    /// \param last         Refers to the end of the second sorted range
-    ///                     the algorithm will be applied to.
-    /// \param comp         \a comp is a callable object which returns true if
-    ///                     the first argument is less than the second,
-    ///                     and false otherwise. The signature of this
-    ///                     comparison should be equivalent to:
-    ///                     \code
-    ///                     bool comp(const Type1 &a, const Type2 &b);
-    ///                     \endcode \n
-    ///                     The signature does not need to have const&, but
-    ///                     the function must not modify the objects passed to
-    ///                     it. The types \a Type1 and \a Type2 must be
-    ///                     such that objects of types \a Iter can be
-    ///                     dereferenced and then implicitly converted to both
-    ///                     \a Type1 and \a Type2
-    /// \param proj         Specifies the function (or function object) which
-    ///                     will be invoked for each of the elements as a
-    ///                     projection operation before the actual predicate
-    ///                     \a is invoked.
-    ///
-    /// The assignments in the parallel \a inplace_merge algorithm invoked
-    /// with an execution policy object of type \a sequenced_policy
-    /// execute in sequential order in the calling thread.
-    ///
-    /// The assignments in the parallel \a inplace_merge algorithm invoked
-    /// with an execution policy object of type \a parallel_policy or
-    /// \a parallel_task_policy are permitted to execute in an unordered
-    /// fashion in unspecified threads, and indeterminately sequenced
-    /// within each thread.
-    ///
-    /// \returns  The \a inplace_merge algorithm returns a
-    ///           \a hpx::future<Iter> if the execution policy is of type
-    ///           \a sequenced_task_policy or \a parallel_task_policy
-    ///           and returns \a Iter otherwise.
-    ///           The \a inplace_merge algorithm returns
-    ///           the source iterator \a last
-    ///
-    template <typename ExPolicy, typename Iter, typename Sent,
-        typename Comp = hpx::ranges::less,
-        typename Proj = hpx::identity>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-    inplace_merge(ExPolicy&& policy, Iter first, Iter middle, Sent last,
-        Comp&& comp = Comp(), Proj&& proj = Proj());
-
-    /// Merges two consecutive sorted ranges [first, middle) and
-    /// [middle, last) into one sorted range [first, last). The order of
-    /// equivalent elements in the each of original two ranges is preserved.
-    /// For equivalent elements in the original two ranges, the elements from
-    /// the first range precede the elements from the second range.
-    ///
-    /// \note   Complexity: Performs O(std::distance(first, last))
-    ///         applications of the comparison \a comp and the each projection.
-    ///
     /// \tparam Rng         The type of the source range used (deduced).
     ///                     The iterators extracted from this range type must
     ///                     meet the requirements of an random access iterator.
@@ -660,6 +506,82 @@ namespace hpx { namespace ranges {
         Proj&& proj = Proj());
 
     // clang-format on
+
+    /// \brief Execution-policy overload of \c merge.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I1,
+        std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+        std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+        std::sized_sentinel_for<O> OutS, typename Comp = std::ranges::less,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::mergeable<I1, I2, O, Comp, Proj1, Proj2>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        merge_result<I1, I2, O>>
+    merge(ExPolicy&& policy, I1 first1, S1 last1, I2 first2, S2 last2, O dest,
+        OutS dest_last, Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {});
+
+    /// \brief Execution-policy overload of \c merge.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// The operation is bounded by the supplied output range(s). Returned
+    /// input positions identify where processing can resume.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R1,
+        std::ranges::random_access_range R2,
+        std::ranges::random_access_range OutR,
+        typename Comp = std::ranges::less, typename Proj1 = hpx::identity,
+        typename Proj2 = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+        std::ranges::sized_range<OutR> &&
+        std::mergeable<std::ranges::iterator_t<R1>, std::ranges::iterator_t<R2>,
+            std::ranges::iterator_t<OutR>, Comp, Proj1, Proj2>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        merge_result<std::ranges::borrowed_iterator_t<R1>,
+            std::ranges::borrowed_iterator_t<R2>,
+            std::ranges::borrowed_iterator_t<OutR>>>
+    merge(ExPolicy&& policy, R1&& rng1, R2&& rng2, OutR&& output,
+        Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {});
+
+    /// \brief Execution-policy overload of \c inplace_merge.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    /// Iterator and subrange results use the standard borrowed-range rules.
+    /// A future does not extend the lifetime of the underlying range storage.
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        typename Comp = std::ranges::less, typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::ranges::sized_range<R> &&
+        std::sortable<std::ranges::iterator_t<R>, Comp, Proj>
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_iterator_t<R>>
+    inplace_merge(ExPolicy&& policy, R&& rng, std::ranges::iterator_t<R> middle,
+        Comp comp = {}, Proj proj = {});
+
+    /// \brief Execution-policy overload of \c inplace_merge.
+    /// \note Requires random access iterators and sized sentinels, or sized
+    /// random access ranges. Callable and element requirements are expressed
+    /// in the constraints below.
+    /// \returns The algorithm result, wrapped in a future for task policies.
+    template <typename ExPolicy, std::random_access_iterator I,
+        std::sized_sentinel_for<I> S, typename Comp = std::ranges::less,
+        typename Proj = hpx::identity>
+        requires hpx::is_execution_policy_v<ExPolicy> &&
+        std::sortable<I, Comp, Proj>
+    parallel::util::detail::algorithm_result_t<ExPolicy, I> inplace_merge(
+        ExPolicy&& policy, I first, I middle, S last, Comp comp = {},
+        Proj proj = {});
 }}    // namespace hpx::ranges
 
 #else    // DOXYGEN
@@ -670,12 +592,14 @@ namespace hpx { namespace ranges {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/bounded_merge.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/merge.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 
+#include <functional>
 #include <iterator>
 #include <ranges>
 #include <type_traits>
@@ -849,6 +773,63 @@ namespace hpx::ranges {
                 hpx::execution::seq, first1, last1, first2, last2, dest,
                 HPX_MOVE(comp), HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
+
+        /// \brief Produce the bounded prefix of an ordered operation.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::random_access_iterator I1,
+            std::sized_sentinel_for<I1> S1, std::random_access_iterator I2,
+            std::sized_sentinel_for<I2> S2, std::random_access_iterator O,
+            std::sized_sentinel_for<O> OutS, typename Comp = std::ranges::less,
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::mergeable<I1, I2, O, Comp, Proj1, Proj2>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I1 first1,
+            S1 last1, I2 first2, S2 last2, O dest, OutS dest_last,
+            Comp comp = {}, Proj1 proj1 = {}, Proj2 proj2 = {})
+        {
+            return parallel::detail::bounded_merge<I1, I2, O>().call(
+                HPX_FORWARD(ExPolicy, policy), first1,
+                first1 + (last1 - first1), first2, first2 + (last2 - first2),
+                dest, dest + (dest_last - dest), HPX_MOVE(comp),
+                HPX_MOVE(proj1), HPX_MOVE(proj2));
+        }
+
+        /// \brief Produce the bounded prefix of an ordered operation.
+        /// \returns Input and output resume positions, or their future.
+        template <typename ExPolicy, std::ranges::random_access_range R1,
+            std::ranges::random_access_range R2,
+            std::ranges::random_access_range OutR,
+            typename Comp = std::ranges::less, typename Proj1 = hpx::identity,
+            typename Proj2 = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
+            std::ranges::sized_range<OutR> &&
+            std::mergeable<std::ranges::iterator_t<R1>,
+                std::ranges::iterator_t<R2>, std::ranges::iterator_t<OutR>,
+                Comp, Proj1, Proj2>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R1&& rng1,
+            R2&& rng2, OutR&& output, Comp comp = {}, Proj1 proj1 = {},
+            Proj2 proj2 = {})
+        {
+            using iterator_result = merge_result<std::ranges::iterator_t<R1>,
+                std::ranges::iterator_t<R2>, std::ranges::iterator_t<OutR>>;
+            using result_type =
+                merge_result<std::ranges::borrowed_iterator_t<R1>,
+                    std::ranges::borrowed_iterator_t<R2>,
+                    std::ranges::borrowed_iterator_t<OutR>>;
+            auto first1 = std::ranges::begin(rng1);
+            auto first2 = std::ranges::begin(rng2);
+            auto dest = std::ranges::begin(output);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first1,
+                    first1 + std::ranges::distance(rng1), first2,
+                    first2 + std::ranges::distance(rng2), dest,
+                    dest + std::ranges::distance(output), HPX_MOVE(comp),
+                    HPX_MOVE(proj1), HPX_MOVE(proj2)),
+                [](iterator_result result) -> result_type {
+                    return {result.in1, result.in2, result.out};
+                });
+        }
     } merge{};
 
     ///////////////////////////////////////////////////////////////////////////
@@ -857,59 +838,36 @@ namespace hpx::ranges {
       : hpx::detail::tag_dispatch<inplace_merge_t,
             hpx::detail::tag_parallel_algorithm<inplace_merge_t>>
     {
-        template <typename ExPolicy, typename Rng, typename Iter,
-            typename Comp = hpx::ranges::less, typename Proj = hpx::identity>
-        // clang-format off
-            requires(
-                hpx::is_execution_policy_v<ExPolicy> &&
-                std::ranges::range<Rng> &&
-                hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::traits::is_iterator_v<Iter> &&
-                hpx::parallel::traits::is_projected_v<Proj, Iter> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy, Comp,
-                    hpx::parallel::traits::projected_range<Proj, Rng>,
-                    hpx::parallel::traits::projected_range<Proj, Rng>
-                >
-            )
-        // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        invoke_default(ExPolicy&& policy, Rng&& rng, Iter middle,
-            Comp comp = Comp(), Proj proj = Proj())
+        template <typename ExPolicy, std::ranges::random_access_range R,
+            typename Comp = std::ranges::less, typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::ranges::sized_range<R> &&
+            std::sortable<std::ranges::iterator_t<R>, Comp, Proj>
+        static decltype(auto) invoke_default(ExPolicy&& policy, R&& rng,
+            std::ranges::iterator_t<R> middle, Comp comp = {}, Proj proj = {})
         {
-            using iterator_type = std::ranges::iterator_t<Rng>;
-
-            static_assert(std::random_access_iterator<iterator_type>,
-                "Required at least random access iterator.");
-            static_assert(std::random_access_iterator<Iter>,
-                "Required at least random access iterator.");
-
-            return hpx::parallel::detail::inplace_merge<Iter>().call(
-                HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng), middle,
-                hpx::util::end(rng), HPX_MOVE(comp), HPX_MOVE(proj));
+            using I = std::ranges::iterator_t<R>;
+            auto first = std::ranges::begin(rng);
+            return parallel::util::detail::convert_to_result(
+                invoke_default(HPX_FORWARD(ExPolicy, policy), first, middle,
+                    first + std::ranges::distance(rng), HPX_MOVE(comp),
+                    HPX_MOVE(proj)),
+                [](I result) -> std::ranges::borrowed_iterator_t<R> {
+                    return result;
+                });
         }
 
-        template <typename ExPolicy, typename Iter, typename Sent,
-            typename Comp = hpx::ranges::less, typename Proj = hpx::identity>
-        // clang-format off
-            requires(
-                hpx::is_execution_policy_v<ExPolicy> &&
-                std::sentinel_for<Sent, Iter> &&
-                hpx::parallel::traits::is_projected_v<Proj, Iter> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy, Comp,
-                    hpx::parallel::traits::projected<Proj, Iter>,
-                    hpx::parallel::traits::projected<Proj, Iter>
-                >
-            )
-        // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, Iter>
-        invoke_default(ExPolicy&& policy, Iter first, Iter middle, Sent last,
-            Comp comp = Comp(), Proj proj = Proj())
+        template <typename ExPolicy, std::random_access_iterator I,
+            std::sized_sentinel_for<I> S, typename Comp = std::ranges::less,
+            typename Proj = hpx::identity>
+            requires hpx::is_execution_policy_v<ExPolicy> &&
+            std::sortable<I, Comp, Proj>
+        static decltype(auto) invoke_default(ExPolicy&& policy, I first,
+            I middle, S last, Comp comp = {}, Proj proj = {})
         {
-            static_assert(std::random_access_iterator<Iter>,
-                "Required at least random access iterator.");
-
-            return hpx::parallel::detail::inplace_merge<Iter>().call(
-                HPX_FORWARD(ExPolicy, policy), first, middle, last,
+            auto end = first + (last - first);
+            return parallel::detail::inplace_merge<I>().call(
+                HPX_FORWARD(ExPolicy, policy), first, middle, end,
                 HPX_MOVE(comp), HPX_MOVE(proj));
         }
 

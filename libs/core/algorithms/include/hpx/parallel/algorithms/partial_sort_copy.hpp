@@ -169,6 +169,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -347,6 +348,57 @@ namespace hpx::parallel::detail {
                     util::in_out_result<FwdIter,
                         RandIter>>::call(std::current_exception()));
             }
+        }
+    };
+    // The existing parallel kernel uses a copy of the input as its scratch
+    // range. Its projections must therefore be identities and its input and
+    // output value types must match. Use the general ranges implementation
+    // when that scratch representation would impose extra requirements.
+    HPX_CXX_CORE_EXPORT template <typename I, typename O>
+    struct range_partial_sort_copy final
+      : algorithm<range_partial_sort_copy<I, O>, util::in_out_result<I, O>>
+    {
+        using result_type = util::in_out_result<I, O>;
+
+        range_partial_sort_copy()
+          : algorithm<range_partial_sort_copy, result_type>("partial_sort_copy")
+        {
+        }
+
+        template <typename ExPolicy, typename Comp, typename Proj1,
+            typename Proj2>
+        static result_type sequential(ExPolicy policy, I first, I last, O dest,
+            O dest_last, Comp comp, Proj1 proj1, Proj2 proj2)
+        {
+            if constexpr (!hpx::is_sequenced_execution_policy_v<ExPolicy> &&
+                !hpx::execution_policy_has_scheduler_executor_v<ExPolicy> &&
+                std::same_as<std::iter_value_t<I>, std::iter_value_t<O>> &&
+                std::copy_constructible<std::iter_value_t<I>> &&
+                (std::same_as<Proj1, hpx::identity> ||
+                    std::same_as<Proj1, std::identity>) &&
+                (std::same_as<Proj2, hpx::identity> ||
+                    std::same_as<Proj2, std::identity>) )
+            {
+                return partial_sort_copy<result_type>::parallel(
+                    hpx::execution::experimental::to_non_task(policy), first,
+                    last, dest, dest_last, HPX_MOVE(comp), HPX_MOVE(proj1),
+                    HPX_MOVE(proj2));
+            }
+            else
+            {
+                auto result =
+                    std::ranges::partial_sort_copy(first, last, dest, dest_last,
+                        HPX_MOVE(comp), HPX_MOVE(proj1), HPX_MOVE(proj2));
+                return {result.in, result.out};
+            }
+        }
+
+        template <typename ExPolicy, typename... Args>
+        static decltype(auto) parallel(ExPolicy&& policy, Args&&... args)
+        {
+            return range_partial_sort_copy().call2(
+                HPX_FORWARD(ExPolicy, policy), std::true_type{},
+                HPX_FORWARD(Args, args)...);
         }
     };
 }    // namespace hpx::parallel::detail

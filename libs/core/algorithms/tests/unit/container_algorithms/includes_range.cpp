@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -215,12 +216,15 @@ void test_includes1()
 
     test_includes1(IteratorTag());
 
-    test_includes1(seq, IteratorTag());
-    test_includes1(par, IteratorTag());
-    test_includes1(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_includes1(seq, IteratorTag());
+        test_includes1(par, IteratorTag());
+        test_includes1(par_unseq, IteratorTag());
 
-    test_includes1_async(seq(task), IteratorTag());
-    test_includes1_async(par(task), IteratorTag());
+        test_includes1_async(seq(task), IteratorTag());
+        test_includes1_async(par(task), IteratorTag());
+    }
 }
 
 void includes_test1()
@@ -429,12 +433,15 @@ void test_includes2()
 
     test_includes2(IteratorTag());
 
-    test_includes2(seq, IteratorTag());
-    test_includes2(par, IteratorTag());
-    test_includes2(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_includes2(seq, IteratorTag());
+        test_includes2(par, IteratorTag());
+        test_includes2(par_unseq, IteratorTag());
 
-    test_includes2_async(seq(task), IteratorTag());
-    test_includes2_async(par(task), IteratorTag());
+        test_includes2_async(seq(task), IteratorTag());
+        test_includes2_async(par(task), IteratorTag());
+    }
 }
 
 void includes_test2()
@@ -617,11 +624,14 @@ void test_includes_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_includes_exception(seq, IteratorTag());
-    test_includes_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_includes_exception(seq, IteratorTag());
+        test_includes_exception(par, IteratorTag());
 
-    test_includes_exception_async(seq(task), IteratorTag());
-    test_includes_exception_async(par(task), IteratorTag());
+        test_includes_exception_async(seq(task), IteratorTag());
+        test_includes_exception_async(par(task), IteratorTag());
+    }
 }
 
 void includes_exception_test()
@@ -800,11 +810,14 @@ void test_includes_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_includes_bad_alloc(seq, IteratorTag());
-    test_includes_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_includes_bad_alloc(seq, IteratorTag());
+        test_includes_bad_alloc(par, IteratorTag());
 
-    test_includes_bad_alloc_async(seq(task), IteratorTag());
-    test_includes_bad_alloc_async(par(task), IteratorTag());
+        test_includes_bad_alloc_async(seq(task), IteratorTag());
+        test_includes_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void includes_bad_alloc_test()
