@@ -261,13 +261,15 @@ namespace hpx::parallel {
                         std::list<std::exception_ptr> errors;
                         if (leftf.has_exception())
                         {
-                            util::detail::handle_local_exceptions<ExPolicy>::
-                                call(leftf.get_exception_ptr(), errors);
+                            util::detail::handle_local_exceptions<
+                                ExPolicy>::call(leftf.get_exception_ptr(),
+                                errors);
                         }
                         if (rightf.has_exception())
                         {
-                            util::detail::handle_local_exceptions<ExPolicy>::
-                                call(rightf.get_exception_ptr(), errors);
+                            util::detail::handle_local_exceptions<
+                                ExPolicy>::call(rightf.get_exception_ptr(),
+                                errors);
                         }
 
                         throw exception_list(HPX_MOVE(errors));
