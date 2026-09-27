@@ -863,6 +863,75 @@ Next, ``hpx::for_each()`` is called with the ``hpx::execution::par`` execution p
 which applies the lambda function ``print`` to each element in the vector in parallel. Therefore,
 the output order of the elements in the vector is not deterministic and may vary from run to run.
 
+Parallel range algorithms
+-------------------------
+
+``hpx::ranges`` provides execution-policy overloads following
+`P3179R9 <https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2025/p3179r9.html>`_.
+These iterator overloads require random access iterators and sized sentinels.
+Whole-range overloads require both ``std::ranges::random_access_range`` and
+``std::ranges::sized_range``. These requirements also apply to ``seq`` and task
+policies. Overloads without an execution policy retain their weaker iterator
+requirements. The numerical algorithms and other algorithms outside P3179's
+scope retain their existing interfaces.
+
+Output-producing policy algorithms accept an output end sentinel or a complete
+output range. They process only the elements that fit, and return input and
+output positions from which processing can resume. For example:
+
+.. code-block:: c++
+
+   std::vector<int> input{1, 2, 3, 4};
+   std::vector<int> output(2);
+   auto result = hpx::ranges::copy(hpx::execution::par, input, output);
+   // output contains {1, 2}.
+   // result.in == input.begin() + 2; result.out == output.end().
+
+Filtering algorithms consume elements that do not produce output even after
+the destination fills. Their input result points to the next element that
+would have been written. ``partition_copy`` stops when the next input does not
+fit its selected destination; a full destination does not prevent elements
+from being written to the other destination. Bounded set operations discover
+the selected prefix in input order, then copy the selected elements in parallel.
+``partial_sort_copy`` uses a sequential fallback for different value types or
+projections, avoiding extra copying and construction requirements on those types.
+
+The result of ``reverse_copy`` points to the beginning of the suffix copied
+from the input. The result of ``rotate_copy`` points to the next position in
+the rotated input, wrapping at the input end. After a complete rotated copy,
+this position is the supplied middle iterator.
+
+Policy overloads of ``search``, ``search_n``, ``find_end``, ``find_last`` and its
+predicate variants, ``remove``, ``remove_if``, ``unique``, ``partition``,
+``stable_partition``, ``rotate``, and the shift algorithms return subranges.
+``search_n`` searches for consecutive occurrences of a value. ``min``, ``max``,
+and ``minmax`` return copies of selected elements from a nonempty range;
+their ``*_element`` counterparts return positions. The legacy
+``search_n(range, count, pattern)`` overload remains a counted-subsequence
+HPX extension. Projections affect comparison,
+not the values returned or copied.
+
+Whole-range results use ``std::ranges::borrowed_iterator_t`` and
+``std::ranges::borrowed_subrange_t``. Each iterator field in an aggregate result
+independently becomes ``std::ranges::dangling`` for a temporary owning range.
+Non-owning ranges such as ``std::span``, ``std::ranges::subrange``, and
+``hpx::util::iterator_range`` preserve their iterator results.
+
+|hpx| retains its task-policy extension: ``seq(task)`` and ``par(task)`` return
+``hpx::future<Result>`` with the same result type as the corresponding synchronous
+call. Input and output storage must remain alive until that future completes.
+The future does not own the ranges. Comparison, replacement, and fill arguments
+are copied when their types permit copying. Noncopyable arguments are referenced
+and must remain alive and unchanged until the operation completes, including
+when the result is a future. HPX's exception handling rules also continue
+to apply. Existing overloads taking an unbounded output iterator remain HPX
+extensions; their callers must provide enough output storage.
+
+When migrating policy calls, replace forward-only ranges with random access
+ranges, supply sized sentinels or sized ranges, and update iterator-only uses of
+the algorithms listed above to inspect their subrange results. Use the bounded
+output overloads when the destination may be shorter than the input.
+
 Parallel exceptions
 -------------------
 
