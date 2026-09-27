@@ -13,9 +13,8 @@
 #pragma once
 
 #if defined(DOXYGEN)
-namespace hpx {
-    namespace ranges {
-        // clang-format off
+namespace hpx { namespace ranges {
+    // clang-format off
 
     /// Returns the first element in the range [first, last) that is equal
     /// to value
@@ -846,7 +845,8 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_binary_predicate<std::ranges::equal_to,
             std::projected<I, Proj>, T const*>
-    parallel::util::detail::algorithm_result_t<ExPolicy, I> find(ExPolicy&& policy, I first, S last, T const& val, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy, I>
+    find(ExPolicy&& policy, I first, S last, T const& val, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -855,14 +855,17 @@ namespace hpx {
     /// \returns The algorithm result, wrapped in a future for task policies.
     /// Iterator and subrange results use the standard borrowed-range rules.
     /// A future does not extend the lifetime of the underlying range storage.
-    template <typename ExPolicy, std::ranges::random_access_range R, typename Proj = hpx::identity,
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        typename Proj = hpx::identity,
         typename T = std::remove_cvref_t<
             std::invoke_result_t<Proj&, std::iter_value_t<std::ranges::iterator_t<R>>&>>>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_binary_predicate<std::ranges::equal_to,
             std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_iterator_t<R>> find(ExPolicy&& policy, R&& rng, T const& val, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_iterator_t<R>>
+    find(ExPolicy&& policy, R&& rng, T const& val, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_if.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -874,7 +877,8 @@ namespace hpx {
         typename Proj = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_unary_predicate<F, std::projected<I, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, I> find_if(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy, I>
+    find_if(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_if.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -888,7 +892,9 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_unary_predicate<F, std::projected<std::ranges::iterator_t<R>, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_iterator_t<R>> find_if(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_iterator_t<R>>
+    find_if(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_if_not.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -900,7 +906,8 @@ namespace hpx {
         typename Proj = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_unary_predicate<F, std::projected<I, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, I> find_if_not(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy, I>
+    find_if_not(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_if_not.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -914,7 +921,9 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_unary_predicate<F, std::projected<std::ranges::iterator_t<R>, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_iterator_t<R>> find_if_not(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_iterator_t<R>>
+    find_if_not(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_end.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -931,7 +940,9 @@ namespace hpx {
         std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
         std::indirectly_comparable<std::ranges::iterator_t<R1>,
             std::ranges::iterator_t<R2>, Pred, Proj1, Proj2>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_subrange_t<R1>> find_end(ExPolicy&& policy, R1&& rng1,
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_subrange_t<R1>>
+    find_end(ExPolicy&& policy, R1&& rng1,
         R2&& rng2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {});
 
     /// \brief Execution-policy overload of \c find_end.
@@ -946,7 +957,9 @@ namespace hpx {
         typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirectly_comparable<I1, I2, Pred, Proj1, Proj2>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::subrange<I1>> find_end(ExPolicy&& policy, I1 first1,
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::subrange<I1>>
+    find_end(ExPolicy&& policy, I1 first1,
         S1 last1, I2 first2, S2 last2, Pred pred = {},
         Proj1 proj1 = {}, Proj2 proj2 = {});
 
@@ -965,7 +978,9 @@ namespace hpx {
         std::ranges::sized_range<R1> && std::ranges::sized_range<R2> &&
         std::indirectly_comparable<std::ranges::iterator_t<R1>,
             std::ranges::iterator_t<R2>, Pred, Proj1, Proj2>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_iterator_t<R1>> find_first_of(ExPolicy&& policy, R1&& rng1,
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_iterator_t<R1>>
+    find_first_of(ExPolicy&& policy, R1&& rng1,
         R2&& rng2, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {});
 
     /// \brief Execution-policy overload of \c find_first_of.
@@ -980,7 +995,8 @@ namespace hpx {
         typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirectly_comparable<I1, I2, Pred, Proj1, Proj2>
-    parallel::util::detail::algorithm_result_t<ExPolicy, I1> find_first_of(ExPolicy&& policy, I1 first1,
+    parallel::util::detail::algorithm_result_t<ExPolicy, I1>
+    find_first_of(ExPolicy&& policy, I1 first1,
         S1 last1, I2 first2, S2 last2, Pred pred = {},
         Proj1 proj1 = {}, Proj2 proj2 = {});
 
@@ -996,7 +1012,9 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_binary_predicate<std::ranges::equal_to,
             std::projected<I, Proj>, T const*>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::subrange<I>> find_last(ExPolicy&& policy, I first, S last, T const& val, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::subrange<I>>
+    find_last(ExPolicy&& policy, I first, S last, T const& val, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_last.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -1005,14 +1023,17 @@ namespace hpx {
     /// \returns The resulting subrange, wrapped in a future for task policies.
     /// Iterator and subrange results use the standard borrowed-range rules.
     /// A future does not extend the lifetime of the underlying range storage.
-    template <typename ExPolicy, std::ranges::random_access_range R, typename Proj = hpx::identity,
+    template <typename ExPolicy, std::ranges::random_access_range R,
+        typename Proj = hpx::identity,
         typename T = std::remove_cvref_t<
             std::invoke_result_t<Proj&, std::iter_value_t<std::ranges::iterator_t<R>>&>>>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_binary_predicate<std::ranges::equal_to,
             std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_subrange_t<R>> find_last(ExPolicy&& policy, R&& rng, T const& val, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_subrange_t<R>>
+    find_last(ExPolicy&& policy, R&& rng, T const& val, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_last_if.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -1024,7 +1045,9 @@ namespace hpx {
         typename Proj = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_unary_predicate<F, std::projected<I, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::subrange<I>> find_last_if(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::subrange<I>>
+    find_last_if(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_last_if.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -1038,7 +1061,9 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_unary_predicate<F, std::projected<std::ranges::iterator_t<R>, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_subrange_t<R>> find_last_if(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_subrange_t<R>>
+    find_last_if(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_last_if_not.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -1050,7 +1075,9 @@ namespace hpx {
         typename Proj = hpx::identity>
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::indirect_unary_predicate<F, std::projected<I, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::subrange<I>> find_last_if_not(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::subrange<I>>
+    find_last_if_not(ExPolicy&& policy, I first, S last, F f, Proj proj = {});
 
     /// \brief Execution-policy overload of \c find_last_if_not.
     /// \note Requires random access iterators and sized sentinels, or sized
@@ -1064,7 +1091,9 @@ namespace hpx {
         requires hpx::is_execution_policy_v<ExPolicy> &&
         std::ranges::sized_range<R> &&
         std::indirect_unary_predicate<F, std::projected<std::ranges::iterator_t<R>, Proj>>
-    parallel::util::detail::algorithm_result_t<ExPolicy, std::ranges::borrowed_subrange_t<R>> find_last_if_not(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
+    parallel::util::detail::algorithm_result_t<ExPolicy,
+        std::ranges::borrowed_subrange_t<R>>
+    find_last_if_not(ExPolicy&& policy, R&& rng, F f, Proj proj = {});
 
     // clang-format on
 }}    // namespace hpx::ranges
@@ -1093,7 +1122,8 @@ namespace hpx::ranges {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::ranges::find
     HPX_CXX_CORE_EXPORT inline constexpr struct find_t final
-      : hpx::detail::tag_dispatch<find_t, hpx::detail::tag_parallel_algorithm<find_t>>
+      : hpx::detail::tag_dispatch<find_t,
+            hpx::detail::tag_parallel_algorithm<find_t>>
     {
         template <typename ExPolicy, std::random_access_iterator I,
             std::sized_sentinel_for<I> S, typename Proj = hpx::identity,
