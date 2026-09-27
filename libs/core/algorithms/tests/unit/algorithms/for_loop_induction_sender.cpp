@@ -22,7 +22,7 @@
 #include "test_utils.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-int seed = std::random_device{}();
+auto seed = std::random_device{}();
 std::mt19937 gen(seed);
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
