@@ -457,8 +457,11 @@ namespace hpx::util::itt {
     {
         if (use_ittnotify_api)
         {
+            // The extra value comes from `this` rather than the string
+            // handle: callers reuse cached name handles across concurrent
+            // instances, so a handle-derived id would collide.
             id_ = HPX_ITT_MAKE_ID(
-                domain_.domain_, reinterpret_cast<std::size_t>(sh_.handle_));
+                domain_.domain_, reinterpret_cast<std::size_t>(this));
             HPX_ITT_TASK_BEGIN_OVERLAPPED(domain_.domain_, id_, sh_.handle_);
         }
     }
