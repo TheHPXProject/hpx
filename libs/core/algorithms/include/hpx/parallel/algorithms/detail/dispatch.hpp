@@ -13,6 +13,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/scoped_executor_parameters.hpp>
@@ -89,6 +90,10 @@ namespace hpx::parallel::detail {
         }
 
     public:
+        // Algorithms with future-based task graphs opt in to the scheduler
+        // adapter. Their existing parallel decomposition is preserved.
+        static constexpr bool uses_futures = false;
+
         using result_type = Result;
         using local_result_type = local_algorithm_result_t<result_type>;
 
@@ -180,19 +185,78 @@ namespace hpx::parallel::detail {
                 hpx::parallel::util::detail::algorithm_result<ExPolicy,
                     local_result_type>;
 
-            using result = decltype(Derived::parallel(
-                HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
-
-            if constexpr (std::is_void_v<result>)
+            if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                              ExPolicy> &&
+                Derived::uses_futures)
             {
-                Derived::parallel(
-                    HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...);
-                return result_handler::get();
+                namespace ex = hpx::execution::experimental;
+                auto sched = policy.executor().sched();
+                auto future_policy =
+                    ex::to_task(policy.on(ex::scheduler_executor(sched)));
+                auto sender = ex::let_value(ex::schedule(sched),
+                    [policy = HPX_MOVE(future_policy),
+                        args = hpx::make_tuple(
+                            HPX_FORWARD(Args, args)...)]() mutable {
+                        // let_value keeps the captured arguments alive until
+                        // the task graph completes, including comparators and
+                        // projections referenced by recursive tasks.
+                        try
+                        {
+                            return hpx::invoke_fused(
+                                [&policy](auto&&... values) {
+                                    using policy_type =
+                                        decltype(ex::to_non_task(policy));
+                                    using exception_handler =
+                                        hpx::parallel::detail::handle_exception<
+                                            policy_type, local_result_type>;
+                                    return ex::let_error(
+                                        ex::as_sender(
+                                            Derived{}.call(HPX_MOVE(policy),
+                                                HPX_FORWARD(decltype(values),
+                                                    values)...)),
+                                        [](std::exception_ptr error) {
+                                            try
+                                            {
+                                                exception_handler::call(error);
+                                            }
+                                            catch (...)
+                                            {
+                                                return ex::just_error(
+                                                    std::current_exception());
+                                            }
+                                            HPX_UNREACHABLE;
+                                        });
+                                },
+                                HPX_MOVE(args));
+                        }
+                        catch (...)
+                        {
+                            using policy_type =
+                                decltype(ex::to_non_task(policy));
+                            hpx::parallel::detail::handle_exception<policy_type,
+                                local_result_type>::call();
+                        }
+                    });
+                return result_handler::get(
+                    ex::continues_on(HPX_MOVE(sender), HPX_MOVE(sched)));
             }
             else
             {
-                return result_handler::get(Derived::parallel(
+                using result = decltype(Derived::parallel(
                     HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
+
+                if constexpr (std::is_void_v<result>)
+                {
+                    Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Args, args)...);
+                    return result_handler::get();
+                }
+                else
+                {
+                    return result_handler::get(
+                        Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                            HPX_FORWARD(Args, args)...));
+                }
             }
         }
 
