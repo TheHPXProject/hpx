@@ -141,6 +141,15 @@ bool use_ittnotify_api = false;
         __itt_task_end_ptr(domain);                                            \
     /**/
 
+#define HPX_INTERNAL_ITT_TASK_BEGIN_OVERLAPPED(domain, id, name)               \
+    if (use_ittnotify_api && __itt_task_begin_overlapped_ptr)                  \
+        __itt_task_begin_overlapped_ptr(domain, id, __itt_null, name);         \
+    /**/
+#define HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, id)                       \
+    if (use_ittnotify_api && __itt_task_end_overlapped_ptr)                    \
+        __itt_task_end_overlapped_ptr(domain, id);                             \
+    /**/
+
 #define HPX_INTERNAL_ITT_DOMAIN_CREATE(name)                                   \
     (use_ittnotify_api && __itt_domain_create_ptr) ?                           \
         __itt_domain_create_ptr(name) :                                        \
@@ -441,6 +450,28 @@ namespace hpx::util::itt {
         }
     }
 
+    overlapped_task::overlapped_task(
+        domain const& d, string_handle name) noexcept
+      : domain_(d)
+      , sh_(HPX_MOVE(name))
+    {
+        if (use_ittnotify_api)
+        {
+            id_ = HPX_ITT_MAKE_ID(
+                domain_.domain_, reinterpret_cast<std::size_t>(sh_.handle_));
+            HPX_ITT_TASK_BEGIN_OVERLAPPED(domain_.domain_, id_, sh_.handle_);
+        }
+    }
+
+    overlapped_task::~overlapped_task()
+    {
+        if (use_ittnotify_api)
+        {
+            HPX_ITT_TASK_END_OVERLAPPED(domain_.domain_, id_);
+            delete id_;
+        }
+    }
+
     void emit_marker(domain const& d, string_handle const& name) noexcept
     {
         HPX_ITT_MARKER(d.domain_, name.handle_);
@@ -673,6 +704,18 @@ void itt_task_begin(___itt_domain const* domain, ___itt_id const* id,
 
 void itt_task_end(___itt_domain const* domain) noexcept {
     HPX_INTERNAL_ITT_TASK_END(domain)}
+
+void itt_task_begin_overlapped(___itt_domain const* domain,
+    ___itt_id const* id, ___itt_string_handle* name) noexcept
+{
+    HPX_INTERNAL_ITT_TASK_BEGIN_OVERLAPPED(domain, *id, name)
+}
+
+void itt_task_end_overlapped(
+    ___itt_domain const* domain, ___itt_id const* id) noexcept
+{
+    HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, *id)
+}
 
 ___itt_domain* itt_domain_create(char const* name) noexcept
 {

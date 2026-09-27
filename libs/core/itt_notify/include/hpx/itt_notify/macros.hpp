@@ -49,6 +49,11 @@
 #define HPX_ITT_TASK_BEGIN_ID(domain, id, name) itt_task_begin(domain, id, name)
 #define HPX_ITT_TASK_END(domain) itt_task_end(domain)
 
+#define HPX_ITT_TASK_BEGIN_OVERLAPPED(domain, id, name)                        \
+    itt_task_begin_overlapped(domain, id, name)
+#define HPX_ITT_TASK_END_OVERLAPPED(domain, id)                                \
+    itt_task_end_overlapped(domain, id)
+
 #define HPX_ITT_DOMAIN_CREATE(name) itt_domain_create(name)
 #define HPX_ITT_STRING_HANDLE_CREATE(name) itt_string_handle_create(name)
 
