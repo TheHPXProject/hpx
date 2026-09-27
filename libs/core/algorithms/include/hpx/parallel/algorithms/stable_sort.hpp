@@ -187,6 +187,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename RandomIt>
         struct stable_sort : public algorithm<stable_sort<RandomIt>, RandomIt>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr stable_sort() noexcept
               : algorithm<stable_sort, RandomIt>("stable_sort")
             {
@@ -207,9 +209,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename Sentinel, typename Compare,
                 typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, RandomIt>
-            parallel(ExPolicy&& policy, RandomIt first, Sentinel last,
-                Compare&& compare, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, RandomIt first,
+                Sentinel last, Compare&& compare, Proj&& proj)
             {
                 using algorithm_result =
                     util::detail::algorithm_result<ExPolicy, RandomIt>;
@@ -310,20 +311,16 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, RandomIt first, RandomIt last,
-            Comp comp = Comp()) HPX_PRE(first <= last)
+        static decltype(auto) invoke_default(ExPolicy&& policy, RandomIt first,
+            RandomIt last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
 
-            using result_type =
-                hpx::parallel::util::detail::algorithm_result_t<ExPolicy>;
-
-            return hpx::util::void_guard<result_type>(),
-                   hpx::parallel::detail::stable_sort<RandomIt>().call(
-                       HPX_FORWARD(ExPolicy, policy), first, last,
-                       HPX_MOVE(comp), hpx::identity_v);
+            return hpx::parallel::util::detail::algorithm_result<ExPolicy>::get(
+                hpx::parallel::detail::stable_sort<RandomIt>().call(
+                    HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(comp),
+                    hpx::identity_v));
         }
     } stable_sort{};
 }    // namespace hpx

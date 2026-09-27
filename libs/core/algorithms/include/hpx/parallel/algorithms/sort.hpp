@@ -167,6 +167,7 @@ namespace hpx {
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
+#include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <algorithm>
@@ -259,9 +260,15 @@ namespace hpx::parallel {
                     {
                         std::list<std::exception_ptr> errors;
                         if (leftf.has_exception())
-                            errors.push_back(leftf.get_exception_ptr());
+                        {
+                            util::detail::handle_local_exceptions<ExPolicy>::
+                                call(leftf.get_exception_ptr(), errors);
+                        }
                         if (rightf.has_exception())
-                            errors.push_back(rightf.get_exception_ptr());
+                        {
+                            util::detail::handle_local_exceptions<ExPolicy>::
+                                call(rightf.get_exception_ptr(), errors);
+                        }
 
                         throw exception_list(HPX_MOVE(errors));
                     }
@@ -330,6 +337,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename RandomIt>
         struct sort : public algorithm<sort<RandomIt>, RandomIt>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr sort() noexcept
               : algorithm<sort, RandomIt>("sort")
             {
@@ -348,9 +357,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename Sent, typename Comp,
                 typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, RandomIt>
-            parallel(ExPolicy&& policy, RandomIt first, Sent last_s,
-                Comp&& comp, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, RandomIt first,
+                Sent last_s, Comp&& comp, Proj&& proj)
             {
                 auto last = detail::advance_to_sentinel(first, last_s);
                 typedef util::detail::algorithm_result<ExPolicy, RandomIt>
@@ -417,21 +425,16 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, RandomIt first, RandomIt last,
-            Comp comp = Comp()) HPX_PRE(first <= last)
+        static decltype(auto) invoke_default(ExPolicy&& policy, RandomIt first,
+            RandomIt last, Comp comp = Comp()) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
 
-            using result_type =
-                typename hpx::parallel::util::detail::algorithm_result<
-                    ExPolicy>::type;
-
-            return hpx::util::void_guard<result_type>(),
-                   hpx::parallel::detail::sort<RandomIt>().call(
-                       HPX_FORWARD(ExPolicy, policy), first, last,
-                       HPX_MOVE(comp), hpx::identity_v);
+            return hpx::parallel::util::detail::algorithm_result<ExPolicy>::get(
+                hpx::parallel::detail::sort<RandomIt>().call(
+                    HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(comp),
+                    hpx::identity_v));
         }
     } sort{};
 }    // namespace hpx

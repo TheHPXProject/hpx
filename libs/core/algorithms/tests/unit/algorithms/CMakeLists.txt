@@ -202,6 +202,8 @@ set(sender_tests
     mismatch_binary_sender
     move_sender
     none_of_sender
+    nth_element_extended_sender
+    nth_element_sender
     partial_sort_sender
     reduce_sender
     remove_copy_if_sender
@@ -221,6 +223,8 @@ set(sender_tests
     set_intersection_sender
     shift_left_sender
     shift_right_sender
+    sort_sender
+    stable_sort_sender
     starts_with_sender
     swapranges_sender
     transform_sender
