@@ -176,6 +176,7 @@ set(sender_tests
     ends_with_sender
     equal_sender
     equal_binary_sender
+    exclusive_scan_sender
     fill_sender
     filln_sender
     find_sender
@@ -187,6 +188,7 @@ set(sender_tests
     foreachn_sender
     generate_sender
     generaten_sender
+    inclusive_scan_sender
     inplace_merge_sender
     is_heap_sender
     is_heap_until_sender
@@ -234,6 +236,8 @@ set(sender_tests
     stable_sort_sender
     starts_with_sender
     swapranges_sender
+    transform_exclusive_scan_sender
+    transform_inclusive_scan_sender
     transform_sender
     transform_binary_sender
     transform_binary2_sender
