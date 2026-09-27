@@ -15,6 +15,7 @@
 #include <hpx/tracing/tracing.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <string_view>
@@ -30,14 +31,14 @@ namespace hpx::tracing {
 
         struct itt_globals
         {
-            util::itt::domain hpx;
+            util::itt::domain domain;
             util::itt::string_handle fiber;
             util::itt::string_handle fiber_suspend;
             util::itt::string_handle background;
             util::itt::string_handle os_thread_sleep;
 
             itt_globals() noexcept
-              : hpx("hpx")
+              : domain("hpx")
               , fiber("fiber")
               , fiber_suspend("fiber_suspend")
               , background("hpx::background")
@@ -46,7 +47,7 @@ namespace hpx::tracing {
             }
         };
 
-        itt_globals& get_itt_globals() noexcept
+        itt_globals const& get_itt_globals() noexcept
         {
             static itt_globals g;
             return g;
@@ -56,7 +57,7 @@ namespace hpx::tracing {
     void tracing_init(char const*, int, char**, std::uint32_t, std::uint32_t,
         std::string_view) noexcept
     {
-        (void) get_itt_globals();
+        [[maybe_unused]] auto const& _ = get_itt_globals();
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -70,7 +71,7 @@ namespace hpx::tracing {
     // loop_context
 
     loop_context::loop_context() noexcept
-      : domain(get_itt_globals().hpx)
+      : domain(get_itt_globals().domain)
       , task_id("task_id")
       , task_phase("task_phase")
     {
@@ -143,7 +144,7 @@ namespace hpx::tracing {
 
     fiber_region::fiber_region(
         fiber_region_init_data const& data, std::size_t) noexcept
-      : task_(get_itt_globals().hpx,
+      : task_(get_itt_globals().domain,
             data.name != nullptr ? util::itt::string_handle(data.name) :
                                    get_itt_globals().fiber)
     {
@@ -152,7 +153,7 @@ namespace hpx::tracing {
     fiber_region::~fiber_region() = default;
 
     fiber_suspend_region::fiber_suspend_region(char const* desc) noexcept
-      : task_(get_itt_globals().hpx,
+      : task_(get_itt_globals().domain,
             desc != nullptr ? util::itt::string_handle(desc) :
                               get_itt_globals().fiber_suspend)
     {
@@ -161,7 +162,7 @@ namespace hpx::tracing {
     fiber_suspend_region::~fiber_suspend_region() = default;
 
     background_work_region::background_work_region(std::size_t) noexcept
-      : task_(get_itt_globals().hpx, get_itt_globals().background)
+      : task_(get_itt_globals().domain, get_itt_globals().background)
     {
     }
 
@@ -172,20 +173,20 @@ namespace hpx::tracing {
 
     mark_event::mark_event(char const* name) noexcept
     {
-        util::itt::emit_marker(get_itt_globals().hpx,
+        util::itt::emit_marker(get_itt_globals().domain,
             util::itt::string_handle(name != nullptr ? name : "mark"));
     }
 
     void frame_mark(char const* name) noexcept
     {
-        util::itt::emit_marker(get_itt_globals().hpx,
+        util::itt::emit_marker(get_itt_globals().domain,
             util::itt::string_handle(name != nullptr ? name : "frame"));
     }
 
     void os_thread_sleep(std::size_t) noexcept
     {
         util::itt::emit_marker(
-            get_itt_globals().hpx, get_itt_globals().os_thread_sleep);
+            get_itt_globals().domain, get_itt_globals().os_thread_sleep);
     }
 
 }    // namespace hpx::tracing

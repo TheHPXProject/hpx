@@ -111,7 +111,11 @@ namespace hpx::tracing {
         fiber_suspend_region& operator=(fiber_suspend_region const&) = delete;
 
     private:
-        util::itt::task task_;
+        // overlapped_task, not task: the region can span a self.yield()
+        // and be destroyed on a different worker than it was constructed
+        // on. __itt_task_end without an id would close whatever is on the
+        // resuming worker's stack.
+        util::itt::overlapped_task task_;
     };
 
     ////////////////////////////////////////////////////////////////////////////
