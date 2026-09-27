@@ -171,6 +171,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
@@ -205,7 +206,8 @@ namespace hpx::parallel {
             return util::loop_with_cleanup(
                 HPX_FORWARD(ExPolicy, policy), first, last,
                 [&value](InIter it) -> void {
-                    hpx::construct_at(std::addressof(*it), value);
+                    hpx::construct_at(
+                        std::addressof(*it), unwrap_algorithm_value(value));
                 },
                 [](InIter it) -> void {
                     std::destroy_at(std::addressof(*it));
@@ -220,7 +222,8 @@ namespace hpx::parallel {
             return util::loop_with_cleanup_n(
                 HPX_FORWARD(ExPolicy, policy), first, count,
                 [&value](InIter it) -> void {
-                    hpx::construct_at(std::addressof(*it), value);
+                    hpx::construct_at(
+                        std::addressof(*it), unwrap_algorithm_value(value));
                 },
                 [](InIter it) -> void {
                     std::destroy_at(std::addressof(*it));

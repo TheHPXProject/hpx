@@ -17,6 +17,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -76,8 +77,8 @@ void test_uninitialized_value_construct_range_sent(
     auto end_size = rand() % data_size;
     c[end_size] = {20};
 
-    hpx::ranges::uninitialized_value_construct(
-        policy, std::begin(c), sentinel<std::int32_t>{20});
+    hpx::ranges::uninitialized_value_construct(policy, std::begin(c),
+        test::make_sized_sentinel(std::begin(c), sentinel<std::int32_t>{20}));
 
     std::size_t count42 = 0;
     std::size_t count10 = 0;
@@ -164,17 +165,25 @@ void test_uninitialized_value_construct_range()
     using namespace hpx::execution;
 
     test_uninitialized_value_construct_range(IteratorTag());
-    test_uninitialized_value_construct_range(seq, IteratorTag());
-    test_uninitialized_value_construct_range(par, IteratorTag());
-    test_uninitialized_value_construct_range(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_value_construct_range(seq, IteratorTag());
+        test_uninitialized_value_construct_range(par, IteratorTag());
+        test_uninitialized_value_construct_range(par_unseq, IteratorTag());
 
-    test_uninitialized_value_construct_range_async(seq(task), IteratorTag());
-    test_uninitialized_value_construct_range_async(par(task), IteratorTag());
+        test_uninitialized_value_construct_range_async(
+            seq(task), IteratorTag());
+        test_uninitialized_value_construct_range_async(
+            par(task), IteratorTag());
+    }
 
     test_uninitialized_value_construct_range_sent(IteratorTag());
-    test_uninitialized_value_construct_range_sent(seq, IteratorTag());
-    test_uninitialized_value_construct_range_sent(par, IteratorTag());
-    test_uninitialized_value_construct_range_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_value_construct_range_sent(seq, IteratorTag());
+        test_uninitialized_value_construct_range_sent(par, IteratorTag());
+        test_uninitialized_value_construct_range_sent(par_unseq, IteratorTag());
+    }
 }
 
 void uninitialized_value_construct_range_test()

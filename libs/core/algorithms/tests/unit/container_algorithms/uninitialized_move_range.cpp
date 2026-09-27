@@ -16,6 +16,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/iterator_support/tests/iter_sent.hpp>
@@ -63,11 +64,13 @@ void test_uninitialized_move_sent(ExPolicy&& policy, IteratorTag)
     std::copy(std::begin(c), std::end(c), std::rbegin(d));
     std::size_t sent_len = (std::rand() % 10007) + 1;
     hpx::ranges::uninitialized_move(policy, std::begin(c),
-        sentinel<std::size_t>{
-            *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))},
+        test::make_sized_sentinel(std::begin(c),
+            sentinel<std::size_t>{
+                *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))}),
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
 
     std::size_t count = 0;
     // loop till for sent_len since either the sentinel for the input or output iterator
@@ -92,11 +95,13 @@ void test_uninitialized_move_sent_async(ExPolicy&& p, IteratorTag)
     std::copy(std::begin(c), std::end(c), std::rbegin(d));
     std::size_t sent_len = (std::rand() % 10007) + 1;
     auto f = hpx::ranges::uninitialized_move(p, std::begin(c),
-        sentinel<std::size_t>{
-            *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))},
+        test::make_sized_sentinel(std::begin(c),
+            sentinel<std::size_t>{
+                *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))}),
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
     f.wait();
 
     std::size_t count = 0;
@@ -117,12 +122,15 @@ void test_uninitialized_move_sent()
 
     test_uninitialized_move_sent(IteratorTag());
 
-    test_uninitialized_move_sent(seq, IteratorTag());
-    test_uninitialized_move_sent(par, IteratorTag());
-    test_uninitialized_move_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_move_sent(seq, IteratorTag());
+        test_uninitialized_move_sent(par, IteratorTag());
+        test_uninitialized_move_sent(par_unseq, IteratorTag());
 
-    test_uninitialized_move_sent_async(seq(task), IteratorTag());
-    test_uninitialized_move_sent_async(par(task), IteratorTag());
+        test_uninitialized_move_sent_async(seq(task), IteratorTag());
+        test_uninitialized_move_sent_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_move_sent_test()
@@ -207,12 +215,15 @@ void test_uninitialized_move()
 
     test_uninitialized_move(IteratorTag());
 
-    test_uninitialized_move(seq, IteratorTag());
-    test_uninitialized_move(par, IteratorTag());
-    test_uninitialized_move(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_move(seq, IteratorTag());
+        test_uninitialized_move(par, IteratorTag());
+        test_uninitialized_move(par_unseq, IteratorTag());
 
-    test_uninitialized_move_async(seq(task), IteratorTag());
-    test_uninitialized_move_async(par(task), IteratorTag());
+        test_uninitialized_move_async(seq(task), IteratorTag());
+        test_uninitialized_move_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_move_test()
@@ -350,11 +361,14 @@ void test_uninitialized_move_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_uninitialized_move_exception(seq, IteratorTag());
-    test_uninitialized_move_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_move_exception(seq, IteratorTag());
+        test_uninitialized_move_exception(par, IteratorTag());
 
-    test_uninitialized_move_exception_async(seq(task), IteratorTag());
-    test_uninitialized_move_exception_async(par(task), IteratorTag());
+        test_uninitialized_move_exception_async(seq(task), IteratorTag());
+        test_uninitialized_move_exception_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_move_exception_test()
@@ -450,11 +464,14 @@ void test_uninitialized_move_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_uninitialized_move_bad_alloc(seq, IteratorTag());
-    test_uninitialized_move_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_move_bad_alloc(seq, IteratorTag());
+        test_uninitialized_move_bad_alloc(par, IteratorTag());
 
-    test_uninitialized_move_bad_alloc_async(seq(task), IteratorTag());
-    test_uninitialized_move_bad_alloc_async(par(task), IteratorTag());
+        test_uninitialized_move_bad_alloc_async(seq(task), IteratorTag());
+        test_uninitialized_move_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_move_bad_alloc_test()

@@ -18,6 +18,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -127,12 +128,15 @@ void test_destroy_n()
 
     test_destroy_n(IteratorTag());
 
-    test_destroy_n(seq, IteratorTag());
-    test_destroy_n(par, IteratorTag());
-    test_destroy_n(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy_n(seq, IteratorTag());
+        test_destroy_n(par, IteratorTag());
+        test_destroy_n(par_unseq, IteratorTag());
 
-    test_destroy_n_async(seq(task), IteratorTag());
-    test_destroy_n_async(par(task), IteratorTag());
+        test_destroy_n_async(seq(task), IteratorTag());
+        test_destroy_n_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_n_test()
@@ -320,11 +324,14 @@ void test_destroy_n_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_destroy_n_exception(seq, IteratorTag());
-    test_destroy_n_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy_n_exception(seq, IteratorTag());
+        test_destroy_n_exception(par, IteratorTag());
 
-    test_destroy_n_exception_async(seq(task), IteratorTag());
-    test_destroy_n_exception_async(par(task), IteratorTag());
+        test_destroy_n_exception_async(seq(task), IteratorTag());
+        test_destroy_n_exception_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_n_exception_test()
@@ -456,11 +463,14 @@ void test_destroy_n_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_destroy_n_bad_alloc(seq, IteratorTag());
-    test_destroy_n_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy_n_bad_alloc(seq, IteratorTag());
+        test_destroy_n_bad_alloc(par, IteratorTag());
 
-    test_destroy_n_bad_alloc_async(seq(task), IteratorTag());
-    test_destroy_n_bad_alloc_async(par(task), IteratorTag());
+        test_destroy_n_bad_alloc_async(seq(task), IteratorTag());
+        test_destroy_n_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_n_bad_alloc_test()

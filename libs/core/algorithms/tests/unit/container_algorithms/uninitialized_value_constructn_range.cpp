@@ -17,6 +17,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -127,12 +128,15 @@ void test_uninitialized_value_construct_n()
 
     test_uninitialized_value_construct_n(IteratorTag());
 
-    test_uninitialized_value_construct_n(seq, IteratorTag());
-    test_uninitialized_value_construct_n(par, IteratorTag());
-    test_uninitialized_value_construct_n(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_value_construct_n(seq, IteratorTag());
+        test_uninitialized_value_construct_n(par, IteratorTag());
+        test_uninitialized_value_construct_n(par_unseq, IteratorTag());
 
-    test_uninitialized_value_construct_n_async(seq(task), IteratorTag());
-    test_uninitialized_value_construct_n_async(par(task), IteratorTag());
+        test_uninitialized_value_construct_n_async(seq(task), IteratorTag());
+        test_uninitialized_value_construct_n_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_value_construct_n_test()

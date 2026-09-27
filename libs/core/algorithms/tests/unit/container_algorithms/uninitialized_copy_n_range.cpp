@@ -16,6 +16,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/iterator_support/tests/iter_sent.hpp>
@@ -61,8 +62,9 @@ void test_uninitialized_copy_n_sent(ExPolicy&& policy, IteratorTag)
     std::size_t sent_len = (std::rand() % 10007) + 1;
     hpx::ranges::uninitialized_copy_n(policy, std::begin(c), sent_len,
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
 
     std::size_t count = 0;
     // loop till for sent_len since either the sentinel for the input or output iterator
@@ -88,8 +90,9 @@ void test_uninitialized_copy_n_sent_async(ExPolicy&& p, IteratorTag)
     std::size_t sent_len = (std::rand() % 10007) + 1;
     auto f = hpx::ranges::uninitialized_copy_n(p, std::begin(c), sent_len,
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
     f.wait();
 
     std::size_t count = 0;
@@ -110,12 +113,15 @@ void test_uninitialized_copy_n_sent()
 
     test_uninitialized_copy_n_sent(IteratorTag());
 
-    test_uninitialized_copy_n_sent(seq, IteratorTag());
-    test_uninitialized_copy_n_sent(par, IteratorTag());
-    test_uninitialized_copy_n_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_copy_n_sent(seq, IteratorTag());
+        test_uninitialized_copy_n_sent(par, IteratorTag());
+        test_uninitialized_copy_n_sent(par_unseq, IteratorTag());
 
-    test_uninitialized_copy_n_sent_async(seq(task), IteratorTag());
-    test_uninitialized_copy_n_sent_async(par(task), IteratorTag());
+        test_uninitialized_copy_n_sent_async(seq(task), IteratorTag());
+        test_uninitialized_copy_n_sent_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_copy_n_sent_test()

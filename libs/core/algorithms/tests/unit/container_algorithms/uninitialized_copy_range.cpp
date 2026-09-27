@@ -16,6 +16,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/iterator_support/tests/iter_sent.hpp>
@@ -63,11 +64,13 @@ void test_uninitialized_copy_sent(ExPolicy&& policy, IteratorTag)
     std::copy(std::begin(c), std::end(c), std::rbegin(d));
     std::size_t sent_len = (std::rand() % 10007) + 1;
     hpx::ranges::uninitialized_copy(policy, std::begin(c),
-        sentinel<std::size_t>{
-            *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))},
+        test::make_sized_sentinel(std::begin(c),
+            sentinel<std::size_t>{
+                *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))}),
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
 
     std::size_t count = 0;
     // loop till for sent_len since either the sentinel for the input or output iterator
@@ -92,11 +95,13 @@ void test_uninitialized_copy_sent_async(ExPolicy&& p, IteratorTag)
     std::copy(std::begin(c), std::end(c), std::rbegin(d));
     std::size_t sent_len = (std::rand() % 10007) + 1;
     auto f = hpx::ranges::uninitialized_copy(p, std::begin(c),
-        sentinel<std::size_t>{
-            *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))},
+        test::make_sized_sentinel(std::begin(c),
+            sentinel<std::size_t>{
+                *(std::begin(c) + static_cast<std::ptrdiff_t>(sent_len))}),
         std::begin(d),
-        sentinel<std::size_t>{
-            *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))});
+        test::make_sized_sentinel(std::begin(d),
+            sentinel<std::size_t>{
+                *(std::begin(d) + static_cast<std::ptrdiff_t>(sent_len))}));
     f.wait();
 
     std::size_t count = 0;
@@ -117,12 +122,15 @@ void test_uninitialized_copy_sent()
 
     test_uninitialized_copy_sent(IteratorTag());
 
-    test_uninitialized_copy_sent(seq, IteratorTag());
-    test_uninitialized_copy_sent(par, IteratorTag());
-    test_uninitialized_copy_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_copy_sent(seq, IteratorTag());
+        test_uninitialized_copy_sent(par, IteratorTag());
+        test_uninitialized_copy_sent(par_unseq, IteratorTag());
 
-    test_uninitialized_copy_sent_async(seq(task), IteratorTag());
-    test_uninitialized_copy_sent_async(par(task), IteratorTag());
+        test_uninitialized_copy_sent_async(seq(task), IteratorTag());
+        test_uninitialized_copy_sent_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_copy_sent_test()
@@ -207,12 +215,15 @@ void test_uninitialized_copy()
 
     test_uninitialized_copy(IteratorTag());
 
-    test_uninitialized_copy(seq, IteratorTag());
-    test_uninitialized_copy(par, IteratorTag());
-    test_uninitialized_copy(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_copy(seq, IteratorTag());
+        test_uninitialized_copy(par, IteratorTag());
+        test_uninitialized_copy(par_unseq, IteratorTag());
 
-    test_uninitialized_copy_async(seq(task), IteratorTag());
-    test_uninitialized_copy_async(par(task), IteratorTag());
+        test_uninitialized_copy_async(seq(task), IteratorTag());
+        test_uninitialized_copy_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_copy_test()
@@ -350,11 +361,14 @@ void test_uninitialized_copy_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_uninitialized_copy_exception(seq, IteratorTag());
-    test_uninitialized_copy_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_copy_exception(seq, IteratorTag());
+        test_uninitialized_copy_exception(par, IteratorTag());
 
-    test_uninitialized_copy_exception_async(seq(task), IteratorTag());
-    test_uninitialized_copy_exception_async(par(task), IteratorTag());
+        test_uninitialized_copy_exception_async(seq(task), IteratorTag());
+        test_uninitialized_copy_exception_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_copy_exception_test()
@@ -450,11 +464,14 @@ void test_uninitialized_copy_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_uninitialized_copy_bad_alloc(seq, IteratorTag());
-    test_uninitialized_copy_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_copy_bad_alloc(seq, IteratorTag());
+        test_uninitialized_copy_bad_alloc(par, IteratorTag());
 
-    test_uninitialized_copy_bad_alloc_async(seq(task), IteratorTag());
-    test_uninitialized_copy_bad_alloc_async(par(task), IteratorTag());
+        test_uninitialized_copy_bad_alloc_async(seq(task), IteratorTag());
+        test_uninitialized_copy_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void uninitialized_copy_bad_alloc_test()

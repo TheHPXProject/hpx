@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "destroy_range_tests.hpp"
@@ -20,12 +21,15 @@ void test_destroy()
 
     test_destroy(IteratorTag());
 
-    test_destroy(seq, IteratorTag());
-    test_destroy(par, IteratorTag());
-    test_destroy(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy(seq, IteratorTag());
+        test_destroy(par, IteratorTag());
+        test_destroy(par_unseq, IteratorTag());
 
-    test_destroy_async(seq(task), IteratorTag());
-    test_destroy_async(par(task), IteratorTag());
+        test_destroy_async(seq(task), IteratorTag());
+        test_destroy_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_test()
@@ -45,11 +49,14 @@ void test_destroy_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_destroy_exception(seq, IteratorTag());
-    test_destroy_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy_exception(seq, IteratorTag());
+        test_destroy_exception(par, IteratorTag());
 
-    test_destroy_exception_async(seq(task), IteratorTag());
-    test_destroy_exception_async(par(task), IteratorTag());
+        test_destroy_exception_async(seq(task), IteratorTag());
+        test_destroy_exception_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_exception_test()
@@ -67,11 +74,14 @@ void test_destroy_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_destroy_bad_alloc(seq, IteratorTag());
-    test_destroy_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_destroy_bad_alloc(seq, IteratorTag());
+        test_destroy_bad_alloc(par, IteratorTag());
 
-    test_destroy_bad_alloc_async(seq(task), IteratorTag());
-    test_destroy_bad_alloc_async(par(task), IteratorTag());
+        test_destroy_bad_alloc_async(seq(task), IteratorTag());
+        test_destroy_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void destroy_bad_alloc_test()

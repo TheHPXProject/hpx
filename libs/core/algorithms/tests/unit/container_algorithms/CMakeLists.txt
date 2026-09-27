@@ -89,6 +89,7 @@ set(tests
     p3179_search_range
     p3179_iterator_range
     p3179_mutating_range
+    p3179_memory_range
     p3179_ordered_range
     p3179_query_range
     reduce_range

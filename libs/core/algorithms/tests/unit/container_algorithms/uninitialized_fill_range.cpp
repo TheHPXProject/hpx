@@ -16,6 +16,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/iterator_support/tests/iter_sent.hpp>
@@ -51,7 +52,9 @@ void test_uninitialized_fill_sent(ExPolicy policy)
     std::iota(std::begin(c), std::end(c), std::rand());
 
     hpx::ranges::uninitialized_fill(policy, std::begin(c),
-        sentinel<std::size_t>{*(std::begin(c) + 100)}, 10);
+        test::make_sized_sentinel(
+            std::begin(c), sentinel<std::size_t>{*(std::begin(c) + 100)}),
+        10);
 
     // verify values
     std::size_t count = 0;
@@ -128,17 +131,23 @@ void test_uninitialized_fill()
 
     test_uninitialized_fill(IteratorTag());
 
-    test_uninitialized_fill(seq, IteratorTag());
-    test_uninitialized_fill(par, IteratorTag());
-    test_uninitialized_fill(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_fill(seq, IteratorTag());
+        test_uninitialized_fill(par, IteratorTag());
+        test_uninitialized_fill(par_unseq, IteratorTag());
 
-    test_uninitialized_fill_async(seq(task), IteratorTag());
-    test_uninitialized_fill_async(par(task), IteratorTag());
+        test_uninitialized_fill_async(seq(task), IteratorTag());
+        test_uninitialized_fill_async(par(task), IteratorTag());
+    }
 
     test_uninitialized_fill_sent();
-    test_uninitialized_fill_sent(seq);
-    test_uninitialized_fill_sent(par);
-    test_uninitialized_fill_sent(par_unseq);
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_uninitialized_fill_sent(seq);
+        test_uninitialized_fill_sent(par);
+        test_uninitialized_fill_sent(par_unseq);
+    }
 }
 
 void uninitialized_fill_test()
