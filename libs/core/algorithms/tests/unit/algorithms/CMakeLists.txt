@@ -194,6 +194,7 @@ set(sender_tests
     is_sorted_sender
     is_sorted_until_sender
     lexicographical_compare_sender
+    make_heap_sender
     max_element_sender
     min_element_sender
     minmax_element_sender

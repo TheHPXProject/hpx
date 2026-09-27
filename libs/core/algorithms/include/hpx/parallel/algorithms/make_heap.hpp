@@ -196,13 +196,16 @@ namespace hpx {
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
@@ -210,6 +213,7 @@ namespace hpx {
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <exception>
@@ -304,16 +308,16 @@ namespace hpx::parallel {
             using difference_type =
                 typename std::iterator_traits<Iter>::difference_type;
 
-            difference_type n = last - first;
+            difference_type n =
+                detail::advance_to_sentinel(first, last) - first;
             if (n > 1)
             {
                 for (difference_type start = (n - 2) / 2; start >= 0; --start)
                 {
                     sift_down(first, comp, proj, n, first + start);
                 }
-                return first + n;
             }
-            return first;
+            return first + n;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -341,11 +345,11 @@ namespace hpx::parallel {
                 Comp&& comp, Proj&& proj)
             {
                 typename std::iterator_traits<RndIter>::difference_type n =
-                    last - first;
+                    detail::advance_to_sentinel(first, last) - first;
                 if (n <= 1)
                 {
                     return util::detail::algorithm_result<ExPolicy,
-                        RndIter>::get(HPX_MOVE(first));
+                        RndIter>::get(first + n);
                 }
 
                 using execution_policy = std::decay_t<ExPolicy>;
@@ -523,12 +527,87 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename RndIter, typename Sent,
                 typename Comp, typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, RndIter> parallel(
-                ExPolicy&& policy, RndIter first, Sent last, Comp&& comp,
-                Proj&& proj)
+            static auto make_heap_sender(ExPolicy&& policy, RndIter first,
+                Sent last, Comp&& comp, Proj&& proj)
             {
-                return make_heap_thread(HPX_FORWARD(ExPolicy, policy), first,
-                    last, HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj));
+                namespace ex = hpx::execution::experimental;
+                using index_iterator =
+                    hpx::util::counting_iterator<std::size_t>;
+
+                auto sched = policy.executor().sched();
+                auto result = ex::let_value(ex::schedule(sched),
+                    [policy = ex::to_task(HPX_FORWARD(ExPolicy, policy)), first,
+                        last, comp = HPX_FORWARD(Comp, comp),
+                        proj = HPX_FORWARD(Proj, proj)]() mutable {
+                        try
+                        {
+                            auto end = detail::advance_to_sentinel(first, last);
+                            auto const n = end - first;
+                            auto sift = [first, n, comp, proj](
+                                            std::size_t i) mutable {
+                                sift_down(first, comp, proj, n, first + i);
+                            };
+
+                            // The number of levels is only known at runtime.
+                            // Type erasure lets us chain their nested sender
+                            // types without blocking between levels.
+                            ex::unique_any_sender<> levels(ex::just());
+                            std::size_t level_end =
+                                static_cast<std::size_t>(n) / 2;
+                            while (level_end != 0)
+                            {
+                                auto const level_begin =
+                                    std::bit_floor(level_end) - 1;
+                                levels = ex::unique_any_sender<>(ex::let_value(
+                                    HPX_MOVE(levels),
+                                    [policy, sift, level_begin,
+                                        level_end]() mutable {
+                                        // Nodes at the same depth have disjoint
+                                        // subtrees. Complete this level before
+                                        // allowing its parents to sift down.
+                                        for_each_n<index_iterator> for_each;
+                                        auto work = for_each.call(policy,
+                                            index_iterator(level_begin),
+                                            level_end - level_begin,
+                                            HPX_MOVE(sift), hpx::identity_v);
+                                        return HPX_MOVE(work) |
+                                            ex::then([](index_iterator) {});
+                                    }));
+                                level_end = level_begin;
+                            }
+                            return HPX_MOVE(levels) |
+                                ex::then([end]() { return end; });
+                        }
+                        catch (...)
+                        {
+                            util::detail::handle_local_exceptions<
+                                ExPolicy>::call(std::current_exception());
+                        }
+                    });
+
+                // Preserve the scheduler's completion domain across the
+                // type-erased level chain, including for non-task policies.
+                return ex::continues_on(HPX_MOVE(result), HPX_MOVE(sched));
+            }
+
+            template <typename ExPolicy, typename RndIter, typename Sent,
+                typename Comp, typename Proj>
+            static decltype(auto) parallel(ExPolicy&& policy, RndIter first,
+                Sent last, Comp&& comp, Proj&& proj)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    return make_heap_sender(HPX_FORWARD(ExPolicy, policy),
+                        first, last, HPX_FORWARD(Comp, comp),
+                        HPX_FORWARD(Proj, proj));
+                }
+                else
+                {
+                    return make_heap_thread(HPX_FORWARD(ExPolicy, policy),
+                        first, last, HPX_FORWARD(Comp, comp),
+                        HPX_FORWARD(Proj, proj));
+                }
             }
 
             template <typename RndIter, typename Sent, typename Comp,
@@ -568,9 +647,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, RndIter first, RndIter last,
-            Comp comp) HPX_PRE(first <= last)
+        static decltype(auto) invoke_default(ExPolicy&& policy, RndIter first,
+            RndIter last, Comp comp) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
@@ -588,9 +666,8 @@ namespace hpx {
             hpx::traits::is_iterator_v<RndIter>
         )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, RndIter first, RndIter last)
-            HPX_PRE(first <= last)
+        static decltype(auto) invoke_default(ExPolicy&& policy, RndIter first,
+            RndIter last) HPX_PRE(first <= last)
         {
             static_assert(std::random_access_iterator<RndIter>,
                 "Requires random access iterator.");
