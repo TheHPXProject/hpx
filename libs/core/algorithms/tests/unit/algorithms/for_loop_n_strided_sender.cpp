@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <ctime>
 #include <iostream>
 #include <numeric>
 #include <random>
@@ -20,12 +21,9 @@
 #include "test_utils.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-auto seed = std::random_device{}();
-std::mt19937 gen(seed);
-
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
-void test_for_loop_n_strided_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag, int stride)
+void test_for_loop_n_strided_sender(std::mt19937& gen, LnPolicy ln_policy,
+    ExPolicy&& ex_policy, IteratorTag, int stride)
 {
     static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
         "hpx::is_async_execution_policy_v<ExPolicy>");
@@ -69,20 +67,20 @@ void test_for_loop_n_strided_sender(
 }
 
 template <typename IteratorTag>
-void for_loop_n_strided_sender_test()
+void for_loop_n_strided_sender_test(std::mt19937& gen)
 {
     using namespace hpx::execution;
     for (int stride : {1, 2, 5004, 10006, 20000})
     {
         test_for_loop_n_strided_sender(
-            hpx::launch::sync, seq(task), IteratorTag(), stride);
+            gen, hpx::launch::sync, seq(task), IteratorTag(), stride);
         test_for_loop_n_strided_sender(
-            hpx::launch::sync, unseq(task), IteratorTag(), stride);
+            gen, hpx::launch::sync, unseq(task), IteratorTag(), stride);
 
         test_for_loop_n_strided_sender(
-            hpx::launch::async, par(task), IteratorTag(), stride);
+            gen, hpx::launch::async, par(task), IteratorTag(), stride);
         test_for_loop_n_strided_sender(
-            hpx::launch::async, par_unseq(task), IteratorTag(), stride);
+            gen, hpx::launch::async, par_unseq(task), IteratorTag(), stride);
     }
 }
 
@@ -93,10 +91,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    gen.seed(seed);
+    std::mt19937 gen(seed);
 
-    for_loop_n_strided_sender_test<std::forward_iterator_tag>();
-    for_loop_n_strided_sender_test<std::random_access_iterator_tag>();
+    for_loop_n_strided_sender_test<std::forward_iterator_tag>(gen);
+    for_loop_n_strided_sender_test<std::random_access_iterator_tag>(gen);
 
     return hpx::local::finalize();
 }

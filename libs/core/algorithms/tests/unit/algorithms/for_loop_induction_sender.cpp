@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <ctime>
 #include <iostream>
 #include <numeric>
 #include <random>
@@ -22,12 +23,9 @@
 #include "test_utils.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
-auto seed = std::random_device{}();
-std::mt19937 gen(seed);
-
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_for_loop_induction_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
@@ -67,7 +65,7 @@ void test_for_loop_induction_sender(
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_for_loop_induction_stride_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
@@ -108,7 +106,7 @@ void test_for_loop_induction_stride_sender(
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_for_loop_induction_life_out_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
@@ -151,7 +149,7 @@ void test_for_loop_induction_life_out_sender(
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_for_loop_induction_stride_life_out_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
@@ -198,44 +196,46 @@ void test_for_loop_induction_stride_life_out_sender(
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
-void test_for_loop_induction_sender()
+void test_for_loop_induction_sender(std::mt19937& gen)
 {
     using namespace hpx::execution;
     auto const sync = hpx::launch::sync;
     auto const async = hpx::launch::async;
 
-    test_for_loop_induction_sender(sync, seq(task), IteratorTag());
-    test_for_loop_induction_sender(async, par(task), IteratorTag());
-    test_for_loop_induction_sender(async, par_unseq(task), IteratorTag());
+    test_for_loop_induction_sender(gen, sync, seq(task), IteratorTag());
+    test_for_loop_induction_sender(gen, async, par(task), IteratorTag());
+    test_for_loop_induction_sender(gen, async, par_unseq(task), IteratorTag());
 
-    test_for_loop_induction_stride_sender(sync, seq(task), IteratorTag());
-    test_for_loop_induction_stride_sender(async, par(task), IteratorTag());
+    test_for_loop_induction_stride_sender(gen, sync, seq(task), IteratorTag());
+    test_for_loop_induction_stride_sender(gen, async, par(task), IteratorTag());
     test_for_loop_induction_stride_sender(
-        async, par_unseq(task), IteratorTag());
+        gen, async, par_unseq(task), IteratorTag());
 
-    test_for_loop_induction_life_out_sender(sync, seq(task), IteratorTag());
-    test_for_loop_induction_life_out_sender(async, par(task), IteratorTag());
     test_for_loop_induction_life_out_sender(
-        async, par_unseq(task), IteratorTag());
+        gen, sync, seq(task), IteratorTag());
+    test_for_loop_induction_life_out_sender(
+        gen, async, par(task), IteratorTag());
+    test_for_loop_induction_life_out_sender(
+        gen, async, par_unseq(task), IteratorTag());
 
     test_for_loop_induction_stride_life_out_sender(
-        sync, seq(task), IteratorTag());
+        gen, sync, seq(task), IteratorTag());
     test_for_loop_induction_stride_life_out_sender(
-        async, par(task), IteratorTag());
+        gen, async, par(task), IteratorTag());
     test_for_loop_induction_stride_life_out_sender(
-        async, par_unseq(task), IteratorTag());
+        gen, async, par_unseq(task), IteratorTag());
 }
 
-void for_loop_induction_test_sender()
+void for_loop_induction_test_sender(std::mt19937& gen)
 {
-    test_for_loop_induction_sender<std::random_access_iterator_tag>();
-    test_for_loop_induction_sender<std::forward_iterator_tag>();
+    test_for_loop_induction_sender<std::random_access_iterator_tag>(gen);
+    test_for_loop_induction_sender<std::forward_iterator_tag>(gen);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename LnPolicy, typename ExPolicy>
 void test_for_loop_induction_idx_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy)
 {
     static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
         "hpx::is_async_execution_policy_v<ExPolicy>");
@@ -267,7 +267,7 @@ void test_for_loop_induction_idx_sender(
 
 template <typename LnPolicy, typename ExPolicy>
 void test_for_loop_induction_stride_idx_sender(
-    LnPolicy ln_policy, ExPolicy&& ex_policy)
+    std::mt19937& gen, LnPolicy ln_policy, ExPolicy&& ex_policy)
 {
     static_assert(hpx::is_async_execution_policy_v<ExPolicy>,
         "hpx::is_async_execution_policy_v<ExPolicy>");
@@ -299,19 +299,19 @@ void test_for_loop_induction_stride_idx_sender(
     HPX_TEST_EQ(count, c.size());
 }
 
-void for_loop_induction_test_idx_sender()
+void for_loop_induction_test_idx_sender(std::mt19937& gen)
 {
     using namespace hpx::execution;
     auto const sync = hpx::launch::sync;
     auto const async = hpx::launch::async;
 
-    test_for_loop_induction_idx_sender(sync, seq(task));
-    test_for_loop_induction_idx_sender(async, par(task));
-    test_for_loop_induction_idx_sender(async, par_unseq(task));
+    test_for_loop_induction_idx_sender(gen, sync, seq(task));
+    test_for_loop_induction_idx_sender(gen, async, par(task));
+    test_for_loop_induction_idx_sender(gen, async, par_unseq(task));
 
-    test_for_loop_induction_stride_idx_sender(sync, seq(task));
-    test_for_loop_induction_stride_idx_sender(async, par(task));
-    test_for_loop_induction_stride_idx_sender(async, par_unseq(task));
+    test_for_loop_induction_stride_idx_sender(gen, sync, seq(task));
+    test_for_loop_induction_stride_idx_sender(gen, async, par(task));
+    test_for_loop_induction_stride_idx_sender(gen, async, par_unseq(task));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -322,10 +322,10 @@ int hpx_main(hpx::program_options::variables_map& vm)
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
-    gen.seed(seed);
+    std::mt19937 gen(seed);
 
-    for_loop_induction_test_sender();
-    for_loop_induction_test_idx_sender();
+    for_loop_induction_test_sender(gen);
+    for_loop_induction_test_idx_sender(gen);
 
     return hpx::local::finalize();
 }
