@@ -24,6 +24,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -55,7 +56,7 @@ namespace hpx::parcelset::policies::openshmem {
                 this, dest, static_cast<mailbox_array*>(pp));
         }
 
-        // Enqueue a connection to be driven by the single progress thread.
+        // Enqueue a connection to be driven by any progress thread.
         // Safe to call from any HPX thread.
         void add(connection_ptr const& ptr)
         {
@@ -64,29 +65,42 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // True if the progress thread still has queued work to drain (used
-        // by do_stop()). A connection that is in flight is always re-queued
-        // after each poll, so checking the queue is sufficient. Called only
-        // from do_stop() (never from the progress thread), so a blocking
-        // lock is safe and avoids spurious "empty" results under contention.
+        // by do_stop()).  A connection that is in flight is always re-queued
         bool has_pending() noexcept
         {
             std::unique_lock l(connections_mtx_);
-            return !connections_.empty();
+            return !connections_.empty() || !busy_dsts_.empty();
         }
 
-        // Drive one connection to completion.  Called only from the single
-        // progress thread.  poll_send() blocks until all chunks are sent
-        // and acked, then delivers the completion callback. Returns true
-        // if any progress was made.
+        // Drive one connection by a single non-blocking step.  Callable from
+        // any progress thread.
         bool background_work() noexcept
         {
             connection_ptr connection;
             {
-                std::unique_lock l(connections_mtx_, std::try_to_lock);
-                if (l && !connections_.empty())
+                std::unique_lock l(connections_mtx_);
+
+                std::size_t const n = connections_.size();
+                for (std::size_t i = 0; i < n && !connection; ++i)
                 {
-                    connection = HPX_MOVE(connections_.front());
+                    connection_ptr c = HPX_MOVE(connections_.front());
                     connections_.pop_front();
+
+                    // Steppable if it already owns its destination
+                    // reservation, or its destination is not reserved
+                    if (c->reserved_dst_ || !busy_dsts_.count(c->dst()))
+                    {
+                        if (!c->reserved_dst_)
+                        {
+                            busy_dsts_.insert(c->dst());
+                            c->reserved_dst_ = true;
+                        }
+                        connection = HPX_MOVE(c);
+                    }
+                    else
+                    {
+                        connections_.push_back(HPX_MOVE(c));
+                    }
                 }
             }
 
@@ -95,9 +109,19 @@ namespace hpx::parcelset::policies::openshmem {
                 return false;
             }
 
-            // poll_send() blocks until the entire multi-chunk transfer
-            // completes (each chunk: putmem + signal + wait ack).
-            connection->poll_send();
+            // poll_send() transfers at most one chunk and never blocks.  A
+            // finished connection releases its destination reservation; one
+            bool const finished = connection->poll_send();
+            if (finished)
+            {
+                std::unique_lock l(connections_mtx_);
+                busy_dsts_.erase(connection->dst());
+                connection->reserved_dst_ = false;
+                return true;
+            }
+
+            std::unique_lock l(connections_mtx_);
+            connections_.push_back(HPX_MOVE(connection));
             return true;
         }
 
@@ -105,10 +129,8 @@ namespace hpx::parcelset::policies::openshmem {
         using callback_fn_type =
             hpx::move_only_function<void(error_code const&)>;
 
-        // Enqueue a parcel for sending; the actual transfer happens on the
-        // single progress thread. Returns immediately (non-blocking), which
-        // is required since this may be called from any HPX thread while
-        // all shmem_* calls must stay on the progress thread.
+        // Enqueue a parcel for sending; the actual transfer is driven by any
+        // progress thread.  Returns immediately (non-blocking)
         bool send_immediate(parcelset::locality const& dest,
             parcel_buffer_type buffer, callback_fn_type&& callbackFn)
         {
@@ -123,7 +145,13 @@ namespace hpx::parcelset::policies::openshmem {
     private:
         void* mailboxes_;
         hpx::spinlock connections_mtx_;
+
+        // Connections waiting for their transfer to be driven.
         connection_list connections_;
+
+        // Destinations currently reserved by an in-flight connection (part
+        // of the single-flight protocol).  Guarded by connections_mtx_.
+        std::set<int> busy_dsts_;
     };
 }    // namespace hpx::parcelset::policies::openshmem
 

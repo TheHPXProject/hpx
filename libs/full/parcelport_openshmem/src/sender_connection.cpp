@@ -15,24 +15,6 @@
 
 namespace hpx::parcelset::policies::openshmem {
 
-    namespace detail {
-
-        struct message_header
-        {
-            std::uint64_t size;
-            std::uint64_t data_size;
-            std::uint32_t num_chunks;
-            std::uint32_t chunk_index;
-            std::uint32_t total_size_low;
-            std::uint32_t total_size_high;
-        };
-
-        static_assert(sizeof(message_header) % 8 == 0,
-            "message_header must be 8-byte aligned");
-
-        constexpr std::size_t header_size = sizeof(message_header);
-    }    // namespace detail
-
     void sender_connection::prepare() noexcept
     {
         auto& mailboxes = *mailboxes_;
@@ -55,28 +37,35 @@ namespace hpx::parcelset::policies::openshmem {
             num_chunks_ = 1;
         }
 
+        message_id_ = mailboxes.next_message_id();
+
         chunk_idx_ = 0;
     }
 
     // Stage one chunk: copy header + payload into the local buffer slot.
-    // The actual shmem transfer is done by the caller via send().
-    void sender_connection::stage_chunk() noexcept
+    // The actual shmem transfer is done by the caller via try_send().
+    std::size_t sender_connection::stage_chunk() noexcept
     {
         auto& mailboxes = *mailboxes_;
 
         std::size_t const offset = chunk_idx_ * available_payload_;
-        std::size_t const chunk_size =
-            (offset + available_payload_ > total_data_size_) ?
-            (total_data_size_ - offset) :
-            available_payload_;
+        std::size_t const chunk_size = detail::chunk_size_for(
+            chunk_idx_, num_chunks_, total_data_size_, available_payload_);
 
         unsigned char* buffer =
             mailboxes.get_buffer(static_cast<std::size_t>(dst_));
 
+        // Protect the payload when checksumming is enabled; the receiver
+        // recomputes checksum over the exact same transferred region.
         detail::message_header header{buffer_.size_, buffer_.data_size_,
             num_chunks_, chunk_idx_,
             static_cast<std::uint32_t>(total_data_size_ & 0xFFFFFFFF),
-            static_cast<std::uint32_t>(total_data_size_ >> 32)};
+            static_cast<std::uint32_t>(total_data_size_ >> 32), message_id_,
+            mailboxes.checksum_enabled() ?
+                detail::crc32(reinterpret_cast<unsigned char const*>(
+                                  buffer_.data_.data() + offset),
+                    chunk_size) :
+                0};
 
         std::memcpy(buffer, &header, sizeof(header));
         if (chunk_size > 0)
@@ -84,31 +73,27 @@ namespace hpx::parcelset::policies::openshmem {
             std::memcpy(buffer + sizeof(header), buffer_.data_.data() + offset,
                 chunk_size);
         }
+
+        return chunk_size;
     }
 
-    // Blocking send: stage each chunk and call mailboxes_.send() which
-    // transfers the data and waits for the receiver's ack before returning.
+    // Non-blocking send driver: stage and transfer exactly one chunk per
+    // call via mailbox_array::try_send() (which polls credit once).
     bool sender_connection::poll_send() noexcept
     {
-        if (dst_ == static_cast<int>(mailboxes_->my_pe()))
+        while (chunk_idx_ < num_chunks_)
         {
-            handle_local_send();
-            return true;
-        }
+            std::size_t const chunk_size = stage_chunk();
+            std::size_t const transfer_size =
+                detail::header_size + chunk_size;
 
-        for (std::uint32_t i = 0; i < num_chunks_; ++i)
-        {
-            chunk_idx_ = i;
-            stage_chunk();
+            if (!mailboxes_->try_send(static_cast<std::size_t>(dst_),
+                    transfer_size))
+            {
+                return false;    // no credit: requeue and retry later
+            }
 
-            std::size_t const offset = i * available_payload_;
-            std::size_t const chunk_size =
-                (offset + available_payload_ > total_data_size_) ?
-                (total_data_size_ - offset) :
-                available_payload_;
-
-            mailboxes_->send(static_cast<std::size_t>(dst_),
-                detail::header_size + chunk_size);
+            ++chunk_idx_;
         }
 
         finish();
@@ -128,51 +113,6 @@ namespace hpx::parcelset::policies::openshmem {
         {
             postprocess_handler(ec, there_, shared_from_this());
         }
-    }
-
-    void sender_connection::handle_local_send() noexcept
-    {
-        auto& mailboxes = *mailboxes_;
-
-        std::size_t const mtu = mailboxes.mtu();
-        std::size_t const available_payload = mtu - detail::header_size;
-
-        std::size_t const total_data_size = buffer_.size_;
-        std::uint32_t const num_chunks = static_cast<std::uint32_t>(
-            (total_data_size + available_payload - 1) / available_payload);
-
-        std::size_t offset = 0;
-
-        for (std::uint32_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx)
-        {
-            std::size_t const chunk_size =
-                (offset + available_payload > total_data_size) ?
-                (total_data_size - offset) :
-                available_payload;
-
-            unsigned char* buffer =
-                mailboxes.get_buffer(static_cast<std::size_t>(dst_));
-
-            detail::message_header header{buffer_.size_, buffer_.data_size_,
-                num_chunks, chunk_idx,
-                static_cast<std::uint32_t>(total_data_size & 0xFFFFFFFF),
-                static_cast<std::uint32_t>(total_data_size >> 32)};
-
-            std::memcpy(buffer, &header, sizeof(header));
-            if (chunk_size > 0)
-            {
-                std::memcpy(buffer + sizeof(header),
-                    buffer_.data_.data() + offset, chunk_size);
-            }
-
-            // publish this chunk into our own rx pool via the credit protocol
-            mailboxes.send(static_cast<std::size_t>(dst_),
-                detail::header_size + chunk_size);
-
-            offset += chunk_size;
-        }
-
-        finish();
     }
 
 }    // namespace hpx::parcelset::policies::openshmem

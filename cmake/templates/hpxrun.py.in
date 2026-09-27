@@ -222,6 +222,21 @@ def run_mpi(cmd, localities, verbose):
     subproc(exec_cmd)
 
 
+# Run with oshrun
+# This is executing oshrun with the "-n" option set to the number of localities.
+# The UCX OSC component is requested (--mca osc ucx) and the symmetric heap
+# override (SMA_SYMMETRIC_SIZE) is forwarded, matching the configuration used
+# for the openshmem parcelport.
+def run_oshrun(cmd, localities, verbose):
+    oshrun = os.environ.get('HPXRUN_OSHRUN', 'oshrun')
+    sma_symmetric_size = os.environ.get('SMA_SYMMETRIC_SIZE', '1G')
+    exec_cmd = [oshrun, '-n', str(localities), '--mca', 'osc', 'ucx',
+                '-x', 'SMA_SYMMETRIC_SIZE=' + sma_symmetric_size] + cmd
+    if verbose:
+        print('Executing command: ' + ' '.join(exec_cmd))
+    subproc(exec_cmd)
+
+
 def run_gasnet(cmd, localities, verbose):
     os.environ['GASNET_PSHM_NODES'] = str(localities)
     os.environ['GASNET_QUIET'] = 'yes'
@@ -263,6 +278,9 @@ def run(cmd, runwrapper, localities, nodes, verbose):
     if runwrapper == 'mpi':
         assert nodes is None, "nodes option only valid with tcp parcelport."
         run_mpi(cmd, localities, verbose)
+    if runwrapper == 'oshrun':
+        assert nodes is None, "nodes option only valid with tcp parcelport."
+        run_oshrun(cmd, localities, verbose)
     if runwrapper == 'gasnet':
         assert nodes is None, "nodes option only valid with tcp parcelport."
         run_gasnet(cmd, localities, verbose)
@@ -293,6 +311,7 @@ def build_cmd(options, args):
             else ['--hpx:ini=hpx.parcel.lci.priority=1000', '--hpx:ini=hpx.parcel.lci.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lci'] if pp == 'lci'
             else ['--hpx:ini=hpx.parcel.lcw.priority=1000', '--hpx:ini=hpx.parcel.lcw.enable=1', '--hpx:ini=hpx.parcel.bootstrap=lcw'] if pp == 'lcw'
             else ['--hpx:ini=hpx.parcel.gasnet.priority=1000', '--hpx:ini=hpx.parcel.gasnet.enable=1', '--hpx:ini=hpx.parcel.bootstrap=gasnet'] if pp == 'gasnet'
+            else ['--hpx:ini=hpx.parcel.openshmem.priority=1000', '--hpx:ini=hpx.parcel.openshmem.enable=1'] if pp == 'openshmem'
             else ['--hpx:ini=hpx.parcel.tcp.priority=1000', '--hpx:ini=hpx.parcel.tcp.enable=1'] if pp == 'tcp'
             else [])
         cmd += select_parcelport(options.parcelport)
@@ -330,14 +349,14 @@ def check_options(parser, options, args):
         print('Can not start less than one thread per locality', file=sys.stderr)
         sys.exit(1)
 
-    check_valid_parcelport = (lambda x: x == 'mpi' or x == 'lci' or x == 'lcw' or x == 'gasnet' or x == 'tcp' or x == 'none');
+    check_valid_parcelport = (lambda x: x == 'mpi' or x == 'lci' or x == 'lcw' or x == 'gasnet' or x == 'openshmem' or x == 'tcp' or x == 'none');
     if not check_valid_parcelport(options.parcelport):
         print('Error: Parcelport option not valid\n', file=sys.stderr)
         parser.print_help()
         sys.exit(1)
 
     check_valid_runwrapper = (lambda x:
-            x == 'none' or x == 'mpi' or x == 'srun' or x =='jsrun' or x == 'gasnet' or x == 'gasnet-smp');
+            x == 'none' or x == 'mpi' or x == 'srun' or x =='jsrun' or x == 'gasnet' or x == 'gasnet-smp' or x == 'oshrun');
     if not check_valid_runwrapper(options.runwrapper):
         print('Error: Runwrapper option not valid\n', file=sys.stderr)
         parser.print_help()
@@ -419,13 +438,13 @@ Used by the tcp parcelport only.
     parser.add_option('-p', '--parcelport'
       , action='store', type='string'
       , dest='parcelport', default=default_env('HPXRUN_PARCELPORT', 'tcp')
-      , help='Which parcelport to use (Options are: mpi, lci, lcw, gasnet, tcp) '
+      , help='Which parcelport to use (Options are: mpi, lci, lcw, gasnet, openshmem, tcp) '
              '(environment variable HPXRUN_PARCELPORT')
 
     parser.add_option('-r', '--runwrapper'
       , action='store', type='string'
       , dest='runwrapper', default=default_env('HPXRUN_RUNWRAPPER', 'none')
-      , help='Which runwrapper to use (Options are: none, mpi, gasnet, gasnet-smp, srun, jsrun) '
+      , help='Which runwrapper to use (Options are: none, mpi, oshrun, gasnet, gasnet-smp, srun, jsrun) '
              '(environment variable HPXRUN_RUNWRAPPER)')
 
     parser.add_option('-e', '--expected'

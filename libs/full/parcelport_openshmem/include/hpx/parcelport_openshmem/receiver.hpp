@@ -1,4 +1,4 @@
-//  Copyright (c) 2025 Christopher Taylor
+//  Copyright (c) 2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -39,26 +39,19 @@ namespace hpx::parcelset::policies::openshmem {
         void run() noexcept {}
 
         // True if there are still partially received connections being
-        // processed (used by do_stop()). Called only from do_stop() (never
-        // from the progress thread), so a blocking lock is safe and avoids
-        // spurious "empty" results under contention.
+        // processed (used by do_stop()). Called only from do_stop()
         bool has_pending() noexcept
         {
-            std::unique_lock l(connections_mtx_);
-            return !connections_.empty();
+            std::unique_lock l1(connections_mtx_);
+            std::unique_lock l2(active_mtx_);
+            return !connections_.empty() || !active_connections_.empty();
         }
 
-        bool background_work() noexcept
+        bool background_work(std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             bool has_work = false;
 
-            connection_ptr connection = accept();
-            if (connection)
-            {
-                receive_messages(HPX_MOVE(connection));
-                return true;
-            }
-
+            connection_ptr connection = accept(arena_idx, arena_cnt);
             if (!connection)
             {
                 std::unique_lock l(connections_mtx_, std::try_to_lock);
@@ -93,11 +86,12 @@ namespace hpx::parcelset::policies::openshmem {
             }
         }
 
-        connection_ptr accept() noexcept
+        connection_ptr accept(std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
             auto& mailboxes = pp_.get_mailboxes();
 
-            int const pe = mailboxes.try_detect_pe_notification();
+            int const pe =
+                mailboxes.try_detect_pe_notification(arena_idx, arena_cnt);
             if (pe < 0)
                 return connection_ptr();
 

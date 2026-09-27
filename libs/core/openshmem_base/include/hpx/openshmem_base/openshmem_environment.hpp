@@ -41,6 +41,14 @@ namespace hpx::util {
 
         static std::string get_processor_name();
 
+        // Thread level negotiated by shmem_init_thread() (see init()); the
+        // parcelport uses it to decide whether multiple threads may use it.
+        static int provided_thread_level() noexcept;
+
+        // True if the runtime provided SHMEM_THREAD_MULTIPLE, i.e. multiple
+        // threads may call shmem_* concurrently.
+        static bool thread_multiple() noexcept;
+
         using mutex_type = hpx::spinlock;
         using scoped_lock = std::unique_lock<mutex_type>;
 
@@ -49,6 +57,7 @@ namespace hpx::util {
 
         static bool enabled_;
         static bool has_called_init_;
+        static int provided_thread_level_;
     };
 }    // namespace hpx::util
 
