@@ -85,7 +85,7 @@ void test_is_heap_until(ExPolicy&& policy, DataType)
     auto heap_end_iter = std::next(std::begin(c), std::rand() % c.size());
     std::make_heap(std::begin(c), heap_end_iter);
 
-    auto result = hpx::ranges::is_heap_until(policy, c);
+    auto result = hpx::ranges::is_heap_until(policy, c, std::less<>());
     auto solution = std::is_heap_until(std::begin(c), std::end(c));
 
     HPX_TEST(result == solution);
@@ -106,7 +106,7 @@ void test_is_heap_until_async(ExPolicy&& policy, DataType)
     auto heap_end_iter = std::next(std::begin(c), std::rand() % c.size());
     std::make_heap(std::begin(c), heap_end_iter);
 
-    auto f = hpx::ranges::is_heap_until(policy, c);
+    auto f = hpx::ranges::is_heap_until(policy, c, std::less<>());
     auto result = f.get();
     auto solution = std::is_heap_until(std::begin(c), std::end(c));
 

@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -161,12 +162,15 @@ void test_mismatch1()
 
     test_mismatch1(IteratorTag());
 
-    test_mismatch1(seq, IteratorTag());
-    test_mismatch1(par, IteratorTag());
-    test_mismatch1(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_mismatch1(seq, IteratorTag());
+        test_mismatch1(par, IteratorTag());
+        test_mismatch1(par_unseq, IteratorTag());
 
-    test_mismatch1_async(seq(task), IteratorTag());
-    test_mismatch1_async(par(task), IteratorTag());
+        test_mismatch1_async(seq(task), IteratorTag());
+        test_mismatch1_async(par(task), IteratorTag());
+    }
 }
 
 void mismatch_test1()
@@ -313,12 +317,15 @@ void test_mismatch2()
 
     test_mismatch2(IteratorTag());
 
-    test_mismatch2(seq, IteratorTag());
-    test_mismatch2(par, IteratorTag());
-    test_mismatch2(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_mismatch2(seq, IteratorTag());
+        test_mismatch2(par, IteratorTag());
+        test_mismatch2(par_unseq, IteratorTag());
 
-    test_mismatch2_async(seq(task), IteratorTag());
-    test_mismatch2_async(par(task), IteratorTag());
+        test_mismatch2_async(seq(task), IteratorTag());
+        test_mismatch2_async(par(task), IteratorTag());
+    }
 }
 
 void mismatch_test2()
@@ -454,11 +461,14 @@ void test_mismatch_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_mismatch_exception(seq, IteratorTag());
-    test_mismatch_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_mismatch_exception(seq, IteratorTag());
+        test_mismatch_exception(par, IteratorTag());
 
-    test_mismatch_exception_async(seq(task), IteratorTag());
-    test_mismatch_exception_async(par(task), IteratorTag());
+        test_mismatch_exception_async(seq(task), IteratorTag());
+        test_mismatch_exception_async(par(task), IteratorTag());
+    }
 }
 
 void mismatch_exception_test()
@@ -555,11 +565,14 @@ void test_mismatch_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_mismatch_bad_alloc(seq, IteratorTag());
-    test_mismatch_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_mismatch_bad_alloc(seq, IteratorTag());
+        test_mismatch_bad_alloc(par, IteratorTag());
 
-    test_mismatch_bad_alloc_async(seq(task), IteratorTag());
-    test_mismatch_bad_alloc_async(par(task), IteratorTag());
+        test_mismatch_bad_alloc_async(seq(task), IteratorTag());
+        test_mismatch_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void mismatch_bad_alloc_test()

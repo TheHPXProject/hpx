@@ -85,7 +85,7 @@ void test_is_heap(ExPolicy&& policy, DataType)
     auto heap_end_iter = std::next(std::begin(c), std::rand() % c.size());
     std::make_heap(std::begin(c), heap_end_iter);
 
-    bool result = hpx::ranges::is_heap(policy, c);
+    bool result = hpx::ranges::is_heap(policy, c, std::less<>());
     bool solution = std::is_heap(std::begin(c), std::end(c));
 
     HPX_TEST_EQ(result, solution);
@@ -106,7 +106,7 @@ void test_is_heap_async(ExPolicy&& policy, DataType)
     auto heap_end_iter = std::next(std::begin(c), std::rand() % c.size());
     std::make_heap(std::begin(c), heap_end_iter);
 
-    auto f = hpx::ranges::is_heap(policy, c);
+    auto f = hpx::ranges::is_heap(policy, c, std::less<>());
     bool result = f.get();
     bool solution = std::is_heap(std::begin(c), std::end(c));
 

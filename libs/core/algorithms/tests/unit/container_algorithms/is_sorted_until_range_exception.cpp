@@ -17,6 +17,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -408,11 +409,14 @@ void test_sorted_until_exception()
     //If the execution policy object is of type vector_execution_policy,
     //  std::terminate shall be called. Therefore we do not test exceptions
     //  with a vector execution policy
-    test_sorted_until_exception(seq, IteratorTag());
-    test_sorted_until_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted_until_exception(seq, IteratorTag());
+        test_sorted_until_exception(par, IteratorTag());
 
-    test_sorted_until_async_exception(seq(task), IteratorTag());
-    test_sorted_until_async_exception(par(task), IteratorTag());
+        test_sorted_until_async_exception(seq(task), IteratorTag());
+        test_sorted_until_async_exception(par(task), IteratorTag());
+    }
 
     test_sorted_until_seq_exception(IteratorTag());
 }
@@ -797,11 +801,14 @@ void test_sorted_until_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_sorted_until_bad_alloc(par, IteratorTag());
-    test_sorted_until_bad_alloc(seq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted_until_bad_alloc(par, IteratorTag());
+        test_sorted_until_bad_alloc(seq, IteratorTag());
 
-    test_sorted_until_async_bad_alloc(seq(task), IteratorTag());
-    test_sorted_until_async_bad_alloc(par(task), IteratorTag());
+        test_sorted_until_async_bad_alloc(seq(task), IteratorTag());
+        test_sorted_until_async_bad_alloc(par(task), IteratorTag());
+    }
 
     test_sorted_until_seq_bad_alloc(IteratorTag());
 }

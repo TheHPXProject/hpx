@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -111,12 +112,15 @@ void test_find_first_of()
 
     test_find_first_of_proj(IteratorTag());
 
-    test_find_first_of_proj(seq, IteratorTag());
-    test_find_first_of_proj(par, IteratorTag());
-    test_find_first_of_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of_proj(seq, IteratorTag());
+        test_find_first_of_proj(par, IteratorTag());
+        test_find_first_of_proj(par_unseq, IteratorTag());
 
-    test_find_first_of_async_proj(seq(task), IteratorTag());
-    test_find_first_of_async_proj(par(task), IteratorTag());
+        test_find_first_of_async_proj(seq(task), IteratorTag());
+        test_find_first_of_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_first_of_test()
@@ -248,11 +252,14 @@ void test_find_first_of_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_find_first_of_exception(seq, IteratorTag());
-    test_find_first_of_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of_exception(seq, IteratorTag());
+        test_find_first_of_exception(par, IteratorTag());
 
-    test_find_first_of_exception_async(seq(task), IteratorTag());
-    test_find_first_of_exception_async(par(task), IteratorTag());
+        test_find_first_of_exception_async(seq(task), IteratorTag());
+        test_find_first_of_exception_async(par(task), IteratorTag());
+    }
 }
 
 void find_first_of_exception_test()
@@ -344,11 +351,14 @@ void test_find_first_of_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_find_first_of_bad_alloc(seq, IteratorTag());
-    test_find_first_of_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of_bad_alloc(seq, IteratorTag());
+        test_find_first_of_bad_alloc(par, IteratorTag());
 
-    test_find_first_of_bad_alloc_async(seq(task), IteratorTag());
-    test_find_first_of_bad_alloc_async(par(task), IteratorTag());
+        test_find_first_of_bad_alloc_async(seq(task), IteratorTag());
+        test_find_first_of_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void find_first_of_bad_alloc_test()

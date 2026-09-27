@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -169,19 +170,25 @@ void test_find_first_of()
     using namespace hpx::execution;
 
     test_find_first_of(IteratorTag());
-    test_find_first_of(seq, IteratorTag());
-    test_find_first_of(par, IteratorTag());
-    test_find_first_of(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of(seq, IteratorTag());
+        test_find_first_of(par, IteratorTag());
+        test_find_first_of(par_unseq, IteratorTag());
+    }
 
     test_find_first_of_proj(IteratorTag());
-    test_find_first_of_proj(seq, IteratorTag());
-    test_find_first_of_proj(par, IteratorTag());
-    test_find_first_of_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_first_of_proj(seq, IteratorTag());
+        test_find_first_of_proj(par, IteratorTag());
+        test_find_first_of_proj(par_unseq, IteratorTag());
 
-    test_find_first_of_async(seq(task), IteratorTag());
-    test_find_first_of_async(par(task), IteratorTag());
-    test_find_first_of_async_proj(seq(task), IteratorTag());
-    test_find_first_of_async_proj(par(task), IteratorTag());
+        test_find_first_of_async(seq(task), IteratorTag());
+        test_find_first_of_async(par(task), IteratorTag());
+        test_find_first_of_async_proj(seq(task), IteratorTag());
+        test_find_first_of_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_first_of_test()

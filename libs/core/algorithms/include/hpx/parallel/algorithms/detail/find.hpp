@@ -304,15 +304,19 @@ namespace hpx::parallel::detail {
             std::size_t base_idx, std::size_t part_size, std::size_t diff,
             Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
         {
+            Iter1 current = it;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
-                [=, &tok, &op, &proj1, &proj2](auto t, std::size_t i) -> void {
+                [=, &current, &tok, &op, &proj1, &proj2](
+                    typename std::iterator_traits<Iter1>::reference t,
+                    std::size_t i) -> void {
+                    auto mid = current;
+                    ++current;
                     // Note: replacing the invoke() with HPX_INVOKE()
                     // below makes gcc generate errors
                     if (hpx::invoke(op, hpx::invoke(proj1, t),
                             hpx::invoke(proj2, *first2)))
                     {
                         std::size_t local_count = 1;
-                        auto mid = t;
                         auto mid2 = first2;
                         ++mid;
                         ++mid2;
@@ -322,7 +326,7 @@ namespace hpx::parallel::detail {
                         {
                             // Note: replacing the invoke() with HPX_INVOKE()
                             // below makes gcc generate errors
-                            if (!hpx::invoke(op, hpx::invoke(proj1, mid),
+                            if (!hpx::invoke(op, hpx::invoke(proj1, *mid),
                                     hpx::invoke(proj2, *mid2)))
                             {
                                 break;

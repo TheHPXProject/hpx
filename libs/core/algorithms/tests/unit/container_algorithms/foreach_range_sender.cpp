@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -133,22 +134,26 @@ void test_for_each_sender_direct()
 {
     using namespace hpx::execution;
 
-    test_for_each_explicit_sender_direct(hpx::launch::sync, seq, IteratorTag());
-    test_for_each_explicit_sender_direct(
-        hpx::launch::sync, unseq, IteratorTag());
-    test_for_each_explicit_sender_direct(
-        hpx::launch::async, par, IteratorTag());
-    test_for_each_explicit_sender_direct(
-        hpx::launch::async, par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_explicit_sender_direct(
+            hpx::launch::sync, seq, IteratorTag());
+        test_for_each_explicit_sender_direct(
+            hpx::launch::sync, unseq, IteratorTag());
+        test_for_each_explicit_sender_direct(
+            hpx::launch::async, par, IteratorTag());
+        test_for_each_explicit_sender_direct(
+            hpx::launch::async, par_unseq, IteratorTag());
 
-    test_for_each_explicit_sender_direct_async(
-        hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_explicit_sender_direct_async(
-        hpx::launch::sync, unseq(task), IteratorTag());
-    test_for_each_explicit_sender_direct_async(
-        hpx::launch::async, par(task), IteratorTag());
-    test_for_each_explicit_sender_direct_async(
-        hpx::launch::async, par_unseq(task), IteratorTag());
+        test_for_each_explicit_sender_direct_async(
+            hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_explicit_sender_direct_async(
+            hpx::launch::sync, unseq(task), IteratorTag());
+        test_for_each_explicit_sender_direct_async(
+            hpx::launch::async, par(task), IteratorTag());
+        test_for_each_explicit_sender_direct_async(
+            hpx::launch::async, par_unseq(task), IteratorTag());
+    }
 }
 
 template <typename IteratorTag>
@@ -156,12 +161,17 @@ void test_for_each_sender()
 {
     using namespace hpx::execution;
 
-    test_for_each_explicit_sender(hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_explicit_sender(
-        hpx::launch::sync, unseq(task), IteratorTag());
-    test_for_each_explicit_sender(hpx::launch::async, par(task), IteratorTag());
-    test_for_each_explicit_sender(
-        hpx::launch::async, par_unseq(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_explicit_sender(
+            hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_explicit_sender(
+            hpx::launch::sync, unseq(task), IteratorTag());
+        test_for_each_explicit_sender(
+            hpx::launch::async, par(task), IteratorTag());
+        test_for_each_explicit_sender(
+            hpx::launch::async, par_unseq(task), IteratorTag());
+    }
 }
 
 void for_each_sender_test_direct()

@@ -327,7 +327,6 @@ namespace hpx::parallel {
                 Sent last, Comp&& comp, Proj&& proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, bool>;
-                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
                     std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
@@ -371,8 +370,8 @@ namespace hpx::parallel {
                               std::size_t base_idx) mutable -> void {
                     bool cancelled = false;
                     util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
-                        [&cancelled, first, &comp, &proj](type const& v,
-                            std::size_t const i) mutable -> void {
+                        [&cancelled, first, &comp, &proj](
+                            auto&& v, std::size_t const i) mutable -> void {
                             if constexpr (std::is_same_v<hpx::identity,
                                               std::decay_t<Proj>>)
                             {
@@ -461,7 +460,6 @@ namespace hpx::parallel {
                 Sent last, Comp comp, Proj proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, Iter>;
-                using type = std::iterator_traits<Iter>::value_type;
                 using difference_type =
                     std::iterator_traits<Iter>::difference_type;
                 constexpr bool has_scheduler_executor =
@@ -506,7 +504,7 @@ namespace hpx::parallel {
                     std::size_t cancelled = static_cast<std::size_t>(-1);
                     util::loop_idx_n<policy_type>(base_idx, it, part_size, tok,
                         [&cancelled, first, &comp, &proj](
-                            type const& v, std::size_t const i) -> void {
+                            auto&& v, std::size_t const i) -> void {
                             if constexpr (std::is_same_v<hpx::identity,
                                               std::decay_t<Proj>>)
                             {

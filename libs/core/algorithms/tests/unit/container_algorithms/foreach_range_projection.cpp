@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "foreach_tests_projection.hpp"
@@ -21,12 +22,15 @@ void test_for_each()
 
     test_for_each_seq(IteratorTag(), Proj());
 
-    test_for_each(seq, IteratorTag(), Proj());
-    test_for_each(par, IteratorTag(), Proj());
-    test_for_each(par_unseq, IteratorTag(), Proj());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each(seq, IteratorTag(), Proj());
+        test_for_each(par, IteratorTag(), Proj());
+        test_for_each(par_unseq, IteratorTag(), Proj());
 
-    test_for_each_async(seq(task), IteratorTag(), Proj());
-    test_for_each_async(par(task), IteratorTag(), Proj());
+        test_for_each_async(seq(task), IteratorTag(), Proj());
+        test_for_each_async(par(task), IteratorTag(), Proj());
+    }
 }
 
 template <typename Proj>
@@ -47,11 +51,14 @@ void test_for_each_exception()
     // with a vector execution policy
     test_for_each_exception_seq(IteratorTag(), Proj());
 
-    test_for_each_exception(seq, IteratorTag(), Proj());
-    test_for_each_exception(par, IteratorTag(), Proj());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_exception(seq, IteratorTag(), Proj());
+        test_for_each_exception(par, IteratorTag(), Proj());
 
-    test_for_each_exception_async(seq(task), IteratorTag(), Proj());
-    test_for_each_exception_async(par(task), IteratorTag(), Proj());
+        test_for_each_exception_async(seq(task), IteratorTag(), Proj());
+        test_for_each_exception_async(par(task), IteratorTag(), Proj());
+    }
 }
 
 template <typename Proj>
@@ -72,11 +79,14 @@ void test_for_each_bad_alloc()
     // with a vector execution policy
     test_for_each_bad_alloc_seq(IteratorTag(), Proj());
 
-    test_for_each_bad_alloc(seq, IteratorTag(), Proj());
-    test_for_each_bad_alloc(par, IteratorTag(), Proj());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_bad_alloc(seq, IteratorTag(), Proj());
+        test_for_each_bad_alloc(par, IteratorTag(), Proj());
 
-    test_for_each_bad_alloc_async(seq(task), IteratorTag(), Proj());
-    test_for_each_bad_alloc_async(par(task), IteratorTag(), Proj());
+        test_for_each_bad_alloc_async(seq(task), IteratorTag(), Proj());
+        test_for_each_bad_alloc_async(par(task), IteratorTag(), Proj());
+    }
 }
 
 template <typename Proj>

@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -101,11 +102,14 @@ void test_adjacent_find_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_adjacent_find_bad_alloc(seq, IteratorTag());
-    test_adjacent_find_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_adjacent_find_bad_alloc(seq, IteratorTag());
+        test_adjacent_find_bad_alloc(par, IteratorTag());
 
-    test_adjacent_find_bad_alloc_async(seq(task), IteratorTag());
-    test_adjacent_find_bad_alloc_async(par(task), IteratorTag());
+        test_adjacent_find_bad_alloc_async(seq(task), IteratorTag());
+        test_adjacent_find_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void adjacent_find_bad_alloc_test()

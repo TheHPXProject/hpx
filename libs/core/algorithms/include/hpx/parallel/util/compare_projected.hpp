@@ -31,6 +31,13 @@ namespace hpx::parallel::util {
         }
 
         template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_INVOKE(proj_, HPX_FORWARD(T1, t1)),
+                HPX_INVOKE(proj_, HPX_FORWARD(T2, t2)));
+        }
+
+        template <typename T1, typename T2>
         constexpr bool operator()(T1&& t1, T2&& t2) const
         {
             return HPX_INVOKE(comp_, HPX_INVOKE(proj_, HPX_FORWARD(T1, t1)),
@@ -48,6 +55,12 @@ namespace hpx::parallel::util {
         constexpr compare_projected(Compare_&& comp, hpx::identity)
           : comp_(HPX_FORWARD(Compare_, comp))
         {
+        }
+
+        template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_FORWARD(T1, t1), HPX_FORWARD(T2, t2));
         }
 
         template <typename T1, typename T2>
@@ -70,6 +83,13 @@ namespace hpx::parallel::util {
           , proj1_(HPX_FORWARD(Proj1_, proj1))
           , proj2_(HPX_FORWARD(Proj2_, proj2))
         {
+        }
+
+        template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_INVOKE(proj1_, HPX_FORWARD(T1, t1)),
+                HPX_INVOKE(proj2_, HPX_FORWARD(T2, t2)));
         }
 
         template <typename T1, typename T2>
@@ -96,6 +116,13 @@ namespace hpx::parallel::util {
         }
 
         template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_FORWARD(T1, t1),
+                HPX_INVOKE(proj2_, HPX_FORWARD(T2, t2)));
+        }
+
+        template <typename T1, typename T2>
         constexpr bool operator()(T1&& t1, T2&& t2) const
         {
             return HPX_INVOKE(comp_, HPX_FORWARD(T1, t1),
@@ -118,6 +145,13 @@ namespace hpx::parallel::util {
         }
 
         template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_INVOKE(proj1_, HPX_FORWARD(T1, t1)),
+                HPX_FORWARD(T2, t2));
+        }
+
+        template <typename T1, typename T2>
         constexpr bool operator()(T1&& t1, T2&& t2) const
         {
             return HPX_INVOKE(comp_, HPX_INVOKE(proj1_, HPX_FORWARD(T1, t1)),
@@ -136,6 +170,12 @@ namespace hpx::parallel::util {
             Compare_&& comp, hpx::identity, hpx::identity)
           : comp_(HPX_FORWARD(Compare_, comp))
         {
+        }
+
+        template <typename T1, typename T2>
+        constexpr bool operator()(T1&& t1, T2&& t2)
+        {
+            return HPX_INVOKE(comp_, HPX_FORWARD(T1, t1), HPX_FORWARD(T2, t2));
         }
 
         template <typename T1, typename T2>

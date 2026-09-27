@@ -38,6 +38,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/mismatch.hpp
     hpx/parallel/algorithms/detail/parallel_stable_sort.hpp
     hpx/parallel/algorithms/detail/pivot.hpp
+    hpx/parallel/algorithms/detail/range_extrema.hpp
     hpx/parallel/algorithms/detail/reduce.hpp
     hpx/parallel/algorithms/detail/reduce_deterministic.hpp
     hpx/parallel/algorithms/detail/replace.hpp

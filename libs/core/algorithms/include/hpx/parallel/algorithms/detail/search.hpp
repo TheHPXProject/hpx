@@ -25,8 +25,10 @@
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/partitioner.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -369,6 +371,102 @@ namespace hpx::parallel::detail {
             return partitioner::call_with_index(
                 HPX_FORWARD(decltype(policy), policy), first, max_start, 1,
                 HPX_MOVE(f1), HPX_MOVE(f2));
+        }
+    };
+
+    // Summarize runs within each partition. Combining the boundary runs in
+    // input order finds matches crossing partitions without re-evaluating a
+    // predicate or projection on any input element.
+    HPX_CXX_CORE_EXPORT template <typename I>
+    struct search_n_range final
+      : algorithm<search_n_range<I>, std::ranges::subrange<I>>
+    {
+        using result_type = std::ranges::subrange<I>;
+
+        search_n_range()
+          : algorithm<search_n_range, result_type>("search_n")
+        {
+        }
+
+        struct partition_result
+        {
+            std::size_t size;
+            std::size_t prefix;
+            std::size_t suffix;
+            std::size_t match;
+        };
+
+        template <typename ExPolicy, typename T, typename Pred, typename Proj>
+        static result_type sequential(ExPolicy, I first, I last,
+            std::iter_difference_t<I> count, T const& value, Pred pred,
+            Proj proj)
+        {
+            if (count <= 0)
+                return {first, first};
+            return std::ranges::search_n(first, last, count, value.get(),
+                HPX_MOVE(pred), HPX_MOVE(proj));
+        }
+
+        template <typename ExPolicy, typename T, typename Pred, typename Proj>
+        static decltype(auto) parallel(ExPolicy&& policy, I first, I last,
+            std::iter_difference_t<I> count, T const& value, Pred pred,
+            Proj proj)
+        {
+            auto const size = last - first;
+            auto const work_size = count > 0 && count <= size ? size : 0;
+            auto scan = [count, value, pred = HPX_MOVE(pred),
+                            proj = HPX_MOVE(proj)](
+                            I it, std::size_t part_size) mutable {
+                partition_result result{part_size, 0, 0, part_size};
+                std::size_t index = 0;
+                util::loop_n<ExPolicy>(it, part_size, [&](I current) {
+                    if (HPX_INVOKE(
+                            pred, HPX_INVOKE(proj, *current), value.get()))
+                    {
+                        if (result.prefix == index)
+                            ++result.prefix;
+                        ++result.suffix;
+                        if (result.suffix == static_cast<std::size_t>(count) &&
+                            result.match == part_size)
+                        {
+                            result.match = index + 1 - result.suffix;
+                        }
+                    }
+                    else
+                    {
+                        result.suffix = 0;
+                    }
+                    ++index;
+                });
+                return result;
+            };
+            auto combine = [first, last, count](auto&& parts) -> result_type {
+                if (count <= 0)
+                    return {first, first};
+                auto const needed = static_cast<std::size_t>(count);
+                std::size_t offset = 0;
+                std::size_t trailing = 0;
+                for (auto const& part : parts)
+                {
+                    if (trailing + part.prefix >= needed)
+                    {
+                        auto match = first + (offset - trailing);
+                        return {match, match + count};
+                    }
+                    if (part.match != part.size)
+                    {
+                        auto match = first + (offset + part.match);
+                        return {match, match + count};
+                    }
+                    trailing = part.prefix == part.size ? trailing + part.size :
+                                                          part.suffix;
+                    offset += part.size;
+                }
+                return {last, last};
+            };
+            return util::partitioner<ExPolicy, result_type,
+                partition_result>::call(HPX_FORWARD(ExPolicy, policy), first,
+                work_size, HPX_MOVE(scan), hpx::unwrapping(HPX_MOVE(combine)));
         }
     };
     /// \endcond

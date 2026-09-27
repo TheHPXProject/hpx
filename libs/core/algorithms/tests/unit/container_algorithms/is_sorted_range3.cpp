@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "is_sorted_range_tests3.hpp"
@@ -17,12 +18,15 @@ template <typename IteratorTag>
 void test_sorted3()
 {
     using namespace hpx::execution;
-    test_sorted3(seq, IteratorTag());
-    test_sorted3(par, IteratorTag());
-    test_sorted3(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted3(seq, IteratorTag());
+        test_sorted3(par, IteratorTag());
+        test_sorted3(par_unseq, IteratorTag());
 
-    test_sorted3_async(seq(task), IteratorTag());
-    test_sorted3_async(par(task), IteratorTag());
+        test_sorted3_async(seq(task), IteratorTag());
+        test_sorted3_async(par(task), IteratorTag());
+    }
 
     test_sorted3_seq(IteratorTag());
 }

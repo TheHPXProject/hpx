@@ -13,6 +13,7 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <hpx/iterator_support/tests/iter_sent.hpp>
@@ -59,25 +60,28 @@ void test_max_element_sent(ExPolicy policy)
     auto c = test::random_repeat(100, std::size_t(50));
     c[50] = std::size_t(101);
     auto ref = std::max_element(std::begin(c), std::begin(c) + 50);
-    auto r = hpx::ranges::max_element(
-        policy, std::begin(c), sentinel<size_t>{*(std::begin(c) + 50)});
+    auto r = hpx::ranges::max_element(policy, std::begin(c),
+        test::sized_sentinel_from_iterator(std::begin(c) + 50));
 
     HPX_TEST(*r == *ref);
 
     auto c1 = std::vector<size_t>{5, 7, 8};
     ref = std::max_element(
         std::begin(c1), std::begin(c1) + 2, std::greater<std::size_t>());
-    r = hpx::ranges::max_element(policy, std::begin(c1), sentinel<size_t>{8},
+    r = hpx::ranges::max_element(policy, std::begin(c1),
+        test::sized_sentinel_from_iterator(std::begin(c1) + 2),
         std::greater<std::size_t>());
 
     HPX_TEST(*r == *ref);
 
     auto c2 = std::vector<size_t>{2, 2, 2};
-    r = hpx::ranges::max_element(policy, std::begin(c2), sentinel<size_t>{2});
+    r = hpx::ranges::max_element(policy, std::begin(c2),
+        test::sized_sentinel_from_iterator(std::begin(c2)));
     HPX_TEST(r == std::begin(c2));
 
     auto c3 = std::vector<size_t>{2, 3, 3, 4};
-    r = hpx::ranges::max_element(policy, std::begin(c3), sentinel<size_t>{3});
+    r = hpx::ranges::max_element(policy, std::begin(c3),
+        test::sized_sentinel_from_iterator(std::begin(c3) + 1));
     HPX_TEST(*r == 2);
 }
 
@@ -178,17 +182,23 @@ void test_max_element()
     using namespace hpx::execution;
 
     test_max_element(IteratorTag());
-    test_max_element(seq, IteratorTag());
-    test_max_element(par, IteratorTag());
-    test_max_element(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_max_element(seq, IteratorTag());
+        test_max_element(par, IteratorTag());
+        test_max_element(par_unseq, IteratorTag());
 
-    test_max_element_async(seq(task), IteratorTag());
-    test_max_element_async(par(task), IteratorTag());
+        test_max_element_async(seq(task), IteratorTag());
+        test_max_element_async(par(task), IteratorTag());
+    }
 
     test_max_element_sent();
-    test_max_element_sent(seq);
-    test_max_element_sent(par);
-    test_max_element_sent(par_unseq);
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_max_element_sent(seq);
+        test_max_element_sent(par);
+        test_max_element_sent(par_unseq);
+    }
 }
 
 void max_element_test()
@@ -401,11 +411,14 @@ void test_max_element_exception()
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
     test_max_element_exception(IteratorTag());
-    test_max_element_exception(seq, IteratorTag());
-    test_max_element_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_max_element_exception(seq, IteratorTag());
+        test_max_element_exception(par, IteratorTag());
 
-    test_max_element_exception_async(seq(task), IteratorTag());
-    test_max_element_exception_async(par(task), IteratorTag());
+        test_max_element_exception_async(seq(task), IteratorTag());
+        test_max_element_exception_async(par(task), IteratorTag());
+    }
 }
 
 void max_element_exception_test()
@@ -608,11 +621,14 @@ void test_max_element_bad_alloc()
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
     test_max_element_bad_alloc(IteratorTag());
-    test_max_element_bad_alloc(seq, IteratorTag());
-    test_max_element_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_max_element_bad_alloc(seq, IteratorTag());
+        test_max_element_bad_alloc(par, IteratorTag());
 
-    test_max_element_bad_alloc_async(seq(task), IteratorTag());
-    test_max_element_bad_alloc_async(par(task), IteratorTag());
+        test_max_element_bad_alloc_async(seq(task), IteratorTag());
+        test_max_element_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void max_element_bad_alloc_test()

@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -73,9 +74,9 @@ void test_find_end1_proj(ExPolicy&& policy, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    iterator index = hpx::ranges::find_end(policy, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    iterator index = test::subrange_begin(hpx::ranges::find_end(policy,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
@@ -100,9 +101,9 @@ void test_find_end1_async_proj(ExPolicy&& p, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    hpx::future<iterator> f = hpx::ranges::find_end(p, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    hpx::future<iterator> f = test::subrange_begin(hpx::ranges::find_end(p,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
     f.wait();
 
     // create iterator at position of value to be found
@@ -119,12 +120,15 @@ void test_find_end1()
 
     test_find_end1_proj(IteratorTag());
 
-    test_find_end1_proj(seq, IteratorTag());
-    test_find_end1_proj(par, IteratorTag());
-    test_find_end1_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end1_proj(seq, IteratorTag());
+        test_find_end1_proj(par, IteratorTag());
+        test_find_end1_proj(par_unseq, IteratorTag());
 
-    test_find_end1_async_proj(seq(task), IteratorTag());
-    test_find_end1_async_proj(par(task), IteratorTag());
+        test_find_end1_async_proj(seq(task), IteratorTag());
+        test_find_end1_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_end_test1()
@@ -186,9 +190,9 @@ void test_find_end2_proj(ExPolicy&& policy, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    iterator index = hpx::ranges::find_end(policy, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    iterator index = test::subrange_begin(hpx::ranges::find_end(policy,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() - 2);
@@ -216,9 +220,9 @@ void test_find_end2_async_proj(ExPolicy&& p, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    hpx::future<iterator> f = hpx::ranges::find_end(p, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    hpx::future<iterator> f = test::subrange_begin(hpx::ranges::find_end(p,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
 
     f.wait();
 
@@ -236,12 +240,15 @@ void test_find_end2()
 
     test_find_end2_proj(IteratorTag());
 
-    test_find_end2_proj(seq, IteratorTag());
-    test_find_end2_proj(par, IteratorTag());
-    test_find_end2_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end2_proj(seq, IteratorTag());
+        test_find_end2_proj(par, IteratorTag());
+        test_find_end2_proj(par_unseq, IteratorTag());
 
-    test_find_end2_async_proj(seq(task), IteratorTag());
-    test_find_end2_async_proj(par(task), IteratorTag());
+        test_find_end2_async_proj(seq(task), IteratorTag());
+        test_find_end2_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_end_test2()
@@ -302,9 +309,9 @@ void test_find_end3_proj(ExPolicy&& policy, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    iterator index = hpx::ranges::find_end(policy, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    iterator index = test::subrange_begin(hpx::ranges::find_end(policy,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
 
     base_iterator test_index = std::begin(c);
 
@@ -333,9 +340,9 @@ void test_find_end3_async_proj(ExPolicy&& p, IteratorTag)
 
     // create only two partitions, splitting the desired sub sequence into
     // separate partitions.
-    hpx::future<iterator> f = hpx::ranges::find_end(p, iterator(std::begin(c)),
-        iterator(std::end(c)), std::begin(h), std::end(h),
-        std::equal_to<std::size_t>(), proj, proj);
+    hpx::future<iterator> f = test::subrange_begin(hpx::ranges::find_end(p,
+        iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
+        std::end(h), std::equal_to<std::size_t>(), proj, proj));
 
     f.wait();
 
@@ -352,12 +359,15 @@ void test_find_end3()
 
     test_find_end3_proj(IteratorTag());
 
-    test_find_end3_proj(seq, IteratorTag());
-    test_find_end3_proj(par, IteratorTag());
-    test_find_end3_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end3_proj(seq, IteratorTag());
+        test_find_end3_proj(par, IteratorTag());
+        test_find_end3_proj(par_unseq, IteratorTag());
 
-    test_find_end3_async_proj(seq(task), IteratorTag());
-    test_find_end3_async_proj(par(task), IteratorTag());
+        test_find_end3_async_proj(seq(task), IteratorTag());
+        test_find_end3_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_end_test3()
@@ -415,10 +425,10 @@ void test_find_end4_proj(ExPolicy&& policy, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    iterator index = hpx::ranges::find_end(
+    iterator index = test::subrange_begin(hpx::ranges::find_end(
         policy, iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
         std::end(h), [](std::size_t v1, std::size_t v2) { return !(v1 != v2); },
-        proj, proj);
+        proj, proj));
 
     base_iterator test_index =
         std::begin(c) + static_cast<std::ptrdiff_t>(c.size() / 2);
@@ -444,10 +454,10 @@ void test_find_end4_async_proj(ExPolicy&& p, IteratorTag)
 
     auto proj = [](std::size_t x) { return x % 65536; };
 
-    hpx::future<iterator> f = hpx::ranges::find_end(
+    hpx::future<iterator> f = test::subrange_begin(hpx::ranges::find_end(
         p, iterator(std::begin(c)), iterator(std::end(c)), std::begin(h),
         std::end(h), [](std::size_t v1, std::size_t v2) { return !(v1 != v2); },
-        proj, proj);
+        proj, proj));
 
     f.wait();
 
@@ -465,12 +475,15 @@ void test_find_end4()
 
     test_find_end4_proj(IteratorTag());
 
-    test_find_end4_proj(seq, IteratorTag());
-    test_find_end4_proj(par, IteratorTag());
-    test_find_end4_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end4_proj(seq, IteratorTag());
+        test_find_end4_proj(par, IteratorTag());
+        test_find_end4_proj(par_unseq, IteratorTag());
 
-    test_find_end4_async_proj(seq(task), IteratorTag());
-    test_find_end4_async_proj(par(task), IteratorTag());
+        test_find_end4_async_proj(seq(task), IteratorTag());
+        test_find_end4_async_proj(par(task), IteratorTag());
+    }
 }
 
 void find_end_test4()
@@ -501,12 +514,12 @@ void test_find_end_exception(ExPolicy&& policy, IteratorTag)
     bool caught_exception = false;
     try
     {
-        hpx::ranges::find_end(policy,
+        test::subrange_begin(hpx::ranges::find_end(policy,
             decorated_iterator(
                 std::begin(c), []() { throw std::runtime_error("test"); }),
             decorated_iterator(
                 std::end(c), []() { throw std::runtime_error("test"); }),
-            std::begin(h), std::end(h));
+            std::begin(h), std::end(h)));
         HPX_TEST(false);
     }
     catch (hpx::exception_list const& e)
@@ -580,12 +593,13 @@ void test_find_end_exception_async(ExPolicy&& p, IteratorTag)
     bool returned_from_algorithm = false;
     try
     {
-        hpx::future<decorated_iterator> f = hpx::ranges::find_end(p,
-            decorated_iterator(
-                std::begin(c), []() { throw std::runtime_error("test"); }),
-            decorated_iterator(
-                std::end(c), []() { throw std::runtime_error("test"); }),
-            std::begin(h), std::end(h));
+        hpx::future<decorated_iterator> f =
+            test::subrange_begin(hpx::ranges::find_end(p,
+                decorated_iterator(
+                    std::begin(c), []() { throw std::runtime_error("test"); }),
+                decorated_iterator(
+                    std::end(c), []() { throw std::runtime_error("test"); }),
+                std::begin(h), std::end(h)));
         returned_from_algorithm = true;
         f.get();
 
@@ -615,11 +629,14 @@ void test_find_end_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_find_end_exception(seq, IteratorTag());
-    test_find_end_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end_exception(seq, IteratorTag());
+        test_find_end_exception(par, IteratorTag());
 
-    test_find_end_exception_async(seq(task), IteratorTag());
-    test_find_end_exception_async(par(task), IteratorTag());
+        test_find_end_exception_async(seq(task), IteratorTag());
+        test_find_end_exception_async(par(task), IteratorTag());
+    }
 }
 
 void find_end_exception_test()
@@ -648,10 +665,10 @@ void test_find_end_bad_alloc(ExPolicy&& policy, IteratorTag)
     bool caught_bad_alloc = false;
     try
     {
-        hpx::ranges::find_end(policy,
+        test::subrange_begin(hpx::ranges::find_end(policy,
             decorated_iterator(std::begin(c), []() { throw std::bad_alloc(); }),
             decorated_iterator(std::end(c), []() { throw std::bad_alloc(); }),
-            std::begin(h), std::end(h));
+            std::begin(h), std::end(h)));
         HPX_TEST(false);
     }
     catch (std::bad_alloc const&)
@@ -683,10 +700,13 @@ void test_find_end_bad_alloc_async(ExPolicy&& p, IteratorTag)
     bool returned_from_algorithm = false;
     try
     {
-        hpx::future<decorated_iterator> f = hpx::ranges::find_end(p,
-            decorated_iterator(std::begin(c), []() { throw std::bad_alloc(); }),
-            decorated_iterator(std::end(c), []() { throw std::bad_alloc(); }),
-            std::begin(h), std::end(h));
+        hpx::future<decorated_iterator> f =
+            test::subrange_begin(hpx::ranges::find_end(p,
+                decorated_iterator(
+                    std::begin(c), []() { throw std::bad_alloc(); }),
+                decorated_iterator(
+                    std::end(c), []() { throw std::bad_alloc(); }),
+                std::begin(h), std::end(h)));
         returned_from_algorithm = true;
         f.get();
 
@@ -713,11 +733,14 @@ void test_find_end_bad_alloc()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_find_end_bad_alloc(seq, IteratorTag());
-    test_find_end_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_end_bad_alloc(seq, IteratorTag());
+        test_find_end_bad_alloc(par, IteratorTag());
 
-    test_find_end_bad_alloc_async(seq(task), IteratorTag());
-    test_find_end_bad_alloc_async(par(task), IteratorTag());
+        test_find_end_bad_alloc_async(seq(task), IteratorTag());
+        test_find_end_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void find_end_bad_alloc_test()

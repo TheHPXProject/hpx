@@ -6,35 +6,40 @@
 
 #include <hpx/algorithm.hpp>
 #include <hpx/init.hpp>
-#include <hpx/iterator_support/tests/iter_sent.hpp>
+#include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstdint>
+
+#include "test_utils.hpp"
+
+using iterator = hpx::util::counting_iterator<std::int64_t>;
+using sentinel = test::sized_sentinel_from_iterator<iterator>;
 
 void myfunction(std::int64_t) {}
 
 void test_invoke_projected()
 {
-    iterator<std::int64_t> iter = hpx::ranges::for_each(hpx::execution::seq,
-        iterator<std::int64_t>{0}, sentinel<std::int64_t>{100}, myfunction);
+    iterator iter = hpx::ranges::for_each(
+        hpx::execution::seq, iterator{0}, sentinel{iterator{100}}, myfunction);
 
     HPX_TEST_EQ(*iter, std::int64_t(100));
 
-    iter = hpx::ranges::for_each(hpx::execution::par, iterator<std::int64_t>{0},
-        sentinel<std::int64_t>{100}, myfunction);
+    iter = hpx::ranges::for_each(
+        hpx::execution::par, iterator{0}, sentinel{iterator{100}}, myfunction);
 
     HPX_TEST_EQ(*iter, std::int64_t(100));
 }
 
 void test_begin_end_iterator()
 {
-    iterator<std::int64_t> iter = hpx::ranges::for_each(hpx::execution::seq,
-        iterator<std::int64_t>{0}, sentinel<std::int64_t>{100}, &myfunction);
+    iterator iter = hpx::ranges::for_each(
+        hpx::execution::seq, iterator{0}, sentinel{iterator{100}}, &myfunction);
 
     HPX_TEST_EQ(*iter, std::int64_t(100));
 
-    iter = hpx::ranges::for_each(hpx::execution::par, iterator<std::int64_t>{0},
-        sentinel<std::int64_t>{100}, &myfunction);
+    iter = hpx::ranges::for_each(
+        hpx::execution::par, iterator{0}, sentinel{iterator{100}}, &myfunction);
 
     HPX_TEST_EQ(*iter, std::int64_t(100));
 }

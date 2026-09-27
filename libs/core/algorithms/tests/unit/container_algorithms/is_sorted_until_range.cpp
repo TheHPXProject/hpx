@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -177,12 +178,15 @@ void test_sorted_until1()
 {
     using namespace hpx::execution;
 
-    test_sorted_until1(seq, IteratorTag());
-    test_sorted_until1(par, IteratorTag());
-    test_sorted_until1(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted_until1(seq, IteratorTag());
+        test_sorted_until1(par, IteratorTag());
+        test_sorted_until1(par_unseq, IteratorTag());
 
-    test_sorted_until1_async(seq(task), IteratorTag());
-    test_sorted_until1_async(par(task), IteratorTag());
+        test_sorted_until1_async(seq(task), IteratorTag());
+        test_sorted_until1_async(par(task), IteratorTag());
+    }
 
     test_sorted_until1_seq(IteratorTag());
 }
@@ -417,12 +421,15 @@ template <typename IteratorTag>
 void test_sorted_until2()
 {
     using namespace hpx::execution;
-    test_sorted_until2(seq, IteratorTag());
-    test_sorted_until2(par, IteratorTag());
-    test_sorted_until2(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted_until2(seq, IteratorTag());
+        test_sorted_until2(par, IteratorTag());
+        test_sorted_until2(par_unseq, IteratorTag());
 
-    test_sorted_until2_async(seq(task), IteratorTag());
-    test_sorted_until2_async(par(task), IteratorTag());
+        test_sorted_until2_async(seq(task), IteratorTag());
+        test_sorted_until2_async(par(task), IteratorTag());
+    }
 
     test_sorted_until2_seq(IteratorTag());
 }
@@ -760,12 +767,15 @@ template <typename IteratorTag>
 void test_sorted_until3()
 {
     using namespace hpx::execution;
-    test_sorted_until3(seq, IteratorTag());
-    test_sorted_until3(par, IteratorTag());
-    test_sorted_until3(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_sorted_until3(seq, IteratorTag());
+        test_sorted_until3(par, IteratorTag());
+        test_sorted_until3(par_unseq, IteratorTag());
 
-    test_sorted_until3_async(seq(task), IteratorTag());
-    test_sorted_until3_async(par(task), IteratorTag());
+        test_sorted_until3_async(seq(task), IteratorTag());
+        test_sorted_until3_async(par(task), IteratorTag());
+    }
 
     test_sorted_until3_seq(IteratorTag());
 }

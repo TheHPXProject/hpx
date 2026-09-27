@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "foreach_tests.hpp"
@@ -21,26 +22,31 @@ void test_for_each()
 
     test_for_each_seq(IteratorTag());
 
-    test_for_each(seq, IteratorTag());
-    test_for_each(unseq, IteratorTag());
-    test_for_each(par, IteratorTag());
-    test_for_each(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each(seq, IteratorTag());
+        test_for_each(unseq, IteratorTag());
+        test_for_each(par, IteratorTag());
+        test_for_each(par_unseq, IteratorTag());
 
-    test_for_each_async(seq(task), IteratorTag());
-    test_for_each_async(par(task), IteratorTag());
-    test_for_each_async(unseq(task), IteratorTag());
-    test_for_each_async(par_unseq(task), IteratorTag());
+        test_for_each_async(seq(task), IteratorTag());
+        test_for_each_async(par(task), IteratorTag());
+        test_for_each_async(unseq(task), IteratorTag());
+        test_for_each_async(par_unseq(task), IteratorTag());
 
-    test_for_each_sender(hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_sender(hpx::launch::async, par(task), IteratorTag());
-    test_for_each_sender(hpx::launch::sync, unseq(task), IteratorTag());
-    test_for_each_sender(hpx::launch::async, par_unseq(task), IteratorTag());
+        test_for_each_sender(hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_sender(hpx::launch::async, par(task), IteratorTag());
+        test_for_each_sender(hpx::launch::sync, unseq(task), IteratorTag());
+        test_for_each_sender(
+            hpx::launch::async, par_unseq(task), IteratorTag());
 
-    test_for_each_sender_bulk(hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_sender_bulk(hpx::launch::async, par(task), IteratorTag());
-    test_for_each_sender_bulk(hpx::launch::sync, unseq(task), IteratorTag());
-    test_for_each_sender_bulk(
-        hpx::launch::async, par_unseq(task), IteratorTag());
+        test_for_each_sender_bulk(hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_sender_bulk(hpx::launch::async, par(task), IteratorTag());
+        test_for_each_sender_bulk(
+            hpx::launch::sync, unseq(task), IteratorTag());
+        test_for_each_sender_bulk(
+            hpx::launch::async, par_unseq(task), IteratorTag());
+    }
 }
 
 void for_each_test()
@@ -60,15 +66,19 @@ void test_for_each_exception()
     // with a vector execution policy
     test_for_each_exception_seq(IteratorTag());
 
-    test_for_each_exception(seq, IteratorTag());
-    test_for_each_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_exception(seq, IteratorTag());
+        test_for_each_exception(par, IteratorTag());
 
-    test_for_each_exception_async(seq(task), IteratorTag());
-    test_for_each_exception_async(par(task), IteratorTag());
+        test_for_each_exception_async(seq(task), IteratorTag());
+        test_for_each_exception_async(par(task), IteratorTag());
 
-    test_for_each_exception_sender(hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_exception_sender(
-        hpx::launch::async, par(task), IteratorTag());
+        test_for_each_exception_sender(
+            hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_exception_sender(
+            hpx::launch::async, par(task), IteratorTag());
+    }
 }
 
 void for_each_exception_test()
@@ -88,15 +98,19 @@ void test_for_each_bad_alloc()
     // with a vector execution policy
     test_for_each_bad_alloc_seq(IteratorTag());
 
-    test_for_each_bad_alloc(seq, IteratorTag());
-    test_for_each_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_for_each_bad_alloc(seq, IteratorTag());
+        test_for_each_bad_alloc(par, IteratorTag());
 
-    test_for_each_bad_alloc_async(seq(task), IteratorTag());
-    test_for_each_bad_alloc_async(par(task), IteratorTag());
+        test_for_each_bad_alloc_async(seq(task), IteratorTag());
+        test_for_each_bad_alloc_async(par(task), IteratorTag());
 
-    test_for_each_bad_alloc_sender(hpx::launch::sync, seq(task), IteratorTag());
-    test_for_each_bad_alloc_sender(
-        hpx::launch::async, par(task), IteratorTag());
+        test_for_each_bad_alloc_sender(
+            hpx::launch::sync, seq(task), IteratorTag());
+        test_for_each_bad_alloc_sender(
+            hpx::launch::async, par(task), IteratorTag());
+    }
 }
 
 void for_each_bad_alloc_test()

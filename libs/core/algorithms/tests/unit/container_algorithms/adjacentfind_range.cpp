@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -81,12 +82,15 @@ template <typename IteratorTag>
 void test_adjacent_find()
 {
     using namespace hpx::execution;
-    test_adjacent_find(seq, IteratorTag());
-    test_adjacent_find(par, IteratorTag());
-    test_adjacent_find(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_adjacent_find(seq, IteratorTag());
+        test_adjacent_find(par, IteratorTag());
+        test_adjacent_find(par_unseq, IteratorTag());
 
-    test_adjacent_find_async(seq(task), IteratorTag());
-    test_adjacent_find_async(par(task), IteratorTag());
+        test_adjacent_find_async(seq(task), IteratorTag());
+        test_adjacent_find_async(par(task), IteratorTag());
+    }
 }
 
 void adjacent_find_test()

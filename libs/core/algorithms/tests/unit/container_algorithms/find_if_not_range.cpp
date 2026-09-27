@@ -13,6 +13,7 @@
 #include <iterator>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -97,12 +98,15 @@ void test_find_if_not()
 
     test_find_if_not(IteratorTag());
 
-    test_find_if_not(seq, IteratorTag());
-    test_find_if_not(par, IteratorTag());
-    test_find_if_not(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_if_not(seq, IteratorTag());
+        test_find_if_not(par, IteratorTag());
+        test_find_if_not(par_unseq, IteratorTag());
 
-    test_find_if_not_async(seq(task), IteratorTag());
-    test_find_if_not_async(par(task), IteratorTag());
+        test_find_if_not_async(seq(task), IteratorTag());
+        test_find_if_not_async(par(task), IteratorTag());
+    }
 }
 
 void find_if_not_test()

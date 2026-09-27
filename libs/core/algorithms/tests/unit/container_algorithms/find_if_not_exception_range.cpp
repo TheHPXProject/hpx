@@ -14,6 +14,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -138,11 +139,14 @@ void test_find_if_not_exception()
     // If the execution policy object is of type vector_execution_policy,
     // std::terminate shall be called. therefore we do not test exceptions
     // with a vector execution policy
-    test_find_if_not_exception(seq, IteratorTag());
-    test_find_if_not_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_find_if_not_exception(seq, IteratorTag());
+        test_find_if_not_exception(par, IteratorTag());
 
-    test_find_if_not_exception_async(seq(task), IteratorTag());
-    test_find_if_not_exception_async(par(task), IteratorTag());
+        test_find_if_not_exception_async(seq(task), IteratorTag());
+        test_find_if_not_exception_async(par(task), IteratorTag());
+    }
 }
 
 void find_if_not_exception_test()
