@@ -27,13 +27,13 @@ namespace hpx { namespace ranges {
     /// \tparam Iter1       The type of the source iterators used for the
     ///                     first range (deduced).
     ///                     This iterator type must meet the requirements of an
-    ///                     forward iterator.
+    ///                     a random access iterator.
     /// \tparam Sent1       The type of the source iterators used for the end of
     ///                     the first range (deduced).
     /// \tparam Iter2       The type of the source iterators used for the
     ///                     second range (deduced).
     ///                     This iterator type must meet the requirements of an
-    ///                     forward iterator.
+    ///                     a random access iterator.
     /// \tparam Sent2       The type of the source iterators used for the end of
     ///                     the second range (deduced).
     /// \tparam Pred        The type of an optional function/function object to use.
@@ -107,13 +107,17 @@ namespace hpx { namespace ranges {
     ///           If the length of the range [first1, last1) does not equal
     ///           the length of the range [first2, last2), it returns false.
     ///
+    /// \note Policy overloads require random access iterators and sized
+    ///       sentinels, or random access ranges that are also sized ranges.
+    ///
     template <typename ExPolicy, typename Iter1, typename Sent1,
-        typename Iter2, typename Sent2, typename Pred = equal_to,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity>
+        typename Iter2, typename Sent2,
+        typename Pred = std::ranges::equal_to,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-    equal(ExPolicy&& policy, Iter1 first1, Sent1 last1, Iter2 first2, Sent2 last2,
-        Pred&& op = Pred(), Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
+    equal(ExPolicy&& policy, Iter1 first1, Sent1 last1,
+        Iter2 first2, Sent2 last2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+        Proj2 proj2 = Proj2());
 
     /// Returns true if the range [first1, last1) is equal to the range
     /// starting at first2, and false otherwise.
@@ -127,10 +131,10 @@ namespace hpx { namespace ranges {
     ///                     in which it executes the assignments.
     /// \tparam Rng1        The type of the first source range used (deduced).
     ///                     The iterators extracted from this range type must
-    ///                     meet the requirements of an forward iterator.
+    ///                     meet the requirements of a random access iterator.
     /// \tparam Rng2        The type of the second source range used (deduced).
     ///                     The iterators extracted from this range type must
-    ///                     meet the requirements of an forward iterator.
+    ///                     meet the requirements of a random access iterator.
     /// \tparam Pred        The type of an optional function/function object to use.
     ///                     Unlike its sequential form, the parallel
     ///                     overload of \a equal requires \a Pred to meet the
@@ -196,13 +200,15 @@ namespace hpx { namespace ranges {
     ///           The \a equal algorithm returns true if the elements in the
     ///           two ranges are equal, otherwise it returns false.
     ///
+    /// \note Policy overloads require random access iterators and sized
+    ///       sentinels, or random access ranges that are also sized ranges.
+    ///
     template <typename ExPolicy, typename Rng1, typename Rng2,
-        typename Pred = equal_to,
-        typename Proj1 = hpx::identity,
-        typename Proj2 = hpx::identity>
+        typename Pred = std::ranges::equal_to,
+        typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-    equal(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2, Pred&& op = Pred(),
-        Proj1&& proj1 = Proj1(), Proj2&& proj2 = Proj2());
+    equal(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
+        Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2());
 
     /// Returns true if the range [first1, last1) is equal to the range
     /// [first2, last2), and false otherwise.
@@ -379,17 +385,18 @@ namespace hpx::ranges {
             hpx::detail::tag_parallel_algorithm<equal_t>>
     {
         template <typename ExPolicy, typename Iter1, typename Sent1,
-            typename Iter2, typename Sent2, typename Pred = equal_to,
+            typename Iter2, typename Sent2,
+            typename Pred = std::ranges::equal_to,
             typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                std::sentinel_for<Sent1, Iter1> &&
-                std::sentinel_for<Sent2, Iter2> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy, Pred,
-                    hpx::parallel::traits::projected<Proj1, Iter1>,
-                    hpx::parallel::traits::projected<Proj2, Iter2>
-                >
+                std::random_access_iterator<Iter1> &&
+                std::sized_sentinel_for<Sent1, Iter1> &&
+                std::random_access_iterator<Iter2> &&
+                std::sized_sentinel_for<Sent2, Iter2> &&
+                std::indirectly_comparable<Iter1,
+                    Iter2, Pred, Proj1, Proj2>
             )
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
@@ -397,46 +404,35 @@ namespace hpx::ranges {
             Iter2 first2, Sent2 last2, Pred op = Pred(), Proj1 proj1 = Proj1(),
             Proj2 proj2 = Proj2())
         {
-            static_assert(std::forward_iterator<Iter1>,
-                "Requires at least forward iterator.");
-            static_assert(std::forward_iterator<Iter2>,
-                "Requires at least forward iterator.");
-
             return hpx::parallel::detail::equal_binary().call(
                 HPX_FORWARD(ExPolicy, policy), first1, last1, first2, last2,
                 HPX_MOVE(op), HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
 
         template <typename ExPolicy, typename Rng1, typename Rng2,
-            typename Pred = equal_to, typename Proj1 = hpx::identity,
-            typename Proj2 = hpx::identity>
+            typename Pred = std::ranges::equal_to,
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                hpx::parallel::traits::is_projected_range_v<Proj1, Rng1> &&
-                hpx::parallel::traits::is_projected_range_v<Proj2, Rng2> &&
-                hpx::parallel::traits::is_indirect_callable_v<ExPolicy, Pred,
-                    hpx::parallel::traits::projected<Proj1,
-                        typename hpx::traits::range_traits<Rng1>::iterator_type>,
-                    hpx::parallel::traits::projected<Proj2,
-                        typename hpx::traits::range_traits<Rng2>::iterator_type>
-                >
+                std::ranges::random_access_range<Rng1> &&
+                std::ranges::sized_range<Rng1> &&
+                std::ranges::random_access_range<Rng2> &&
+                std::ranges::sized_range<Rng2> &&
+                std::indirectly_comparable<std::ranges::iterator_t<Rng1>,
+                    std::ranges::iterator_t<Rng2>, Pred, Proj1, Proj2>
             )
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
         invoke_default(ExPolicy&& policy, Rng1&& rng1, Rng2&& rng2,
             Pred op = Pred(), Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            static_assert(std::forward_iterator<std::ranges::iterator_t<Rng1>>,
-                "Requires at least forward iterator.");
-            static_assert(std::forward_iterator<std::ranges::iterator_t<Rng2>>,
-                "Requires at least forward iterator.");
-
             return hpx::parallel::detail::equal_binary().call(
-                HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng1),
-                hpx::util::end(rng1), hpx::util::begin(rng2),
-                hpx::util::end(rng2), HPX_MOVE(op), HPX_MOVE(proj1),
-                HPX_MOVE(proj2));
+                HPX_FORWARD(ExPolicy, policy), std::ranges::begin(rng1),
+                (std::ranges::begin(rng1) + std::ranges::distance(rng1)),
+                std::ranges::begin(rng2),
+                (std::ranges::begin(rng2) + std::ranges::distance(rng2)),
+                HPX_MOVE(op), HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
 
         template <typename Iter1, typename Sent1, typename Iter2,

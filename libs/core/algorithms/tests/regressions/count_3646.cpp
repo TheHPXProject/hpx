@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <ranges>
 
 struct bit_counting_iterator : public iterator<std::int64_t>
 {
@@ -64,13 +65,20 @@ void test_count()
 
     auto stdResult = std::count(Iter{0}, Iter{33}, std::int64_t{1});
 
-    auto result = hpx::ranges::count(
-        hpx::execution::seq, Iter{0}, Sent{33}, std::int64_t{1});
+    // Forward iterators with unsized sentinels remain supported without a
+    // policy. Policy overloads use a random access iterator and sized sentinel.
+    auto result = hpx::ranges::count(Iter{0}, Sent{33}, std::int64_t{1});
 
     HPX_TEST_EQ(result, stdResult);
 
+    auto values = std::views::iota(0, 33);
+    auto first = std::counted_iterator(values.begin(), 33);
     result = hpx::ranges::count(
-        hpx::execution::par, Iter{0}, Sent{33}, std::int64_t{1});
+        hpx::execution::seq, first, std::default_sentinel, 1);
+    HPX_TEST_EQ(result, stdResult);
+
+    result = hpx::ranges::count(
+        hpx::execution::par, first, std::default_sentinel, 1);
 
     HPX_TEST_EQ(result, stdResult);
 }
@@ -83,13 +91,19 @@ void test_count_if()
     auto predicate = [](std::int64_t v) { return v == 1; };
     auto stdResult = std::count_if(Iter{0}, Iter{33}, predicate);
 
-    Iter::difference_type result = hpx::ranges::count_if(
-        hpx::execution::seq, Iter{0}, Sent{33}, predicate);
+    Iter::difference_type result =
+        hpx::ranges::count_if(Iter{0}, Sent{33}, predicate);
 
     HPX_TEST_EQ(result, stdResult);
 
+    auto values = std::views::iota(0, 33);
+    auto first = std::counted_iterator(values.begin(), 33);
     result = hpx::ranges::count_if(
-        hpx::execution::par, Iter{0}, Sent{33}, predicate);
+        hpx::execution::seq, first, std::default_sentinel, predicate);
+    HPX_TEST_EQ(result, stdResult);
+
+    result = hpx::ranges::count_if(
+        hpx::execution::par, first, std::default_sentinel, predicate);
 
     HPX_TEST_EQ(result, stdResult);
 }
