@@ -16,9 +16,25 @@
 #include <ranges>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace {
+    template <typename T>
+    concept can_unwrap = requires(T&& value) {
+        hpx::parallel::detail::unwrap_algorithm_value(HPX_FORWARD(T, value));
+    };
+
+    using stored_value = hpx::parallel::detail::algorithm_value<int>;
+    static_assert(can_unwrap<int&> && can_unwrap<int const&>);
+    static_assert(can_unwrap<stored_value&> && can_unwrap<stored_value const&>);
+    static_assert(!can_unwrap<int> && !can_unwrap<int const>);
+    static_assert(!can_unwrap<stored_value> && !can_unwrap<stored_value const>);
+    static_assert(
+        std::same_as<decltype(hpx::parallel::detail::unwrap_algorithm_value(
+                         std::declval<stored_value&>())),
+            int const&>);
+
     template <typename T>
     auto value(T&& result)
     {

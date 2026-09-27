@@ -40,11 +40,23 @@ namespace hpx::parallel::detail {
         }
     };
 
+    // Unwrapping borrows from a named value or its storage. Reject temporaries
+    // so the returned reference cannot outlive them.
     HPX_CXX_CORE_EXPORT template <typename T>
     HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(
-        T const& value) noexcept
+        T const&& value) noexcept = delete;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(T& value) noexcept
     {
         return value;
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(
+        algorithm_value<T>& value) noexcept
+    {
+        return value.get();
     }
 
     HPX_CXX_CORE_EXPORT template <typename T>
