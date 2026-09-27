@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -41,18 +42,25 @@ T make_sort_value(int i)
     }
 }
 
+// Transfer test data per partition instead of issuing a synchronous remote
+// request for every element during setup and verification.
 template <typename T>
 std::vector<T> copy_values(hpx::partitioned_vector<T> const& values)
 {
-    std::vector<T> result;
-    result.reserve(values.size());
-    typename hpx::partitioned_vector<T>::const_iterator it = values.begin();
-    typename hpx::partitioned_vector<T>::const_iterator end = values.end();
-    for (/**/; it != end; ++it)
-    {
-        result.push_back(*it);
-    }
-    return result;
+    std::vector<std::size_t> positions(values.size());
+    std::iota(positions.begin(), positions.end(), std::size_t(0));
+    return values.get_values(hpx::launch::sync, positions);
+}
+
+template <typename T, typename F>
+void initialize_values(hpx::partitioned_vector<T>& values, F make_value)
+{
+    std::vector<std::size_t> positions(values.size());
+    std::iota(positions.begin(), positions.end(), std::size_t(0));
+    std::vector<T> data(values.size());
+    std::transform(
+        positions.begin(), positions.end(), data.begin(), make_value);
+    values.set_values(hpx::launch::sync, positions, data);
 }
 
 template <typename T>
@@ -88,41 +96,34 @@ void verify_sorted(hpx::partitioned_vector<T> const& values,
 template <typename T>
 void initialize_reverse(hpx::partitioned_vector<T>& values)
 {
-    typename hpx::partitioned_vector<T>::iterator it = values.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
-        *it = make_sort_value<T>(SIZE - i);
+    initialize_values(
+        values, [](int i) { return make_sort_value<T>(SIZE - i); });
 }
 
 template <typename T>
 void initialize_mixed(hpx::partitioned_vector<T>& values)
 {
-    typename hpx::partitioned_vector<T>::iterator it = values.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
-        *it = make_sort_value<T>((i * 17 + 3) % SIZE);
+    initialize_values(
+        values, [](int i) { return make_sort_value<T>((i * 17 + 3) % SIZE); });
 }
 
 template <typename T>
 void initialize_sorted(hpx::partitioned_vector<T>& values)
 {
-    typename hpx::partitioned_vector<T>::iterator it = values.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
-        *it = make_sort_value<T>(i);
+    initialize_values(values, [](int i) { return make_sort_value<T>(i); });
 }
 
 template <typename T>
 void initialize_duplicates(hpx::partitioned_vector<T>& values)
 {
-    typename hpx::partitioned_vector<T>::iterator it = values.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
-        *it = make_sort_value<T>(i % 4);
+    initialize_values(values, [](int i) { return make_sort_value<T>(i % 4); });
 }
 
 template <typename T>
 void initialize_mixed_n(hpx::partitioned_vector<T>& values, int n)
 {
-    typename hpx::partitioned_vector<T>::iterator it = values.begin();
-    for (int i = 0; i < n; ++i, ++it)
-        *it = make_sort_value<T>((i * 17 + 3) % n);
+    initialize_values(
+        values, [n](int i) { return make_sort_value<T>((i * 17 + 3) % n); });
 }
 
 struct throwing_less
