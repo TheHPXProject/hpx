@@ -835,8 +835,7 @@ namespace hpx::util::itt {
 
     HPX_CXX_CORE_EXPORT struct overlapped_task
     {
-        constexpr overlapped_task(
-            domain const&, string_handle const&) noexcept
+        constexpr overlapped_task(domain const&, string_handle const&) noexcept
         {
         }
         ~overlapped_task() = default;

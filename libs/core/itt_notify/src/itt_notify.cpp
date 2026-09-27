@@ -702,20 +702,20 @@ void itt_task_begin(___itt_domain const* domain, ___itt_id const* id,
     HPX_INTERNAL_ITT_TASK_BEGIN_ID(domain, *id, name)
 }
 
-void itt_task_end(___itt_domain const* domain) noexcept {
-    HPX_INTERNAL_ITT_TASK_END(domain)}
+void itt_task_end(___itt_domain const* domain) noexcept
+{
+    HPX_INTERNAL_ITT_TASK_END(domain)
+}
 
-void itt_task_begin_overlapped(___itt_domain const* domain,
-    ___itt_id const* id, ___itt_string_handle* name) noexcept
+void itt_task_begin_overlapped(___itt_domain const* domain, ___itt_id const* id,
+    ___itt_string_handle* name) noexcept
 {
     HPX_INTERNAL_ITT_TASK_BEGIN_OVERLAPPED(domain, *id, name)
 }
 
 void itt_task_end_overlapped(
-    ___itt_domain const* domain, ___itt_id const* id) noexcept
-{
-    HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, *id)
-}
+    ___itt_domain const* domain, ___itt_id const* id) noexcept {
+    HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, *id)}
 
 ___itt_domain* itt_domain_create(char const* name) noexcept
 {
