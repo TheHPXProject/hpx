@@ -330,6 +330,14 @@ namespace hpx::parallel::detail {
         //
         std::uint64_t const number_of_keys =
             hpx::parallel::detail::distance(key_first, key_last);
+        if (number_of_keys == 0)
+            return {keys_output, values_output};
+        if (number_of_keys == 1)
+        {
+            *keys_output++ = *key_first;
+            *values_output++ = *values_first;
+            return {keys_output, values_output};
+        }
         //
         key_state.assign(number_of_keys, reduce_key_series_states());
         {
@@ -458,6 +466,8 @@ namespace hpx::parallel::detail {
       : public algorithm<reduce_by_key<FwdIter1, FwdIter2>,
             util::in_out_result<FwdIter1, FwdIter2>>
     {
+        static constexpr bool uses_futures = true;
+
         constexpr reduce_by_key() noexcept
           : algorithm<reduce_by_key, util::in_out_result<FwdIter1, FwdIter2>>(
                 "reduce_by_key")
@@ -478,11 +488,9 @@ namespace hpx::parallel::detail {
 
         template <typename ExPolicy, typename RanIter, typename RanIter2,
             typename Compare, typename Func>
-        static util::detail::algorithm_result_t<ExPolicy,
-            util::in_out_result<FwdIter1, FwdIter2>>
-        parallel(ExPolicy&& policy, RanIter key_first, RanIter key_last,
-            RanIter2 values_first, FwdIter1 keys_output, FwdIter2 values_output,
-            Compare&& comp, Func&& func)
+        static decltype(auto) parallel(ExPolicy&& policy, RanIter key_first,
+            RanIter key_last, RanIter2 values_first, FwdIter1 keys_output,
+            FwdIter2 values_output, Compare&& comp, Func&& func)
         {
             return util::detail::algorithm_result<ExPolicy,
                 util::in_out_result<FwdIter1,
@@ -522,40 +530,15 @@ namespace hpx::experimental {
             hpx::traits::is_iterator_v<FwdIter2>
         )
     // clang-format on
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-        hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>
-    reduce_by_key(ExPolicy&& policy, RanIter key_first, RanIter key_last,
-        RanIter2 values_first, FwdIter1 keys_output, FwdIter2 values_output,
-        Compare comp = Compare(), Func func = Func())
+    decltype(auto) reduce_by_key(ExPolicy&& policy, RanIter key_first,
+        RanIter key_last, RanIter2 values_first, FwdIter1 keys_output,
+        FwdIter2 values_output, Compare comp = Compare(), Func func = Func())
     {
-        using result = hpx::parallel::util::detail::algorithm_result<ExPolicy,
-            hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>>;
-
         static_assert(std::random_access_iterator<RanIter> &&
                 std::random_access_iterator<RanIter2> &&
                 std::forward_iterator<FwdIter1> &&
                 std::forward_iterator<FwdIter2>,
             "iterators : Random_access for inputs and forward for outputs.");
-
-        std::uint64_t const number_of_keys =
-            hpx::parallel::detail::distance(key_first, key_last);
-
-        if (number_of_keys == 0)
-        {
-            return result::get(
-                hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>{
-                    keys_output, values_output});
-        }
-
-        if (number_of_keys == 1)
-        {
-            // we only have a single key/value so that is our output
-            *keys_output = *key_first;
-            *values_output = *values_first;
-            return result::get(
-                hpx::parallel::util::in_out_result<FwdIter1, FwdIter2>{
-                    ++keys_output, ++values_output});
-        }
 
         return hpx::parallel::detail::reduce_by_key<FwdIter1, FwdIter2>().call(
             HPX_FORWARD(ExPolicy, policy), key_first, key_last, values_first,
