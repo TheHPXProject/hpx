@@ -6,6 +6,13 @@
 
 #include "sender_algorithm_test_utils.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <functional>
+#include <numeric>
+#include <utility>
+#include <vector>
+
 template <typename Policy>
 void test(Policy policy)
 {

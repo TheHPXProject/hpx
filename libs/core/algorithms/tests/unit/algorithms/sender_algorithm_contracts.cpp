@@ -6,10 +6,19 @@
 
 #include "sender_algorithm_test_utils.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cstddef>
+#include <exception>
+#include <functional>
 #include <memory>
 #include <new>
+#include <numeric>
 #include <stdexcept>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 struct throwing_operation
 {
