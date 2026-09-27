@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -191,9 +192,10 @@ namespace hpx::execution::experimental {
 
             if constexpr (std::is_void_v<result_type>)
             {
-                // stdexec::bulk requires integral shape and execution policy
-                using size_type = decltype(std::ranges::size(shape));
-                size_type const n = std::ranges::size(shape);
+                // stdexec::bulk requires an integral shape. Iterator ranges of
+                // forward chunks need not provide a constant-time size.
+                using size_type = decltype(std::ranges::distance(shape));
+                size_type const n = std::ranges::distance(shape);
                 return bulk(schedule(sched_), n,
                     [shape,
                         bound_f = hpx::bind_back(HPX_FORWARD(F, f),
@@ -212,8 +214,8 @@ namespace hpx::execution::experimental {
                     "explicit_scheduler_executor::bulk_async_execution "
                     "can result in data races!");
 
-                using size_type = decltype(std::ranges::size(shape));
-                size_type const shape_size = std::ranges::size(shape);
+                using size_type = decltype(std::ranges::distance(shape));
+                size_type const shape_size = std::ranges::distance(shape);
 
                 using result_vector_type = std::vector<result_type>;
                 result_vector_type result_vector(shape_size);
@@ -289,8 +291,8 @@ namespace hpx::execution::experimental {
             auto pre_req =
                 when_all(keep_future(HPX_FORWARD(Future, predecessor)));
 
-            using size_type = decltype(std::ranges::size(shape));
-            size_type const n = std::ranges::size(shape);
+            using size_type = decltype(std::ranges::distance(shape));
+            size_type const n = std::ranges::distance(shape);
             return continues_on(HPX_MOVE(pre_req), sched_) |
                 bulk(n,
                     [shape,

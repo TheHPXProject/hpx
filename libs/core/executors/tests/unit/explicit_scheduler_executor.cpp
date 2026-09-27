@@ -14,10 +14,14 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 
+#include <array>
+#include <atomic>
 #include <cstdlib>
+#include <forward_list>
 #include <functional>
 #include <string>
 #include <type_traits>
@@ -201,8 +205,23 @@ void test_bulk_then_void(Executor&& exec)
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename Executor>
+void test_unsized_shape(Executor& exec)
+{
+    std::forward_list<int> input{0, 1, 2};
+    hpx::util::iterator_range shape(input);
+    static_assert(!std::ranges::sized_range<decltype(shape)>);
+    std::array<std::atomic<int>, 3> visits{};
+    auto work = hpx::parallel::execution::bulk_async_execute(
+        exec, [&visits](int i) { ++visits[i]; }, shape);
+    hpx::this_thread::experimental::sync_wait(HPX_MOVE(work));
+    for (auto const& count : visits)
+        HPX_TEST_EQ(count.load(), 1);
+}
+
+template <typename Executor>
 void test_executor(Executor&& exec)
 {
+    test_unsized_shape(exec);
     test_post(exec);
 
     test_sync(exec);

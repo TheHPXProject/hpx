@@ -10,6 +10,7 @@
 
 #include <hpx/execution.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/runtime.hpp>
 
@@ -18,11 +19,40 @@
 #include <iterator>
 #include <numeric>
 #include <random>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace test {
+    template <typename I>
+    I subrange_begin(std::ranges::subrange<I> result)
+    {
+        return result.begin();
+    }
+
+    template <typename I>
+    hpx::future<I> subrange_begin(hpx::future<std::ranges::subrange<I>> result)
+    {
+        return result.then([](hpx::future<std::ranges::subrange<I>> ready) {
+            return ready.get().begin();
+        });
+    }
+
+    template <typename I>
+    I subrange_end(std::ranges::subrange<I> result)
+    {
+        return result.end();
+    }
+
+    template <typename I>
+    hpx::future<I> subrange_end(hpx::future<std::ranges::subrange<I>> result)
+    {
+        return result.then([](hpx::future<std::ranges::subrange<I>> ready) {
+            return ready.get().end();
+        });
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     // Sentinel constructed from an Iterator just for the purpose of the
     // overloads tests
@@ -65,6 +95,36 @@ namespace test {
     private:
         IterType end;
     };
+
+    // Keep the unsized sentinel above for serial overload tests.
+    template <std::random_access_iterator Iter>
+    struct sized_sentinel_from_iterator : sentinel_from_iterator<Iter>
+    {
+        sized_sentinel_from_iterator() = default;
+
+        explicit sized_sentinel_from_iterator(Iter end)
+          : sentinel_from_iterator<Iter>(end)
+        {
+        }
+
+        friend std::iter_difference_t<Iter> operator-(
+            sized_sentinel_from_iterator s, Iter it)
+        {
+            return s.get() - it;
+        }
+
+        friend std::iter_difference_t<Iter> operator-(
+            Iter it, sized_sentinel_from_iterator s)
+        {
+            return it - s.get();
+        }
+    };
+
+    template <std::random_access_iterator I, std::sentinel_for<I> S>
+    auto make_sized_sentinel(I first, S last)
+    {
+        return sized_sentinel_from_iterator(std::ranges::next(first, last));
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     template <typename IteratorTag>

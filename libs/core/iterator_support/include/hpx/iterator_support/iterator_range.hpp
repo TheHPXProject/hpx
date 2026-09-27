@@ -54,7 +54,7 @@ namespace hpx::util {
             return _iterator;
         }
 
-        [[nodiscard]] HPX_HOST_DEVICE constexpr Iterator end() const
+        [[nodiscard]] HPX_HOST_DEVICE constexpr Sentinel end() const
         {
             return _sentinel;
         }
@@ -76,11 +76,13 @@ namespace hpx::util {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Range>
-    iterator_range(Range& r) -> iterator_range<std::ranges::iterator_t<Range>>;
+    iterator_range(Range& r) -> iterator_range<std::ranges::iterator_t<Range>,
+        std::ranges::sentinel_t<Range>>;
 
     HPX_CXX_CORE_EXPORT template <typename Range>
     iterator_range(Range const& r)
-        -> iterator_range<std::ranges::iterator_t<Range const>>;
+        -> iterator_range<std::ranges::iterator_t<Range const>,
+            std::ranges::sentinel_t<Range const>>;
 
     HPX_CXX_CORE_EXPORT template <typename Iterator, typename Sentinel>
     iterator_range(Iterator it, Sentinel sent)
@@ -88,7 +90,7 @@ namespace hpx::util {
 
     template <typename Range,
         typename Iterator = std::ranges::iterator_t<Range>,
-        typename Sentinel = std::ranges::iterator_t<Range>>
+        typename Sentinel = std::ranges::sentinel_t<Range>>
     HPX_DEPRECATED_V(1, 9,
         "hpx::util::make_iterator_range is deprecated, use "
         "hpx::util::iterator_range instead")
@@ -101,7 +103,7 @@ namespace hpx::util {
 
     template <typename Range,
         typename Iterator = std::ranges::iterator_t<Range const>,
-        typename Sentinel = std::ranges::iterator_t<Range const>>
+        typename Sentinel = std::ranges::sentinel_t<Range const>>
     HPX_DEPRECATED_V(1, 9,
         "hpx::util::make_iterator_range is deprecated, use "
         "hpx::util::iterator_range instead")
@@ -123,6 +125,20 @@ namespace hpx::util {
         return iterator_range<Iterator, Sentinel>(HPX_MOVE(it), HPX_MOVE(sent));
     }
 }    // namespace hpx::util
+
+namespace std::ranges {
+
+    // The range owns only its iterators; destroying it does not invalidate
+    // them. Its legacy size() member may traverse an unsized sentinel, which
+    // does not satisfy the constant-time requirement of sized_range.
+    HPX_CXX_CORE_EXPORT template <typename I, typename S>
+    inline constexpr bool
+        enable_borrowed_range<hpx::util::iterator_range<I, S>> = true;
+
+    HPX_CXX_CORE_EXPORT template <typename I, typename S>
+    inline constexpr bool disable_sized_range<hpx::util::iterator_range<I, S>> =
+        !std::sized_sentinel_for<S, I>;
+}    // namespace std::ranges
 
 namespace hpx::ranges {
 

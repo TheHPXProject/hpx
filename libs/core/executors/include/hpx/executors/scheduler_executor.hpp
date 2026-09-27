@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <exception>
 #include <iterator>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -315,8 +316,8 @@ namespace hpx::execution::experimental {
                 shape_element, Ts...>;
 
             // hpx::execution::experimental::bulk requires integral shape
-            using size_type = decltype(std::ranges::size(shape));
-            size_type const n = std::ranges::size(shape);
+            using size_type = decltype(std::ranges::distance(shape));
+            size_type const n = std::ranges::distance(shape);
 
             if constexpr (std::is_void_v<result_type>)
             {
@@ -421,8 +422,8 @@ namespace hpx::execution::experimental {
             using result_type = hpx::util::detail::invoke_deferred_result_t<F,
                 shape_element, Ts...>;
 
-            using size_type = decltype(std::ranges::size(shape));
-            size_type const n = std::ranges::size(shape);
+            using size_type = decltype(std::ranges::distance(shape));
+            size_type const n = std::ranges::distance(shape);
 
             if constexpr (detail::has_thread_pool_backend<
                               std::decay_t<BaseScheduler>>::value)
@@ -507,9 +508,10 @@ namespace hpx::execution::experimental {
                     "data races!");
 
                 // the overall return value is future<std::vector<result_type>>
-                auto pre_req = when_all(
-                    keep_future(HPX_FORWARD(Future, predecessor)),
-                    just(std::vector<result_type>(std::ranges::size(shape))));
+                auto pre_req =
+                    when_all(keep_future(HPX_FORWARD(Future, predecessor)),
+                        just(std::vector<result_type>(
+                            std::ranges::distance(shape))));
 
                 auto loop = bulk(continues_on(HPX_MOVE(pre_req), sched_), shape,
                     detail::captured_args_then(
