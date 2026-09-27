@@ -170,6 +170,7 @@ namespace hpx { namespace ranges {
 #include <hpx/parallel/algorithms/generate.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <iterator>

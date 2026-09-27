@@ -167,6 +167,7 @@ namespace hpx {
 #include <hpx/parallel/util/result_types.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <cstdint>
 #include <iterator>
 #include <ranges>

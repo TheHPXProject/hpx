@@ -15,6 +15,7 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <forward_list>
 #include <functional>
 #include <iterator>
@@ -114,13 +115,15 @@ namespace {
         auto extrema = value(minmax_element(policy, rng, less, proj));
         HPX_TEST(extrema.min == input.begin());
         HPX_TEST(extrema.max == input.begin() + 3);
-        HPX_TEST_EQ(value(hpx::ranges::min(policy, rng, less, proj)).number, 1);
-        HPX_TEST_EQ(value(hpx::ranges::max(policy, rng, less, proj)).number, 3);
+        HPX_TEST_EQ(
+            value((hpx::ranges::min) (policy, rng, less, proj)).number, 1);
+        HPX_TEST_EQ(
+            value((hpx::ranges::max) (policy, rng, less, proj)).number, 3);
         auto values = value(hpx::ranges::minmax(policy, rng, less, proj));
         HPX_TEST_EQ(values.min.number, 1);
         HPX_TEST_EQ(values.max.number, 3);
         HPX_TEST_EQ(
-            value(hpx::ranges::min(policy, std::vector<int>{9, 4, 7})), 4);
+            value((hpx::ranges::min) (policy, std::vector<int>{9, 4, 7})), 4);
         auto increment = [](int& n) { ++n; };
         check_constraints(for_each, policy, increment);
         HPX_TEST(value(for_each(policy, rng, increment, proj)) == input.end());
@@ -193,7 +196,7 @@ namespace {
         std::vector<throwing_copy> input;
         input.emplace_back(2);
         input.emplace_back(1);
-        auto check = [&](auto algorithm) {
+        auto check_exception = [&](auto algorithm) {
             bool caught = false;
             try
             {
@@ -206,9 +209,9 @@ namespace {
             }
             HPX_TEST(caught);
         };
-        check(hpx::ranges::min);
-        check(hpx::ranges::max);
-        check(hpx::ranges::minmax);
+        check_exception(hpx::ranges::min);
+        check_exception(hpx::ranges::max);
+        check_exception(hpx::ranges::minmax);
     }
 
     void test_extrema_requirements()
