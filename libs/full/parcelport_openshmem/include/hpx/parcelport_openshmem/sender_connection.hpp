@@ -67,9 +67,7 @@ namespace hpx::parcelset::policies::openshmem {
             std::shared_ptr<sender_connection>)>;
 
         // Store the completion handlers and prepare the parcel for sending.
-        // The actual sending is driven by poll_send() from the single
-        // progress thread, which keeps all shmem_* calls on that thread
-        // (required by SHMEM_THREAD_SERIALIZED).
+        // The actual sending is driven by poll_send() from one progress
         void async_write(handler_type&& handler,
             post_handler_type&& parcel_postprocess) noexcept
         {
@@ -82,16 +80,14 @@ namespace hpx::parcelset::policies::openshmem {
             prepare();
         }
 
-        // Blocking send driver.  Sends all chunks (each via the blocking
-        // mailbox_array::send()) and returns true when the connection is
-        // complete.  Must be called from the single progress thread only.
+        // Non-blocking send driver.  Sends at most one chunk per call (each
+        // via the non-blocking mailbox_array::try_send()) and returns true
         bool poll_send() noexcept;
 
     private:
         void prepare() noexcept;
-        void stage_chunk() noexcept;
+        std::size_t stage_chunk() noexcept;
         void finish() noexcept;
-        void handle_local_send() noexcept;
 
         friend struct sender;
 
@@ -108,6 +104,11 @@ namespace hpx::parcelset::policies::openshmem {
         std::uint32_t chunk_idx_ = 0;
         std::size_t total_data_size_ = 0;
         std::size_t available_payload_ = 0;
+        std::uint64_t message_id_ = 0;
+
+        // True while this connection holds the single-flight reservation on
+        // its destination (see sender::busy_dsts_).  Only manipulated by the
+        bool reserved_dst_ = false;
     };
 }    // namespace hpx::parcelset::policies::openshmem
 
