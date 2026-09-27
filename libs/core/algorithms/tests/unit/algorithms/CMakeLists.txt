@@ -187,6 +187,7 @@ set(sender_tests
     foreachn_sender
     generate_sender
     generaten_sender
+    inplace_merge_sender
     is_heap_sender
     is_heap_until_sender
     includes_sender
@@ -196,6 +197,7 @@ set(sender_tests
     lexicographical_compare_sender
     make_heap_sender
     max_element_sender
+    merge_sender
     min_element_sender
     minmax_element_sender
     mismatch_sender
