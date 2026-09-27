@@ -232,7 +232,7 @@ namespace hpx { namespace ranges {
     ///
     /// \returns  The \a search_n algorithm returns \a FwdIter.
     ///           The \a search_n algorithm returns an iterator to the beginning of
-    ///           the last subsequence [s_first, s_last) in range [first, first+count).
+    ///           the first subsequence [s_first, s_last) in range [first, first+count).
     ///           If the length of the subsequence [s_first, s_last) is greater
     ///           than the length of the range [first, first+count),
     ///           \a first is returned.
@@ -326,7 +326,7 @@ namespace hpx { namespace ranges {
     ///           execution policy is of type \a task_execution_policy and
     ///           returns \a FwdIter otherwise.
     ///           The \a search_n algorithm returns an iterator to the beginning of
-    ///           the last subsequence [s_first, s_last) in range [first, first+count).
+    ///           the first subsequence [s_first, s_last) in range [first, first+count).
     ///           If the length of the subsequence [s_first, s_last) is greater
     ///           than the length of the range [first, first+count),
     ///           \a first is returned.
@@ -396,15 +396,10 @@ namespace hpx { namespace ranges {
     /// The comparison operations in the parallel \a search algorithm execute
     /// in sequential order in the calling thread.
     ///
-    /// \returns  The \a search algorithm returns a \a hpx::future<FwdIter> if the
-    ///           execution policy is of type \a task_execution_policy and
-    ///           returns \a FwdIter otherwise.
-    ///           The \a search algorithm returns an iterator to the beginning of
-    ///           the first subsequence [s_first, s_last) in range [first, last).
-    ///           If the length of the subsequence [s_first, s_last) is greater
-    ///           than the length of the range [first, last), \a last is returned.
-    ///           Additionally if the size of the subsequence is empty \a first is
-    ///           returned. If no subsequence is found, \a last is returned.
+    /// \returns  The iterator points to the first matching subsequence
+    ///           in [first, first + count), where first is begin(rng1).
+    ///           If the pattern is empty or no match is found, first is
+    ///           returned.
     ///
     template <typename Rng1, typename Rng2,
         typename Pred = hpx::ranges::equal_to, typename Proj1 = hpx::identity,
@@ -480,15 +475,11 @@ namespace hpx { namespace ranges {
     /// fashion in unspecified threads, and indeterminately sequenced
     /// within each thread.
     ///
-    /// \returns  The \a search algorithm returns a \a hpx::future<FwdIter> if the
-    ///           execution policy is of type \a task_execution_policy and
-    ///           returns \a FwdIter otherwise.
-    ///           The \a search algorithm returns an iterator to the beginning of
-    ///           the first subsequence [s_first, s_last) in range [first, last).
-    ///           If the length of the subsequence [s_first, s_last) is greater
-    ///           than the length of the range [first, last), \a last is returned.
-    ///           Additionally if the size of the subsequence is empty \a first is
-    ///           returned. If no subsequence is found, \a last is returned.
+    /// \returns  A future holding an iterator for task policies, or an iterator
+    ///           otherwise. The iterator points to the first matching subsequence
+    ///           in [first, first + count), where first is begin(rng1).
+    ///           If the pattern is empty or no match is found, first is
+    ///           returned.
     ///
     template <typename ExPolicy, typename Rng1, typename Rng2,
         typename Pred = hpx::ranges::equal_to, typename Proj1 = hpx::identity,
@@ -579,7 +570,9 @@ namespace hpx { namespace ranges {
 #include <hpx/config.hpp>
 #include <hpx/algorithms/traits/projected.hpp>
 #include <hpx/algorithms/traits/projected_range.hpp>
+#include <hpx/modules/async_local.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/parallel/algorithms/detail/algorithm_value.hpp>
 #include <hpx/parallel/algorithms/detail/search.hpp>
@@ -727,10 +720,11 @@ namespace hpx::ranges {
             FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            return hpx::parallel::detail::search<FwdIter, FwdIter>().call(
-                hpx::execution::seq, first, std::ranges::next(first, count),
-                s_first, s_last, HPX_MOVE(op), HPX_MOVE(proj1),
-                HPX_MOVE(proj2));
+            auto last = std::ranges::next(first, count);
+            auto found = hpx::parallel::detail::search<FwdIter, FwdIter>().call(
+                hpx::execution::seq, first, last, s_first, s_last, HPX_MOVE(op),
+                HPX_MOVE(proj1), HPX_MOVE(proj2));
+            return found == last ? first : found;
         }
 
         template <typename ExPolicy, typename FwdIter, typename FwdIter2,
@@ -757,10 +751,31 @@ namespace hpx::ranges {
             FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            return hpx::parallel::detail::search<FwdIter, FwdIter>().call(
-                HPX_FORWARD(ExPolicy, policy), first,
-                std::ranges::next(first, count), s_first, s_last, HPX_MOVE(op),
-                HPX_MOVE(proj1), HPX_MOVE(proj2));
+            auto last = std::ranges::next(first, count);
+            auto result =
+                hpx::parallel::detail::search<FwdIter, FwdIter>().call(
+                    HPX_FORWARD(ExPolicy, policy), first, last, s_first, s_last,
+                    HPX_MOVE(op), HPX_MOVE(proj1), HPX_MOVE(proj2));
+            auto convert = [first, last](FwdIter found) {
+                return found == last ? first : found;
+            };
+            if constexpr (hpx::traits::is_future_v<decltype(result)>)
+            {
+                // Same-type make_future conversions bypass the callable.
+                // Use asynchronous work so a deferred search does not start
+                // in the caller while attaching a continuation.
+                return hpx::async(
+                    hpx::launch::async,
+                    [convert](hpx::future<FwdIter> ready) {
+                        return convert(ready.get());
+                    },
+                    HPX_MOVE(result));
+            }
+            else
+            {
+                return parallel::util::detail::convert_to_result(
+                    HPX_MOVE(result), HPX_MOVE(convert));
+            }
         }
 
         template <typename Rng1, typename Rng2,
@@ -783,13 +798,9 @@ namespace hpx::ranges {
             std::size_t count, Rng2&& rng2, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            using fwditer_type = std::ranges::iterator_t<Rng1>;
-
-            return hpx::parallel::detail::search<fwditer_type, fwditer_type>()
-                .call(hpx::execution::seq, hpx::util::begin(rng1),
-                    std::ranges::next(hpx::util::begin(rng1), count),
-                    hpx::util::begin(rng2), hpx::util::end(rng2), HPX_MOVE(op),
-                    HPX_MOVE(proj1), HPX_MOVE(proj2));
+            return invoke_default(hpx::util::begin(rng1), count,
+                hpx::util::begin(rng2), hpx::util::end(rng2), HPX_MOVE(op),
+                HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
 
         template <typename ExPolicy, typename Rng1, typename Rng2,
@@ -815,13 +826,10 @@ namespace hpx::ranges {
             Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
             Proj2 proj2 = Proj2())
         {
-            using fwditer_type = std::ranges::iterator_t<Rng1>;
-
-            return hpx::parallel::detail::search<fwditer_type, fwditer_type>()
-                .call(HPX_FORWARD(ExPolicy, policy), hpx::util::begin(rng1),
-                    std::ranges::next(hpx::util::begin(rng1), count),
-                    hpx::util::begin(rng2), hpx::util::end(rng2), HPX_MOVE(op),
-                    HPX_MOVE(proj1), HPX_MOVE(proj2));
+            return invoke_default(HPX_FORWARD(ExPolicy, policy),
+                hpx::util::begin(rng1), count, hpx::util::begin(rng2),
+                hpx::util::end(rng2), HPX_MOVE(op), HPX_MOVE(proj1),
+                HPX_MOVE(proj2));
         }
 
         /// \brief Find the first run of count elements matching value.

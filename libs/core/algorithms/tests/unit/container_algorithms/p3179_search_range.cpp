@@ -97,17 +97,49 @@ namespace {
     {
         std::vector<int> input{1, 2, 3, 2, 3};
         std::vector<int> needle{2, 3};
-        auto expected = input.begin() + 1;
-        HPX_TEST(
-            hpx::ranges::search_n(input, input.size(), needle) == expected);
-        HPX_TEST(hpx::ranges::search_n(hpx::execution::par, input, input.size(),
-                     needle) == expected);
-        HPX_TEST(hpx::ranges::search_n(input.begin(), input.size(),
-                     needle.begin(), needle.end()) == expected);
-        HPX_TEST(
-            hpx::ranges::search_n(hpx::execution::par(hpx::execution::task),
-                input.begin(), input.size(), needle.begin(), needle.end())
-                .get() == expected);
+        auto verify_result = [&](std::size_t count, auto expected) {
+            HPX_TEST(hpx::ranges::search_n(input, count, needle) == expected);
+            HPX_TEST(hpx::ranges::search_n(input.begin(), count, needle.begin(),
+                         needle.end()) == expected);
+            auto with_policy = [&](auto policy) {
+                HPX_TEST(value(hpx::ranges::search_n(
+                             policy, input, count, needle)) == expected);
+                HPX_TEST(value(hpx::ranges::search_n(policy, input.begin(),
+                             count, needle.begin(), needle.end())) == expected);
+            };
+            using namespace hpx::execution;
+            with_policy(seq);
+            with_policy(par);
+            with_policy(seq(task));
+            with_policy(par(task));
+        };
+        verify_result(input.size(), input.begin() + 1);
+        verify_result(
+            2, input.begin());    // A match outside the counted prefix.
+        needle = {9};
+        verify_result(input.size(), input.begin());
+        needle.clear();
+        verify_result(input.size(), input.begin());
+        verify_result(0, input.begin());
+        needle = {2, 3};
+        verify_result(0, input.begin());
+    }
+
+    template <typename Policy>
+    void test_counted_search_returns_before_completion(Policy policy)
+    {
+        std::vector<int> input{1, 2, 3, 4};
+        std::vector<int> needle{2, 3};
+        hpx::promise<void> release;
+        auto gate = release.get_future().share();
+        auto project = [gate](int element) {
+            gate.get();
+            return element;
+        };
+        auto result = hpx::ranges::search_n(policy, input, input.size(), needle,
+            std::ranges::equal_to{}, project);
+        release.set_value();
+        HPX_TEST(result.get() == input.begin() + 1);
     }
 
     void test_partition_boundaries()
@@ -143,6 +175,8 @@ int hpx_main()
     test(par(task));
     test_partition_boundaries();
     test_counted_subsequence_extension();
+    test_counted_search_returns_before_completion(seq(task));
+    test_counted_search_returns_before_completion(par(task));
     return hpx::local::finalize();
 }
 

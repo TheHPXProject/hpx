@@ -226,10 +226,10 @@ namespace hpx::parallel::detail {
                           proj2 = HPX_FORWARD(Proj2, proj2)](FwdIter it,
                           std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
+                // The partitioner may reuse this callable for multiple chunks.
                 sequential_search_t<policy_type>{}(it, s_first, base_idx,
                     part_size, static_cast<std::size_t>(diff),
-                    static_cast<std::size_t>(count), tok, HPX_FORWARD(Pred, op),
-                    HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
+                    static_cast<std::size_t>(count), tok, op, proj1, proj2);
             };
 
             auto f2 = [=](auto&&... data) mutable -> FwdIter {
