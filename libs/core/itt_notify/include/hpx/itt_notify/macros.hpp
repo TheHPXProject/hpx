@@ -36,6 +36,8 @@
 #define HPX_ITT_FRAME_BEGIN(frame, id) itt_frame_begin(frame, id)
 #define HPX_ITT_FRAME_END(frame, id) itt_frame_end(frame, id)
 
+#define HPX_ITT_MARKER(domain, name) itt_marker(domain, name)
+
 #define HPX_ITT_MARK_CREATE(mark, name) mark = itt_mark_create(name)
 #define HPX_ITT_MARK_OFF(mark) itt_mark_off(mark)
 #define HPX_ITT_MARK(mark, parameter) itt_mark(mark, parameter)

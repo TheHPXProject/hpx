@@ -98,6 +98,11 @@ bool use_ittnotify_api = false;
         __itt_frame_end_v3_ptr(domain, id);                                    \
     /**/
 
+#define HPX_INTERNAL_ITT_MARKER(domain, name)                                  \
+    if (use_ittnotify_api && __itt_marker_ptr)                                 \
+        __itt_marker_ptr(domain, __itt_null, name, __itt_marker_scope_global); \
+    /**/
+
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_INTERNAL_ITT_MARK_CREATE(name)                                     \
     (use_ittnotify_api && __itt_mark_create_ptr) ?                             \
@@ -436,6 +441,11 @@ namespace hpx::util::itt {
         }
     }
 
+    void emit_marker(domain const& d, string_handle const& name) noexcept
+    {
+        HPX_ITT_MARKER(d.domain_, name.handle_);
+    }
+
     void task::add_metadata(
         string_handle const& name, std::uint64_t const val) const noexcept
     {
@@ -613,6 +623,12 @@ void itt_frame_begin(___itt_domain const* domain, ___itt_id* id) noexcept
 void itt_frame_end(___itt_domain const* domain, ___itt_id* id) noexcept
 {
     HPX_INTERNAL_ITT_FRAME_END(domain, id)
+}
+
+void itt_marker(
+    ___itt_domain const* domain, ___itt_string_handle* name) noexcept
+{
+    HPX_INTERNAL_ITT_MARKER(domain, name)
 }
 
 ///////////////////////////////////////////////////////////////////////////////

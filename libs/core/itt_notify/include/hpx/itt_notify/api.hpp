@@ -58,6 +58,9 @@ HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_frame_begin(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_frame_end(
     ___itt_domain const* frame, ___itt_id* id) noexcept;
 
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_marker(
+    ___itt_domain const* domain, ___itt_string_handle* name) noexcept;
+
 HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT int itt_mark_create(
     char const*) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_mark_off(int mark) noexcept;
@@ -373,6 +376,9 @@ namespace hpx::util::itt {
         string_handle sh_;
     };
 
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void emit_marker(
+        domain const& d, string_handle const& name) noexcept;
+
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct heap_function
     {
@@ -560,6 +566,11 @@ HPX_CXX_CORE_EXPORT constexpr void itt_frame_begin(
 }
 HPX_CXX_CORE_EXPORT constexpr void itt_frame_end(
     ___itt_domain const*, ___itt_id*) noexcept
+{
+}
+
+HPX_CXX_CORE_EXPORT constexpr void itt_marker(
+    ___itt_domain const*, ___itt_string_handle*) noexcept
 {
 }
 
@@ -785,6 +796,11 @@ namespace hpx::util::itt {
         {
         }
     };
+
+    HPX_CXX_CORE_EXPORT constexpr void emit_marker(
+        domain const&, string_handle const&) noexcept
+    {
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct heap_function
