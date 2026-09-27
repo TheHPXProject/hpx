@@ -1,0 +1,247 @@
+//  Copyright (c) 2026 the-ivii
+//
+//  SPDX-License-Identifier: BSL-1.0
+//  Distributed under the Boost Software License, Version 1.0. (See accompanying
+//  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+#include <hpx/init.hpp>
+#include <hpx/modules/algorithms.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/futures.hpp>
+#include <hpx/modules/testing.hpp>
+
+#include <algorithm>
+#include <concepts>
+#include <memory>
+#include <ranges>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+namespace {
+    template <typename T>
+    auto value(T&& result)
+    {
+        if constexpr (hpx::traits::is_future_v<std::decay_t<T>>)
+            return result.get();
+        else
+            return result;
+    }
+
+    struct token
+    {
+        int key;
+
+        explicit token(int key)
+          : key(key)
+        {
+        }
+
+        token(token const&) = delete;
+        token& operator=(token const&) = delete;
+        token(token&&) = default;
+        token& operator=(token&&) = default;
+
+        friend bool operator==(token const&, token const&) = default;
+    };
+
+    // Copyable destination, assignable and constructible from a noncopyable
+    // source. Its projection also supplies a noncopyable comparison value.
+    struct record
+    {
+        std::shared_ptr<token> data;
+
+        record()
+          : data(std::make_shared<token>(0))
+        {
+        }
+
+        explicit record(token const& t)
+          : data(std::make_shared<token>(t.key))
+        {
+        }
+
+        record& operator=(token const& t)
+        {
+            data = std::make_shared<token>(t.key);
+            return *this;
+        }
+    };
+
+    struct projection
+    {
+        token const& operator()(record const& r) const
+        {
+            return *r.data;
+        }
+    };
+
+    using iterator = std::vector<record>::iterator;
+    static_assert(std::indirect_binary_predicate<std::ranges::equal_to,
+        std::projected<iterator, projection>, token const*>);
+    static_assert(std::indirectly_writable<iterator, token const&>);
+    static_assert(std::constructible_from<record, token const&>);
+    static_assert(!std::copy_constructible<token>);
+
+    template <typename Policy>
+    void test_lookup(Policy policy)
+    {
+        using namespace hpx::ranges;
+        std::vector<std::unique_ptr<int>> input(5);
+        input.front() = std::make_unique<int>(1);
+        input[3] = std::make_unique<int>(2);
+        std::unique_ptr<int> const needle;
+        auto const first = input.begin();
+        auto const last = input.end();
+
+        HPX_TEST(value(find(policy, input, needle)) == first + 1);
+        HPX_TEST(value(find(policy, first, last, needle)) == first + 1);
+        HPX_TEST(value(count(policy, input, needle)) == 3);
+        HPX_TEST(value(count(policy, first, last, needle)) == 3);
+        HPX_TEST(value(contains(policy, input, needle)));
+        HPX_TEST(value(contains(policy, first, last, needle)));
+        auto tail = value(find_last(policy, input, needle));
+        HPX_TEST(tail.begin() == first + 4);
+        HPX_TEST(tail.end() == last);
+        HPX_TEST(
+            value(find_last(policy, first, last, needle)).begin() == first + 4);
+        auto run = value(search_n(policy, input, 2, needle));
+        HPX_TEST(run.begin() == first + 1);
+        HPX_TEST(run.end() == first + 3);
+        HPX_TEST(value(search_n(policy, first, last, 2, needle)).begin() ==
+            first + 1);
+        HPX_TEST(value(search_n(policy, input, 0, needle)).begin() == first);
+        HPX_TEST(value(search_n(policy, input, 4, needle)).begin() == last);
+
+        std::vector<std::unique_ptr<int>> empty;
+        HPX_TEST(value(find(policy, empty, needle)) == empty.end());
+        HPX_TEST(value(count(policy, empty, needle)) == 0);
+        HPX_TEST(!value(contains(policy, empty, needle)));
+        HPX_TEST(
+            value(find_last(policy, empty, needle)).begin() == empty.end());
+        HPX_TEST(
+            value(search_n(policy, empty, 1, needle)).begin() == empty.end());
+        HPX_TEST(value(hpx::ranges::remove(policy, input, needle)).begin() ==
+            first + 2);
+        HPX_TEST(*input.front() == 1);
+        HPX_TEST(*input[1] == 2);
+    }
+
+    template <typename Policy>
+    void test_values(Policy policy)
+    {
+        using namespace hpx::ranges;
+        token const needle(1);
+        token const replacement(9);
+        std::vector<record> input(5);
+        input[1] = needle;
+        input[2] = needle;
+        auto const proj = projection{};
+        auto const pred = [](token const& t) { return t.key == 1; };
+        HPX_TEST(value(find(policy, input, needle, proj)) == input.begin() + 1);
+        HPX_TEST(value(count(policy, input, needle, proj)) == 2);
+        HPX_TEST(value(contains(policy, input, needle, proj)));
+        HPX_TEST(value(find_last(policy, input, needle, proj)).begin() ==
+            input.begin() + 2);
+        HPX_TEST(value(search_n(policy, input, 2, needle,
+                           std::ranges::equal_to{}, proj))
+                     .begin() == input.begin() + 1);
+
+        std::vector<record> output(2);
+        auto copied = value(remove_copy(policy, input, output, needle, proj));
+        HPX_TEST(copied.in == input.begin() + 4);
+        HPX_TEST(copied.out == output.end());
+        HPX_TEST(output[0].data->key == 0);
+        HPX_TEST(output[1].data->key == 0);
+        copied = value(
+            replace_copy(policy, input, output, needle, replacement, proj));
+        HPX_TEST(copied.in == input.begin() + 2);
+        HPX_TEST(output[0].data->key == 0);
+        HPX_TEST(output[1].data->key == 9);
+        copied = value(
+            replace_copy_if(policy, input, output, pred, replacement, proj));
+        HPX_TEST(copied.out == output.end());
+        HPX_TEST(output[1].data->key == 9);
+
+        auto modified = input;
+        HPX_TEST(value(replace(policy, modified, needle, replacement, proj)) ==
+            modified.end());
+        HPX_TEST(modified[1].data->key == 9);
+        HPX_TEST(modified[2].data->key == 9);
+        modified = input;
+        HPX_TEST(value(replace_if(policy, modified, pred, replacement, proj)) ==
+            modified.end());
+        HPX_TEST(modified[1].data->key == 9);
+        HPX_TEST(modified[2].data->key == 9);
+        HPX_TEST(
+            value(hpx::ranges::remove(policy, input, needle, proj)).begin() ==
+            input.begin() + 3);
+
+        HPX_TEST(value(fill(policy, output, replacement)) == output.end());
+        HPX_TEST(output[0].data->key == 9);
+        HPX_TEST(output[1].data->key == 9);
+        HPX_TEST(value(fill_n(policy, output.begin(), 1, needle)) ==
+            output.begin() + 1);
+        HPX_TEST(output[0].data->key == 1);
+        HPX_TEST(output[1].data->key == 9);
+        HPX_TEST(value(fill_n(policy, output.begin(), -1, needle)) ==
+            output.begin());
+
+        std::allocator<record> alloc;
+        auto storage = alloc.allocate(2);
+        auto range = std::ranges::subrange(storage, storage + 2);
+        HPX_TEST(value(uninitialized_fill(policy, range, replacement)) ==
+            storage + 2);
+        HPX_TEST(storage[0].data->key == 9);
+        HPX_TEST(storage[1].data->key == 9);
+        std::ranges::destroy(range);
+        HPX_TEST(value(uninitialized_fill_n(policy, storage, 2, needle)) ==
+            storage + 2);
+        HPX_TEST(storage[0].data->key == 1);
+        HPX_TEST(storage[1].data->key == 1);
+        std::ranges::destroy(range);
+        alloc.deallocate(storage, 2);
+    }
+
+    template <typename Policy>
+    void test_temporary_value(Policy policy)
+    {
+        std::vector<std::string> input{
+            "first", "a long temporary search value"};
+        hpx::promise<void> release;
+        auto gate = release.get_future().share();
+        auto project = [gate](std::string const& s) -> std::string const& {
+            gate.get();
+            return s;
+        };
+        auto result = hpx::ranges::find(policy, input,
+            std::string("a long temporary search value"), project);
+        // Force the task to use its value after the argument is destroyed.
+        release.set_value();
+        HPX_TEST(result.get() == input.begin() + 1);
+    }
+}    // namespace
+
+int hpx_main()
+{
+    using namespace hpx::execution;
+    test_lookup(seq);
+    test_lookup(par);
+    test_lookup(par_unseq);
+    test_lookup(seq(task));
+    test_lookup(par(task));
+    test_values(seq);
+    test_values(par);
+    test_values(par_unseq);
+    test_values(seq(task));
+    test_values(par(task));
+    test_temporary_value(seq(task));
+    test_temporary_value(par(task));
+    return hpx::local::finalize();
+}
+
+int main(int argc, char* argv[])
+{
+    HPX_TEST(hpx::local::init(hpx_main, argc, argv) == 0);
+    return hpx::util::report_errors();
+}

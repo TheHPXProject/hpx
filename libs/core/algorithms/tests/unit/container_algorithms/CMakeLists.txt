@@ -92,6 +92,7 @@ set(tests
     p3179_memory_range
     p3179_ordered_range
     p3179_query_range
+    p3179_value_range
     reduce_range
     remove_range
     remove_if_range
