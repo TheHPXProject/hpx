@@ -82,6 +82,14 @@ if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_GASNET)
   hpx_setup_gasnet()
 endif()
 
+# OpenSHMEM: recreate the imported OpenSHMEM::openshmem target from the values
+# cached at HPX build time (the consumer needs neither pkg-config nor the
+# oshmem module files themselves).
+if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_OPENSHMEM)
+  include(HPX_SetupOpenSHMEM)
+  hpx_setup_openshmem()
+endif()
+
 # Eve can be installed by HPX or externally installed. In the first case we use
 # exported targets, in the second we find Eve again using find_package.
 if("${HPX_WITH_DATAPAR_BACKEND}" STREQUAL "EVE")

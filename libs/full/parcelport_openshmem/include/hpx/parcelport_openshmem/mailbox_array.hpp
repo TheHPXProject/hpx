@@ -10,12 +10,17 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_OPENSHMEM)
 #include <hpx/assert.hpp>
+#include <hpx/modules/errors.hpp>
 
+#include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <utility>
 
 #include <shmem.h>
@@ -24,67 +29,215 @@ namespace hpx::parcelset::policies::openshmem {
 
     // TX/RX page-arena + per-pair 64-bit credit-word protocol
     //
-    // ONE zeroed symmetric allocation (shmem_calloc) holds everything:
-    //     tx       : npes * SLOTS * mtu   (my outbound staging/scratch pages)
-    //     rx       : npes * SLOTS * mtu   (my shared inbound landing pages)
-    //     produced : npes * npes * 4      (uint32, low-32 of per-pair word)
-    //     consumed : npes * npes * 4      (uint32, high-32 of per-pair word)
-    //   -> one 64-bit credit per (sender i, receiver j): low32 = produced,
-    //      high32 = consumed.  Payload lives in the tx/rx page pools which
-    //      are O(npes * SLOTS) and linear in the number of PEs; the npes^2
-    //      credit words are tiny 4-byte atomics (no npes^2 page grid).
-    //
-    // Slot-writer ownership (avoids torn writes with only atomic_set):
-    //     produced[i*npes+j] written by sender (tx) i onto j;  receiver j reads local
-    //     consumed[i*npes+j] written by receiver (rx) j onto i; sender i reads local
-    //   -> each 32-bit half has a single writer; no RMW needed.
-    //
-    // Validated (2-PE) transport rule:
-    //   - each side reads its associated counter locally (plain load)
-    //   - each side remotely writes the peer's counter via atomic_set(..., peer)
-    //   - both sides atomic_fetch the peer purely to force delivery of the
-    //     peer's inbound stores into local symmetric memory (send queue)
-    //   - data carried by blocking putmem.  NO atomic_*_nbi / fetch_add.
-    //
-    // Receiver j's landing page for a page written by sender i lives in j's
-    // shared rx pool at offset (i*SLOTS + (p % SLOTS)) * mtu.  Each sender is
-    // assigned its own SLOTS-sized slot range, so concurrent senders never
-    // reuse the same landing slot (per-destination single-flight, which the
-    // parcelport enforces via active_dsts_, keeps this safe).
-    //
-    // One MTU-sized page == one chunk (message_header + payload), matching
-    // how sender_connection stages a chunk into an mtu slot.
+    namespace detail {
+
+        // Wire header of a chunk, shared by sender_connection (writer) and
+        // receiver_connection (reader). Each page carries the full header.
+        struct message_header
+        {
+            std::uint64_t size;
+            std::uint64_t data_size;
+            std::uint32_t num_chunks;
+            std::uint32_t chunk_index;
+            std::uint32_t total_size_low;
+            std::uint32_t total_size_high;
+            std::uint64_t message_id;
+            std::uint32_t checksum;
+        };
+
+        static_assert(sizeof(message_header) % 8 == 0,
+            "message_header must be 8-byte aligned");
+
+        constexpr std::size_t header_size = sizeof(message_header);
+
+        // Bounds a corrupt num_chunks field so downstream chunk-vector
+        // resizes stay sane during validation.
+        constexpr std::size_t max_message_chunks = 1u << 20;
+
+        // checksum over the payload bytes only.
+        constexpr std::array<std::uint32_t, 256> make_crc32_table()
+        {
+            std::array<std::uint32_t, 256> table{};
+            for (std::size_t i = 0; i < table.size(); ++i)
+            {
+                std::uint32_t c = static_cast<std::uint32_t>(i);
+                for (int k = 0; k < 8; ++k)
+                {
+                    c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+                }
+                table[i] = c;
+            }
+            return table;
+        }
+
+        inline std::uint32_t crc32(
+            unsigned char const* data, std::size_t size) noexcept
+        {
+            static constexpr std::array<std::uint32_t, 256> table =
+                make_crc32_table();
+            std::uint32_t crc = 0xFFFFFFFFu;
+            for (std::size_t i = 0; i < size; ++i)
+            {
+                crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
+            }
+            return crc ^ 0xFFFFFFFFu;
+        }
+
+        inline std::uint64_t message_total_size(message_header const& h) noexcept
+        {
+            return (std::uint64_t(h.total_size_high) << 32) | h.total_size_low;
+        }
+
+        // Payload size (bytes) of the chunk at 'chunk_index' of a message of
+        // 'total_size' bytes split into 'num_chunks' chunks of at most
+        inline std::size_t chunk_size_for(std::uint64_t chunk_index,
+            std::uint64_t num_chunks, std::uint64_t total_size,
+            std::size_t payload_size) noexcept
+        {
+            std::uint64_t const offset = chunk_index * payload_size;
+            return static_cast<std::size_t>((chunk_index == num_chunks - 1) ?
+                    (total_size - offset) :
+                    payload_size);
+        }
+
+        // Structural sanity of one page header.
+        inline bool message_header_geometry_valid(
+            message_header const& h, std::size_t mtu) noexcept
+        {
+            if (header_size >= mtu)
+                return false;
+            std::size_t const payload_size = mtu - header_size;
+            if (payload_size == 0)
+                return false;
+
+            if (h.message_id == 0)
+                return false;
+            if (h.num_chunks == 0 || h.num_chunks > max_message_chunks)
+                return false;
+            if (h.chunk_index >= h.num_chunks)
+                return false;
+
+            std::uint64_t const total_size = message_total_size(h);
+            if (h.size != total_size || h.data_size != total_size)
+                return false;
+            if (total_size > max_message_chunks * (std::uint64_t) payload_size)
+                return false;
+
+            std::uint64_t const offset =
+                std::uint64_t(h.chunk_index) * payload_size;
+            if (offset > total_size)
+                return false;
+
+            if (chunk_size_for(
+                    h.chunk_index, h.num_chunks, total_size, payload_size) >
+                payload_size)
+                return false;
+
+            std::uint64_t const expected_chunks =
+                (total_size + payload_size - 1) / payload_size;
+            if (h.num_chunks != (total_size == 0 ? 1 : expected_chunks))
+                return false;
+
+            return true;
+        }
+
+        // Extract + fully validate a received page (geometry + payload
+        // checksum).
+        inline bool validate_message_page(unsigned char const* page,
+            std::size_t mtu, std::size_t& chunk_size,
+            bool use_checksum = true) noexcept
+        {
+            message_header header;
+            std::memcpy(&header, page, sizeof(header));
+
+            if (!message_header_geometry_valid(header, mtu))
+                return false;
+
+            std::size_t const payload_size = mtu - header_size;
+            std::uint64_t const total_size = message_total_size(header);
+            chunk_size = chunk_size_for(header.chunk_index, header.num_chunks,
+                total_size, payload_size);
+
+            return !use_checksum || header.checksum ==
+                crc32(page + header_size, chunk_size);
+        }
+    }    // namespace detail
 
     class HPX_EXPORT mailbox_array
     {
     public:
-        // Number of in-flight pages (chunks) allowed per (sender,receiver)
-        // pair before the sender must wait for consumed credit.  Bounded by
-        // the rx page range assigned to each sender.
-        static constexpr std::size_t slots_per_dst = 8;
+        // Default number of in-flight pages (chunks) allowed per
+        // (sender,receiver) pair before the sender must wait for consumed slots
+        static constexpr std::size_t default_slots_per_dst = 8;
+
+        // Max number of source PEs probed per receive-scan pass. The scan
+        // window slides over the arena (one source per call)
+        static constexpr std::size_t default_probe_window = 8;
+
+        // Expected size (bytes) of the OpenSHMEM symmetric data segment the
+        // job was launched with.
+        static constexpr std::size_t default_symmetric_memory_size = 1u << 30;
+
+        // Per-PE symmetric-memory footprint in bytes for a given geometry
+        // (identical on every PE by construction): two O(npes*slots*mtu)
+        static constexpr std::size_t symmetric_bytes(
+            std::size_t npes, std::size_t slots, std::size_t mtu) noexcept
+        {
+            return 2 * npes * slots * mtu +
+                2 * npes * npes * sizeof(std::uint32_t);
+        }
 
         mailbox_array() = default;
 
-        mailbox_array(std::size_t num_pes, std::size_t my_pe, std::size_t mtu)
+        mailbox_array(std::size_t num_pes, std::size_t my_pe,
+            std::size_t mtu, std::size_t slots_per_dst,
+            std::size_t symmetric_memory_size = default_symmetric_memory_size,
+            bool checksum = true,
+            std::size_t probe_window = default_probe_window)
           : num_pes_(num_pes)
           , my_pe_(my_pe)
           , mtu_(mtu)
+          , slots_per_dst_(slots_per_dst)
+          , symmetric_memory_size_(symmetric_memory_size)
+          , checksum_(checksum)
+          , probe_window_(probe_window)
         {
-            std::size_t const pages = num_pes_ * slots_per_dst * mtu_;
-            std::size_t const words = num_pes_ * num_pes_;
+            HPX_ASSERT(slots_per_dst_ > 0);
+
+            std::size_t const pages = num_pes_ * slots_per_dst_ * mtu_;
 
             // one zeroed allocation; zeroed produced/consumed = correct
             // monotonic start state (0 pages produced/consumed).
             std::size_t const bytes =
-                2 * pages + 2 * words * sizeof(std::uint32_t);
+                symmetric_bytes(num_pes_, slots_per_dst_, mtu_);
+
+            // Advisory warning (PE 0 only) when the mapping grows large
+            // relative to the symmetric segment the runtime was actually
+            if (my_pe_ == 0 && symmetric_memory_size_ > 0 &&
+                bytes > symmetric_memory_size_ / 2)
+            {
+                std::fprintf(stderr,
+                    "openshmem: warning: symmetric memory mapping is %zu "
+                    "bytes (2 * npes * slots * mtu + 2 * npes^2 * 4 with "
+                    "npes=%zu slots=%zu mtu=%zu), more than half of the "
+                    "configured symmetric segment (%zu bytes).  Lower "
+                    "hpx.parcel.openshmem.slots (build-time "
+                    "HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS), run on fewer PEs, "
+                    "or raise the symmetric heap at launch (e.g. oshrun -x "
+                    "SMA_SYMMETRIC_SIZE=8G).\n",
+                    bytes, num_pes_, slots_per_dst_, mtu_,
+                    symmetric_memory_size_);
+            }
 
             heap_ = shmem_calloc(bytes, 1);
             if (!heap_)
             {
-                std::fprintf(stderr,
-                    "openshmem: shmem_calloc(%zu) failed on PE %zu\n", bytes,
-                    my_pe_);
-                std::abort();
+                // Report a catchable failure so the parcelport (and the
+                // application) can shut down gracefully
+                HPX_THROW_EXCEPTION(hpx::error::out_of_memory,
+                    "openshmem::mailbox_array::mailbox_array",
+                    "shmem_calloc(" + std::to_string(bytes) +
+                        ") failed on PE " + std::to_string(my_pe_));
             }
 
             unsigned char* base = static_cast<unsigned char*>(heap_);
@@ -93,9 +246,9 @@ namespace hpx::parcelset::policies::openshmem {
             rx_beg_ = tx_end_;
             rx_end_ = rx_beg_ + pages;
             produced_beg_ = reinterpret_cast<std::uint32_t*>(rx_end_);
-            produced_end_ = produced_beg_ + words;
+            produced_end_ = produced_beg_ + num_pes_ * num_pes_;
             consumed_beg_ = produced_end_;
-            consumed_end_ = consumed_beg_ + words;
+            consumed_end_ = consumed_beg_ + num_pes_ * num_pes_;
 
             // Publish the zeroed state to all PEs before any peer drives
             // progress against us.
@@ -103,18 +256,14 @@ namespace hpx::parcelset::policies::openshmem {
 
             // Local-only mirror counters (never symmetric, never remote).
             // produced_locals_[dst] = how many pages I have published to dst
-            // consumed_locals_[src] = how many pages I have consumed from src
-            //
-            // These persist across send()/receive_() calls.  The symmetric
-            // produced_beg_/consumed_beg_ copies are only updated by REMOTE
-            // atomic_set requests, so a PE's own local copy of a counter it
-            // writes stays stale — hence the mirrors.
-            produced_locals_ = new std::uint32_t[num_pes_];
-            consumed_locals_ = new std::uint32_t[num_pes_];
+            produced_locals_ = new std::atomic<std::uint32_t>[num_pes_];
+            consumed_locals_ = new std::atomic<std::uint32_t>[num_pes_];
+            scan_rotate_ = new std::atomic<std::uint32_t>[num_pes_];
             for (std::size_t i = 0; i < num_pes_; ++i)
             {
-                produced_locals_[i] = 0;
-                consumed_locals_[i] = 0;
+                produced_locals_[i].store(0, std::memory_order_relaxed);
+                consumed_locals_[i].store(0, std::memory_order_relaxed);
+                scan_rotate_[i].store(0, std::memory_order_relaxed);
             }
         }
 
@@ -122,6 +271,7 @@ namespace hpx::parcelset::policies::openshmem {
         {
             delete[] produced_locals_;
             delete[] consumed_locals_;
+            delete[] scan_rotate_;
             if (heap_)
             {
                 shmem_free(heap_);
@@ -143,9 +293,14 @@ namespace hpx::parcelset::policies::openshmem {
           , consumed_end_(other.consumed_end_)
           , produced_locals_(other.produced_locals_)
           , consumed_locals_(other.consumed_locals_)
+          , scan_rotate_(other.scan_rotate_)
           , num_pes_(other.num_pes_)
           , my_pe_(other.my_pe_)
           , mtu_(other.mtu_)
+          , slots_per_dst_(other.slots_per_dst_)
+          , symmetric_memory_size_(other.symmetric_memory_size_)
+          , checksum_(other.checksum_)
+          , probe_window_(other.probe_window_)
         {
             other.heap_ = nullptr;
             other.tx_beg_ = nullptr;
@@ -158,6 +313,7 @@ namespace hpx::parcelset::policies::openshmem {
             other.consumed_end_ = nullptr;
             other.produced_locals_ = nullptr;
             other.consumed_locals_ = nullptr;
+            other.scan_rotate_ = nullptr;
         }
 
         mailbox_array& operator=(mailbox_array&& other) noexcept
@@ -181,9 +337,14 @@ namespace hpx::parcelset::policies::openshmem {
                 consumed_end_ = other.consumed_end_;
                 produced_locals_ = other.produced_locals_;
                 consumed_locals_ = other.consumed_locals_;
+                scan_rotate_ = other.scan_rotate_;
                 num_pes_ = other.num_pes_;
                 my_pe_ = other.my_pe_;
                 mtu_ = other.mtu_;
+                slots_per_dst_ = other.slots_per_dst_;
+                symmetric_memory_size_ = other.symmetric_memory_size_;
+                checksum_ = other.checksum_;
+                probe_window_ = other.probe_window_;
                 other.heap_ = nullptr;
                 other.tx_beg_ = nullptr;
                 other.tx_end_ = nullptr;
@@ -195,18 +356,19 @@ namespace hpx::parcelset::policies::openshmem {
                 other.consumed_end_ = nullptr;
                 other.produced_locals_ = nullptr;
                 other.consumed_locals_ = nullptr;
+                other.scan_rotate_ = nullptr;
             }
             return *this;
         }
 
         // Return the symmetric scratch page that a sender uses to stage the
-        // chunk for the current credit slot of (dst_pe). Each ring slot has
-        // its own dedicated staging page (per-slot TX pages).
+        // chunk for the current credit slot of (dst_pe).
         unsigned char* tx_page(std::size_t dst_pe) const
         {
             std::size_t const slot =
-                produced_locals_[dst_pe] % slots_per_dst;
-            return tx_beg_ + (dst_pe * slots_per_dst + slot) * mtu_;
+                produced_locals_[dst_pe].load(std::memory_order_relaxed) %
+                slots_per_dst_;
+            return tx_beg_ + (dst_pe * slots_per_dst_ + slot) * mtu_;
         }
 
         unsigned char* get_buffer(std::size_t pe) const
@@ -214,19 +376,61 @@ namespace hpx::parcelset::policies::openshmem {
             return tx_page(pe);
         }
 
-        // Non-blocking scan: return the index of the first PE that has at
-        // least one page we have not yet consumed, or -1 if none.
-        //
-        // Uses shmem_uint32_atomic_fetch, a remote atomic read of src's
-        // produced counter, which (a) returns src's latest published value
-        // and (b) drives delivery of src's inbound stores into our local
-        // memory — the mechanism that makes a plain later local load see the
-        // data.  Without this remote read, an idle receiver never triggers
-        // delivery and would deadlock.
-        int try_detect_pe_notification() const noexcept
+        // checksum + sequence guard over received pages.  Disable only when the
+        // checksum pass shows up in profiling
+        bool checksum_enabled() const noexcept
         {
-            for (std::size_t src = 0; src < num_pes_; ++src)
+            return checksum_;
+        }
+
+        // Total number of pages transferred so far (published + consumed),
+        // summed over the local mirrors.  Only used by do_stop()
+        std::uint64_t transfer_count() const noexcept
+        {
+            std::uint64_t total = 0;
+            for (std::size_t i = 0; i < num_pes_; ++i)
             {
+                total += produced_locals_[i].load(std::memory_order_relaxed);
+                total += consumed_locals_[i].load(std::memory_order_relaxed);
+            }
+            return total;
+        }
+
+        // Non-blocking scan of the source arena owned by 'arena_idx'.  With
+        // 'arena_cnt' concurrent scanners each thread polls only its own slots
+        int try_detect_pe_notification(std::size_t arena_idx = 0,
+            std::size_t arena_cnt = 0) const noexcept
+        {
+            if (arena_cnt == 0)
+            {
+                arena_cnt = 1;
+            }
+
+            std::size_t const lo = (num_pes_ * arena_idx) / arena_cnt;
+            std::size_t const hi = (num_pes_ * (arena_idx + 1)) / arena_cnt;
+            std::size_t const width = hi - lo;
+            if (width == 0)
+            {
+                return -1;
+            }
+
+            std::size_t const window = probe_window_ == 0 ?
+                width :
+                (std::min)(width, probe_window_);
+
+            // Rotate the scan start point so no single (lowest-index) ready
+            // source can hog this arena.
+            std::size_t const slot =
+                arena_idx < num_pes_ ? arena_idx : num_pes_ - 1;
+            std::size_t start =
+                lo + (scan_rotate_[slot].fetch_add(1,
+                         std::memory_order_relaxed) %
+                    width);
+
+            for (std::size_t k = 0; k < window; ++k)
+            {
+                std::size_t const src = lo + ((start - lo + k) % width);
+
                 if (src == my_pe_)
                 {
                     continue;
@@ -234,13 +438,11 @@ namespace hpx::parcelset::policies::openshmem {
                 std::size_t const w = src * num_pes_ + my_pe_;
 
                 // Pull delivery of src's inbound stores (putmem + produced
-                // atomic_set) into the local symmetric memory, then read the
-                // published value locally.  A remote shmem_uint32_atomic_fetch
-                // return value would read src's own copy of the slot (which
-                // is 0), not our copy.
+                // atomic_set) into the local symmetric memory
                 progress_to(src);
                 std::uint32_t const produced = produced_beg_[w];
-                std::uint32_t const consumed = consumed_locals_[src];
+                std::uint32_t const consumed =
+                    consumed_locals_[src].load(std::memory_order_relaxed);
                 if (produced > consumed)
                 {
                     return static_cast<int>(src);
@@ -250,8 +452,7 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // progress_to(peer): a remote atomic_fetch to the peer "pushes" the
-        // peer's inbound stores into our local symmetric memory (the delivery
-        // rule).  Called inside every blocking wait.
+        // peer's inbound stores into our local symmetric memory
         void progress_to(std::size_t const peer) const noexcept
         {
             std::size_t const w = my_pe_ * num_pes_ + peer;
@@ -261,11 +462,10 @@ namespace hpx::parcelset::policies::openshmem {
                 &consumed_beg_[w], static_cast<int>(peer));
         }
 
-        // Blocking send of one mtu-sized page (chunk) to dst_pe.
-        // Copies 'count' bytes from our staging page (get_buffer()) into
-        // dst's shared rx slot range, publishes produced, and applies the
-        // credit wait (may keep up to slots_per_dst pages in flight).
-        void send(std::size_t const dst_pe, std::size_t const count) noexcept
+        // Non-blocking send of one mtu-sized page (chunk) to dst_pe.
+        // Copies 'count' bytes from our staging page (get_buffer())
+        bool try_send(std::size_t const dst_pe,
+            std::size_t const count) noexcept
         {
             HPX_ASSERT(count <= mtu_);
 
@@ -274,17 +474,20 @@ namespace hpx::parcelset::policies::openshmem {
             std::size_t const w = my_pe_ * num_pes_ + dst_pe;
 
             // mirrors of the two halves
-            std::uint32_t produced = produced_locals_[dst_pe];    // mine
+            std::uint32_t produced =
+                produced_locals_[dst_pe].load(std::memory_order_relaxed);
 
             // dst's consumed counter: for a local send it is our own drain
             // mirror (same thread); otherwise the delivered remote copy.
             std::uint32_t consumed = (dst_pe == my_pe_) ?
-                consumed_locals_[dst_pe] :
+                consumed_locals_[dst_pe].load(std::memory_order_relaxed) :
                 consumed_beg_[w];
 
-            // credit wait: may write while produced - consumed < slots_per_dst
-            while (static_cast<int>(produced - consumed) >=
-                static_cast<int>(slots_per_dst))
+            // Poll the credit (max slots_per_dst_ pages in flight).  Deliver
+            // dst's consumed counter exactly once; if still no credit, return
+            // false to retry
+            if (static_cast<int>(produced - consumed) >=
+                static_cast<int>(slots_per_dst_))
             {
                 if (dst_pe != my_pe_)
                 {
@@ -293,23 +496,27 @@ namespace hpx::parcelset::policies::openshmem {
                 }
                 else
                 {
-                    consumed = consumed_locals_[dst_pe];    // our drain mirror
+                    consumed =
+                        consumed_locals_[dst_pe].load(std::memory_order_relaxed);
+                }
+
+                if (static_cast<int>(produced - consumed) >=
+                    static_cast<int>(slots_per_dst_))
+                {
+                    return false;    // no credit: requeue and retry later
                 }
             }
 
-            std::size_t const slot = produced % slots_per_dst;
+            std::size_t const slot = produced % slots_per_dst_;
 
             // Staging source: my per-dst staging page (tx mirror of the rx
-            // slot), keyed by dst_pe so two different destinations use
-            // disjoint staging pages (matches tx_page()).
+            // slot), keyed by dst_pe
             std::size_t const stage_slot =
-                (dst_pe * slots_per_dst + slot) * mtu_;
+                (dst_pe * slots_per_dst_ + slot) * mtu_;
 
             // Landing target: dst's shared rx pool, keyed by self PE (the
-            // sender), so each sender has its own disjoint per-src ring and
-            // different senders cannot collide on the same guard pages (the
-            // cause of duplicate delivery at 4 PEs).
-            std::size_t const rx_slot = (my_pe_ * slots_per_dst + slot) * mtu_;
+            // sender), so each sender has its own disjoint per-src ring
+            std::size_t const rx_slot = (my_pe_ * slots_per_dst_ + slot) * mtu_;
 
             // data: blocking putmem staging -> dst's rx page.
             shmem_putmem(rx_beg_ + rx_slot, tx_beg_ + stage_slot, count,
@@ -319,54 +526,58 @@ namespace hpx::parcelset::policies::openshmem {
             produced = produced + 1;
             shmem_uint32_atomic_set(
                 &produced_beg_[w], produced, static_cast<int>(dst_pe));
-            produced_locals_[dst_pe] = produced;    // update our mirror
+            produced_locals_[dst_pe].store(
+                produced, std::memory_order_relaxed);    // update our mirror
             shmem_fence();
 
             // delivery (push): issue a remote atomic_fetch to the peer right
-            // after publishing produced, so our inbound stores (the
-            // atomic_set we just posted onto dst) are forced into dst's local
-            // view — the same ping-pong the validated harness relies on when
-            // both sides continuously fetch each other. Without this, an idle
-            // receiver's local load/scan may never observe dst's copy.
+            // after publishing produced, so our inbound stores.
             if (dst_pe != my_pe_)
             {
                 progress_to(dst_pe);
             }
+
+            return true;
         }
 
-        // Blocking receive of one page (chunk) from src_pe.  Copies 'count'
-        // bytes off our shared rx page into out_buf, then returns the credit
-        // (publishes consumed) so src may reuse the slot.
-        bool receive_(std::size_t const src_pe, unsigned char* const out_buf,
-            std::size_t const count) noexcept
+        // Non-blocking receive of one page (chunk) from src_pe.  Copies
+        // 'count' bytes off our shared rx page into out_buf, then returns
+        bool try_receive_(std::size_t const src_pe,
+            unsigned char* const out_buf, std::size_t const count) noexcept
         {
             HPX_ASSERT(count <= mtu_);
 
             std::size_t const w = src_pe * num_pes_ + my_pe_;
 
-            std::uint32_t const consumed = consumed_locals_[src_pe];    // mine
+            std::uint32_t const consumed =
+                consumed_locals_[src_pe].load(std::memory_order_relaxed);
 
-            // wait for src to publish page 'consumed' (data ready)
-            while (produced_beg_[w] <= consumed)
+            std::uint32_t produced = produced_beg_[w];
+
+            // Poll for src to publish page 'consumed' (data ready).  Deliver
+            // src's produced exactly once; if still not ready, requeue.
+            if (produced <= consumed)
             {
                 progress_to(src_pe);    // deliver src's produced
+                produced = produced_beg_[w];
+                if (produced <= consumed)
+                {
+                    return false;    // not ready: requeue and retry later
+                }
             }
 
-            std::size_t const slot = consumed % slots_per_dst;
+            std::size_t const slot = consumed % slots_per_dst_;
             // Read from src's per-src ring in our shared rx pool
             // ((src_pe * slots + slot) * mtu_).  The sender keys its landing
-            // ring by its own pe (== our src_pe), so each sender has a
-            // disjoint ring and a chunk from one source is never
-            // aliased/overwritten by a different source (the duplicate
-            // delivery / duplicate_component_id bug at 4 PEs).
-            std::size_t const rx_slot = (src_pe * slots_per_dst + slot) * mtu_;
+            std::size_t const rx_slot = (src_pe * slots_per_dst_ + slot) * mtu_;
 
             std::memcpy(out_buf, rx_beg_ + rx_slot, count);
 
             // return the credit: publish consumed (high-32; self owns it) onto src
             shmem_uint32_atomic_set(
                 &consumed_beg_[w], consumed + 1, static_cast<int>(src_pe));
-            consumed_locals_[src_pe] = consumed + 1;    // update our mirror
+            consumed_locals_[src_pe].store(
+                consumed + 1, std::memory_order_relaxed);    // update mirror
             shmem_fence();
 
             return true;
@@ -380,7 +591,7 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 return false;
             }
-            return receive_(static_cast<std::size_t>(pe), output, count);
+            return try_receive_(static_cast<std::size_t>(pe), output, count);
         }
 
         constexpr std::size_t mtu() const noexcept
@@ -398,6 +609,13 @@ namespace hpx::parcelset::policies::openshmem {
             return my_pe_;
         }
 
+        // Monotonically increasing per-PE message identifier.  Every parcel
+        // (message) gets a fresh id, which the receiver uses to cross-check
+        std::uint64_t next_message_id() noexcept
+        {
+            return message_sequence_.fetch_add(1, std::memory_order_relaxed) + 1;
+        }
+
     private:
         void* heap_ = nullptr;
 
@@ -409,12 +627,19 @@ namespace hpx::parcelset::policies::openshmem {
         std::uint32_t* produced_end_ = nullptr;
         std::uint32_t* consumed_beg_ = nullptr;
         std::uint32_t* consumed_end_ = nullptr;
-        std::uint32_t* produced_locals_ = nullptr;
-        std::uint32_t* consumed_locals_ = nullptr;
+        std::atomic<std::uint32_t>* produced_locals_ = nullptr;
+        std::atomic<std::uint32_t>* consumed_locals_ = nullptr;
+        mutable std::atomic<std::uint32_t>* scan_rotate_ = nullptr;
 
         std::size_t num_pes_ = 0;
         std::size_t my_pe_ = 0;
         std::size_t mtu_ = 0;
+        std::size_t slots_per_dst_ = 0;
+        std::size_t symmetric_memory_size_ = 0;
+        bool checksum_ = true;
+        std::size_t probe_window_ = default_probe_window;
+
+        std::atomic<std::uint64_t> message_sequence_{0};
     };
 }    // namespace hpx::parcelset::policies::openshmem
 

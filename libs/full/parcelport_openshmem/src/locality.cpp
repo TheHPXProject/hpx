@@ -25,7 +25,7 @@ namespace hpx::parcelset::policies::openshmem {
         ar >> rank_;
     }
 
-    std::ostream& operator<<(std::ostream& os, locality const& loc)
+    std::ostream& operator<<(std::ostream& os, locality const& loc) noexcept
     {
         hpx::util::ios_flags_saver ifs(os);
         os << loc.rank_;

@@ -40,14 +40,5 @@ macro(find_openshmem)
     )
   endif()
 
-  if(NOT TARGET OpenSHMEM::openshmem)
-    add_library(OpenSHMEM::openshmem INTERFACE IMPORTED)
-    set_target_properties(
-      OpenSHMEM::openshmem
-      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${OSHMEM_INCLUDE_DIRS}"
-                 INTERFACE_LINK_LIBRARIES "${OSHMEM_LIBRARIES}"
-    )
-  endif()
-
   message(STATUS "Found OpenSHMEM (${OpenSHMEM_PKG}): ${OSHMEM_INCLUDE_DIRS}")
 endmacro()

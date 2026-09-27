@@ -22,6 +22,7 @@ namespace hpx::util {
 
     bool openshmem_environment::enabled_ = false;
     bool openshmem_environment::has_called_init_ = false;
+    int openshmem_environment::provided_thread_level_ = SHMEM_THREAD_SINGLE;
 
     bool openshmem_environment::check_openshmem_environment(
         runtime_configuration const& cfg)
@@ -33,6 +34,9 @@ namespace hpx::util {
     void openshmem_environment::init(
         int*, char***, runtime_configuration& cfg)
     {
+        // Guard the mutated statics the same way finalize() does, so a
+        // re-entrant or concurrent init() cannot race the backend state.
+        scoped_lock l(mtx_);
         if (enabled_)
             return;
 
@@ -53,11 +57,17 @@ namespace hpx::util {
             throw std::runtime_error("Failed to initialize OpenSHMEM");
         }
 
+        provided_thread_level_ = provided;
+
         if (provided != SHMEM_THREAD_MULTIPLE)
         {
             std::cerr << "Warning: OpenSHMEM did not provide "
                          "SHMEM_THREAD_MULTIPLE. "
                       << "Provided level: " << provided << std::endl;
+
+            // Without SHMEM_THREAD_MULTIPLE all shmem_* calls must come from
+            // a single thread, so the openshmem io pool collapses to one.
+            cfg.add_entry("hpx.parcel.openshmem.io_pool_size", "1");
         }
 
         has_called_init_ = true;
@@ -107,6 +117,16 @@ namespace hpx::util {
     int openshmem_environment::size() noexcept
     {
         return shmem_n_pes();
+    }
+
+    int openshmem_environment::provided_thread_level() noexcept
+    {
+        return provided_thread_level_;
+    }
+
+    bool openshmem_environment::thread_multiple() noexcept
+    {
+        return provided_thread_level_ >= SHMEM_THREAD_MULTIPLE;
     }
 
     std::string openshmem_environment::get_processor_name()

@@ -1414,6 +1414,19 @@ if(HPX_WITH_NETWORKING)
         HPX_HAVE_PARCELPORT_OPENSHMEM_MTU ${HPX_WITH_PARCELPORT_OPENSHMEM_MTU}
       )
     endif()
+
+    hpx_option(
+      HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS INT
+      "Set the number of in-flight chunks per (sender,receiver) pair for the OpenSHMEM parcelport (default: 8)."
+      8
+      CATEGORY "Parcelport"
+    )
+    if(HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS)
+      hpx_add_config_define(
+        HPX_HAVE_PARCELPORT_OPENSHMEM_SLOTS
+        ${HPX_WITH_PARCELPORT_OPENSHMEM_SLOTS}
+      )
+    endif()
   endif()
 
   hpx_option(
