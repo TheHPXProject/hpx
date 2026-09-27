@@ -7,11 +7,13 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <forward_list>
 #include <functional>
 #include <iterator>
@@ -52,6 +54,14 @@ namespace {
     {
         if constexpr (hpx::traits::is_future_v<std::decay_t<T>>)
             return result.get();
+        else if constexpr (hpx::execution::experimental::is_sender_v<
+                               std::decay_t<T>>)
+        {
+            auto completed = hpx::this_thread::experimental::sync_wait(
+                HPX_FORWARD(T, result));
+            HPX_TEST(completed.has_value());
+            return hpx::get<0>(HPX_MOVE(completed.value()));
+        }
         else
             return HPX_FORWARD(T, result);
     }
@@ -293,6 +303,39 @@ namespace {
     }
 
     template <typename Policy>
+    void test_lazy_filter(Policy policy)
+    {
+        std::vector<int> input{1, 2, 3}, output(2);
+        std::size_t calls = 0;
+        auto work = hpx::ranges::copy_if(policy, input, output, [&calls](int) {
+            ++calls;
+            return true;
+        });
+        HPX_TEST_EQ(calls, std::size_t(0));
+        auto result = value(HPX_MOVE(work));
+        HPX_TEST(result.in == input.begin() + 2);
+        HPX_TEST(result.out == output.end());
+        HPX_TEST_EQ(calls, input.size());
+    }
+
+    template <typename Policy>
+    void test_empty_filtered(Policy policy)
+    {
+        std::vector<int> input, yes(2, -1), no(2, -1);
+        auto selected = [](int n) { return n % 2 == 0; };
+        auto copied = value(hpx::ranges::copy_if(policy, input, yes, selected));
+        HPX_TEST(copied.in == input.begin());
+        HPX_TEST(copied.out == yes.begin());
+        auto split = value(
+            hpx::ranges::partition_copy(policy, input, yes, no, selected));
+        HPX_TEST(split.in == input.begin());
+        HPX_TEST(split.out1 == yes.begin());
+        HPX_TEST(split.out2 == no.begin());
+        HPX_TEST_EQ(yes.front(), -1);
+        HPX_TEST_EQ(no.front(), -1);
+    }
+
+    template <typename Policy>
     void test(Policy policy)
     {
         test_default_values(policy);
@@ -311,6 +354,13 @@ int hpx_main()
     test(par_unseq);
     test(seq(task));
     test(par(task));
+    using namespace hpx::execution::experimental;
+    auto exec = explicit_scheduler_executor(thread_pool_scheduler{});
+    auto sender_policy = hpx::execution::par(task).on(exec);
+    test_filtered(sender_policy);
+    test_partition_and_reorder(sender_policy);
+    test_empty_filtered(sender_policy);
+    test_lazy_filter(sender_policy);
     return hpx::local::finalize();
 }
 

@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace hpx::parallel::detail {
@@ -56,6 +57,7 @@ namespace hpx::parallel::detail {
         }
 
         template <typename ExPolicy, typename Select>
+            requires(!hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
         static decltype(auto) parallel(ExPolicy&& policy, I first, I last,
             O dest, O dest_last, Select select)
         {
@@ -104,11 +106,21 @@ namespace hpx::parallel::detail {
                 util::detail::clear_container(work);
                 return {first + (resume - flags->begin()), dest + copied};
             };
-            return util::scan_partitioner<ExPolicy, result_type,
+            return result::get(util::scan_partitioner<ExPolicy, result_type,
                 std::size_t>::call(HPX_FORWARD(ExPolicy, policy), first, count,
                 std::size_t(0), HPX_MOVE(select_partition),
                 std::plus<std::size_t>{}, HPX_MOVE(copy_partition),
-                HPX_MOVE(finish));
+                HPX_MOVE(finish)));
+        }
+
+        template <typename ExPolicy, typename... Args>
+            requires hpx::execution_policy_has_scheduler_executor_v<ExPolicy>
+        static decltype(auto) parallel(ExPolicy&& policy, Args&&... args)
+        {
+            // The scan partitioner requires future-returning executors.
+            // Keep sender execution lazy and on the requested scheduler.
+            return bounded_copy_selected().call2(HPX_FORWARD(ExPolicy, policy),
+                std::true_type{}, HPX_FORWARD(Args, args)...);
         }
     };
 
@@ -147,6 +159,7 @@ namespace hpx::parallel::detail {
         }
 
         template <typename ExPolicy, typename Pred, typename Proj>
+            requires(!hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
         static decltype(auto) parallel(ExPolicy&& policy, I first, I last,
             O1 yes, O1 yes_last, O2 no, O2 no_last, Pred pred, Proj proj)
         {
@@ -221,11 +234,21 @@ namespace hpx::parallel::detail {
                 return {first + (resume - flags->begin()), yes + yes_count,
                     no + no_count};
             };
-            return util::scan_partitioner<ExPolicy, result_type,
+            return result::get(util::scan_partitioner<ExPolicy, result_type,
                 std::size_t>::call(HPX_FORWARD(ExPolicy, policy), first, count,
                 std::size_t(0), HPX_MOVE(select_partition),
                 std::plus<std::size_t>{}, HPX_MOVE(copy_partition),
-                HPX_MOVE(finish));
+                HPX_MOVE(finish)));
+        }
+
+        template <typename ExPolicy, typename... Args>
+            requires hpx::execution_policy_has_scheduler_executor_v<ExPolicy>
+        static decltype(auto) parallel(ExPolicy&& policy, Args&&... args)
+        {
+            // The scan partitioner requires future-returning executors.
+            // Keep sender execution lazy and on the requested scheduler.
+            return bounded_partition_copy().call2(HPX_FORWARD(ExPolicy, policy),
+                std::true_type{}, HPX_FORWARD(Args, args)...);
         }
     };
     /// \endcond

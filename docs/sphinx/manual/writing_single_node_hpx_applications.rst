@@ -892,7 +892,11 @@ the destination fills. Their input result points to the next element that
 would have been written. ``partition_copy`` stops when the next input does not
 fit its selected destination; a full destination does not prevent elements
 from being written to the other destination. Bounded set operations discover
-the selected prefix in input order, then copy the selected elements in parallel.
+the selected prefix in input order, then copy the selected elements. Copying
+is parallel for parallel policies without a scheduler executor; sequenced
+and scheduler-executor policies copy the selected elements inline. Bounded
+filtering algorithms also use a sequential fallback on scheduler executors,
+with task policies deferring that work to the requested scheduler.
 ``partial_sort_copy`` uses a sequential fallback for different value types or
 projections, avoiding extra copying and construction requirements on those types.
 
