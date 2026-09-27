@@ -234,6 +234,7 @@ set(sender_tests
     reverse_copy_sender
     rotate_sender
     rotate_copy_sender
+    search_n_sender
     search_sender
     set_difference_sender
     set_intersection_sender
@@ -265,6 +266,7 @@ set(sender_tests
     uninitialized_relocaten_sender
     uninitialized_value_construct_sender
     uninitialized_value_constructn_sender
+    unique_copy_sender
     unique_sender
 )
 

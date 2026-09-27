@@ -557,6 +557,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct unique_copy : public algorithm<unique_copy<IterPair>, IterPair>
         {
+            static constexpr bool uses_futures = true;
+
             constexpr unique_copy() noexcept
               : algorithm<unique_copy, IterPair>("unique_copy")
             {
@@ -576,10 +578,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Pred, typename Proj>
-            static typename util::detail::algorithm_result<ExPolicy,
-                unique_copy_result<FwdIter1, FwdIter2>>::type
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, Pred&& pred, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, Pred&& pred, Proj&& proj)
             {
                 using zip_iterator = hpx::util::zip_iterator<FwdIter1, bool*>;
                 using algorithm_result =
@@ -784,9 +784,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Pred pred = Pred())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Pred pred = Pred())
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -794,7 +793,7 @@ namespace hpx {
             using result_type =
                 parallel::util::in_out_result<FwdIter1, FwdIter2>;
 
-            return parallel::util::get_second_element<FwdIter1, FwdIter2>(
+            return parallel::util::get_second_element(
                 hpx::parallel::detail::unique_copy<result_type>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, dest,
                     HPX_MOVE(pred), hpx::identity_v));
