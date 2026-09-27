@@ -10,6 +10,8 @@
 #if !defined(HPX_CLANG_VERSION) ||                                             \
     ((HPX_CLANG_VERSION / 10000) != 11 && (HPX_CLANG_VERSION / 10000) != 8)
 
+#include "bulk_shape.hpp"
+
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
@@ -17,6 +19,8 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
+
+#include <stdexec/execution.hpp>
 
 #include <array>
 #include <atomic>
@@ -324,6 +328,7 @@ void test_unsized_shape(Executor& exec)
 template <typename Executor>
 void test_executor(Executor&& exec)
 {
+    executor_test::test_bulk_shape<true>(exec);
     test_unsized_shape(exec);
     test_post(exec);
 
@@ -345,6 +350,9 @@ int hpx_main()
     scheduler_executor exec(thread_pool_scheduler{});
 
     test_executor(exec);
+
+    scheduler_executor generic_exec(stdexec::inline_scheduler{});
+    executor_test::test_bulk_shape<true>(generic_exec);
 
     return hpx::local::finalize();
 }

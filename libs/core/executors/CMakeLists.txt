@@ -16,6 +16,7 @@ set(executors_headers
     hpx/executors/detail/bulk_invoke_helper.hpp
     hpx/executors/detail/hierarchical_spawning.hpp
     hpx/executors/detail/index_queue_spawning.hpp
+    hpx/executors/detail/indexed_shape.hpp
     hpx/executors/detail/index_queue_spawning_result.hpp
     hpx/executors/detail/index_queue_spawning_void.hpp
     hpx/executors/execute_on.hpp

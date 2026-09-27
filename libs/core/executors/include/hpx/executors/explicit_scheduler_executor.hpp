@@ -9,6 +9,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/executors/detail/indexed_shape.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -182,10 +183,11 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires std::ranges::forward_range<S const>
         decltype(auto) bulk_async_execute(
-            F&& f, S const& shape, Ts&&... ts) const
+            F&& f, S const& input_shape, Ts&&... ts) const
         {
+            decltype(auto) shape = detail::make_indexed_shape(input_shape);
             using shape_element = hpx::traits::range_traits<S>::value_type;
             using result_type = hpx::util::detail::invoke_deferred_result_t<F,
                 shape_element, Ts...>;
@@ -222,13 +224,13 @@ namespace hpx::execution::experimental {
 
                 auto f_wrapper = [](size_type const i,
                                      result_vector_type& result_vector,
-                                     S const& shape, F& f, Ts&... ts) {
+                                     auto const& shape, F& f, Ts&... ts) {
                     auto it = std::ranges::begin(shape);
                     result_vector[i] = HPX_INVOKE(f, *std::next(it, i), ts...);
                 };
 
                 auto get_result = [](result_vector_type&& result_vector,
-                                      S const&, F&&, Ts&&...) {
+                                      auto const&, F&&, Ts&&...) {
                     return HPX_MOVE(result_vector);
                 };
 
@@ -253,10 +255,11 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires std::ranges::forward_range<S const>
         decltype(auto) bulk_sync_execute(
-            F&& f, S const& shape, Ts&&... ts) const
+            F&& f, S const& input_shape, Ts&&... ts) const
         {
+            decltype(auto) shape = detail::make_indexed_shape(input_shape);
             hpx::this_thread::experimental::sync_wait(bulk_async_execute(
                 HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
         }
@@ -277,10 +280,11 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename Future, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires std::ranges::forward_range<S const>
         auto bulk_then_execute(
-            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
+            F&& f, S const& input_shape, Future&& predecessor, Ts&&... ts) const
         {
+            decltype(auto) shape = detail::make_indexed_shape(input_shape);
             using result_type =
                 parallel::execution::detail::then_bulk_function_result_t<F, S,
                     Future, Ts...>;
