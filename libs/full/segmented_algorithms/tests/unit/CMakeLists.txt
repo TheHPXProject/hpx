@@ -115,3 +115,10 @@ foreach(test ${tests})
   )
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES)
+  # These tests inspect sort helpers that are not exported by HPX.Full.
+  target_compile_definitions(
+    partitioned_vector_sort_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+  )
+endif()

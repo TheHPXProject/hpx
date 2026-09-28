@@ -4,10 +4,6 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// These tests inspect sort helpers that are not exported by HPX.Full.
-// Use the header interface to keep the internal regression checks available.
-#define HPX_HAVE_FORCE_NO_CXX_MODULES
-
 #include <hpx/config.hpp>
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/hpx_main.hpp>
