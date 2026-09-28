@@ -213,18 +213,21 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, std::random_access_iterator I,
             std::sized_sentinel_for<I> S, typename T = std::iter_value_t<I>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::is_lvalue_reference_v<std::iter_reference_t<I>> &&
             std::same_as<std::remove_cvref_t<std::iter_reference_t<I>>,
                 std::iter_value_t<I>> &&
-            std::constructible_from<std::iter_value_t<I>, T const&>
+            std::constructible_from<std::iter_value_t<I>,
+                std::remove_reference_t<T> const&>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, I first, S last, T const& value)
+            ExPolicy&& policy, I first, S last, T&& value)
         {
             auto end = first + (last - first);
             return parallel::detail::uninitialized_fill<I>().call(
                 HPX_FORWARD(ExPolicy, policy), first, end,
-                parallel::detail::algorithm_value<T>(value));
+                parallel::detail::algorithm_value<std::remove_cvref_t<T>>(
+                    HPX_FORWARD(T, value)));
         }
 
         template <typename Rng, typename T>
@@ -245,7 +248,8 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, std::ranges::random_access_range R,
             typename T = std::iter_value_t<std::ranges::iterator_t<R>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::is_lvalue_reference_v<
                 std::iter_reference_t<std::ranges::iterator_t<R>>> &&
@@ -253,15 +257,16 @@ namespace hpx::ranges {
                              std::iter_reference_t<std::ranges::iterator_t<R>>>,
                 std::iter_value_t<std::ranges::iterator_t<R>>> &&
             std::constructible_from<
-                std::iter_value_t<std::ranges::iterator_t<R>>, T const&>
+                std::iter_value_t<std::ranges::iterator_t<R>>,
+                std::remove_reference_t<T> const&>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, R&& rng, T const& value)
+            ExPolicy&& policy, R&& rng, T&& value)
         {
             using I = std::ranges::iterator_t<R>;
             auto first = std::ranges::begin(rng);
             return parallel::util::detail::convert_to_result(
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first,
-                    first + std::ranges::distance(rng), value),
+                    first + std::ranges::distance(rng), HPX_FORWARD(T, value)),
                 [](I result) -> std::ranges::borrowed_iterator_t<R> {
                     return result;
                 });
@@ -274,21 +279,24 @@ namespace hpx::ranges {
         // Typed value parameters permit list-initialized arguments.
         template <typename ExPolicy, std::random_access_iterator I,
             std::sized_sentinel_for<I> S, typename T = std::iter_value_t<I>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::is_lvalue_reference_v<std::iter_reference_t<I>> &&
             std::same_as<std::remove_cvref_t<std::iter_reference_t<I>>,
                 std::iter_value_t<I>> &&
-            std::constructible_from<std::iter_value_t<I>, T const&>
+            std::constructible_from<std::iter_value_t<I>,
+                std::remove_reference_t<T> const&>
         decltype(auto) operator()(
-            ExPolicy&& policy, I first, S last, T const& value) const
+            ExPolicy&& policy, I first, S last, T&& value) const
         {
-            return base_type::operator()(
-                HPX_FORWARD(ExPolicy, policy), first, last, value);
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                last, HPX_FORWARD(T, value));
         }
 
         template <typename ExPolicy, std::ranges::random_access_range R,
             typename T = std::iter_value_t<std::ranges::iterator_t<R>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::is_lvalue_reference_v<
                 std::iter_reference_t<std::ranges::iterator_t<R>>> &&
@@ -296,12 +304,12 @@ namespace hpx::ranges {
                              std::iter_reference_t<std::ranges::iterator_t<R>>>,
                 std::iter_value_t<std::ranges::iterator_t<R>>> &&
             std::constructible_from<
-                std::iter_value_t<std::ranges::iterator_t<R>>, T const&>
-        decltype(auto) operator()(
-            ExPolicy&& policy, R&& rng, T const& value) const
+                std::iter_value_t<std::ranges::iterator_t<R>>,
+                std::remove_reference_t<T> const&>
+        decltype(auto) operator()(ExPolicy&& policy, R&& rng, T&& value) const
         {
-            return base_type::operator()(
-                HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(R, rng), value);
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
+                HPX_FORWARD(R, rng), HPX_FORWARD(T, value));
         }
     } uninitialized_fill{};
 
@@ -327,19 +335,22 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, std::random_access_iterator I,
             typename T = std::iter_value_t<I>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::is_lvalue_reference_v<std::iter_reference_t<I>> &&
             std::same_as<std::remove_cvref_t<std::iter_reference_t<I>>,
                 std::iter_value_t<I>> &&
-            std::constructible_from<std::iter_value_t<I>, T const&>
+            std::constructible_from<std::iter_value_t<I>,
+                std::remove_reference_t<T> const&>
         static decltype(auto) invoke_default(ExPolicy&& policy, I first,
-            std::iter_difference_t<I> count, T const& value)
+            std::iter_difference_t<I> count, T&& value)
         {
             auto const size = (std::max) (std::iter_difference_t<I>(0), count);
             return parallel::detail::uninitialized_fill_n<I>().call(
                 HPX_FORWARD(ExPolicy, policy), first,
                 static_cast<std::size_t>(size),
-                parallel::detail::algorithm_value<T>(value));
+                parallel::detail::algorithm_value<std::remove_cvref_t<T>>(
+                    HPX_FORWARD(T, value)));
         }
 
         using base_type = hpx::detail::tag_dispatch<uninitialized_fill_n_t,
@@ -349,16 +360,18 @@ namespace hpx::ranges {
         // Typed value parameters permit list-initialized arguments.
         template <typename ExPolicy, std::random_access_iterator I,
             typename T = std::iter_value_t<I>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::is_lvalue_reference_v<std::iter_reference_t<I>> &&
             std::same_as<std::remove_cvref_t<std::iter_reference_t<I>>,
                 std::iter_value_t<I>> &&
-            std::constructible_from<std::iter_value_t<I>, T const&>
+            std::constructible_from<std::iter_value_t<I>,
+                std::remove_reference_t<T> const&>
         decltype(auto) operator()(ExPolicy&& policy, I first,
-            std::iter_difference_t<I> count, T const& value) const
+            std::iter_difference_t<I> count, T&& value) const
         {
-            return base_type::operator()(
-                HPX_FORWARD(ExPolicy, policy), first, count, value);
+            return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
+                count, HPX_FORWARD(T, value));
         }
     } uninitialized_fill_n{};
 }    // namespace hpx::ranges

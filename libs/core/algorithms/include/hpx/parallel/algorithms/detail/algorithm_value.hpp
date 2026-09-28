@@ -16,6 +16,12 @@
 namespace hpx::parallel::detail {
     /// \cond NOINTERNAL
 
+    // Values stored by policy algorithms must be owned or borrowed from an
+    // lvalue whose lifetime the caller can keep through asynchronous work.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept algorithm_value_argument = std::is_lvalue_reference_v<T> ||
+        std::is_copy_constructible_v<std::remove_cvref_t<T>>;
+
     // Preserve the existing ownership of copyable arguments in task policies.
     // Noncopyable values are referenced and must outlive asynchronous work.
     HPX_CXX_CORE_EXPORT template <typename T>
@@ -26,8 +32,11 @@ namespace hpx::parallel::detail {
         storage_type value_;
 
     public:
-        HPX_HOST_DEVICE constexpr explicit algorithm_value(T const& value)
-          : value_(value)
+        template <typename U>
+            requires algorithm_value_argument<U> &&
+            std::is_same_v<std::remove_cvref_t<U>, T>
+        HPX_HOST_DEVICE constexpr explicit algorithm_value(U&& value)
+          : value_(std::as_const(value))
         {
         }
 
@@ -67,9 +76,11 @@ namespace hpx::parallel::detail {
     }
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    constexpr auto equal_to_value(T const& value)
+        requires algorithm_value_argument<T>
+    constexpr auto equal_to_value(T&& value)
     {
-        return [value = algorithm_value<T>(value)](auto&& projected) {
+        return [value = algorithm_value<std::remove_cvref_t<T>>(
+                    HPX_FORWARD(T, value))](auto&& projected) {
             return std::ranges::equal_to{}(
                 HPX_FORWARD(decltype(projected), projected), value.get());
         };

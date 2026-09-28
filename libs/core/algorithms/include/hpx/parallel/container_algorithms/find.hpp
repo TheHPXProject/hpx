@@ -1129,34 +1129,39 @@ namespace hpx::ranges {
             std::sized_sentinel_for<I> S, typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<I, Proj>, T const*>
+                std::projected<I, Proj>, std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, I first, S last, T const& val, Proj proj = {})
+            ExPolicy&& policy, I first, S last, T&& val, Proj proj = {})
         {
             auto end = first + (last - first);
             return parallel::detail::find_if<I>().call(
                 HPX_FORWARD(ExPolicy, policy), first, end,
-                parallel::detail::equal_to_value(val), HPX_MOVE(proj));
+                parallel::detail::equal_to_value(HPX_FORWARD(T, val)),
+                HPX_MOVE(proj));
         }
 
         template <typename ExPolicy, std::ranges::random_access_range R,
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
                 std::iter_value_t<std::ranges::iterator_t<R>>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+                std::projected<std::ranges::iterator_t<R>, Proj>,
+                std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, R&& rng, T const& val, Proj proj = {})
+            ExPolicy&& policy, R&& rng, T&& val, Proj proj = {})
         {
             using I = std::ranges::iterator_t<R>;
             auto first = std::ranges::begin(rng);
             return parallel::util::detail::convert_to_result(
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first,
-                    first + std::ranges::distance(rng), val, HPX_MOVE(proj)),
+                    first + std::ranges::distance(rng), HPX_FORWARD(T, val),
+                    HPX_MOVE(proj)),
                 [](I result) -> std::ranges::borrowed_iterator_t<R> {
                     return result;
                 });
@@ -1211,19 +1216,20 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<Iter>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::random_access_iterator<Iter> &&
             std::sized_sentinel_for<Sent, Iter> &&
-            requires(ExPolicy&& policy, Iter first, Sent last, T const& value,
+            requires(ExPolicy&& policy, Iter first, Sent last, T&& value,
                 Proj proj) {
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first, last,
-                    value, HPX_MOVE(proj));
+                    HPX_FORWARD(T, value), HPX_MOVE(proj));
             }
         decltype(auto) operator()(ExPolicy&& policy, Iter first, Sent last,
-            T const& value, Proj proj = Proj()) const
+            T&& value, Proj proj = Proj()) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
-                last, value, HPX_MOVE(proj));
+                last, HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
 
         /// \brief Supports list-initialized values in policy range calls.
@@ -1231,18 +1237,20 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::ranges::range_value_t<Rng>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::random_access_range<Rng> &&
             std::ranges::sized_range<Rng> &&
-            requires(ExPolicy&& policy, Rng&& rng, T const& value, Proj proj) {
+            requires(ExPolicy&& policy, Rng&& rng, T&& value, Proj proj) {
                 invoke_default(HPX_FORWARD(ExPolicy, policy),
-                    HPX_FORWARD(Rng, rng), value, HPX_MOVE(proj));
+                    HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value),
+                    HPX_MOVE(proj));
             }
-        decltype(auto) operator()(ExPolicy&& policy, Rng&& rng, T const& value,
-            Proj proj = Proj()) const
+        decltype(auto) operator()(
+            ExPolicy&& policy, Rng&& rng, T&& value, Proj proj = Proj()) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
-                HPX_FORWARD(Rng, rng), value, HPX_MOVE(proj));
+                HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
     } find{};
 
@@ -1694,17 +1702,19 @@ namespace hpx::ranges {
             std::sized_sentinel_for<I> S, typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<I, Proj>, T const*>
+                std::projected<I, Proj>, std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, I first, S last, T const& val, Proj proj = {})
+            ExPolicy&& policy, I first, S last, T&& val, Proj proj = {})
         {
             auto end = first + (last - first);
             return parallel::util::detail::convert_to_result(
                 parallel::detail::find_last_if<I>().call(
                     HPX_FORWARD(ExPolicy, policy), first, end,
-                    parallel::detail::equal_to_value(val), HPX_MOVE(proj)),
+                    parallel::detail::equal_to_value(HPX_FORWARD(T, val)),
+                    HPX_MOVE(proj)),
                 [end](I found) -> std::ranges::subrange<I> {
                     return {found, end};
                 });
@@ -1714,18 +1724,21 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
                 std::iter_value_t<std::ranges::iterator_t<R>>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+                std::projected<std::ranges::iterator_t<R>, Proj>,
+                std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, R&& rng, T const& val, Proj proj = {})
+            ExPolicy&& policy, R&& rng, T&& val, Proj proj = {})
         {
             using I = std::ranges::iterator_t<R>;
             auto first = std::ranges::begin(rng);
             return parallel::util::detail::convert_to_result(
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first,
-                    first + std::ranges::distance(rng), val, HPX_MOVE(proj)),
+                    first + std::ranges::distance(rng), HPX_FORWARD(T, val),
+                    HPX_MOVE(proj)),
                 [](std::ranges::subrange<I> result)
                     -> std::ranges::borrowed_subrange_t<R> { return result; });
         }
@@ -1782,19 +1795,20 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<Iter>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::random_access_iterator<Iter> &&
             std::sized_sentinel_for<Sent, Iter> &&
-            requires(ExPolicy&& policy, Iter first, Sent last, T const& value,
+            requires(ExPolicy&& policy, Iter first, Sent last, T&& value,
                 Proj proj) {
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first, last,
-                    value, HPX_MOVE(proj));
+                    HPX_FORWARD(T, value), HPX_MOVE(proj));
             }
         decltype(auto) operator()(ExPolicy&& policy, Iter first, Sent last,
-            T const& value, Proj proj = Proj()) const
+            T&& value, Proj proj = Proj()) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
-                last, value, HPX_MOVE(proj));
+                last, HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
 
         /// \brief Supports list-initialized values in policy range calls.
@@ -1802,18 +1816,20 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::ranges::range_value_t<Rng>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::random_access_range<Rng> &&
             std::ranges::sized_range<Rng> &&
-            requires(ExPolicy&& policy, Rng&& rng, T const& value, Proj proj) {
+            requires(ExPolicy&& policy, Rng&& rng, T&& value, Proj proj) {
                 invoke_default(HPX_FORWARD(ExPolicy, policy),
-                    HPX_FORWARD(Rng, rng), value, HPX_MOVE(proj));
+                    HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value),
+                    HPX_MOVE(proj));
             }
-        decltype(auto) operator()(ExPolicy&& policy, Rng&& rng, T const& value,
-            Proj proj = Proj()) const
+        decltype(auto) operator()(
+            ExPolicy&& policy, Rng&& rng, T&& value, Proj proj = Proj()) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
-                HPX_FORWARD(Rng, rng), value, HPX_MOVE(proj));
+                HPX_FORWARD(Rng, rng), HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
     } find_last{};
 

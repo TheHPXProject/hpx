@@ -840,15 +840,19 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
-            std::indirectly_comparable<I, T const*, Pred, Proj>
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_comparable<I, std::remove_reference_t<T> const*,
+                Pred, Proj>
         static decltype(auto) invoke_default(ExPolicy&& policy, I first, S last,
-            std::iter_difference_t<I> count, T const& value, Pred pred = {},
+            std::iter_difference_t<I> count, T&& value, Pred pred = {},
             Proj proj = {})
         {
             return parallel::detail::search_n_range<I>().call(
                 HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
-                count, parallel::detail::algorithm_value<T>(value),
+                count,
+                parallel::detail::algorithm_value<std::remove_cvref_t<T>>(
+                    HPX_FORWARD(T, value)),
                 HPX_MOVE(pred), HPX_MOVE(proj));
         }
 
@@ -859,20 +863,21 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::ranges::range_value_t<R>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
-            std::indirectly_comparable<std::ranges::iterator_t<R>, T const*,
-                Pred, Proj>
+            std::indirectly_comparable<std::ranges::iterator_t<R>,
+                std::remove_reference_t<T> const*, Pred, Proj>
         static decltype(auto) invoke_default(ExPolicy&& policy, R&& rng,
-            std::ranges::range_difference_t<R> count, T const& value,
-            Pred pred = {}, Proj proj = {})
+            std::ranges::range_difference_t<R> count, T&& value, Pred pred = {},
+            Proj proj = {})
         {
             using iterator = std::ranges::iterator_t<R>;
             auto first = std::ranges::begin(rng);
             return parallel::util::detail::convert_to_result(
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first,
-                    first + std::ranges::distance(rng), count, value,
-                    HPX_MOVE(pred), HPX_MOVE(proj)),
+                    first + std::ranges::distance(rng), count,
+                    HPX_FORWARD(T, value), HPX_MOVE(pred), HPX_MOVE(proj)),
                 [](std::ranges::subrange<iterator> result)
                     -> std::ranges::borrowed_subrange_t<R> { return result; });
         }
@@ -887,14 +892,17 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
-            std::indirectly_comparable<I, T const*, Pred, Proj>
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
+            std::indirectly_comparable<I, std::remove_reference_t<T> const*,
+                Pred, Proj>
         decltype(auto) operator()(ExPolicy&& policy, I first, S last,
-            std::iter_difference_t<I> count, T const& value, Pred pred = {},
+            std::iter_difference_t<I> count, T&& value, Pred pred = {},
             Proj proj = {}) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
-                last, count, value, HPX_MOVE(pred), HPX_MOVE(proj));
+                last, count, HPX_FORWARD(T, value), HPX_MOVE(pred),
+                HPX_MOVE(proj));
         }
 
         /// \brief Support list-initialized values with a range argument.
@@ -903,17 +911,18 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::ranges::range_value_t<R>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
-            std::indirectly_comparable<std::ranges::iterator_t<R>, T const*,
-                Pred, Proj>
+            std::indirectly_comparable<std::ranges::iterator_t<R>,
+                std::remove_reference_t<T> const*, Pred, Proj>
         decltype(auto) operator()(ExPolicy&& policy, R&& rng,
-            std::ranges::range_difference_t<R> count, T const& value,
-            Pred pred = {}, Proj proj = {}) const
+            std::ranges::range_difference_t<R> count, T&& value, Pred pred = {},
+            Proj proj = {}) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
-                HPX_FORWARD(R, rng), count, value, HPX_MOVE(pred),
-                HPX_MOVE(proj));
+                HPX_FORWARD(R, rng), count, HPX_FORWARD(T, value),
+                HPX_MOVE(pred), HPX_MOVE(proj));
         }
     } search_n{};
 }    // namespace hpx::ranges

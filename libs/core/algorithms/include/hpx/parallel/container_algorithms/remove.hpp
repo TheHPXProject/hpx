@@ -455,15 +455,15 @@ namespace hpx::ranges {
             std::sized_sentinel_for<I> S, typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
-            std::permutable<I> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> && std::permutable<I> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<I, Proj>, T const*>
+                std::projected<I, Proj>, std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, I first, S last, T const& value, Proj proj = {})
+            ExPolicy&& policy, I first, S last, T&& value, Proj proj = {})
         {
             auto end = first + (last - first);
-            auto pred = parallel::detail::equal_to_value(value);
+            auto pred = parallel::detail::equal_to_value(HPX_FORWARD(T, value));
             return parallel::util::detail::convert_to_result(
                 parallel::detail::remove_if<I>().call(
                     HPX_FORWARD(ExPolicy, policy), first, end, HPX_MOVE(pred),
@@ -477,19 +477,22 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
                 std::iter_value_t<std::ranges::iterator_t<R>>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::permutable<std::ranges::iterator_t<R>> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+                std::projected<std::ranges::iterator_t<R>, Proj>,
+                std::remove_reference_t<T> const*>
         static decltype(auto) invoke_default(
-            ExPolicy&& policy, R&& rng, T const& value, Proj proj = {})
+            ExPolicy&& policy, R&& rng, T&& value, Proj proj = {})
         {
             using I = std::ranges::iterator_t<R>;
             auto first = std::ranges::begin(rng);
             return parallel::util::detail::convert_to_result(
                 invoke_default(HPX_FORWARD(ExPolicy, policy), first,
-                    first + std::ranges::distance(rng), value, HPX_MOVE(proj)),
+                    first + std::ranges::distance(rng), HPX_FORWARD(T, value),
+                    HPX_MOVE(proj)),
                 [](std::ranges::subrange<I> result)
                     -> std::ranges::borrowed_subrange_t<R> { return result; });
         }
@@ -503,31 +506,33 @@ namespace hpx::ranges {
             std::sized_sentinel_for<I> S, typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<I>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
-            std::permutable<I> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> && std::permutable<I> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<I, Proj>, T const*>
-        decltype(auto) operator()(ExPolicy&& policy, I first, S last,
-            T const& value, Proj proj = {}) const
+                std::projected<I, Proj>, std::remove_reference_t<T> const*>
+        decltype(auto) operator()(
+            ExPolicy&& policy, I first, S last, T&& value, Proj proj = {}) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy), first,
-                last, value, HPX_MOVE(proj));
+                last, HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
 
         template <typename ExPolicy, std::ranges::random_access_range R,
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
                 std::iter_value_t<std::ranges::iterator_t<R>>&>>>
-            requires hpx::is_execution_policy_v<ExPolicy> &&
+            requires parallel::detail::algorithm_value_argument<T> &&
+            hpx::is_execution_policy_v<ExPolicy> &&
             std::ranges::sized_range<R> &&
             std::permutable<std::ranges::iterator_t<R>> &&
             std::indirect_binary_predicate<std::ranges::equal_to,
-                std::projected<std::ranges::iterator_t<R>, Proj>, T const*>
+                std::projected<std::ranges::iterator_t<R>, Proj>,
+                std::remove_reference_t<T> const*>
         decltype(auto) operator()(
-            ExPolicy&& policy, R&& rng, T const& value, Proj proj = {}) const
+            ExPolicy&& policy, R&& rng, T&& value, Proj proj = {}) const
         {
             return base_type::operator()(HPX_FORWARD(ExPolicy, policy),
-                HPX_FORWARD(R, rng), value, HPX_MOVE(proj));
+                HPX_FORWARD(R, rng), HPX_FORWARD(T, value), HPX_MOVE(proj));
         }
     } remove{};
 }    // namespace hpx::ranges

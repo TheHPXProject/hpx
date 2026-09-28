@@ -46,7 +46,9 @@ namespace {
 
     struct token
     {
-        int key;
+        int key = 0;
+
+        token() = default;
 
         explicit token(int key)
           : key(key)
@@ -54,7 +56,7 @@ namespace {
         }
 
         token(token const&) = delete;
-        token& operator=(token const&) = delete;
+        token& operator=(token const&) = default;
         token(token&&) = default;
         token& operator=(token&&) = default;
 
@@ -98,6 +100,186 @@ namespace {
     static_assert(std::indirectly_writable<iterator, token const&>);
     static_assert(std::constructible_from<record, token const&>);
     static_assert(!std::copy_constructible<token>);
+
+    struct copyable_token : token
+    {
+        using token::token;
+
+        copyable_token(copyable_token const& other)
+          : token(other.key)
+        {
+        }
+    };
+
+    struct matches_token
+    {
+        bool operator()(token const& value) const
+        {
+            return value.key == 1;
+        }
+    };
+
+    template <typename Policy, typename Value, bool Accepted>
+    constexpr void check_value_category()
+    {
+        using namespace hpx::ranges;
+        using range = std::vector<record>&;
+        using iter = iterator;
+        using size = std::iter_difference_t<iter>;
+        using proj = projection;
+        using pred = matches_token;
+        using named = token const&;
+
+        static_assert(
+            std::is_constructible_v<hpx::parallel::detail::algorithm_value<
+                                        std::remove_cvref_t<Value>>,
+                Value> == Accepted);
+        static_assert(requires(Value&& v) {
+            hpx::parallel::detail::equal_to_value(HPX_FORWARD(Value, v));
+        } == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::find), Policy,
+                          iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::find), Policy,
+                          range, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::find_last),
+                          Policy, iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::find_last),
+                          Policy, range, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+                          iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+                          range, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+                          Policy, iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+                          Policy, range, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::remove), Policy,
+                          iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::remove), Policy,
+                          range, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::search_n), Policy, iter,
+                iter, size, Value, std::ranges::equal_to, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::search_n), Policy, range,
+                size, Value, std::ranges::equal_to, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::fill), Policy,
+                          iter, iter, Value> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::fill), Policy,
+                          range, Value> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::uninitialized_fill),
+                Policy, iter, iter, Value> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::uninitialized_fill),
+                Policy, range, Value> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::fill_n), Policy,
+                          iter, size, Value> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::uninitialized_fill_n),
+                Policy, iter, size, Value> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::remove_copy), Policy,
+                iter, iter, iter, iter, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::remove_copy),
+                          Policy, range, range, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace_if),
+                          Policy, iter, iter, pred, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace_if),
+                          Policy, range, pred, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy_if), Policy,
+                iter, iter, iter, iter, pred, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy_if), Policy,
+                range, range, pred, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, iter, iter, Value, named, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, iter, iter, named, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, iter, iter, Value, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, range, Value, named, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, range, named, Value, proj> == Accepted);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::replace),
+                          Policy, range, Value, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                iter, iter, iter, iter, Value, named, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                iter, iter, iter, iter, named, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                iter, iter, iter, iter, Value, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                range, range, Value, named, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                range, range, named, Value, proj> == Accepted);
+        static_assert(
+            std::is_invocable_v<decltype(hpx::ranges::replace_copy), Policy,
+                range, range, Value, Value, proj> == Accepted);
+    }
+
+    template <typename Policy>
+    constexpr void check_value_categories()
+    {
+        check_value_category<Policy, token&, true>();
+        check_value_category<Policy, token const&, true>();
+        check_value_category<Policy, token, false>();
+        check_value_category<Policy, token const, false>();
+        check_value_category<Policy, copyable_token, true>();
+        check_value_category<Policy, copyable_token const, true>();
+
+        // Typed overloads for braced values must not bypass the lifetime guard.
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::find(policy, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::find_last(policy, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::count(policy, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::contains(policy, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::remove(policy, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::search_n(
+                policy, input, 1, {}, std::ranges::equal_to{}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::remove_copy(policy, input, input, {}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::replace(policy, input, {}, record{}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<record>& input) {
+            hpx::ranges::replace_copy(
+                policy, input, input, {}, record{}, projection{});
+        });
+        static_assert(!requires(Policy policy, std::vector<token>& input) {
+            hpx::ranges::fill(policy, input, {});
+        });
+        static_assert(!requires(Policy policy, std::vector<token>& input) {
+            hpx::ranges::fill_n(policy, input.begin(), 1, {});
+        });
+        static_assert(!requires(Policy policy, std::vector<token>& input) {
+            hpx::ranges::replace_if(
+                policy, input, [](token const&) { return true; }, {});
+        });
+        static_assert(!requires(Policy policy, std::vector<token>& input) {
+            hpx::ranges::replace_copy_if(
+                policy, input, input, [](token const&) { return true; }, {});
+        });
+    }
 
     template <typename Policy>
     void test_lookup(Policy policy)
@@ -232,15 +414,40 @@ namespace {
         };
         auto result = hpx::ranges::find(policy, input,
             std::string("a long temporary search value"), project);
-        // Force the task to use its value after the argument is destroyed.
+        auto counted = hpx::ranges::count(policy, input,
+            std::string("a long temporary search value"), project);
+        auto contained = hpx::ranges::contains(policy, input,
+            std::string("a long temporary search value"), project);
+        // Force the tasks to use their values after the arguments are destroyed.
         release.set_value();
         HPX_TEST(result.get() == input.begin() + 1);
+        HPX_TEST_EQ(counted.get(), 1);
+        HPX_TEST(contained.get());
+    }
+    template <typename Policy>
+    void test_borrowed_value(Policy policy)
+    {
+        token const needle(3);
+        std::vector<record> input;
+        input.emplace_back(needle);
+        hpx::promise<void> release;
+        auto gate = release.get_future().share();
+        auto project = [gate](record const& r) -> token const& {
+            gate.get();
+            return *r.data;
+        };
+        auto result = hpx::ranges::count(policy, input, needle, project);
+        release.set_value();
+        HPX_TEST_EQ(result.get(), 1);
     }
 }    // namespace
 
 int hpx_main()
 {
     using namespace hpx::execution;
+    check_value_categories<decltype(seq)>();
+    check_value_categories<decltype(seq(task))>();
+    check_value_categories<decltype(par(task))>();
     test_lookup(seq);
     test_lookup(par);
     test_lookup(par_unseq);
@@ -253,6 +460,8 @@ int hpx_main()
     test_values(par(task));
     test_temporary_value(seq(task));
     test_temporary_value(par(task));
+    test_borrowed_value(seq(task));
+    test_borrowed_value(par(task));
     return hpx::local::finalize();
 }
 
