@@ -87,7 +87,7 @@ foreach(test ${tests})
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
   if("${test}" STREQUAL "partitioned_vector_sort")
-    # Four localities so k-way merge of more than two runs is exercised.
+    # Four localities exercise concurrent merges and remote transfers.
     set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 4
                            THREADS_PER_LOCALITY 4
     )
