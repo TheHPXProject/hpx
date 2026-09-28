@@ -699,11 +699,15 @@ namespace hpx::ranges {
       : hpx::detail::tag_dispatch<search_n_t,
             hpx::detail::tag_parallel_algorithm<search_n_t>>
     {
+        // Reject non-count arguments before resolving the counted-search
+        // overloads. Clang 21.1.5 can crash on their implicit conversions.
         template <typename FwdIter, typename FwdIter2, typename Sent2,
             typename Pred = hpx::ranges::equal_to,
-            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
+            typename Size = std::size_t>
         // clang-format off
             requires(
+                std::is_convertible_v<Size, std::size_t> &&
                 std::forward_iterator<FwdIter> &&
                 parallel::traits::is_projected_v<Proj1, FwdIter> &&
                 std::forward_iterator<FwdIter2> &&
@@ -716,11 +720,12 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        static FwdIter invoke_default(FwdIter first, std::size_t count,
+        static FwdIter invoke_default(FwdIter first, Size&& count,
             FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            auto last = std::ranges::next(first, count);
+            std::size_t const length = HPX_FORWARD(Size, count);
+            auto last = std::ranges::next(first, length);
             auto found = hpx::parallel::detail::search<FwdIter, FwdIter>().call(
                 hpx::execution::seq, first, last, s_first, s_last, HPX_MOVE(op),
                 HPX_MOVE(proj1), HPX_MOVE(proj2));
@@ -729,9 +734,11 @@ namespace hpx::ranges {
 
         template <typename ExPolicy, typename FwdIter, typename FwdIter2,
             typename Sent2, typename Pred = hpx::ranges::equal_to,
-            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
+            typename Size = std::size_t>
         // clang-format off
             requires(
+                std::is_convertible_v<Size, std::size_t> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::forward_iterator<FwdIter> &&
                 parallel::traits::is_projected_v<Proj1, FwdIter> &&
@@ -747,11 +754,12 @@ namespace hpx::ranges {
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             FwdIter>
-        invoke_default(ExPolicy&& policy, FwdIter first, std::size_t count,
+        invoke_default(ExPolicy&& policy, FwdIter first, Size&& count,
             FwdIter2 s_first, Sent2 s_last, Pred op = Pred(),
             Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
         {
-            auto last = std::ranges::next(first, count);
+            std::size_t const length = HPX_FORWARD(Size, count);
+            auto last = std::ranges::next(first, length);
             auto result =
                 hpx::parallel::detail::search<FwdIter, FwdIter>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, s_first, s_last,
@@ -780,9 +788,11 @@ namespace hpx::ranges {
 
         template <typename Rng1, typename Rng2,
             typename Pred = hpx::ranges::equal_to,
-            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
+            typename Size = std::size_t>
         // clang-format off
             requires(
+                std::is_convertible_v<Size, std::size_t> &&
                 std::ranges::range<Rng1> &&
                 hpx::parallel::traits::is_projected_range_v<Proj1, Rng1> &&
                 std::ranges::range<Rng2> &&
@@ -795,19 +805,22 @@ namespace hpx::ranges {
             )
         // clang-format on
         static std::ranges::iterator_t<Rng1> invoke_default(Rng1&& rng1,
-            std::size_t count, Rng2&& rng2, Pred op = Pred(),
-            Proj1 proj1 = Proj1(), Proj2 proj2 = Proj2())
+            Size&& count, Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
+            Proj2 proj2 = Proj2())
         {
-            return invoke_default(hpx::util::begin(rng1), count,
+            std::size_t const length = HPX_FORWARD(Size, count);
+            return invoke_default(hpx::util::begin(rng1), length,
                 hpx::util::begin(rng2), hpx::util::end(rng2), HPX_MOVE(op),
                 HPX_MOVE(proj1), HPX_MOVE(proj2));
         }
 
         template <typename ExPolicy, typename Rng1, typename Rng2,
             typename Pred = hpx::ranges::equal_to,
-            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity>
+            typename Proj1 = hpx::identity, typename Proj2 = hpx::identity,
+            typename Size = std::size_t>
         // clang-format off
             requires(
+                std::is_convertible_v<Size, std::size_t> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::range<Rng1> &&
                 hpx::parallel::traits::is_projected_range_v<Proj1, Rng1> &&
@@ -822,12 +835,13 @@ namespace hpx::ranges {
         // clang-format on
         static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
             std::ranges::iterator_t<Rng1>>
-        invoke_default(ExPolicy&& policy, Rng1&& rng1, std::size_t count,
+        invoke_default(ExPolicy&& policy, Rng1&& rng1, Size&& count,
             Rng2&& rng2, Pred op = Pred(), Proj1 proj1 = Proj1(),
             Proj2 proj2 = Proj2())
         {
+            std::size_t const length = HPX_FORWARD(Size, count);
             return invoke_default(HPX_FORWARD(ExPolicy, policy),
-                hpx::util::begin(rng1), count, hpx::util::begin(rng2),
+                hpx::util::begin(rng1), length, hpx::util::begin(rng2),
                 hpx::util::end(rng2), HPX_MOVE(op), HPX_MOVE(proj1),
                 HPX_MOVE(proj2));
         }

@@ -97,7 +97,7 @@ namespace {
     {
         std::vector<int> input{1, 2, 3, 2, 3};
         std::vector<int> needle{2, 3};
-        auto verify_result = [&](std::size_t count, auto expected) {
+        auto verify_result = [&](auto count, auto expected) {
             HPX_TEST(hpx::ranges::search_n(input, count, needle) == expected);
             HPX_TEST(hpx::ranges::search_n(input.begin(), count, needle.begin(),
                          needle.end()) == expected);
@@ -114,6 +114,8 @@ namespace {
             with_policy(par(task));
         };
         verify_result(input.size(), input.begin() + 1);
+        verify_result(
+            std::integral_constant<std::size_t, 5>{}, input.begin() + 1);
         verify_result(
             2, input.begin());    // A match outside the counted prefix.
         needle = {9};
