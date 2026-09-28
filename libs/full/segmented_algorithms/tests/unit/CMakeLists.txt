@@ -99,7 +99,7 @@ foreach(test ${tests})
   if(test STREQUAL "partitioned_vector_sort" OR test MATCHES
                                                 "^partitioned_vector_merge(_extended|_regressions)?$"
   )
-    # Four localities so k-way merge of more than two runs is exercised.
+    # Four localities exercise concurrent merges and remote transfers.
     set(test_localities 4)
   else()
     set(test_localities 2)
