@@ -1532,8 +1532,12 @@ namespace hpx::parallel {
         auto for_loop_strided(ExPolicy&& policy, B first, E last, S stride,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            // stride shall not be zero
+            // The stride must be nonzero and its magnitude representable.
             HPX_ASSERT(stride != 0);
+            if constexpr (std::is_signed_v<S>)
+            {
+                HPX_ASSERT(stride != (std::numeric_limits<S>::min)());
+            }
 
             if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
                 std::is_integral_v<E> && std::is_signed_v<E> &&
@@ -1570,8 +1574,12 @@ namespace hpx::parallel {
         auto for_loop_strided_range(ExPolicy&& policy, R r, S stride,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            // stride shall not be zero
+            // The stride must be nonzero and its magnitude representable.
             HPX_ASSERT(stride != 0);
+            if constexpr (std::is_signed_v<S>)
+            {
+                HPX_ASSERT(stride != (std::numeric_limits<S>::min)());
+            }
 
             constexpr bool scheduler_policy =
                 hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
@@ -1611,8 +1619,12 @@ namespace hpx::parallel {
         decltype(auto) for_loop_n(ExPolicy&& policy, B first, Size size,
             S stride, hpx::util::index_pack<Is...>, Args&&... args)
         {
-            // stride shall not be zero
+            // The stride must be nonzero and its magnitude representable.
             HPX_ASSERT(stride != 0);
+            if constexpr (std::is_signed_v<S>)
+            {
+                HPX_ASSERT(stride != (std::numeric_limits<S>::min)());
+            }
 
             // stride should be negative only if E is an integral type or at
             // least a bidirectional iterator
