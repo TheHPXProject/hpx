@@ -1,6 +1,6 @@
 ..
     Copyright (c)      2021 ETH Zurich
-    Copyright (c) 2007-2023 Louisiana State University
+    Copyright (c) 2007-2026 Louisiana State University
 
     SPDX-License-Identifier: BSL-1.0
     Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -30,8 +30,17 @@ are completed to avoid confusion.
 
 #. Write release notes in ``docs/sphinx/releases/whats_new_$VERSION.rst``. Keep
    adding merged PRs and closed issues to this until just before the release is
-   made. Use ``tools/generate_issue_pr_list.sh`` to generate the lists. Add the
-   new release notes to the table of contents in ``docs/sphinx/releases.rst``.
+   made. From a checkout with complete history, run
+   ``tools/generate_issue_pr_list.sh BASE_REF RELEASE_REF`` to generate the
+   lists. Choose and record the previous release or maintenance revision as
+   ``BASE_REF`` and pin ``RELEASE_REF`` to the release commit (defaults to
+   ``HEAD``). The generator includes merged PRs present only in the release
+   history, even outside the milestone. Review cherry-picked or rebased PRs
+   separately and record their landed commits. Closed milestone issues are
+   listed independently and are not evidence that a feature was implemented.
+   Use ``--limit`` to print the newest 50 entries after reconciliation. Add
+   the new release notes to the table of contents in
+   ``docs/sphinx/releases.rst``.
 
 #. Build the docs, and proof-read them. Update any documentation that may have
    changed, and correct any typos. Pay special attention to:
