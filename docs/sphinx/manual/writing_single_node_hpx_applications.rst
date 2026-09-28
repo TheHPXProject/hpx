@@ -925,7 +925,9 @@ Non-owning ranges such as ``std::span``, ``std::ranges::subrange``, and
 ``hpx::future<Result>`` with the same result type as the corresponding synchronous
 call. Input and output storage must remain alive until that future completes.
 The future does not own the ranges. Comparison, replacement, and fill arguments
-are copied when their types permit copying. Noncopyable arguments are referenced
+are copied when their types permit copying, including temporary arguments.
+Noncopyable arguments must be lvalues: policy overloads reject noncopyable
+temporaries before storing a reference. Named noncopyable arguments are borrowed
 and must remain alive and unchanged until the operation completes, including
 when the result is a future. HPX's exception handling rules also continue
 to apply. Existing overloads taking an unbounded output iterator remain HPX
