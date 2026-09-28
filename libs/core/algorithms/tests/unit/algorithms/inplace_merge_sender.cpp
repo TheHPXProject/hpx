@@ -27,7 +27,7 @@ void test(Policy policy)
         auto sender =
             hpx::inplace_merge(policy, data.begin(), middle, data.end());
         HPX_TEST(data == original);
-        sender_test::wait(std::move(sender));
+        sender_test::wait(std::move(sender) | sender_test::ex::then([] {}));
         HPX_TEST(data == expected);
     }
 }

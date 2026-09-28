@@ -25,7 +25,7 @@ void test(Policy policy)
             auto sender =
                 hpx::nth_element(policy, data.begin(), nth, data.end());
             HPX_TEST(data == original);
-            sender_test::wait(std::move(sender));
+            sender_test::wait(std::move(sender) | sender_test::ex::then([] {}));
             if (position < n)
             {
                 HPX_TEST_EQ(*nth, expected[position]);

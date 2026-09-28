@@ -54,7 +54,8 @@ void test_heap(Policy policy)
         auto sender = hpx::make_heap(policy, values.begin(), values.end());
         static_assert(ex::is_sender_v<decltype(sender)>);
         HPX_TEST(values == original);
-        HPX_TEST(tt::sync_wait(std::move(sender)).has_value());
+        HPX_TEST(
+            tt::sync_wait(std::move(sender) | ex::then([] {})).has_value());
         HPX_TEST(std::is_heap(values.begin(), values.end()));
         auto sorted = values;
         std::sort(sorted.begin(), sorted.end());
@@ -65,7 +66,7 @@ void test_heap(Policy policy)
             ex::just(values.begin(), values.end(), std::greater<int>{}) |
             hpx::make_heap(policy);
         auto const before = values;
-        HPX_TEST(tt::sync_wait(std::move(piped)).has_value());
+        HPX_TEST(tt::sync_wait(std::move(piped) | ex::then([] {})).has_value());
         HPX_TEST(
             std::is_heap(values.begin(), values.end(), std::greater<int>{}));
         std::sort(values.begin(), values.end());
@@ -220,8 +221,8 @@ void test_stopped(Policy policy)
     std::vector<int> values{1, 2, 3};
     auto const original = values;
     ex::unique_any_sender<iterator, iterator> predecessor(ex::just_stopped());
-    auto result =
-        tt::sync_wait(std::move(predecessor) | hpx::make_heap(policy));
+    auto result = tt::sync_wait(
+        std::move(predecessor) | hpx::make_heap(policy) | ex::then([] {}));
     HPX_TEST(!result.has_value());
     HPX_TEST(values == original);
 }

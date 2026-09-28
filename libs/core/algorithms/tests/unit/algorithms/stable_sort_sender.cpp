@@ -23,11 +23,11 @@ void test(Policy policy)
         std::sort(expected.begin(), expected.end());
         auto sender = hpx::stable_sort(policy, data.begin(), data.end());
         HPX_TEST(data == original);
-        sender_test::wait(std::move(sender));
+        sender_test::wait(std::move(sender) | sender_test::ex::then([] {}));
         HPX_TEST(data == expected);
         sender_test::wait(sender_test::ex::just(
                               data.begin(), data.end(), std::greater<int>{}) |
-            hpx::stable_sort(policy));
+            hpx::stable_sort(policy) | sender_test::ex::then([] {}));
         std::reverse(expected.begin(), expected.end());
         HPX_TEST(data == expected);
     }
