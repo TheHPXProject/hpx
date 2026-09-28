@@ -7,7 +7,7 @@
 # Metadata for citation of this software according to the CFF format (https://citation-file-format.github.io/)
 cff-version: 1.2.0
 message: If you use this software, please cite it using these metadata.
-title: 'TheHPXProject/hpx: HPX V1.11.0: The C++ Standards Library for Parallelism and
+title: 'TheHPXProject/hpx: HPX V2.0.0: The C++ Standards Library for Parallelism and
   Concurrency'
 doi: 10.5281/zenodo.5185328
 authors:
@@ -85,6 +85,6 @@ authors:
   family-names: Khatami
   affiliation: Louisiana State University
 version: 1.11.0
-date-released: 2025-06-30
+date-released: 2026-09-30
 repository-code: https://github.com/TheHPXProject/hpx
 license: BSL-1.0
