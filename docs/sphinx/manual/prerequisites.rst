@@ -55,10 +55,15 @@ The table below presents all the necessary prerequisites for building |hpx|.
    ====================== =================== ================== ==================
    \                      Name                Minimum Version    Latest tested
    ====================== =================== ================== ==================
-   **Build System**       |cmake|_            3.20               4.1
+   **Build System**       |cmake|_            3.18               4.1
    **Required Libraries** |boost|_            1.71.0             1.88.0
    \                      |hwloc|_            1.5                2.4
    ====================== =================== ================== ==================
+
+C++20 module builds (``HPX_WITH_CXX_MODULES=ON``, default ``OFF``) require
+CMake 3.28 or newer, a Ninja or Visual Studio generator, and GCC 14+, LLVM
+Clang 16+, or Visual Studio 17.4+. AppleClang is not supported for module
+builds.
 
 The most important dependencies are |boost|_ and |hwloc|_. The installation of Boost
 is described in detail in Boost's `Getting Started <https://www.boost.org/more/getting_started/index.html>`_
