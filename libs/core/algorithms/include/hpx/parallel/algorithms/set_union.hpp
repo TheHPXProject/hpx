@@ -276,13 +276,38 @@ namespace hpx::parallel {
                 using difference_type2 =
                     typename std::iterator_traits<Iter2>::difference_type;
 
-                // NOTE: no early-exit special-casing here for first1==last1
-                // or first2==last2. set_operation() itself now handles both
-                // degenerate cases correctly (including len1==0, which is
-                // not equivalent to an empty result for set_union). Keeping
-                // a single return statement here also avoids decltype(auto)
-                // needing to unify divergent sender types across multiple
-                // branches for the S/R case.
+                // Keep the direct copy paths for ordinary executors. The
+                // sender path uses set_operation for empty ranges so its
+                // return type stays the same for every input.
+                if constexpr (!hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    using result_type =
+                        util::in_in_out_result<Iter1, Iter2, Iter3>;
+
+                    if (first1 == last1)
+                    {
+                        // clang-format off
+                        return util::detail::convert_to_result(
+                            detail::copy<util::in_out_result<Iter2, Iter3>>().call(
+                                HPX_FORWARD(ExPolicy, policy), first2, last2, dest),
+                            [first1](util::in_out_result<Iter2, Iter3> const& p)
+                                -> result_type { return {first1, p.in, p.out}; });
+                        // clang-format on
+                    }
+
+                    if (first2 == last2)
+                    {
+                        // clang-format off
+                        return util::detail::convert_to_result(
+                            detail::copy<util::in_out_result<Iter1, Iter3>>().call(
+                                HPX_FORWARD(ExPolicy, policy), first1, last1, dest),
+                            [first2](util::in_out_result<Iter1, Iter3> const& p)
+                                -> result_type { return {p.in, first2, p.out}; });
+                        // clang-format on
+                    }
+                }
+
                 using buffer_type = typename set_operations_buffer<Iter3>::type;
                 using func_type = std::decay_t<F>;
 
