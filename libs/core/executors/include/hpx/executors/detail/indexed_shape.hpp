@@ -7,6 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/iterator_support.hpp>
 
 #include <cstddef>
 #include <memory>
@@ -36,6 +37,16 @@ namespace hpx::execution::experimental::detail {
                 S shape;
                 std::vector<std::ranges::iterator_t<S const>> positions;
             };
+            using index_iterator = hpx::util::counting_iterator<std::size_t>;
+            struct access_position
+            {
+                std::shared_ptr<storage> state;
+
+                decltype(auto) operator()(index_iterator const& it) const
+                {
+                    return *state->positions[*it];
+                }
+            };
             auto state = std::make_shared<storage>(shape);
             auto const& owned_shape = std::as_const(state->shape);
             auto const last = std::ranges::end(owned_shape);
@@ -43,11 +54,13 @@ namespace hpx::execution::experimental::detail {
                 state->positions.push_back(it);
 
             auto const size = state->positions.size();
-            return std::views::iota(std::size_t(0), size) |
-                std::views::transform(
-                    [state = HPX_MOVE(state)](std::size_t i) -> decltype(auto) {
-                        return *state->positions[i];
-                    });
+            // Bulk backends also use legacy iterator traits and standard
+            // integral counts. HPX iterators provide both without depending
+            // on the library's iota/transform view iterator representation.
+            auto const access = access_position{HPX_MOVE(state)};
+            return hpx::util::iterator_range(
+                hpx::util::transform_iterator(index_iterator(0), access),
+                hpx::util::transform_iterator(index_iterator(size), access));
         }
     }
 
