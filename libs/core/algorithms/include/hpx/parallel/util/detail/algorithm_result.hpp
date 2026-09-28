@@ -232,11 +232,12 @@ namespace hpx::parallel::util::detail {
             namespace ex = hpx::execution::experimental;
             if constexpr (ex::is_sender_v<T_>)
             {
-                return HPX_FORWARD(T_, t);
+                // Public void algorithms must not expose internal results.
+                return ex::then(HPX_FORWARD(T_, t), [](auto&&...) noexcept {});
             }
             else
             {
-                return ex::just(HPX_FORWARD(T_, t));
+                return ex::just();
             }
         }
     };

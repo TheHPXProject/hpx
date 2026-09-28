@@ -22,7 +22,7 @@ void test(Policy policy)
         std::sort(expected.begin(), expected.end());
         auto sender = hpx::sort(policy, data.begin(), data.end());
         HPX_TEST(data == original);
-        sender_test::wait(std::move(sender));
+        sender_test::wait(std::move(sender) | sender_test::ex::then([] {}));
         HPX_TEST(data == expected);
         auto ranged = sender_test::wait(hpx::ranges::sort(policy, data));
         HPX_TEST(hpx::get<0>(*ranged) == data.end());
@@ -30,7 +30,7 @@ void test(Policy policy)
 
         sender_test::wait(sender_test::ex::just(
                               data.begin(), data.end(), std::greater<int>{}) |
-            hpx::sort(policy));
+            hpx::sort(policy) | sender_test::ex::then([] {}));
         std::reverse(expected.begin(), expected.end());
         HPX_TEST(data == expected);
     }
