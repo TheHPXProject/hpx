@@ -6,6 +6,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/algorithms/traits/projected_range.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
