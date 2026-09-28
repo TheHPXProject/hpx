@@ -9,15 +9,20 @@
 #include <hpx/hpx_main.hpp>
 #include <hpx/include/parallel_is_sorted.hpp>
 #include <hpx/include/parallel_sort.hpp>
+#include <hpx/include/partitioned_vector.hpp>
 #include <hpx/include/partitioned_vector_predef.hpp>
 #include <hpx/include/runtime.hpp>
 #include <hpx/modules/segmented_algorithms.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <memory>
 #include <new>
 #include <numeric>
 #include <stdexcept>
@@ -392,14 +397,19 @@ void test_merge_network()
 
 struct counted_sort_value
 {
-    inline static std::size_t live = 0;
-    inline static std::size_t peak = 0;
-    inline static std::size_t copies = 0;
+    inline static std::atomic<std::size_t> live{0};
+    inline static std::atomic<std::size_t> peak{0};
+    inline static std::atomic<std::size_t> copies{0};
     int value = 0;
 
     counted_sort_value()
     {
-        peak = (std::max) (peak, ++live);
+        auto const current = ++live;
+        auto previous = peak.load();
+        while (previous < current &&
+            !peak.compare_exchange_weak(previous, current))
+        {
+        }
     }
     counted_sort_value(counted_sort_value const& other)
       : counted_sort_value()
@@ -418,7 +428,17 @@ struct counted_sort_value
     {
         --live;
     }
+
+    template <typename Archive>
+    void serialize(Archive& ar, unsigned)
+    {
+        ar & value;
+    }
 };
+
+// HPX component factories must be registered before runtime startup.
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+HPX_REGISTER_PARTITIONED_VECTOR(counted_sort_value)
 
 void test_merge_buffer()
 {
@@ -442,21 +462,21 @@ void test_merge_buffer()
             std::vector<counted_sort_value> reference(2 * size);
             hpx::merge(hpx::execution::seq, left.begin(), left.end(),
                 right.begin(), right.end(), reference.begin(), pred);
-            reference_copies = counted_sort_value::copies;
-            reference_peak = counted_sort_value::peak;
+            reference_copies = counted_sort_value::copies.load();
+            reference_peak = counted_sort_value::peak.load();
         }
         counted_sort_value::copies = 0;
-        counted_sort_value::peak = counted_sort_value::live;
+        counted_sort_value::peak = counted_sort_value::live.load();
         auto merged = detail::segmented_sort_merge_pair(
             hpx::execution::seq, left, right, pred);
-        HPX_TEST_EQ(counted_sort_value::copies, reference_copies);
-        HPX_TEST_EQ(counted_sort_value::peak, reference_peak);
+        HPX_TEST_EQ(counted_sort_value::copies.load(), reference_copies);
+        HPX_TEST_EQ(counted_sort_value::peak.load(), reference_peak);
         for (std::size_t i = 0; i < merged.size(); ++i)
         {
             HPX_TEST_EQ(merged[i].value, static_cast<int>(i));
         }
     }
-    HPX_TEST_EQ(counted_sort_value::live, std::size_t(0));
+    HPX_TEST_EQ(counted_sort_value::live.load(), std::size_t(0));
 }
 
 void test_host_placement(std::vector<hpx::id_type> const& localities)
@@ -624,6 +644,218 @@ void test_merge_exceptions(
     }
 }
 
+// This comparator observes overlap between two initial block sorts. Waiting
+// on an HPX future yields the worker, and the timeout also diagnoses the old
+// serial scheduler without hanging the test.
+struct initial_sort_probe_state
+{
+    std::array<std::atomic<bool>, 2> entered{};
+    std::atomic<std::size_t> started{0};
+    hpx::promise<void> both_started;
+    hpx::shared_future<void> ready = both_started.get_future();
+    std::atomic<bool> timed_out{false};
+};
+
+struct initial_sort_probe
+{
+    inline static std::shared_ptr<initial_sort_probe_state> state;
+    static constexpr auto block_size =
+        hpx::parallel::detail::segmented_sort_max_block_size;
+
+    bool operator()(int a, int b) const
+    {
+        auto const block = static_cast<std::size_t>(a) / block_size;
+        if (!state->entered[block].exchange(true))
+        {
+            if (++state->started == 2)
+            {
+                state->both_started.set_value();
+            }
+            if (state->ready.wait_for(std::chrono::seconds(5)) !=
+                hpx::future_status::ready)
+            {
+                state->timed_out = true;
+            }
+        }
+        return a < b;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+void test_initial_sort_concurrency()
+{
+    namespace detail = hpx::parallel::detail;
+    constexpr auto size = initial_sort_probe::block_size;
+    // Four physical pieces produce two buffered logical blocks on this
+    // locality, together using the complete four-block scratch budget.
+    hpx::partitioned_vector<int> values(2 * size, 0,
+        hpx::container_layout(4, std::vector<hpx::id_type>{hpx::find_here()}));
+    initialize_values(values, [](std::size_t i) {
+        return static_cast<int>((i / size) * size + size - 1 - i % size);
+    });
+    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
+    auto blocks = detail::segmented_sort_blocks(runs, size);
+    initial_sort_probe::state = std::make_shared<initial_sort_probe_state>();
+    detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 0}, {1, 1}},
+        initial_sort_probe{}, hpx::identity_v, std::false_type{});
+    HPX_TEST(!initial_sort_probe::state->timed_out.load());
+    initial_sort_probe::state.reset();
+    auto got = copy_values(values);
+    HPX_TEST(std::is_sorted(got.begin(), got.end()));
+}
+
+struct collection_gate
+{
+    hpx::promise<void> release;
+    hpx::shared_future<void> ready = release.get_future();
+};
+
+struct collection_probe_iterator
+{
+    hpx::partitioned_vector<int>::iterator base;
+    std::shared_ptr<collection_gate> gate;
+
+    bool operator==(collection_probe_iterator const& other) const
+    {
+        return base == other.base;
+    }
+};
+
+namespace hpx::traits {
+    template <>
+    struct segmented_iterator_traits<collection_probe_iterator>
+      : segmented_iterator_traits<hpx::partitioned_vector<int>::iterator>
+    {
+        using base_traits =
+            segmented_iterator_traits<hpx::partitioned_vector<int>::iterator>;
+
+        static segment_iterator segment(collection_probe_iterator iter)
+        {
+            iter.gate->ready.wait();
+            return base_traits::segment(iter.base);
+        }
+
+        static local_iterator local(collection_probe_iterator iter)
+        {
+            return base_traits::local(iter.base);
+        }
+    };
+}    // namespace hpx::traits
+
+template <typename ExPolicy>
+void test_async_run_collection(ExPolicy const& policy)
+{
+    hpx::partitioned_vector<int> values(64, 0,
+        hpx::container_layout(2, std::vector<hpx::id_type>{hpx::find_here()}));
+    initialize_reverse(values);
+    auto gate = std::make_shared<collection_gate>();
+    hpx::future<void> sorted;
+    hpx::promise<void> returned;
+    auto return_signal = returned.get_future();
+    auto invoke = hpx::async([&]() {
+        sorted = hpx::parallel::detail::segmented_sort(policy,
+            collection_probe_iterator{values.begin(), gate},
+            collection_probe_iterator{values.end(), gate}, std::less<int>{},
+            hpx::identity_v, hpx::is_sequenced_execution_policy<ExPolicy>{});
+        returned.set_value();
+    });
+    // Collection is deliberately blocked; obtaining the sort future must
+    // not wait for it. Release on timeout too, so the old path fails cleanly.
+    auto const status = return_signal.wait_for(std::chrono::seconds(5));
+    gate->release.set_value();
+    invoke.get();
+    sorted.get();
+    HPX_TEST(status == hpx::future_status::ready);
+    auto got = copy_values(values);
+    HPX_TEST(std::is_sorted(got.begin(), got.end()));
+}
+
+struct counted_value_less
+{
+    bool operator()(
+        counted_sort_value const& a, counted_sort_value const& b) const
+    {
+        return a.value < b.value;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+void test_ordered_endpoints()
+{
+    namespace detail = hpx::parallel::detail;
+    hpx::partitioned_vector<counted_sort_value> values(4096,
+        counted_sort_value{},
+        hpx::container_layout(2, std::vector<hpx::id_type>{hpx::find_here()}));
+    initialize_values(values, [](int i) {
+        counted_sort_value value;
+        value.value = i;
+        return value;
+    });
+    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
+    auto blocks = detail::segmented_sort_blocks(runs, 2048);
+    counted_sort_value::copies = 0;
+    using local_iterator = hpx::traits::segmented_iterator_traits<
+        decltype(values.begin())>::local_iterator;
+    detail::segmented_sort_compare_split<local_iterator>::sequential(
+        hpx::execution::seq, blocks[0], blocks[1], counted_value_less{},
+        hpx::identity_v);
+    HPX_TEST_EQ(counted_sort_value::copies.load(), std::size_t(2));
+    auto got = copy_values(values);
+    for (std::size_t i = 0; i < got.size(); ++i)
+    {
+        HPX_TEST_EQ(got[i].value, static_cast<int>(i));
+    }
+}
+
+void test_transfer_batches(std::vector<hpx::id_type> const& localities)
+{
+    namespace detail = hpx::parallel::detail;
+    auto const partitions = 4 * localities.size();
+    hpx::partitioned_vector<int> values(
+        partitions * 9, 0, hpx::container_layout(partitions, localities));
+    initialize_values(values, [](int i) { return i; });
+    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
+    decltype(runs) block;
+    std::vector<int> expected;
+    // Interleave ownership so four localities cross the eight-action batch
+    // boundary. The helper must preserve logical order and disjoint writes.
+    for (std::size_t piece = 0; piece < 4; ++piece)
+    {
+        for (std::size_t locality = 0; locality < localities.size(); ++locality)
+        {
+            auto const index = 4 * locality + piece;
+            block.push_back(runs[index]);
+            for (std::size_t i = 0; i < 9; ++i)
+            {
+                expected.push_back(static_cast<int>(9 * index + i));
+            }
+        }
+    }
+    auto fetched =
+        detail::segmented_sort_fetch_block(hpx::execution::par, block);
+    HPX_TEST(fetched == expected);
+    for (auto& value : fetched)
+    {
+        value = -value - 1;
+    }
+    auto end = detail::segmented_sort_store_block(
+        hpx::execution::par, block, fetched.begin());
+    HPX_TEST(end == fetched.end());
+    auto got = copy_values(values);
+    for (std::size_t i = 0; i < got.size(); ++i)
+    {
+        HPX_TEST_EQ(got[i], -static_cast<int>(i) - 1);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
@@ -632,6 +864,14 @@ int main()
     test_merge_buffer();
     test_host_placement(localities);
     test_bounded_blocks(localities);
+    if (hpx::get_os_thread_count() > 1)
+    {
+        test_initial_sort_concurrency();
+    }
+    test_ordered_endpoints();
+    test_transfer_batches(localities);
+    test_async_run_collection(hpx::execution::seq(hpx::execution::task));
+    test_async_run_collection(hpx::execution::par(hpx::execution::task));
     test_merge_exceptions(hpx::execution::seq, localities);
     test_merge_exceptions(hpx::execution::par, localities);
     test_merge_exceptions(
