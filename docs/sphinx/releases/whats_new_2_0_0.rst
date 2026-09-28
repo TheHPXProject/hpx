@@ -13,17 +13,22 @@
 
 |hpx| V2.0.0 is one of the largest releases in the project's history, touching
 the language baseline, the execution model, the networking layer, the build
-system, and observability tooling. Roughly 680 pull requests and 120 closed
-issues went into this cycle since v1.11.0 (June 2025). The sections below
-expand on each major theme.
+system, and observability tooling. The inventories below cover 664 pull
+requests with merge commits in the release comparison, two additional PRs
+incorporated through transplanted changes, and 132 closed milestone issues.
+The sections below expand on each major theme.
 
 Language and Standard Baseline
 ==============================
 
 - C++20 is now the *minimum* required standard, up from C++17. V1.11.0 was
   the last release to support C++17 (:hpx-issue:`5497`).
-- Minimum supported compiler versions were raised across the board; older
-  GCC versions (e.g. pre-9.3, :hpx-issue:`6240`) are no longer supported.
+- Compared with the 1.11 release branch, the minimum supported GCC
+  version rises from 11 to 12, and Visual Studio from 2019 to 2022. The
+  minimum Clang version remains 16.
+- Base builds require CMake 3.18 or newer. The prerequisite table has been
+  corrected to match the enforced minimum; C++20 module builds require a
+  newer CMake version as described below.
 - A large volume of obsolete ``#if``/feature-test guards that existed only to
   support pre-C++20 compilers were removed (:hpx-issue:`6941`), simplifying
   the codebase now that C++20 is guaranteed.
@@ -31,9 +36,11 @@ Language and Standard Baseline
 C++20 Modules
 =============
 
-The entire |hpx| module hierarchy - organized in dependency "levels" - was
-migrated to native C++20 module support, tracked issue-by-issue
-(:hpx-issue:`6014`), with no required changes for consumers.
+Native C++20 module support was added across the |hpx| module hierarchy
+(:hpx-issue:`6014`). It is optional: ``HPX_WITH_CXX_MODULES`` defaults to
+``OFF``. Enabling it requires CMake 3.28 or newer, a Ninja or Visual Studio
+generator, and GCC 14+, LLVM Clang 16+, or Visual Studio 17.4+. AppleClang
+is rejected by the module configuration checks.
 
 C++26 Adoption (Ahead of Standardization)
 =========================================
@@ -63,8 +70,7 @@ experimental compiler support, well ahead of formal standardization:
     :hpx-pr:`7523`, :hpx-pr:`7462`).
   - Example programs migrated to demonstrate the new API:
     ``factorial_reflection`` (:hpx-pr:`7508`), ``fibonacci_reflection``
-    (:hpx-pr:`7455`), and the ``spell_check`` examples migrated to
-    ``HPX_ACTION`` (:hpx-pr:`7338`).
+    (:hpx-pr:`7455`).
   - A migration guide (:hpx-pr:`7348`) and compile-time overhead
     benchmarks comparing macros vs. ``reflect_action``
     (:hpx-pr:`7332`, :hpx-pr:`7459`) were added to help users and
@@ -103,6 +109,35 @@ foundation, usable from both C++20 and C++26:
   ``make_future`` with ``run_loop_scheduler`` (:hpx-pr:`7437`), and a
   future/promise bridge redesign (:hpx-pr:`7355`).
 
+Runtime and Execution APIs
+==========================
+
+- The P2079 parallel scheduler integrates sender work with HPX thread pools
+  (:hpx-pr:`6655`). ``hpx::execution::experimental::get_parallel_scheduler()``
+  uses the default pool; the overload taking a pool reference supports named
+  pools obtained through ``hpx::resource::get_thread_pool`` (:hpx-pr:`7579`).
+- Execution-policy traits and the independent
+  ``rebind_policy_executor_t`` / ``rebind_policy_parameters_t`` utilities
+  support inspecting and adapting policies (:hpx-pr:`7550`, :hpx-pr:`7551`).
+- Thrust integration adds HPX execution policies for Thrust algorithms in
+  CUDA builds (:hpx-pr:`6744`), controlled by ``HPX_WITH_THRUST``.
+- New concurrent containers include vector, queue, unordered map, and
+  unordered set (:hpx-pr:`6897`).
+- ``hpx::local::termination_detection`` waits for local work to finish,
+  with timeout, deadline, and stop-token cancellation overloads
+  (:hpx-pr:`6886`, :hpx-pr:`6890`).
+- ``HPX::init`` supports runtime initialization from libraries, and
+  ``HPX::auto_wrap_main`` starts the runtime around ``main()`` without
+  requiring the wrapping header (:hpx-pr:`6775`, :hpx-pr:`6804`). The latter
+  target is not supported by the native Windows MSVC toolchain.
+  Local initialization was decoupled from the distributed runtime
+  (:hpx-pr:`7103`).
+- ``hpx::threads::set_thread_affinity`` and
+  ``hpx::this_thread::set_affinity`` expose thread-affinity control
+  (:hpx-pr:`6861`).
+- ``finalize`` and ``disconnect`` accept ``std::chrono`` durations through
+  new overloads (:hpx-pr:`7612`).
+
 ``tag_invoke`` Removal
 ======================
 
@@ -117,7 +152,7 @@ downstream code that customized |hpx| behavior via ADL/``tag_invoke``:
 - Specific customization points converted to members, e.g.
   ``connect_t`` (:hpx-pr:`7292`).
 - Cleanup of now-stale ``hpx_tag_invoke`` module dependencies
-  (:hpx-pr:`7451`, :hpx-pr:`7452`) and a final sweep
+  (:hpx-pr:`7451`) and a final sweep
   (:hpx-pr:`7443`).
 
 Networking / Parcelport Work
@@ -126,6 +161,8 @@ Networking / Parcelport Work
 - A new, optimized MPI parcelport, with orderly teardown that quiesces
   before ``MPI_Finalize`` (:hpx-pr:`7404`).
 - An optimized |lci|_ parcelport.
+- A separate LCW/MPIx parcelport was added (:hpx-pr:`6815`), enabled with
+  ``HPX_WITH_PARCELPORT_LCW=ON`` (default ``OFF``).
 - Substantial AGAS/parcelset hardening:
 
   - ``force_disconnect`` support for removing crashed/unreachable
@@ -140,7 +177,7 @@ Networking / Parcelport Work
     :hpx-pr:`7364`) and caching channel communicators per site
     (:hpx-pr:`7481`).
   - Disconnected-locality handling, including a dedicated dispatch guard
-    (:hpx-pr:`7536`, :hpx-pr:`7537`) and correct error handling in
+    (:hpx-pr:`7536`) and correct error handling in
     ``resolve_locality`` (:hpx-pr:`7388`).
   - A fix for the shared-pointer serialization type-confusion /
     deserialization vulnerability reported in :hpx-issue:`7333`
@@ -163,6 +200,8 @@ Observability / Tracing
   (:hpx-pr:`7347`), suspend/resume hooks (:hpx-pr:`7372`), data-parallel
   workloads (:hpx-pr:`7392`), and general runtime instrumentation
   (:hpx-pr:`7357`).
+- LIKWID profiling support was added (:hpx-pr:`6053`), enabled with
+  ``HPX_LIKWID_WITH_LIKWID=ON``.
 - New tooling built on top of this infrastructure: **hpx-top**, an
   interactive TUI performance monitor (:hpx-issue:`7001`), and
   **hpx_stat_viewer**.
@@ -181,7 +220,7 @@ cycle:
   moved instead of copied, :hpx-pr:`7398`), ``all_gather``/``scatter``
   (flattened payloads, :hpx-pr:`7375`), ``all_to_all`` (flattened
   exchange payloads :hpx-pr:`7377`, hierarchical implementation
-  :hpx-pr:`7307`, size-based pairwise dispatch :hpx-pr:`7430`/:hpx-pr:`7431`,
+  :hpx-pr:`7307`, size-based pairwise dispatch :hpx-pr:`7431`,
   and a ~66x performance regression fix for the flat variant,
   :hpx-issue:`7411`), and a hierarchical **scan** collective
   (:hpx-pr:`7343`).
@@ -223,14 +262,15 @@ the parallel algorithms library:
 - **C++20/23 conformance**: fixing sentinel return-type mismatches in
   ``hpx::ranges`` container CPOs (:hpx-pr:`7322`), unifying projection
   support across ``starts_with``/``ends_with`` (:hpx-pr:`7314`),
-  ``unique``/``unique_copy`` (:hpx-pr:`7381`), and
-  ``min``/``max``/``minmax_element``/``is_heap`` (:hpx-pr:`7305`).
+  and adding projection coverage for ``unique``/``unique_copy``
+  (:hpx-pr:`7393`) and ``minmax_element`` (:hpx-pr:`7230`).
 - **New algorithms**: ``hpx::experimental::for_each_index`` per P4150
   (:hpx-issue:`7214`), ``hpx::ranges::iota`` (:hpx-issue:`6969`),
   ``find_last``/``find_last_if``/``find_last_if_not``
-  (:hpx-issue:`6892`), and missing C++23 range algorithms -
-  ``fold``, ``chunk_by``, ``slide``, ``stride``, ``cartesian_product``
-  (:hpx-issue:`6908`).
+  (:hpx-issue:`6892`), and the C++23 fold family: ``fold_left``,
+  ``fold_right``, ``fold_left_first``, ``fold_right_last``,
+  ``fold_left_with_iter``, and ``fold_left_first_with_iter``
+  (:hpx-pr:`6884`, :hpx-pr:`6910`).
 - **Correctness fixes**: ``max_element`` returning the last, rather than
   first, greatest element (:hpx-pr:`7304`), two bugs in ``chunk_size.hpp``
   involving swapped arguments (:hpx-issue:`6931`), an incorrect
@@ -292,8 +332,12 @@ Security / Robustness Fixes
   deserialization / type-confusion issue in shared-pointer serialization
   was fixed (:hpx-issue:`7333`, :hpx-pr:`7334`).
 - **Data races**: a race in ``hostname_print_helper::get_hostname()`` on
-  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7535`,
-  :hpx-pr:`7525`, with a regression test added in :hpx-pr:`7546`).
+  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7525`, with a regression test added in :hpx-pr:`7546`).
+- **Synchronization**: corrected timed semaphore waits (:hpx-pr:`7617`),
+  a deadlock and race in ``latch::reset`` (:hpx-pr:`7555`), and handling of
+  spurious wakeups in ``hpx::barrier`` (:hpx-pr:`7611`).
+- **AGAS garbage collection**: fixed background collection when networking
+  is disabled (:hpx-pr:`7627`).
 - **Exception safety**: a memory-leak risk in
   ``options_description_easy_init`` under exceptions was fixed
   (:hpx-issue:`7040`), and unsafe ``std::strcat`` usage in ``print.cpp``
@@ -301,7 +345,8 @@ Security / Robustness Fixes
 - **Serialization correctness**: a double-read/type-mismatch bug in
   ``exception_ptr::load()`` was fixed (:hpx-pr:`7278`), along with a
   semantic mismatch in serialization archive flags
-  (:hpx-issue:`7034`).
+  (:hpx-issue:`7034`). Collection sizes read from archives are now checked
+  before use (:hpx-pr:`7594`).
 
 Breaking changes
 ================
@@ -323,20 +368,35 @@ in the sections above.
 Closed Issues and Pull Requests
 ==================================
 
-The full, generated lists of closed issues and merged pull requests for
-this release cycle are included below (see ``Closed issues`` and
-``Closed pull requests`` sections), spanning roughly 120 issues
-(#2235-#7539) and 680+ pull requests (#5843-#7554) merged since the
-v1.11.0 release.
+The lists below were reconciled against release-2.0.X at
+``0583c29f1d0f92bf05c82e69e7396a29a1f8f25a``, using release-1.11.X at
+``4823cb5b41cc6ec5ab3a49741541927f24704bf3`` as the baseline (including its
+maintenance backports, rather than only the v1.11.0 tag).
+
+There are 664 merged PRs whose merge commits are reachable from the release
+and absent from that baseline, including PRs outside milestone 2.0.0. The
+132 closed issues are the milestone inventory; closure does not necessarily
+mean an implementation was delivered. Closed, unmerged PRs are excluded.
+Two further PRs with verified transplanted changes are recorded separately
+below the generated list.
 
 Closed issues
 =============
 
+* :hpx-issue:`7613` - `HPX_REGISTER_CHANNEL(type, name)` 2-arg form still fails for written-out template types
+* :hpx-issue:`7608` - debugging: refresh DbgHelp module list after SymInitialize
+* :hpx-issue:`7592` - Re-enable auto-linking on Windows for static builds
+* :hpx-issue:`7591` - Windows CI: Unsynchronized `SymInitialize` calls between HPX and Tracy cause intermittent `DbgHelp` failures and heap corruption
+* :hpx-issue:`7589` - Replace raw double timeouts with std::chrono in finalize.hpp
+* :hpx-issue:`7569` - godbolt-minimal does not install hpx/experimental/sandbox.hpp
+* :hpx-issue:`7568` - Add HPX to Compiler Explorer
+* :hpx-issue:`7557` - examples/quickstart/sort_by_key_demo fails to compile with Apple clang 21 (libc++ __sift_down vs compare_projected)
 * :hpx-issue:`7539` - libhpx_wrap has an unpropagated oneTBB dependency
 * :hpx-issue:`7520` - Data race in hostname_print_helper::get_hostname() on worker thread startup
 * :hpx-issue:`7517` - HPX_FORWARD does not forward under nvcc: cudafe strips && from static_cast<decltype(x)&&>
 * :hpx-issue:`7513` - dijkstra_termination_disconnected_*_7474 abort on any HPX_WITH_SUPERVISION=OFF build
 * :hpx-issue:`7483` - force_disconnect: race between disconnect completion and AGAS resolve visibility
+* :hpx-issue:`7480` - Apply AGAS RPC timeout during hosted locality namespace bootstrap polling
 * :hpx-issue:`7470` - late_component_launcher: demonstrate crash detection -> force_disconnect purge -> relaunch
 * :hpx-issue:`7461` - check-circular-deps CI failing on master (pre-existing, unrelated to PR #base 4f5b0d6b)
 * :hpx-issue:`7428` - v1.11.0 fails to build with asio-1.38.2
@@ -407,6 +467,7 @@ Closed issues
 * :hpx-issue:`6888` - Enhancement: Add timeout and cancellation support to hpx::local::termination_detection()
 * :hpx-issue:`6878` - Parallel uninitialized_relocate does not preserve sequenced semantics for overlapping ranges
 * :hpx-issue:`6874` - tests.examples.1d_stencil.1d_stencil_5 is failing in some CI runs
+* :hpx-issue:`6867` - v1.11.0 fails to build on F44
 * :hpx-issue:`6854` - hpx::shared_mutex deadlock
 * :hpx-issue:`6842` - Errors when building tests relying on stdexec
 * :hpx-issue:`6798` - Provide a CMakePresets.json file
@@ -434,6 +495,7 @@ Closed issues
 * :hpx-issue:`6528` - Wrong version recommendation of shpinx when building documentation
 * :hpx-issue:`6506` - Create API similar to pthread_setaffinity_np for HPX threads
 * :hpx-issue:`6504` - `FindTBB.cmake` cannot find correct TBB library.
+* :hpx-issue:`6502` - The test executable numa_allocator_test fails with an assertion
 * :hpx-issue:`6500` - The test partitioned_vector\_ doesn't finish in a very long time
 * :hpx-issue:`6347` - Failed Linking CXX executable due to undefined references
 * :hpx-issue:`6345` - Initialization hangs when only setting --hpx:cores
@@ -442,6 +504,7 @@ Closed issues
 * :hpx-issue:`6163` - Expose global termination detection through a new API
 * :hpx-issue:`6014` - Support C++20 modules
 * :hpx-issue:`5907` - HPX_DEBUG/CMAKE_BUILD_TYPE not correctly decoupled/consistently used.
+* :hpx-issue:`5903` - Support for Windows HPC Pack
 * :hpx-issue:`5497` - Start using C++17 features unconditionally
 * :hpx-issue:`5045` - Implement P0443/P1897/P2300
 * :hpx-issue:`4702` - Prefer enum class over unscoped enums
@@ -453,18 +516,74 @@ Closed issues
 * :hpx-issue:`4074` - HPX module "configurations"
 * :hpx-issue:`2235` - Concurrent data structures support
 
-Closed pull requests
+Merged pull requests
 ====================
 
+* :hpx-pr:`7637` - Update Collective Benchmark
+* :hpx-pr:`7631` - debugging: suppress C4251 warning in dbghelp_symbol_cache.hpp
+* :hpx-pr:`7630` - Clarify nostack fork_join leaf use and harden UINT32 range / exception paths.
+* :hpx-pr:`7629` - Recycle terminated thread_data before malloc on recursive async spawn
+* :hpx-pr:`7628` - Wire abp-priority queues to lockfree_abp_{fifo,lifo} backends
+* :hpx-pr:`7627` - fix AGAS background GC when networking is disabled
+* :hpx-pr:`7626` - Prefer MADV_FREE when recycling mmap'd coroutine stacks
+* :hpx-pr:`7625` - Re-enable auto-linking on Windows(dynamic linking, no C++20 modules)
+* :hpx-pr:`7624` - Re-enable auto-linking on Windows(static linking, including C++20 modules)
+* :hpx-pr:`7621` - performance_counters: use public counter-type API in registry_thread_safety_7563 test
+* :hpx-pr:`7620` - tracing: fill two small gaps in the Tracy backend`
+* :hpx-pr:`7619` - fix node-specific HPX command-line option parsing
+* :hpx-pr:`7617` - synchronization: fix incorrect restart-state comparison in counting_semaphore::wait_until
+* :hpx-pr:`7615` - Fix std::get on types derived from std::pair with HPX_DATASTRUCTURES\_...
+* :hpx-pr:`7614` - Fix HPX_REGISTER_CHANNEL 2-arg form still pasting type into identifiers
+* :hpx-pr:`7612` - core: add std::chrono overloads of finalize and disconnect
+* :hpx-pr:`7611` - Core: Fix spurious wakeup vulnerability in hpx::barrier
+* :hpx-pr:`7609` - debugging: refresh DbgHelp module list on stale symbol lookup
+* :hpx-pr:`7607` - Get the Rostam Jenkins lanes passing again
+* :hpx-pr:`7606` - Re-enable auto-linking on Windows(static linking, no C++20 modules) (#7592)
+* :hpx-pr:`7605` - build(deps): bump github/codeql-action from 4.38.0 to 4.38.1
+* :hpx-pr:`7604` - thrust: rename policy_traits test to thrust_policy_traits to avoid ta...
+* :hpx-pr:`7601` - debugging: cache DbgHelp symbol lookups
+* :hpx-pr:`7600` - Use std::size_t for matrix and block sizes in the transpose examples
+* :hpx-pr:`7599` - actions: emit a stub on device so the action types exist
+* :hpx-pr:`7598` - Optimize: Weaken atomic memory orderings in when_all_vector
+* :hpx-pr:`7597` - fix synchronous channel communicator race
+* :hpx-pr:`7596` - Use std::size_t for grid and partition counts in the examples
+* :hpx-pr:`7595` - Convert iterator differences and strto* results explicitly
+* :hpx-pr:`7594` - Check collection sizes read from an archive before using them
+* :hpx-pr:`7593` - Carry the thread heap counts as std::size_t
+* :hpx-pr:`7590` - Stop cancelling running Jenkins builds
+* :hpx-pr:`7588` - Carry the idle and busy loop counts as std::int64_t
+* :hpx-pr:`7587` - docs: document future callback and async reference pitfalls (#2589)
+* :hpx-pr:`7586` - Take a std::size_t item count in the bulk dequeue path
+* :hpx-pr:`7582` - Return std::int64_t from the queue holder thread counters
+* :hpx-pr:`7581` - Raise documentation build step timeouts to restore headroom
+* :hpx-pr:`7579` - Add get_parallel_scheduler(pool) for named HPX thread pools
+* :hpx-pr:`7577` - Make fibhash return std::size_t
+* :hpx-pr:`7575` - Stop hiding errors in the PDF documentation build
+* :hpx-pr:`7574` - Don't define HPX config macros while finding an installed HPX
+* :hpx-pr:`7573` - Restore the default handler before aborting
+* :hpx-pr:`7572` - Keep the real PAPI error and skip the test when the counter is missing
+* :hpx-pr:`7571` - Give each worker its own random generator for work stealing
+* :hpx-pr:`7570` - Make godbolt-minimal ship hpx/experimental/sandbox.hpp
+* :hpx-pr:`7567` - Keep LSU CI results when builds are interrupted
+* :hpx-pr:`7566` - Add a 32 bit Windows CI job
+* :hpx-pr:`7565` - Issue #7480 fix: AGAS RPC timeout during hosted locality namespace bootstrap polling
+* :hpx-pr:`7564` - performance_counters: synchronize registry access to countertypes\_
+* :hpx-pr:`7562` - performance_counters: discover counters registered after startup
+* :hpx-pr:`7559` - make operator_brackets_proxy transparent to hpx::get for tuple-like references
+* :hpx-pr:`7558` - build(deps): bump github/codeql-action from 4.37.9 to 4.38.0
 * :hpx-pr:`7556` - fix: drop redundant HPX_CORE_EXPORT on version check definitions
+* :hpx-pr:`7555` - Fix: Resolve deterministic deadlock and race condition in latch::reset
 * :hpx-pr:`7554` - Exclude docs from Codacy's duplication analysis
+* :hpx-pr:`7553` - tracy: serialise DbgHelp calls with HPX on Windows
 * :hpx-pr:`7552` - config: remove TBB example benchmarks and unused FindTBB module
+* :hpx-pr:`7551` - Add orthogonal rebind_policy_executor_t / rebind_policy_parameters_t
+* :hpx-pr:`7550` - Feat : policy traits 6717
 * :hpx-pr:`7546` - debugging: add regression test for hostname_print_helper race
+* :hpx-pr:`7544` - tracing: sample per-task lifecycle events 1-in-N
+* :hpx-pr:`7542` - Use an HPX-aware mutex in numa_binding_allocator::initialize_pages
 * :hpx-pr:`7541` - Factor the duplicated AGAS instance-name formatting into a shared helper
 * :hpx-pr:`7540` - Explicitly disable the use of TBB as the parallelization backend for libstdc++
-* :hpx-pr:`7537` - Refactor disconnected locality dispatch guard
 * :hpx-pr:`7536` - Factor the disconnected-locality dispatch guard into a shared helper
-* :hpx-pr:`7535` - Fix data race in hostname_print_helper::get_hostname()
 * :hpx-pr:`7534` - Keep LSU matrix artifacts separate
 * :hpx-pr:`7533` - Stop failed LSU builds from publishing installs
 * :hpx-pr:`7532` - Fix LSU GitHub status reporting
@@ -491,7 +610,6 @@ Closed pull requests
 * :hpx-pr:`7506` - Fix the two shutdown regressions from #7471 that hang the distributed CIs
 * :hpx-pr:`7505` - Waiting for threads in pools to start running before continuing
 * :hpx-pr:`7504` - build(deps): bump github/codeql-action from 4.37.8 to 4.37.9
-* :hpx-pr:`7502` - Fix the -Werror=comment build break in reflect_action_overhead
 * :hpx-pr:`7501` - Fixing apparent multi-line comment
 * :hpx-pr:`7500` - Stop the colocated tests finalizing from inside the hpx_main loop
 * :hpx-pr:`7499` - examples: rename background_work_smoke subsystems to fix HPX_WITH_CUDA build
@@ -526,10 +644,10 @@ Closed pull requests
 * :hpx-pr:`7456` - tests: expand hpx::search_n unit tests to match HPX algorithm test standards
 * :hpx-pr:`7455` - examples: add fibonacci_reflection demonstrating C++26 reflection API
 * :hpx-pr:`7453` - fix(execution_base): complete P2300 compliance and fix set_stopped crash for any_sender
-* :hpx-pr:`7452` - Remove stale hpx_tag_invoke module dependencies
 * :hpx-pr:`7451` - Remove stale hpx_tag_invoke module dependencies
 * :hpx-pr:`7450` - tracing: Add work-stealing instrumentation for Tracy profiler
 * :hpx-pr:`7449` - Fix pairwise all_to_all build with Clang 17 and OpenMP
+* :hpx-pr:`7448` - components_base: add reflection-based default for get_component_name
 * :hpx-pr:`7447` - Adding hpx::force_disconnect to support the use case described in #7441
 * :hpx-pr:`7446` - Documentation fixes
 * :hpx-pr:`7445` - Add collectives API documentation metadata
@@ -543,7 +661,6 @@ Closed pull requests
 * :hpx-pr:`7433` - Bump lukka/get-cmake from 4.4.1 to 4.4.2
 * :hpx-pr:`7432` - supervision_dispatch: add C++26 reflection overload for dispatch_work
 * :hpx-pr:`7431` - Add size-based pairwise dispatch to all_to_all
-* :hpx-pr:`7430` - Add size-based pairwise dispatch to all_to_all
 * :hpx-pr:`7429` - Bump github/codeql-action from 4.37.3 to 4.37.4
 * :hpx-pr:`7427` - Supervision dispatch and target resolution
 * :hpx-pr:`7426` - Fix the build with HPX_WITH_THREAD_QUEUE_WAITTIME=ON
@@ -559,25 +676,28 @@ Closed pull requests
 * :hpx-pr:`7414` - Don't disabled first core placement if --hpx:bind=none
 * :hpx-pr:`7413` - Adding supervision dispatch component
 * :hpx-pr:`7412` - Give the launched locality the endpoint the probe actually bound
+* :hpx-pr:`7410` - tag_invoke cleanup
 * :hpx-pr:`7409` - Implement check_admission in supervision module
 * :hpx-pr:`7408` - Adding a set of tests for pool_timer
+* :hpx-pr:`7407` - Adding await_terminal support to supervision module
 * :hpx-pr:`7405` - Let the OS pick the parcelport port in the departed locality test
 * :hpx-pr:`7404` - Make MPI parcelport teardown orderly: quiesce before MPI_Finalize
 * :hpx-pr:`7403` - Tracing inline future continuations
 * :hpx-pr:`7402` - Feat/distributed adaptors
 * :hpx-pr:`7401` - Cache the first collective finalizer failure and rethrow it for every site
+* :hpx-pr:`7400` - remove tag_invoke from algorithm loop
 * :hpx-pr:`7399` - Add supervision infrastructure for lifecycle events and observers
 * :hpx-pr:`7398` - Move the all_reduce reduction seed instead of copying it
 * :hpx-pr:`7396` - Move distributed sender&receiver facilities to separate module
 * :hpx-pr:`7395` - remove tag_invoke from container algorithms
 * :hpx-pr:`7394` - execution: fix sync_wait notify lifetime race
+* :hpx-pr:`7393` - Add projection tests for ranges::unique algorithms
 * :hpx-pr:`7392` - Tracing data parallel workloads
 * :hpx-pr:`7391` - Fix doxygen warnings when building docs
 * :hpx-pr:`7388` - Fix resolve_locality error handling for departed localities
 * :hpx-pr:`7387` - Don't apply PU offset for localities that explicitly use core bindings
-* :hpx-pr:`7386` - Bump lukka/get-cmake from 4.3.4 to 4.4.0
 * :hpx-pr:`7385` - components: add reflect_client<^^Server> and HPX_REFLECT_CLIENT macro
-* :hpx-pr:`7381` - Implement projection support for unique and unique_copy algorithms
+* :hpx-pr:`7382` - Fixing issue with the latch_notification test
 * :hpx-pr:`7380` - remove tag invoke from parallel algorithms
 * :hpx-pr:`7379` - Thread data size reductions
 * :hpx-pr:`7378` - Move communicator basenames into owned storage
@@ -585,10 +705,8 @@ Closed pull requests
 * :hpx-pr:`7376` - async: add hpx::async<^^func>(target, ...) reflection overload
 * :hpx-pr:`7375` - Flatten hierarchical gather and scatter payloads
 * :hpx-pr:`7374` - async_cuda: preserve transform_stream environment
-* :hpx-pr:`7373` - async_cuda: preserve transform_stream environment
 * :hpx-pr:`7372` - Tracing suspend resume hooks
 * :hpx-pr:`7371` - Working around Clang ICE happening when compiling the algorithm sender tests
-* :hpx-pr:`7370` - Flatten hierarchical collective payloads
 * :hpx-pr:`7369` - Reject explicit generations after auto generation on the same communicator
 * :hpx-pr:`7368` - remove tag_invoke from core execution
 * :hpx-pr:`7367` - Fixing future::wait_until (and wait_for) to return once future was made ready
@@ -597,6 +715,7 @@ Closed pull requests
 * :hpx-pr:`7364` - Avoid communicator reuse between scan test phases
 * :hpx-pr:`7363` - Implement minmax_element to use less comparisons
 * :hpx-pr:`7361` - add pre commit hooks
+* :hpx-pr:`7360` - Duplication of the thread queues in the schedulers
 * :hpx-pr:`7359` - Harden collectives validation paths
 * :hpx-pr:`7357` - Tracing runtime instrumentation
 * :hpx-pr:`7356` - Allowing for a test to fail only for a given configuration
@@ -604,19 +723,18 @@ Closed pull requests
 * :hpx-pr:`7354` - Feat/distributed transfer
 * :hpx-pr:`7353` - remove tag_invoke usage
 * :hpx-pr:`7352` - ci: add actions_base reflection tests to CI workflows
-* :hpx-pr:`7351` - CodeRabbit Generated Unit Tests: Add unit tests for PR changes
 * :hpx-pr:`7350` - Introduces better lifetime management for background/pool threads
 * :hpx-pr:`7349` - actions_base: add reflect_direct_action and direct action macro reflection support
 * :hpx-pr:`7348` - docs: add C++26 reflection-based action migration guide
 * :hpx-pr:`7347` - Add tracing support for task lifecycle events
 * :hpx-pr:`7346` - feat(algorithms): implement P2300 allocator support for when_all_vector
-* :hpx-pr:`7345` - Refactoring serializing parcels
 * :hpx-pr:`7344` - add sender/receiver support to set_difference
 * :hpx-pr:`7343` - Add hierarchical scan collectives
 * :hpx-pr:`7342` - actions_base: fix reflect_action for noexcept functions, add arity
 * :hpx-pr:`7341` - async_mpi: modernize transform_mpi sender participation
+* :hpx-pr:`7340` - Harden collectives validation paths
 * :hpx-pr:`7339` - Fixing various test failures.
-* :hpx-pr:`7338` - examples: migrate spell_check examples to HPX_ACTION (C++26 reflection)
+* :hpx-pr:`7337` - tracing: remove legacy ITT hooks from full components
 * :hpx-pr:`7336` - removed unnecessary thread id info in merge
 * :hpx-pr:`7335` - feat(executors): implement domain-optimized continues_on for thread_p...
 * :hpx-pr:`7334` - Fixing shared_ptr serialization vulnerabilities
@@ -627,7 +745,7 @@ Closed pull requests
 * :hpx-pr:`7328` - fix(datapar): guard mismatch SIMD path on zip_iterator compatibility
 * :hpx-pr:`7327` - build(deps): bump actions/checkout from 6 to 7
 * :hpx-pr:`7326` - Hierarchical collectives: unify the per-call generation step for cross-collective sharing
-* :hpx-pr:`7325` - Docs: Add troubleshooting note for local runs
+* :hpx-pr:`7324` - Improve collective benchmark
 * :hpx-pr:`7322` - Fix sentinel return type mismatch in hpx::ranges container algorithm CPOs
 * :hpx-pr:`7321` - Harden hierarchical collectives: flat fallback unification, input validation, tree test coverage
 * :hpx-pr:`7320` - feat(execution): implement get_allocator query for P2300 schedulers
@@ -638,11 +756,9 @@ Closed pull requests
 * :hpx-pr:`7315` - make_future: use run_loop scheduler accessor
 * :hpx-pr:`7314` - parallel: Unify projection support and fix constraints for starts_with and ends_with
 * :hpx-pr:`7311` - actions_base: add reflection-based component action (reflect_component_action)
-* :hpx-pr:`7310` - execution_base: trim leftover trait glue
-* :hpx-pr:`7308` - executors: Add bulk_chunked and bulk_unchunked member functions to executor_scheduler
+* :hpx-pr:`7309` - keep_future: expose empty env
 * :hpx-pr:`7307` - Add hierarchical all_to_all collective
 * :hpx-pr:`7306` - Fix warnings and errors when building docs
-* :hpx-pr:`7305` - algorithms: unify projection overloads in min/max/minmax_element and is_heap
 * :hpx-pr:`7304` - Fix max_element returning last greatest element instead of first
 * :hpx-pr:`7303` - Patching recently introduced issues on Windows/MSVC
 * :hpx-pr:`7302` - Disable logging on the github CI to avoid out of disk space errors
@@ -689,35 +805,27 @@ Closed pull requests
 * :hpx-pr:`7257` - Migrate to stdexec & Fix deadlock on HPX worker threads
 * :hpx-pr:`7256` - Implement HPX Future-Sender Bridge (P2300 interoperability)
 * :hpx-pr:`7255` - Re-enable automatically closing stale issues
-* :hpx-pr:`7254` - Re-enable Clang executor tests
 * :hpx-pr:`7253` - Add parallel distributed algorithms for segmented copy
-* :hpx-pr:`7252` - Execution: Migrate `transform_completion_signatures` to avoid deprecation warnings (#7251)
 * :hpx-pr:`7250` - Unified tracing API: merge ITT/Tracy instrumentation
 * :hpx-pr:`7249` - ci: pin VS 2022 workflows to windows-2022 runner
 * :hpx-pr:`7248` - make_future: static_assert against silent-hang run_loop_scheduler sender
 * :hpx-pr:`7247` - make_future: isolate __loop\_ private-member access in single detail helper
 * :hpx-pr:`7246` - fix #7245: switch Stdexec FetchContent_Populate to FetchContent_MakeA vailable
 * :hpx-pr:`7244` - drop dead trait, dead test guards, and migrate async_mpi receiver to native P2300
-* :hpx-pr:`7243` - Implement P2300 stopped_as_optional sender adapter
 * :hpx-pr:`7242` - Update HPX URL for perftest commenting
-* :hpx-pr:`7241` - Implement P2300 ensure_started algorithm
 * :hpx-pr:`7240` - Implement P2300 bulk adapter for HPX executors
 * :hpx-pr:`7239` - Implement P2300 get_scheduler bridge for parallel_executor
 * :hpx-pr:`7238` - Implement P2300 get_scheduler bridge for executors
 * :hpx-pr:`7237` - Adapting HPX actions module to C++20 modules
-* :hpx-pr:`7236` - fix(execution): correct sends_stopped in bulk and schedule_from completion signatures
 * :hpx-pr:`7235` - Silence Codacy warnings
 * :hpx-pr:`7234` - Bump lukka/get-cmake from 4.3.0 to 4.3.2
 * :hpx-pr:`7233` - Suppress MSVC linker warnings in C++ 20 module mode
 * :hpx-pr:`7232` - ci: switch to lukka/get-cmake to resolve GitHub API rate limits
 * :hpx-pr:`7231` - Bump dawidd6/action-download-artifact from 20 to 21
 * :hpx-pr:`7230` - algorithms: expose Proj parameter in hpx::min/max/minmax_element CPOs
-* :hpx-pr:`7229` - Use secret token for downloading cmake in github actions
 * :hpx-pr:`7227` - Adding const version of some of the looping constructs to support datapar
 * :hpx-pr:`7224` - Making sure chunking iterators are detected as random access
 * :hpx-pr:`7223` - Fix missing invoke header in for_each_index algorithm
-* :hpx-pr:`7222` - Add hierarchical all-to-all design documentation
-* :hpx-pr:`7221` - Fixed CPO forwarding issue
 * :hpx-pr:`7220` - [parallel] Add projection support to hpx::is_sorted, hpx::is_sorted_until, and hpx::is_partitioned CPOs
 * :hpx-pr:`7219` - Fix iteration mismatch in collective tests local timing
 * :hpx-pr:`7218` - Multi line warning fix
@@ -729,11 +837,9 @@ Closed pull requests
 * :hpx-pr:`7210` - Reimplement distributed::barrier on top of collectives infrastructure
 * :hpx-pr:`7209` - executors: fix performance regressions
 * :hpx-pr:`7208` - [parallel] Fix element_type deduction in minmax algorithms
-* :hpx-pr:`7207` - ci: Introduce HPX PR Sentinel (Automated Rule-Based Review & Labeling Bot)
 * :hpx-pr:`7206` - Fix C++ modules BMI installation and re-enable external build tests
 * :hpx-pr:`7205` - CI: Add manual "Cancel All Workflows" automation via label
 * :hpx-pr:`7204` - serialization: add reflection tests for static member function name e...
-* :hpx-pr:`7202` - Re-enable external build tests with C++ modules
 * :hpx-pr:`7201` - Deduplicate Windows tests.examples exclusions
 * :hpx-pr:`7198` - Add non-power-of-arity tests for hierarchical all_reduce and all_gather
 * :hpx-pr:`7196` - [tests] Add return-iterator compliance and edge-case regression tests for hpx::partial_sort
@@ -764,21 +870,18 @@ Closed pull requests
 * :hpx-pr:`7169` - Fix parallel is_sorted_until off by one cross boundary check
 * :hpx-pr:`7168` - Co-locate SPSC channel cached indices with their atomics
 * :hpx-pr:`7166` - parcelset: add connection cache saturation counters and exhaustion alerting
-* :hpx-pr:`7165` - execution: fix split scheduler preservation for late subscribers (P2300)
 * :hpx-pr:`7164` - pass executor to hpx::dataflow in sort and partial_sort
 * :hpx-pr:`7163` - Fix missing early termination in parallel `find_first_of` inner loop
 * :hpx-pr:`7162` - partial ordering tests for merge
 * :hpx-pr:`7161` - fix(find_first_of): add missing early return and fix datapar iterator dependency
 * :hpx-pr:`7160` - Add hierarchical all_reduce and all_gather via reduce+broadcast composition
 * :hpx-pr:`7159` - concurrency: harden anchor consistency checks in lockfree::deque
-* :hpx-pr:`7157` - execution: add native upon_error and upon_stopped sender adaptors
 * :hpx-pr:`7156` - Add segmented is_partitioned
 * :hpx-pr:`7155` - docs: add 'Using HPX on Compiler Explorer' manual page
 * :hpx-pr:`7154` - ci: add CI workflow validating godbolt-minimal preset
 * :hpx-pr:`7153` - Optimize exception safety in zip_iterator by adding missing noexcept
 * :hpx-pr:`7152` - ci: restore dropped dynamic workflow exclusions
 * :hpx-pr:`7149` - Allow for fork_join_executor to work with stackless HPX threads
-* :hpx-pr:`7148` - ci: add concurrency cancel-in-progress to all workflow files
 * :hpx-pr:`7147` - uninitialized_relocate: use pointer arithmetic for overlap distance calculation
 * :hpx-pr:`7146` - enable auto-cancellation for all CI workflows
 * :hpx-pr:`7145` - Tracing suspend abstraction
@@ -804,24 +907,17 @@ Closed pull requests
 * :hpx-pr:`7122` - fix use after move errors in replace_copy
 * :hpx-pr:`7121` - Switching from test-branch to master for docs_push
 * :hpx-pr:`7120` - Fix exact test matching in container algorithm CI shards
-* :hpx-pr:`7119` - Improve/spsc queue performance 7112
-* :hpx-pr:`7118` - Ci profile
 * :hpx-pr:`7116` - Refactor build-and-test workflow into matrix + composite action
 * :hpx-pr:`7115` - Cache read/write indices in channel_spsc
 * :hpx-pr:`7114` - Fix heap corruption in partial_sort filter() function
-* :hpx-pr:`7113` - Fix heap corruption in partial_sort filter() function
 * :hpx-pr:`7110` - Implement segmented version of equal algorithm
-* :hpx-pr:`7109` - feat: add contract assertions to hpx::optional::operator* and operator->
 * :hpx-pr:`7108` - Update reflection_qualified_name_of tests with server/client request ...
-* :hpx-pr:`7107` - fixed the stable_sort_range test
 * :hpx-pr:`7106` - feat(futures): implement C++23 monadic operations
-* :hpx-pr:`7105` - refactor: decouple hpx_main and core init from distributed runtime
 * :hpx-pr:`7104` - Removing concurrency group from documentation build and push
 * :hpx-pr:`7103` - feat: enable transparent hpx::init dispatch for local-only builds
 * :hpx-pr:`7102` - Disable pushing generated docs from CircleCI
 * :hpx-pr:`7101` - schedulers: add NUMA-distance-aware victim list and NUMA hint routing
 * :hpx-pr:`7100` - Removed unused lambda captures
-* :hpx-pr:`7098` - refactor: narrow umbrella includes in acquire_future.hpp
 * :hpx-pr:`7097` - Fix scheduler_executor regression
 * :hpx-pr:`7096` - Migrate documentation build and deploy to GitHub Actions
 * :hpx-pr:`7095` - refactor: replace sizeof==0 hack with always_false in sort_by_key
@@ -832,25 +928,21 @@ Closed pull requests
 * :hpx-pr:`7089` - note sequential fallback for non-contiguous iterators in parallel uninitialized_relocate CPOs
 * :hpx-pr:`7088` - revert slash commands
 * :hpx-pr:`7086` - Added delta local accumulation inside thread cleanup loop
+* :hpx-pr:`7084` - trigger workflows
 * :hpx-pr:`7083` - Fix critical collectives correctness issues (hierarchical partitioning, scatter/all_to_all validation, barrier release re-entry)
 * :hpx-pr:`7082` - Add Conan package support
 * :hpx-pr:`7081` - test: add right-overlap tests for forward uninitialized_relocate CPOs
-* :hpx-pr:`7080` - complete all missing P2300R10 algorithms and P3425 receiver inlining
 * :hpx-pr:`7079` - Feat/sandbox laboratory
 * :hpx-pr:`7078` - examples: add sender_diamond quickstart example
 * :hpx-pr:`7076` - add slash command
-* :hpx-pr:`7073` - fix: correct overlap detection in parallel uninitialized_relocate CPOs
 * :hpx-pr:`7072` - Add segmented is_sorted_until , is_sorted
-* :hpx-pr:`7070` - Feat/local convenience header
 * :hpx-pr:`7069` - Improve hpx_wrap error message with explicit linker flags for non-CMa...
 * :hpx-pr:`7068` - cmake: remove HPX_WITH_CXX20_STD_EXECUTION_POLICES feature test
 * :hpx-pr:`7067` - cmake: remove HPX_WITH_CXX20_LAMBDA_CAPTURE feature test
 * :hpx-pr:`7066` - cmake: remove HPX_WITH_CXX20_STD_CONSTRUCT_AT feature test
 * :hpx-pr:`7065` - cmake: Improve error messages for missing optional dependencies Improve dependency errors
-* :hpx-pr:`7064` - tests: add sender/receiver for hpx::copy_if
 * :hpx-pr:`7063` - Add godbolt-minimal CMake preset for browser-based compiler environments
 * :hpx-pr:`7061` - build(deps): bump jwlawson/actions-setup-cmake from 2.1 to 2.2
-* :hpx-pr:`7060` - cmake: remove HPX_WITH_CXX20_STD_RANGES_ITER_SWAP feature test
 * :hpx-pr:`7058` - Tracing unified interface
 * :hpx-pr:`7057` - Add inspect checks to pre-commit and DCO commit-msg hook
 * :hpx-pr:`7056` - Feat: Replaced the old lockfree queue with the moodycamel ConcurrentQ...
@@ -882,11 +974,9 @@ Closed pull requests
 * :hpx-pr:`7016` - support GCC trunk/C++26 reflection in build, tests and CI
 * :hpx-pr:`7015` - Fix critical edge cases in reduce_by_key and improve sentinel support
 * :hpx-pr:`7014` - Fix std::distance usage in is_partitioned and find_first_of
-* :hpx-pr:`7013` - Fix incorrect Doxygen for hpx::search_n: "last" -> "first" subsequence
 * :hpx-pr:`7012` - Added Dark mode to the website
 * :hpx-pr:`7011` - Cleaning up minor issues that slipped into master
 * :hpx-pr:`7010` - use optimised image for reflection ci
-* :hpx-pr:`7009` - Add segmented replace & replace_if
 * :hpx-pr:`7008` - build(deps): bump actions/checkout from 5 to 6
 * :hpx-pr:`7007` - performance: Optimize shared_mutex and fix C++20 modular build errors
 * :hpx-pr:`7006` - Fix inaccurate comments in 1d_stencil_5 example
@@ -905,7 +995,6 @@ Closed pull requests
 * :hpx-pr:`6991` - Algorithm: Implementing hpx::iota and hpx::ranges::iota (#6969)
 * :hpx-pr:`6990` - schedulers: fix stale domain_num/q_index after select_active_pu() in schedule_thread() none path
 * :hpx-pr:`6988` - Fix segmented_algorithms CI and fail-on-cache-miss, Implement depreport workflow
-* :hpx-pr:`6987` - feat(components_base): Enable native C++20 module generation
 * :hpx-pr:`6986` - Fixing unused variable warning/errors.
 * :hpx-pr:`6985` - Fix critical race conditions in AGAS and improve component pinning robustness
 * :hpx-pr:`6984` - Use rebind_parameters for the rotate algorithm implementation
@@ -916,7 +1005,6 @@ Closed pull requests
 * :hpx-pr:`6977` - cmake: remove HPX_WITH_CXX20_STD_DEFAULT_SENTINEL feature test
 * :hpx-pr:`6976` - cmake: remove HPX_WITH_CXX20_STD_BIT_CAST feature test
 * :hpx-pr:`6973` - cmake: remove HPX_WITH_CXX20_STD_IDENTITY feature test
-* :hpx-pr:`6972` - Fix data race in concurrent container move operations
 * :hpx-pr:`6971` - Fix get_num_items logic in default_distribution_policy
 * :hpx-pr:`6968` - schedulers: fix NUMA hint not validating suspended PUs
 * :hpx-pr:`6967` - async_cuda, async_mpi: replace tuple-based keep_alive capture with C+...
@@ -924,18 +1012,13 @@ Closed pull requests
 * :hpx-pr:`6965` - executors: replace tuple-based lambda capture with C++20 pack capture
 * :hpx-pr:`6964` - cmake: Remove obsolete feature test for CXX20_PERFECT_PACK_CAPTURE
 * :hpx-pr:`6962` - Replace BLOCK_SIZE with different name to avoid clashes with Linux-defined macro
-* :hpx-pr:`6960` - Attempting to fix sorting tests
 * :hpx-pr:`6959` - cmake: Remove obsolete feature test for CXX20_TRIVIAL_VIRTUAL_DESTRUCTOR
 * :hpx-pr:`6958` - Re-add iterator traits
-* :hpx-pr:`6957` - Implement datapar for move with tests
 * :hpx-pr:`6956` - docs: add lifetime warning for create_channel_communicator
 * :hpx-pr:`6955` - fix: correct argument order for `next_or_subrange` and `add_ready_future_idx` functions
-* :hpx-pr:`6954` - Fixed the managed to unmanaged change
-* :hpx-pr:`6952` - Remove HPX_WITH_CXX20_STD_ENDIAN feature test and config guard
 * :hpx-pr:`6951` - Add zero-validation for with_processing_units_count
 * :hpx-pr:`6950` - Merge Path Algorithm
 * :hpx-pr:`6949` - Bump actions/upload-artifact from 6 to 7
-* :hpx-pr:`6948` - implement c++20 modules for full libraries
 * :hpx-pr:`6947` - executors: fix uint32_t truncation in fork_join static scheduling (Phase 1)
 * :hpx-pr:`6946` - dynamic test discovery in CI
 * :hpx-pr:`6944` - nit: remove linux specific header in test utils
@@ -949,9 +1032,7 @@ Closed pull requests
 * :hpx-pr:`6935` - Experimenting with rebinding parameters objects
 * :hpx-pr:`6934` - Fix parallel performance of hpx::reverse by using index-based dispatch
 * :hpx-pr:`6933` - Misc fixes for documentation
-* :hpx-pr:`6932` - feat: expose HPX using C++ Modules (HPX.Core and HPX.Full)
 * :hpx-pr:`6930` - Adjusting build system to HPX conventions
-* :hpx-pr:`6929` - Do bisection to diagnose performance regression
 * :hpx-pr:`6928` - Replace scan implementation with explicit functions to avoid triggering concept checking
 * :hpx-pr:`6927` - Attempt to work around Github API limitations
 * :hpx-pr:`6926` - Disable async_cuda test as nvcc fails
@@ -960,21 +1041,17 @@ Closed pull requests
 * :hpx-pr:`6923` - Convert enum message_buffer_append_state to enum class
 * :hpx-pr:`6921` - Add workflow_dispatch for local testing and fix PR triggers
 * :hpx-pr:`6920` - Fixing various compilation regressions
-* :hpx-pr:`6919` - Fix performance regression in fork_join_executor by implementing missing traits
 * :hpx-pr:`6918` - Bump actions/checkout from 4 to 6
 * :hpx-pr:`6917` - Bump actions/upload-artifact from 4 to 6
 * :hpx-pr:`6916` - Add pull_request triggers to GHA workflows and fixed check-formatting jobs
 * :hpx-pr:`6915` - Adding missing module dependencies to the HPX algorithm module
 * :hpx-pr:`6914` - Cleaning up recently added debug suffix configuration
 * :hpx-pr:`6913` - Add comprehensive subtraction unit tests for gid_type
-* :hpx-pr:`6912` - Add comprehensive subtraction unit tests for gid_type
-* :hpx-pr:`6911` - Fix split fast-path to preserve completion scheduler semantics
 * :hpx-pr:`6910` - Implement C++23 Algorithms: fold_left, fold_right.
 * :hpx-pr:`6909` - Refactoring local_priority_queue_scheduler for better cache behavior
 * :hpx-pr:`6907` - reduce lock contention in local_priority_queue_scheduler via randomized victim selection
 * :hpx-pr:`6903` - Migrate HPX CI from CircleCI to GitHub Actions
 * :hpx-pr:`6902` - using standard traits present in iterator library
-* :hpx-pr:`6901` - Migrate HPX CI from CircleCI to GitHub Actions
 * :hpx-pr:`6900` - shared_mutex: follow-up fix and add regression test
 * :hpx-pr:`6899` - Implemented forwarding_sender_query for sender adaptors
 * :hpx-pr:`6898` - Removed the incomplete line in Readme
@@ -984,7 +1061,6 @@ Closed pull requests
 * :hpx-pr:`6891` - Refine unordered_map unit tests and add operator[] size stability check
 * :hpx-pr:`6890` - Feature/termination detection timeout
 * :hpx-pr:`6889` - Fixing set_affinity_test
-* :hpx-pr:`6887` - Fix run loop and connect awaitable
 * :hpx-pr:`6886` - Expose global termination detection through new API (#6163)
 * :hpx-pr:`6885` - refactor execution parameters and steady clock usage
 * :hpx-pr:`6884` - implement fold algorithms acc. to c++26
@@ -996,64 +1072,48 @@ Closed pull requests
 * :hpx-pr:`6875` - implement serialization for partition_data in 1d_stencil_5
 * :hpx-pr:`6873` - Fix runtime shutdown ordering for collectives on macOS Debug - Issue #6776
 * :hpx-pr:`6872` - Added random repeating numbers in tests and fixed sentinel tests for extrema algorithms
-* :hpx-pr:`6871` - fix assertion failure in distributed barrier
 * :hpx-pr:`6870` - standardise hpx::generate function signature
 * :hpx-pr:`6869` - update relocation definitions to track p2786r13 standard
-* :hpx-pr:`6868` - Fixing zip_iterator::operator[]() to agree with gcc 16 std::sort
 * :hpx-pr:`6866` - Fix threads hanging indefinitely by acquiring the state mutex before checking for an exclusive lock
-* :hpx-pr:`6865` - Fix threads hanging indefinitely by acquiring the state mutex before checking for an exclusive lock
 * :hpx-pr:`6864` - [Serialization] [Feature] Add serialization for multi containers and unordered_set
 * :hpx-pr:`6863` - Fix partitioned_vector tests timeout by reducing vector dimensions #6500
 * :hpx-pr:`6862` - Bump jwlawson/actions-setup-cmake from 2.0 to 2.1
 * :hpx-pr:`6861` - implement thread affinity api similar to pthread_setaffinity_np
-* :hpx-pr:`6860` - cmake: fix cmake-format issues for ARM architecture support
 * :hpx-pr:`6859` - [Serialization] [Feature] Add experimental C++26 reflection support
 * :hpx-pr:`6858` - Adding intrinsic support for the Tracy profiler
 * :hpx-pr:`6857` - Bump jwlawson/actions-setup-cmake from 2.0 to 2.1
 * :hpx-pr:`6856` - Godbolt Boost detection: search for static libs if shared not found
-* :hpx-pr:`6855` - Add spin-then-sleep idle policy for local parallelism
 * :hpx-pr:`6853` - Remove type alias sender completions support (#6624)
 * :hpx-pr:`6852` - Add HPX_EXPORT to plugin factory types to fix MacOS visibility issues
 * :hpx-pr:`6851` - added CMakePresets.json with multiple build configurations for HPX development
 * :hpx-pr:`6850` - Fix Ninja Multi-Config generator support for pkg-config files
 * :hpx-pr:`6849` - Fix ARM build failure by automatically enabling generic context coroutines Fixes #6728
 * :hpx-pr:`6848` - Forking and modernizing Boost.iostreams
-* :hpx-pr:`6847` - Add CI infrastructure for cloud deployment (Phase CI)
 * :hpx-pr:`6846` - fix(stdexec): added adaption to ensure successful build with stdexec
 * :hpx-pr:`6845` - Starting to adapt HPX full modules to C++ modules
 * :hpx-pr:`6844` - Fixing cyclic dependency between memory and serialization module
-* :hpx-pr:`6843` - Attempting to improve compiler error messages related to tag_invoke
 * :hpx-pr:`6841` - rewrite hpx::search_n with standard-conforming API and add searcher-based overloads to hpx::search
 * :hpx-pr:`6840` - Fix worker_timed.hpp: type-safe delay using chrono::nanoseconds
 * :hpx-pr:`6839` - Use c++20 concepts where possible
-* :hpx-pr:`6838` - initialize parallel reduce from init value
 * :hpx-pr:`6837` - Removing HPX_HAVE_CXX11_STD_SHARED_PTR_LWG3018 option
 * :hpx-pr:`6836` - Removing boost.shared_array
 * :hpx-pr:`6835` - Enforce clang-format east-const
 * :hpx-pr:`6834` - Feature/hierarchical collectives
-* :hpx-pr:`6833` - Add docs for SIMD image blur example
 * :hpx-pr:`6832` - Applying minor optimizations and fixes in various places
 * :hpx-pr:`6831` - Fix linker error for print_dec<unsigned long> on ARM64
 * :hpx-pr:`6830` - Fix numa_allocator test failure on macOS
-* :hpx-pr:`6829` - Fix deadlock in for_each_on_main_thread regression test
-* :hpx-pr:`6828` - Distribute chunk calculation for hpx::merge using memoizing iterators
-* :hpx-pr:`6827` - Implement and integrate sized range concepts for parallel container algorithms
 * :hpx-pr:`6826` - Apply partitioner optimizations to all code paths
 * :hpx-pr:`6825` - Cleaning up C++ module configuration
 * :hpx-pr:`6824` - Use constexpr and hpx::wait_each in future_reduce test
 * :hpx-pr:`6823` - More work on exposing C++ modules
-* :hpx-pr:`6822` - Use constexpr and hpx::wait_each in future_reduce test
 * :hpx-pr:`6821` - Switch to executing a parallel algorithm to synchronous execution
 * :hpx-pr:`6820` - Fix expected failure in contract tests
 * :hpx-pr:`6818` - Adapt last HPX modules of the HPX core library to C++ modules
 * :hpx-pr:`6817` - Adapting HPX CUDA modules to C++ modules
-* :hpx-pr:`6816` - Use ccache for Rostam CI
 * :hpx-pr:`6815` - The new LCW (or MPIx) parcelport
-* :hpx-pr:`6814` - Adapting HPX algorithm module to C++ modules
 * :hpx-pr:`6813` - Simplify find_package CMake modules
 * :hpx-pr:`6812` - Adapting HPX networking base modules to C++ modules
 * :hpx-pr:`6811` - Adapting HPX modules of levels 24, 25 and 26 to C++ modules
-* :hpx-pr:`6810` - Fix: Allow MPI auto-detection and correct CMakePresets.json
 * :hpx-pr:`6809` - Adapting HPX modules of levels 19, 20, 21, and 22 to C++ modules
 * :hpx-pr:`6808` - Bump actions/checkout from 4 to 6
 * :hpx-pr:`6807` - Adapting HPX modules of levels 16, 17, and 18 to C++ modules
@@ -1072,11 +1132,9 @@ Closed pull requests
 * :hpx-pr:`6792` - Adjust memory order constraints on reference counting
 * :hpx-pr:`6790` - Make stackless threads usable with parallel algorithms
 * :hpx-pr:`6789` - contracts module
-* :hpx-pr:`6788` - Contract test
 * :hpx-pr:`6787` - Update the LCI parcelport to LCI v2
 * :hpx-pr:`6785` - Bump github/codeql-action from 3 to 4
 * :hpx-pr:`6784` - Add executors documentation
-* :hpx-pr:`6783` - Adapting HPX Modules hash, datastructures, and memory to C++ modules
 * :hpx-pr:`6782` - Adapting module serialization
 * :hpx-pr:`6781` - Converting HPX modules to C++ modules
 * :hpx-pr:`6780` - Exposing HPX type_support module as a C++ module
@@ -1092,7 +1150,6 @@ Closed pull requests
 * :hpx-pr:`6768` - Extend inspect checks to cover .ixx module interface files
 * :hpx-pr:`6767` - Fixing dependencies for CircleCI workflow
 * :hpx-pr:`6766` - Fixing url for Inspect logo
-* :hpx-pr:`6764` - Bump actions/checkout from 4 to 5
 * :hpx-pr:`6763` - Fixing Github builders
 * :hpx-pr:`6762` - Bump actions/checkout from 4 to 5
 * :hpx-pr:`6761` - Expose version module using C++20 modules
@@ -1104,42 +1161,43 @@ Closed pull requests
 * :hpx-pr:`6755` - Adding test for version API
 * :hpx-pr:`6753` - Improve proxy references support in algorithms
 * :hpx-pr:`6751` - Disable test on sanitizer CI
-* :hpx-pr:`6750` - Fix missing instantiation of print_dec<unsigned long> in print.cpp
 * :hpx-pr:`6749` - Reducing the size of CirclCI tasks
 * :hpx-pr:`6748` - Allowing for the fork_join_executor to be used on the main thread
 * :hpx-pr:`6746` - Integrate NVIDIA's S/R Bulk implementation into HPX
 * :hpx-pr:`6744` - Integrating thrust into HPX
 * :hpx-pr:`6741` - Algorithm tests using partitioner with cleanup
-* :hpx-pr:`6739` - Fixing the chunking algorithm for parallel loops to more evenly distribute the workload
 * :hpx-pr:`6738` - Add aclocal-1.16 symlink
 * :hpx-pr:`6737` - Allowing to invoke parallel algorithms from main thread
-* :hpx-pr:`6736` - Fix sr partitioner with cleanup
 * :hpx-pr:`6734` - Resolves the redundant use of `resolver_client` in `agas/agas_fwd.hpp`
 * :hpx-pr:`6732` - Removing support for C++17
+* :hpx-pr:`6731` - Removing deprecated Asio features
 * :hpx-pr:`6727` - Fixed the S/R version of partial_sort with unit test added
-* :hpx-pr:`6726` - run_on_all prueba - Issue #6651
 * :hpx-pr:`6725` - Adding Boost 1.88
-* :hpx-pr:`6724` - modified existing extrema algo tests
 * :hpx-pr:`6723` - Optimize `hpx::merge`
 * :hpx-pr:`6720` - Fixed the S/R version of nth_element with unit test added
-* :hpx-pr:`6712` - fixes issue 6647
-* :hpx-pr:`6711` - Use cpp20 concepts in libs
-* :hpx-pr:`6709` - Transition SR tag_invoke to member functions
-* :hpx-pr:`6708` - Assume HPX_HAVE_STDEXEC
-* :hpx-pr:`6704` - Simplify code by using NS aliases
-* :hpx-pr:`6702` - When_all_vector update
+* :hpx-pr:`6716` - Fixing some of the reported linker warnings
+* :hpx-pr:`6705` - Adding gcc/15 to jenkins
 * :hpx-pr:`6700` - Update parallel algorithms to use cpp20 concepts
-* :hpx-pr:`6694` - Updated adjacent difference to use c++20 concepts
-* :hpx-pr:`6684` - Add semantic tests for extrema algorithms with repeated values
 * :hpx-pr:`6655` - Implement parallel_scheduler in HPX
-* :hpx-pr:`6597` - Updated the image version of config.yml
 * :hpx-pr:`6515` - Adding process example
 * :hpx-pr:`6465` - Always return outermost thread id
 * :hpx-pr:`6428` - Enable testing of new scheduler in CI
-* :hpx-pr:`6376` - openshmem parcelport
-* :hpx-pr:`6318` - Adding hierarchical operation to index_queue spawning
-* :hpx-pr:`6255` - #6224, fold algorithms
-* :hpx-pr:`6145` - More various tweaks and minor optimizations
 * :hpx-pr:`6053` - Support for new performance tool suite : LIKWID
-* :hpx-pr:`5984` - Reimplement distributed::barrier on top of existing collectives infrastructure
-* :hpx-pr:`5843` - Remove staged threads, immediately create thread objects
+
+Additional incorporated pull requests
+=====================================
+
+These PRs were merged into development branches. Their GitHub merge commits
+are not ancestors of either comparison revision, but their changes were
+incorporated into this release through other commits:
+
+* :hpx-pr:`6702` - When_all_vector update. The patch in
+  ``13cfb156ca91ae2b5bb5a4e21a7ca040f685291d`` has the same stable Git patch ID
+  as release commit ``167f1c76b42fa750c67eceacc39bc25188183d8b``.
+* :hpx-pr:`7351` - Background-thread unit tests. Release commit
+  ``08dec69a7871499a1e866324421319be695be492`` re-added the tests from this PR,
+  adapting them to the updated background-thread API.
+
+.. PR #6704 is excluded: its merge commit is outside the comparison history,
+   and neither its patch ID nor the namespace-alias additions in as_sender.hpp
+   were found in that history. Milestone closure alone is not provenance.
