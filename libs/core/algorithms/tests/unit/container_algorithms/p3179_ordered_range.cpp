@@ -53,7 +53,7 @@ namespace {
             }
             std::ranges::sort(a, {}, &record::key);
             std::ranges::sort(b, {}, &record::key);
-            std::vector<record> expected(2 * size);
+            std::vector<record> expected(a.size() + b.size());
             std::ranges::merge(
                 a, b, expected.begin(), {}, &record::key, &record::key);
             for (int capacity = 0; capacity <= 2 * size; ++capacity)
