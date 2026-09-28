@@ -58,7 +58,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename T>
     HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(T& value) noexcept
     {
-        return value;
+        return std::as_const(value);
     }
 
     HPX_CXX_CORE_EXPORT template <typename T>

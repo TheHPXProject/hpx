@@ -32,6 +32,14 @@ namespace {
     static_assert(!can_unwrap<stored_value> && !can_unwrap<stored_value const>);
     static_assert(
         std::same_as<decltype(hpx::parallel::detail::unwrap_algorithm_value(
+                         std::declval<int&>())),
+            int const&>);
+    static_assert(
+        std::same_as<decltype(hpx::parallel::detail::unwrap_algorithm_value(
+                         std::declval<int const&>())),
+            int const&>);
+    static_assert(
+        std::same_as<decltype(hpx::parallel::detail::unwrap_algorithm_value(
                          std::declval<stored_value&>())),
             int const&>);
 
@@ -410,7 +418,7 @@ namespace {
         auto gate = release.get_future().share();
         auto project = [gate](std::string const& s) -> std::string const& {
             gate.get();
-            return s;
+            return std::as_const(s);
         };
         auto result = hpx::ranges::find(policy, input,
             std::string("a long temporary search value"), project);
