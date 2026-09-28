@@ -172,8 +172,9 @@ public:
 ///////////////////////////////////////////////////////////////////////////////
 struct set_42
 {
+    // Accept both ordinary references and proxies returned by value.
     template <typename T>
-    void operator()(T& val)
+    void operator()(T&& val)
     {
         val = 42;
     }
