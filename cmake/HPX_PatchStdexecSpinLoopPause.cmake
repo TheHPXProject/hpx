@@ -27,13 +27,13 @@ string(
           "${_stdexec_spin_loop_pause_contents}"
 )
 
-if(_stdexec_spin_loop_pause_contents STREQUAL _stdexec_spin_loop_pause_original)
-  message(
-    WARNING
-      "Failed to patch ${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}: expected pattern not found"
+# Current stdexec versions already use the corrected declaration. Keep the
+# replacement for compatibility with older revisions and only write the file
+# when it is needed.
+if(NOT _stdexec_spin_loop_pause_contents STREQUAL
+   _stdexec_spin_loop_pause_original
+)
+  file(WRITE "${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
+       "${_stdexec_spin_loop_pause_contents}"
   )
 endif()
-
-file(WRITE "${HPX_STDEXEC_SPIN_LOOP_PAUSE_FILE}"
-     "${_stdexec_spin_loop_pause_contents}"
-)
