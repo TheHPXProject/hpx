@@ -331,19 +331,6 @@ namespace hpx::execution::experimental {
     inline constexpr bool sender_invokes_algorithm_v =
         stdexec::__sender_for<Sender, AlgorithmTag>;
 
-    namespace stdexec_non_standard_tag_invoke {
-
-        // Presently, the stdexec repository implements tag invoke,
-        // however it includes a non-standard (in the sense of unexpected) extension.
-        // tag invoke first checks for the existence of a .query member function or
-        // a ::query static function.
-        HPX_CXX_CORE_EXPORT using stdexec::tag_invoke;
-        HPX_CXX_CORE_EXPORT using stdexec::tag_invoke_result;
-
-        HPX_CXX_CORE_EXPORT using stdexec::nothrow_tag_invocable;
-        HPX_CXX_CORE_EXPORT using stdexec::tag_invocable;
-    }    // namespace stdexec_non_standard_tag_invoke
-
     namespace stdexec_internal {
 
         HPX_CXX_CORE_EXPORT using stdexec::__single_sender_value_t;
