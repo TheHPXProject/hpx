@@ -16,6 +16,7 @@
 #if !defined(HPX_WINDOWS)
 #include <hpx/components/process/util/child.hpp>
 
+#include <cerrno>
 #include <cstdlib>
 
 #include <sys/types.h>
@@ -92,7 +93,10 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class Arg>
             void operator()(Arg& arg) const
             {
-                arg.on_exec_setup(e_);
+                if (e_.exec_error == 0)
+                {
+                    arg.on_exec_setup(e_);
+                }
             }
         };
 
@@ -108,6 +112,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class Arg>
             void operator()(Arg& arg) const
             {
+                errno = e_.exec_error;
                 arg.on_exec_error(e_);
             }
         };
@@ -124,8 +129,13 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
             else if (pid == 0)
             {
+                exec_error = 0;
                 (call_on_exec_setup(*this)(ts), ...);
-                ::execve(exe, cmd_line, env);
+                if (exec_error == 0)
+                {
+                    ::execve(exe, cmd_line, env);
+                    exec_error = errno;
+                }
                 (call_on_exec_error(*this)(ts), ...);
 
                 _exit(EXIT_FAILURE);
@@ -139,6 +149,8 @@ namespace hpx { namespace components { namespace process { namespace posix {
         char const* exe;
         char** cmd_line;
         char** env;
+        // Preserve child setup errors until the error initializers report them.
+        int exec_error = 0;
     };
 
 }}}}    // namespace hpx::components::process::posix

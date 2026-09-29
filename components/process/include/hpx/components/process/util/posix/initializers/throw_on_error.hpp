@@ -19,11 +19,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <string.h>
 #include <unistd.h>
 
-#include <cstddef>
 #include <string>
+#include <system_error>
 
 namespace hpx { namespace components { namespace process { namespace posix {
 
@@ -33,10 +32,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
         {
             static std::string extract_error_string(int code)
             {
-                constexpr std::size_t const buffer_len = 256;
-                char buffer[buffer_len + 1];
-                strerror_r(code, buffer, buffer_len);
-                return buffer;
+                return std::generic_category().message(code);
             }
 
         public:
@@ -82,7 +78,8 @@ namespace hpx { namespace components { namespace process { namespace posix {
 
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_success",
-                        "execve(2) failed: {}", extract_error_string(code));
+                        "process setup or execve(2) failed: {}",
+                        extract_error_string(code));
                 }
                 ::close(fds_[0]);
             }

@@ -16,6 +16,7 @@
 #include <hpx/components/process/util/posix/initializers/initializer_base.hpp>
 #include <hpx/modules/serialization.hpp>
 
+#include <cerrno>
 #include <string>
 #include <unistd.h>
 
@@ -34,9 +35,12 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
 
             template <class PosixExecutor>
-            void on_exec_setup(PosixExecutor&) const
+            void on_exec_setup(PosixExecutor& e) const
             {
-                ::chdir(s_.c_str());
+                if (::chdir(s_.c_str()) == -1)
+                {
+                    e.exec_error = errno;
+                }
             }
 
         private:
