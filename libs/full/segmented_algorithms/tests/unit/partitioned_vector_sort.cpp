@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <exception>
 #include <functional>
+#include <map>
 #include <memory>
 #include <new>
 #include <numeric>
@@ -498,6 +499,23 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
     HPX_TEST(detail::segmented_sort_host(runs, {}) == b);
     HPX_TEST_EQ(detail::segmented_sort_block_capacity(runs),
         a == b ? detail::segmented_sort_max_block_size : (data.size() + 1) / 2);
+
+    if (a != b)
+    {
+        detail::segmented_sort_block<iterator> left{
+            {a, a, data.begin(), data.begin() + unit}};
+        detail::segmented_sort_block<iterator> right{
+            {b, b, data.begin() + unit, data.begin() + 2 * unit}};
+        std::map<hpx::id_type, std::size_t> assignments;
+        for (std::size_t i = 0; i != 8; ++i)
+        {
+            auto const host =
+                detail::segmented_sort_host(left, right, assignments);
+            ++assignments[host];
+        }
+        HPX_TEST_EQ(assignments[a], std::size_t(4));
+        HPX_TEST_EQ(assignments[b], std::size_t(4));
+    }
 
     if (a != b)
     {
