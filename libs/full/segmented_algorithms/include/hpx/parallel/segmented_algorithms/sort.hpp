@@ -248,10 +248,12 @@ namespace hpx::parallel::detail {
 
     // Choose the locality holding the most input for this operation, summing
     // all participating pieces rather than selecting a single partition.
+    // Balance equally good hosts across the current stage.
     template <typename LocalIter>
     hpx::id_type segmented_sort_host(
         segmented_sort_block<LocalIter> const& left,
-        segmented_sort_block<LocalIter> const& right)
+        segmented_sort_block<LocalIter> const& right,
+        std::map<hpx::id_type, std::size_t> const& assignments)
     {
         std::map<hpx::id_type, std::size_t> sizes;
         for (auto const& run : left)
@@ -262,9 +264,30 @@ namespace hpx::parallel::detail {
         {
             sizes[run.locality] += static_cast<std::size_t>(run.size());
         }
-        auto const host = std::max_element(sizes.begin(), sizes.end(),
-            [](auto const& a, auto const& b) { return a.second < b.second; });
+        auto assigned = [&](hpx::id_type const& locality) {
+            auto const it = assignments.find(locality);
+            return it == assignments.end() ? std::size_t(0) : it->second;
+        };
+        auto host = sizes.begin();
+        for (auto it = std::next(host); it != sizes.end(); ++it)
+        {
+            if (it->second > host->second ||
+                (it->second == host->second &&
+                    assigned(it->first) < assigned(host->first)))
+            {
+                host = it;
+            }
+        }
         return host->first;
+    }
+
+    template <typename LocalIter>
+    hpx::id_type segmented_sort_host(
+        segmented_sort_block<LocalIter> const& left,
+        segmented_sort_block<LocalIter> const& right)
+    {
+        return segmented_sort_host(
+            left, right, std::map<hpx::id_type, std::size_t>{});
     }
 
     template <typename LocalIter>
@@ -557,6 +580,29 @@ namespace hpx::parallel::detail {
 
     using segmented_sort_pair = std::pair<std::size_t, std::size_t>;
 
+    struct segmented_sort_worker_count
+      : algorithm<segmented_sort_worker_count, std::size_t>
+    {
+        constexpr segmented_sort_worker_count() noexcept
+          : algorithm<segmented_sort_worker_count, std::size_t>(
+                "segmented_sort_worker_count")
+        {
+        }
+
+        template <typename ExPolicy>
+        static std::size_t sequential(ExPolicy const&)
+        {
+            return (std::max) (std::size_t(1),
+                static_cast<std::size_t>(hpx::get_os_thread_count()));
+        }
+
+        template <typename ExPolicy>
+        static std::size_t parallel(ExPolicy const& policy)
+        {
+            return sequential(policy);
+        }
+    };
+
     // Batcher odd-even merge stages. With K blocks, O(log^2 K) stages trade
     // additional communication rounds for bounded merge buffers. All
     // comparisons are ascending, so a short final block and absent blocks
@@ -626,31 +672,73 @@ namespace hpx::parallel::detail {
         else
         {
             std::map<hpx::id_type, std::vector<segmented_sort_pair>> jobs;
+            std::map<hpx::id_type, std::size_t> assignments;
             for (auto pair : pairs)
             {
-                auto host =
-                    segmented_sort_host(blocks[pair.first], right_block(pair));
+                auto host = segmented_sort_host(
+                    blocks[pair.first], right_block(pair), assignments);
                 jobs[host].push_back(pair);
+                ++assignments[host];
+            }
+
+            std::map<hpx::id_type, std::size_t> worker_counts;
+            bool const initial_stage = std::all_of(pairs.begin(), pairs.end(),
+                [](auto pair) { return pair.first == pair.second; });
+            if (initial_stage)
+            {
+                std::vector<hpx::id_type> remote_hosts;
+                std::vector<hpx::future<std::size_t>> pending;
+                std::exception_ptr error;
+                try
+                {
+                    for (auto const& job : jobs)
+                    {
+                        auto const& host = job.first;
+                        if (host == here)
+                        {
+                            worker_counts[host] =
+                                segmented_sort_worker_count::sequential(policy);
+                        }
+                        else
+                        {
+                            remote_hosts.push_back(host);
+                            pending.push_back(dispatch_async(host,
+                                segmented_sort_worker_count(), policy,
+                                std::true_type()));
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    error = std::current_exception();
+                }
+                segmented_sort_wait<ExPolicy>(pending, error);
+                for (std::size_t i = 0; i != pending.size(); ++i)
+                {
+                    worker_counts[remote_hosts[i]] = pending[i].get();
+                }
             }
 
             // Initial sorts can share a locality: buffered sorts charge two
             // blocks each, and in-place sorts need no value buffers. Bound
             // scratch storage by the same four-block budget as one merge.
-            // Merge stages still run at most one compare/split per locality.
-            auto const workers = (std::max) (std::size_t(1),
-                static_cast<std::size_t>(hpx::get_os_thread_count()));
+            // Destination schedulers control worker use. Merge stages still
+            // run at most one compare/split per locality.
             for (;;)
             {
                 std::vector<hpx::future<bool>> pending;
-                pending.reserve(jobs.size() * workers);
+                pending.reserve(pairs.size());
                 std::exception_ptr error;
                 try
                 {
                     for (auto& [host, queue] : jobs)
                     {
                         std::size_t used = 0;
+                        auto const workers = initial_stage ?
+                            worker_counts[host] :
+                            std::size_t(1);
                         for (std::size_t active = 0;
-                            active < workers && !queue.empty(); ++active)
+                            active != workers && !queue.empty(); ++active)
                         {
                             auto const pair = queue.back();
                             auto const& left = blocks[pair.first];
