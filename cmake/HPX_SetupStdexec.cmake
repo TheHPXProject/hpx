@@ -41,9 +41,6 @@ if(HPX_WITH_FETCH_STDEXEC)
     GIT_TAG ${HPX_WITH_STDEXEC_TAG}
     SOURCE_SUBDIR _hpx_skip_stdexec_cmakelists
     PATCH_COMMAND
-      ${CMAKE_COMMAND}
-      "-DHPX_STDEXEC_SPIN_LOOP_PAUSE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__spin_loop_pause.hpp"
-      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecSpinLoopPause.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
       "-DHPX_STDEXEC_NVCC_PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccWorkarounds.patch"
       "-DHPX_STDEXEC_NVCC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}"
