@@ -112,7 +112,6 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class Arg>
             void operator()(Arg& arg) const
             {
-                errno = e_.exec_error;
                 arg.on_exec_error(e_);
             }
         };
@@ -141,6 +140,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 _exit(EXIT_FAILURE);
             }
 
+            child_pid = pid;
             (call_on_fork_success(*this)(ts), ...);
 
             return child(pid);
@@ -151,6 +151,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
         char** env;
         // Preserve child setup errors until the error initializers report them.
         int exec_error = 0;
+        pid_t child_pid = -1;
     };
 
 }}}}    // namespace hpx::components::process::posix

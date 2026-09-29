@@ -19,6 +19,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <string>
@@ -68,13 +69,18 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
 
             template <class PosixExecutor>
-            void on_fork_success(PosixExecutor&) const
+            void on_fork_success(PosixExecutor& e) const
             {
                 ::close(fds_[1]);
                 int code;
                 if (::read(fds_[0], &code, sizeof(int)) > 0)
                 {
                     ::close(fds_[0]);
+
+                    while (::waitpid(e.child_pid, nullptr, 0) == -1 &&
+                        errno == EINTR)
+                    {
+                    }
 
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_success",
@@ -91,11 +97,11 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
 
             template <class PosixExecutor>
-            void on_exec_error(PosixExecutor&) const
+            void on_exec_error(PosixExecutor& e) const
             {
-                int e = errno;
-                while (
-                    ::write(fds_[1], &e, sizeof(int)) == -1 && errno == EINTR)
+                int const code = e.exec_error;
+                while (::write(fds_[1], &code, sizeof(int)) == -1 &&
+                    errno == EINTR)
                     ;
                 ::close(fds_[1]);
             }

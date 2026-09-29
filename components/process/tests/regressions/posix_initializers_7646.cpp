@@ -42,6 +42,21 @@ namespace {
         }
     }
 
+    void check_no_children()
+    {
+        int status = 0;
+        errno = 0;
+        pid_t const pid = ::waitpid(-1, &status, WNOHANG);
+        HPX_TEST_EQ(pid, -1);
+        HPX_TEST_EQ(errno, ECHILD);
+
+        // Avoid leaving a child behind if this regression is reintroduced.
+        if (pid == 0)
+        {
+            reap_child(EXIT_FAILURE);
+        }
+    }
+
     template <typename... Initializers>
     void test_error(int code, bool handler_first, Initializers const&... init)
     {
@@ -65,9 +80,7 @@ namespace {
                          code)) != std::string::npos);
         }
         HPX_TEST(caught);
-        // This standalone test launches one child at a time without an HPX
-        // runtime. Reap it even when execute throws before returning its handle.
-        reap_child(EXIT_FAILURE);
+        check_no_children();
     }
 }    // namespace
 
