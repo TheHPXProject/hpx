@@ -202,9 +202,9 @@ namespace hpx::parallel::detail {
         return runs;
     }
 
-    // Logical blocks have equal sizes except for the final block. They may
-    // span physical partitions, including clipped subrange endpoints.
-    inline constexpr std::size_t segmented_sort_max_block_size = 65536;
+    // Bound the payload of each remote transfer independently of the physical
+    // partition size. Physical partitions remain the sorting units.
+    inline constexpr std::size_t segmented_sort_transfer_chunk_size = 65536;
 
     template <typename LocalIter>
     using segmented_sort_block = std::vector<segmented_sort_run<LocalIter>>;
@@ -221,28 +221,24 @@ namespace hpx::parallel::detail {
         return size;
     }
 
-    // Multiple physical partitions on one locality should not increase the
-    // network depth. The cap bounds buffers when N / localities is large.
+    // Use the largest participating physical partition as the sorting unit.
+    // This keeps the number of network blocks no larger than the partition
+    // count while preserving equal capacities except for the final block.
     template <typename LocalIter>
     std::size_t segmented_sort_block_capacity(
         segmented_sort_block<LocalIter> const& runs)
     {
-        auto const total = segmented_sort_block_size(runs);
-        // A single bounded block avoids network stages for small ranges.
-        if (total <= segmented_sort_max_block_size)
-        {
-            return total;
-        }
-        std::set<hpx::id_type> localities;
+        std::size_t capacity = 0;
         for (auto const& run : runs)
         {
-            localities.insert(run.locality);
+            capacity =
+                (std::max) (capacity, static_cast<std::size_t>(run.size()));
         }
-        auto const count = localities.size();
-        return (std::min) (segmented_sort_max_block_size,
-            total / count + (total % count != 0));
+        return capacity;
     }
 
+    // Split blocks for production sorting, transfer chunks, and focused
+    // network tests.
     template <typename LocalIter>
     auto segmented_sort_blocks(
         segmented_sort_block<LocalIter> const& runs, std::size_t block_size)
@@ -268,6 +264,27 @@ namespace hpx::parallel::detail {
             }
         }
         return blocks;
+    }
+
+    template <typename LocalIter>
+    auto segmented_sort_transfer_chunks(
+        segmented_sort_block<LocalIter> const& block)
+    {
+        std::vector<segmented_sort_block<LocalIter>> chunks;
+        for (auto const& run : block)
+        {
+            auto first = run.first;
+            while (first != run.last)
+            {
+                auto const count =
+                    (std::min) (segmented_sort_transfer_chunk_size,
+                        static_cast<std::size_t>(run.last - first));
+                auto last = first + static_cast<std::ptrdiff_t>(count);
+                chunks.push_back({{run.id, run.locality, first, last}});
+                first = last;
+            }
+        }
+        return chunks;
     }
 
     // Choose the locality holding the most input for this operation, summing
@@ -401,11 +418,12 @@ namespace hpx::parallel::detail {
         }
         std::vector<value_type> values;
         values.reserve(segmented_sort_block_size(block));
+        auto chunks = segmented_sort_transfer_chunks(block);
         constexpr auto limit = hpx::is_sequenced_execution_policy_v<ExPolicy> ?
             1 :
             segmented_sort_transfer_limit;
-        auto it = block.begin();
-        while (it != block.end())
+        auto it = chunks.begin();
+        while (it != chunks.end())
         {
             std::vector<hpx::future<std::vector<value_type>>> pending;
             pending.reserve(limit);
@@ -415,14 +433,11 @@ namespace hpx::parallel::detail {
             std::exception_ptr error;
             try
             {
-                for (std::size_t i = 0; i < limit && it != block.end(); ++i)
+                for (std::size_t i = 0; i < limit && it != chunks.end(); ++i)
                 {
-                    auto end =
-                        std::find_if(it, block.end(), [&](auto const& run) {
-                            return run.locality != it->locality;
-                        });
-                    segmented_sort_block<LocalIter> pieces(it, end);
-                    if (it->locality == here)
+                    auto pieces = *it;
+                    auto const host = pieces.front().locality;
+                    if (host == here)
                     {
                         pending.push_back(hpx::make_ready_future(
                             segmented_fetch_values<LocalIter>::sequential(
@@ -430,12 +445,12 @@ namespace hpx::parallel::detail {
                     }
                     else
                     {
-                        pending.push_back(dispatch_async(it->locality,
+                        pending.push_back(dispatch_async(host,
                             segmented_fetch_values<LocalIter>(), policy,
                             std::true_type(), HPX_MOVE(pieces)));
                     }
                     indices.push_back(indices.size());
-                    it = end;
+                    ++it;
                 }
             }
             catch (...)
@@ -522,28 +537,26 @@ namespace hpx::parallel::detail {
     {
         using value_type = std::iterator_traits<LocalIter>::value_type;
         auto const here = hpx::find_here();
+        auto chunks = segmented_sort_transfer_chunks(block);
         constexpr auto limit = hpx::is_sequenced_execution_policy_v<ExPolicy> ?
             1 :
             segmented_sort_transfer_limit;
-        auto it = block.begin();
-        while (it != block.end())
+        auto it = chunks.begin();
+        while (it != chunks.end())
         {
             std::vector<hpx::future<bool>> pending;
             pending.reserve(limit);
             std::exception_ptr error;
             try
             {
-                for (std::size_t i = 0; i < limit && it != block.end(); ++i)
+                for (std::size_t i = 0; i < limit && it != chunks.end(); ++i)
                 {
-                    auto end =
-                        std::find_if(it, block.end(), [&](auto const& run) {
-                            return run.locality != it->locality;
-                        });
-                    segmented_sort_block<LocalIter> pieces(it, end);
+                    auto pieces = *it;
+                    auto const host = pieces.front().locality;
                     auto last = first +
                         static_cast<std::ptrdiff_t>(
                             segmented_sort_block_size(pieces));
-                    if (it->locality == here)
+                    if (host == here)
                     {
                         using traits =
                             hpx::traits::segmented_local_iterator_traits<
@@ -562,13 +575,13 @@ namespace hpx::parallel::detail {
                         std::vector<value_type> values(
                             std::make_move_iterator(first),
                             std::make_move_iterator(last));
-                        pending.push_back(dispatch_async(it->locality,
+                        pending.push_back(dispatch_async(host,
                             segmented_store_values<LocalIter>(), policy,
                             std::true_type(), HPX_MOVE(pieces),
                             HPX_MOVE(values)));
                     }
                     first = last;
-                    it = end;
+                    ++it;
                 }
             }
             catch (...)
@@ -883,66 +896,123 @@ namespace hpx::parallel::detail {
                 ++assignments[host];
             }
 
-            // Initial sorts can share a locality: buffered sorts charge two
-            // blocks each, and in-place sorts need no value buffers. Bound
-            // scratch storage to four blocks per worker. Independent merge
-            // pairs can use all destination workers within that same bound.
-            for (;;)
+            std::vector<hpx::future<bool>> pending;
+            std::vector<hpx::id_type> pending_hosts;
+            std::vector<std::size_t> pending_costs;
+            pending.reserve(pairs.size());
+            pending_hosts.reserve(pairs.size());
+            pending_costs.reserve(pairs.size());
+            std::map<hpx::id_type, std::size_t> active;
+            std::map<hpx::id_type, std::size_t> scratch_used;
+
+            auto operation_cost = [&](segmented_sort_pair pair) {
+                auto const& left = blocks[pair.first];
+                auto const& right = right_block(pair);
+                if (right.empty())
+                {
+                    return left.size() == 1 ?
+                        std::size_t(0) :
+                        2 * segmented_sort_block_size(left);
+                }
+                return 2 *
+                    (segmented_sort_block_size(left) +
+                        segmented_sort_block_size(right));
+            };
+
+            auto launch_available = [&](hpx::id_type const& host) {
+                auto& queue = jobs.at(host);
+                auto const workers = worker_counts.at(host);
+                auto const scratch_budget =
+                    workers * 4 * segmented_sort_transfer_chunk_size;
+                while (active[host] != workers && !queue.empty())
+                {
+                    auto const pair = queue.back();
+                    auto const cost = operation_cost(pair);
+                    // Always admit one oversized operation so progress does
+                    // not depend on the physical partition size.
+                    if (active[host] != 0 &&
+                        scratch_used[host] + cost > scratch_budget)
+                    {
+                        break;
+                    }
+                    queue.pop_back();
+                    auto const& left = blocks[pair.first];
+                    auto const& right = right_block(pair);
+                    if (host == here)
+                    {
+                        pending.push_back(hpx::async(
+                            [policy, left, right, comp, proj, is_seq]() {
+                                return operation().call2(
+                                    policy, is_seq, left, right, comp, proj);
+                            }));
+                    }
+                    else
+                    {
+                        pending.push_back(dispatch_async(host, operation(),
+                            policy, is_seq, left, right, comp, proj));
+                    }
+                    pending_hosts.push_back(host);
+                    pending_costs.push_back(cost);
+                    ++active[host];
+                    scratch_used[host] += cost;
+                }
+            };
+
+            std::exception_ptr error;
+            try
             {
-                std::vector<hpx::future<bool>> pending;
-                pending.reserve(pairs.size());
-                std::exception_ptr error;
+                for (auto const& job : jobs)
+                {
+                    launch_available(job.first);
+                }
+            }
+            catch (...)
+            {
+                error = std::current_exception();
+            }
+            if (error)
+            {
+                segmented_sort_wait<ExPolicy>(pending, error);
+            }
+
+            // Keep each host's worker window full as soon as one operation
+            // completes. Slow operations no longer impose round barriers on
+            // unrelated work.
+            while (!pending.empty())
+            {
+                if (hpx::wait_any_nothrow(pending))
+                {
+                    segmented_sort_wait<ExPolicy>(pending);
+                }
+                std::set<hpx::id_type> completed_hosts;
+                for (std::size_t i = pending.size(); i-- != 0;)
+                {
+                    if (pending[i].is_ready())
+                    {
+                        pending[i].get();
+                        auto const host = pending_hosts[i];
+                        --active[host];
+                        scratch_used[host] -= pending_costs[i];
+                        completed_hosts.insert(host);
+                        pending.erase(
+                            pending.begin() + static_cast<std::ptrdiff_t>(i));
+                        pending_hosts.erase(pending_hosts.begin() +
+                            static_cast<std::ptrdiff_t>(i));
+                        pending_costs.erase(pending_costs.begin() +
+                            static_cast<std::ptrdiff_t>(i));
+                    }
+                }
                 try
                 {
-                    for (auto& [host, queue] : jobs)
+                    for (auto const& host : completed_hosts)
                     {
-                        std::size_t used = 0;
-                        auto const workers = worker_counts.at(host);
-                        auto const memory_budget =
-                            workers * 4 * segmented_sort_max_block_size;
-                        for (std::size_t active = 0;
-                            active != workers && !queue.empty(); ++active)
-                        {
-                            auto const pair = queue.back();
-                            auto const& left = blocks[pair.first];
-                            auto const& right = right_block(pair);
-                            auto const cost = right.empty() ?
-                                (left.size() == 1 ?
-                                        0 :
-                                        2 * segmented_sort_block_size(left)) :
-                                4 * segmented_sort_max_block_size;
-                            if (used + cost > memory_budget)
-                            {
-                                break;
-                            }
-                            used += cost;
-                            queue.pop_back();
-                            if (host == here)
-                            {
-                                pending.push_back(
-                                    hpx::async([policy, left, right, comp, proj,
-                                                   is_seq]() {
-                                        return operation().call2(policy, is_seq,
-                                            left, right, comp, proj);
-                                    }));
-                            }
-                            else
-                            {
-                                pending.push_back(
-                                    dispatch_async(host, operation(), policy,
-                                        is_seq, left, right, comp, proj));
-                            }
-                        }
+                        launch_available(host);
                     }
                 }
                 catch (...)
                 {
-                    error = std::current_exception();
-                }
-                segmented_sort_wait<ExPolicy>(pending, error);
-                if (pending.empty())
-                {
-                    break;
+                    segmented_sort_wait<ExPolicy>(
+                        pending, std::current_exception());
                 }
             }
         }
@@ -967,8 +1037,8 @@ namespace hpx::parallel::detail {
                 policy, blocks, {{0, 0}}, worker_counts, comp, proj, is_seq);
             return;
         }
-        auto const block_size = segmented_sort_block_capacity(runs);
-        auto blocks = segmented_sort_blocks(runs, block_size);
+        auto blocks =
+            segmented_sort_blocks(runs, segmented_sort_block_capacity(runs));
         std::map<hpx::id_type, std::size_t> worker_counts;
         if constexpr (!IsSeq::value)
         {
