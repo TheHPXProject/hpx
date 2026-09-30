@@ -94,7 +94,7 @@ HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT ___itt_id* itt_make_id(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_create(
     ___itt_domain const*, ___itt_id const* id) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_destroy(
-    ___itt_id const* id) noexcept;
+    ___itt_domain const*, ___itt_id const* id) noexcept;
 
 HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT __itt_heap_function
 itt_heap_function_create(char const*, char const*) noexcept;
@@ -226,7 +226,8 @@ namespace hpx::util::itt {
 
         id(id const& rhs) = delete;
         id(id&& rhs) noexcept
-          : id_(rhs.id_)
+          : domain_(rhs.domain_)
+          , id_(rhs.id_)
         {
             rhs.id_ = nullptr;
         }
@@ -236,12 +237,14 @@ namespace hpx::util::itt {
         {
             if (this != &rhs)
             {
+                domain_ = rhs.domain_;
                 id_ = rhs.id_;
                 rhs.id_ = nullptr;
             }
             return *this;
         }
 
+        ___itt_domain const* domain_ = nullptr;
         ___itt_id* id_ = nullptr;
     };
 
@@ -653,7 +656,10 @@ HPX_CXX_CORE_EXPORT constexpr void itt_id_create(
     ___itt_domain const*, ___itt_id*) noexcept
 {
 }
-HPX_CXX_CORE_EXPORT constexpr void itt_id_destroy(___itt_id*) noexcept {}
+HPX_CXX_CORE_EXPORT constexpr void itt_id_destroy(
+    ___itt_domain const*, ___itt_id*) noexcept
+{
+}
 
 HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr __itt_heap_function
 itt_heap_function_create(char const*, char const*) noexcept

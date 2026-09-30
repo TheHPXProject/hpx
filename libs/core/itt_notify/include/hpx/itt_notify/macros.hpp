@@ -59,7 +59,7 @@
 
 #define HPX_ITT_MAKE_ID(addr, extra) itt_make_id(addr, extra)
 #define HPX_ITT_ID_CREATE(domain, id) itt_id_create(domain, id)
-#define HPX_ITT_ID_DESTROY(id) itt_id_destroy(id)
+#define HPX_ITT_ID_DESTROY(domain, id) itt_id_destroy(domain, id)
 
 #define HPX_ITT_HEAP_FUNCTION_CREATE(name, domain)                             \
     itt_heap_function_create(name, domain) /**/
