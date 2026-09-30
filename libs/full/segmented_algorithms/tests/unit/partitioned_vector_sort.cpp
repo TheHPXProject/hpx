@@ -336,6 +336,21 @@ void test_sort_subranges(
 void test_merge_network()
 {
     namespace detail = hpx::parallel::detail;
+
+    std::size_t stage_count = 0;
+    bool has_descending_pair = false;
+    detail::segmented_sort_merge_stages(16, [&](auto const& pairs) {
+        ++stage_count;
+        HPX_TEST_EQ(pairs.size(), std::size_t(8));
+        for (auto const& pair : pairs)
+        {
+            has_descending_pair =
+                has_descending_pair || pair.first > pair.second;
+        }
+    });
+    HPX_TEST_EQ(stage_count, std::size_t(10));
+    HPX_TEST(has_descending_pair);
+
     for (std::size_t count = 2; count <= 7; ++count)
     {
         for (std::size_t tail : {1, 2, 3})
@@ -718,10 +733,78 @@ void test_initial_sort_concurrency()
     auto runs = detail::segmented_sort_runs(values.begin(), values.end());
     auto blocks = detail::segmented_sort_blocks(runs, size);
     initial_sort_probe::state = std::make_shared<initial_sort_probe_state>();
+    auto worker_counts =
+        detail::segmented_sort_worker_counts(hpx::execution::par, blocks);
     detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 0}, {1, 1}},
-        initial_sort_probe{}, hpx::identity_v, std::false_type{});
+        worker_counts, initial_sort_probe{}, hpx::identity_v,
+        std::false_type{});
     HPX_TEST(!initial_sort_probe::state->timed_out.load());
     initial_sort_probe::state.reset();
+    auto got = copy_values(values);
+    HPX_TEST(std::is_sorted(got.begin(), got.end()));
+}
+
+struct merge_stage_probe_state
+{
+    std::array<std::atomic<bool>, 2> entered{};
+    std::atomic<std::size_t> started{0};
+    hpx::promise<void> both_started;
+    hpx::shared_future<void> ready = both_started.get_future();
+    std::atomic<bool> timed_out{false};
+};
+
+struct merge_stage_probe
+{
+    inline static std::shared_ptr<merge_stage_probe_state> state;
+    static constexpr std::size_t block_size = 2048;
+    static constexpr int group_stride = 4 * static_cast<int>(block_size);
+
+    bool operator()(int a, int b) const
+    {
+        auto const group =
+            static_cast<std::size_t>((std::min) (a, b) / group_stride);
+        if (!state->entered[group].exchange(true))
+        {
+            if (++state->started == 2)
+            {
+                state->both_started.set_value();
+            }
+            if (state->ready.wait_for(std::chrono::seconds(5)) !=
+                hpx::future_status::ready)
+            {
+                state->timed_out = true;
+            }
+        }
+        return a < b;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+void test_merge_stage_concurrency()
+{
+    namespace detail = hpx::parallel::detail;
+    constexpr auto size = merge_stage_probe::block_size;
+    hpx::partitioned_vector<int> values(4 * size, 0,
+        hpx::container_layout(4, std::vector<hpx::id_type>{hpx::find_here()}));
+    initialize_values(values, [](std::size_t i) {
+        auto const block = i / size;
+        auto const offset = i % size;
+        return static_cast<int>(block / 2) * merge_stage_probe::group_stride +
+            static_cast<int>(2 * offset + block % 2);
+    });
+    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
+    auto blocks = detail::segmented_sort_blocks(runs, size);
+    auto worker_counts =
+        detail::segmented_sort_worker_counts(hpx::execution::par, blocks);
+    merge_stage_probe::state = std::make_shared<merge_stage_probe_state>();
+    detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 1}, {2, 3}},
+        worker_counts, merge_stage_probe{}, hpx::identity_v, std::false_type{});
+    HPX_TEST(!merge_stage_probe::state->timed_out.load());
+    merge_stage_probe::state.reset();
     auto got = copy_values(values);
     HPX_TEST(std::is_sorted(got.begin(), got.end()));
 }
@@ -885,6 +968,7 @@ int main()
     if (hpx::get_os_thread_count() > 1)
     {
         test_initial_sort_concurrency();
+        test_merge_stage_concurrency();
     }
     test_ordered_endpoints();
     test_transfer_batches(localities);
