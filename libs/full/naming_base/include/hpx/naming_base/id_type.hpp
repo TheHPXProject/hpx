@@ -142,6 +142,15 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT inline id_type const invalid_id = id_type();
 
+    namespace lcos::detail {
+
+        // The definition of this specialization lives in the components
+        // module. Declare it here to prevent the primary template from being
+        // instantiated for id_type before the specialization is visible.
+        template <>
+        struct future_data<hpx::id_type>;
+    }    // namespace lcos::detail
+
     namespace naming {
 
         ///////////////////////////////////////////////////////////////////////////
