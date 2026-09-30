@@ -24,9 +24,6 @@
 namespace hpx::tracing {
 
     ////////////////////////////////////////////////////////////////////////////
-    // Lazy: use_ittnotify_api is flipped at runtime by
-    // runtime_configuration::pre_initialize_ittnotify_tool, so a
-    // file-scope static would cache null handles forever.
     namespace {
 
         struct itt_globals
@@ -49,8 +46,17 @@ namespace hpx::tracing {
 
         itt_globals const& get_itt_globals() noexcept
         {
-            static itt_globals g;
-            return g;
+            // While the tool is inactive, hand back a throwaway empty set so
+            // the active one is never built with null handles. The active set
+            // is constructed once, lazily, on the first call after
+            // use_ittnotify_api is flipped on, so its handles are real.
+            if (!use_ittnotify_api)
+            {
+                static itt_globals const empty;
+                return empty;
+            }
+            static itt_globals const active;
+            return active;
         }
     }    // namespace
 
