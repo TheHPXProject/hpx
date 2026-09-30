@@ -19,6 +19,8 @@
 #include <hpx/modules/tracing.hpp>
 
 #include <cstddef>
+#include <latch>
+#include <thread>
 
 int hpx_main()
 {
@@ -29,6 +31,32 @@ int hpx_main()
 
     {
         hpx::util::itt::task t(domain, task_name);
+    }
+
+    // Exercise two concurrent tasks that share one name handle under one
+    // domain. Two real OS threads with a latch keep both tasks open at once,
+    // and each task begins and ends on the same thread (no HPX yield).
+    {
+        hpx::util::itt::string_handle shared_name("smoke_concurrent");
+        std::latch both_open(2);
+        auto worker = [&]() {
+            hpx::util::itt::task t(domain, shared_name);
+            both_open.arrive_and_wait();
+        };
+        std::thread a(worker);
+        std::thread b(worker);
+        a.join();
+        b.join();
+    }
+
+    // Exercise a reused suspend region: two successive regions with the same
+    // name in the same scope, so the second reuses the stack slot the first
+    // released.
+    {
+        hpx::tracing::fiber_suspend_region first("smoke.suspend.reuse");
+    }
+    {
+        hpx::tracing::fiber_suspend_region second("smoke.suspend.reuse");
     }
 
     // Fire one call per new tracing entry point under the shared "hpx"
