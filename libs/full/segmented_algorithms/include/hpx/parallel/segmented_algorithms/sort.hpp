@@ -133,7 +133,17 @@ namespace hpx::parallel::detail {
             if (beg != end)
             {
                 auto id = traits::get_id(segment);
-                runs.emplace_back(HPX_MOVE(id), hpx::id_type{}, beg, end);
+                if constexpr (requires { traits::get_locality_id(segment); })
+                {
+                    auto locality = hpx::naming::get_id_from_locality_id(
+                        traits::get_locality_id(segment));
+                    runs.emplace_back(
+                        HPX_MOVE(id), HPX_MOVE(locality), beg, end);
+                }
+                else
+                {
+                    runs.emplace_back(HPX_MOVE(id), hpx::id_type{}, beg, end);
+                }
             }
         };
 
@@ -151,22 +161,30 @@ namespace hpx::parallel::detail {
             add_run(sit, traits::begin(sit), traits::local(last));
         }
 
-        // Resolve independent namespace entries concurrently, with a bounded
-        // number of outstanding requests. Task policies collect runs inside
-        // their asynchronous operation, including this discovery phase.
-        for (std::size_t first_run = 0; first_run < runs.size();)
+        // Segmented containers without placement metadata still use bounded,
+        // concurrent namespace lookups. Task policies collect runs inside
+        // their asynchronous operation, including this fallback phase.
+        std::vector<std::size_t> unresolved;
+        for (std::size_t i = 0; i != runs.size(); ++i)
+        {
+            if (runs[i].locality == hpx::invalid_id)
+            {
+                unresolved.push_back(i);
+            }
+        }
+        for (std::size_t first_run = 0; first_run < unresolved.size();)
         {
             std::vector<hpx::future<hpx::id_type>> pending;
             auto const count = (std::min) (segmented_sort_transfer_limit,
-                runs.size() - first_run);
+                unresolved.size() - first_run);
             pending.reserve(count);
             std::exception_ptr error;
             try
             {
                 for (std::size_t i = 0; i < count; ++i)
                 {
-                    pending.push_back(
-                        hpx::get_colocation_id(runs[first_run + i].id));
+                    pending.push_back(hpx::get_colocation_id(
+                        runs[unresolved[first_run + i]].id));
                 }
             }
             catch (...)
@@ -177,7 +195,7 @@ namespace hpx::parallel::detail {
                 pending, error);
             for (std::size_t i = 0; i < count; ++i)
             {
-                runs[first_run + i].locality = pending[i].get();
+                runs[unresolved[first_run + i]].locality = pending[i].get();
             }
             first_run += count;
         }
