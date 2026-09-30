@@ -701,7 +701,12 @@ void test_merge_exceptions(
             4 * hpx::parallel::detail::segmented_sort_transfer_chunk_size;
         hpx::partitioned_vector<int> values(
             size, 0, hpx::container_layout(4, localities));
-        initialize_values(values, [](int i) { return i; });
+        initialize_values(values, [](std::size_t i) {
+            constexpr auto band_size =
+                hpx::parallel::detail::segmented_sort_transfer_chunk_size;
+            auto const band = i / band_size;
+            return static_cast<int>((3 - band) * band_size + i % band_size);
+        });
         bool caught = false;
         try
         {
@@ -734,16 +739,13 @@ void test_merge_exceptions(
     }
 }
 
-// This comparator observes overlap between two initial block sorts. Waiting
-// on an HPX future yields the worker, and the timeout also diagnoses the old
-// serial scheduler without hanging the test.
+// This comparator observes overlap between two initial block sorts. Sleeping
+// suspends the HPX thread so another sort can enter on the same locality.
 struct initial_sort_probe_state
 {
     std::array<std::atomic<bool>, 2> entered{};
-    std::atomic<std::size_t> started{0};
-    hpx::promise<void> both_started;
-    hpx::shared_future<void> ready = both_started.get_future();
-    std::atomic<bool> timed_out{false};
+    std::atomic<std::size_t> active{0};
+    std::atomic<std::size_t> peak{0};
 };
 
 struct initial_sort_probe
@@ -757,15 +759,14 @@ struct initial_sort_probe
         auto const block = static_cast<std::size_t>(a) / block_size;
         if (!state->entered[block].exchange(true))
         {
-            if (++state->started == 2)
+            auto const current = ++state->active;
+            auto previous = state->peak.load();
+            while (previous < current &&
+                !state->peak.compare_exchange_weak(previous, current))
             {
-                state->both_started.set_value();
             }
-            if (state->ready.wait_for(std::chrono::seconds(5)) !=
-                hpx::future_status::ready)
-            {
-                state->timed_out = true;
-            }
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+            --state->active;
         }
         return a < b;
     }
@@ -795,7 +796,7 @@ void test_initial_sort_concurrency()
     detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 0}, {1, 1}},
         worker_counts, initial_sort_probe{}, hpx::identity_v,
         std::false_type{});
-    HPX_TEST(!initial_sort_probe::state->timed_out.load());
+    HPX_TEST_EQ(initial_sort_probe::state->peak.load(), std::size_t(2));
     initial_sort_probe::state.reset();
     auto got = copy_values(values);
     HPX_TEST(std::is_sorted(got.begin(), got.end()));
