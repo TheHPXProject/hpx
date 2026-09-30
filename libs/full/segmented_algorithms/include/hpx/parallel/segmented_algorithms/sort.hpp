@@ -632,15 +632,18 @@ namespace hpx::parallel::detail {
 
             using value_type = std::iterator_traits<LocalIter>::value_type;
             util::compare_projected<Comp&, Proj&> pred(comp, proj);
-            if (!right.empty())
+            // Avoid a network round trip for an endpoint probe. When both
+            // endpoints are local, this inexpensive check still skips all
+            // merge buffers for already ordered blocks.
+            auto const here = hpx::find_here();
+            if (!right.empty() && left.back().locality == here &&
+                right.front().locality == here)
             {
-                auto left_end = left.back();
-                left_end.first = left_end.last - 1;
-                auto right_begin = right.front();
-                right_begin.last = right_begin.first + 1;
-                auto endpoints = segmented_sort_fetch_block(policy,
-                    segmented_sort_block<LocalIter>{left_end, right_begin});
-                if (!pred(endpoints[1], endpoints[0]))
+                using traits =
+                    hpx::traits::segmented_local_iterator_traits<LocalIter>;
+                auto left_end = traits::local(left.back().last - 1);
+                auto right_begin = traits::local(right.front().first);
+                if (!pred(*right_begin, *left_end))
                 {
                     return true;
                 }
@@ -1108,6 +1111,11 @@ namespace hpx::segmented {
 
     /// \brief Segmented overload of \a hpx::sort for
     ///        \a partitioned_vector iterators.
+    ///
+    /// Remote partition operations are issued one at a time by this
+    /// overload. Use a parallel execution policy to overlap independent
+    /// operations. For ranges spanning localities, the comparator must be
+    /// copyable and serializable by HPX.
     HPX_CXX_EXPORT template <typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::traits::is_iterator_v<SegIter> &&
@@ -1128,6 +1136,9 @@ namespace hpx::segmented {
     }
 
     /// \brief Segmented overload of \a hpx::sort with an execution policy.
+    ///
+    /// For ranges spanning localities, the comparator must be copyable and
+    /// serializable by HPX.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&

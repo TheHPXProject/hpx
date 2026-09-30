@@ -1032,7 +1032,7 @@ void test_ordered_endpoints()
     detail::segmented_sort_compare_split<local_iterator>::sequential(
         hpx::execution::seq, blocks[0], blocks[1], counted_value_less{},
         hpx::identity_v);
-    HPX_TEST_EQ(counted_sort_value::copies.load(), std::size_t(2));
+    HPX_TEST_EQ(counted_sort_value::copies.load(), std::size_t(0));
     auto got = copy_values(values);
     for (std::size_t i = 0; i < got.size(); ++i)
     {
