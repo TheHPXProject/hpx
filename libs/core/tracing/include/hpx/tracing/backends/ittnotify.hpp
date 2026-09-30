@@ -76,7 +76,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] mark_event
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT mark_event
     {
         explicit mark_event(char const* name) noexcept;
     };
@@ -87,7 +87,7 @@ namespace hpx::tracing {
         char const* name = nullptr;
     };
 
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] fiber_region
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT fiber_region
     {
         explicit fiber_region(fiber_region_init_data const& data,
             std::size_t num_thread) noexcept;
@@ -101,8 +101,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]]
-    fiber_suspend_region
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT fiber_suspend_region
     {
         explicit fiber_suspend_region(char const* desc) noexcept;
         ~fiber_suspend_region();
@@ -119,8 +118,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]]
-    background_work_region
+    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT background_work_region
     {
         explicit background_work_region(std::size_t num_thread = 0) noexcept;
         ~background_work_region();
