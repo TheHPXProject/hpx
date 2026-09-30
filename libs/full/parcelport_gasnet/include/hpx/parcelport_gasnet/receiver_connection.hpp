@@ -1,6 +1,4 @@
-//  Copyright (c) 2023      Christopher Taylor
-//  Copyright (c) 2014-2015 Thomas Heller
-//  Copyright (c) 2007-2021 Hartmut Kaiser
+//  Copyright (c) 2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,19 +10,16 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/assert.hpp>
-#include <hpx/modules/gasnet_base.hpp>
-#include <hpx/modules/timing.hpp>
-
-#include <hpx/modules/parcelset.hpp>
-#include <hpx/parcelport_gasnet/header.hpp>
+#include <hpx/parcelport_gasnet/mailbox_array.hpp>
+#include <hpx/parcelset/decode_parcels.hpp>
+#include <hpx/parcelset/parcel_buffer.hpp>
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <utility>
 #include <vector>
-
-#include <gasnet.h>
 
 namespace hpx::parcelset::policies::gasnet {
 
@@ -32,209 +27,315 @@ namespace hpx::parcelset::policies::gasnet {
     struct receiver_connection
     {
     private:
-        enum connection_state
+        enum class connection_state : std::uint8_t
         {
-            initialized,
-            rcvd_transmission_chunks,
-            rcvd_data,
-            rcvd_chunks,
-            sent_release_tag
+            initialized = 1,
+            rcvd_header = 2,
+            collecting = 3,
+            decoded = 4,
+            // A consumed page failed validation.  The remaining pages of the
+            // (discarded) message are skipped so the stream realigns at the
+            // next message boundary.
+            draining_malformed = 5,
+            // Terminal: the connection produced no usable parcel.  Distinct
+            // from 'decoded' so the caller knows a transfer was lost.
+            failed = 6
         };
 
-        using data_type = std::vector<char>;
-        using buffer_type = parcel_buffer<data_type, data_type>;
+        using buffer_type = parcel_buffer<>;
 
     public:
-        receiver_connection(int src, header h, Parcelport& pp) noexcept
-          : state_(initialized)
+        receiver_connection(int src, mailbox_array& mailboxes, Parcelport* pp)
+          : state_(connection_state::initialized)
           , src_(src)
-          , tag_(h.tag())
-          , header_(h)
-          , request_ptr_(false)
-          , chunks_idx_(0)
+          , mailboxes_(mailboxes)
           , pp_(pp)
+          , expected_chunks_(0)
+          , received_chunks_(0)
+          , recv_buf_(mailboxes.mtu())
         {
-            header_.assert_valid();
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
-            parcelset::data_point& data = buffer_.data_point_;
-            data.time_ = timer_.elapsed_nanoseconds();
-            data.bytes_ = static_cast<std::size_t>(header_.numbytes());
-#endif
-            buffer_.data_.resize(static_cast<std::size_t>(header_.size()));
-            buffer_.num_chunks_ = header_.num_chunks();
         }
 
-        bool receive(std::size_t num_thread = -1)
+        constexpr int src() const noexcept
+        {
+            return src_;
+        }
+
+        bool is_multi_chunk() const noexcept
+        {
+            return expected_chunks_ > 1;
+        }
+
+        bool receive() noexcept
         {
             switch (state_)
             {
-            case initialized:
-                return receive_transmission_chunks(num_thread);
+            case connection_state::initialized:
+                return receive_header();
 
-            case rcvd_transmission_chunks:
-                return receive_data(num_thread);
+            case connection_state::rcvd_header:
+                return decode_or_collect();
 
-            case rcvd_data:
-                return receive_chunks(num_thread);
+            case connection_state::collecting:
+                return collect_chunks();
 
-            case rcvd_chunks:
-                return send_release_tag(num_thread);
+            case connection_state::draining_malformed:
+                return drain_malformed();
 
-            case sent_release_tag:
-                return done();
+            case connection_state::decoded:
+            case connection_state::failed:
+                return true;
 
             default:
-                HPX_ASSERT(false);
+                return false;
             }
+        }
+
+    private:
+        bool receive_header() noexcept
+        {
+            std::size_t const src_pe = static_cast<std::size_t>(src_);
+
+            // Non-blocking: if the page is not published yet the connection
+            // is re-queued unchanged and no page has been consumed.
+            if (!mailboxes_.try_receive_(
+                    src_pe, recv_buf_.data(), mailboxes_.mtu()))
+            {
+                return false;
+            }
+
+            detail::message_header header;
+            std::memcpy(&header, recv_buf_.data(), sizeof(header));
+
+            // The page is now consumed (credit returned to the sender), so a
+            // failure must not lead to 'retry this page' — that would read
+            // the next page and silently lose the transfer.  Handle it as a
+            // terminal/loud failure instead.
+            std::size_t chunk_size = 0;
+            if (!detail::validate_message_page(recv_buf_.data(),
+                    mailboxes_.mtu(), chunk_size,
+                    mailboxes_.checksum_enabled()))
+            {
+                return handle_malformed_header(header);
+            }
+
+            // A connection always starts at a message boundary; a first chunk
+            // with an index > 0 means the stream lost earlier pages
+            // (unrecoverable corruption).  Fail loudly rather than collecting
+            // a partial message.
+            if (header.chunk_index != 0)
+            {
+                return handle_malformed_header(header);
+            }
+
+            expected_message_id_ = header.message_id;
+            buffer_.size_ = header.size;
+            buffer_.data_size_ = header.data_size;
+            buffer_.num_chunks_ = std::make_pair(0u, 0u);
+
+            expected_chunks_ = header.num_chunks;
+            received_chunks_ = 0;
+
+            std::size_t const header_size = detail::header_size;
+
+            if (header.num_chunks == 1)
+            {
+                if (header.size > 0)
+                {
+                    buffer_.data_.resize(header.size);
+                    std::memcpy(buffer_.data_.data(),
+                        recv_buf_.data() + header_size, header.size);
+                }
+
+                state_ = connection_state::rcvd_header;
+                return decode_parcels(0);
+            }
+
+            chunks_.clear();
+            chunks_.resize(header.num_chunks);
+
+            chunks_[header.chunk_index].resize(chunk_size);
+            std::memcpy(chunks_[header.chunk_index].data(),
+                recv_buf_.data() + header_size, chunk_size);
+            received_chunks_++;
+
+            if (received_chunks_ == expected_chunks_)
+            {
+                return reassemble_and_decode();
+            }
+
+            state_ = connection_state::collecting;
             return false;
         }
 
-        bool receive_transmission_chunks(std::size_t num_thread = -1)
+        bool decode_or_collect() noexcept
         {
-            auto self_ = hpx::util::gasnet_environment::rank();
-
-            // determine the size of the chunk buffer
-            std::size_t num_zero_copy_chunks = static_cast<std::size_t>(
-                static_cast<std::uint32_t>(buffer_.num_chunks_.first));
-            std::size_t num_non_zero_copy_chunks = static_cast<std::size_t>(
-                static_cast<std::uint32_t>(buffer_.num_chunks_.second));
-            buffer_.transmission_chunks_.resize(
-                num_zero_copy_chunks + num_non_zero_copy_chunks);
-            if (num_zero_copy_chunks != 0)
+            if (expected_chunks_ > 1)
             {
-                buffer_.chunks_.resize(num_zero_copy_chunks);
-                {
-                    hpx::util::gasnet_environment::scoped_lock l;
-                    unsigned long elem[2] = {0, 0};
-                    std::memcpy(elem,
-                        hpx::util::gasnet_environment::segments[self_].addr,
-                        static_cast<int>(buffer_.transmission_chunks_.size() *
-                            sizeof(buffer_type::transmission_chunk_type)));
-                    buffer_.transmission_chunks_.data()->first = elem[0];
-                    buffer_.transmission_chunks_.data()->second = elem[1];
-                    request_ptr_ = true;
-                }
+                return collect_chunks();
             }
-
-            state_ = rcvd_transmission_chunks;
-
-            return receive_data(num_thread);
+            return decode_parcels(0);
         }
 
-        bool receive_data(std::size_t num_thread = -1)
+        bool collect_chunks() noexcept
         {
-            if (!request_done())
+            std::size_t const src_pe = static_cast<std::size_t>(src_);
+
+            if (!mailboxes_.try_receive_(
+                    src_pe, recv_buf_.data(), mailboxes_.mtu()))
             {
                 return false;
             }
 
-            char* piggy_back = header_.piggy_back();
-            if (piggy_back)
+            detail::message_header header;
+            std::memcpy(&header, recv_buf_.data(), sizeof(header));
+
+            std::size_t chunk_size = 0;
+            if (!detail::validate_message_page(recv_buf_.data(),
+                    mailboxes_.mtu(), chunk_size,
+                    mailboxes_.checksum_enabled()))
             {
-                std::memcpy(
-                    &buffer_.data_[0], piggy_back, buffer_.data_.size());
-            }
-            else
-            {
-                auto self_ = hpx::util::gasnet_environment::rank();
-                hpx::util::gasnet_environment::scoped_lock l;
-                std::memcpy(buffer_.data_.data(),
-                    hpx::util::gasnet_environment::segments[self_].addr,
-                    buffer_.data_.size());
-                request_ptr_ = true;
+                return handle_malformed_header(header);
             }
 
-            state_ = rcvd_data;
+            // Sequence cross-checks: every continuation chunk must belong to
+            // the same message and arrive strictly in order.  Any mismatch
+            // means the stream lost or reordered pages — fail loudly.
+            if (header.message_id != expected_message_id_ ||
+                header.num_chunks != expected_chunks_ ||
+                header.chunk_index != received_chunks_)
+            {
+                return handle_malformed_header(header);
+            }
 
-            return receive_chunks(num_thread);
+            std::size_t const header_size = detail::header_size;
+
+            chunks_[header.chunk_index].resize(chunk_size);
+            std::memcpy(chunks_[header.chunk_index].data(),
+                recv_buf_.data() + header_size, chunk_size);
+            received_chunks_++;
+
+            if (received_chunks_ == expected_chunks_)
+            {
+                return reassemble_and_decode();
+            }
+
+            return false;
         }
 
-        bool receive_chunks(std::size_t num_thread = -1)
+        // A page was already consumed (credit returned to the sender) and its
+        // header failed validation, or a first/continuation chunk broke
+        // ordering guarantees.  The transfer cannot be salvaged: report it
+        // loudly and, whenever the message extent is still parseable, drain
+        // the message's remaining pages so the per-src stream realigns at the
+        // next message boundary.  Never re-enters the failed state silently.
+        bool handle_malformed_header(
+            detail::message_header const& header) noexcept
         {
-            while (chunks_idx_ < buffer_.chunks_.size())
+            std::size_t remaining = 0;
+            if (detail::message_header_geometry_valid(
+                    header, mailboxes_.mtu()) &&
+                header.chunk_index + 1 < header.num_chunks)
             {
-                if (!request_done())
+                remaining = header.num_chunks - header.chunk_index - 1;
+            }
+
+            std::fprintf(stderr,
+                "gasnet: PE %zu: dropping malformed message from src %d "
+                "(num_chunks=%u chunk_index=%u message_id=%llu "
+                "size=%llu checksum=%08x, draining %zu remaining page(s))\n",
+                mailboxes_.my_pe(), src_, header.num_chunks,
+                header.chunk_index,
+                static_cast<unsigned long long>(header.message_id),
+                static_cast<unsigned long long>(header.size), header.checksum,
+                remaining);
+
+            if (remaining > 0)
+            {
+                to_drain_ = remaining;
+                state_ = connection_state::draining_malformed;
+                return false;    // re-queue; the pages are skipped below
+            }
+
+            state_ = connection_state::failed;
+            return true;    // terminal; no parcel is decoded for this connection
+        }
+
+        // Skip (consume + drop) the pages of the discarded message so the
+        // stream realigns.  Non-blocking: if the sender has not published the
+        // next page yet, re-queue and continue later.
+        bool drain_malformed() noexcept
+        {
+            std::size_t const src_pe = static_cast<std::size_t>(src_);
+
+            while (to_drain_ > 0)
+            {
+                if (!mailboxes_.try_receive_(
+                        src_pe, recv_buf_.data(), mailboxes_.mtu()))
                 {
                     return false;
                 }
-
-                std::size_t idx = chunks_idx_++;
-                std::size_t chunk_size =
-                    buffer_.transmission_chunks_[idx].second;
-
-                data_type& c = buffer_.chunks_[idx];
-                c.resize(chunk_size);
-                {
-                    auto self_ = hpx::util::gasnet_environment::rank();
-                    hpx::util::gasnet_environment::scoped_lock l;
-                    std::memcpy(c.data(),
-                        hpx::util::gasnet_environment::segments[self_].addr,
-                        c.size());
-                    request_ptr_ = true;
-                }
+                --to_drain_;
             }
 
-            state_ = rcvd_chunks;
-
-            return send_release_tag(num_thread);
+            state_ = connection_state::failed;
+            return true;
         }
 
-        bool send_release_tag(std::size_t num_thread = -1)
+        bool reassemble_and_decode() noexcept
         {
-            if (!request_done())
+            std::size_t total_size = 0;
+            for (auto const& chunk : chunks_)
             {
-                return false;
-            }
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
-            parcelset::data_point& data = buffer_.data_point_;
-            data.time_ = timer_.elapsed_nanoseconds() - data.time_;
-#endif
-            {
-                auto self_ = hpx::util::gasnet_environment::rank();
-                hpx::util::gasnet_environment::scoped_lock l;
-                std::memcpy(&tag_,
-                    hpx::util::gasnet_environment::segments[self_].addr,
-                    sizeof(int));
-                request_ptr_ = true;
+                total_size += chunk.size();
             }
 
-            decode_parcels(pp_, HPX_MOVE(buffer_), num_thread);
+            buffer_.data_.resize(total_size);
+            std::size_t offset = 0;
+            for (auto const& chunk : chunks_)
+            {
+                std::memcpy(
+                    buffer_.data_.data() + offset, chunk.data(), chunk.size());
+                offset += chunk.size();
+            }
 
-            state_ = sent_release_tag;
+            chunks_.clear();
 
-            return done();
+            return decode_parcels(0);
         }
 
-        bool done() noexcept
+        bool decode_parcels(std::size_t num_thread) noexcept
         {
-            return request_done();
+            HPX_ASSERT(!buffer_.data_.empty());
+
+            std::vector<parcel> parcels = hpx::parcelset::decode_parcels(
+                *pp_, HPX_MOVE(buffer_), num_thread);
+
+            hpx::parcelset::handle_received_parcels(
+                HPX_MOVE(parcels), num_thread);
+
+            state_ = connection_state::decoded;
+            return true;
         }
 
-        bool request_done() noexcept
-        {
-            hpx::util::gasnet_environment::scoped_try_lock l;
-            if (!l.locked)
-            {
-                return false;
-            }
-
-            return request_ptr_;
-        }
-
-#if defined(HPX_HAVE_PARCELPORT_COUNTERS)
-        hpx::chrono::high_resolution_timer timer_;
-#endif
         connection_state state_;
-
         int src_;
-        int tag_;
-        header header_;
+        mailbox_array& mailboxes_;
+        Parcelport* pp_;
+
         buffer_type buffer_;
+        std::vector<std::vector<char>> chunks_;
+        std::uint32_t expected_chunks_;
+        std::uint32_t received_chunks_;
 
-        bool request_ptr_;
-        std::size_t chunks_idx_;
+        // message_id of the message currently being collected (validated
+        // against every continuation chunk).
+        std::uint64_t expected_message_id_ = 0;
 
-        Parcelport& pp_;
+        // Pages left to skip while draining a discarded message.
+        std::size_t to_drain_ = 0;
+
+        std::vector<unsigned char> recv_buf_;
     };
 }    // namespace hpx::parcelset::policies::gasnet
 

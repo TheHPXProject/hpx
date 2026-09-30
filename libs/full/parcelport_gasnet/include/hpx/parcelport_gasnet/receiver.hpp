@@ -1,5 +1,4 @@
-//  Copyright (c) 2007-2021 Hartmut Kaiser
-//  Copyright (c) 2014-2015 Thomas Heller
+//  Copyright (c) 2026 Christopher Taylor
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,71 +10,50 @@
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/assert.hpp>
-#include <hpx/modules/gasnet_base.hpp>
-
-#include <hpx/parcelport_gasnet/header.hpp>
+#include <hpx/modules/thread_support.hpp>
+#include <hpx/parcelport_gasnet/mailbox_array.hpp>
 #include <hpx/parcelport_gasnet/receiver_connection.hpp>
 
-#include <algorithm>
-#include <chrono>
+#include <cstddef>
 #include <deque>
-#include <iterator>
-#include <list>
 #include <memory>
-#include <mutex>
 #include <set>
-#include <utility>
 
 namespace hpx::parcelset::policies::gasnet {
 
     template <typename Parcelport>
     struct receiver
     {
-        using header_list = std::list<std::pair<int, header>>;
-        using handles_header_type = std::set<std::pair<int, int>>;
         using connection_type = receiver_connection<Parcelport>;
         using connection_ptr = std::shared_ptr<connection_type>;
         using connection_list = std::deque<connection_ptr>;
 
-        struct exp_backoff
-        {
-            int numTries;
-            static int const maxRetries = 10;
-
-            void operator()()
-            {
-                if (numTries <= maxRetries)
-                {
-                    gasnet_AMPoll();
-                    hpx::this_thread::suspend(
-                        std::chrono::microseconds(1 << numTries));
-                }
-                else
-                {
-                    numTries = 0;
-                }
-            }
-        };
-
         explicit constexpr receiver(Parcelport& pp) noexcept
           : pp_(pp)
-          , bo()
         {
         }
 
-        void run() noexcept
+        constexpr void run() noexcept {}
+
+        // True if there are still partially received connections being
+        // processed (used by do_stop()). Called only from do_stop() (never
+        // from the progress thread), so a blocking lock is safe and avoids
+        // spurious "empty" results under contention.  A connection whose
+        // message is in-flight stays in either connections_ (re-queued
+        // between steps) or active_connections_ (its src is drained by an
+        // in-progress connection), so both must be checked.
+        bool has_pending() noexcept
         {
-            util::gasnet_environment::scoped_lock l;
-            new_header();
+            std::unique_lock l1(connections_mtx_);
+            std::unique_lock l2(active_mtx_);
+            return !connections_.empty() || !active_connections_.empty();
         }
 
-        bool background_work() noexcept
+        bool background_work(std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
-            // We first try to accept a new connection
-            connection_ptr connection = accept();
+            bool has_work = false;
 
-            // If we don't have a new connection, try to handle one of the
-            // already accepted ones.
+            connection_ptr connection = accept(arena_idx, arena_cnt);
             if (!connection)
             {
                 std::unique_lock l(connections_mtx_, std::try_to_lock);
@@ -89,79 +67,55 @@ namespace hpx::parcelset::policies::gasnet {
             if (connection)
             {
                 receive_messages(HPX_MOVE(connection));
-                return true;
+                has_work = true;
             }
 
-            return false;
+            return has_work;
         }
 
         void receive_messages(connection_ptr connection) noexcept
         {
+            int const src = connection->src();
             if (!connection->receive())
             {
                 std::unique_lock l(connections_mtx_);
                 connections_.push_back(HPX_MOVE(connection));
             }
+            else
+            {
+                std::unique_lock l(active_mtx_);
+                active_connections_.erase(src);
+            }
         }
 
-        connection_ptr accept() noexcept
+        connection_ptr accept(std::size_t arena_idx, std::size_t arena_cnt) noexcept
         {
-            std::unique_lock l(headers_mtx_, std::try_to_lock);
-            if (l.owns_lock())
+            auto& mailboxes = pp_.get_mailboxes();
+
+            int const pe =
+                mailboxes.try_detect_pe_notification(arena_idx, arena_cnt);
+            if (pe < 0)
+                return connection_ptr();
+
+            std::size_t const src = static_cast<std::size_t>(pe);
             {
-                return accept_locked(l);
-            }
-            return connection_ptr();
-        }
-
-        template <typename Lock>
-        connection_ptr accept_locked(Lock& header_lock) noexcept
-        {
-            connection_ptr res;
-            util::gasnet_environment::scoped_try_lock l;
-
-            if (l.locked)
-            {
-                header h = new_header();
-                l.unlock();
-                header_lock.unlock();
-
-                // remote localities 'put' into the gasnet shared
-                // memory segment on this machine
-                //
-                res.reset(new connection_type(
-                    hpx::util::gasnet_environment::rank(), h, pp_));
-                return res;
-            }
-            return res;
-        }
-
-        header new_header() noexcept
-        {
-            header h = rcv_header_;
-            rcv_header_.reset();
-
-            while (rcv_header_.data() == 0)
-            {
-                bo();
+                std::unique_lock l(active_mtx_);
+                if (active_connections_.count(src))
+                    return connection_ptr();
+                active_connections_.insert(src);
             }
 
-            return h;
+            return std::make_shared<connection_type>(pe, mailboxes, &pp_);
         }
 
         Parcelport& pp_;
 
-        hpx::spinlock headers_mtx_;
-        header rcv_header_;
-
-        hpx::spinlock handles_header_mtx_;
-        handles_header_type handles_header_;
-
         hpx::spinlock connections_mtx_;
         connection_list connections_;
-        exp_backoff bo;
-    };
 
+        hpx::spinlock active_mtx_;
+        std::set<int> active_connections_;
+    };
 }    // namespace hpx::parcelset::policies::gasnet
 
 #endif

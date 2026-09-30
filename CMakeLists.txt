@@ -1432,14 +1432,6 @@ if(HPX_WITH_NETWORKING)
     HPX_WITH_PARCELPORT_GASNET BOOL "Enable the GASNET based parcelport." OFF
     CATEGORY "Parcelport"
   )
-  hpx_option(
-    HPX_WITH_FETCH_GASNET
-    BOOL
-    "Use FetchContent to fetch GASNET. By default an installed GASNET will be used. (default: OFF)."
-    OFF
-    CATEGORY "Build Targets"
-    ADVANCED
-  )
   if(HPX_WITH_PARCELPORT_GASNET)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_GASNET)
     hpx_option(

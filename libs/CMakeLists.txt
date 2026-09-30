@@ -530,6 +530,15 @@ if(HPX_WITH_PARCELPORT_GASNET AND GASNET_LIBRARY_DIRS)
   target_link_directories(hpx_core PUBLIC ${GASNET_LIBRARY_DIRS})
 endif()
 
+if(HPX_WITH_PARCELPORT_GASNET
+   AND "${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi"
+   AND TARGET Mpi::mpi
+)
+  target_link_libraries(
+    hpx_core PUBLIC -Wl,--no-as-needed Mpi::mpi -Wl,--as-needed
+  )
+endif()
+
 if(HPX_WITH_MODULES_AS_STATIC_LIBRARIES OR HPX_WITH_STATIC_LINKING)
   target_link_libraries(hpx_core PUBLIC hpx_public_flags)
   target_link_libraries(hpx_core PUBLIC hpx_base_libraries)

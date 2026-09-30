@@ -11,7 +11,7 @@ macro(hpx_setup_mpi)
   if(NOT TARGET Mpi::mpi)
 
     find_package(MPI REQUIRED QUIET COMPONENTS CXX)
-    add_library(Mpi::mpi INTERFACE IMPORTED)
+    add_library(Mpi::mpi INTERFACE IMPORTED GLOBAL)
     target_link_libraries(Mpi::mpi INTERFACE MPI::MPI_CXX)
 
     # Ensure compatibility with older versions
