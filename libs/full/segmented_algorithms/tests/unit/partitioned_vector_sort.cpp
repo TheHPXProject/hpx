@@ -411,6 +411,54 @@ void test_merge_network()
     }
 }
 
+// Exercise the actual compare/split implementation with deliberately small
+// blocks. Cover non-power-of-two block counts, short tails, and duplicates.
+void test_forced_small_blocks()
+{
+    namespace detail = hpx::parallel::detail;
+    constexpr std::size_t block_size = 5;
+    for (std::size_t block_count : {3, 5, 6, 7})
+    {
+        for (std::size_t tail = 1; tail != block_size; ++tail)
+        {
+            auto const size = (block_count - 1) * block_size + tail;
+            for (std::size_t seed = 0; seed != 16; ++seed)
+            {
+                std::vector<int> values(size);
+                for (std::size_t i = 0; i != size; ++i)
+                {
+                    values[i] = static_cast<int>((i * 17 + seed * 13) % 11);
+                }
+                auto expected = values;
+                std::sort(expected.begin(), expected.end());
+
+                auto const here = hpx::find_here();
+                detail::segmented_sort_block<std::vector<int>::iterator> runs{
+                    {here, here, values.begin(), values.end()}};
+                auto blocks = detail::segmented_sort_blocks(runs, block_size);
+                HPX_TEST_EQ(blocks.size(), block_count);
+                std::vector<detail::segmented_sort_pair> initial;
+                for (std::size_t i = 0; i != blocks.size(); ++i)
+                {
+                    initial.emplace_back(i, i);
+                }
+                std::map<hpx::id_type, std::size_t> worker_counts;
+                detail::segmented_sort_stage(hpx::execution::seq, blocks,
+                    HPX_MOVE(initial), worker_counts, std::less<int>{},
+                    hpx::identity_v, std::true_type{});
+                detail::segmented_sort_merge_stages(
+                    blocks.size(), [&](auto pairs) {
+                        detail::segmented_sort_stage(hpx::execution::seq,
+                            blocks, HPX_MOVE(pairs), worker_counts,
+                            std::less<int>{}, hpx::identity_v,
+                            std::true_type{});
+                    });
+                HPX_TEST(values == expected);
+            }
+        }
+    }
+}
+
 struct counted_sort_value
 {
     inline static std::atomic<std::size_t> live{0};
@@ -459,7 +507,7 @@ HPX_REGISTER_PARTITIONED_VECTOR(counted_sort_value)
 void test_merge_buffer()
 {
     namespace detail = hpx::parallel::detail;
-    auto const size = detail::segmented_sort_max_block_size;
+    auto const size = detail::segmented_sort_transfer_chunk_size;
     {
         std::vector<counted_sort_value> left(size), right(size);
         for (std::size_t i = 0; i < size; ++i)
@@ -499,7 +547,7 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
 {
     namespace detail = hpx::parallel::detail;
     constexpr auto unit = static_cast<std::ptrdiff_t>(
-        detail::segmented_sort_max_block_size / 32 + 1);
+        detail::segmented_sort_transfer_chunk_size / 32 + 1);
     std::vector<int> data(static_cast<std::size_t>(45 * unit));
     using iterator = std::vector<int>::iterator;
     detail::segmented_sort_block<iterator> runs;
@@ -513,7 +561,7 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
     }
     HPX_TEST(detail::segmented_sort_host(runs, {}) == b);
     HPX_TEST_EQ(detail::segmented_sort_block_capacity(runs),
-        a == b ? detail::segmented_sort_max_block_size : (data.size() + 1) / 2);
+        static_cast<std::size_t>(5 * unit));
 
     if (a != b)
     {
@@ -552,10 +600,11 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
     }
 }
 
-void test_bounded_blocks(std::vector<hpx::id_type> const& localities)
+void test_partition_blocks_and_transfer_chunks(
+    std::vector<hpx::id_type> const& localities)
 {
     namespace detail = hpx::parallel::detail;
-    auto const size = 8 * detail::segmented_sort_max_block_size + 7;
+    auto const size = 8 * detail::segmented_sort_transfer_chunk_size + 7;
     hpx::partitioned_vector<int> values(
         size, 0, hpx::container_layout(3, localities));
     initialize_values(values,
@@ -564,19 +613,27 @@ void test_bounded_blocks(std::vector<hpx::id_type> const& localities)
     std::sort(expected.begin() + 1, expected.end() - 2);
     auto runs =
         detail::segmented_sort_runs(values.begin() + 1, values.end() - 2);
-    auto blocks = detail::segmented_sort_blocks(
-        runs, detail::segmented_sort_max_block_size);
-    std::size_t total = 0;
-    for (std::size_t i = 0; i < blocks.size(); ++i)
+    auto const capacity = detail::segmented_sort_block_capacity(runs);
+    auto blocks = detail::segmented_sort_blocks(runs, capacity);
+    HPX_TEST_LTE(blocks.size(), runs.size());
+    for (std::size_t i = 0; i != blocks.size(); ++i)
     {
-        auto const n = detail::segmented_sort_block_size(blocks[i]);
-        HPX_TEST_LTE(n, detail::segmented_sort_max_block_size);
+        auto const block_size = detail::segmented_sort_block_size(blocks[i]);
+        HPX_TEST_LTE(block_size, capacity);
         if (i + 1 != blocks.size())
         {
-            HPX_TEST_EQ(n, detail::segmented_sort_max_block_size);
+            HPX_TEST_EQ(block_size, capacity);
         }
+    }
+
+    auto chunks = detail::segmented_sort_transfer_chunks(runs);
+    std::size_t total = 0;
+    for (auto const& chunk : chunks)
+    {
+        auto const n = detail::segmented_sort_block_size(chunk);
+        HPX_TEST_LTE(n, detail::segmented_sort_transfer_chunk_size);
         total += n;
-        for (auto const& run : blocks[i])
+        for (auto const& run : chunk)
         {
             HPX_TEST(run.locality ==
                 hpx::get_colocation_id(hpx::launch::sync, run.id));
@@ -592,7 +649,7 @@ void test_bounded_blocks(std::vector<hpx::id_type> const& localities)
     // Exercise the distributed merge with nontrivial values and descending
     // order as well as the default integer comparator above.
     hpx::partitioned_vector<std::string> strings(
-        2 * detail::segmented_sort_max_block_size + 7, std::string{},
+        2 * detail::segmented_sort_transfer_chunk_size + 7, std::string{},
         hpx::container_layout(3, localities));
     initialize_values(strings, [](std::size_t i) {
         return std::to_string((i * 17 + 3) % 97) + std::string(32, 'x');
@@ -615,7 +672,7 @@ struct throwing_merge_less
         // Each initial block lies within one band. Only a merge compares
         // different bands, after the local sort phase has succeeded.
         constexpr auto band_size = static_cast<int>(
-            hpx::parallel::detail::segmented_sort_max_block_size);
+            hpx::parallel::detail::segmented_sort_transfer_chunk_size);
         if (a / band_size != b / band_size)
         {
             if (allocation)
@@ -641,7 +698,7 @@ void test_merge_exceptions(
     for (bool allocation : {false, true})
     {
         auto const size =
-            4 * hpx::parallel::detail::segmented_sort_max_block_size;
+            4 * hpx::parallel::detail::segmented_sort_transfer_chunk_size;
         hpx::partitioned_vector<int> values(
             size, 0, hpx::container_layout(4, localities));
         initialize_values(values, [](int i) { return i; });
@@ -693,7 +750,7 @@ struct initial_sort_probe
 {
     inline static std::shared_ptr<initial_sort_probe_state> state;
     static constexpr auto block_size =
-        hpx::parallel::detail::segmented_sort_max_block_size;
+        hpx::parallel::detail::segmented_sort_transfer_chunk_size;
 
     bool operator()(int a, int b) const
     {
@@ -723,8 +780,8 @@ void test_initial_sort_concurrency()
 {
     namespace detail = hpx::parallel::detail;
     constexpr auto size = initial_sort_probe::block_size;
-    // Four physical pieces produce two buffered logical blocks on this
-    // locality, together using the complete four-block scratch budget.
+    // Four physical pieces produce two forced logical blocks on this
+    // locality for the scheduler test.
     hpx::partitioned_vector<int> values(2 * size, 0,
         hpx::container_layout(4, std::vector<hpx::id_type>{hpx::find_here()}));
     initialize_values(values, [](std::size_t i) {
@@ -807,6 +864,73 @@ void test_merge_stage_concurrency()
     merge_stage_probe::state.reset();
     auto got = copy_values(values);
     HPX_TEST(std::is_sorted(got.begin(), got.end()));
+}
+
+struct sliding_stage_probe_state
+{
+    std::array<std::atomic<bool>, 3> entered{};
+    hpx::promise<void> third_started;
+    hpx::shared_future<void> ready = third_started.get_future();
+    std::atomic<bool> timed_out{false};
+};
+
+struct sliding_stage_probe
+{
+    inline static std::shared_ptr<sliding_stage_probe_state> state;
+    static constexpr std::size_t block_size = 1024;
+    static constexpr int group_stride = 4 * static_cast<int>(block_size);
+
+    bool operator()(int a, int b) const
+    {
+        auto const group =
+            static_cast<std::size_t>((std::min) (a, b) / group_stride);
+        if (!state->entered[group].exchange(true))
+        {
+            if (group == 0)
+            {
+                state->third_started.set_value();
+            }
+            else if (group == 2 &&
+                state->ready.wait_for(std::chrono::seconds(5)) !=
+                    hpx::future_status::ready)
+            {
+                state->timed_out = true;
+            }
+        }
+        return a < b;
+    }
+
+    template <typename Archive>
+    void serialize(Archive&, unsigned)
+    {
+    }
+};
+
+void test_sliding_stage_window()
+{
+    namespace detail = hpx::parallel::detail;
+    constexpr auto size = sliding_stage_probe::block_size;
+    std::vector<int> values(6 * size);
+    for (std::size_t i = 0; i != values.size(); ++i)
+    {
+        auto const block = i / size;
+        auto const offset = i % size;
+        values[i] =
+            static_cast<int>(block / 2) * sliding_stage_probe::group_stride +
+            static_cast<int>(2 * offset + block % 2);
+    }
+    auto const here = hpx::find_here();
+    detail::segmented_sort_block<std::vector<int>::iterator> runs{
+        {here, here, values.begin(), values.end()}};
+    auto blocks = detail::segmented_sort_blocks(runs, size);
+    std::map<hpx::id_type, std::size_t> worker_counts{{here, 2}};
+    sliding_stage_probe::state = std::make_shared<sliding_stage_probe_state>();
+    detail::segmented_sort_stage(hpx::execution::par, blocks,
+        {{0, 1}, {2, 3}, {4, 5}}, worker_counts, sliding_stage_probe{},
+        hpx::identity_v, std::false_type{});
+    HPX_TEST(!sliding_stage_probe::state->timed_out.load());
+    sliding_stage_probe::state.reset();
+    HPX_TEST(std::is_sorted(values.begin(), values.end()));
 }
 
 struct collection_gate
@@ -962,13 +1086,15 @@ int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
     test_merge_network();
+    test_forced_small_blocks();
     test_merge_buffer();
     test_host_placement(localities);
-    test_bounded_blocks(localities);
+    test_partition_blocks_and_transfer_chunks(localities);
     if (hpx::get_os_thread_count() > 1)
     {
         test_initial_sort_concurrency();
         test_merge_stage_concurrency();
+        test_sliding_stage_window();
     }
     test_ordered_endpoints();
     test_transfer_batches(localities);
