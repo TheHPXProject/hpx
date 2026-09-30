@@ -13,284 +13,29 @@ macro(hpx_setup_gasnet)
     find_package(PkgConfig REQUIRED QUIET COMPONENTS)
     set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH TRUE)
 
+    if(GASNet_ROOT AND NOT "${GASNet_ROOT}" IN_LIST CMAKE_PREFIX_PATH)
+      list(PREPEND CMAKE_PREFIX_PATH "${GASNet_ROOT}")
+    endif()
+
     pkg_search_module(
       GASNET IMPORTED_TARGET GLOBAL
       gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par
     )
 
-    if((NOT GASNET_FOUND) AND HPX_WITH_FETCH_GASNET)
-
-      if(NOT CMAKE_C_COMPILER)
-        message(
-          FATAL_ERROR
-            "HPX_WITH_FETCH_GASNET requires `-DCMAKE_C_COMPILER` to be set; CMAKE_C_COMPILER is currently unset."
-        )
-      endif()
-      if(NOT CMAKE_CXX_COMPILER)
-        message(
-          FATAL_ERROR
-            "HPX_WITH_FETCH_GASNET requires `-DCMAKE_CXX_COMPILER` to be set; CMAKE_CXX_COMPILER is currently unset."
-        )
-      endif()
-      if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ofi" AND NOT OFI_DIR)
-        message(
-          FATAL_ERROR
-            "HPX_WITH_PARCELPORT_GASNET_CONDUIT=ofi AND HPX_WITH_FETCH_GASNET requires `-DOFI_DIR` to be set; OFI_DIR is currently unset."
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ofi")
-        pkg_search_module(
-          OFI
-          REQUIRED
-          IMPORTED_TARGET
-          GLOBAL
-          libfabric
-          libfabric-1.5
-          libfabric-1.7
-          libfabric-1.15
-        )
-        if(NOT OFI_FOUND)
-          message(
-            FATAL_ERROR
-              "libfabric 1.5, 1.7, or 1.15 was not found. Your `$PKG_CONFIG_PATH` or `-DOFI_DIR` may need to be updated"
-          )
-        endif()
-      endif()
-      if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ucx" AND NOT UCX_DIR)
-        message(
-          FATAL_ERROR
-            "HPX_WITH_PARCELPORT_GASNET_CONDUIT=ucx AND HPX_WITH_FETCH_GASNET requires `-DUCX_DIR` to be set; UCX_DIR is currently unset."
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ucx")
-        pkg_search_module(
-          UCX
-          REQUIRED
-          IMPORTED_TARGET
-          GLOBAL
-          ucx
-          ucx-1.14.0
-          ucx-1.15.0
-        )
-        if(NOT UCX_FOUND)
-          message(
-            FATAL_ERROR
-              "UCX 1.14.0, or 1.15.0 was not found. Your `$PKG_CONFIG_PATH` or `-DUCX_DIR` may need to be updated"
-          )
-        endif()
-      endif()
-
-      message(STATUS "Fetching GASNET")
-
-      set(CMAKE_PREFIX_PATH "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
-      set(ENV{PKG_CONFIG_PATH} "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig")
-
-      include(FetchContent)
-      fetchcontent_declare(
-        gasnet
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        URL https://gasnet.lbl.gov/EX/GASNet-2023.3.0.tar.gz
-      )
-
-      fetchcontent_getproperties(gasnet)
-      if(NOT gasnet)
-        fetchcontent_populate(gasnet)
-      endif()
-
+    if(NOT GASNET_FOUND)
       message(
-        STATUS "Building GASNET and installing into ${CMAKE_INSTALL_PREFIX}"
+        FATAL_ERROR
+          "GASNet (conduit '${HPX_WITH_PARCELPORT_GASNET_CONDUIT}') not found! "
+          "Install GASNet built with that conduit and make its pkgconfig "
+          "directory visible via PKG_CONFIG_PATH or CMAKE_PREFIX_PATH."
       )
-
-      set(GASNET_DIR "${gasnet_SOURCE_DIR}")
-      set(GASNET_BUILD_OUTPUT "${GASNET_DIR}/build.log")
-      set(GASNET_ERROR_FILE "${GASNET_DIR}/error.log")
-
-      if(CMAKE_BUILD_PARALLEL_LEVEL)
-        set(GASNET_BUILD_PARALLEL_LEVEL ${CMAKE_BUILD_PARALLEL_LEVEL})
-      else()
-        cmake_host_system_information(
-          RESULT GASNET_BUILD_PARALLEL_LEVEL QUERY NUMBER_OF_PHYSICAL_CORES
-        )
-      endif()
-
-      if(NOT ${GASNET_BUILD_PARALLEL_LEVEL})
-        set(GASNET_BUILD_PARALLEL_LEVEL 1)
-      endif()
-
-      if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "udp")
-        execute_process(
-          COMMAND
-            bash -c
-            "CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC ./configure --prefix=${GASNET_DIR}/install --with-cflags=-fPIC --with-cxxflags=-fPIC --enable-udp && make -j ${GASNET_BUILD_PARALLEL_LEVEL} && make install"
-          WORKING_DIRECTORY ${GASNET_DIR}
-          RESULT_VARIABLE GASNET_BUILD_STATUS
-          OUTPUT_FILE ${GASNET_BUILD_OUTPUT}
-          ERROR_FILE ${GASNET_ERROR_FILE}
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "smp")
-        execute_process(
-          COMMAND
-            bash -c
-            "CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC ./configure --prefix=${GASNET_DIR}/install --with-cflags=-fPIC --with-cxxflags=-fPIC --enable-smp && make -j ${GASNET_BUILD_PARALLEL_LEVEL} && make install"
-          WORKING_DIRECTORY ${GASNET_DIR}
-          RESULT_VARIABLE GASNET_BUILD_STATUS
-          OUTPUT_FILE ${GASNET_BUILD_OUTPUT}
-          ERROR_FILE ${GASNET_ERROR_FILE}
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ofi")
-        execute_process(
-          COMMAND
-            bash -c
-            "CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC ./configure --enable-ofi --with-ofi-home=${OFI_DIR} --prefix=${GASNET_DIR}/install --with-cflags=-fPIC --with-cxxflags=-fPIC && make -j ${GASNET_BUILD_PARALLEL_LEVEL} && make install"
-          WORKING_DIRECTORY ${GASNET_DIR}
-          RESULT_VARIABLE GASNET_BUILD_STATUS
-          OUTPUT_FILE ${GASNET_BUILD_OUTPUT}
-          ERROR_FILE ${GASNET_ERROR_FILE}
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "ucx")
-        execute_process(
-          COMMAND
-            bash -c
-            "CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC ./configure --enable-ucx --with-ucx-home=${UCX_DIR} --prefix=${GASNET_DIR}/install --with-cflags=-fPIC --with-cxxflags=-fPIC && make -j ${GASNET_BUILD_PARALLEL_LEVEL} && make install"
-          WORKING_DIRECTORY ${GASNET_DIR}
-          RESULT_VARIABLE GASNET_BUILD_STATUS
-          OUTPUT_FILE ${GASNET_BUILD_OUTPUT}
-          ERROR_FILE ${GASNET_ERROR_FILE}
-        )
-      elseif("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
-        if(NOT MPI_FOUND)
-          message(FATAL_ERROR "GASNet MPI Conduit selected; MPI not found!")
-        endif()
-
-        if(NOT TARGET Mpi::mpi)
-          message(FATAL_ERROR "GASNet MPI Conduit selected; MPI not found!")
-        endif()
-
-        if(${MPI_C_COMPILER})
-          set(MPI_C_COMPILER ${CMAKE_C_COMPILER})
-          set(MPI_CC ${CMAKE_C_COMPILER})
-          set(ENV{MPI_CC} ${CMAKE_C_COMPILER})
-        elseif(${MPI_CC})
-          set(MPI_CC ${CMAKE_C_COMPILER})
-          set(ENV{MPI_CC} ${CMAKE_C_COMPILER})
-        elseif(DEFINED ENV{MPI_CC})
-          set(MPI_CC ${CMAKE_C_COMPILER})
-          set(ENV{MPI_CC} ${CMAKE_C_COMPILER})
-        else()
-          message(FATAL_ERROR "GASNet MPI Conduit selected; $MPI_CC not found!")
-        endif()
-
-        if(NOT "$CMAKE_C_COMPILER" STREQUAL "${MPI_CC}")
-          message(FATAL_ERROR "GASNet MPI: $MPI_CC != $CMAKE_C_COMPILER!")
-        endif()
-
-        execute_process(
-          COMMAND
-            bash -c
-            "CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC ./configure --enable-mpi --with-mpi-cc=${CMAKE_C_COMPILER} --with-mpi-libs=${MPI_C_LIBRARIES} --prefix=${GASNET_DIR}/install --with-cflags=-fPIC --with-cxxflags=-fPIC && make -j ${GASNET_BUILD_PARALLEL_LEVEL} && make install"
-          WORKING_DIRECTORY ${GASNET_DIR}
-          RESULT_VARIABLE GASNET_BUILD_STATUS
-          OUTPUT_FILE ${GASNET_BUILD_OUTPUT}
-          ERROR_FILE ${GASNET_ERROR_FILE}
-        )
-      endif()
-
-      if(GASNET_BUILD_STATUS)
-        message(
-          FATAL_ERROR
-            "GASNet build result = ${GASNET_BUILD_STATUS} - see ${GASNET_BUILD_OUTPUT} for more details"
-        )
-      else()
-
-        find_file(GASNET_PKGCONFIG_FILE_FOUND
-                  gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par.pc
-                  ${GASNET_DIR}/install/lib/pkgconfig
-        )
-
-        if(NOT GASNET_PKGCONFIG_FILE_FOUND)
-          message(
-            FATAL_ERROR
-              "PKG-CONFIG ERROR (${GASNET_PKGCONFIG_FILE_FOUND}) -> CANNOT FIND COMPILED GASNET: ${GASNET_DIR}/install/lib/pkgconfig"
-          )
-        endif()
-
-        install(
-          CODE "set(GASNET_CONDUIT \"${HPX_WITH_PARCELPORT_GASNET_CONDUIT}\")"
-        )
-        install(CODE "set(GASNET_PATH \"${GASNET_DIR}\")")
-
-        install(
-          CODE [[
-          file(
-            READ
-            ${GASNET_PATH}/install/lib/pkgconfig/gasnet-${GASNET_CONDUIT}-par.pc
-            GASNET_PKGCONFIG_FILE_CONTENT
-          )
-
-          if(NOT GASNET_PKGCONFIG_FILE_CONTENT)
-            message(FATAL_ERROR "ERROR INSTALLING GASNET")
-          endif()
-
-          string(REPLACE "${GASNET_PATH}/install" "${CMAKE_INSTALL_PREFIX}"
-                         GASNET_PKGCONFIG_FILE_CONTENT
-                         ${GASNET_PKGCONFIG_FILE_CONTENT}
-          )
-
-          file(
-            WRITE
-            ${GASNET_PATH}/install/lib/pkgconfig/gasnet-${GASNET_CONDUIT}-par.pc
-            ${GASNET_PKGCONFIG_FILE_CONTENT}
-          )
-
-          file(GLOB_RECURSE GASNET_FILES ${GASNET_PATH}/install/*)
-
-          if(NOT GASNET_FILES)
-            message(STATUS "ERROR INSTALLING GASNET")
-          endif()
-
-          foreach(GASNET_FILE ${GASNET_FILES})
-            set(GASNET_FILE_CACHED "${GASNET_FILE}")
-
-            string(REGEX MATCH "(^\/.*\/)" GASNET_FILE_PATH ${GASNET_FILE})
-
-            string(REPLACE "${GASNET_PATH}/install" "${CMAKE_INSTALL_PREFIX}"
-                           GASNET_FILE ${GASNET_FILE}
-            )
-
-            string(REPLACE "${GASNET_PATH}/install" "${CMAKE_INSTALL_PREFIX}"
-                           GASNET_FILE_PATH ${GASNET_FILE_PATH}
-            )
-
-            file(MAKE_DIRECTORY ${GASNET_FILE_PATH})
-
-            string(LENGTH ${GASNET_FILE_PATH} GASNET_FILE_PATH_SIZE)
-            math(EXPR GASNET_FILE_PATH_SIZE "${GASNET_FILE_PATH_SIZE}-1")
-
-            string(SUBSTRING ${GASNET_FILE_PATH} 0 ${GASNET_FILE_PATH_SIZE}
-                             GASNET_FILE_PATH
-            )
-
-            file(COPY ${GASNET_FILE_CACHED} DESTINATION ${GASNET_FILE_PATH})
-          endforeach()
-        ]]
-        )
-
-        # install(FILES ${GASNET_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX})
-      endif()
-
-      set(CMAKE_PREFIX_PATH "${GASNET_DIR}/install/lib/pkgconfig")
-      set(ENV{PKG_CONFIG_PATH} "${GASNET_DIR}/install/lib/pkgconfig")
-
-      pkg_search_module(
-        GASNET REQUIRED IMPORTED_TARGET GLOBAL
-        gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par
-      )
-    elseif((NOT GASNET_FOUND) AND (NOT HPX_WITH_FETCH_GASNET))
-      message(FATAL_ERROR "GASNet not found and HPX_WITH_FETCH_GASNET not set!")
     endif()
 
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       set(GASNET_MPI_FOUND TRUE)
       include(HPX_SetupMPI)
       hpx_setup_mpi()
+      target_link_libraries(PkgConfig::GASNET INTERFACE Mpi::mpi)
     endif()
 
     if(GASNET_CFLAGS)
@@ -924,44 +669,16 @@ macro(hpx_setup_gasnet)
       endif()
     endif()
 
-    if(GASNET_DIR)
-      list(TRANSFORM GASNET_CFLAGS
-           REPLACE "${GASNET_DIR}/install"
-                   "$<BUILD_INTERFACE:${GASNET_DIR}/install>"
-      )
-      list(TRANSFORM GASNET_LDFLAGS
-           REPLACE "${GASNET_DIR}/install"
-                   "$<BUILD_INTERFACE:${GASNET_DIR}/install>"
-      )
-      list(TRANSFORM GASNET_LIBRARY_DIRS
-           REPLACE "${GASNET_DIR}/install"
-                   "$<BUILD_INTERFACE:${GASNET_DIR}/install>"
-      )
-
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS
-                                     "${GASNET_CFLAGS}"
-      )
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_LINK_OPTIONS "${GASNET_LDFLAGS}"
-      )
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_LINK_DIRECTORIES
-                                     "${GASNET_LIBRARY_DIRS}"
-      )
-    else()
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS
-                                     "${GASNET_CFLAGS}"
-      )
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_LINK_OPTIONS "${GASNET_LDFLAGS}"
-      )
-      set_target_properties(
-        PkgConfig::GASNET PROPERTIES INTERFACE_LINK_DIRECTORIES
-                                     "${GASNET_LIBRARY_DIRS}"
-      )
-    endif()
+    set_target_properties(
+      PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS "${GASNET_CFLAGS}"
+    )
+    set_target_properties(
+      PkgConfig::GASNET PROPERTIES INTERFACE_LINK_OPTIONS "${GASNET_LDFLAGS}"
+    )
+    set_target_properties(
+      PkgConfig::GASNET PROPERTIES INTERFACE_LINK_DIRECTORIES
+                                   "${GASNET_LIBRARY_DIRS}"
+    )
 
   endif()
 

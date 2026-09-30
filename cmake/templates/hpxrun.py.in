@@ -223,19 +223,18 @@ def run_mpi(cmd, localities, verbose):
 
 
 def run_gasnet(cmd, localities, verbose):
-    os.environ['GASNET_PSHM_NODES'] = str(localities)
+    # GASNet-EX (spec >= v0.19): job rank/size are resolved by the GEX spawn
+    # control selected by the host launcher, not by PSHM-era GASNet-1
+    # environment variables.  The MPI conduit bootstraps under mpiexec.
     os.environ['GASNET_QUIET'] = 'yes'
-    os.environ['GASNET_ROUTE_OUTPUT'] = '0'
     run_mpi(cmd, localities, verbose)
 
 
 def run_gasnet_smp(cmd, localities, verbose):
-    os.environ['GASNET_PSHM_NODES'] = str(localities)
-    os.environ['GASNET_BARRIER'] = 'PSHM'
-    os.environ['GASNET_QUIET'] = 'yes'
-    os.environ['GASNET_ROUTE_OUTPUT'] = '0'
-    # No launcher needed
-    run_none(cmd, localities, nodes, verbose)
+    # The SMP conduit is still a collective job: one process per PE as a
+    # single mpiexec invocation (single node).  There is no PSHM/job-control
+    # magic to set under GASNet-EX.
+    run_gasnet(cmd, localities, verbose)
 
 
 # Run with srun
