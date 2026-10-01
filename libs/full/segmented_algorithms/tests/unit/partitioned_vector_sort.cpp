@@ -16,13 +16,10 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
-#include <array>
-#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <exception>
 #include <functional>
-#include <map>
 #include <memory>
 #include <new>
 #include <numeric>
@@ -331,216 +328,87 @@ void test_sort_subranges(
     }
 }
 
-// Exercise the block network with exhaustive zero/one inputs, including a
-// short final block. A stage must never read/write overlapping blocks.
-void test_merge_network()
+struct move_only_sort_value
 {
-    namespace detail = hpx::parallel::detail;
-
-    std::size_t stage_count = 0;
-    bool has_descending_pair = false;
-    detail::segmented_sort_merge_stages(16, [&](auto const& pairs) {
-        ++stage_count;
-        HPX_TEST_EQ(pairs.size(), std::size_t(8));
-        for (auto const& pair : pairs)
-        {
-            has_descending_pair =
-                has_descending_pair || pair.first > pair.second;
-        }
-    });
-    HPX_TEST_EQ(stage_count, std::size_t(10));
-    HPX_TEST(has_descending_pair);
-
-    for (std::size_t count = 2; count <= 7; ++count)
+    explicit move_only_sort_value(int value)
+      : value(value)
     {
-        for (std::size_t tail : {1, 2, 3})
-        {
-            std::size_t combinations = tail + 1;
-            for (std::size_t i = 1; i < count; ++i)
-            {
-                combinations *= 4;
-            }
-            for (std::size_t input = 0; input < combinations; ++input)
-            {
-                std::vector<std::vector<int>> blocks(count);
-                auto digits = input;
-                std::size_t zeros = 0;
-                for (std::size_t i = 0; i < count; ++i)
-                {
-                    auto const size = i + 1 == count ? tail : 3;
-                    auto const nzero = digits % (size + 1);
-                    digits /= size + 1;
-                    zeros += nzero;
-                    blocks[i].resize(size, 1);
-                    std::fill_n(blocks[i].begin(), nzero, 0);
-                }
-                detail::segmented_sort_merge_stages(
-                    count, [&](auto const& pairs) {
-                        std::vector<bool> touched(count, false);
-                        for (auto [left, right] : pairs)
-                        {
-                            HPX_TEST(!touched[left] && !touched[right]);
-                            touched[left] = touched[right] = true;
-                            std::vector<int> merged(
-                                blocks[left].size() + blocks[right].size());
-                            std::merge(blocks[left].begin(), blocks[left].end(),
-                                blocks[right].begin(), blocks[right].end(),
-                                merged.begin());
-                            auto middle = merged.begin() +
-                                static_cast<std::ptrdiff_t>(
-                                    blocks[left].size());
-                            std::copy(
-                                merged.begin(), middle, blocks[left].begin());
-                            std::copy(
-                                middle, merged.end(), blocks[right].begin());
-                        }
-                    });
-                for (auto const& block : blocks)
-                {
-                    for (int value : block)
-                    {
-                        HPX_TEST_EQ(value, zeros != 0 ? 0 : 1);
-                        if (zeros != 0)
-                        {
-                            --zeros;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Exercise the actual compare/split implementation with deliberately small
-// blocks. Cover non-power-of-two block counts, short tails, and duplicates.
-void test_forced_small_blocks()
-{
-    namespace detail = hpx::parallel::detail;
-    constexpr std::size_t block_size = 5;
-    for (std::size_t block_count : {3, 5, 6, 7})
-    {
-        for (std::size_t tail = 1; tail != block_size; ++tail)
-        {
-            auto const size = (block_count - 1) * block_size + tail;
-            for (std::size_t seed = 0; seed != 16; ++seed)
-            {
-                std::vector<int> values(size);
-                for (std::size_t i = 0; i != size; ++i)
-                {
-                    values[i] = static_cast<int>((i * 17 + seed * 13) % 11);
-                }
-                auto expected = values;
-                std::sort(expected.begin(), expected.end());
-
-                auto const here = hpx::find_here();
-                detail::segmented_sort_block<std::vector<int>::iterator> runs{
-                    {here, here, values.begin(), values.end()}};
-                auto blocks = detail::segmented_sort_blocks(runs, block_size);
-                HPX_TEST_EQ(blocks.size(), block_count);
-                std::vector<detail::segmented_sort_pair> initial;
-                for (std::size_t i = 0; i != blocks.size(); ++i)
-                {
-                    initial.emplace_back(i, i);
-                }
-                std::map<hpx::id_type, std::size_t> worker_counts;
-                detail::segmented_sort_stage(hpx::execution::seq, blocks,
-                    HPX_MOVE(initial), worker_counts, std::less<int>{},
-                    hpx::identity_v, std::true_type{});
-                detail::segmented_sort_merge_stages(
-                    blocks.size(), [&](auto pairs) {
-                        detail::segmented_sort_stage(hpx::execution::seq,
-                            blocks, HPX_MOVE(pairs), worker_counts,
-                            std::less<int>{}, hpx::identity_v,
-                            std::true_type{});
-                    });
-                HPX_TEST(values == expected);
-            }
-        }
-    }
-}
-
-struct counted_sort_value
-{
-    inline static std::atomic<std::size_t> live{0};
-    inline static std::atomic<std::size_t> peak{0};
-    inline static std::atomic<std::size_t> copies{0};
-    int value = 0;
-
-    counted_sort_value()
-    {
-        auto const current = ++live;
-        auto previous = peak.load();
-        while (previous < current &&
-            !peak.compare_exchange_weak(previous, current))
-        {
-        }
-    }
-    counted_sort_value(counted_sort_value const& other)
-      : counted_sort_value()
-    {
-        value = other.value;
-        ++copies;
-    }
-    counted_sort_value(counted_sort_value&& other) noexcept
-      : counted_sort_value()
-    {
-        value = other.value;
-    }
-    counted_sort_value& operator=(counted_sort_value const&) = default;
-    counted_sort_value& operator=(counted_sort_value&&) = default;
-    ~counted_sort_value()
-    {
-        --live;
     }
 
-    template <typename Archive>
-    void serialize(Archive& ar, unsigned)
-    {
-        ar & value;
-    }
+    move_only_sort_value() = delete;
+    move_only_sort_value(move_only_sort_value const&) = delete;
+    move_only_sort_value& operator=(move_only_sort_value const&) = delete;
+    move_only_sort_value(move_only_sort_value&&) = default;
+    move_only_sort_value& operator=(move_only_sort_value&&) = default;
+
+    int value;
 };
 
-// HPX component factories must be registered before runtime startup.
-// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
-HPX_REGISTER_PARTITIONED_VECTOR(counted_sort_value)
-
-void test_merge_buffer()
+// Cover arbitrary run counts, short final runs, duplicates, and value types
+// that cannot be copied or default constructed.
+void test_kway_merge()
 {
     namespace detail = hpx::parallel::detail;
-    auto const size = detail::segmented_sort_transfer_chunk_size;
+
+    for (std::size_t run_count : {3, 5, 6, 7})
     {
-        std::vector<counted_sort_value> left(size), right(size);
-        for (std::size_t i = 0; i < size; ++i)
+        for (std::size_t tail = 1; tail != 5; ++tail)
         {
-            left[i].value = static_cast<int>(2 * i);
-            right[i].value = static_cast<int>(2 * i + 1);
-        }
-        auto pred = [](auto const& a, auto const& b) {
-            return a.value < b.value;
-        };
-        // HPX's merge itself creates temporary values. Compare against a
-        // direct merge to isolate copies and storage added by our wrapper.
-        std::size_t reference_copies;
-        std::size_t reference_peak;
-        {
-            std::vector<counted_sort_value> reference(2 * size);
-            hpx::merge(hpx::execution::seq, left.begin(), left.end(),
-                right.begin(), right.end(), reference.begin(), pred);
-            reference_copies = counted_sort_value::copies.load();
-            reference_peak = counted_sort_value::peak.load();
-        }
-        counted_sort_value::copies = 0;
-        counted_sort_value::peak = counted_sort_value::live.load();
-        auto merged = detail::segmented_sort_merge_pair(
-            hpx::execution::seq, left, right, pred);
-        HPX_TEST_EQ(counted_sort_value::copies.load(), reference_copies);
-        HPX_TEST_EQ(counted_sort_value::peak.load(), reference_peak);
-        for (std::size_t i = 0; i < merged.size(); ++i)
-        {
-            HPX_TEST_EQ(merged[i].value, static_cast<int>(i));
+            for (std::size_t seed = 0; seed != 16; ++seed)
+            {
+                std::vector<int> values;
+                std::vector<std::size_t> offsets;
+                std::vector<std::size_t> counts;
+                std::vector<int> expected;
+                for (std::size_t run = 0; run != run_count; ++run)
+                {
+                    offsets.push_back(values.size());
+                    auto const count = run + 1 == run_count ? tail : 5;
+                    counts.push_back(count);
+                    std::vector<int> part(count);
+                    for (std::size_t i = 0; i != count; ++i)
+                    {
+                        part[i] = static_cast<int>(
+                            (run * 17 + i * 13 + seed * 7) % 11);
+                    }
+                    std::sort(part.begin(), part.end());
+                    expected.insert(expected.end(), part.begin(), part.end());
+                    values.insert(values.end(), part.begin(), part.end());
+                }
+                std::sort(expected.begin(), expected.end());
+
+                std::vector<int> output;
+                output.reserve(values.size());
+                std::less<int> pred;
+                detail::segmented_sort_kway_for_each(values, offsets, counts,
+                    pred,
+                    [&](int&& value) { output.push_back(HPX_MOVE(value)); });
+                HPX_TEST(output == expected);
+            }
         }
     }
-    HPX_TEST_EQ(counted_sort_value::live.load(), std::size_t(0));
+
+    std::vector<move_only_sort_value> values;
+    for (int value : {0, 3, 6, 1, 4, 7, 2, 5, 8})
+    {
+        values.emplace_back(value);
+    }
+    std::vector<std::size_t> const offsets{0, 3, 6};
+    std::vector<std::size_t> const counts{3, 3, 3};
+    auto pred = [](move_only_sort_value const& lhs,
+                    move_only_sort_value const& rhs) {
+        return lhs.value < rhs.value;
+    };
+    std::vector<move_only_sort_value> output;
+    detail::segmented_sort_kway_for_each(
+        values, offsets, counts, pred, [&](move_only_sort_value&& value) {
+            output.push_back(HPX_MOVE(value));
+        });
+    HPX_TEST_EQ(output.size(), std::size_t(9));
+    for (std::size_t i = 0; i != output.size(); ++i)
+    {
+        HPX_TEST_EQ(output[i].value, static_cast<int>(i));
+    }
 }
 
 void test_host_placement(std::vector<hpx::id_type> const& localities)
@@ -560,25 +428,6 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
         runs.emplace_back(b, b, data.begin() + i, data.begin() + i + 4 * unit);
     }
     HPX_TEST(detail::segmented_sort_host(runs, {}) == b);
-    HPX_TEST_EQ(detail::segmented_sort_block_capacity(runs),
-        static_cast<std::size_t>(5 * unit));
-
-    if (a != b)
-    {
-        detail::segmented_sort_block<iterator> left{
-            {a, a, data.begin(), data.begin() + unit}};
-        detail::segmented_sort_block<iterator> right{
-            {b, b, data.begin() + unit, data.begin() + 2 * unit}};
-        std::map<hpx::id_type, std::size_t> assignments;
-        for (std::size_t i = 0; i != 8; ++i)
-        {
-            auto const host =
-                detail::segmented_sort_host(left, right, assignments);
-            ++assignments[host];
-        }
-        HPX_TEST_EQ(assignments[a], std::size_t(4));
-        HPX_TEST_EQ(assignments[b], std::size_t(4));
-    }
 
     if (a != b)
     {
@@ -600,8 +449,7 @@ void test_host_placement(std::vector<hpx::id_type> const& localities)
     }
 }
 
-void test_partition_blocks_and_transfer_chunks(
-    std::vector<hpx::id_type> const& localities)
+void test_transfer_chunks(std::vector<hpx::id_type> const& localities)
 {
     namespace detail = hpx::parallel::detail;
     auto const size = 8 * detail::segmented_sort_transfer_chunk_size + 7;
@@ -613,19 +461,6 @@ void test_partition_blocks_and_transfer_chunks(
     std::sort(expected.begin() + 1, expected.end() - 2);
     auto runs =
         detail::segmented_sort_runs(values.begin() + 1, values.end() - 2);
-    auto const capacity = detail::segmented_sort_block_capacity(runs);
-    auto blocks = detail::segmented_sort_blocks(runs, capacity);
-    HPX_TEST_LTE(blocks.size(), runs.size());
-    for (std::size_t i = 0; i != blocks.size(); ++i)
-    {
-        auto const block_size = detail::segmented_sort_block_size(blocks[i]);
-        HPX_TEST_LTE(block_size, capacity);
-        if (i + 1 != blocks.size())
-        {
-            HPX_TEST_EQ(block_size, capacity);
-        }
-    }
-
     auto chunks = detail::segmented_sort_transfer_chunks(runs);
     std::size_t total = 0;
     for (auto const& chunk : chunks)
@@ -669,7 +504,7 @@ struct throwing_merge_less
 
     bool operator()(int a, int b) const
     {
-        // Each initial block lies within one band. Only a merge compares
+        // Each initial run lies within one band. Only a merge compares
         // different bands, after the local sort phase has succeeded.
         constexpr auto band_size = static_cast<int>(
             hpx::parallel::detail::segmented_sort_transfer_chunk_size);
@@ -733,205 +568,11 @@ void test_merge_exceptions(
             caught = true;
         }
         HPX_TEST(caught);
-        // Reuse immediately: the failed stage must have drained its actions.
+        // Reuse immediately: the failed operation must have drained its
+        // actions.
         initialize_reverse(values);
         test_sort_once(values);
     }
-}
-
-// This comparator observes overlap between two initial block sorts. Sleeping
-// suspends the HPX thread so another sort can enter on the same locality.
-struct initial_sort_probe_state
-{
-    std::array<std::atomic<bool>, 2> entered{};
-    std::atomic<std::size_t> active{0};
-    std::atomic<std::size_t> peak{0};
-};
-
-struct initial_sort_probe
-{
-    inline static std::shared_ptr<initial_sort_probe_state> state;
-    static constexpr auto block_size =
-        hpx::parallel::detail::segmented_sort_transfer_chunk_size;
-
-    bool operator()(int a, int b) const
-    {
-        auto const block = static_cast<std::size_t>(a) / block_size;
-        if (!state->entered[block].exchange(true))
-        {
-            auto const current = ++state->active;
-            auto previous = state->peak.load();
-            while (previous < current &&
-                !state->peak.compare_exchange_weak(previous, current))
-            {
-            }
-            hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
-            --state->active;
-        }
-        return a < b;
-    }
-
-    template <typename Archive>
-    void serialize(Archive&, unsigned)
-    {
-    }
-};
-
-void test_initial_sort_concurrency()
-{
-    namespace detail = hpx::parallel::detail;
-    constexpr auto size = initial_sort_probe::block_size;
-    // Four physical pieces produce two forced logical blocks on this
-    // locality for the scheduler test.
-    hpx::partitioned_vector<int> values(2 * size, 0,
-        hpx::container_layout(4, std::vector<hpx::id_type>{hpx::find_here()}));
-    initialize_values(values, [](std::size_t i) {
-        return static_cast<int>((i / size) * size + size - 1 - i % size);
-    });
-    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
-    auto blocks = detail::segmented_sort_blocks(runs, size);
-    initial_sort_probe::state = std::make_shared<initial_sort_probe_state>();
-    auto worker_counts =
-        detail::segmented_sort_worker_counts(hpx::execution::par, blocks);
-    detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 0}, {1, 1}},
-        worker_counts, initial_sort_probe{}, hpx::identity_v,
-        std::false_type{});
-    HPX_TEST_EQ(initial_sort_probe::state->peak.load(), std::size_t(2));
-    initial_sort_probe::state.reset();
-    auto got = copy_values(values);
-    HPX_TEST(std::is_sorted(got.begin(), got.end()));
-}
-
-struct merge_stage_probe_state
-{
-    std::array<std::atomic<bool>, 2> entered{};
-    std::atomic<std::size_t> started{0};
-    hpx::promise<void> both_started;
-    hpx::shared_future<void> ready = both_started.get_future();
-    std::atomic<bool> timed_out{false};
-};
-
-struct merge_stage_probe
-{
-    inline static std::shared_ptr<merge_stage_probe_state> state;
-    static constexpr std::size_t block_size = 2048;
-    static constexpr int group_stride = 4 * static_cast<int>(block_size);
-
-    bool operator()(int a, int b) const
-    {
-        auto const group =
-            static_cast<std::size_t>((std::min) (a, b) / group_stride);
-        if (!state->entered[group].exchange(true))
-        {
-            if (++state->started == 2)
-            {
-                state->both_started.set_value();
-            }
-            if (state->ready.wait_for(std::chrono::seconds(5)) !=
-                hpx::future_status::ready)
-            {
-                state->timed_out = true;
-            }
-        }
-        return a < b;
-    }
-
-    template <typename Archive>
-    void serialize(Archive&, unsigned)
-    {
-    }
-};
-
-void test_merge_stage_concurrency()
-{
-    namespace detail = hpx::parallel::detail;
-    constexpr auto size = merge_stage_probe::block_size;
-    hpx::partitioned_vector<int> values(4 * size, 0,
-        hpx::container_layout(4, std::vector<hpx::id_type>{hpx::find_here()}));
-    initialize_values(values, [](std::size_t i) {
-        auto const block = i / size;
-        auto const offset = i % size;
-        return static_cast<int>(block / 2) * merge_stage_probe::group_stride +
-            static_cast<int>(2 * offset + block % 2);
-    });
-    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
-    auto blocks = detail::segmented_sort_blocks(runs, size);
-    auto worker_counts =
-        detail::segmented_sort_worker_counts(hpx::execution::par, blocks);
-    merge_stage_probe::state = std::make_shared<merge_stage_probe_state>();
-    detail::segmented_sort_stage(hpx::execution::par, blocks, {{0, 1}, {2, 3}},
-        worker_counts, merge_stage_probe{}, hpx::identity_v, std::false_type{});
-    HPX_TEST(!merge_stage_probe::state->timed_out.load());
-    merge_stage_probe::state.reset();
-    auto got = copy_values(values);
-    HPX_TEST(std::is_sorted(got.begin(), got.end()));
-}
-
-struct sliding_stage_probe_state
-{
-    std::array<std::atomic<bool>, 3> entered{};
-    hpx::promise<void> third_started;
-    hpx::shared_future<void> ready = third_started.get_future();
-    std::atomic<bool> timed_out{false};
-};
-
-struct sliding_stage_probe
-{
-    inline static std::shared_ptr<sliding_stage_probe_state> state;
-    static constexpr std::size_t block_size = 1024;
-    static constexpr int group_stride = 4 * static_cast<int>(block_size);
-
-    bool operator()(int a, int b) const
-    {
-        auto const group =
-            static_cast<std::size_t>((std::min) (a, b) / group_stride);
-        if (!state->entered[group].exchange(true))
-        {
-            if (group == 0)
-            {
-                state->third_started.set_value();
-            }
-            else if (group == 2 &&
-                state->ready.wait_for(std::chrono::seconds(5)) !=
-                    hpx::future_status::ready)
-            {
-                state->timed_out = true;
-            }
-        }
-        return a < b;
-    }
-
-    template <typename Archive>
-    void serialize(Archive&, unsigned)
-    {
-    }
-};
-
-void test_sliding_stage_window()
-{
-    namespace detail = hpx::parallel::detail;
-    constexpr auto size = sliding_stage_probe::block_size;
-    std::vector<int> values(6 * size);
-    for (std::size_t i = 0; i != values.size(); ++i)
-    {
-        auto const block = i / size;
-        auto const offset = i % size;
-        values[i] =
-            static_cast<int>(block / 2) * sliding_stage_probe::group_stride +
-            static_cast<int>(2 * offset + block % 2);
-    }
-    auto const here = hpx::find_here();
-    detail::segmented_sort_block<std::vector<int>::iterator> runs{
-        {here, here, values.begin(), values.end()}};
-    auto blocks = detail::segmented_sort_blocks(runs, size);
-    std::map<hpx::id_type, std::size_t> worker_counts{{here, 2}};
-    sliding_stage_probe::state = std::make_shared<sliding_stage_probe_state>();
-    detail::segmented_sort_stage(hpx::execution::par, blocks,
-        {{0, 1}, {2, 3}, {4, 5}}, worker_counts, sliding_stage_probe{},
-        hpx::identity_v, std::false_type{});
-    HPX_TEST(!sliding_stage_probe::state->timed_out.load());
-    sliding_stage_probe::state.reset();
-    HPX_TEST(std::is_sorted(values.begin(), values.end()));
 }
 
 struct collection_gate
@@ -1000,47 +641,6 @@ void test_async_run_collection(ExPolicy const& policy)
     HPX_TEST(std::is_sorted(got.begin(), got.end()));
 }
 
-struct counted_value_less
-{
-    bool operator()(
-        counted_sort_value const& a, counted_sort_value const& b) const
-    {
-        return a.value < b.value;
-    }
-
-    template <typename Archive>
-    void serialize(Archive&, unsigned)
-    {
-    }
-};
-
-void test_ordered_endpoints()
-{
-    namespace detail = hpx::parallel::detail;
-    hpx::partitioned_vector<counted_sort_value> values(4096,
-        counted_sort_value{},
-        hpx::container_layout(2, std::vector<hpx::id_type>{hpx::find_here()}));
-    initialize_values(values, [](int i) {
-        counted_sort_value value;
-        value.value = i;
-        return value;
-    });
-    auto runs = detail::segmented_sort_runs(values.begin(), values.end());
-    auto blocks = detail::segmented_sort_blocks(runs, 2048);
-    counted_sort_value::copies = 0;
-    using local_iterator = hpx::traits::segmented_iterator_traits<
-        decltype(values.begin())>::local_iterator;
-    detail::segmented_sort_compare_split<local_iterator>::sequential(
-        hpx::execution::seq, blocks[0], blocks[1], counted_value_less{},
-        hpx::identity_v);
-    HPX_TEST_EQ(counted_sort_value::copies.load(), std::size_t(0));
-    auto got = copy_values(values);
-    for (std::size_t i = 0; i < got.size(); ++i)
-    {
-        HPX_TEST_EQ(got[i].value, static_cast<int>(i));
-    }
-}
-
 void test_transfer_batches(std::vector<hpx::id_type> const& localities)
 {
     namespace detail = hpx::parallel::detail;
@@ -1086,18 +686,9 @@ void test_transfer_batches(std::vector<hpx::id_type> const& localities)
 int main()
 {
     std::vector<hpx::id_type> localities = hpx::find_all_localities();
-    test_merge_network();
-    test_forced_small_blocks();
-    test_merge_buffer();
+    test_kway_merge();
     test_host_placement(localities);
-    test_partition_blocks_and_transfer_chunks(localities);
-    if (hpx::get_os_thread_count() > 1)
-    {
-        test_initial_sort_concurrency();
-        test_merge_stage_concurrency();
-        test_sliding_stage_window();
-    }
-    test_ordered_endpoints();
+    test_transfer_chunks(localities);
     test_transfer_batches(localities);
     test_async_run_collection(hpx::execution::seq(hpx::execution::task));
     test_async_run_collection(hpx::execution::par(hpx::execution::task));
