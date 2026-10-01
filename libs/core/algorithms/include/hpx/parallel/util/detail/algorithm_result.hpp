@@ -227,7 +227,7 @@ namespace hpx::parallel::util::detail {
         using type = decltype(hpx::execution::experimental::just());
 
         template <typename T_>
-        static constexpr auto get(T_&& t)
+        static constexpr auto get([[maybe_unused]] T_&& t)
         {
             namespace ex = hpx::execution::experimental;
             if constexpr (ex::is_sender_v<T_>)

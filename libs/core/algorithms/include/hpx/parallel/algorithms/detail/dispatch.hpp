@@ -193,6 +193,12 @@ namespace hpx::parallel::detail {
                 auto sched = policy.executor().sched();
                 auto future_policy =
                     ex::to_task(policy.on(ex::scheduler_executor(sched)));
+                using future_policy_type = decltype(future_policy);
+                static_assert(!hpx::execution_policy_has_scheduler_executor_v<
+                                  future_policy_type>,
+                    "the future adapter policy must leave scheduler dispatch");
+                static_assert(std::is_default_constructible_v<Derived>,
+                    "future-based algorithms must be default constructible");
                 auto sender = ex::let_value(ex::schedule(sched),
                     [policy = HPX_MOVE(future_policy),
                         args = hpx::make_tuple(
@@ -203,7 +209,8 @@ namespace hpx::parallel::detail {
                         try
                         {
                             return hpx::invoke_fused(
-                                [&policy](auto&&... values) {
+                                [policy = HPX_MOVE(policy)](
+                                    auto&&... values) mutable {
                                     using policy_type =
                                         decltype(ex::to_non_task(policy));
                                     using exception_handler =
@@ -235,6 +242,7 @@ namespace hpx::parallel::detail {
                                 decltype(ex::to_non_task(policy));
                             hpx::parallel::detail::handle_exception<policy_type,
                                 local_result_type>::call();
+                            HPX_UNREACHABLE;
                         }
                     });
                 return result_handler::get(
