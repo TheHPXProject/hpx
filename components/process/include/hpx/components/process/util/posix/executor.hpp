@@ -26,6 +26,14 @@ namespace hpx { namespace components { namespace process { namespace posix {
 
     struct executor
     {
+        enum class error_origin
+        {
+            none,
+            setup,
+            chdir,
+            execve
+        };
+
         executor()
           : exe(nullptr)
           , cmd_line(nullptr)
@@ -95,7 +103,12 @@ namespace hpx { namespace components { namespace process { namespace posix {
             {
                 if (e_.exec_error == 0)
                 {
+                    e_.exec_error_origin = error_origin::setup;
                     arg.on_exec_setup(e_);
+                    if (e_.exec_error == 0)
+                    {
+                        e_.exec_error_origin = error_origin::none;
+                    }
                 }
             }
         };
@@ -129,9 +142,11 @@ namespace hpx { namespace components { namespace process { namespace posix {
             else if (pid == 0)
             {
                 exec_error = 0;
+                exec_error_origin = error_origin::none;
                 (call_on_exec_setup(*this)(ts), ...);
                 if (exec_error == 0)
                 {
+                    exec_error_origin = error_origin::execve;
                     ::execve(exe, cmd_line, env);
                     exec_error = errno;
                 }
@@ -151,6 +166,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
         char** env;
         // Preserve child setup errors until the error initializers report them.
         int exec_error = 0;
+        error_origin exec_error_origin = error_origin::none;
         pid_t child_pid = -1;
     };
 

@@ -8,6 +8,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <atomic>
 #include <cerrno>
 #include <cstdlib>
 #include <initializer_list>
@@ -15,9 +16,11 @@
 #include <signal.h>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <time.h>
 #include <vector>
 
+#include <pthread.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -79,7 +82,8 @@ namespace {
     }
 
     template <typename... Initializers>
-    void test_error(int code, bool handler_first, Initializers const&... init)
+    void test_error(int code, char const* operation, bool handler_first,
+        Initializers const&... init)
     {
         bool caught = false;
         try
@@ -97,8 +101,10 @@ namespace {
         {
             caught = true;
             HPX_TEST(e.get_error() == hpx::error::kernel_error);
-            HPX_TEST(std::string(e.what()).find(std::generic_category().message(
-                         code)) != std::string::npos);
+            std::string const message = e.what();
+            HPX_TEST(message.find(operation) != std::string::npos);
+            HPX_TEST(message.find(std::generic_category().message(code)) !=
+                std::string::npos);
         }
         HPX_TEST(caught);
         check_no_children();
@@ -115,18 +121,57 @@ namespace {
         HPX_TEST_EQ(::sigaction(SIGUSR1, &action, &previous_action), 0);
 
         signal_count = 0;
-        auto const interrupt_read = process::on_exec_setup([](auto& e) {
+        std::atomic<int> signal_error{0};
+        std::jthread interrupter;
+        auto const start_interrupting = process::on_fork_success([&](auto&) {
+            pthread_t const reading_thread = ::pthread_self();
+            interrupter = std::jthread([&, reading_thread](
+                                           std::stop_token stop) {
+                while (!stop.stop_requested())
+                {
+                    timespec delay{0, 10000000};
+                    while (::nanosleep(&delay, &delay) == -1 && errno == EINTR)
+                    {
+                    }
+                    int const error = ::pthread_kill(reading_thread, SIGUSR1);
+                    if (error != 0)
+                    {
+                        signal_error = error;
+                        return;
+                    }
+                }
+            });
+        });
+        auto const delayed_error = process::on_exec_setup([](auto& e) {
             delay_signal_test();
-            if (::kill(::getppid(), SIGUSR1) == -1)
-            {
-                e.exec_error = errno;
-                return;
-            }
             delay_signal_test();
             e.exec_error = ENOENT;
         });
-        test_error(ENOENT, true, init..., interrupt_read);
+
+        bool caught = false;
+        try
+        {
+            process::util::execute(start_interrupting,
+                process::throw_on_error(), init..., delayed_error);
+        }
+        catch (hpx::exception const& e)
+        {
+            caught = true;
+            std::string const message = e.what();
+            HPX_TEST(message.find("child process setup failed") !=
+                std::string::npos);
+            HPX_TEST(message.find(std::generic_category().message(ENOENT)) !=
+                std::string::npos);
+        }
+        interrupter.request_stop();
+        if (interrupter.joinable())
+        {
+            interrupter.join();
+        }
+        HPX_TEST(caught);
         HPX_TEST_EQ(signal_count, 1);
+        HPX_TEST_EQ(signal_error.load(), 0);
+        check_no_children();
 
         HPX_TEST_EQ(::sigaction(SIGUSR1, &previous_action, nullptr), 0);
     }
@@ -151,20 +196,20 @@ int main()
             process::on_exec_setup([](auto&) { ::_exit(99); });
         auto const change_errno =
             process::on_exec_error([](auto&) { errno = EACCES; });
-        test_error(ENOENT, handler_first, exe, env, process::start_in_dir(""),
-            must_not_run, change_errno);
-        test_error(ENOTDIR, handler_first, exe, env,
+        test_error(ENOENT, "chdir(2) failed", handler_first, exe, env,
+            process::start_in_dir(""), must_not_run, change_errno);
+        test_error(ENOTDIR, "chdir(2) failed", handler_first, exe, env,
             process::start_in_dir("/dev/null"), must_not_run, change_errno);
         auto const missing_exe = process::run_exe(
             "/this/path/does/not/exist/hpx-posix-initializers-7646");
         auto const missing_args = process::set_args(std::vector<std::string>{
             "/this/path/does/not/exist/hpx-posix-initializers-7646"});
-        test_error(ENOENT, handler_first, missing_exe, missing_args, env,
-            change_errno);
+        test_error(ENOENT, "execve(2) failed", handler_first, missing_exe,
+            missing_args, env, change_errno);
 
         // Exercise the portable fallback for an unknown errno value too.
         int const unknown_error = (std::numeric_limits<int>::max)();
-        test_error(unknown_error, handler_first,
+        test_error(unknown_error, "child process setup failed", handler_first,
             process::on_exec_setup(
                 [=](auto& e) { e.exec_error = unknown_error; }));
     }

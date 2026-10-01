@@ -40,6 +40,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 if (::chdir(s_.c_str()) == -1)
                 {
                     e.exec_error = errno;
+                    e.exec_error_origin = PosixExecutor::error_origin::chdir;
                 }
             }
 
