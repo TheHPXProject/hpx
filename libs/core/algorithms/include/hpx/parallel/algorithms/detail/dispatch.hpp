@@ -287,8 +287,23 @@ namespace hpx::parallel::detail {
             }
             else
             {
-                return result_handler::get(Derived::parallel(
+                using result = decltype(Derived::parallel(
                     HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
+
+                // Executor customizations can make void algorithms such as
+                // for_loop return void directly instead of a future.
+                if constexpr (std::is_void_v<result>)
+                {
+                    Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Args, args)...);
+                    return result_handler::get();
+                }
+                else
+                {
+                    return result_handler::get(
+                        Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                            HPX_FORWARD(Args, args)...));
+                }
             }
         }
 
