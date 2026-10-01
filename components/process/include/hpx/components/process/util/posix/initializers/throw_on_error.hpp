@@ -168,7 +168,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
             void on_exec_error(PosixExecutor& e) const
             {
                 error_report const report{
-                    e.exec_error, static_cast<int>(e.exec_error_origin)};
+                    {e.exec_error, static_cast<int>(e.exec_error_origin)}};
                 while (
                     ::write(fds_[1], report.data(), error_report_size) == -1 &&
                     errno == EINTR)
