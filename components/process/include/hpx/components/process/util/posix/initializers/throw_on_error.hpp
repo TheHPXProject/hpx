@@ -22,7 +22,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <cstddef>
 #include <string>
 #include <system_error>
 
@@ -42,6 +41,13 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 while (::waitpid(pid, nullptr, 0) == -1 && errno == EINTR)
                 {
                 }
+            }
+
+            static auto read_error_code(int fd, int& code) noexcept
+            {
+                // The destination and requested size are the same object.
+                // flawfinder: ignore
+                return ::read(fd, &code, sizeof(code));
             }
 
         public:
@@ -81,35 +87,15 @@ namespace hpx { namespace components { namespace process { namespace posix {
             {
                 ::close(fds_[1]);
                 int code = 0;
-                std::size_t bytes_read = 0;
-                while (bytes_read != sizeof(code))
+                auto count = read_error_code(fds_[0], code);
+                while (count == -1 && errno == EINTR)
                 {
-                    auto const count = ::read(fds_[0],
-                        reinterpret_cast<char*>(&code) + bytes_read,
-                        sizeof(code) - bytes_read);
-                    if (count > 0)
-                    {
-                        bytes_read += static_cast<std::size_t>(count);
-                    }
-                    else if (count == 0)
-                    {
-                        break;
-                    }
-                    else if (errno != EINTR)
-                    {
-                        int const read_error = errno;
-                        ::close(fds_[0]);
-                        wait_for_child(e.child_pid);
-
-                        HPX_THROW_EXCEPTION(hpx::error::kernel_error,
-                            "throw_on_error::on_fork_success",
-                            "read(2) failed: {}",
-                            extract_error_string(read_error));
-                    }
+                    count = read_error_code(fds_[0], code);
                 }
+                int const read_error = count == -1 ? errno : 0;
                 ::close(fds_[0]);
 
-                if (bytes_read == sizeof(code))
+                if (count == static_cast<decltype(count)>(sizeof(code)))
                 {
                     wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
@@ -117,7 +103,14 @@ namespace hpx { namespace components { namespace process { namespace posix {
                         "chdir(2) or execve(2) failed: {}",
                         extract_error_string(code));
                 }
-                else if (bytes_read != 0)
+                else if (count == -1)
+                {
+                    wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success", "read(2) failed: {}",
+                        extract_error_string(read_error));
+                }
+                else if (count != 0)
                 {
                     wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
