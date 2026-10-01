@@ -10,9 +10,11 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <exception>
 #include <iterator>
+#include <memory>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -24,6 +26,116 @@
 
 namespace ex = hpx::execution::experimental;
 namespace tt = hpx::this_thread::experimental;
+
+struct scan_lifecycle_state
+{
+    std::atomic<std::size_t> begin{0};
+    std::atomic<std::size_t> end_scheduling{0};
+    std::atomic<std::size_t> end{0};
+    std::atomic<std::size_t> writes_after_end_scheduling{0};
+};
+
+struct scan_lifecycle_parameters
+{
+    std::shared_ptr<scan_lifecycle_state> state;
+
+    template <typename Executor>
+    void mark_begin_execution(Executor&&) const noexcept
+    {
+        ++state->begin;
+    }
+
+    template <typename Executor>
+    void mark_end_of_scheduling(Executor&&) const noexcept
+    {
+        ++state->end_scheduling;
+    }
+
+    template <typename Executor>
+    void mark_end_execution(Executor&&) const noexcept
+    {
+        ++state->end;
+    }
+};
+
+template <>
+struct hpx::execution::experimental::is_executor_parameters<
+    scan_lifecycle_parameters> : std::true_type
+{
+};
+
+struct scan_output_value
+{
+    std::shared_ptr<scan_lifecycle_state> state;
+    int value = -1;
+
+    scan_output_value& operator=(int new_value) noexcept
+    {
+        if (state->end_scheduling.load() >= state->begin.load())
+        {
+            ++state->writes_after_end_scheduling;
+        }
+        value = new_value;
+        return *this;
+    }
+};
+
+void test_copy_if_sender_lifecycle()
+{
+    using namespace hpx::execution;
+
+    auto exec = ex::explicit_scheduler_executor(
+        ex::thread_pool_policy_scheduler(hpx::launch::async));
+    std::vector<int> input{1, 2, 3, 4, 5, 6};
+    std::vector<int> output(input.size(), -1);
+
+    // Constructing and destroying an unstarted sender has no lifecycle
+    // effects.
+    {
+        auto state = std::make_shared<scan_lifecycle_state>();
+        auto policy = par(task).with(scan_lifecycle_parameters{state}).on(exec);
+        {
+            auto sender = hpx::copy_if(policy, input.begin(), input.end(),
+                output.begin(), [](int value) { return value % 2 == 0; });
+            HPX_TEST_EQ(state->begin.load(), std::size_t(0));
+            HPX_TEST_EQ(state->end_scheduling.load(), std::size_t(0));
+            HPX_TEST_EQ(state->end.load(), std::size_t(0));
+        }
+        HPX_TEST_EQ(state->begin.load(), std::size_t(0));
+        HPX_TEST_EQ(state->end_scheduling.load(), std::size_t(0));
+        HPX_TEST_EQ(state->end.load(), std::size_t(0));
+    }
+
+    // Each copy creates independent scan state when it is started.
+    auto state = std::make_shared<scan_lifecycle_state>();
+    std::vector<scan_output_value> observed_output(
+        input.size(), scan_output_value{state});
+    auto policy = par(task).with(scan_lifecycle_parameters{state}).on(exec);
+    auto sender = hpx::copy_if(policy, input.begin(), input.end(),
+        observed_output.begin(), [](int value) { return value % 2 == 0; });
+    static_assert(std::is_copy_constructible_v<decltype(sender)>);
+    std::vector<int> const expected{2, 4, 6};
+
+    for (std::size_t invocation = 1; invocation != 3; ++invocation)
+    {
+        auto operation = sender;
+        auto result = tt::sync_wait(HPX_MOVE(operation));
+        HPX_TEST(result.has_value());
+        HPX_TEST_EQ(state->begin.load(), invocation);
+        HPX_TEST_EQ(state->end_scheduling.load(), invocation);
+        HPX_TEST_EQ(state->end.load(), invocation);
+        HPX_TEST_EQ(state->writes_after_end_scheduling.load(), std::size_t(0));
+        HPX_TEST(
+            std::equal(observed_output.begin(), observed_output.begin() + 3,
+                expected.begin(), [](scan_output_value const& lhs, int rhs) {
+                    return lhs.value == rhs;
+                }));
+        for (auto& value : observed_output)
+        {
+            value.value = -1;
+        }
+    }
+}
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_copy_if_scheduler(
@@ -211,6 +323,7 @@ void copy_if_sender_test()
 
 int hpx_main()
 {
+    test_copy_if_sender_lifecycle();
     copy_if_sender_test<std::forward_iterator_tag>();
     copy_if_sender_test<std::random_access_iterator_tag>();
     return hpx::local::finalize();

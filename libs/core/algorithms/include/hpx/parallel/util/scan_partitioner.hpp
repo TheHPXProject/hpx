@@ -267,120 +267,117 @@ namespace hpx::parallel::util {
             static decltype(auto) call(ExPolicy_&& policy, FwdIter first,
                 std::size_t count, T&& init, F1&& f1, F2&& f2, F3&& f3, F4&& f4)
             {
-                using parameters_type =
-                    typename std::decay_t<ExPolicy_>::executor_parameters_type;
-                using executor_type =
-                    typename std::decay_t<ExPolicy_>::executor_type;
-                using scoped_executor_parameters =
-                    detail::scoped_executor_parameters<parameters_type,
-                        executor_type>;
-
-                auto scoped_params =
-                    std::make_shared<scoped_executor_parameters>(
-                        policy.parameters(), policy.executor());
-
-                std::size_t cores = 1;
-                auto shape = [&]() {
-                    if constexpr (hpx::execution::experimental::
-                                      extract_has_variable_chunk_size_v<
-                                          parameters_type>)
-                    {
-                        return detail::get_bulk_iteration_shape_variable(
-                            policy, first, count, cores);
-                    }
-                    else
-                    {
-                        return detail::get_bulk_iteration_shape(
-                            policy, first, count, cores);
-                    }
-                }();
-
-                std::vector<chunk_type<FwdIter>> chunks;
-                chunks.reserve(hpx::util::size(shape));
-                for (auto const& chunk : shape)
-                {
-                    chunks.emplace_back(
-                        chunks.size(), hpx::get<0>(chunk), hpx::get<1>(chunk));
-                }
-
                 namespace ex = hpx::execution::experimental;
+                static_assert(std::is_void_v<Result2>,
+                    "scheduler scan partitioning does not produce futures "
+                    "from the final scan phase");
 
-                auto partial_results =
-                    std::make_shared<std::vector<std::optional<Result1>>>(
-                        chunks.size());
-                auto exec = policy.executor();
-                auto first_step = execution::bulk_async_execute(
-                    exec,
-                    [f1 = HPX_FORWARD(F1, f1), partial_results](
-                        chunk_type<FwdIter> const& chunk) mutable {
-                        auto f1_copy = f1;
-                        (*partial_results)[hpx::get<0>(chunk)].emplace(
-                            HPX_INVOKE(f1_copy, hpx::get<1>(chunk),
-                                hpx::get<2>(chunk)));
-                    },
-                    chunks);
-                auto first_step_with_errors = ex::let_error(
-                    HPX_MOVE(first_step), [](std::exception_ptr error) {
-                        return ex::just_error(transform_exception(error));
-                    });
-
-                return ex::let_value(HPX_MOVE(first_step_with_errors),
-                    [exec = HPX_MOVE(exec), chunks = HPX_MOVE(chunks),
-                        scoped_params = HPX_MOVE(scoped_params),
-                        partial_results = HPX_MOVE(partial_results),
-                        init = HPX_FORWARD(T, init), f2 = HPX_FORWARD(F2, f2),
-                        f3 = HPX_FORWARD(F3, f3),
+                auto operation = ex::let_value(ex::just(),
+                    [policy = HPX_FORWARD(ExPolicy_, policy), first, count,
+                        init = HPX_FORWARD(T, init), f1 = HPX_FORWARD(F1, f1),
+                        f2 = HPX_FORWARD(F2, f2), f3 = HPX_FORWARD(F3, f3),
                         f4 = HPX_FORWARD(F4, f4)]() mutable {
-                        try
+                        using parameters_type = typename std::decay_t<
+                            ExPolicy_>::executor_parameters_type;
+                        using executor_type =
+                            typename std::decay_t<ExPolicy_>::executor_type;
+                        using scoped_executor_parameters =
+                            detail::scoped_executor_parameters<parameters_type,
+                                executor_type>;
+
+                        auto scoped_params =
+                            std::make_shared<scoped_executor_parameters>(
+                                policy.parameters(), policy.executor());
+
+                        std::size_t cores = 1;
+                        auto shape = [&]() {
+                            if constexpr (hpx::execution::experimental::
+                                              extract_has_variable_chunk_size_v<
+                                                  parameters_type>)
+                            {
+                                return detail::
+                                    get_bulk_iteration_shape_variable(
+                                        policy, first, count, cores);
+                            }
+                            else
+                            {
+                                return detail::get_bulk_iteration_shape(
+                                    policy, first, count, cores);
+                            }
+                        }();
+
+                        std::vector<chunk_type<FwdIter>> chunks;
+                        chunks.reserve(hpx::util::size(shape));
+                        for (auto const& chunk : shape)
                         {
-                            std::vector<Result1> scan_results;
-                            scan_results.reserve(partial_results->size() + 1);
+                            chunks.emplace_back(chunks.size(),
+                                hpx::get<0>(chunk), hpx::get<1>(chunk));
+                        }
 
-                            Result1 result = HPX_MOVE(init);
-                            scan_results.push_back(result);
-                            for (auto& partial_result : *partial_results)
-                            {
-                                HPX_ASSERT(partial_result.has_value());
-                                result =
-                                    HPX_INVOKE(f2, result, *partial_result);
+                        auto partial_results = std::make_shared<
+                            std::vector<std::optional<Result1>>>(chunks.size());
+                        auto exec = policy.executor();
+                        auto first_step = execution::bulk_async_execute(
+                            exec,
+                            [f1 = HPX_MOVE(f1), partial_results](
+                                chunk_type<FwdIter> const& chunk) mutable {
+                                auto f1_copy = f1;
+                                (*partial_results)[hpx::get<0>(chunk)].emplace(
+                                    HPX_INVOKE(f1_copy, hpx::get<1>(chunk),
+                                        hpx::get<2>(chunk)));
+                            },
+                            chunks);
+
+                        return ex::let_value(HPX_MOVE(first_step),
+                            [exec = HPX_MOVE(exec), chunks = HPX_MOVE(chunks),
+                                scoped_params = HPX_MOVE(scoped_params),
+                                partial_results = HPX_MOVE(partial_results),
+                                init = HPX_MOVE(init), f2 = HPX_MOVE(f2),
+                                f3 = HPX_MOVE(f3),
+                                f4 = HPX_MOVE(f4)]() mutable {
+                                std::vector<Result1> scan_results;
+                                scan_results.reserve(
+                                    partial_results->size() + 1);
+
+                                Result1 result = HPX_MOVE(init);
                                 scan_results.push_back(result);
-                            }
+                                for (auto& partial_result : *partial_results)
+                                {
+                                    HPX_ASSERT(partial_result.has_value());
+                                    result =
+                                        HPX_INVOKE(f2, result, *partial_result);
+                                    scan_results.push_back(result);
+                                }
 
-                            std::vector<final_chunk_type<FwdIter>> final_chunks;
-                            final_chunks.reserve(chunks.size());
-                            for (std::size_t i = 0; i != chunks.size(); ++i)
-                            {
-                                final_chunks.emplace_back(
-                                    hpx::get<1>(chunks[i]),
-                                    hpx::get<2>(chunks[i]), scan_results[i]);
-                            }
+                                std::vector<final_chunk_type<FwdIter>>
+                                    final_chunks;
+                                final_chunks.reserve(chunks.size());
+                                for (std::size_t i = 0; i != chunks.size(); ++i)
+                                {
+                                    final_chunks.emplace_back(
+                                        hpx::get<1>(chunks[i]),
+                                        hpx::get<2>(chunks[i]),
+                                        scan_results[i]);
+                                }
 
-                            auto final_step = execution::bulk_async_execute(
-                                exec,
-                                [f3 = HPX_MOVE(f3)](
-                                    final_chunk_type<FwdIter> const&
-                                        chunk) mutable {
-                                    auto f3_copy = f3;
-                                    HPX_INVOKE(f3_copy, hpx::get<0>(chunk),
-                                        hpx::get<1>(chunk), hpx::get<2>(chunk));
-                                },
-                                final_chunks);
-                            auto final_step_with_errors =
-                                ex::let_error(HPX_MOVE(final_step),
-                                    [](std::exception_ptr error) {
-                                        return ex::just_error(
-                                            transform_exception(error));
-                                    });
+                                auto final_step = execution::bulk_async_execute(
+                                    exec,
+                                    [f3 = HPX_MOVE(f3)](
+                                        final_chunk_type<FwdIter> const&
+                                            chunk) mutable {
+                                        auto f3_copy = f3;
+                                        HPX_INVOKE(f3_copy, hpx::get<0>(chunk),
+                                            hpx::get<1>(chunk),
+                                            hpx::get<2>(chunk));
+                                    },
+                                    final_chunks);
 
-                            scoped_params->mark_end_of_scheduling();
-
-                            return ex::then(HPX_MOVE(final_step_with_errors),
-                                [f4 = HPX_MOVE(f4),
-                                    scoped_params = HPX_MOVE(scoped_params),
-                                    scan_results =
-                                        HPX_MOVE(scan_results)]() mutable -> R {
-                                    try
-                                    {
+                                return ex::then(HPX_MOVE(final_step),
+                                    [f4 = HPX_MOVE(f4),
+                                        scoped_params = HPX_MOVE(scoped_params),
+                                        scan_results = HPX_MOVE(
+                                            scan_results)]() mutable -> R {
+                                        scoped_params->mark_end_of_scheduling();
                                         std::vector<hpx::future<Result2>> data;
                                         if constexpr (std::is_void_v<R>)
                                         {
@@ -395,21 +392,13 @@ namespace hpx::parallel::util {
                                                 HPX_MOVE(scan_results),
                                                 HPX_MOVE(data));
                                         }
-                                    }
-                                    catch (...)
-                                    {
-                                        handle_local_exceptions::call(
-                                            std::current_exception());
-                                    }
-                                    HPX_UNREACHABLE;
-                                });
-                        }
-                        catch (...)
-                        {
-                            handle_local_exceptions::call(
-                                std::current_exception());
-                        }
-                        HPX_UNREACHABLE;
+                                    });
+                            });
+                    });
+
+                return ex::let_error(
+                    HPX_MOVE(operation), [](std::exception_ptr error) {
+                        return ex::just_error(transform_exception(error));
                     });
             }
         };
