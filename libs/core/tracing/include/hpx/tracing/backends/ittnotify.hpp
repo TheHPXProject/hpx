@@ -76,9 +76,9 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT mark_event
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] mark_event
     {
-        explicit mark_event(char const* name) noexcept;
+        HPX_CORE_EXPORT explicit mark_event(char const* name) noexcept;
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -87,11 +87,12 @@ namespace hpx::tracing {
         char const* name = nullptr;
     };
 
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT fiber_region
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] fiber_region
     {
-        explicit fiber_region(fiber_region_init_data const& data,
+        HPX_CORE_EXPORT explicit fiber_region(
+            fiber_region_init_data const& data,
             std::size_t num_thread) noexcept;
-        ~fiber_region();
+        HPX_CORE_EXPORT ~fiber_region();
 
         fiber_region(fiber_region const&) = delete;
         fiber_region& operator=(fiber_region const&) = delete;
@@ -101,10 +102,11 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT fiber_suspend_region
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] fiber_suspend_region
     {
-        explicit fiber_suspend_region(char const* desc) noexcept;
-        ~fiber_suspend_region();
+        HPX_CORE_EXPORT explicit fiber_suspend_region(
+            char const* desc) noexcept;
+        HPX_CORE_EXPORT ~fiber_suspend_region();
 
         fiber_suspend_region(fiber_suspend_region const&) = delete;
         fiber_suspend_region& operator=(fiber_suspend_region const&) = delete;
@@ -118,10 +120,11 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT background_work_region
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] background_work_region
     {
-        explicit background_work_region(std::size_t num_thread = 0) noexcept;
-        ~background_work_region();
+        HPX_CORE_EXPORT explicit background_work_region(
+            std::size_t num_thread = 0) noexcept;
+        HPX_CORE_EXPORT ~background_work_region();
 
         background_work_region(background_work_region const&) = delete;
         background_work_region& operator=(
