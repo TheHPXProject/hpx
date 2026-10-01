@@ -439,9 +439,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        // clang-format off
-        static decltype(auto) invoke_default(ExPolicy&& policy,
-            FwdIter1 first, FwdIter1 last, FwdIter2 dest, Pred pred)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Pred pred)
         // clang-format on
         {
             static_assert(std::forward_iterator<FwdIter1>,
