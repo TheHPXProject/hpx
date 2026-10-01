@@ -832,8 +832,9 @@ namespace hpx::parallel {
             }
 
             template <typename B>
-            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void operator()(
-                B part_begin, std::size_t part_steps, std::size_t part_index)
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void invoke(B part_begin,
+                std::size_t part_steps, std::size_t part_index,
+                hpx::tuple<Ts...>& args)
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
@@ -842,9 +843,6 @@ namespace hpx::parallel {
                     current_thread = hpx::get_worker_thread_num();
                 }
 
-                // Bulk senders may share this function between chunks.
-                // Keep mutable induction counters local to this invocation.
-                auto args = args_;
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
                 auto const stride_size =
                     static_cast<std::size_t>(parallel::detail::abs(stride_));
@@ -914,6 +912,24 @@ namespace hpx::parallel {
                     {
                         HPX_UNREACHABLE;
                     }
+                }
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void operator()(
+                B part_begin, std::size_t part_steps, std::size_t part_index)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    // Bulk senders share this function between chunks. Keep
+                    // mutable induction counters local to each invocation.
+                    auto args = args_;
+                    invoke(part_begin, part_steps, part_index, args);
+                }
+                else
+                {
+                    invoke(part_begin, part_steps, part_index, args_);
                 }
             }
 
@@ -1050,13 +1066,10 @@ namespace hpx::parallel {
             }
 
             template <typename B, typename E>
-            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter(
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter_impl(
                 B part_begin, E part_end, std::size_t part_index,
-                std::uint32_t current_thread)
+                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
             {
-                // Bulk senders may share this function between chunks.
-                // Keep mutable induction counters local to this invocation.
-                auto args = args_;
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
                 detail::init_iteration(args, pack, part_index, current_thread);
 
@@ -1065,6 +1078,60 @@ namespace hpx::parallel {
                     detail::invoke_iteration(
                         args, pack, f_, part_begin++, current_thread);
                     detail::next_iteration(args, pack, current_thread);
+                }
+            }
+
+            template <typename B, typename E>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_iter(
+                B part_begin, E part_end, std::size_t part_index,
+                std::uint32_t current_thread)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    auto args = args_;
+                    loop_iter_impl(
+                        part_begin, part_end, part_index, current_thread, args);
+                }
+                else
+                {
+                    loop_iter_impl(part_begin, part_end, part_index,
+                        current_thread, args_);
+                }
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_n_impl(
+                B part_begin, std::size_t part_steps, std::size_t part_index,
+                std::uint32_t current_thread, hpx::tuple<Ts...>& args)
+            {
+                auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
+                detail::init_iteration(args, pack, part_index, current_thread);
+
+                parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
+                    part_begin, part_steps, [&](auto it) {
+                        detail::invoke_iteration(
+                            args, pack, f_, it, current_thread);
+                        detail::next_iteration(args, pack, current_thread);
+                    });
+            }
+
+            template <typename B>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_n(B part_begin,
+                std::size_t part_steps, std::size_t part_index,
+                std::uint32_t current_thread)
+            {
+                if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                                  ExPolicy>)
+                {
+                    auto args = args_;
+                    loop_n_impl(part_begin, part_steps, part_index,
+                        current_thread, args);
+                }
+                else
+                {
+                    loop_n_impl(part_begin, part_steps, part_index,
+                        current_thread, args_);
                 }
             }
 
@@ -1093,19 +1160,7 @@ namespace hpx::parallel {
                 }
                 else
                 {
-                    // Bulk senders may share this function between chunks.
-                    // Keep induction counters local to this invocation.
-                    auto args = args_;
-                    auto pack = hpx::util::make_index_pack_t<sizeof...(Ts)>();
-                    detail::init_iteration(
-                        args, pack, part_index, current_thread);
-
-                    parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
-                        part_begin, part_steps, [&](auto it) {
-                            detail::invoke_iteration(
-                                args, pack, f_, it, current_thread);
-                            detail::next_iteration(args, pack, current_thread);
-                        });
+                    loop_n(part_begin, part_steps, part_index, current_thread);
                 }
             }
 
