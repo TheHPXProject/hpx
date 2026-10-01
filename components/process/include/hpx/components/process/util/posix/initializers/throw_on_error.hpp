@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <system_error>
 
@@ -47,11 +48,14 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 }
             }
 
-            static auto read_error_report(int fd, error_report& report) noexcept
+            static auto read_error_report(
+                int fd, error_report& report, std::size_t offset) noexcept
             {
-                // The destination and requested size are the same array.
+                auto* const data = reinterpret_cast<char*>(report.data());
+
+                // The destination and requested size stay within the array.
                 // flawfinder: ignore
-                return ::read(fd, report.data(), error_report_size);
+                return ::read(fd, data + offset, error_report_size - offset);
             }
 
             template <class PosixExecutor>
@@ -108,15 +112,29 @@ namespace hpx { namespace components { namespace process { namespace posix {
             {
                 ::close(fds_[1]);
                 error_report report{};
-                auto count = read_error_report(fds_[0], report);
-                while (count == -1 && errno == EINTR)
+                std::size_t bytes_read = 0;
+                int read_error = 0;
+                while (bytes_read != error_report_size)
                 {
-                    count = read_error_report(fds_[0], report);
+                    auto const count =
+                        read_error_report(fds_[0], report, bytes_read);
+                    if (count > 0)
+                    {
+                        bytes_read += static_cast<std::size_t>(count);
+                    }
+                    else if (count == 0)
+                    {
+                        break;
+                    }
+                    else if (errno != EINTR)
+                    {
+                        read_error = errno;
+                        break;
+                    }
                 }
-                int const read_error = count == -1 ? errno : 0;
                 ::close(fds_[0]);
 
-                if (count == static_cast<decltype(count)>(error_report_size))
+                if (bytes_read == error_report_size)
                 {
                     wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
@@ -124,14 +142,14 @@ namespace hpx { namespace components { namespace process { namespace posix {
                         error_operation<PosixExecutor>(report[1]),
                         extract_error_string(report[0]));
                 }
-                else if (count == -1)
+                else if (read_error != 0)
                 {
                     wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_success", "read(2) failed: {}",
                         extract_error_string(read_error));
                 }
-                else if (count != 0)
+                else if (bytes_read != 0)
                 {
                     wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
