@@ -1041,13 +1041,14 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
+                    std::exception_ptr const error = std::current_exception();
                     fut.wait();
 
                     std::vector<hpx::future<void>> futures;
                     futures.reserve(2);
                     futures.emplace_back(HPX_MOVE(fut));
-                    futures.emplace_back(hpx::make_exceptional_future<void>(
-                        std::current_exception()));
+                    futures.emplace_back(
+                        hpx::make_exceptional_future<void>(error));
 
                     std::list<std::exception_ptr> errors;
                     util::detail::handle_local_exceptions<ExPolicy>::call(
@@ -1096,13 +1097,14 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
+                    std::exception_ptr const error = std::current_exception();
                     fut.wait();
 
                     std::vector<hpx::future<void>> futures;
                     futures.reserve(2);
                     futures.emplace_back(HPX_MOVE(fut));
-                    futures.emplace_back(hpx::make_exceptional_future<void>(
-                        std::current_exception()));
+                    futures.emplace_back(
+                        hpx::make_exceptional_future<void>(error));
 
                     std::list<std::exception_ptr> errors;
                     util::detail::handle_local_exceptions<ExPolicy>::call(
