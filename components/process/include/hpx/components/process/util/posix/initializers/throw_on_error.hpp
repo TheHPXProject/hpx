@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cstddef>
 #include <string>
 #include <system_error>
 
@@ -34,6 +35,13 @@ namespace hpx { namespace components { namespace process { namespace posix {
             static std::string extract_error_string(int code)
             {
                 return std::generic_category().message(code);
+            }
+
+            static void wait_for_child(pid_t pid) noexcept
+            {
+                while (::waitpid(pid, nullptr, 0) == -1 && errno == EINTR)
+                {
+                }
             }
 
         public:
@@ -72,22 +80,50 @@ namespace hpx { namespace components { namespace process { namespace posix {
             void on_fork_success(PosixExecutor& e) const
             {
                 ::close(fds_[1]);
-                int code;
-                if (::read(fds_[0], &code, sizeof(int)) > 0)
+                int code = 0;
+                std::size_t bytes_read = 0;
+                while (bytes_read != sizeof(code))
                 {
-                    ::close(fds_[0]);
-
-                    while (::waitpid(e.child_pid, nullptr, 0) == -1 &&
-                        errno == EINTR)
+                    auto const count = ::read(fds_[0],
+                        reinterpret_cast<char*>(&code) + bytes_read,
+                        sizeof(code) - bytes_read);
+                    if (count > 0)
                     {
+                        bytes_read += static_cast<std::size_t>(count);
                     }
+                    else if (count == 0)
+                    {
+                        break;
+                    }
+                    else if (errno != EINTR)
+                    {
+                        int const read_error = errno;
+                        ::close(fds_[0]);
+                        wait_for_child(e.child_pid);
 
-                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
-                        "throw_on_error::on_fork_success",
-                        "process setup or execve(2) failed: {}",
-                        extract_error_string(code));
+                        HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                            "throw_on_error::on_fork_success",
+                            "read(2) failed: {}",
+                            extract_error_string(read_error));
+                    }
                 }
                 ::close(fds_[0]);
+
+                if (bytes_read == sizeof(code))
+                {
+                    wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success",
+                        "chdir(2) or execve(2) failed: {}",
+                        extract_error_string(code));
+                }
+                else if (bytes_read != 0)
+                {
+                    wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success",
+                        "incomplete child error report");
+                }
             }
 
             template <class PosixExecutor>
