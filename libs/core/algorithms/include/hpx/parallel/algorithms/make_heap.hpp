@@ -195,6 +195,7 @@ namespace hpx {
 #include <hpx/contracts.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
@@ -202,7 +203,7 @@ namespace hpx {
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
-#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
+#include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
 #include <hpx/parallel/algorithms/for_each.hpp>
@@ -308,8 +309,8 @@ namespace hpx::parallel {
             using difference_type =
                 typename std::iterator_traits<Iter>::difference_type;
 
-            difference_type n =
-                detail::advance_to_sentinel(first, last) - first;
+            Iter end = first;
+            difference_type n = detail::advance_and_get_distance(end, last);
             if (n > 1)
             {
                 for (difference_type start = (n - 2) / 2; start >= 0; --start)
@@ -317,7 +318,7 @@ namespace hpx::parallel {
                     sift_down(first, comp, proj, n, first + start);
                 }
             }
-            return first + n;
+            return end;
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -344,12 +345,13 @@ namespace hpx::parallel {
             make_heap_thread(ExPolicy&& policy, RndIter first, Sent last,
                 Comp&& comp, Proj&& proj)
             {
+                RndIter end = first;
                 typename std::iterator_traits<RndIter>::difference_type n =
-                    detail::advance_to_sentinel(first, last) - first;
+                    detail::advance_and_get_distance(end, last);
                 if (n <= 1)
                 {
                     return util::detail::algorithm_result<ExPolicy,
-                        RndIter>::get(first + n);
+                        RndIter>::get(HPX_MOVE(end));
                 }
 
                 using execution_policy = std::decay_t<ExPolicy>;
@@ -520,10 +522,82 @@ namespace hpx::parallel {
                     }
                 }
 
-                std::advance(first, n);
                 return util::detail::algorithm_result<ExPolicy, RndIter>::get(
-                    HPX_MOVE(first));
+                    HPX_MOVE(end));
             }
+
+            template <typename ExPolicy, typename RndIter, typename Sent,
+                typename Comp, typename Proj>
+            static auto make_heap_sender_impl(ExPolicy&& policy, RndIter first,
+                Sent last, Comp&& comp, Proj&& proj)
+            {
+                namespace ex = hpx::execution::experimental;
+                using index_iterator =
+                    hpx::util::counting_iterator<std::size_t>;
+
+                RndIter end = first;
+                auto const n = detail::advance_and_get_distance(end, last);
+                auto sift = [first, n, comp = HPX_FORWARD(Comp, comp),
+                                proj = HPX_FORWARD(Proj, proj)](
+                                std::size_t i) mutable {
+                    sift_down(first, comp, proj, n, first + i);
+                };
+
+                // The number of levels is only known at runtime. Type erasure
+                // lets us chain their nested sender types without blocking
+                // between levels.
+                ex::unique_any_sender<> levels(ex::just());
+                std::size_t level_end = static_cast<std::size_t>(n) / 2;
+                while (level_end != 0)
+                {
+                    auto const level_begin = std::bit_floor(level_end) - 1;
+                    levels =
+                        ex::unique_any_sender<>(ex::let_value(HPX_MOVE(levels),
+                            [policy, sift, level_begin, level_end]() mutable {
+                                // Nodes at the same depth have disjoint subtrees.
+                                // Complete this level before allowing its parents
+                                // to sift down.
+                                for_each_n<index_iterator> for_each;
+                                auto work = for_each.call(policy,
+                                    index_iterator(level_begin),
+                                    level_end - level_begin, HPX_MOVE(sift),
+                                    hpx::identity_v);
+                                return HPX_MOVE(work) |
+                                    ex::then([](index_iterator) {});
+                            }));
+                    level_end = level_begin;
+                }
+                return HPX_MOVE(levels) | ex::then([end]() { return end; });
+            }
+
+            template <typename ExPolicy, typename RndIter, typename Sent,
+                typename Comp, typename Proj>
+            struct make_heap_sender_factory
+            {
+                std::decay_t<ExPolicy> policy;
+                RndIter first;
+                Sent last;
+                std::decay_t<Comp> comp;
+                std::decay_t<Proj> proj;
+
+                auto operator()()
+                {
+                    using sender_type =
+                        decltype(make_heap_sender_impl(HPX_MOVE(policy), first,
+                            last, HPX_MOVE(comp), HPX_MOVE(proj)));
+
+                    return hpx::detail::try_catch_exception_ptr(
+                        [&]() -> sender_type {
+                            return make_heap_sender_impl(HPX_MOVE(policy),
+                                first, last, HPX_MOVE(comp), HPX_MOVE(proj));
+                        },
+                        [](std::exception_ptr error) -> sender_type {
+                            util::detail::handle_local_exceptions<
+                                ExPolicy>::call(error);
+                            HPX_UNREACHABLE;
+                        });
+                }
+            };
 
             template <typename ExPolicy, typename RndIter, typename Sent,
                 typename Comp, typename Proj>
@@ -531,59 +605,13 @@ namespace hpx::parallel {
                 Sent last, Comp&& comp, Proj&& proj)
             {
                 namespace ex = hpx::execution::experimental;
-                using index_iterator =
-                    hpx::util::counting_iterator<std::size_t>;
-
                 auto sched = policy.executor().sched();
+                auto task_policy = ex::to_task(HPX_FORWARD(ExPolicy, policy));
+                using task_policy_type = decltype(task_policy);
                 auto result = ex::let_value(ex::schedule(sched),
-                    [policy = ex::to_task(HPX_FORWARD(ExPolicy, policy)), first,
-                        last, comp = HPX_FORWARD(Comp, comp),
-                        proj = HPX_FORWARD(Proj, proj)]() mutable {
-                        try
-                        {
-                            auto end = detail::advance_to_sentinel(first, last);
-                            auto const n = end - first;
-                            auto sift = [first, n, comp, proj](
-                                            std::size_t i) mutable {
-                                sift_down(first, comp, proj, n, first + i);
-                            };
-
-                            // The number of levels is only known at runtime.
-                            // Type erasure lets us chain their nested sender
-                            // types without blocking between levels.
-                            ex::unique_any_sender<> levels(ex::just());
-                            std::size_t level_end =
-                                static_cast<std::size_t>(n) / 2;
-                            while (level_end != 0)
-                            {
-                                auto const level_begin =
-                                    std::bit_floor(level_end) - 1;
-                                levels = ex::unique_any_sender<>(ex::let_value(
-                                    HPX_MOVE(levels),
-                                    [policy, sift, level_begin,
-                                        level_end]() mutable {
-                                        // Nodes at the same depth have disjoint
-                                        // subtrees. Complete this level before
-                                        // allowing its parents to sift down.
-                                        for_each_n<index_iterator> for_each;
-                                        auto work = for_each.call(policy,
-                                            index_iterator(level_begin),
-                                            level_end - level_begin,
-                                            HPX_MOVE(sift), hpx::identity_v);
-                                        return HPX_MOVE(work) |
-                                            ex::then([](index_iterator) {});
-                                    }));
-                                level_end = level_begin;
-                            }
-                            return HPX_MOVE(levels) |
-                                ex::then([end]() { return end; });
-                        }
-                        catch (...)
-                        {
-                            util::detail::handle_local_exceptions<
-                                ExPolicy>::call(std::current_exception());
-                        }
-                    });
+                    make_heap_sender_factory<task_policy_type, RndIter, Sent,
+                        Comp, Proj>{HPX_MOVE(task_policy), first, last,
+                        HPX_FORWARD(Comp, comp), HPX_FORWARD(Proj, proj)});
 
                 // Preserve the scheduler's completion domain across the
                 // type-erased level chain, including for non-task policies.
