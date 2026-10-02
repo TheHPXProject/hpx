@@ -1,5 +1,5 @@
 ..
-    Copyright (C) 2007-2025 Hartmut Kaiser
+    Copyright (C) 2007-2026 Hartmut Kaiser
 
     SPDX-License-Identifier: BSL-1.0
     Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,16 +7,17 @@
 
 .. _hpx_2_0_0:
 
-============================
-|hpx| V2.0.0 (TBD)
-============================
+===========================
+|hpx| V2.0.0 (Oct 31, 2026)
+===========================
 
 |hpx| V2.0.0 is one of the largest releases in the project's history, touching
 the language baseline, the execution model, the networking layer, the build
-system, and observability tooling. The inventories below cover 664 pull
+system, and observability tooling. The inventories below cover 677 pull
 requests with merge commits in the release comparison, two additional PRs
-incorporated through transplanted changes, and 132 closed milestone issues.
-The sections below expand on each major theme.
+incorporated through transplanted changes, and 135 closed milestone issues.
+The sections below expand on each major theme. Since v1.11.0, about 3000
+individual non-merge commits have landed on the way to this release.
 
 Language and Standard Baseline
 ==============================
@@ -137,6 +138,8 @@ Runtime and Execution APIs
   (:hpx-pr:`6861`).
 - ``finalize`` and ``disconnect`` accept ``std::chrono`` durations through
   new overloads (:hpx-pr:`7612`).
+- ``set_rpc_timeout`` now returns ``false`` and leaves the stored timeout
+  unchanged when the supplied duration converts to zero milliseconds.
 
 ``tag_invoke`` Removal
 ======================
@@ -208,7 +211,6 @@ Observability / Tracing
 - A distributed-observability prototype ("HPX-Vision") was proposed and
   discussed (:hpx-issue:`7225`) as a longer-term direction beyond this
   release.
-
 
 Collectives Infrastructure
 ==========================
@@ -332,7 +334,8 @@ Security / Robustness Fixes
   deserialization / type-confusion issue in shared-pointer serialization
   was fixed (:hpx-issue:`7333`, :hpx-pr:`7334`).
 - **Data races**: a race in ``hostname_print_helper::get_hostname()`` on
-  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7525`, with a regression test added in :hpx-pr:`7546`).
+  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7525`, with a regression
+  test added in :hpx-pr:`7546`).
 - **Synchronization**: corrected timed semaphore waits (:hpx-pr:`7617`),
   a deadlock and race in ``latch::reset`` (:hpx-pr:`7555`), and handling of
   spurious wakeups in ``hpx::barrier`` (:hpx-pr:`7611`).
@@ -369,13 +372,13 @@ Closed Issues and Pull Requests
 ==================================
 
 The lists below were reconciled against release-2.0.X at
-``0583c29f1d0f92bf05c82e69e7396a29a1f8f25a``, using release-1.11.X at
+``f9ff18393361421aaf4a1105a7c8dba0bbad0f8a``, using release-1.11.X at
 ``4823cb5b41cc6ec5ab3a49741541927f24704bf3`` as the baseline (including its
 maintenance backports, rather than only the v1.11.0 tag).
 
-There are 664 merged PRs whose merge commits are reachable from the release
+There are 677 merged PRs whose merge commits are reachable from the release
 and absent from that baseline, including PRs outside milestone 2.0.0. The
-132 closed issues are the milestone inventory; closure does not necessarily
+135 closed issues are the milestone inventory; closure does not necessarily
 mean an implementation was delivered. Closed, unmerged PRs are excluded.
 Two further PRs with verified transplanted changes are recorded separately
 below the generated list.
@@ -383,6 +386,8 @@ below the generated list.
 Closed issues
 =============
 
+* :hpx-issue:`7656` - `hpx-top` and `hpx_stat_viewer` are not installed
+* :hpx-issue:`7647` - Error using HPX built with `HPX_WITH_TRACY=TRUE`
 * :hpx-issue:`7613` - `HPX_REGISTER_CHANNEL(type, name)` 2-arg form still fails for written-out template types
 * :hpx-issue:`7608` - debugging: refresh DbgHelp module list after SymInitialize
 * :hpx-issue:`7592` - Re-enable auto-linking on Windows for static builds
@@ -503,6 +508,7 @@ Closed issues
 * :hpx-issue:`6232` - Par performance of hpx::reverse
 * :hpx-issue:`6163` - Expose global termination detection through a new API
 * :hpx-issue:`6014` - Support C++20 modules
+* :hpx-issue:`5918` - HpxChannels Registration fails for written out template types
 * :hpx-issue:`5907` - HPX_DEBUG/CMAKE_BUILD_TYPE not correctly decoupled/consistently used.
 * :hpx-issue:`5903` - Support for Windows HPC Pack
 * :hpx-issue:`5497` - Start using C++17 features unconditionally
@@ -519,6 +525,20 @@ Closed issues
 Merged pull requests
 ====================
 
+* :hpx-pr:`7658` - Install hpx-top.py and hpx_stat_viewer.py
+* :hpx-pr:`7657` - Execution/complete p2079
+* :hpx-pr:`7654` - cmake: export the Tracy targets so consumers can find HPX
+* :hpx-pr:`7653` - Make partitioned vector iterators model random access
+* :hpx-pr:`7643` - lcos_local: cancel pending get/set requests when closing a one_element_channel
+* :hpx-pr:`7642` - Bump dawidd6/action-download-artifact from 24 to 25
+* :hpx-pr:`7641` - Bump github/codeql-action from 4.38.1 to 4.38.2
+* :hpx-pr:`7640` - Fix/coroutine asan stack recycling
+* :hpx-pr:`7637` - Update Collective Benchmark
+* :hpx-pr:`7635` - components_base: fix wrapper heap reclamation
+* :hpx-pr:`7634` - Mark zero-copy save chunks as const and harden vector chunk tests
+* :hpx-pr:`7633` - Add companion concepts for futures, execution policies, and iterators
+* :hpx-pr:`7632` - Re-enable auto-linking on Windows (dynamic linking, C++20 modules)
+* :hpx-pr:`7631` - debugging: suppress C4251 warning in dbghelp_symbol_cache.hpp
 * :hpx-pr:`7637` - Update Collective Benchmark
 * :hpx-pr:`7631` - debugging: suppress C4251 warning in dbghelp_symbol_cache.hpp
 * :hpx-pr:`7630` - Clarify nostack fork_join leaf use and harden UINT32 range / exception paths.
@@ -531,6 +551,7 @@ Merged pull requests
 * :hpx-pr:`7621` - performance_counters: use public counter-type API in registry_thread_safety_7563 test
 * :hpx-pr:`7620` - tracing: fill two small gaps in the Tracy backend`
 * :hpx-pr:`7619` - fix node-specific HPX command-line option parsing
+* :hpx-pr:`7618` - docs: document HPX_REGISTER_CHANNEL and template type restriction
 * :hpx-pr:`7617` - synchronization: fix incorrect restart-state comparison in counting_semaphore::wait_until
 * :hpx-pr:`7615` - Fix std::get on types derived from std::pair with HPX_DATASTRUCTURES\_...
 * :hpx-pr:`7614` - Fix HPX_REGISTER_CHANNEL 2-arg form still pasting type into identifiers
@@ -1191,13 +1212,11 @@ These PRs were merged into development branches. Their GitHub merge commits
 are not ancestors of either comparison revision, but their changes were
 incorporated into this release through other commits:
 
-* :hpx-pr:`6702` - When_all_vector update. The patch in
-  ``13cfb156ca91ae2b5bb5a4e21a7ca040f685291d`` has the same stable Git patch ID
-  as release commit ``167f1c76b42fa750c67eceacc39bc25188183d8b``.
-* :hpx-pr:`7351` - Background-thread unit tests. Release commit
-  ``08dec69a7871499a1e866324421319be695be492`` re-added the tests from this PR,
-  adapting them to the updated background-thread API.
-
-.. PR #6704 is excluded: its merge commit is outside the comparison history,
-   and neither its patch ID nor the namespace-alias additions in as_sender.hpp
-   were found in that history. Milestone closure alone is not provenance.
+* :hpx-pr:`7666` - ci: pin ittapi to v3.27.0 on the release branch
+* :hpx-pr:`7610` - Regenerate the closed issue and pull request lists for V2.0.0
+* :hpx-pr:`7584` - Regenerate V2.0.0 release notes Closed issues and pull requests lists
+* :hpx-pr:`7583` - docs: fix script name in release procedure
+* :hpx-pr:`7549` - Add a first draft of the V2.0.0 release notes
+* :hpx-pr:`7548` - Port generate_issue_pr_list.sh from hub to the GitHub CLI
+* :hpx-pr:`7351` - CodeRabbit Generated Unit Tests: Add unit tests for PR changes
+* :hpx-pr:`6702` - When_all_vector update
