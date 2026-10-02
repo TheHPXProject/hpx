@@ -1,5 +1,5 @@
 ..
-    Copyright (C) 2007-2025 Hartmut Kaiser
+    Copyright (C) 2007-2026 Hartmut Kaiser
 
     SPDX-License-Identifier: BSL-1.0
     Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,16 +7,22 @@
 
 .. _hpx_2_0_0:
 
-============================
-|hpx| V2.0.0 (TBD)
-============================
+===========================
+|hpx| V2.0.0 (Oct 31, 2026)
+===========================
 
 |hpx| V2.0.0 is one of the largest releases in the project's history, touching
 the language baseline, the execution model, the networking layer, the build
-system, and observability tooling. The inventories below cover 664 pull
+system, and observability tooling. The inventories below cover over 700 pull
 requests with merge commits in the release comparison, two additional PRs
-incorporated through transplanted changes, and 132 closed milestone issues.
-The sections below expand on each major theme.
+incorporated through transplanted changes, and more than 150 closed milestone
+issues. The sections below expand on each major theme.
+
+|hpx| V2.0.0 is the result of a broad community effort. Since V1.11.0,
+roughly 100 contributors have authored more than 4,000 commits, and over
+80 of them made their first contribution to |hpx| during this release cycle.
+We are grateful to everyone who contributed code, documentation, tests,
+bug reports, and reviews. Your work made this release possible.
 
 Language and Standard Baseline
 ==============================
@@ -126,17 +132,21 @@ Runtime and Execution APIs
 - ``hpx::local::termination_detection`` waits for local work to finish,
   with timeout, deadline, and stop-token cancellation overloads
   (:hpx-pr:`6886`, :hpx-pr:`6890`).
-- ``HPX::init`` supports runtime initialization from libraries, and
-  ``HPX::auto_wrap_main`` starts the runtime around ``main()`` without
-  requiring the wrapping header (:hpx-pr:`6775`, :hpx-pr:`6804`). The latter
-  target is not supported by the native Windows MSVC toolchain.
-  Local initialization was decoupled from the distributed runtime
-  (:hpx-pr:`7103`).
 - ``hpx::threads::set_thread_affinity`` and
   ``hpx::this_thread::set_affinity`` expose thread-affinity control
   (:hpx-pr:`6861`).
 - ``finalize`` and ``disconnect`` accept ``std::chrono`` durations through
   new overloads (:hpx-pr:`7612`).
+- ``hpx::agas::set_rpc_timeout`` now rejects positive durations shorter
+  than one millisecond: it returns ``false`` and leaves the stored timeout
+  unchanged instead of storing a zero-millisecond timeout.
+- ``HPX::init`` supports runtime initialization from libraries, and
+  ``HPX::auto_wrap_main`` starts the runtime around ``main()`` without
+  requiring the wrapping header (:hpx-pr:`6775`, :hpx-pr:`6804`).
+  ``HPX::auto_wrap_main`` is also supported with MSVC
+  (:hpx-issue:`7662`, :hpx-pr:`7664`).
+  Local initialization was decoupled from the distributed runtime
+  (:hpx-pr:`7103`).
 
 ``tag_invoke`` Removal
 ======================
@@ -204,11 +214,16 @@ Observability / Tracing
   ``HPX_LIKWID_WITH_LIKWID=ON``.
 - New tooling built on top of this infrastructure: **hpx-top**, an
   interactive TUI performance monitor (:hpx-issue:`7001`), and
-  **hpx_stat_viewer**.
+  **hpx_stat_viewer**; both scripts are now installed (:hpx-issue:`7656`,
+  :hpx-pr:`7658`).
 - A distributed-observability prototype ("HPX-Vision") was proposed and
   discussed (:hpx-issue:`7225`) as a longer-term direction beyond this
   release.
-
+- The |ittnotify|_ tracing backend now provides a shared domain, regions,
+  and markers (:hpx-pr:`7636`). The Tracy targets are exported so that
+  consumers can find them through HPX (:hpx-pr:`7654`), and Tracy export
+  annotations were moved off class heads to build with GCC 11 and 12
+  (:hpx-pr:`7669`).
 
 Collectives Infrastructure
 ==========================
@@ -281,9 +296,18 @@ the parallel algorithms library:
   (:hpx-issue:`6719`), unwrapping contiguous iterators
   (:hpx-issue:`6729`), and conditional special member functions for
   ``zip_iterator`` (:hpx-issue:`6752`).
+- **Distributed segmented merge**: added ``merge`` support for segmented
+  input and output ranges distributed across localities, with sequential,
+  parallel, and task execution policies (:hpx-pr:`7545`).
 - **Datapar/SIMD**: fixing |eve|_/simd unaligned load/store broadcast bugs
   (:hpx-pr:`7435`, :hpx-issue:`7287`), and guarding a mismatched SIMD
   path on ``zip_iterator`` compatibility (:hpx-pr:`7328`).
+- **Fixed-size SIMD policies**: added ``hpx::execution::fixed_size_simd<N>``
+  and ``hpx::execution::par_fixed_size_simd<N>`` (plus their ``task``
+  variants) to select vector lane counts explicitly. Datapar loops and
+  algorithms use the policy's lane count, exposed through
+  ``hpx::execution::policy_traits``. Existing SIMD policies retain the
+  native lane count (:hpx-pr:`7674`).
 
 Scheduler / Threading Improvements
 ==================================
@@ -305,6 +329,12 @@ Scheduler / Threading Improvements
   ``thread_queue::cleanup_terminated_locked()`` (:hpx-issue:`7085`).
 - **Fork-join executor**: fixed silent truncation for ranges larger than
   2^32 (:hpx-issue:`6922`).
+- **Shared priority scheduler**: the scheduler now creates a new thread
+  when one is requested (:hpx-issue:`5189`, :hpx-pr:`7682`).
+- **Fork dispatch**: fixed ``hpx::launch::fork`` tasks remaining
+  unscheduled when launched from a plain OS thread or an HPX thread in
+  another pool. Both ``post`` and ``async`` now schedule the task directly
+  when an immediate handoff is unavailable (:hpx-pr:`7687`).
 
 Build / CI Modernization
 ========================
@@ -324,6 +354,17 @@ Build / CI Modernization
 - macOS/vcpkg and hidden-visibility build issues were fixed
   (:hpx-issue:`6772`, :hpx-issue:`6653`), and Fedora-specific macro
   collisions (``BLOCK_SIZE``) were resolved (:hpx-issue:`6961`).
+- Conan builds now alias lowercase targets for Asio and Hwloc
+  (:hpx-issue:`7659`, :hpx-pr:`7661`).
+- MSVC and MinGW fixes: ``dbghelp.lib`` is named from ``backtrace.cpp``
+  (:hpx-pr:`7665`), and the static empty vtable fallback in
+  ``execution_base`` is used on Windows builds
+  (:hpx-issue:`7650`, :hpx-pr:`7652`). The raw MSVC ``hpx_main`` path of
+  ``godbolt-minimal`` is now CI-tested and documented, and passes
+  ``/SUBSYSTEM:CONSOLE`` (:hpx-pr:`7644`, :hpx-pr:`7683`).
+- A Linux CI workflow with ``_GLIBCXX_DEBUG`` enabled was added
+  (:hpx-pr:`7673`), and the parallel scheduler tests were fixed on
+  Clang 16 (:hpx-pr:`7679`).
 
 Security / Robustness Fixes
 ===========================
@@ -332,10 +373,13 @@ Security / Robustness Fixes
   deserialization / type-confusion issue in shared-pointer serialization
   was fixed (:hpx-issue:`7333`, :hpx-pr:`7334`).
 - **Data races**: a race in ``hostname_print_helper::get_hostname()`` on
-  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7525`, with a regression test added in :hpx-pr:`7546`).
+  worker-thread startup (:hpx-issue:`7520`, :hpx-pr:`7525`, with a regression
+  test added in :hpx-pr:`7546`).
 - **Synchronization**: corrected timed semaphore waits (:hpx-pr:`7617`),
-  a deadlock and race in ``latch::reset`` (:hpx-pr:`7555`), and handling of
-  spurious wakeups in ``hpx::barrier`` (:hpx-pr:`7611`).
+  a deadlock and race in ``latch::reset`` (:hpx-pr:`7555`),
+  and handling of spurious wakeups in ``hpx::barrier`` (:hpx-pr:`7611`).
+  The memory order used after a condition-variable wakeup in future
+  ``wait()`` was upgraded from relaxed to acquire (:hpx-pr:`7677`).
 - **AGAS garbage collection**: fixed background collection when networking
   is disabled (:hpx-pr:`7627`).
 - **Exception safety**: a memory-leak risk in
@@ -347,12 +391,6 @@ Security / Robustness Fixes
   semantic mismatch in serialization archive flags
   (:hpx-issue:`7034`). Collection sizes read from archives are now checked
   before use (:hpx-pr:`7594`).
-
-- **Fixed-size SIMD policies**: added ``hpx::execution::fixed_size_simd<N>``
-  and ``hpx::execution::par_fixed_size_simd<N>`` (plus their ``task``
-  variants), which select the number of vector lanes explicitly. Execution
-  policy properties, including ``num_lanes``, are exposed through
-  ``hpx::execution::policy_traits``.
 
 Breaking changes
 ================
@@ -375,13 +413,13 @@ Closed Issues and Pull Requests
 ==================================
 
 The lists below were reconciled against release-2.0.X at
-``0583c29f1d0f92bf05c82e69e7396a29a1f8f25a``, using release-1.11.X at
+``5d466501ae29d98b655cff5b7fa27d63d067af9a``, using release-1.11.X at
 ``4823cb5b41cc6ec5ab3a49741541927f24704bf3`` as the baseline (including its
 maintenance backports, rather than only the v1.11.0 tag).
 
-There are 664 merged PRs whose merge commits are reachable from the release
+There are 697 merged PRs whose merge commits are reachable from the release
 and absent from that baseline, including PRs outside milestone 2.0.0. The
-132 closed issues are the milestone inventory; closure does not necessarily
+140 closed issues are the milestone inventory; closure does not necessarily
 mean an implementation was delivered. Closed, unmerged PRs are excluded.
 Two further PRs with verified transplanted changes are recorded separately
 below the generated list.
@@ -389,6 +427,12 @@ below the generated list.
 Closed issues
 =============
 
+* :hpx-issue:`7680` - shared_future::get() documentation incorrectly states that it invalidates the future
+* :hpx-issue:`7662` - Add auto-wrapping for main for MSVC
+* :hpx-issue:`7659` - Conan requires CMake aliases for Asio and Hwloc
+* :hpx-issue:`7656` - `hpx-top` and `hpx_stat_viewer` are not installed
+* :hpx-issue:`7650` - any_sender.hpp: constexpr empty_vtable fails to compile in MinGW shared (DLL) builds
+* :hpx-issue:`7647` - Error using HPX built with `HPX_WITH_TRACY=TRUE`
 * :hpx-issue:`7613` - `HPX_REGISTER_CHANNEL(type, name)` 2-arg form still fails for written-out template types
 * :hpx-issue:`7608` - debugging: refresh DbgHelp module list after SymInitialize
 * :hpx-issue:`7592` - Re-enable auto-linking on Windows for static builds
@@ -509,6 +553,7 @@ Closed issues
 * :hpx-issue:`6232` - Par performance of hpx::reverse
 * :hpx-issue:`6163` - Expose global termination detection through a new API
 * :hpx-issue:`6014` - Support C++20 modules
+* :hpx-issue:`5918` - HpxChannels Registration fails for written out template types
 * :hpx-issue:`5907` - HPX_DEBUG/CMAKE_BUILD_TYPE not correctly decoupled/consistently used.
 * :hpx-issue:`5903` - Support for Windows HPC Pack
 * :hpx-issue:`5497` - Start using C++17 features unconditionally
@@ -525,6 +570,40 @@ Closed issues
 Merged pull requests
 ====================
 
+* :hpx-pr:`7689` - build(deps): bump lukka/get-cmake from 4.4.2 to 4.4.4
+* :hpx-pr:`7688` - Make replicate vote tests deterministic
+* :hpx-pr:`7687` - Fix launch::fork dropping tasks from OS threads
+* :hpx-pr:`7684` - docs: use correct HPX::iostreams_component target name in quickstart
+* :hpx-pr:`7683` - godbolt-minimal: pass /SUBSYSTEM:CONSOLE in the raw MSVC path
+* :hpx-pr:`7682` - Ensure shared priority scheduler creates thread when requested
+* :hpx-pr:`7681` - futures: fix shared_future::get() postcondition in docs
+* :hpx-pr:`7679` - Fix parallel scheduler tests on Clang 16
+* :hpx-pr:`7677` - fix(futures): upgrade memory_order_relaxed to acquire after cond_var wakeup in wait()
+* :hpx-pr:`7674` - Enable specifying the number of vector lanes to use with SIMD execution policies
+* :hpx-pr:`7673` - Add Linux CI workflow with _GLIBCXX_DEBUG enabled
+* :hpx-pr:`7669` - tracing: move export off Tracy class heads for GCC 11 and 12
+* :hpx-pr:`7668` - Bump dawidd6/action-download-artifact from 26 to 27
+* :hpx-pr:`7665` - debugging: name dbghelp.lib from backtrace.cpp on MSVC
+* :hpx-pr:`7664` - Support HPX::auto_wrap_main on MSVC
+* :hpx-pr:`7661` - Alias lowercase Conan targets for Asio and Hwloc
+* :hpx-pr:`7660` - Bump dawidd6/action-download-artifact from 25 to 26
+* :hpx-pr:`7658` - Install hpx-top.py and hpx_stat_viewer.py
+* :hpx-pr:`7657` - Execution/complete p2079
+* :hpx-pr:`7654` - cmake: export the Tracy targets so consumers can find HPX
+* :hpx-pr:`7653` - Make partitioned vector iterators model random access
+* :hpx-pr:`7652` - execution_base: use the static empty vtable fallback on all Windows builds
+* :hpx-pr:`7644` - godbolt-minimal: CI-test and document the raw MSVC hpx_main path
+* :hpx-pr:`7643` - lcos_local: cancel pending get/set requests when closing a one_element_channel
+* :hpx-pr:`7642` - Bump dawidd6/action-download-artifact from 24 to 25
+* :hpx-pr:`7641` - Bump github/codeql-action from 4.38.1 to 4.38.2
+* :hpx-pr:`7640` - Fix/coroutine asan stack recycling
+* :hpx-pr:`7637` - Update Collective Benchmark
+* :hpx-pr:`7636` - tracing: fill in the ITT backend ? shared domain, regions, markers
+* :hpx-pr:`7635` - components_base: fix wrapper heap reclamation
+* :hpx-pr:`7634` - Mark zero-copy save chunks as const and harden vector chunk tests
+* :hpx-pr:`7633` - Add companion concepts for futures, execution policies, and iterators
+* :hpx-pr:`7632` - Re-enable auto-linking on Windows (dynamic linking, C++20 modules)
+* :hpx-pr:`7631` - debugging: suppress C4251 warning in dbghelp_symbol_cache.hpp
 * :hpx-pr:`7637` - Update Collective Benchmark
 * :hpx-pr:`7631` - debugging: suppress C4251 warning in dbghelp_symbol_cache.hpp
 * :hpx-pr:`7630` - Clarify nostack fork_join leaf use and harden UINT32 range / exception paths.
@@ -537,6 +616,7 @@ Merged pull requests
 * :hpx-pr:`7621` - performance_counters: use public counter-type API in registry_thread_safety_7563 test
 * :hpx-pr:`7620` - tracing: fill two small gaps in the Tracy backend`
 * :hpx-pr:`7619` - fix node-specific HPX command-line option parsing
+* :hpx-pr:`7618` - docs: document HPX_REGISTER_CHANNEL and template type restriction
 * :hpx-pr:`7617` - synchronization: fix incorrect restart-state comparison in counting_semaphore::wait_until
 * :hpx-pr:`7615` - Fix std::get on types derived from std::pair with HPX_DATASTRUCTURES\_...
 * :hpx-pr:`7614` - Fix HPX_REGISTER_CHANNEL 2-arg form still pasting type into identifiers
@@ -585,6 +665,7 @@ Merged pull requests
 * :hpx-pr:`7551` - Add orthogonal rebind_policy_executor_t / rebind_policy_parameters_t
 * :hpx-pr:`7550` - Feat : policy traits 6717
 * :hpx-pr:`7546` - debugging: add regression test for hostname_print_helper race
+* :hpx-pr:`7545` - Segmented merge
 * :hpx-pr:`7544` - tracing: sample per-task lifecycle events 1-in-N
 * :hpx-pr:`7542` - Use an HPX-aware mutex in numa_binding_allocator::initialize_pages
 * :hpx-pr:`7541` - Factor the duplicated AGAS instance-name formatting into a shared helper
@@ -636,6 +717,7 @@ Merged pull requests
 * :hpx-pr:`7481` - Cache channel communicators separately for each site
 * :hpx-pr:`7479` - Fix cross-references in documentation
 * :hpx-pr:`7478` - Use dedicated AGAS-specific RPC timeout for hosted namespaces
+* :hpx-pr:`7477` - Implement P3149
 * :hpx-pr:`7476` - Fix C++23 fold_left_first and fold_right_last return type deduction
 * :hpx-pr:`7472` - build(deps): bump dawidd6/action-download-artifact from 21 to 23
 * :hpx-pr:`7471` - Implementing aborting dynamic worker for late component launcher example
@@ -1197,13 +1279,11 @@ These PRs were merged into development branches. Their GitHub merge commits
 are not ancestors of either comparison revision, but their changes were
 incorporated into this release through other commits:
 
-* :hpx-pr:`6702` - When_all_vector update. The patch in
-  ``13cfb156ca91ae2b5bb5a4e21a7ca040f685291d`` has the same stable Git patch ID
-  as release commit ``167f1c76b42fa750c67eceacc39bc25188183d8b``.
-* :hpx-pr:`7351` - Background-thread unit tests. Release commit
-  ``08dec69a7871499a1e866324421319be695be492`` re-added the tests from this PR,
-  adapting them to the updated background-thread API.
-
-.. PR #6704 is excluded: its merge commit is outside the comparison history,
-   and neither its patch ID nor the namespace-alias additions in as_sender.hpp
-   were found in that history. Milestone closure alone is not provenance.
+* :hpx-pr:`7666` - ci: pin ittapi to v3.27.0 on the release branch
+* :hpx-pr:`7610` - Regenerate the closed issue and pull request lists for V2.0.0
+* :hpx-pr:`7584` - Regenerate V2.0.0 release notes Closed issues and pull requests lists
+* :hpx-pr:`7583` - docs: fix script name in release procedure
+* :hpx-pr:`7549` - Add a first draft of the V2.0.0 release notes
+* :hpx-pr:`7548` - Port generate_issue_pr_list.sh from hub to the GitHub CLI
+* :hpx-pr:`7351` - CodeRabbit Generated Unit Tests: Add unit tests for PR changes
+* :hpx-pr:`6702` - When_all_vector update
