@@ -23,7 +23,9 @@ jobs:
     - name: Install ITTNotify (ittapi)
       shell: bash
       run: |
-          git clone --branch v3.27.0 --depth 1 https://github.com/intel/ittapi.git
+          # Pinned past v3.27.0: that release has a broken init guard fixed in b7f6bf6.
+          git clone https://github.com/intel/ittapi.git
+          git -C ittapi checkout bd72cfb15e34a5fc4c0a8d10f5bb5305d60e1eec
           cmake -S ittapi -B ittapi/build -GNinja \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=$PWD/ittapi/install \
