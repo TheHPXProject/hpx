@@ -57,7 +57,8 @@ namespace hpx::components::detail {
     }    // namespace one_size_heap_allocators
 
     ///////////////////////////////////////////////////////////////////////////
-    class HPX_EXPORT wrapper_heap : public util::wrapper_heap_base
+    HPX_CXX_EXPORT class HPX_EXPORT wrapper_heap
+      : public util::wrapper_heap_base
     {
     public:
         using allocator_type = one_size_heap_allocators::fixed_mallocator;
@@ -89,6 +90,7 @@ namespace hpx::components::detail {
 
         bool is_empty() const;
         bool has_allocatable_slots() const;
+        bool reclaim_if_unusable(std::size_t count) override;
 
         bool alloc(void** result, std::size_t count = 1) override;
         void free(void* p, std::size_t count = 1) override;
@@ -123,7 +125,7 @@ namespace hpx::components::detail {
     public:
         std::string const class_name_;
 #if defined(HPX_DEBUG)
-        std::size_t alloc_count_ = 0;
+        std::atomic<std::size_t> alloc_count_{0};
         std::size_t free_count_ = 0;
         std::size_t heap_count_ = 0;
 #endif

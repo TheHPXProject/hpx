@@ -38,6 +38,7 @@
 
 // NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
 // NOLINTBEGIN(bugprone-unhandled-exception-at-new)
+#include <exec/async_scope.hpp>
 #include <exec/completion_signatures.hpp>
 #include <exec/ensure_started.hpp>
 #include <exec/env.hpp>
@@ -58,6 +59,9 @@
 #endif
 
 namespace hpx::execution::experimental {
+    // Async scope
+    HPX_CXX_CORE_EXPORT using exec::async_scope;
+
     // Domain
     HPX_CXX_CORE_EXPORT using stdexec::default_domain;
     HPX_CXX_CORE_EXPORT using stdexec::get_domain;

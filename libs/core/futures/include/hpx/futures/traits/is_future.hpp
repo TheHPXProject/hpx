@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2022 Hartmut Kaiser
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -57,6 +58,16 @@ namespace hpx::traits {
     inline constexpr bool is_future_v = is_future<R>::value;
 
     ///////////////////////////////////////////////////////////////////////////
+    // Public aliases for the unique-future detection used throughout HPX.
+    HPX_CXX_CORE_EXPORT template <typename Future>
+    struct is_unique_future : detail::is_unique_future<std::decay_t<Future>>
+    {
+    };
+
+    HPX_CXX_CORE_EXPORT template <typename R>
+    inline constexpr bool is_unique_future_v = is_unique_future<R>::value;
+
+    ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename... Ts>
     using is_future_any = hpx::util::any_of<is_future<Ts>...>;
 
@@ -79,3 +90,19 @@ namespace hpx::traits {
     inline constexpr bool is_ref_wrapped_future_v =
         is_ref_wrapped_future<R>::value;
 }    // namespace hpx::traits
+
+namespace hpx {
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// Detect a future type without conflicting with the hpx::future class.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept future_type = hpx::traits::is_future_v<T>;
+
+    /// Detect a unique future type.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept unique_future = hpx::traits::is_unique_future_v<T>;
+
+    /// Detect a reference wrapper containing a future.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept ref_wrapped_future = hpx::traits::is_ref_wrapped_future_v<T>;
+}    // namespace hpx

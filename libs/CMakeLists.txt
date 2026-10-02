@@ -519,7 +519,13 @@ if(HPX_WITH_ITTNOTIFY)
 endif()
 
 if(HPX_WITH_TRACY)
-  target_link_libraries(hpx_core PUBLIC tracy::tracy)
+  # Shared builds absorb TracyClient into hpx_core, so keep the target out of
+  # the export. Static builds still need it at link time.
+  if(HPX_WITH_STATIC_LINKING)
+    target_link_libraries(hpx_core PUBLIC tracy::tracy)
+  else()
+    target_link_libraries(hpx_core PUBLIC $<BUILD_INTERFACE:tracy::tracy>)
+  endif()
 endif()
 
 if(TARGET STDEXEC::stdexec)

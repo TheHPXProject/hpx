@@ -13,7 +13,8 @@ include_local
 
 This module provides no functionality in itself. Instead it provides headers
 that group together other headers that often appear together. This module
-provides local-only headers.
+provides local-only headers, including ``hpx/experimental/sandbox.hpp`` for
+Compiler Explorer and other constrained environments.
 
 See the :ref:`API reference <modules_include_local_api>` of this module for
 more details.

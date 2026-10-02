@@ -11,9 +11,11 @@
 /// \brief HPX Sandbox Laboratory -- environment introspection, parallel
 ///        benchmarking, and scaling telemetry for single-node environments.
 ///
-/// This header provides a lightweight, header-only toolkit for
-/// prototyping and benchmarking HPX parallel code in resource-constrained
-/// environments such as Compiler Explorer (Godbolt). It includes:
+/// This header provides a lightweight toolkit for prototyping and
+/// benchmarking HPX parallel code in resource-constrained environments
+/// such as Compiler Explorer (Godbolt). Timing helpers are header-only;
+/// environment detection and formatted printing are compiled into
+/// ``hpx_core``. It includes:
 ///
 ///   - **Environment introspection** via hwloc topology queries
 ///   - **Automatic sandbox detection** for container / CI environments
@@ -52,7 +54,7 @@ namespace hpx::experimental::sandbox {
         /// \brief Print a formatted environment report.
         ///
         /// \param os  Output stream.
-        HPX_EXPORT void print(std::ostream& os) const;
+        HPX_CORE_EXPORT void print(std::ostream& os) const;
     };
 
     /// \brief Holds the results of a comparative benchmark.
@@ -69,7 +71,7 @@ namespace hpx::experimental::sandbox {
         /// \brief Print a formatted benchmark report.
         ///
         /// \param os  Output stream.
-        HPX_EXPORT void print(std::ostream& os) const;
+        HPX_CORE_EXPORT void print(std::ostream& os) const;
     };
 
     // --- Environment Detection ---
@@ -102,7 +104,7 @@ namespace hpx::experimental::sandbox {
     // --- Public API ---
 
     /// \brief Detect and return information about the current environment.
-    HPX_EXPORT environment_info detect_environment();
+    HPX_CORE_EXPORT environment_info detect_environment();
 
     /// \brief Print a formatted environment report.
     inline void describe_environment(std::ostream& os)

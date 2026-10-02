@@ -792,7 +792,22 @@ namespace hpx::agas {
     hpx::future<naming::address> addressing_service::unbind_range_async(
         naming::gid_type const& lower_id, std::uint64_t const count)
     {
-        return primary_ns_.unbind_gid_async(count, lower_id);
+        hpx::future<naming::address> f =
+            primary_ns_.unbind_gid_async(count, lower_id);
+        if (count != 1 || !naming::detail::is_migratable(lower_id))
+        {
+            return f;
+        }
+
+        return f.then(hpx::launch::sync,
+            [this, lower_id](hpx::future<naming::address>&& f) {
+                naming::address addr = f.get();
+                if (addr.address_ != nullptr)
+                {
+                    erase_migrated_object(lower_id, addr.address_);
+                }
+                return addr;
+            });
     }
 
     bool addressing_service::unbind_range_local(
@@ -802,6 +817,12 @@ namespace hpx::agas {
         try
         {
             addr = primary_ns_.unbind_gid(count, lower_id);
+
+            if (count == 1 && naming::detail::is_migratable(lower_id) &&
+                addr.address_ != nullptr)
+            {
+                erase_migrated_object(lower_id, addr.address_);
+            }
 
             return true;
         }
@@ -2480,16 +2501,19 @@ namespace hpx::agas {
         {
             naming::gid_type const gid(naming::detail::get_stripped_gid(gid_));
 
-            // insert the object into the map of migrated objects
-            if (auto const it = migrated_objects_table_.find(gid);
-                it == migrated_objects_table_.end())
+            // Mark the object as no longer resident on this locality. A null LVA
+            // distinguishes this state from a component which has migrated back.
+            auto [it, inserted] =
+                migrated_objects_table_.try_emplace(gid, nullptr);
+            if (expect_to_be_marked_as_migrating)
             {
-                HPX_ASSERT(!expect_to_be_marked_as_migrating);
-                migrated_objects_table_.insert(gid);
+                HPX_ASSERT(!inserted);
+                HPX_ASSERT(it->second == nullptr);
             }
             else
             {
-                HPX_ASSERT(expect_to_be_marked_as_migrating);
+                HPX_ASSERT(inserted || it->second != nullptr);
+                it->second = nullptr;
             }
 
             // avoid interactions with the locking in the cache
@@ -2503,7 +2527,13 @@ namespace hpx::agas {
     }
 
     void addressing_service::unmark_as_migrated(
-        naming::gid_type const& gid_, hpx::move_only_function<void()>&& f)
+        naming::gid_type const& gid, hpx::move_only_function<void()>&& f)
+    {
+        unmark_as_migrated(gid, nullptr, HPX_MOVE(f));
+    }
+
+    void addressing_service::unmark_as_migrated(naming::gid_type const& gid_,
+        naming::address_type const lva, hpx::move_only_function<void()>&& f)
     {
         if (!gid_)
         {
@@ -2518,18 +2548,31 @@ namespace hpx::agas {
 
         std::unique_lock<mutex_type> lock(migrated_objects_mtx_);
 
-        // remove the object from the map of migrated objects
+        // Keep the current LVA so that parcels resolved before an earlier
+        // migration can be rejected after the component returns.
         bool remove_from_cache = false;
         if (auto const it = migrated_objects_table_.find(gid);
             it != migrated_objects_table_.end())
         {
-            migrated_objects_table_.erase(it);
+            if (lva != nullptr)
+            {
+                it->second = lva;
+            }
+            else
+            {
+                // Preserve the behavior of the overload without an LVA.
+                migrated_objects_table_.erase(it);
+            }
 
             // remove entry from cache
             if (caching_ && naming::detail::store_in_cache(gid_))
             {
                 remove_from_cache = true;
             }
+        }
+        else if (lva != nullptr)
+        {
+            migrated_objects_table_.emplace(gid, lva);
         }
 
         f();    // call the user code for the component instance to be migrated
@@ -2582,11 +2625,37 @@ namespace hpx::agas {
     {
         naming::gid_type const gid(naming::detail::get_stripped_gid(gid_));
 
-        return migrated_objects_table_.contains(gid);
+        if (auto const it = migrated_objects_table_.find(gid);
+            it != migrated_objects_table_.end())
+        {
+            return it->second == nullptr;
+        }
+        return false;
+    }
+
+    void addressing_service::erase_migrated_object(
+        naming::gid_type const& gid_, naming::address_type const lva)
+    {
+        naming::gid_type const gid(naming::detail::get_stripped_gid(gid_));
+
+        std::lock_guard<mutex_type> lock(migrated_objects_mtx_);
+        if (auto const it = migrated_objects_table_.find(gid);
+            it != migrated_objects_table_.end() && it->second == lva)
+        {
+            migrated_objects_table_.erase(it);
+        }
     }
 
     std::pair<bool, components::pinned_ptr>
     addressing_service::was_object_migrated(naming::gid_type const& gid,
+        hpx::move_only_function<components::pinned_ptr()>&& f) const
+    {
+        return was_object_migrated(gid, nullptr, HPX_MOVE(f));
+    }
+
+    std::pair<bool, components::pinned_ptr>
+    addressing_service::was_object_migrated(
+        naming::gid_type const& gid, naming::address_type const lva,
         hpx::move_only_function<components::pinned_ptr()>&& f    //-V669
     ) const
     {
@@ -2613,8 +2682,14 @@ namespace hpx::agas {
             return std::make_pair(false, f());
         }
 
-        if (was_object_migrated_locked(gid))
+        naming::gid_type const stripped_gid(
+            naming::detail::get_stripped_gid(gid));
+        if (auto const it = migrated_objects_table_.find(stripped_gid);
+            it != migrated_objects_table_.end() &&
+            (it->second == nullptr || (lva != nullptr && it->second != lva)))
+        {
             return std::make_pair(true, components::pinned_ptr());
+        }
 
         [[maybe_unused]] util::ignore_while_checking const ignore(&lock);
 

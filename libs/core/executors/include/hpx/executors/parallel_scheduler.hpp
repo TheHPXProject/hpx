@@ -4,6 +4,10 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+/// \file hpx/executors/parallel_scheduler.hpp
+/// \page hpx::execution::experimental::get_parallel_scheduler, hpx::execution::experimental::parallel_scheduler, hpx::execution::experimental::parallel_scheduler_domain
+/// \headerfile hpx/execution.hpp
+
 #pragma once
 
 #include <hpx/config.hpp>
@@ -28,16 +32,50 @@
 #include <optional>
 #include <tuple>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 #include <variant>
 
 namespace hpx::execution::experimental {
 
+    /// \cond NOINTERNAL
     // Forward declaration for parallel_scheduler_domain
     HPX_CXX_CORE_EXPORT class parallel_scheduler;
+    /// \endcond
 
+    /// \brief Return a \a parallel_scheduler that schedules on the default
+    ///        HPX thread pool.
+    ///
+    /// This is HPX's implementation of the P2079
+    /// ``std::execution::get_parallel_scheduler()`` entry point. Work
+    /// started on the returned scheduler uses the same worker threads as
+    /// the default pool rather than a separate system thread pool.
+    ///
+    /// \returns A scheduler bound to HPX's default thread pool.
+    ///
+    /// \note For a named resource-partitioner pool, use the overload that
+    ///       takes \c hpx::threads::thread_pool_base&.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT parallel_scheduler
     get_parallel_scheduler();
+
+    /// \brief Return a \a parallel_scheduler that runs work on \p pool.
+    ///
+    /// \param pool  HPX thread pool that should execute scheduled work.
+    ///
+    /// \pre \p pool must outlive the returned scheduler and every
+    ///      operation started on it. The scheduler stores a non-owning
+    ///      pointer; it does not extend the pool's lifetime. This
+    ///      precondition is not enforced at runtime (caller
+    ///      responsibility). Debug builds assert that \p pool currently
+    ///      reports at least one OS thread.
+    ///
+    /// Look named pools up with \c hpx::resource::get_thread_pool. A
+    /// misspelled or unknown name throws \c hpx::exception; it does not
+    /// produce undefined behavior.
+    ///
+    /// \returns A scheduler bound to \p pool.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT parallel_scheduler
+    get_parallel_scheduler(hpx::threads::thread_pool_base& pool);
 
     // Virtual bulk dispatch infrastructure for P2079R10.
     //
@@ -320,6 +358,21 @@ namespace hpx::execution::experimental {
                     }
                     return true;
                 }
+
+            protected:
+                void query_env(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result) const noexcept override
+                {
+                    using token_type = std::decay_t<decltype(get_stop_token(
+                        get_env(op_.receiver_)))>;
+                    if (query_type == typeid(get_stop_token_t) &&
+                        result_type == typeid(token_type))
+                    {
+                        static_cast<std::optional<token_type>*>(result)
+                            ->emplace(get_stop_token(get_env(op_.receiver_)));
+                    }
+                }
             };
 
             // ---- Proxy type computation ----------------------------------
@@ -590,11 +643,13 @@ namespace hpx::execution::experimental {
 
     // P2079R10: Domain for parallel_scheduler bulk operations.
     // The existing thread_pool_domain checks __completes_on with
-    // thread_pool_policy_scheduler, but parallel_scheduler's sender
-    // returns parallel_scheduler as the completion scheduler.
-    // This domain bridges the gap by extracting the underlying
-    // thread_pool_policy_scheduler and delegating to HPX's optimized
-    // thread_pool_bulk_sender.
+    /// \brief Domain associated with \a parallel_scheduler.
+    ///
+    /// Implements P2079 sender transformations for bulk algorithms that
+    /// complete on a \a parallel_scheduler. Fast-path bulk work is
+    /// forwarded to HPX's optimized \c thread_pool_bulk_sender; custom
+    /// backends go through the virtual \a parallel_scheduler_backend
+    /// interface.
     HPX_CXX_CORE_EXPORT struct parallel_scheduler_domain
       : hpx::execution::experimental::detail::sync_wait_domain
     {
@@ -716,9 +771,19 @@ namespace hpx::execution::experimental {
         }
     };
 
-    // P2079R10 parallel_scheduler implementation.
-    // Stores a shared_ptr<parallel_scheduler_backend> for replaceability.
-    // The default backend wraps HPX's thread_pool_policy_scheduler.
+    /// \brief P2079 parallel scheduler.
+    ///
+    /// A replaceable \c std::execution scheduler that schedules work on an
+    /// HPX thread pool through a \a parallel_scheduler_backend. The default
+    /// backend wraps HPX's \c thread_pool_policy_scheduler so callers can
+    /// use \a get_parallel_scheduler without managing pools themselves.
+    ///
+    /// Schedulers compare equal when they share the same backend instance
+    /// (P2079 pointer equality). Forward-progress guarantee is
+    /// \c parallel.
+    ///
+    /// Obtain instances with \a get_parallel_scheduler (default pool) or
+    /// \a get_parallel_scheduler(pool) (named resource-partitioner pool).
     HPX_CXX_CORE_EXPORT class parallel_scheduler
     {
     public:
@@ -925,6 +990,21 @@ namespace hpx::execution::experimental {
                     }
                     return true;
                 }
+
+            protected:
+                void query_env(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result) const noexcept override
+                {
+                    using token_type = std::decay_t<decltype(get_stop_token(
+                        get_env(receiver_)))>;
+                    if (query_type == typeid(get_stop_token_t) &&
+                        result_type == typeid(token_type))
+                    {
+                        static_cast<std::optional<token_type>*>(result)
+                            ->emplace(get_stop_token(get_env(receiver_)));
+                    }
+                }
             };
 
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver_;
@@ -1117,7 +1197,8 @@ namespace hpx::execution::experimental {
 
     private:
         // P2079R10: Construct from a backend shared_ptr. Private; only
-        // get_parallel_scheduler() (and copy/move) may produce instances.
+        // get_parallel_scheduler() overloads (and copy/move) may produce
+        // instances.
         explicit parallel_scheduler(
             std::shared_ptr<parallel_scheduler_backend> backend) noexcept
           : backend_(HPX_MOVE(backend))
@@ -1125,6 +1206,8 @@ namespace hpx::execution::experimental {
         }
 
         friend HPX_CORE_EXPORT parallel_scheduler get_parallel_scheduler();
+        friend HPX_CORE_EXPORT parallel_scheduler get_parallel_scheduler(
+            hpx::threads::thread_pool_base& pool);
 
         std::shared_ptr<parallel_scheduler_backend> backend_;
     };

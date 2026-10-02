@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <string>
@@ -23,9 +24,12 @@
 #include "test_utils.hpp"
 
 //////////////////////////////////////////////////////////////////////////////
+constexpr std::size_t max_test_size = 100007;
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
-std::uniform_int_distribution<> dis(0, (std::numeric_limits<int>::max)());
+// Leave room for the largest iota sequence, including its initial offset.
+std::uniform_int_distribution<> dis(
+    0, (std::numeric_limits<int>::max)() - static_cast<int>(max_test_size));
 
 struct smaller_than_50
 {
@@ -53,7 +57,7 @@ void test_count_if(IteratorTag)
     typedef std::vector<int>::difference_type diff_type;
     typedef test::test_iterator<base_iterator, IteratorTag> iterator;
 
-    std::vector<int> c(100007);
+    std::vector<int> c(max_test_size);
     std::iota(std::begin(c), std::begin(c) + 50, 0);
     std::iota(std::begin(c) + 50, std::end(c), dis(gen) + 50);
 
@@ -73,7 +77,7 @@ void test_count_if(ExPolicy&& policy, IteratorTag)
     typedef std::vector<int>::difference_type diff_type;
     typedef test::test_iterator<base_iterator, IteratorTag> iterator;
 
-    std::vector<int> c(100007);
+    std::vector<int> c(max_test_size);
     std::iota(std::begin(c), std::begin(c) + 50, 0);
     std::iota(std::begin(c) + 50, std::end(c), dis(gen) + 50);
 
@@ -97,7 +101,7 @@ void test_count_if_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
     namespace tt = hpx::this_thread::experimental;
     using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
 
-    std::vector<int> c(100007);
+    std::vector<int> c(max_test_size);
     std::iota(std::begin(c), std::begin(c) + 50, 0);
     std::iota(std::begin(c) + 50, std::end(c), dis(gen) + 50);
 

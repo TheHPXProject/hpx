@@ -1,0 +1,79 @@
+# Copyright (c) 2026 the-ivii
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Release, Godbolt Minimal)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.4.2
+
+    - name: Install dependencies
+      run: |
+        md C:\projects
+        $archive = "C:\projects\vcpkg-export-hpx-dependencies.7z"
+        $expected = "1781883DA9EC4C51406EDA9B5B114AADB6185DAD2A7AB3955AC1D019C99F6777"
+        $client = new-object System.Net.WebClient
+        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z", $archive)
+        $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash
+        if ($actual -ne $expected) {
+          throw "vcpkg archive SHA-256 mismatch: expected $expected, got $actual"
+        }
+        7z x $archive -y -oC:\projects\vcpkg
+    - name: Configure
+      shell: bash
+      run: |
+          cmake . -Bbuild -G'Visual Studio 17 2022' \
+              -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DCMAKE_INSTALL_PREFIX="$PWD/build/install" \
+              -DHPX_WITH_CXX_STANDARD=20 \
+              -DHPX_WITH_STATIC_LINKING=ON \
+              -DHPX_WITH_DISTRIBUTED_RUNTIME=OFF \
+              -DHPX_WITH_NETWORKING=OFF \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_FETCH_HWLOC=ON \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_TESTS=OFF \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_DOCUMENTATION=OFF \
+              -DHPX_WITH_TOOLS=OFF
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --config Release \
+          --target ALL_BUILD \
+          -- -maxcpucount:2 -verbosity:minimal -nologo
+    - name: Install
+      shell: bash
+      run: |
+        cmake --install build --config Release \
+          --prefix "$PWD/build/install"
+        test -f "$PWD/build/install/include/hpx/experimental/sandbox.hpp"
+        test -f "$PWD/build/install/lib/hpx_wrap.lib"
+        test -f "$PWD/build/install/lib/hpx_init.lib"
+        test -f "$PWD/build/install/lib/hpx.lib"
+        test -f "$PWD/build/install/lib/hpx_core.lib"
+    - name: Build and run CMake smoke test
+      shell: bash
+      run: |
+        .github/ci-scripts/godbolt_minimal_smoke/run_cmake_smoke.sh \
+          --prefix "$PWD/build/install" \
+          --generator 'Visual Studio 17 2022' \
+          --toolchain 'C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+          --config Release \
+          --copy-dlls \
+          --build-dir build/smoke/build

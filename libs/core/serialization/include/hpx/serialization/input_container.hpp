@@ -236,8 +236,9 @@ namespace hpx::serialization {
             }
 
             HPX_ASSERT(current_chunk_ != static_cast<std::size_t>(-1));
-            HPX_ASSERT(get_chunk_type(current_chunk_) ==
-                chunk_type::chunk_type_pointer);
+            auto const current_type = get_chunk_type(current_chunk_);
+            HPX_ASSERT(current_type == chunk_type::chunk_type_pointer ||
+                current_type == chunk_type::chunk_type_const_pointer);
 
             if (get_chunk_size(current_chunk_) != count)
             {
@@ -246,9 +247,12 @@ namespace hpx::serialization {
                     "archive data binary stream data chunk size mismatch");
             }
 
-            auto*& buffer = get_chunk_data(current_chunk_).pos_;
             if (allow_zero_copy_receive)
             {
+                // Receive-side placement only applies to mutable pointer
+                // chunks allocated for networking to fill in.
+                HPX_ASSERT(current_type == chunk_type::chunk_type_pointer);
+                auto*& buffer = get_chunk_data(current_chunk_).pos_;
                 // If the receiving end supports zero-copy serialization of
                 // larger chunks, the de-serialization pass should not copy
                 // the data, but simply return the address of the buffer
@@ -261,7 +265,12 @@ namespace hpx::serialization {
                 // Unfortunately we can't implement a zero-copy policy on
                 // the receiving end as the parcelport doesn't support this.
                 // The memory was already allocated by the serialization
-                // code, thus we copy the received data.
+                // code, thus we copy the received data. Use the active
+                // union member for the chunk kind (#812).
+                void const* buffer =
+                    current_type == chunk_type::chunk_type_const_pointer ?
+                    get_chunk_data(current_chunk_).cpos_ :
+                    get_chunk_data(current_chunk_).pos_;
                 HPX_ASSERT(buffer != nullptr);
                 traits::detail::copy_serialized_data(address, buffer, count);
             }

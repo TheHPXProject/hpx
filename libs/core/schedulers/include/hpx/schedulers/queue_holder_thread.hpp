@@ -14,6 +14,7 @@
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
 #include <hpx/schedulers/macros.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -349,11 +350,20 @@ namespace hpx::threads::policies {
             }
             else
             {
-                // delete only this many threads
-                auto delete_count = static_cast<std::int64_t>(
-                    terminated_items_count_.data_.load(
-                        std::memory_order_relaxed) /
-                    2);
+                // Bounded recycle: never zero when items exist (count/2 == 0
+                // previously skipped the single-item case). Cap like
+                // thread_queue with min/max_delete_count_.
+                std::int64_t const count = terminated_items_count_.data_.load(
+                    std::memory_order_relaxed);
+                std::int64_t delete_count = (std::min) (count / 2,
+                    static_cast<std::int64_t>(parameters_.max_delete_count_));
+                delete_count = (std::max) (delete_count,
+                    static_cast<std::int64_t>(parameters_.min_delete_count_));
+                delete_count = (std::min) (delete_count, count);
+                if (delete_count == 0 && count > 0)
+                {
+                    delete_count = 1;
+                }
 
                 tq_deb.debug(debug::str<>("cleanup"), "recycle", "delete_count",
                     debug::dec<3>(delete_count));
@@ -374,6 +384,49 @@ namespace hpx::threads::policies {
             return terminated_items_count_.data_.load(
                        std::memory_order_relaxed) == 0;
         }
+
+#if !defined(HPX_HAVE_ADDRESS_SANITIZER)
+        // Recycle a bounded number of terminated threads into heaps. Stops
+        // early once target_heap is non-empty so create can reuse a matching
+        // stack size without draining the whole terminated list (#6793 /
+        // CodeRabbit).
+        void recycle_terminated_for_heap(thread_heap_type* target_heap)
+        {
+            std::int64_t const count =
+                terminated_items_count_.data_.load(std::memory_order_relaxed);
+            if (count == 0)
+            {
+                return;
+            }
+
+            scoped_lock lk(thread_map_mtx_.data_);
+
+            std::int64_t delete_count = (std::min) (count / 2,
+                static_cast<std::int64_t>(parameters_.max_delete_count_));
+            delete_count = (std::max) (delete_count,
+                static_cast<std::int64_t>(parameters_.min_delete_count_));
+            delete_count = (std::min) (delete_count, count);
+            if (delete_count == 0)
+            {
+                delete_count = 1;
+            }
+
+            thread_data* todelete;
+            while (delete_count && terminated_items_.pop(todelete))
+            {
+                thread_id_type tid(todelete);
+                --terminated_items_count_.data_;
+                remove_from_thread_map(tid, false);
+                recycle_thread(tid);
+                --delete_count;
+
+                if (target_heap != nullptr && !target_heap->empty())
+                {
+                    break;
+                }
+            }
+        }
+#endif
 
         // ----------------------------------------------------------------
         void create_thread(thread_init_data& data, thread_id_ref_type* tid,
@@ -428,6 +481,28 @@ namespace hpx::threads::policies {
             std::terminate();
         }
 
+        // Allocate a fresh thread_data (stackless or stackful).
+        threads::thread_id_ref_type allocate_thread_object(
+            threads::thread_init_data& data, std::ptrdiff_t stacksize)
+        {
+            threads::thread_data* p;
+            if (stacksize == parameters_.nostack_stacksize_)
+            {
+                p = threads::thread_data_stackless::create(
+                    data, this, stacksize);
+            }
+            else
+            {
+                p = threads::thread_data_stackful::create(
+                    data, this, stacksize);
+            }
+            thread_id_ref_type tid(p, thread_id_addref::no);
+            tq_deb.debug(debug::str<>("create_thread_object"), "new",
+                queue_data_print(this),
+                debug::threadinfo<threads::thread_data*>(p));
+            return tid;
+        }
+
         // ----------------------------------------------------------------
         // Not thread safe. This function must only be called by the thread that
         // owns the holder object. Creates a thread_data object using
@@ -477,37 +552,37 @@ namespace hpx::threads::policies {
 
             // ASAN gets confused by reusing threads/stacks
 #if !defined(HPX_HAVE_ADDRESS_SANITIZER)
-            // Check for an unused thread object.
-            if (heap && !heap->empty())    //-V522
+            // Prefer recycled thread objects. If the heap is empty, first
+            // move terminated threads back onto it so recursive async /
+            // fork-join trees do not malloc under load.
+            if (heap)    //-V522
             {
-                // Take ownership of the thread object and rebind it.
-                tid = heap->front();
-                heap->pop_front();
-                get_thread_id_data(tid)->rebind(data);
-                tq_deb.debug(debug::str<>("create_thread_object"), "rebind",
-                    queue_data_print(this),
-                    debug::threadinfo<threads::thread_id_ref_type*>(&tid));
+                if (HPX_UNLIKELY(heap->empty()) &&
+                    terminated_items_count_.data_.load(
+                        std::memory_order_relaxed) != 0)
+                {
+                    recycle_terminated_for_heap(heap);
+                }
+
+                if (!heap->empty())
+                {
+                    // Take ownership of the thread object and rebind it.
+                    tid = heap->front();
+                    heap->pop_front();
+                    get_thread_id_data(tid)->rebind(data);
+                    tq_deb.debug(debug::str<>("create_thread_object"), "rebind",
+                        queue_data_print(this),
+                        debug::threadinfo<threads::thread_id_ref_type*>(&tid));
+                }
+                else
+                {
+                    tid = allocate_thread_object(data, stacksize);
+                }
             }
             else
 #endif
             {
-                // Allocate a new thread object.
-                threads::thread_data* p;
-                if (stacksize == parameters_.nostack_stacksize_)
-                {
-                    p = threads::thread_data_stackless::create(
-                        data, this, stacksize);
-                }
-                else
-                {
-                    p = threads::thread_data_stackful::create(
-                        data, this, stacksize);
-                }
-                tid = thread_id_ref_type(p, thread_id_addref::no);
-
-                tq_deb.debug(debug::str<>("create_thread_object"), "new",
-                    queue_data_print(this),
-                    debug::threadinfo<threads::thread_data*>(p));
+                tid = allocate_thread_object(data, stacksize);
             }
         }
 
@@ -881,6 +956,11 @@ namespace hpx::threads::policies {
             if (!xthread && (count > parameters_.max_terminated_threads_))
             {
                 // clean up all terminated threads
+                cleanup_terminated(thread_num, false);
+            }
+            else if (!xthread && (count > parameters_.min_delete_count_))
+            {
+                // Recycle early for recursive async reuse (see #6793).
                 cleanup_terminated(thread_num, false);
             }
         }

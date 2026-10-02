@@ -34,5 +34,13 @@ namespace hpx::util {
         virtual std::size_t heap_count() const = 0;
         virtual std::size_t size() const = 0;
         virtual std::size_t free_size() const = 0;
+
+        // Called while one_size_heap_list holds its exclusive lock. An
+        // implementation may retire trailing slots that cannot satisfy count
+        // and release the backing pool if no live allocations remain.
+        virtual bool reclaim_if_unusable(std::size_t)
+        {
+            return false;
+        }
     };
 }    // namespace hpx::util

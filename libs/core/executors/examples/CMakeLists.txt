@@ -18,8 +18,11 @@ else()
 endif()
 
 set(example_programs disable_thread_stealing_executor
-                     executor_with_thread_hooks
+                     executor_with_thread_hooks parallel_scheduler
 )
+
+# Needs at least two OS threads so a PU can be moved onto the named pool.
+set(parallel_scheduler_PARAMETERS THREADS_PER_LOCALITY 2)
 
 if(HPX_LIKWID_WITH_LIKWID)
   set(example_programs ${example_programs} executor_using_likwid)

@@ -14,10 +14,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <hpx/modules/tracy.hpp>
-
-#include <tracy/TracyC.h>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -34,13 +33,12 @@ namespace hpx::tracing {
         return name;
     }
 
-    // Inline connection-gate. When no Tracy client is attached, the per-task
-    // hot-path entries below short-circuit at the call site to a single
-    // atomic load.
+    // Goes through hpx::tracy so users need no Tracy headers and the
+    // symbol is exported from hpx_core on Windows.
     namespace detail {
         HPX_CXX_CORE_EXPORT inline bool is_profiler_connected() noexcept
         {
-            return ___tracy_connected() != 0;
+            return hpx::tracy::is_profiler_connected();
         }
     }    // namespace detail
 
@@ -631,10 +629,12 @@ namespace hpx::tracing {
         detail::os_thread_sleep_impl(num_thread);
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void tracing_init(
-        char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
-    {
-    }
+    // Non-empty version_info is recorded as a Tracy App Info line so a
+    // capture can be correlated with the HPX build. Buffered by Tracy
+    // until a profiler attaches.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const*, int,
+        char**, std::uint32_t = 0, std::uint32_t = 1,
+        std::string_view version_info = {}) noexcept;
 
     HPX_CXX_CORE_EXPORT constexpr void tracing_finalize() noexcept {}
 

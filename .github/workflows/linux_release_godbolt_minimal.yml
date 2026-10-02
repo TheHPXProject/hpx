@@ -1,4 +1,5 @@
 # Copyright (c) 2026 Jatin Sharma
+# Copyright (c) 2026 the-ivii
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -21,64 +22,29 @@ jobs:
     - uses: actions/checkout@v7
     - name: Configure
       shell: bash
-      run: |
-          cmake \
-              . \
-              -Bbuild \
-              -GNinja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DHPX_WITH_MALLOC=system \
-              -DHPX_WITH_NETWORKING=OFF \
-              -DHPX_WITH_TESTS=OFF \
-              -DHPX_WITH_EXAMPLES=OFF \
-              -DHPX_WITH_DOCUMENTATION=OFF \
-              -DHPX_WITH_STATIC_LINKING=ON \
-              -DHPX_WITH_FETCH_ASIO=ON
+      run: cmake --preset godbolt-minimal
     - name: Build
       shell: bash
-      run: |
-          cmake --build build
+      run: cmake --build --preset godbolt-minimal
     - name: Install
       shell: bash
       run: |
-        cmake --install build --prefix "$PWD/build/install"
-    - name: Build and run external smoke test
+        cmake --install build/godbolt-minimal --prefix "$PWD/build/install"
+        test -f "$PWD/build/install/include/hpx/experimental/sandbox.hpp"
+        test -f "$PWD/build/install/lib/libhpx_wrap.a"
+        test -f "$PWD/build/install/lib/libhpx_init.a"
+        test -f "$PWD/build/install/lib/libhpx.a"
+        test -f "$PWD/build/install/lib/libhpx_core.a"
+    - name: Build and run CMake smoke test
       shell: bash
       run: |
-        mkdir -p build/smoke
-        cat > build/smoke/CMakeLists.txt << 'EOF'
-        cmake_minimum_required(VERSION 3.18)
-        project(hpx_godbolt_minimal_smoketest CXX)
-
-        find_package(HPX REQUIRED)
-
-        add_executable(hello_world hello_world.cpp)
-        target_link_libraries(hello_world PRIVATE HPX::hpx)
-        EOF
-
-        cat > build/smoke/hello_world.cpp << 'EOF'
-        #include <hpx/init.hpp>
-
-        #include <iostream>
-
-        int hpx_main(int, char*[])
-        {
-          std::cout << "Hello World!\n";
-          return hpx::local::finalize();
-        }
-
-        int main(int argc, char* argv[])
-        {
-          return hpx::local::init(&hpx_main, argc, argv);
-        }
-        EOF
-
-        cmake \
-          -Sbuild/smoke \
-          -Bbuild/smoke/build \
-          -GNinja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH="$PWD/build/install"
-
-        cmake --build build/smoke/build
-        build/smoke/build/hello_world
+        .github/ci-scripts/godbolt_minimal_smoke/run_cmake_smoke.sh \
+          --prefix "$PWD/build/install" \
+          --build-dir build/smoke/build
+    - name: Raw g++ wrap-main smoke test
+      shell: bash
+      run: |
+        .github/ci-scripts/godbolt_minimal_smoke/run_raw_gxx_smoke.sh \
+          --prefix "$PWD/build/install" \
+          --cmake-build-dir build/smoke/build \
+          --out-dir build/smoke

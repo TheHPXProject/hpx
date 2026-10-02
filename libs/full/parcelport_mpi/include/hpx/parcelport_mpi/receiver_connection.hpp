@@ -304,7 +304,7 @@ namespace hpx::parcelset::policies::mpi {
                                 buffer_.transmission_chunks_[i].second);
                             buffer_.chunks_[i] =
                                 serialization::create_pointer_chunk(
-                                    nullptr, chunk_size);
+                                    static_cast<void*>(nullptr), chunk_size);
                         }
 
                         parcels_ =

@@ -144,6 +144,10 @@ benchmark).
   threads, introducing overhead.
 * With the **fork-join executor**, threads are created once and reused across
   loops, reducing overhead and improving performance.
+* For bulk leaf regions that must not suspend, construct
+  ``fork_join_executor`` with ``thread_stacksize::nostack`` (bodies must not
+  ``async`` / ``future::get`` / ``this_thread::suspend``; see
+  `#3348 <https://github.com/TheHPXProject/hpx/issues/3348>`_).
 
 In studies, the fork-join executor achieved significant speedups, in some cases
 more than twice as fast as traditional OpenMP implementations.
@@ -586,3 +590,87 @@ We then use hpx::for_each with a parallel execution policy and attach our custom
 
 This pattern is especially useful in larger applications with many tasks, as annotations make it much easier
 to trace and debug the execution of parallel algorithms.
+
+.. _parallel_scheduler:
+
+P2079 parallel scheduler
+========================
+
+C++26 (`P2079 <https://wg21.link/p2079>`_)
+exposes ``std::execution::get_parallel_scheduler()``. |hpx| implements this as
+``hpx::execution::experimental::get_parallel_scheduler()``.
+
+Earlier drafts of the same paper (P2079R2) used the names ``system_context`` and
+``system_scheduler``. Those public types were dropped. The default backend in
+|hpx| reuses the default thread pool's worker threads instead of spawning a
+separate thread pool for the scheduler.
+
+.. literalinclude:: ../../libs/core/executors/examples/parallel_scheduler.cpp
+   :language: c++
+   :start-after: //[get_parallel_scheduler_default
+   :end-before: //get_parallel_scheduler_default]
+
+To bind the scheduler to a named HPX pool created with the resource
+partitioner, pass that pool to ``get_parallel_scheduler``. There is no
+need to write a custom ``parallel_scheduler_backend`` class:
+
+.. literalinclude:: ../../libs/core/executors/examples/parallel_scheduler.cpp
+   :language: c++
+   :start-after: //[get_parallel_scheduler_named_pool
+   :end-before: //get_parallel_scheduler_named_pool]
+
+``get_thread_pool`` throws ``hpx::exception`` for an unknown pool name.
+The pool must outlive the scheduler; HPX does not extend the pool's
+lifetime or diagnose a dangling pool.
+
+Replacing the default backend
+-----------------------------
+
+Most applications should use the default scheduler or the named-pool overload
+above. A replacement backend is intended for integrations that need
+``get_parallel_scheduler()`` to submit work to another execution service, or
+that need custom resource management, scheduling, or instrumentation that an
+HPX thread pool does not provide.
+
+A replacement derives from ``parallel_scheduler_backend`` and implements
+``schedule``, ``schedule_bulk_chunked``, and ``schedule_bulk_unchunked``. Each
+function receives a type-erased receiver and preallocated scratch storage. The
+backend schedules the requested work and eventually completes the receiver
+exactly once with ``set_value``, ``set_error``, or ``set_stopped``. A bulk
+backend calls the receiver's ``execute`` member for the assigned index ranges
+before delivering the terminal completion.
+
+Install an existing backend object with ``set_parallel_scheduler_backend``:
+
+.. code-block:: c++
+
+   namespace ex = hpx::execution::experimental;
+
+   auto previous = ex::query_parallel_scheduler_backend();
+   ex::set_parallel_scheduler_backend(
+       std::make_shared<my_parallel_scheduler_backend>());
+
+   auto scheduler = ex::get_parallel_scheduler();
+
+   // Restore the process-wide backend after all operations using it finish.
+   ex::set_parallel_scheduler_backend(std::move(previous));
+
+The replacement is process-wide and affects subsequent calls to
+``get_parallel_scheduler()``. Schedulers obtained earlier retain shared
+ownership of their original backend. Do not replace a backend while operations
+using it are in flight.
+
+Libraries that select a backend during initialization can instead call
+``set_parallel_scheduler_backend_factory`` before the first
+``get_parallel_scheduler()`` or ``query_parallel_scheduler_backend()`` call.
+The factory is invoked lazily and its backend is shared by subsequent default
+schedulers. Changing the factory after that backend has been created does not
+replace the active backend; use ``set_parallel_scheduler_backend`` for an
+immediate replacement.
+
+Replacement backends receive a ``parallel_scheduler_receiver_proxy`` for each
+operation. Its ``try_query<P>(query)`` member exposes supported properties from
+the connected receiver's environment. In particular,
+``try_query<inplace_stop_token>(get_stop_token)`` returns the receiver's stop
+token when its environment provides that type. Unsupported query and result
+type combinations return ``std::nullopt``.

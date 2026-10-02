@@ -28,6 +28,7 @@
 #endif
 
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -230,6 +231,8 @@ namespace hpx::util {
 #if defined(__linux) || defined(linux) || defined(__linux__) ||                \
     defined(__FreeBSD__)
             "use_guard_pages = ${HPX_USE_GUARD_PAGES:1}",
+            // 0: never, 1: MADV_FREE when available (default), 2: DONTNEED
+            "unbind_on_reset = ${HPX_STACKS_UNBIND_ON_RESET:1}",
 #endif
 
             "[hpx.threadpools]",
@@ -1141,9 +1144,16 @@ namespace hpx::util {
             std::string const entry =
                 sec->get_entry(entryname, defaultvaluestr);
             char* endptr = nullptr;
-            std::ptrdiff_t const val =
+            errno = 0;
+            long long const parsed =
                 std::strtoll(entry.c_str(), &endptr, /*base:*/ 0);
-            return endptr != entry.c_str() ? val : defaultvalue;
+            if (endptr == entry.c_str() || errno == ERANGE)
+                return defaultvalue;
+
+            // a stack size that does not fit is no more usable than one that
+            // did not parse
+            std::ptrdiff_t const val = static_cast<std::ptrdiff_t>(parsed);
+            return val == parsed ? val : defaultvalue;
         }
         return defaultvalue;
     }
@@ -1159,6 +1169,22 @@ namespace hpx::util {
                 0;
         }
         return true;    // default is true
+    }
+
+    int runtime_configuration::stack_unbind_on_reset() const
+    {
+        if (util::section const* sec = get_section("hpx.stacks");
+            nullptr != sec)
+        {
+            int const mode =
+                hpx::util::get_entry_as<int>(*sec, "unbind_on_reset", 1);
+            if (mode < 0 || mode > 2)
+            {
+                return 1;
+            }
+            return mode;
+        }
+        return 1;    // default: MADV_FREE / keep-resident
     }
 #endif
 

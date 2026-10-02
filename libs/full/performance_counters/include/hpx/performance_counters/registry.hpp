@@ -23,7 +23,7 @@
 namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_EXPORT class registry
+    HPX_CXX_EXPORT class HPX_EXPORT registry
     {
     private:
         struct counter_data

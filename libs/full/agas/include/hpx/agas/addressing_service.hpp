@@ -29,7 +29,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -65,7 +64,10 @@ namespace hpx::agas {
         using gva_cache_type = hpx::util::cache::lru_cache<gva_cache_key, gva,
             hpx::util::cache::statistics::local_full_statistics>;
 
-        using migrated_objects_table_type = std::set<naming::gid_type>;
+        // A null address marks an object as away. A non-null address records
+        // the current LVA after the object has migrated back to this locality.
+        using migrated_objects_table_type =
+            std::map<naming::gid_type, naming::address_type>;
         using refcnt_requests_type = std::map<naming::gid_type, std::int64_t>;
 
         mutable hpx::shared_mutex gva_cache_mtx_;
@@ -280,8 +282,11 @@ namespace hpx::agas {
         bool bind_postproc(
             naming::gid_type const& id, gva const& g, future<bool> f);
 
-        /// Maintain list of migrated objects
+        /// Return whether the object is currently marked as away.
         bool was_object_migrated_locked(naming::gid_type const& id) const;
+        /// Erase a resident record only if it still refers to the given LVA.
+        void erase_migrated_object(
+            naming::gid_type const& id, naming::address_type lva);
 
     private:
         /// Move a locality from one state to another under the resolved
@@ -1281,9 +1286,14 @@ namespace hpx::agas {
             hpx::id_type const& id);
         bool end_migration(hpx::id_type const& id);
 
-        /// Maintain list of migrated objects
+        /// Check whether an object is marked as having migrated away.
         std::pair<bool, components::pinned_ptr> was_object_migrated(
             naming::gid_type const& gid,
+            hpx::move_only_function<components::pinned_ptr()>&& f) const;
+
+        /// Check the supplied LVA against the local migration state.
+        std::pair<bool, components::pinned_ptr> was_object_migrated(
+            naming::gid_type const& gid, naming::address_type lva,
             hpx::move_only_function<components::pinned_ptr()>&& f) const;
 
         /// Mark the given object as being migrated (if the object is unpinned).
@@ -1292,9 +1302,13 @@ namespace hpx::agas {
             hpx::move_only_function<std::pair<bool, hpx::future<void>>()>&& f,
             bool expect_to_be_marked_as_migrating);
 
-        /// Remove the given object from the table of migrated objects
+        /// Remove an object's migration record when its LVA is unavailable.
         void unmark_as_migrated(
-            naming::gid_type const& gid_, hpx::move_only_function<void()>&& f);
+            naming::gid_type const& gid, hpx::move_only_function<void()>&& f);
+
+        /// Record the current LVA of an object which is resident again.
+        void unmark_as_migrated(naming::gid_type const& gid_,
+            naming::address_type lva, hpx::move_only_function<void()>&& f);
 
         // Pre-cache locality endpoints in hosted locality namespace
         void pre_cache_endpoints(std::vector<parcelset::endpoints_type> const&);

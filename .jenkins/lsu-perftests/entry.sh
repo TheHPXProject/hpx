@@ -27,8 +27,12 @@ else
     job_name="jenkins-hpx-${ghprbPullId}-${configuration_name}"
 
     # Cancel currently running builds on the same branch, but only for pull
-    # requests
-    hpx_slurm_cancel_previous "${job_name}"
+    # requests. Old jobs that are slow to go away must not stop this build,
+    # or the lane ends here without running or reporting anything.
+    if ! hpx_slurm_cancel_previous "${job_name}"; then
+        echo "Warning: could not clear previous Slurm jobs for ${job_name}," \
+            "starting this build anyway" >&2
+    fi
 fi
 
 # delay things for a random amount of time

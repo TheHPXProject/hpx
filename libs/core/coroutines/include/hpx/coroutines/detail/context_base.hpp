@@ -169,6 +169,12 @@ namespace hpx::threads::coroutines::detail {
 
             if (m_exit_status != context_exit_status::not_exited)
             {
+                // Function and thread-local destructors have finished, including
+                // any yields. Recycle only after leaving the coroutine stack.
+                // Direct execution uses coroutine_impl::invoke_directly(),
+                // which bypasses invoke() and does not recycle a stack.
+                this->reset_stack(false);
+
                 if (m_exit_status == context_exit_status::exited_return)
                     return;
                 if (m_exit_status == context_exit_status::exited_abnormally)
@@ -201,7 +207,7 @@ namespace hpx::threads::coroutines::detail {
             do_yield();
 
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)
-            this->finish_yield_fiber(this->asan_fake_stack);
+            this->finish_switch_fiber(this->asan_fake_stack, m_caller);
 #endif
             m_exit_status = context_exit_status::not_exited;
 
@@ -367,7 +373,15 @@ namespace hpx::threads::coroutines::detail {
             m_state = context_state::exited;
             m_exit_status = status;
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)
+#if defined(HPX_HAVE_FIBER_BASED_COROUTINES)
+            // Windows fibers resume this context when rebound.
             this->start_yield_fiber(&this->asan_fake_stack, m_caller);
+#else
+            // Other backends recreate the context on rebind. Release the fake
+            // stack belonging to the frames that will never be resumed.
+            this->asan_fake_stack = nullptr;
+            this->start_yield_fiber(nullptr, m_caller);
+#endif
 #endif
 
             do_yield();
@@ -390,13 +404,15 @@ namespace hpx::threads::coroutines::detail {
             m_state = context_state::running;
 
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)
-            this->start_switch_fiber(&this->asan_fake_stack);
+            // Save the caller's fake stack separately from the coroutine's.
+            this->start_switch_fiber(&m_caller.asan_fake_stack);
 #endif
 
             swap_context(m_caller, *this, detail::invoke_hint());
 
 #if defined(HPX_HAVE_ADDRESS_SANITIZER)
-            this->finish_switch_fiber(this->asan_fake_stack, m_caller);
+            // We are back on the caller. ASan reports the coroutine's bounds.
+            this->finish_yield_fiber(m_caller.asan_fake_stack);
 #endif
         }
 

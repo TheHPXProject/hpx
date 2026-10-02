@@ -9,6 +9,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <numeric>
 #include <string>
@@ -341,6 +342,28 @@ void closed_channel_set1()
     HPX_TEST(caught_exception);
 }
 
+void closed_one_element_channel_pending_get()
+{
+    hpx::lcos::local::one_element_channel<int> c;
+
+    auto f = c.get();
+    c.close();
+    HPX_TEST(f.wait_for(std::chrono::seconds(1)) == hpx::future_status::ready);
+    HPX_TEST(f.has_exception());
+}
+
+void closed_one_element_channel_pending_set()
+{
+    hpx::lcos::local::one_element_channel<int> c;
+
+    c.set(1);
+    auto p = c.set(hpx::launch::async, 2);
+    c.close();
+    HPX_TEST_EQ(c.get(hpx::launch::sync), 1);
+    HPX_TEST(p.wait_for(std::chrono::seconds(1)) == hpx::future_status::ready);
+    HPX_TEST(p.has_exception());
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -361,6 +384,8 @@ int hpx_main()
     deadlock_test1();
     closed_channel_get1();
     closed_channel_set1();
+    closed_one_element_channel_pending_get();
+    closed_one_element_channel_pending_set();
 
     return hpx::local::finalize();
 }

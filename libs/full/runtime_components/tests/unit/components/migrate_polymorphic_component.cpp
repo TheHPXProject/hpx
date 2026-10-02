@@ -14,6 +14,8 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/include/serialization.hpp>
 #include <hpx/iostream.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
@@ -40,6 +42,13 @@ struct test_server_base
         return hpx::find_here();
     }
     HPX_DEFINE_COMPONENT_ACTION(test_server_base, call, call_action)
+
+    std::uintptr_t get_lva() const
+    {
+        HPX_TEST_NEQ(pin_count(), std::uint32_t(0));
+        return reinterpret_cast<std::uintptr_t>(get_current_address().address_);
+    }
+    HPX_DEFINE_COMPONENT_ACTION(test_server_base, get_lva, get_lva_action)
 
     void busy_work() const
     {
@@ -150,6 +159,10 @@ HPX_DEFINE_GET_COMPONENT_TYPE(test_server_base)
 typedef test_server_base::call_action call_action;
 HPX_REGISTER_ACTION_DECLARATION(call_action)
 HPX_REGISTER_ACTION(call_action)
+
+using get_lva_action = test_server_base::get_lva_action;
+HPX_REGISTER_ACTION_DECLARATION(get_lva_action)
+HPX_REGISTER_ACTION(get_lva_action)
 
 typedef test_server_base::busy_work_action busy_work_action;
 HPX_REGISTER_ACTION_DECLARATION(busy_work_action)
@@ -272,6 +285,11 @@ struct test_client : hpx::components::client_base<test_client, test_server_base>
         return call_action()(this->get_id());
     }
 
+    std::uintptr_t get_lva() const
+    {
+        return get_lva_action()(this->get_id());
+    }
+
     hpx::future<void> busy_work() const
     {
         return hpx::async<busy_work_action>(this->get_id());
@@ -302,6 +320,66 @@ struct test_client : hpx::components::client_base<test_client, test_server_base>
         return lazy_get_base_data_action()(this->get_id()).get();
     }
 };
+
+///////////////////////////////////////////////////////////////////////////////
+bool test_migrate_polymorphic_component_rejects_stale_lva(
+    hpx::id_type const& target)
+{
+    try
+    {
+        hpx::id_type const source = hpx::find_here();
+        test_client const component(hpx::new_<test_server>(source, 7, 42));
+        test_client const occupier(hpx::new_<test_server>(source, 9, 84));
+        std::uintptr_t const stale_lva = occupier.get_lva();
+
+        test_client const remote(
+            hpx::components::migrate<test_server>(component, target));
+        HPX_TEST_EQ(remote.call(), target);
+
+        // Use another live object's address so the negative control never
+        // performs virtual dispatch through freed storage.
+        {
+            auto const away =
+                hpx::traits::action_was_object_migrated<get_data_action>::call(
+                    component.get_id().get_gid(),
+                    reinterpret_cast<hpx::naming::address_type>(stale_lva));
+            HPX_TEST(away.first);
+            HPX_TEST(!away.second);
+        }
+
+        test_client const returned(
+            hpx::components::migrate<test_server>(remote, source));
+        HPX_TEST_EQ(returned.call(), source);
+        std::uintptr_t const current_lva = returned.get_lva();
+        HPX_TEST_NEQ(current_lva, stale_lva);
+
+        {
+            auto const current =
+                hpx::traits::action_was_object_migrated<get_data_action>::call(
+                    component.get_id().get_gid(),
+                    reinterpret_cast<hpx::naming::address_type>(current_lva));
+            HPX_TEST(!current.first);
+            HPX_TEST(current.second);
+        }
+
+        auto const stale =
+            hpx::traits::action_was_object_migrated<get_data_action>::call(
+                component.get_id().get_gid(),
+                reinterpret_cast<hpx::naming::address_type>(stale_lva));
+        HPX_TEST(stale.first);
+        HPX_TEST(!stale.second);
+        HPX_TEST_EQ(returned.get_base_data(), 7);
+        HPX_TEST_EQ(returned.get_data(), 42);
+        HPX_TEST_EQ(occupier.get_base_data(), 9);
+        HPX_TEST_EQ(occupier.get_data(), 84);
+    }
+    catch (hpx::exception const& e)
+    {
+        hpx::cout << hpx::get_error_what(e) << std::endl;
+        return false;
+    }
+    return true;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 bool test_migrate_polymorphic_component(
@@ -725,6 +803,12 @@ bool test_migrate_lazy_busy_polymorphic_component2(
 int main()
 {
     std::vector<hpx::id_type> const localities = hpx::find_remote_localities();
+
+    if (!localities.empty())
+    {
+        HPX_TEST(test_migrate_polymorphic_component_rejects_stale_lva(
+            localities.front()));
+    }
 
     for (hpx::id_type const& id : localities)
     {

@@ -54,6 +54,9 @@ jobs:
           cmake --build build --config Debug \
           --target ALL_BUILD \
           -- -maxcpucount:2 -verbosity:minimal -nologo
+          cmake --build build --config Debug \
+          --target autolink_test \
+          -- -maxcpucount:2 -verbosity:minimal -nologo
     - name: Install
       shell: bash
       run: |
@@ -66,5 +69,5 @@ jobs:
           ctest `
           --output-on-failure `
             --build-config Debug `
-            --tests-regex tests.examples `
+            --tests-regex 'tests\.examples|tests\.unit\.modules\.config\.autolink' `
             --exclude-regex $exclude_regex
