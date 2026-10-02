@@ -8,7 +8,45 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <iterator>
+#include <ranges>
+#include <span>
+#include <type_traits>
+#include <utility>
 #include <vector>
+
+using iterator_range = hpx::util::iterator_range<int*>;
+using unsized_iterator_range =
+    hpx::util::iterator_range<int*, std::unreachable_sentinel_t>;
+using vector_type = std::vector<int>;
+using vector_iterator_range =
+    hpx::util::iterator_range<std::ranges::iterator_t<vector_type>>;
+using span_type = std::span<int>;
+using span_iterator_range =
+    hpx::util::iterator_range<std::ranges::iterator_t<span_type>>;
+
+struct throwing_range
+{
+    int* begin() noexcept(false);
+    int* end() noexcept(false);
+};
+
+template <typename T>
+concept has_size = requires(T const& range) { range.size(); };
+
+static_assert(std::ranges::borrowed_range<iterator_range>);
+static_assert(std::ranges::sized_range<iterator_range>);
+static_assert(std::ranges::borrowed_range<unsized_iterator_range>);
+static_assert(!std::ranges::sized_range<unsized_iterator_range>);
+static_assert(has_size<iterator_range>);
+static_assert(!has_size<unsized_iterator_range>);
+static_assert(std::is_constructible_v<vector_iterator_range, vector_type&>);
+static_assert(
+    !std::is_constructible_v<vector_iterator_range, std::vector<long>&>);
+static_assert(!std::is_constructible_v<vector_iterator_range, vector_type>);
+static_assert(std::is_constructible_v<span_iterator_range, span_type>);
+static_assert(std::is_constructible_v<iterator_range, throwing_range&>);
+static_assert(!noexcept(iterator_range(std::declval<throwing_range&>())));
 
 ///////////////////////////////////////////////////////////////////////////////
 void array_range()

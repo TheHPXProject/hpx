@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <exception>
+#include <iterator>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -80,7 +81,10 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(reshaped) == 1)
+                    auto const shape_begin = std::begin(reshaped);
+                    auto const shape_end = std::end(reshaped);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
                             partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
