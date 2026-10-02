@@ -23,7 +23,7 @@ jobs:
     - name: Install ITTNotify (ittapi)
       shell: bash
       run: |
-          git clone https://github.com/intel/ittapi.git
+          git clone --branch v3.27.0 --depth 1 https://github.com/intel/ittapi.git
           cmake -S ittapi -B ittapi/build -GNinja \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_INSTALL_PREFIX=$PWD/ittapi/install \
