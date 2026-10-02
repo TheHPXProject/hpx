@@ -56,7 +56,7 @@ pipeline {
                 axes {
                     axis {
                         name 'configuration_name'
-                        values 'gcc-12', 'gcc-13', 'gcc-14', 'gcc-15', 'clang-17-apex', 'clang-16', 'clang-17', 'clang-18', 'clang-19', 'clang-20', 'gcc-12-cuda-12', 'gcc-12-cuda-12-dgx', 'hipcc'
+                        values 'gcc-12', 'gcc-13', 'gcc-14', 'gcc-15', 'clang-17-apex', 'clang-16', 'clang-17', 'clang-18', 'clang-19', 'clang-20', 'gcc-12-cuda-12', 'gcc-12-cuda-12-dgx', 'gcc-13-cuda-13-spark', 'hipcc'
                     }
                     axis {
                          name 'build_type'
