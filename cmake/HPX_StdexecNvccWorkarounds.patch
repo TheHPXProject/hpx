@@ -27,13 +27,10 @@ to nvcc 12.9 with a gcc 12 host compiler:
 SPDX-License-Identifier: BSL-1.0
 
 diff --git a/include/stdexec/__detail/__connect.hpp b/include/stdexec/__detail/__connect.hpp
-index d9b4c5d6..4fede426 100644
+index 3a07e751..f242d2e9 100644
 --- a/include/stdexec/__detail/__connect.hpp
 +++ b/include/stdexec/__detail/__connect.hpp
-@@ -64,7 +64,7 @@ namespace STDEXEC
-                               || __with_co_await<_Sender, _Receiver>
-                               || __with_legacy_tag_invoke<_Sender, _Receiver>;
- 
+@@ -66,3 +66,3 @@ namespace STDEXEC
 -#  if !STDEXEC_MSVC()
 +#  if !STDEXEC_MSVC() && !STDEXEC_NVCC()
  
