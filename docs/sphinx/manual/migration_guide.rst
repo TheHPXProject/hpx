@@ -976,7 +976,7 @@ and end of the sequence of elements the algorithm will be applied to respectivel
 `output.begin()` refers to the beginning of the destination, while the last argument
 specifies the function which will be invoked for each of the values of the input sequence.
 
-.. seealso::
+# .. seealso::
 
 Apart from :hpx:func:`hpx::inclusive_scan`, |hpx| provides its users with :hpx:func:`hpx::exclusive_scan`.
 The key difference between inclusive scan and exclusive scan lies in the treatment of the current element
@@ -2229,7 +2229,7 @@ support enabled:
 Reflection support is auto-detected by HPX's CMake build system via
 ``hpx_check_for_cxx26_reflection()`` in
 ``cmake/HPX_PerformCxxFeatureTests.cmake``. No manual flag is required
-when using a supported compiler — ``HPX_HAVE_CXX26_REFLECTION`` is set
+when using a supported compiler ? ``HPX_HAVE_CXX26_REFLECTION`` is set
 automatically.
 
 Existing code requires no changes
@@ -2239,7 +2239,7 @@ The most important point: **existing code using** ``HPX_PLAIN_ACTION``,
 ``HPX_DEFINE_COMPONENT_ACTION``, and related macros requires zero source
 changes. When ``HPX_WITH_CXX26_REFLECTION=ON``, these macros automatically
 use the reflection-based implementation internally. No
-``HPX_REGISTER_ACTION`` calls are needed — registration is automatic.
+``HPX_REGISTER_ACTION`` calls are needed ? registration is automatic.
 
 .. code-block:: c++
 
@@ -2304,7 +2304,7 @@ Explicit migration: direct plain actions
 Explicit migration: direct component actions
 ---------------------------------------------
 
-Direct actions execute without spawning a new HPX thread — locally they
+Direct actions execute without spawning a new HPX thread ? locally they
 run inline on the calling thread, and remotely on the target locality's
 existing HPX thread. The reflection-based API preserves this behavior:
 
