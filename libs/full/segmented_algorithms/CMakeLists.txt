@@ -35,6 +35,7 @@ set(segmented_algorithms_headers
     hpx/parallel/segmented_algorithms/reduce.hpp
     hpx/parallel/segmented_algorithms/replace.hpp
     hpx/parallel/segmented_algorithms/replace_copy.hpp
+    hpx/parallel/segmented_algorithms/sort.hpp
     hpx/parallel/segmented_algorithms/traits/zip_iterator.hpp
     hpx/parallel/segmented_algorithms/transform_exclusive_scan.hpp
     hpx/parallel/segmented_algorithms/transform.hpp
@@ -58,7 +59,8 @@ add_hpx_module(
   ADD_TO_GLOBAL_HEADER "hpx/parallel/segmented_algorithms/detail/dispatch.hpp"
   COMPAT_HEADERS ${segmented_algorithms_compat_headers}
   DEPENDENCIES hpx_core
-  MODULE_DEPENDENCIES hpx_actions_base hpx_async_colocated hpx_async_distributed
-                      hpx_distribution_policies hpx_naming_base
+  MODULE_DEPENDENCIES
+    hpx_actions_base hpx_async_colocated hpx_async_distributed
+    hpx_distribution_policies hpx_naming_base hpx_runtime_distributed
   CMAKE_SUBDIRS examples tests
 )
