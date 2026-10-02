@@ -9,10 +9,14 @@
 // executes at runtime; if this file compiles, every static_assert below has
 // already been checked by the compiler.
 
-#include <hpx/execution.hpp>
-#include <hpx/init.hpp>
+#include <hpx/modules/execution.hpp>
+#include <hpx/modules/executors.hpp>
+#include <hpx/modules/init_runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thrust.hpp>
+
+#include <type_traits>
+#include <utility>
 
 ///////////////////////////////////////////////////////////////////////////
 // A single policy is checked against all seven policy_traits members at
@@ -76,6 +80,37 @@ static_assert(check_policy_traits<hpx::thrust::thrust_task_policy, true, false,
 static_assert(check_policy_traits<
     hpx::thrust::thrust_task_policy_shim<stub_executor, stub_parameters>, true,
     true, true, false, false, true, false>());
+
+///////////////////////////////////////////////////////////////////////////
+/// on() and with() rebind one axis at a time through
+/// create_rebound_policy_executor and create_rebound_policy_parameters.
+using thrust_parameters_type =
+    hpx::thrust::thrust_policy::executor_parameters_type;
+
+static_assert(
+    std::is_same_v<decltype(std::declval<hpx::thrust::thrust_policy const&>()
+                           .on(hpx::execution::sequenced_executor{})),
+        hpx::thrust::thrust_policy_shim<hpx::execution::sequenced_executor,
+            thrust_parameters_type>>);
+static_assert(std::is_same_v<
+    decltype(std::declval<hpx::thrust::thrust_policy const&>().with(
+        hpx::execution::experimental::static_chunk_size())),
+    hpx::thrust::thrust_policy_shim<hpx::execution::parallel_executor,
+        hpx::execution::experimental::static_chunk_size>>);
+
+using thrust_shim_type =
+    hpx::thrust::thrust_policy_shim<hpx::execution::sequenced_executor,
+        thrust_parameters_type>;
+
+static_assert(
+    std::is_same_v<decltype(std::declval<thrust_shim_type const&>().on(
+                       hpx::execution::sequenced_executor{})),
+        thrust_shim_type>);
+static_assert(
+    std::is_same_v<decltype(std::declval<thrust_shim_type const&>().with(
+                       hpx::execution::experimental::static_chunk_size())),
+        hpx::thrust::thrust_policy_shim<hpx::execution::sequenced_executor,
+            hpx::execution::experimental::static_chunk_size>>);
 
 ///////////////////////////////////////////////////////////////////////////
 int hpx_main()

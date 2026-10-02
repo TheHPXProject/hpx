@@ -190,8 +190,9 @@ namespace hpx::execution {
                     hpx::traits::is_executor_any_v<std::decay_t<Executor_>>,
                     "hpx::traits::is_executor_any_v<Executor>");
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_FORWARD(Executor_, exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(
+                        derived(), HPX_FORWARD(Executor_, exec));
             }
 
             // Create a new execution policy from the given execution parameters
@@ -211,10 +212,10 @@ namespace hpx::execution {
             template <typename... Parameters_>
             constexpr decltype(auto) with(Parameters_&&... params) const
             {
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), executor(),
-                    hpx::execution::experimental::join_executor_parameters(
-                        HPX_FORWARD(Parameters_, params)...));
+                return hpx::execution::experimental::
+                    create_rebound_policy_parameters(derived(),
+                        hpx::execution::experimental::join_executor_parameters(
+                            HPX_FORWARD(Parameters_, params)...));
             }
 
         public:
@@ -244,7 +245,8 @@ namespace hpx::execution {
             }
 
             // Scheduling property query implementations forward to the
-            // embedded executor and rebound through create_rebound_policy.
+            // embedded executor and rebound through
+            // create_rebound_policy_executor.
             template <scheduling_property Tag, typename Property>
                 requires(!std::is_same_v<Tag,
                              hpx::execution::experimental::
@@ -252,9 +254,9 @@ namespace hpx::execution {
                     std::invocable<Tag, executor_type, Property>)
             [[nodiscard]] auto query(Tag tag, Property&& prop) const
             {
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), tag(executor(), HPX_FORWARD(Property, prop)),
-                    parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(),
+                        tag(executor(), HPX_FORWARD(Property, prop)));
             }
 
             template <scheduling_property Tag>
@@ -275,8 +277,8 @@ namespace hpx::execution {
                 auto exec = hpx::execution::experimental::with_annotation(
                     executor(), annotation);
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
             [[nodiscard]] auto query(
@@ -289,8 +291,8 @@ namespace hpx::execution {
                 auto exec = hpx::execution::experimental::with_annotation(
                     executor(), HPX_MOVE(annotation));
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
             [[nodiscard]] decltype(auto) query(
@@ -320,8 +322,9 @@ namespace hpx::execution {
                     auto exec = hpx::execution::experimental::
                         with_processing_units_count(executor(), num_cores);
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
                 else if constexpr (requires(exec_type e) {
                                        e.num_cores_;
@@ -335,16 +338,18 @@ namespace hpx::execution {
                     }
                     exec.num_cores_ = num_cores;
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
                 else
                 {
                     auto exec = hpx::execution::experimental::
                         with_processing_units_count(executor(), num_cores);
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
             }
 
@@ -367,12 +372,11 @@ namespace hpx::execution {
                             HPX_FORWARD(Params, params), executor(),
                             hpx::chrono::null_duration, 0));
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
         private:
-            friend struct hpx::execution::experimental::create_rebound_policy_t;
             friend class hpx::serialization::access;
 
             template <typename Archive>
