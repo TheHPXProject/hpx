@@ -114,8 +114,8 @@ namespace {
             ex::parallel_scheduler_receiver_proxy& proxy) noexcept
         {
             source_.request_stop();
-            using stop_token_type = decltype(source_.get_token());
-            auto token = proxy.try_query<stop_token_type>(ex::get_stop_token);
+            // P3804R2: Query for the adapted inplace_stop_token, not the native type
+            auto token = proxy.try_query<hpx::inplace_stop_token>(ex::get_stop_token);
             found_token_ = token.has_value() && token->stop_requested();
             found_unsupported_ =
                 proxy.try_query<int>(ex::get_stop_token).has_value();
@@ -211,9 +211,11 @@ int hpx_main(int, char*[])
 {
     // Type and Concept Tests
     static_assert(
-        std::has_virtual_destructor_v<ex::parallel_scheduler_receiver_proxy>);
-    static_assert(std::has_virtual_destructor_v<
-        ex::parallel_scheduler_bulk_item_receiver_proxy>);
+        !std::has_virtual_destructor_v<ex::parallel_scheduler_receiver_proxy>,
+        "P3804R2: Proxies must not have virtual destructors");
+    static_assert(!std::has_virtual_destructor_v<
+                      ex::parallel_scheduler_bulk_item_receiver_proxy>,
+        "P3804R2: Proxies must not have virtual destructors");
 
     // parallel_scheduler models scheduler concept
     {

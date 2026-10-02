@@ -358,21 +358,6 @@ namespace hpx::execution::experimental {
                     }
                     return true;
                 }
-
-            protected:
-                void query_env(std::type_info const& query_type,
-                    std::type_info const& result_type,
-                    void* result) const noexcept override
-                {
-                    using token_type = std::decay_t<decltype(get_stop_token(
-                        get_env(op_.receiver_)))>;
-                    if (query_type == typeid(get_stop_token_t) &&
-                        result_type == typeid(token_type))
-                    {
-                        static_cast<std::optional<token_type>*>(result)
-                            ->emplace(get_stop_token(get_env(op_.receiver_)));
-                    }
-                }
             };
 
             // ---- Proxy type computation ----------------------------------
@@ -989,21 +974,6 @@ namespace hpx::execution::experimental {
                             inplace_stop_token(op_.stop_source_.get_token());
                     }
                     return true;
-                }
-
-            protected:
-                void query_env(std::type_info const& query_type,
-                    std::type_info const& result_type,
-                    void* result) const noexcept override
-                {
-                    using token_type = std::decay_t<decltype(get_stop_token(
-                        get_env(receiver_)))>;
-                    if (query_type == typeid(get_stop_token_t) &&
-                        result_type == typeid(token_type))
-                    {
-                        static_cast<std::optional<token_type>*>(result)
-                            ->emplace(get_stop_token(get_env(receiver_)));
-                    }
                 }
             };
 
