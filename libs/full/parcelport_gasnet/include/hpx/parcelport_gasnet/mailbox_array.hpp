@@ -299,6 +299,15 @@ namespace hpx::parcelset::policies::gasnet {
             HPX_ASSERT(num_pes_ > 0);
             HPX_ASSERT(my_pe_ < num_pes_);
 
+            // The chunk protocol prepends message_header to every page, so an
+            // mtu at or below the header size would wrap available_payload_
+            // huge in sender_connection::prepare() and overflow the staging
+            // page; an mtu that is not a multiple of 4 also misaligns the
+            // credit matrices' uint32 words (UB on strict-alignment hosts).
+            // The default (64 KiB) trivially satisfies both; this sanity check
+            // catches hand-rolled hpx.parcel.gasnet.mtu values at launch.
+            HPX_ASSERT(mtu_ > detail::header_size && mtu_ % 4 == 0);
+
             std::size_t const bytes =
                 symmetric_bytes(num_pes_, slots_per_dst_, mtu_);
 
@@ -595,10 +604,11 @@ namespace hpx::parcelset::policies::gasnet {
             {
                 std::size_t const src = lo + ((start - lo + k) % width);
 
-                if (src == my_pe_)
-                {
-                    continue;
-                }
+                // Self is deliberately NOT skipped: try_send()/try_receive_()
+                // handle locality-to-self parcels with a local memcpy and local
+                // credit stores, and the receiver's per-arena scan must detect
+                // them or self-sent parcels (common during bootstrap) are never
+                // drained and the empty stalls.
                 std::size_t const w = src * num_pes_ + my_pe_;
 
                 // Acquire so a same-PE self-send's release-store of produced
@@ -612,7 +622,12 @@ namespace hpx::parcelset::policies::gasnet {
                         .load(std::memory_order_acquire);
                 std::uint32_t const consumed =
                     consumed_locals_[src].load(std::memory_order_relaxed);
-                if (produced > consumed)
+                // Modular (wrap-safe) comparison: the 32-bit watermarks wrap
+                // after 2^32 pages, so the raw ordering relation is unreliable
+                // after a wrap, but the signed difference is exact because
+                // credit gating keeps the pages-in-flight count well below
+                // 2^32.  Nonzero == at least one published-but-undrained page.
+                if ((produced - consumed) != 0)
                 {
                     return static_cast<int>(src);
                 }
@@ -651,6 +666,31 @@ namespace hpx::parcelset::policies::gasnet {
         bool send_ready(std::size_t const dst_pe) noexcept
         {
             gex_Event_t& ev = send_events_[dst_pe];
+            if (ev == GEX_EVENT_INVALID)
+            {
+                return true;
+            }
+            if (!hpx::util::gasnet_environment::poll_event(ev))
+            {
+                return false;
+            }
+            ev = GEX_EVENT_INVALID;
+            return true;
+        }
+
+        // True when the single outstanding credit-return access region to
+        // src_pe (if any) has locally completed, i.e. the drained page's
+        // credit word has been performed at src_pe and the rx slot may be
+        // overwritten by the next page from that source.  Polls the stored
+        // event via gasnet_environment::poll_event(), which never blocks; the
+        // event is consumed on completion.  Always true for self-sends, which
+        // store the credit locally and issue no region.  Callers MUST keep a
+        // source single-flighted while polling (receiver_connection waits in
+        // its 'reaping_credit' state); two threads polling the same src would
+        // race on the event slot.
+        bool credit_ready(std::size_t const src_pe) noexcept
+        {
+            gex_Event_t& ev = credit_events_[src_pe];
             if (ev == GEX_EVENT_INVALID)
             {
                 return true;
@@ -811,7 +851,12 @@ namespace hpx::parcelset::policies::gasnet {
                 std::atomic_ref<std::uint32_t>(
                     produced_beg_[w])
                     .load(std::memory_order_acquire);
-            if (produced <= consumed)
+            // Modular (wrap-safe) comparison, symmetric with try_send(): the
+            // in-flight page count is (produced - consumed) mod 2^32 and is
+            // bounded below 2^32 by the credit window, so equality means "no
+            // page published yet" regardless of how many 2^32 wraps have
+            // occurred.
+            if (produced == consumed)
             {
                 return false;    // not ready: requeue and retry later
             }
