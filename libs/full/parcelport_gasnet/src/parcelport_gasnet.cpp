@@ -315,12 +315,15 @@ namespace hpx::parcelset {
             void do_stop()
             {
                 // Wait for the io_service drivers to empty all queued work,
-                // then stop them.  This thread must NOT touch GASNet while
-                // the drivers may still be running (they exit only once
-                // 'stopped_' is set below), so it waits passively instead of
-                // driving progress itself.  The wait deliberately uses no HPX
-                // thread suspension: nothing wakes a suspended thread, and
-                // the loop must not depend on the scheduler.
+                // then stop them.  This thread does not drive progress itself
+                // (the wait deliberately uses no HPX thread suspension:
+                // nothing wakes a suspended thread, and the loop must not
+                // depend on the scheduler).  It does take one final collective
+                // barrier below, which is safe while the drivers still run:
+                // GASNet-EX teams are thread-multiple, the drivers issue only
+                // RMA (never a collective), so this thread is the sole
+                // collective caller and concurrent RMA from the drivers is
+                // legal.
                 //
                 // The abort condition is *stall*, not a wall-clock budget: an
                 // empty that keeps transferring pages is allowed to take as
@@ -354,6 +357,23 @@ namespace hpx::parcelset {
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
+
+                // Final collective barrier before the drivers stop and the
+                // transport finalizes.  Every connection reaps its last access
+                // region before finishing — poll_send() waits for the final
+                // data+credit region (sender_connection.cpp), and the
+                // receiver waits in its 'reaping_credit' state for the final
+                // credit-return region (receiver_connection.hpp) — so this PE
+                // has no access region outstanding when the drain loop exits.
+                // The barrier then confirms job-wide that every PE agrees the
+                // empty has drained before any of them proceeds to
+                // finalize()/gasnet_exit(): without it, PE A could tear down
+                // its registered segment while PE B's very last put into that
+                // segment was still in flight (undefined behavior), and the
+                // final parcel could be dropped.  A straggler that arrives
+                // after the last drain poll is dropped, never silently
+                // corrupted, exactly like the stall-timeout abort above.
+                util::gasnet_environment::barrier();
 
                 stopped_.store(true, std::memory_order_release);
             }

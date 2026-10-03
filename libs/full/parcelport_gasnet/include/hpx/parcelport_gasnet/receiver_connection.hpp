@@ -39,7 +39,14 @@ namespace hpx::parcelset::policies::gasnet {
             draining_malformed = 5,
             // Terminal: the connection produced no usable parcel.  Distinct
             // from 'decoded' so the caller knows a transfer was lost.
-            failed = 6
+            failed = 6,
+            // The last page of the message has been consumed (its credit
+            // returned via an NBI region) but that region is still in flight.
+            // The connection re-queues here until it completes, keeping the
+            // source single-flighted, then moves on to the terminal state
+            // recorded in post_credit_state_ ('decoded' on success, 'failed'
+            // after a malformed drain).
+            reaping_credit = 7
         };
 
         using buffer_type = parcel_buffer<>;
@@ -81,6 +88,9 @@ namespace hpx::parcelset::policies::gasnet {
 
             case connection_state::draining_malformed:
                 return drain_malformed();
+
+            case connection_state::reaping_credit:
+                return reap_credit();
 
             case connection_state::decoded:
             case connection_state::failed:
@@ -257,13 +267,19 @@ namespace hpx::parcelset::policies::gasnet {
                 return false;    // re-queue; the pages are skipped below
             }
 
-            state_ = connection_state::failed;
-            return true;    // terminal; no parcel is decoded for this connection
+            // The failed page was consumed (credit returned) before
+            // validation; wait for that credit-return region to land before
+            // reporting the terminal failure (see reap_credit()).
+            post_credit_state_ = connection_state::failed;
+            state_ = connection_state::reaping_credit;
+            return false;
         }
 
         // Skip (consume + drop) the pages of the discarded message so the
         // stream realigns.  Non-blocking: if the sender has not published the
-        // next page yet, re-queue and continue later.
+        // next page yet, re-queue and continue later.  The final drained page
+        // returns its credit via an NBI region, so the connection then waits
+        // in 'reaping_credit' before finishing.
         bool drain_malformed() noexcept
         {
             std::size_t const src_pe = static_cast<std::size_t>(src_);
@@ -278,7 +294,30 @@ namespace hpx::parcelset::policies::gasnet {
                 --to_drain_;
             }
 
-            state_ = connection_state::failed;
+            post_credit_state_ = connection_state::failed;
+            state_ = connection_state::reaping_credit;
+            return false;
+        }
+
+        // Wait for the credit-return region of the connection's last consumed
+        // page to complete before finishing.  mailbox_array::credit_ready()
+        // polls only and consumes the event when done; while it is still in
+        // flight the connection re-queues and the source stays reserved, so
+        // no other connection can touch this source's event slot.  On
+        // completion the connection moves to the terminal state recorded in
+        // post_credit_state_.  Mirrors sender_connection::poll_send()'s final
+        // send_ready() reap, closing the send-side/credit-side loop so that a
+        // drained receiver queue really means no access region is left
+        // outstanding: do_stop() derives quiescence from those queues, and
+        // finishing early would let the transport tear down while a credit
+        // put was still on the wire.
+        bool reap_credit() noexcept
+        {
+            if (!mailboxes_.credit_ready(static_cast<std::size_t>(src_)))
+            {
+                return false;    // final credit-return region in flight
+            }
+            state_ = post_credit_state_;
             return true;
         }
 
@@ -314,8 +353,14 @@ namespace hpx::parcelset::policies::gasnet {
             hpx::parcelset::handle_received_parcels(
                 HPX_MOVE(parcels), num_thread);
 
-            state_ = connection_state::decoded;
-            return true;
+            // The final page's credit-return region is still in flight; wait
+            // for it before releasing the source reservation (see
+            // reap_credit()), so a drained receiver queue implies no access
+            // region is left outstanding when do_stop() shuts the transport
+            // down.
+            post_credit_state_ = connection_state::decoded;
+            state_ = connection_state::reaping_credit;
+            return false;
         }
 
         connection_state state_;
@@ -331,6 +376,11 @@ namespace hpx::parcelset::policies::gasnet {
         // message_id of the message currently being collected (validated
         // against every continuation chunk).
         std::uint64_t expected_message_id_ = 0;
+
+        // Terminal state reached after the 'reaping_credit' wait completes:
+        // 'decoded' for a successful transfer, 'failed' after a malformed
+        // drain.  Set by the transition that enters 'reaping_credit'.
+        connection_state post_credit_state_ = connection_state::decoded;
 
         // Pages left to skip while draining a discarded message.
         std::size_t to_drain_ = 0;
