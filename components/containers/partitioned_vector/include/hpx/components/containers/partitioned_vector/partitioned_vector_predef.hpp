@@ -22,6 +22,8 @@
 #if !defined(HPX_PARTITIONED_VECTOR_MODULE_EXPORTS) &&                         \
     !defined(HPX_HAVE_STATIC_LINKING)
 
+/// \cond NOINTERNAL
+
 // partitioned_vector<double>
 HPX_REGISTER_PARTITIONED_VECTOR_DECLARATION(double)
 
@@ -125,5 +127,7 @@ extern template hpx::partitioned_vector<std::string, std::vector<std::string>>::
     partitioned_vector(std::vector<std::string>::const_iterator,
         std::vector<std::string>::const_iterator,
         hpx::explicit_container_distribution_policy const&, void*);
+
+/// \endcond
 
 #endif

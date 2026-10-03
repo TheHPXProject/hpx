@@ -7,7 +7,7 @@
 
 #pragma once
 
-/// \file hpx/components/unordered_map/unordered_map_segmented_iterator.hpp
+/// \file unordered_map_segmented_iterator.hpp
 /// \brief This file contains the implementation of iterators for hpx::unordered_map.
 
 // The idea for these iterators is taken from

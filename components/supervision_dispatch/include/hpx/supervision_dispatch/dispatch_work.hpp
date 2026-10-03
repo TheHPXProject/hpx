@@ -127,7 +127,7 @@ namespace hpx::supervision {
     /// \brief HPX action wrapper for invoke_fenced_action().
     ///
     /// Registers invoke_fenced_action<Action, IdType, Epoch, Ts...> as an HPX
-    /// action so it can be dispatched with hpx::async/hpx::colocated (see
+    /// action so it can be dispatched with \c hpx::async/\c hpx::colocated (see
     /// dispatch_work()).
     ///
     /// \tparam Action  The wrapped HPX action type.
@@ -164,7 +164,7 @@ namespace hpx::supervision {
     /// corresponding fenced_action specialization that wraps it: the target
     /// identifier type is fixed to `hpx::id_type`, the fencing epoch type is
     /// fixed to `std::uint64_t`, and the remaining argument types are taken
-    /// from \p Action::arguments_type (i.e. \p Action's own declared argument
+    /// from \c Action::arguments_type (i.e. \p Action's own declared argument
     /// list, unpacked via detail::fenced_action_pack).
     ///
     /// This is the type-level building block used by dispatch_work() to obtain
@@ -185,10 +185,10 @@ namespace hpx::supervision {
         using type = detail::fenced_action_pack<Action>::type;
     };
 
-    /// \brief Convenience alias for `make_fenced_action<Action>::type`.
+    /// \brief Convenience alias for \c make_fenced_action<Action>::type.
     ///
     /// Yields the fenced_action wrapper type for \p Action directly, avoiding
-    /// the `typename ...::type` boilerplate at call sites.
+    /// the \c typename ...::type boilerplate at call sites.
     ///
     /// \tparam Action The wrapped HPX action type whose fenced dispatch
     ///                wrapper should be derived.

@@ -8,7 +8,7 @@
 
 #pragma once
 
-/// \file hpx/components/unordered/partition_unordered_map_component.hpp
+/// \file partition_unordered_map_component.hpp
 ///
 /// \brief The partition_unordered_map as the hpx component is defined here.
 ///

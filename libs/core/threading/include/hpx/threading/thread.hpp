@@ -318,7 +318,8 @@ namespace hpx {
         /// \details It is recommended to use the clock tied to \a abs_time, in
         ///          which case adjustments of the clock may be taken into
         ///          account. Thus, the duration of the block might be more or
-        ///          less than \c abs_time-Clock::now() at the time of the call,
+        ///          less than \c abs_time - \c Clock::now() at the time of the
+        ///          call,
         ///          depending on the direction of the adjustment and whether it
         ///          is honored by the implementation. The function also may
         ///          block until after \a abs_time has been reached due to

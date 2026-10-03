@@ -89,7 +89,7 @@ namespace hpx {
     /// \endcode
     /// is well-formed when treated as an unevaluated operand, where \a INVOKE
     /// is the operation defined in \a Callable.
-    /// \copydetails is_invocable
+    /// \copydetail is_invocable
     HPX_CXX_CORE_EXPORT template <typename R, typename F, typename... Ts>
     struct is_invocable_r
       : hpx::detail::is_invocable_r_impl<F && (Ts && ...), R>

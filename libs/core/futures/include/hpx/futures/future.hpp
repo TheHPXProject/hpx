@@ -780,7 +780,7 @@ namespace hpx {
         }
 
         /// \copybrief hpx::future::then(F&& f, error_code& ec = throws)
-        /// \copydetail hpx::future::then(F&& f, error_code& ec = throws)
+        /// \copydetails hpx::future::then(F&& f, error_code& ec = throws)
         ///
         /// \tparam T0          The type of executor or launch policy.
         /// \tparam F           The type of the function/function object to use
