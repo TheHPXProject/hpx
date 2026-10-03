@@ -15,6 +15,7 @@
 #include <iterator>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -68,8 +69,11 @@ template <typename IteratorTag>
 void test_partitioned1()
 {
     using namespace hpx::execution;
-    test_partitioned1_async(seq(task), IteratorTag());
-    test_partitioned1_async(par(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partitioned1_async(seq(task), IteratorTag());
+        test_partitioned1_async(par(task), IteratorTag());
+    }
 }
 
 void partitioned_test1()
@@ -131,8 +135,11 @@ template <typename IteratorTag>
 void test_partitioned2()
 {
     using namespace hpx::execution;
-    test_partitioned2_async(seq(task), IteratorTag());
-    test_partitioned2_async(par(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partitioned2_async(seq(task), IteratorTag());
+        test_partitioned2_async(par(task), IteratorTag());
+    }
 }
 
 void partitioned_test2()
@@ -215,8 +222,11 @@ template <typename IteratorTag>
 void test_partitioned3()
 {
     using namespace hpx::execution;
-    test_partitioned3_async(seq(task), IteratorTag());
-    test_partitioned3_async(par(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partitioned3_async(seq(task), IteratorTag());
+        test_partitioned3_async(par(task), IteratorTag());
+    }
 }
 
 void partitioned_test3()
@@ -271,8 +281,11 @@ template <typename IteratorTag>
 void test_partitioned_exception()
 {
     using namespace hpx::execution;
-    test_partitioned_async_exception(seq(task), IteratorTag());
-    test_partitioned_async_exception(par(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partitioned_async_exception(seq(task), IteratorTag());
+        test_partitioned_async_exception(par(task), IteratorTag());
+    }
 }
 
 void partitioned_exception_test()
@@ -323,8 +336,11 @@ template <typename IteratorTag>
 void test_partitioned_bad_alloc()
 {
     using namespace hpx::execution;
-    test_partitioned_async_bad_alloc(seq(task), IteratorTag());
-    test_partitioned_async_bad_alloc(par(task), IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_partitioned_async_bad_alloc(seq(task), IteratorTag());
+        test_partitioned_async_bad_alloc(par(task), IteratorTag());
+    }
 }
 
 void partitioned_bad_alloc_test()

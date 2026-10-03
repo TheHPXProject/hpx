@@ -66,6 +66,29 @@ namespace test {
         IterType end;
     };
 
+    template <std::random_access_iterator Iter>
+    struct sized_sentinel_from_iterator : sentinel_from_iterator<Iter>
+    {
+        sized_sentinel_from_iterator() = default;
+
+        explicit sized_sentinel_from_iterator(Iter end)
+          : sentinel_from_iterator<Iter>(end)
+        {
+        }
+
+        friend std::iter_difference_t<Iter> operator-(
+            sized_sentinel_from_iterator s, Iter it)
+        {
+            return s.get() - it;
+        }
+
+        friend std::iter_difference_t<Iter> operator-(
+            Iter it, sized_sentinel_from_iterator s)
+        {
+            return it - s.get();
+        }
+    };
+
     ///////////////////////////////////////////////////////////////////////////
     template <typename IteratorTag>
     struct maybe_disable_proxy

@@ -15,6 +15,7 @@
 #include <iterator>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -68,7 +69,7 @@ void test_starts_with_sent(ExPolicy policy, IteratorTag)
 
     using base_iterator = std::vector<int>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
-    using sentinel = test::sentinel_from_iterator<iterator>;
+    using sentinel = test::sized_sentinel_from_iterator<iterator>;
 
     auto end1 = std::rand() % 10007 + 1;
     auto end2 = std::rand() % end1;
@@ -215,7 +216,7 @@ void test_starts_with_sent_proj(ExPolicy policy, IteratorTag)
 
     using base_iterator = std::vector<custom_type>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
-    using sentinel = test::sentinel_from_iterator<iterator>;
+    using sentinel = test::sized_sentinel_from_iterator<iterator>;
 
     auto end1 = std::rand() % 10007 + 1;
     auto end2 = std::rand() % end1;
@@ -357,30 +358,42 @@ void test_starts_with()
     using namespace hpx::execution;
 
     test_starts_with(IteratorTag());
-    test_starts_with(seq, IteratorTag());
-    test_starts_with(par, IteratorTag());
-    test_starts_with(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_starts_with(seq, IteratorTag());
+        test_starts_with(par, IteratorTag());
+        test_starts_with(par_unseq, IteratorTag());
 
-    test_starts_with_async(seq(task), IteratorTag());
-    test_starts_with_async(par(task), IteratorTag());
+        test_starts_with_async(seq(task), IteratorTag());
+        test_starts_with_async(par(task), IteratorTag());
+    }
 
     test_starts_with_sent(IteratorTag());
-    test_starts_with_sent(seq, IteratorTag());
-    test_starts_with_sent(par, IteratorTag());
-    test_starts_with_sent(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_starts_with_sent(seq, IteratorTag());
+        test_starts_with_sent(par, IteratorTag());
+        test_starts_with_sent(par_unseq, IteratorTag());
+    }
 
     test_starts_with_proj(IteratorTag());
-    test_starts_with_proj(seq, IteratorTag());
-    test_starts_with_proj(par, IteratorTag());
-    test_starts_with_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_starts_with_proj(seq, IteratorTag());
+        test_starts_with_proj(par, IteratorTag());
+        test_starts_with_proj(par_unseq, IteratorTag());
 
-    test_starts_with_async_proj(seq(task), IteratorTag());
-    test_starts_with_async_proj(par(task), IteratorTag());
+        test_starts_with_async_proj(seq(task), IteratorTag());
+        test_starts_with_async_proj(par(task), IteratorTag());
+    }
 
     test_starts_with_sent_proj(IteratorTag());
-    test_starts_with_sent_proj(seq, IteratorTag());
-    test_starts_with_sent_proj(par, IteratorTag());
-    test_starts_with_sent_proj(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_starts_with_sent_proj(seq, IteratorTag());
+        test_starts_with_sent_proj(par, IteratorTag());
+        test_starts_with_sent_proj(par_unseq, IteratorTag());
+    }
 }
 
 void starts_with_test()

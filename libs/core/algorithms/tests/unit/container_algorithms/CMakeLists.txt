@@ -85,6 +85,7 @@ set(tests
     partial_sort_copy_range
     partition_range
     partition_copy_range
+    p3179_query_range
     reduce_range
     remove_range
     remove_if_range
