@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -95,13 +96,16 @@ void test_contains()
 
     test_contains(IteratorTag());
 
-    test_contains(seq, IteratorTag());
-    test_contains(par, IteratorTag());
-    test_contains(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains(seq, IteratorTag());
+        test_contains(par, IteratorTag());
+        test_contains(par_unseq, IteratorTag());
 
-    test_contains_async(seq(task), IteratorTag());
-    test_contains_async(par(task), IteratorTag());
-    test_contains_async(par_unseq(task), IteratorTag());
+        test_contains_async(seq(task), IteratorTag());
+        test_contains_async(par(task), IteratorTag());
+        test_contains_async(par_unseq(task), IteratorTag());
+    }
 }
 
 void contains_test()
@@ -236,11 +240,14 @@ void test_contains_exception()
 
     test_contains_exception(IteratorTag());
 
-    test_contains_exception(seq, IteratorTag());
-    test_contains_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_exception(seq, IteratorTag());
+        test_contains_exception(par, IteratorTag());
 
-    test_contains_exception_async(seq(task), IteratorTag());
-    test_contains_exception_async(par(task), IteratorTag());
+        test_contains_exception_async(seq(task), IteratorTag());
+        test_contains_exception_async(par(task), IteratorTag());
+    }
 }
 
 void contains_exception_test()
@@ -332,11 +339,14 @@ void test_contains_bad_alloc()
 {
     using namespace hpx::execution;
 
-    test_contains_bad_alloc(seq, IteratorTag());
-    test_contains_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_bad_alloc(seq, IteratorTag());
+        test_contains_bad_alloc(par, IteratorTag());
 
-    test_contains_bad_alloc_async(seq(task), IteratorTag());
-    test_contains_bad_alloc_async(par(task), IteratorTag());
+        test_contains_bad_alloc_async(seq(task), IteratorTag());
+        test_contains_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void contains_bad_alloc_test()
