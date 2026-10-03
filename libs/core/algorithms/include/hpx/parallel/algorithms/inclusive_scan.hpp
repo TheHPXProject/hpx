@@ -502,7 +502,7 @@ namespace hpx::parallel {
         struct inclusive_scan
           : public algorithm<inclusive_scan<IterPair>, IterPair>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr inclusive_scan() noexcept
               : algorithm<inclusive_scan, IterPair>("inclusive_scan")

@@ -180,7 +180,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename Iter>
     struct partial_sort_copy : public algorithm<partial_sort_copy<Iter>, Iter>
     {
-        static constexpr bool uses_futures = true;
+        static constexpr bool uses_legacy_futures = true;
 
         constexpr partial_sort_copy() noexcept
           : algorithm<partial_sort_copy, Iter>("partial_sort_copy")

@@ -339,7 +339,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename RandomIt>
         struct sort : public algorithm<sort<RandomIt>, RandomIt>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr sort() noexcept
               : algorithm<sort, RandomIt>("sort")

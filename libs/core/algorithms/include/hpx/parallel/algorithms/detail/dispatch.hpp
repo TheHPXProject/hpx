@@ -91,9 +91,13 @@ namespace hpx::parallel::detail {
 
     public:
         // Algorithms with legacy future-based task graphs opt in to the
-        // scheduler adapter. Algorithms with native sender paths leave this
-        // false and receive the scheduler policy directly.
-        static constexpr bool uses_futures = false;
+        // scheduler adapter. Their early-exit and partitioned paths may yield
+        // different concrete sender types if instantiated directly with a
+        // scheduler policy. The adapter instead runs their existing task-policy
+        // path and converts its future into a single sender type. Algorithms
+        // with native sender paths leave this false and receive the scheduler
+        // policy directly.
+        static constexpr bool uses_legacy_futures = false;
 
         using result_type = Result;
         using local_result_type = local_algorithm_result_t<result_type>;
@@ -264,7 +268,7 @@ namespace hpx::parallel::detail {
 
             if constexpr (hpx::execution_policy_has_scheduler_executor_v<
                               ExPolicy> &&
-                Derived::uses_futures)
+                Derived::uses_legacy_futures)
             {
                 namespace ex = hpx::execution::experimental;
                 auto sched = policy.executor().sched();
@@ -275,7 +279,8 @@ namespace hpx::parallel::detail {
                                   future_policy_type>,
                     "the future adapter policy must leave scheduler dispatch");
                 static_assert(std::is_default_constructible_v<Derived>,
-                    "future-based algorithms must be default constructible");
+                    "legacy future-based algorithms must be default "
+                    "constructible");
                 auto args_tuple = hpx::make_tuple(HPX_FORWARD(Args, args)...);
                 using args_tuple_type = decltype(args_tuple);
                 auto sender = ex::let_value(ex::schedule(sched),

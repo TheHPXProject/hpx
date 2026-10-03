@@ -242,7 +242,7 @@ namespace hpx::parallel {
         struct transform_exclusive_scan
           : public algorithm<transform_exclusive_scan<IterPair>, IterPair>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr transform_exclusive_scan() noexcept
               : algorithm<transform_exclusive_scan, IterPair>(

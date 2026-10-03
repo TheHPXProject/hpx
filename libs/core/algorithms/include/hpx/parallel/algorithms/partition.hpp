@@ -648,7 +648,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename Iter>
         struct stable_partition : public algorithm<stable_partition<Iter>, Iter>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr stable_partition() noexcept
               : algorithm<stable_partition, Iter>("stable_partition")
@@ -1389,7 +1389,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename FwdIter>
         struct partition : algorithm<partition<FwdIter>, FwdIter>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr partition() noexcept
               : algorithm<partition, FwdIter>("partition")
@@ -1463,7 +1463,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterTuple>
         struct partition_copy : algorithm<partition_copy<IterTuple>, IterTuple>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr partition_copy() noexcept
               : algorithm<partition_copy, IterTuple>("partition_copy")

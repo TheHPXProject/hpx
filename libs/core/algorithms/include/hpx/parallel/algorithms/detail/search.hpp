@@ -254,7 +254,7 @@ namespace hpx::parallel::detail {
     HPX_CXX_CORE_EXPORT template <typename FwdIter, typename Sent>
     struct search_n final : public algorithm<search_n<FwdIter, Sent>, FwdIter>
     {
-        static constexpr bool uses_futures = true;
+        static constexpr bool uses_legacy_futures = true;
 
         constexpr search_n() noexcept
           : algorithm<search_n, FwdIter>("search_n")

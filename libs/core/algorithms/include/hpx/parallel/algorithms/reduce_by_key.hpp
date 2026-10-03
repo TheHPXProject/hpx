@@ -466,7 +466,7 @@ namespace hpx::parallel::detail {
       : public algorithm<reduce_by_key<FwdIter1, FwdIter2>,
             util::in_out_result<FwdIter1, FwdIter2>>
     {
-        static constexpr bool uses_futures = true;
+        static constexpr bool uses_legacy_futures = true;
 
         constexpr reduce_by_key() noexcept
           : algorithm<reduce_by_key, util::in_out_result<FwdIter1, FwdIter2>>(

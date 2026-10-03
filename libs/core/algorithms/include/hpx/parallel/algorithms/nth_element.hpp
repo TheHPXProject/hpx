@@ -244,7 +244,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename Iter>
         struct nth_element : algorithm<nth_element<Iter>, Iter>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr nth_element() noexcept
               : algorithm<nth_element, Iter>("nth_element")

@@ -503,7 +503,7 @@ namespace hpx::parallel {
     struct partial_sort
       : public detail::algorithm<partial_sort<RandIter>, RandIter>
     {
-        static constexpr bool uses_futures = true;
+        static constexpr bool uses_legacy_futures = true;
 
         constexpr partial_sort() noexcept
           : detail::algorithm<partial_sort, RandIter>("partial_sort")

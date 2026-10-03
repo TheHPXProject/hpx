@@ -557,7 +557,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct unique_copy : public algorithm<unique_copy<IterPair>, IterPair>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr unique_copy() noexcept
               : algorithm<unique_copy, IterPair>("unique_copy")

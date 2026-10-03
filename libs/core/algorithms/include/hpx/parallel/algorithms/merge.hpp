@@ -920,7 +920,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterTuple>
         struct merge : public algorithm<merge<IterTuple>, IterTuple>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr merge() noexcept
               : algorithm<merge, IterTuple>("merge")
@@ -1147,7 +1147,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename Result>
         struct inplace_merge : public algorithm<inplace_merge<Result>, Result>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr inplace_merge() noexcept
               : algorithm<inplace_merge, Result>("inplace_merge")

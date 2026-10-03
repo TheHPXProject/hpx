@@ -356,7 +356,7 @@ namespace hpx::parallel {
         struct exclusive_scan
           : public algorithm<exclusive_scan<IterPair>, IterPair>
         {
-            static constexpr bool uses_futures = true;
+            static constexpr bool uses_legacy_futures = true;
 
             constexpr exclusive_scan() noexcept
               : algorithm<exclusive_scan, IterPair>("exclusive_scan")
