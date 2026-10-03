@@ -166,6 +166,7 @@ set(sender_tests
     adjacentfind_sender
     all_of_sender
     any_of_sender
+    copy_if_sender
     copy_sender
     copyn_sender
     count_sender
@@ -175,6 +176,7 @@ set(sender_tests
     ends_with_sender
     equal_sender
     equal_binary_sender
+    exclusive_scan_sender
     fill_sender
     filln_sender
     find_sender
@@ -182,10 +184,19 @@ set(sender_tests
     findfirstof_sender
     findif_sender
     findifnot_sender
+    for_loop_induction_sender
+    for_loop_n_sender
+    for_loop_n_strided_sender
+    for_loop_reduction_sender
+    for_loop_sender
+    for_loop_strided_sender
+    for_loop_strided_induction_sender
     foreach_sender
     foreachn_sender
     generate_sender
     generaten_sender
+    inclusive_scan_sender
+    inplace_merge_sender
     is_heap_sender
     is_heap_until_sender
     includes_sender
@@ -193,15 +204,26 @@ set(sender_tests
     is_sorted_sender
     is_sorted_until_sender
     lexicographical_compare_sender
+    make_heap_sender
     max_element_sender
+    merge_sender
     min_element_sender
     minmax_element_sender
     mismatch_sender
     mismatch_binary_sender
     move_sender
     none_of_sender
+    nth_element_extended_sender
+    nth_element_sender
+    partial_sort_copy_sender
+    partial_sort_extended_sender
     partial_sort_sender
+    partition_copy_sender
+    partition_sender
+    reduce_by_key_sender
     reduce_sender
+    remove_copy_if_sender
+    remove_copy_sender
     remove_sender
     remove_if_sender
     replace_sender
@@ -212,13 +234,23 @@ set(sender_tests
     reverse_copy_sender
     rotate_sender
     rotate_copy_sender
+    search_n_sender
     search_sender
+    sender_algorithm_contracts
     set_difference_sender
     set_intersection_sender
+    set_symmetric_difference_sender
+    set_union_sender
     shift_left_sender
     shift_right_sender
+    sort_by_key_sender
+    sort_sender
+    stable_partition_sender
+    stable_sort_sender
     starts_with_sender
     swapranges_sender
+    transform_exclusive_scan_sender
+    transform_inclusive_scan_sender
     transform_sender
     transform_binary_sender
     transform_binary2_sender
@@ -237,6 +269,7 @@ set(sender_tests
     uninitialized_relocaten_sender
     uninitialized_value_construct_sender
     uninitialized_value_constructn_sender
+    unique_copy_sender
     unique_sender
 )
 

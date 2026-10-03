@@ -449,7 +449,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return first + nelem;
             }
@@ -486,7 +486,7 @@ namespace hpx::parallel {
 
         if (nmid > 1024)
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
+            if (detail::is_sorted_sequential(first, first + nelem, comp))
             {
                 return hpx::make_ready_future(first + nelem);
             }
@@ -503,6 +503,8 @@ namespace hpx::parallel {
     struct partial_sort
       : public detail::algorithm<partial_sort<RandIter>, RandIter>
     {
+        static constexpr bool uses_legacy_futures = true;
+
         constexpr partial_sort() noexcept
           : detail::algorithm<partial_sort, RandIter>("partial_sort")
         {
@@ -522,40 +524,22 @@ namespace hpx::parallel {
         static decltype(auto) parallel(ExPolicy&& policy, Iter first,
             Iter middle, Sent last, Comp&& comp, Proj&& proj)
         {
-            constexpr bool has_scheduler_executor =
-                hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
+            using algorithm_result =
+                util::detail::algorithm_result<ExPolicy, Iter>;
 
-            if constexpr (has_scheduler_executor)
+            try
             {
-                namespace ex = hpx::execution::experimental;
-                return ex::just(first, middle, last) |
-                    ex::then([comp = HPX_FORWARD(Comp, comp),
-                                 proj = HPX_FORWARD(Proj, proj)](
-                                 Iter first, Iter middle, Iter last) -> Iter {
-                        return sequential_partial_sort(first, middle, last,
-                            util::compare_projected<std::decay_t<Comp>,
-                                std::decay_t<Proj>>(comp, proj));
-                    });
+                // call the sort routine and return the right type,
+                // depending on execution policy
+                return algorithm_result::get(parallel_partial_sort(
+                    HPX_FORWARD(ExPolicy, policy), first, middle, last,
+                    util::compare_projected<Comp&, Proj&>(comp, proj)));
             }
-            else
+            catch (...)
             {
-                using algorithm_result =
-                    util::detail::algorithm_result<ExPolicy, Iter>;
-
-                try
-                {
-                    // call the sort routine and return the right type,
-                    // depending on execution policy
-                    return algorithm_result::get(parallel_partial_sort(
-                        HPX_FORWARD(ExPolicy, policy), first, middle, last,
-                        util::compare_projected<Comp&, Proj&>(comp, proj)));
-                }
-                catch (...)
-                {
-                    return algorithm_result::get(
-                        detail::handle_exception<ExPolicy, Iter>::call(
-                            std::current_exception()));
-                }
+                return algorithm_result::get(
+                    detail::handle_exception<ExPolicy, Iter>::call(
+                        std::current_exception()));
             }
         }
     };

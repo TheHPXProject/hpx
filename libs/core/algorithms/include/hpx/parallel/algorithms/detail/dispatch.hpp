@@ -13,6 +13,7 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/scoped_executor_parameters.hpp>
@@ -89,9 +90,94 @@ namespace hpx::parallel::detail {
         }
 
     public:
+        // Algorithms with legacy future-based task graphs opt in to the
+        // scheduler adapter. Their early-exit and partitioned paths may yield
+        // different concrete sender types if instantiated directly with a
+        // scheduler policy. The adapter instead runs their existing task-policy
+        // path and converts its future into a single sender type. Algorithms
+        // with native sender paths leave this false and receive the scheduler
+        // policy directly.
+        static constexpr bool uses_legacy_futures = false;
+
         using result_type = Result;
         using local_result_type = local_algorithm_result_t<result_type>;
 
+    private:
+        template <typename Policy>
+        struct future_algorithm_error_handler
+        {
+            auto operator()(std::exception_ptr error) const
+            {
+                namespace ex = hpx::execution::experimental;
+                using policy_type =
+                    decltype(ex::to_non_task(std::declval<Policy>()));
+                using exception_handler =
+                    hpx::parallel::detail::handle_exception<policy_type,
+                        local_result_type>;
+                using error_sender_type = decltype(ex::just_error(error));
+
+                return hpx::detail::try_catch_exception_ptr(
+                    [&]() -> error_sender_type {
+                        exception_handler::call(error);
+                        HPX_UNREACHABLE;
+                    },
+                    [](std::exception_ptr transformed_error) {
+                        return ex::just_error(HPX_MOVE(transformed_error));
+                    });
+            }
+        };
+
+        template <typename Policy>
+        struct future_algorithm_invoker
+        {
+            Policy policy;
+
+            template <typename... Ts>
+            auto operator()(Ts&&... values)
+            {
+                namespace ex = hpx::execution::experimental;
+                auto sender = ex::as_sender(Derived{}.call(
+                    HPX_MOVE(policy), HPX_FORWARD(Ts, values)...));
+                return ex::let_error(
+                    HPX_MOVE(sender), future_algorithm_error_handler<Policy>{});
+            }
+        };
+
+        template <typename Policy, typename Sender>
+        [[noreturn]] static Sender handle_future_algorithm_error(
+            std::exception_ptr error)
+        {
+            namespace ex = hpx::execution::experimental;
+            using policy_type =
+                decltype(ex::to_non_task(std::declval<Policy>()));
+            hpx::parallel::detail::handle_exception<policy_type,
+                local_result_type>::call(error);
+            HPX_UNREACHABLE;
+        }
+
+        template <typename Policy, typename Tuple>
+        struct future_algorithm_sender_factory
+        {
+            Policy policy;
+            Tuple args;
+
+            auto operator()()
+            {
+                using sender_type = decltype(hpx::invoke_fused(
+                    future_algorithm_invoker<Policy>{HPX_MOVE(policy)},
+                    HPX_MOVE(args)));
+
+                return hpx::detail::try_catch_exception_ptr(
+                    [&]() -> sender_type {
+                        return hpx::invoke_fused(
+                            future_algorithm_invoker<Policy>{HPX_MOVE(policy)},
+                            HPX_MOVE(args));
+                    },
+                    &handle_future_algorithm_error<Policy, sender_type>);
+            }
+        };
+
+    public:
         // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
         explicit constexpr algorithm(char const* const name) noexcept
           : name_(name)
@@ -180,19 +266,49 @@ namespace hpx::parallel::detail {
                 hpx::parallel::util::detail::algorithm_result<ExPolicy,
                     local_result_type>;
 
-            using result = decltype(Derived::parallel(
-                HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
-
-            if constexpr (std::is_void_v<result>)
+            if constexpr (hpx::execution_policy_has_scheduler_executor_v<
+                              ExPolicy> &&
+                Derived::uses_legacy_futures)
             {
-                Derived::parallel(
-                    HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...);
-                return result_handler::get();
+                namespace ex = hpx::execution::experimental;
+                auto sched = policy.executor().sched();
+                auto future_policy =
+                    ex::to_task(policy.on(ex::scheduler_executor(sched)));
+                using future_policy_type = decltype(future_policy);
+                static_assert(!hpx::execution_policy_has_scheduler_executor_v<
+                                  future_policy_type>,
+                    "the future adapter policy must leave scheduler dispatch");
+                static_assert(std::is_default_constructible_v<Derived>,
+                    "legacy future-based algorithms must be default "
+                    "constructible");
+                auto args_tuple = hpx::make_tuple(HPX_FORWARD(Args, args)...);
+                using args_tuple_type = decltype(args_tuple);
+                auto sender = ex::let_value(ex::schedule(sched),
+                    future_algorithm_sender_factory<future_policy_type,
+                        args_tuple_type>{
+                        HPX_MOVE(future_policy), HPX_MOVE(args_tuple)});
+                return result_handler::get(
+                    ex::continues_on(HPX_MOVE(sender), HPX_MOVE(sched)));
             }
             else
             {
-                return result_handler::get(Derived::parallel(
+                using result = decltype(Derived::parallel(
                     HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(Args, args)...));
+
+                // Executor customizations can make void algorithms such as
+                // for_loop return void directly instead of a future.
+                if constexpr (std::is_void_v<result>)
+                {
+                    Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                        HPX_FORWARD(Args, args)...);
+                    return result_handler::get();
+                }
+                else
+                {
+                    return result_handler::get(
+                        Derived::parallel(HPX_FORWARD(ExPolicy, policy),
+                            HPX_FORWARD(Args, args)...));
+                }
             }
         }
 

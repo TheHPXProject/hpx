@@ -341,10 +341,8 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            RandomIt>::type
-        invoke_default(ExPolicy&& policy, RandomIt first, Sent last,
-            Comp&& comp = Comp(), Proj&& proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, RandomIt first,
+            Sent last, Comp&& comp = Comp(), Proj&& proj = Proj())
         {
             static_assert(std::random_access_iterator<RandomIt>,
                 "Requires a random access iterator.");
@@ -394,10 +392,8 @@ namespace hpx::ranges {
                 >::value
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            std::ranges::iterator_t<Rng>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, Comp&& comp = Comp(),
-            Proj&& proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            Comp&& comp = Comp(), Proj&& proj = Proj())
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;

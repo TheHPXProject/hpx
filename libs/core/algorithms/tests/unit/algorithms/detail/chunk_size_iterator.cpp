@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <forward_list>
 #include <iterator>
 #include <list>
 #include <numeric>
@@ -170,8 +171,34 @@ void test_container(std::size_t chunk_size)
     category_test(first, last, *first, category());
 }
 
+// A stride can round the requested chunk above the whole input size.
+// Incrementing the single chunk must still reach the end iterator.
+template <typename Container>
+void test_oversized_chunk()
+{
+    using iterator = typename Container::iterator;
+    for (std::size_t count : {0, 1, 17})
+    {
+        Container values(count);
+        auto first =
+            chunk_size_iterator<iterator>(values.begin(), count + 7, count);
+        auto last = chunk_size_iterator<iterator>(
+            values.end(), count + 7, count, count);
+        if (count != 0)
+        {
+            HPX_TEST(first != last);
+            HPX_TEST_EQ(hpx::get<1>(*first), count);
+            ++first;
+        }
+        HPX_TEST(first == last);
+    }
+}
+
 int main(int, char*[])
 {
+    test_oversized_chunk<std::vector<int>>();
+    test_oversized_chunk<std::forward_list<int>>();
+
     // Test the built-in integer types.
     test_integer<int>(0, 20, 5, 20);
     test_integer<int>(0, 17, 5, 17);
