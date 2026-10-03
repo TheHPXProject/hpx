@@ -129,13 +129,79 @@ never initialised and all API calls crash at startup. See
 :ref:`hpx_main_implementation_linux` for a detailed explanation of the
 mechanism.
 
-Windows does not support -Wl,-wrap=main (GNU ld). On Windows, hpx/hpx_main.hpp redefines main as hpx_startup::user_main, so a raw MSVC link of the same snippet uses hpx_wrap.lib, hpx_init.lib, hpx.lib, and hpx_core.lib as the base set, with no wrap option. Add each additional module .lib your program actually needs — for example hpx_include_local.lib when using hpx/experimental/sandbox.hpp — since those symbols are not merged into the four base libraries. Prefer HPX::hpx plus HPX::wrap_main from CMake, which pull in module dependencies automatically. Compiler Explorer Execute runs in a Linux sandbox; the Windows path matters for MSVC compile-only sessions and for local godbolt-minimal builds on Windows.
-
 .. important::
 
    ``-DHPX_APPLICATION_EXPORTS`` must be passed as a preprocessor definition
    when compiling application code against the static libraries. Omitting it
    causes link failures related to |hpx|'s symbol visibility macros.
+
+.. _using_hpx_ce_linking_msvc:
+
+Linking without CMake on Windows (MSVC)
+---------------------------------------
+
+``-Wl,-wrap=main`` is a GNU ld option and has no MSVC equivalent. On Windows,
+``hpx/hpx_main.hpp`` instead redefines ``main`` as ``hpx_startup::user_main``.
+The real ``main`` that starts the |hpx| runtime comes from the header itself in
+a static build and from ``hpx_init.lib`` otherwise, and ``hpx_wrap.lib`` makes
+the runtime run ``hpx_startup::user_main`` as its first |hpx| thread. A raw
+``cl.exe`` build therefore needs no wrap option, only ``hpx_wrap.lib`` on the
+link line. From a Developer PowerShell for Visual Studio:
+
+.. code-block:: powershell
+
+   PS> $hpx = 'C:\path\to\hpx'
+   PS> $boost = 'C:\path\to\boost'
+   PS> cl /std:c++20 /O2 /EHsc /MD /GR /bigobj /permissive- `
+         /Zc:__cplusplus /Zc:preprocessor /Zc:inline /Zc:throwingNew `
+         /Zc:rvalueCast /Zc:strictStrings `
+         /DHPX_APPLICATION_EXPORTS /I "$hpx\include" /I "$boost\include" `
+         /I "$hpx\hwloc_installed\include" `
+         my_program.cpp `
+         /link /LIBPATH:"$hpx\lib" /LIBPATH:"$hpx\hwloc_installed\lib" `
+         hpx_wrap.lib hpx_init.lib libhwloc.dll.a psapi.lib shlwapi.lib `
+         dbghelp.lib
+
+The |hpx| module libraries (``hpx_core.lib`` and ``hpx.lib``, or one ``.lib``
+per module when |hpx| is built with
+``HPX_WITH_MODULES_AS_STATIC_LIBRARIES=ON``) do not have to be listed: with
+MSVC the installed headers name them through ``#pragma comment(lib, ...)``,
+so ``/LIBPATH:`` to the install's ``lib`` directory is enough. Define
+``HPX_NO_AUTOLINK`` to turn this off and list the libraries yourself.
+``hpx_wrap.lib`` and ``hpx_init.lib`` are not auto-linked and have to be
+passed explicitly, as do hwloc and the Windows libraries ``psapi.lib``,
+``shlwapi.lib``, and ``dbghelp.lib`` (needed for the stack traces that
+``HPX_WITH_STACKTRACES`` enables by default). No ``--start-group`` equivalent
+is needed: ``link.exe`` searches every library on the command line until all
+symbols are resolved.
+
+The ``/Zc:`` options, ``/bigobj``, and ``/permissive-`` are the options the
+``HPX::hpx`` CMake target passes on to its consumers. ``hwloc_installed`` is
+where the install puts the prebuilt hwloc that ``HPX_WITH_FETCH_HWLOC=ON``
+downloads, and ``libhwloc.dll.a`` is its import library; point the ``/I`` and
+``/LIBPATH:`` options at your own hwloc otherwise. Put the hwloc DLL (also
+installed into ``$hpx\bin``) next to the executable or on ``PATH`` before
+running it.
+
+A godbolt-minimal build uses Boost as a header-only dependency, so only the
+Boost include path is needed. Configurations with
+``HPX_WITH_GENERIC_CONTEXT_COROUTINES=ON`` also link the Boost ``context``,
+``thread``, and ``chrono`` libraries; add those to the ``/link`` part together
+with a ``/LIBPATH:`` for them.
+
+To build a program that does not include ``hpx/hpx_main.hpp`` itself, add
+``/FIhpx/hpx_main.hpp`` to the compile options above. This is what
+``HPX::auto_wrap_main`` does on MSVC: ``/FI`` force-includes the header into
+every source file, which is the same as including it at the top of each one.
+When compiling more than one source file this way against a static |hpx|, also
+pass ``/DHPX_AUTO_WRAP_MAIN_FORCE_INCLUDE`` so the default ``main`` comes from
+``hpx_wrap.lib`` once instead of from the header in every source file.
+
+Prefer ``HPX::hpx`` plus ``HPX::wrap_main`` or ``HPX::auto_wrap_main`` from
+CMake where possible, since they supply these options and the module libraries
+automatically. Compiler Explorer's execution sandbox runs Linux, so the
+Windows path matters for MSVC compile-only sessions and for local
+godbolt-minimal builds on Windows.
 
 .. _using_hpx_ce_writing_code:
 
