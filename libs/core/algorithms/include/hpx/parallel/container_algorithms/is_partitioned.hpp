@@ -74,9 +74,9 @@ namespace hpx { namespace ranges {
     ///                     in which it executes the assignments.
     /// \tparam FwdIter     The type of the source iterators used for the
     ///                     This iterator type must meet the requirements of a
-    ///                     forward iterator.
+    ///                     random access iterator.
     /// \tparam Sent        The type of the source sentinel (deduced). This
-    ///                     sentinel type must be a sentinel for FwdIter.
+    ///                     sentinel type must be a sized sentinel for FwdIter.
     /// \tparam Pred        The type of the function/function object to use
     ///                     (deduced). \a Pred must be \a CopyConstructible
     ///                     when using a parallel policy.
@@ -124,12 +124,15 @@ namespace hpx { namespace ranges {
     ///           false. If the range [first, last) contains less than two
     ///           elements, the function is always true.
     ///
+    /// \note Policy overloads require random access iterators and sized
+    ///       sentinels, or random access ranges that are also sized ranges.
+    ///
     template <typename ExPolicy, typename FwdIter, typename Sent,
-        typename Pred,
-        typename Proj = hpx::identity>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
-    is_partitioned(ExPolicy&& policy, FwdIter first, Sent last, Pred&& pred,
-        Proj&& proj = Proj());
+        typename Pred, typename Proj = hpx::identity>
+    typename parallel::util::detail::algorithm_result<ExPolicy,
+        bool>::type
+    is_partitioned(ExPolicy&& policy, FwdIter first, Sent last, Pred pred,
+        Proj proj = Proj());
 
     /// Determines if the range rng is partitioned.
     ///
@@ -185,7 +188,7 @@ namespace hpx { namespace ranges {
     ///                     in which it executes the assignments.
     /// \tparam Rng         The type of the source range used (deduced).
     ///                     The iterators extracted from this range type must
-    ///                     meet the requirements of an forward iterator.
+    ///                     meet the requirements of a random access iterator.
     /// \tparam Pred        The type of the function/function object to use
     ///                     (deduced). \a Pred must be \a CopyConstructible
     ///                     when using a parallel policy.
@@ -231,12 +234,14 @@ namespace hpx { namespace ranges {
     ///           false. If the range rng contains less than two
     ///           elements, the function is always true.
     ///
-    template <typename ExPolicy, typename Rng,
-        typename Pred,
+    /// \note Policy overloads require random access iterators and sized
+    ///       sentinels, or random access ranges that are also sized ranges.
+    ///
+    template <typename ExPolicy, typename Rng, typename Pred,
         typename Proj = hpx::identity>
-    hpx::parallel::util::detail::algorithm_result_t<ExPolicy, bool>
+    parallel::util::detail::algorithm_result_t<ExPolicy, bool>
     is_partitioned(
-        ExPolicy&& policy, Rng&& rng, Pred&& pred, Proj&& proj = Proj());
+        ExPolicy&& policy, Rng&& rng, Pred pred, Proj proj = Proj());
     // clang-format on
 }}    // namespace hpx::ranges
 #else
@@ -287,14 +292,12 @@ namespace hpx::ranges {
         template <typename ExPolicy, typename FwdIter, typename Sent,
             typename Pred, typename Proj = hpx::identity>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                std::forward_iterator<FwdIter> &&
-                hpx::parallel::traits::is_projected_v<Proj, FwdIter> &&
-                hpx::parallel::traits::is_indirect_callable_v<
-                    hpx::execution::sequenced_policy, Pred,
-                    hpx::parallel::traits::projected<Proj, FwdIter>
-                >
+                std::random_access_iterator<FwdIter> &&
+                std::sized_sentinel_for<Sent, FwdIter> &&
+                std::indirect_unary_predicate<Pred,
+                    std::projected<FwdIter, Proj>>
             )
         // clang-format on
         static typename parallel::util::detail::algorithm_result<ExPolicy,
@@ -302,9 +305,9 @@ namespace hpx::ranges {
         invoke_default(ExPolicy&& policy, FwdIter first, Sent last, Pred pred,
             Proj proj = Proj())
         {
-            return hpx::parallel::detail::is_partitioned<FwdIter, Sent>().call(
-                HPX_FORWARD(ExPolicy, policy), first, last, HPX_MOVE(pred),
-                HPX_MOVE(proj));
+            return hpx::parallel::detail::is_partitioned<FwdIter, FwdIter>()
+                .call(HPX_FORWARD(ExPolicy, policy), first,
+                    first + (last - first), HPX_MOVE(pred), HPX_MOVE(proj));
         }
 
         template <typename Rng, typename Pred, typename Proj = hpx::identity>
@@ -332,14 +335,12 @@ namespace hpx::ranges {
         template <typename ExPolicy, typename Rng, typename Pred,
             typename Proj = hpx::identity>
         // clang-format off
-            requires(
+            requires (
                 hpx::is_execution_policy_v<ExPolicy> &&
-                std::ranges::range<Rng> &&
-                hpx::parallel::traits::is_projected_range_v<Proj, Rng> &&
-                hpx::parallel::traits::is_indirect_callable_v<
-                    hpx::execution::sequenced_policy, Pred,
-                    hpx::parallel::traits::projected_range<Proj, Rng>
-                >
+                std::ranges::random_access_range<Rng> &&
+                std::ranges::sized_range<Rng> &&
+                std::indirect_unary_predicate<Pred,
+                    std::projected<std::ranges::iterator_t<Rng>, Proj>>
             )
         // clang-format on
         static parallel::util::detail::algorithm_result_t<ExPolicy, bool>
@@ -351,8 +352,9 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::is_partitioned<iterator_type,
                 iterator_type>()
-                .call(HPX_FORWARD(ExPolicy, policy), std::begin(rng),
-                    std::end(rng), HPX_MOVE(pred), HPX_MOVE(proj));
+                .call(HPX_FORWARD(ExPolicy, policy), std::ranges::begin(rng),
+                    (std::ranges::begin(rng) + std::ranges::distance(rng)),
+                    HPX_MOVE(pred), HPX_MOVE(proj));
         }
     } is_partitioned{};
 }    // namespace hpx::ranges
