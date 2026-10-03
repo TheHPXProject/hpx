@@ -13,6 +13,30 @@ macro(hpx_setup_gasnet)
     find_package(PkgConfig REQUIRED QUIET COMPONENTS)
     set(PKG_CONFIG_USE_CMAKE_PREFIX_PATH TRUE)
 
+    # Known-good build recipe for the PAR/mpi conduit this parcelport needs.
+    # Defined up front so it can be reported both when the .pc file cannot be
+    # found and when a found .pc turns out to be misconfigured.  GASNet emits
+    # a static archive (libgasnet-mpi-par.a); -fPIC is what makes it linkable
+    # into HPX's shared objects, so the compile flags are essential here.
+    string(
+      CONCAT
+      GASNET_REBUILD_MESSAGE
+      "Build GASNet as follows and make the .pc files visible via "
+      "PKG_CONFIG_PATH or CMAKE_PREFIX_PATH:\n"
+      "  export CXXFLAGS=-fPIC -O3; export CFLAGS=-fPIC -O3;\n"
+      "  PMI_LIBS=probe CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC\n"
+      "  ./configure --enable-par --disable-ucx --enable-mpi \\\n"
+      "    --with-c-compiler=mpicc --with-cxx-compiler=mpicxx \\\n"
+      "    --with-mpi=/opt/openmpi --enable-hwloc \\\n"
+      "    --prefix=/opt/gasnet-par --with-cflags=-fPIC \\\n"
+      "    --with-cxxflags=-fPIC --disable-udp --disable-ibv \\\n"
+      "    --enable-pmi --with-pmi-home=/opt/pmix \\\n"
+      "    --enable-segment-large --with-ldflags=-fPIC \\\n"
+      "    --with-mpi-cflags=-fPIC && make -j4 && sudo make install\n"
+      "  export PKG_CONFIG_PATH=/opt/ucx/lib/pkgconfig:"
+      "/opt/openmpi/lib/pkgconfig:/opt/gasnet-par/lib/pkgconfig:$PKG_CONFIG_PATH"
+    )
+
     if(GASNet_ROOT AND NOT "${GASNet_ROOT}" IN_LIST CMAKE_PREFIX_PATH)
       list(PREPEND CMAKE_PREFIX_PATH "${GASNet_ROOT}")
     endif()
@@ -25,9 +49,12 @@ macro(hpx_setup_gasnet)
     if(NOT GASNET_FOUND)
       message(
         FATAL_ERROR
-          "GASNet (conduit '${HPX_WITH_PARCELPORT_GASNET_CONDUIT}') not found! "
-          "Install GASNet built with that conduit and make its pkgconfig "
-          "directory visible via PKG_CONFIG_PATH or CMAKE_PREFIX_PATH."
+          "GASNet (conduit '${HPX_WITH_PARCELPORT_GASNET_CONDUIT}', PAR "
+          "threading mode) not found: no pkg-config module "
+          "'gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par'. Either the "
+          "GASNet .pc directory is not on PKG_CONFIG_PATH/"
+          "CMAKE_PREFIX_PATH, or GASNet was never built. "
+          "${GASNET_REBUILD_MESSAGE}"
       )
     endif()
 
@@ -40,8 +67,11 @@ macro(hpx_setup_gasnet)
 
     # Validate the GASNet build configuration. HPX requires a GASNet built in
     # PAR threading mode with the mpi conduit, with position-independent code
-    # and as shared libraries, on top of an UCX built with multithreading
-    # support.
+    # (GASNet is consumed as a static archive; -fPIC is what makes it
+    # linkable into HPX's shared objects), on top of a UCX built with
+    # multithreading support.  The library artefacts themselves are whatever
+    # the gasnet-<conduit>-par .pc resolves to, so only the pkg-config metadata
+    # is validated here.
 
     set(GASNET_PC_NAME "gasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par")
 
@@ -62,22 +92,6 @@ macro(hpx_setup_gasnet)
       OUTPUT_VARIABLE GASNET_BUILD_SPAWNER_PMI
       OUTPUT_STRIP_TRAILING_WHITESPACE
       ERROR_QUIET
-    )
-
-    string(
-      CONCAT
-      GASNET_REBUILD_MESSAGE
-      "Rebuild GASNet as follows and make the .pc files visible via "
-      "PKG_CONFIG_PATH or CMAKE_PREFIX_PATH:\n"
-      "  export CXXFLAGS=-fPIC -O3; export CFLAGS=-fPIC -O3;\n"
-      "  PMI_LIBS=probe CFLAGS=-fPIC CCFLAGS=-fPIC CXXFLAGS=-fPIC\n"
-      "  ./configure --enable-par --disable-ucx --enable-mpi \\\n"
-      "    --with-mpi=/opt/openmpi --enable-hwloc \\\n"
-      "    --prefix=/opt/gasnet-par --with-cflags=-fPIC \\\n"
-      "    --with-cxxflags=-fPIC --disable-udp --disable-ibv \\\n"
-      "    --enable-shared --enable-pmi --with-pmi-home=/opt/pmix \\\n"
-      "    --enable-segment-large --with-ldflags=-fPIC \\\n"
-      "    --with-mpi-cflags=-fPIC && make -j4 && sudo make install"
     )
 
     # hard requirement: PAR threading mode
@@ -141,29 +155,16 @@ ${GASNET_BUILD_GASNET_CXX}")
       )
     endif()
 
-    # hard requirement: shared libraries
-    set(GASNET_BUILD_SHARED_LIB "")
-    foreach(_dir IN LISTS GASNET_LIBRARY_DIRS)
-      file(
-        GLOB GASNET_BUILD_GLOB
-        "${_dir}/libgasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par.so*"
-      )
-      if(GASNET_BUILD_GLOB)
-        list(GET GASNET_BUILD_GLOB 0 GASNET_BUILD_SHARED_LIB)
-        break()
-      endif()
-    endforeach()
-    if(NOT GASNET_BUILD_SHARED_LIB)
-      message(
-        FATAL_ERROR
-          "GASNet was not built as a shared library (no "
-          "libgasnet-${HPX_WITH_PARCELPORT_GASNET_CONDUIT}-par.so in "
-          "'${GASNET_LIBRARY_DIRS}'). HPX requires --enable-shared. "
-          "${GASNET_REBUILD_MESSAGE}"
-      )
-    endif()
-
-    # hard requirement (mpi conduit only): UCX built with multithreading
+    # Hard requirement under the mpi conduit: UCX built with multithreading.
+    #
+    # This is NOT GASNet's own ucx conduit -- the rebuild recipe above passes
+    # --disable-ucx on purpose, since we drive GASNet through OpenMPI's mpi
+    # conduit instead.  The UCX we require here is the one OpenMPI itself was
+    # built against (hence /opt/ucx on PKG_CONFIG_PATH): gasnet-mpi links
+    # through libmpi, so an MPI built on UCX pulls it in transitively and it
+    # has to be MT-capable for HPX's threading model.  Do not "fix" this by
+    # relaxing --disable-ucx or by dropping the check below; they are unrelated
+    # knobs.
     if("${HPX_WITH_PARCELPORT_GASNET_CONDUIT}" STREQUAL "mpi")
       execute_process(
         COMMAND "${PKG_CONFIG_EXECUTABLE}" --variable=prefix ucx
@@ -230,648 +231,43 @@ ${GASNET_BUILD_GASNET_CXX}")
       message(STATUS "GASNet built without PMI spawner support.")
     endif()
 
+    # GASNet's .pc emits GCC's '--param <name>=<value>' as two whitespace-
+    # separated tokens.  pkg_check_module splits Cflags on whitespace, so the
+    # bare value ('inline-unit-growth=10000', 'large-function-growth=200000')
+    # becomes a separate list element and is passed to the compiler as a
+    # positional input filename -- g++ then fails with "linker input file not
+    # found".  Re-join each such pair into a single SHELL: token so it reaches
+    # the compiler as one flag.
     if(GASNET_CFLAGS)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(FLAG_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_CFLAGS})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
+      set(GASNET_BUILD_CFLAGS "")
+      set(GASNET_BUILD_PARAM "")
+      foreach(_flag IN LISTS GASNET_CFLAGS)
+        if(GASNET_BUILD_PARAM)
+          list(APPEND GASNET_BUILD_CFLAGS
+               "SHELL:${GASNET_BUILD_PARAM} ${_flag}")
+          set(GASNET_BUILD_PARAM "")
+        elseif("${_flag}" STREQUAL "--param" OR "${_flag}" STREQUAL "-param")
+          set(GASNET_BUILD_PARAM "${_flag}")
+        else()
+          list(APPEND GASNET_BUILD_CFLAGS "${_flag}")
         endif()
       endforeach()
-
-      list(LENGTH GASNET_CFLAGS IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_CFLAGS NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_CFLAGS "${X}")
-      endforeach()
-    endif()
-
-    if(GASNET_CFLAGS_OTHER)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(FLAG_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_CFLAGS_OTHER})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        endif()
-      endforeach()
-
-      list(LENGTH GASNET_CFLAGS_OTHER IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_CFLAGS_OTHER NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_CFLAGS_OTHER "${X}")
-      endforeach()
-    endif()
-
-    if(GASNET_LDFLAGS)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(DIRIDX 0)
-      set(FLAG_LIST "")
-      set(DIR_LIST "")
-      set(LIB_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_LDFLAGS})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        string(FIND "${X}" "-lgasnet" IDX)
-        string(FIND "${X}" "-l" LIDX)
-        string(FIND "${X}" "-L" DIRIDX)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IDX}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        elseif(NOT "${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-l" "" TMPSTR "${X}")
-          list(APPEND LIB_LIST "${TMPSTR}")
-          set(IDX 0)
-        elseif("${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          list(APPEND FLAG_LIST "${X}")
-        endif()
-        if(NOT "${DIRIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-L" "" TMPSTR "${X}")
-          list(APPEND DIR_LIST "${TMPSTR}")
-        endif()
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH GASNET_LDFLAGS IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_LDFLAGS NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_LDFLAGS "${X}")
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH LIB_LIST IDX)
-      if(NOT "${IDX}" EQUAL "0")
-        set(IDX 0)
-
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-          set(NEWLINK "SHELL:-Wl,--whole-archive ")
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(APPEND NEWLINK " -Wl,--no-whole-archive")
-          string(FIND "SHELL:-Wl,--whole-archive  -Wl,--no-whole-archive"
-                      "${NEWLINK}" IDX
-          )
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS "${NEWLINK}")
-          endif()
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-          if(APPLE)
-            set(NEWLINK "SHELL:-Wl,-force_load,")
-          else()
-            set(NEWLINK "SHELL: ")
-          endif()
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(FIND "SHELL:" "${NEWLINK}" IDX)
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS "${NEWLINK}")
-          endif()
-        endif()
+      # A trailing '--param' with no value would otherwise be dropped.
+      if(GASNET_BUILD_PARAM)
+        list(APPEND GASNET_BUILD_CFLAGS "${GASNET_BUILD_PARAM}")
       endif()
     endif()
 
-    if(GASNET_LDFLAGS_OTHER)
-      unset(FOUND_LIB)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(DIRIDX 0)
-      set(FLAG_LIST "")
-      set(DIR_LIST "")
-      set(LIB_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_LDFLAGS_OTHER})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        string(FIND "${X}" "-lgasnet" IDX)
-        string(FIND "${X}" "-L" DIRIDX)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IDX}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        elseif(NOT "${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-l" "" TMPSTR "${X}")
-          list(APPEND LIB_LIST "${TMPSTR}")
-          set(IDX 0)
-        elseif("${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          list(APPEND FLAG_LIST "${X}")
-        endif()
-        if(NOT "${DIRIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-L" "" TMPSTR "${X}")
-          list(APPEND DIR_LIST "${TMPSTR}")
-        endif()
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH GASNET_LDFLAGS_OTHER IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_LDFLAGS_OTHER NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_LDFLAGS_OTHER "${X}")
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH LIB_LIST IDX)
-      if(NOT "${IDX}" EQUAL "0")
-        set(IDX 0)
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-          set(NEWLINK "SHELL:-Wl,--whole-archive ")
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(APPEND NEWLINK " -Wl,--no-whole-archive")
-
-          string(FIND "SHELL:-Wl,--whole-archive  -Wl,--no-whole-archive"
-                      "${NEWLINK}" IDX
-          )
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS_OTHER "${NEWLINK}")
-          endif()
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-          if(APPLE)
-            set(NEWLINK "SHELL:-Wl,-force_load,")
-          else()
-            set(NEWLINK "SHELL: ")
-          endif()
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(FIND "SHELL:" "${NEWLINK}" IDX)
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS "${NEWLINK}")
-          endif()
-        endif()
-      endif()
-
+    if(GASNET_BUILD_CFLAGS)
+      message(STATUS "GASNet compile flags: ${GASNET_BUILD_CFLAGS}")
+      set_target_properties(
+        PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS
+                                     "${GASNET_BUILD_CFLAGS}"
+      )
     endif()
 
-    if(GASNET_STATIC_CFLAGS)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(FLAG_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_STATIC_CFLAGS})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        endif()
-      endforeach()
-
-      list(LENGTH GASNET_STATIC_CFLAGS IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_STATIC_CFLAGS NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_STATIC_CFLAGS "${X}")
-      endforeach()
-    endif()
-
-    if(GASNET_STATIC_CFLAGS_OTHER)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(FLAG_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_STATIC_CFLAGS_OTHER})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        endif()
-      endforeach()
-
-      list(LENGTH GASNET_STATIC_CFLAGS_OTHER IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_STATIC_CFLAGS_OTHER NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_STATIC_CFLAGS_OTHER "${X}")
-      endforeach()
-    endif()
-
-    if(GASNET_STATIC_LDFLAGS)
-      unset(FOUND_LIB)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(DIRIDX 0)
-      set(FLAG_LIST "")
-      set(DIR_LIST "")
-      set(LIB_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_STATIC_LDFLAGS})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        string(FIND "${X}" "-lgasnet" IDX)
-        string(FIND "${X}" "-L" DIRIDX)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IDX}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        elseif(NOT "${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-l" "" TMPSTR "${X}")
-          list(APPEND LIB_LIST "${TMPSTR}")
-          set(IDX 0)
-        elseif("${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          list(APPEND FLAG_LIST "${X}")
-        endif()
-        if(NOT "${DIRIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-L" "" TMPSTR "${X}")
-          list(APPEND DIR_LIST "${TMPSTR}")
-        endif()
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH GASNET_STATIC_LDFLAGS IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_STATIC_LDFLAGS NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_STATIC_LDFLAGS "${X}")
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH LIB_LIST IDX)
-      if(NOT "${IDX}" EQUAL "0")
-        set(IDX 0)
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-          set(NEWLINK "SHELL:-Wl,--whole-archive ")
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(APPEND NEWLINK " -Wl,--no-whole-archive")
-
-          string(FIND "SHELL:-Wl,--whole-archive  -Wl,--no-whole-archive"
-                      "${NEWLINK}" IDX
-          )
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_STATIC_LDFLAGS "${NEWLINK}")
-          endif()
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-          if(APPLE)
-            set(NEWLINK "SHELL:-Wl,-force_load,")
-          else()
-            set(NEWLINK "SHELL: ")
-          endif()
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(FIND "SHELL:" "${NEWLINK}" IDX)
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS "${NEWLINK}")
-          endif()
-        endif()
-      endif()
-    endif()
-
-    if(GASNET_STATIC_LDFLAGS_OTHER)
-      unset(FOUND_LIB)
-      set(IS_PARAM "0")
-      set(PARAM_FOUND "0")
-      set(NEWPARAM "")
-      set(IDX 0)
-      set(DIRIDX 0)
-      set(FLAG_LIST "")
-      set(DIR_LIST "")
-      set(LIB_LIST "")
-
-      foreach(X IN ITEMS ${GASNET_STATIC_LDFLAGS_OTHER})
-        string(FIND "${X}" "--param" PARAM_FOUND)
-        string(FIND "${X}" "-lgasnet" IDX)
-        string(FIND "${X}" "-L" DIRIDX)
-        if(NOT "${PARAM_FOUND}" EQUAL "-1")
-          set(IS_PARAM "1")
-          set(NEWPARAM "SHELL:${X}")
-        endif()
-        if("${PARAM_FOUND}" EQUAL "-1"
-           AND "${IDX}" EQUAL "-1"
-           AND "${IS_PARAM}" EQUAL "0"
-           OR "${IS_PARAM}" EQUAL "-1"
-        )
-          list(APPEND FLAG_LIST "${X}")
-          set(IS_PARAM "0")
-        elseif("${PARAM_FOUND}" EQUAL "-1" AND "${IS_PARAM}" EQUAL "1")
-          list(APPEND FLAG_LIST "${NEWPARAM} ${X}")
-          set(NEWPARAM "")
-          set(IS_PARAM "0")
-        elseif(NOT "${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-l" "" TMPSTR "${X}")
-          list(APPEND LIB_LIST "${TMPSTR}")
-          set(IDX 0)
-        elseif("${IDX}" EQUAL "-1" AND NOT "${LIDX}" EQUAL "-1")
-          list(APPEND FLAG_LIST "${X}")
-        endif()
-        if(NOT "${DIRIDX}" EQUAL "-1")
-          set(TMPSTR "")
-          string(REPLACE "-L" "" TMPSTR "${X}")
-          list(APPEND DIR_LIST "${TMPSTR}")
-        endif()
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH GASNET_STATIC_LDFLAGS_OTHER IDX)
-      foreach(X RANGE ${IDX})
-        list(POP_FRONT GASNET_STATIC_LDFLAGS_OTHER NEWPARAM)
-      endforeach()
-
-      foreach(X IN ITEMS ${FLAG_LIST})
-        list(APPEND GASNET_STATIC_LDFLAGS_OTHER "${X}")
-      endforeach()
-
-      set(IDX 0)
-      list(LENGTH LIB_LIST IDX)
-      if(NOT "${IDX}" EQUAL "0")
-        set(IDX 0)
-        if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-          set(NEWLINK "SHELL:-Wl,--whole-archive ")
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-
-              message(STATUS "${FOUND_LIB} ${X}")
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(APPEND NEWLINK " -Wl,--no-whole-archive")
-          string(FIND "SHELL:-Wl,--whole-archive  -Wl,--no-whole-archive"
-                      "${NEWLINK}" IDX
-          )
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_STATIC_LDFLAGS_OTHER "${NEWLINK}")
-          endif()
-        elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-          if(APPLE)
-            set(NEWLINK "SHELL:-Wl,-force_load,")
-          else()
-            set(NEWLINK "SHELL: ")
-          endif()
-          foreach(X IN ITEMS ${LIB_LIST})
-            set(DIRSTR "")
-            string(REPLACE ";" " " DIRSTR "${DIR_LIST}")
-            foreach(Y IN ITEMS ${DIR_LIST})
-              find_library(
-                FOUND_LIB
-                NAMES ${X} "lib${X}" "lib${X}.a"
-                PATHS ${Y}
-                HINTS ${Y} NO_CACHE
-                NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH
-              )
-
-              list(LENGTH FOUND_LIB IDX)
-              if(NOT "${IDX}" EQUAL "0")
-                string(APPEND NEWLINK "${FOUND_LIB}")
-                set(FOUND_LIB "")
-              endif()
-            endforeach()
-          endforeach()
-          string(FIND "SHELL:" "${NEWLINK}" IDX)
-          if("${IDX}" EQUAL "-1")
-            list(APPEND GASNET_LDFLAGS "${NEWLINK}")
-          endif()
-        endif()
-      endif()
-    endif()
-
-    set_target_properties(
-      PkgConfig::GASNET PROPERTIES INTERFACE_COMPILE_OPTIONS "${GASNET_CFLAGS}"
-    )
-    set_target_properties(
-      PkgConfig::GASNET PROPERTIES INTERFACE_LINK_OPTIONS "${GASNET_LDFLAGS}"
-    )
-    set_target_properties(
-      PkgConfig::GASNET PROPERTIES INTERFACE_LINK_DIRECTORIES
-                                   "${GASNET_LIBRARY_DIRS}"
-    )
-
+    # Link libraries, link options and link directories come straight from the
+    # IMPORTED_TARGET PkgConfig::GASNET, so consumers simply link that target.
   endif()
 
 endmacro()

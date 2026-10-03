@@ -82,12 +82,13 @@ namespace hpx::parcelset::policies::gasnet {
     // Non-blocking send driver: stage and transfer as many chunks as the
     // transport admits in this call via mailbox_array::try_send() (which
     // polls credit once).  Returns true when the entire multi-chunk transfer
-    // is complete, false while chunks remain but either no credit is left or
-    // the single outstanding access region to this destination is still in
-    // flight, in which case the caller must re-queue the connection.  Never
-    // blocks.  The sender holds this connection's destination reservation for
-    // the whole transfer, so this never interleaves with another concurrent
-    // connection to the same destination.
+    // is complete AND the final access region's completion event has been
+    // reaped, false while chunks remain but either no credit is left or an
+    // access region to this destination is still in flight, in which case the
+    // caller must re-queue the connection.  Never blocks.  The sender holds
+    // this connection's destination reservation for the whole transfer, so
+    // this never interleaves with another concurrent connection to the same
+    // destination.
     bool sender_connection::poll_send() noexcept
     {
         while (chunk_idx_ < num_chunks_)
@@ -114,6 +115,23 @@ namespace hpx::parcelset::policies::gasnet {
             }
 
             ++chunk_idx_;
+        }
+
+        // The final (data + credit) access region is still in flight here:
+        // do_stop() derives quiescence from the sender/receiver connection
+        // queues, so finishing now — with has_pending() already false — would
+        // let shutdown tear the transport down (finalize()/gasnet_exit())
+        // while the very last parcel was still on the wire.  Reap the region
+        // before releasing the destination reservation: send_ready() polls
+        // only and returns false while the event is outstanding, so the
+        // caller re-queues this connection (reservation held) until the
+        // region has locally completed (the source page is reusable; the
+        // target-side visibility of that final put is guaranteed by do_stop()'s
+        // shutdown barrier).  Always passes immediately for self-sends, which
+        // issue no region.
+        if (!mailboxes_->send_ready(static_cast<std::size_t>(dst_)))
+        {
+            return false;    // final region in flight: requeue and retry later
         }
 
         finish();
