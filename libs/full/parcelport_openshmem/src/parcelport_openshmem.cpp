@@ -96,7 +96,8 @@ namespace hpx::parcelset {
             }
 
             // In-flight chunks per (sender,receiver) pair.  Must be
-            // identical on every PE
+            // identical on every PE (the rx ring modulo is part of the wire
+            // protocol), same caveat as mtu.
             static std::size_t slots(util::runtime_configuration const& ini)
             {
                 std::size_t const slots = hpx::util::get_entry_as<std::size_t>(
@@ -107,6 +108,7 @@ namespace hpx::parcelset {
 
             // Expected size (bytes) of the symmetric data segment the job was
             // launched with; used only to warn about large mappings at mailbox
+            // construction time (an advisory, not a hard failure).
             static std::size_t symmetric_memory_size(
                 util::runtime_configuration const& ini)
             {
@@ -115,8 +117,13 @@ namespace hpx::parcelset {
                     mailbox_array::default_symmetric_memory_size);
             }
 
-            // Bound (seconds) for the drain wait in do_stop(). Shutdown must
-            // terminate even if a peer stops returning credit
+            // Bound (seconds) for the empty wait in do_stop(). Shutdown must
+            // terminate even if a peer stops returning credit for its last
+            // in-flight transfers; when the timeout fires the few stranded
+            // parcels are dropped.  The time is measured as *zero transfer
+            // activity*: an empty that keeps moving pages waits as long as it
+            // needs (no premature message drops), only a genuinely stalled
+            // empty aborts.  Override with hpx.parcel.openshmem.stop_timeout.
             static std::size_t stop_timeout(util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<std::size_t>(
@@ -125,6 +132,8 @@ namespace hpx::parcelset {
 
             // checksum guard over received pages.  Off is only slightly faster
             // on checksum-heavy workloads and removes the corruption
+            // tripwire, so leave it on unless profiling says otherwise.
+            // Must be identical on every PE (sender and receiver must agree).
             static bool checksum(util::runtime_configuration const& ini)
             {
                 return hpx::util::get_entry_as<bool>(
@@ -132,7 +141,10 @@ namespace hpx::parcelset {
             }
 
             // Max source PEs probed per receive-scan pass.  0 = full scan
-            // every pass.  Bounds the per-pass remote-fetch cost at large n
+            // every pass.  Each probe issues a delivery-push (a remote
+            // shmem_uint32_atomic_fetch) before reading the source's produced
+            // counter, so this chiefly bounds the per-pass remote round-trip
+            // cost at large n (see mailbox_array::default_probe_window).
             static std::size_t scan_window(
                 util::runtime_configuration const& ini)
             {
@@ -141,8 +153,23 @@ namespace hpx::parcelset {
                     mailbox_array::default_probe_window);
             }
 
-            // Gate for the cross-PE wire-protocol uniformity check.  Currently
-            // DISABLED by default.
+            // Cross-PE wire-protocol uniformity check.  DISABLED by default
+            // pending validation of the symmetric-memory rework.
+            //
+            // History: the check used to obtain its scratch space with
+            // shmem_malloc() (a *collective* call) from inside do_run().  PE 0
+            // blocked there waiting for a peer that never arrived, so the job
+            // hung before main() with no locality output: do_run() is not
+            // reached by all PEs in lockstep, because rank 0 runs in
+            // runtime_mode::console and the others in runtime_mode::worker.
+            //
+            // It now publishes into the mailbox_array's own symmetric carve
+            // (see mailbox_array::config_words()), which is allocated and
+            // published behind a barrier that already completes on every PE.
+            // It stays off by default until that path is confirmed on a real
+            // oshrun job.  When enabling it, make sure every PE is launched
+            // with identical hpx.parcel.openshmem.mtu, .slots and .checksum
+            // values.
             static bool uniform_check(
                 util::runtime_configuration const& ini)
             {
@@ -178,9 +205,23 @@ namespace hpx::parcelset {
 
             ~parcelport() override = default;
 
-            // Every PE must run the same wire-protocol parameters (mtu, slots (rx/tx),
-            // checksum) - represents a "geometry"
-            void check_protocol_config_uniformity() const
+            // Every PE must run the same wire-protocol parameters (mtu, slots,
+            // checksum): the rx-ring modulo, the page geometry and the
+            // checksum agreement are all part of the wire format, so a
+            // mismatch corrupts transfers silently.  Each PE publishes a
+            // fingerprint of the trio into its own word of a collective
+            // scratch allocation, then reads every PE's fingerprint and aborts
+            // loudly on any mismatch.  Called from do_run() while the transport
+            // is still single-threaded and no parcel traffic exists.
+            //
+            // The publish is a plain local store into symmetric memory:
+            // OpenSHMEM peers address a common address space directly, so no
+            // flush is needed to make the word visible.  The shmem_fence()
+            // orders that store before the following shmem_barrier_all(), and
+            // because barriers order prior operations, the remote
+            // shmem_uint32_atomic_fetch() reads below are guaranteed to observe
+            // every completed publish.
+void check_protocol_config_uniformity() const
             {
                 std::uint32_t const hash =
                     (static_cast<std::uint32_t>(mtu_) * 31u +
@@ -188,20 +229,29 @@ namespace hpx::parcelset {
                         31u +
                     (mailboxes_.checksum_enabled() ? 1u : 0u);
 
-                void* const scratch =
-                    shmem_malloc(num_pes_ * sizeof(std::uint32_t));
-                if (!scratch)
+                // The fingerprint row lives in the mailbox_array's own
+                // symmetric carve rather than a fresh shmem_malloc(), which is
+                // collective: do_run() is not reached by every PE in
+                // lockstep (rank 0 runs in runtime_mode::console, the others in
+                // runtime_mode::worker), so the extra collective deadlocked the
+                // job before main().  The carve is identical on every PE and was
+                // already published behind the constructor's barrier.
+                std::uint32_t* const words = mailboxes_.config_words();
+                if (!words)
                 {
                     HPX_THROW_EXCEPTION(hpx::error::out_of_memory,
                         "openshmem::parcelport:"
                         "check_protocol_config_uniformity",
-                        "shmem_malloc failed on PE " +
+                        "mailbox_array config fingerprint row is null on PE " +
                             std::to_string(my_pe_));
                 }
-                auto* const words = static_cast<std::uint32_t*>(scratch);
 
                 // Each PE publishes its fingerprint at its own index.  Every
                 // PE then REMOTE-fetches each peer's word: a plain local load
+                // would read OUR OWN element, so the cross-PE comparison has
+                // to be an actual remote atomic read.  The atomic also acts as
+                // the delivery-push that makes the peer's counter visible to
+                // this PE under UCX's OpenSHMEM shim.
                 words[my_pe_] = hash;
                 shmem_fence();
                 shmem_barrier_all();
@@ -211,9 +261,9 @@ namespace hpx::parcelset {
                 {
                     std::uint32_t const other_hash =
                         (pe == my_pe_) ?
-                        words[pe] :
-                        shmem_uint32_atomic_fetch(
-                            &words[pe], static_cast<int>(pe));
+                            words[pe] :
+                            shmem_uint32_atomic_fetch(
+                                &words[pe], static_cast<int>(pe));
                     if (other_hash != hash)
                     {
                         mismatch = true;
@@ -237,8 +287,6 @@ namespace hpx::parcelset {
                                  "every other PE.\n";
                     std::abort();
                 }
-
-                shmem_free(scratch);
             }
 
             bool do_run()
@@ -246,13 +294,19 @@ namespace hpx::parcelset {
                 sender_.run();
                 receiver_.run();
 
-                // Every PE must run the same wire-protocol parameters (geometry);
-                // a mismatch corrupts transfers silently.
+                // Every PE must run the same wire-protocol parameters; a
+                // mismatch corrupts transfers silently.  Disable only via
+                // hpx.parcel.openshmem.uniform_check=0.
                 if (uniform_check(ini_))
                 {
                     check_protocol_config_uniformity();
                 }
 
+                // Unlike the GASNet-EX port (whose teams are always
+                // thread-multiple), an OpenSHMEM runtime may only provide
+                // SHMEM_THREAD_SERIALIZED, in which case concurrent drivers
+                // would be illegal.  Clamp to a single driver in that case so
+                // the spin loop below stays valid under either thread model.
                 arena_count_ = io_service_pool_.size();
                 if (!util::openshmem_environment::thread_multiple())
                 {
@@ -285,8 +339,23 @@ namespace hpx::parcelset {
 
             void do_stop()
             {
-                // Wait for the io_service drivers to drain all queued work,
-                // then stop them. This thread must NOT touch shmem_*
+                // Wait for the io_service drivers to empty all queued work,
+                // then stop them.  This thread must NOT touch shmem_* while
+                // the drivers may still be running (they exit only once
+                // 'stopped_' is set below), so it waits passively instead of
+                // driving progress itself.  The wait deliberately uses no HPX
+                // thread suspension: nothing wakes a suspended thread, and
+                // the loop must not depend on the scheduler.
+                //
+                // The abort condition is *stall*, not a wall-clock budget: an
+                // empty that keeps transferring pages is allowed to take as
+                // long as it needs (otherwise a legitimately slow-but-moving
+                // empty would drop messages), and only a genuinely stalled
+                // empty -- no page movement for stop_timeout_ seconds -- aborts
+                // so shutdown still terminates when a peer never returns
+                // credit (or never publishes) again.  Transfer activity is
+                // measured via mailbox_array::transfer_count(), which changes
+                // exactly as often as pages move.
                 auto last_change = std::chrono::steady_clock::now();
                 std::uint64_t last_count = mailboxes_.transfer_count();
 
@@ -311,7 +380,40 @@ namespace hpx::parcelset {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
 
+                if (util::openshmem_environment::thread_multiple())
+                {
+                    // SHMEM_THREAD_MULTIPLE: the drivers may still be
+                    // pumping a stalled peer's straggler while we quiesce;
+                    // the barrier (legal while other threads run
+                    // non-collective shmem_* calls under this model) orders
+                    // every PE's stores issued before it (data pages via
+                    // putmem, produced/consumed credits via atomic_set).
+                    // When it returns, no remote write is outstanding
+                    // anywhere in the job, so no peer can write into our
+                    // symmetric heap once we stop empty.  'stopped_' is
+                    // set only below, so no driver is signalled to leave in
+                    // the middle of the quiesce.
+                    shmem_barrier_all();
+                }
+
+                // The drivers exit only after observing 'stopped_' below.
+                // Under SHMEM_THREAD_SERIALIZED nothing below may touch
+                // shmem_* until the last driver has left (io_service_work
+                // decrements drivers_running_), so wait for them here.
                 stopped_.store(true, std::memory_order_release);
+                while (drivers_running_.load(std::memory_order_acquire) != 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+
+                if (!util::openshmem_environment::thread_multiple())
+                {
+                    // SHMEM_THREAD_SERIALIZED: now exclusively
+                    // single-threaded, so the final barrier is safe.  It
+                    // guarantees every peer has observed our stores (and we
+                    // theirs) before the transport is finalized by destroy().
+                    shmem_barrier_all();
+                }
             }
 
             std::string get_locality_name() const override
@@ -338,7 +440,10 @@ namespace hpx::parcelset {
             }
 
             // Drive one step of transport progress.  Called from the io_service
-            // drivers and (under SHMEM_THREAD_MULTIPLE) from any HPX thread
+            // drivers and (under SHMEM_THREAD_MULTIPLE) from any HPX thread that
+            // runs the background-works scheduler callback.  'arena_idx' selects
+            // the receive arena (a disjoint range of source PEs) so concurrent
+            // scanners do not duplicate each other's probes.  Never blocks.
             bool progress(
                 std::size_t arena_idx, parcelport_background_mode mode)
             {
@@ -357,7 +462,12 @@ namespace hpx::parcelset {
             }
 
             // All shmem_* calls happen here (and in the io_service drivers).
-            // Under SHMEM_THREAD_MULTIPLE any HPX thread may drive progress
+            // Under SHMEM_THREAD_MULTIPLE any HPX thread may drive progress;
+            // under SHMEM_THREAD_SERIALIZED only the single driver installed by
+            // do_run() may, so this path stays disabled and all progress
+            // happens on that driver.  The thread processes the send queue and
+            // the receive arena selected by its OS-thread identifier
+            // (num_thread modulo the io pool size).
             bool background_work(
                 std::size_t num_thread, parcelport_background_mode mode)
             {
@@ -419,16 +529,36 @@ namespace hpx::parcelset {
             void io_service_work(std::size_t arena_idx)
             {
                 // Deliberate hot spin (no OS yield).  The receiver arena scan
-                // continuously pumps the transport
-                while (!stopped_.load(std::memory_order_acquire))
+                // continuously pumps the transport so a published page (data
+                // + credit, both written into our symmetric heap) is picked up
+                // promptly.  Yielding starves delivery and the sender window
+                // fills.  Each driver only scans its own arena.
+                //
+                // Track the number of running drivers so do_stop() can wait
+                // for the last of them to exit: under SHMEM_THREAD_SERIALIZED
+                // this thread must be the only one touching shmem_* once the
+                // empty completes.  The try/catch guarantees the count never
+                // leaks if progress() throws.
+                try
                 {
-                    progress(arena_idx, parcelport_background_mode::all);
+                    drivers_running_.fetch_add(1, std::memory_order_relaxed);
+                    while (!stopped_.load(std::memory_order_acquire))
+                    {
+                        progress(arena_idx, parcelport_background_mode::all);
+                    }
                 }
+                catch (...)
+                {
+                    drivers_running_.fetch_sub(1, std::memory_order_relaxed);
+                    throw;
+                }
+                drivers_running_.fetch_sub(1, std::memory_order_relaxed);
             }
 
             util::runtime_configuration const& ini_;
 
             std::atomic<bool> stopped_;
+            std::atomic<std::size_t> drivers_running_{0};
 
             std::size_t num_pes_;
             std::size_t my_pe_;
@@ -473,30 +603,40 @@ struct hpx::traits::plugin_config_data<
 
     static constexpr char const* call() noexcept
     {
-        // The io pool is sized freely: under SHMEM_THREAD_MULTIPLE every io
-        // thread drives progress on its own arena.
+        // The io pool is sized freely under SHMEM_THREAD_MULTIPLE: every io
+        // driver drives progress on its own arena (a disjoint range of source
+        // PEs).  The value below is only a default; do_run() clamps it to 1
+        // when the OpenSHMEM runtime provides only SHMEM_THREAD_SERIALIZED.
         return "mtu = "
                "${HPX_HAVE_PARCELPORT_OPENSHMEM_MTU:65536}\n"
                // In-flight chunks per (sender,receiver) pair; raises
-               // symmetric tx/rx memory linearly, so keep it small
+               // symmetric tx/rx memory linearly, so keep it small for very
+               // large runs and increase it for high-latency links.
                "slots = ${HPX_HAVE_PARCELPORT_OPENSHMEM_SLOTS:8}\n"
                // Expected symmetric data segment size (bytes; see
                // mailbox_array::default_symmetric_memory_size).
                "symmetric_memory_size = 1073741824\n"
-               // Seconds of zero page activity at shutdown before the drain wait
-               // aborts and remaining in-flight transfers are dropped.
+               // Seconds of zero page activity at shutdown before the empty wait
+               // aborts and remaining in-flight transfers are dropped.  An
+               // empty that keeps transferring pages waits as long as it needs;
+               // only a genuine stall terminates early.
                "stop_timeout = 30\n"
-               // checksum guard over received pages.  Leave on unless profiling
-               // shows the pass
+               // CRC32 guard over received pages.  Leave on unless profiling
+               // shows the pass; setting it to 0 removes the corruption
+               // tripwire and must be identical on every PE.
                "checksum = 1\n"
-               // Cross-PE wire-protocol uniformity check at startup.
-               // Currently off by default.
-               "uniform_check = 0\n"
+// Cross-PE wire-protocol uniformity check at startup.  Off by
+                // default until the symmetric-fingerprint rework is validated
+                // on a real oshrun job: it now reuses the mailbox_array carve
+                // (no collective shmem_malloc in do_run()), but the check still
+                // costs one barrier on every launch.  Enable with
+                // uniform_check=1 when launching a homogeneous job.
+                "uniform_check = 0\n"
                // Max source PEs probed per receive-scan pass (0 = all).
-               // Bounds the per-pass remote-fetch cost at large n.
+               // Bounds the per-pass remote round-trip cost at large n.
                "scan_window = 8\n"
                // Number of io_service threads driving progress.  The base
-               // parcelport reads hpx.parcel.<pp>.io_pool_size (default 2)
+               // parcelport reads hpx.parcel.<pp>.io_pool_size (default 2).
                "io_pool_size = 1\n";
     }
 };

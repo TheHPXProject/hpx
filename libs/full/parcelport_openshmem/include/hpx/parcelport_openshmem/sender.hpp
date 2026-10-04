@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -52,8 +53,16 @@ namespace hpx::parcelset::policies::openshmem {
 
         connection_ptr create_connection(int dest, void* pp)
         {
-            return std::make_shared<connection_type>(
-                this, dest, static_cast<mailbox_array*>(pp));
+            auto* const mailboxes = static_cast<mailbox_array*>(pp);
+            if (dest < 0 || static_cast<std::size_t>(dest) >= mailboxes->num_pes())
+            {
+                HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
+                    "openshmem::sender::create_connection",
+                    "destination rank " + std::to_string(dest) +
+                        " is outside the job [0, " +
+                        std::to_string(mailboxes->num_pes()) + ")");
+            }
+            return std::make_shared<connection_type>(this, dest, mailboxes);
         }
 
         // Enqueue a connection to be driven by any progress thread.
@@ -64,8 +73,13 @@ namespace hpx::parcelset::policies::openshmem {
             connections_.push_back(ptr);
         }
 
-        // True if the progress thread still has queued work to drain (used
+        // True if the progress thread still has queued work to empty (used
         // by do_stop()).  A connection that is in flight is always re-queued
+        // after each poll, so the queue plus the set of destinations with an
+        // in-flight (reserved) connection fully covers "work remaining".
+        // Called only from do_stop() (never from the progress thread), so a
+        // blocking lock is safe and avoids spurious "empty" results under
+        // contention.
         bool has_pending() noexcept
         {
             std::unique_lock l(connections_mtx_);
@@ -73,7 +87,14 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // Drive one connection by a single non-blocking step.  Callable from
-        // any progress thread.
+        // any progress thread.  Every destination is single-flight: a
+        // connection holds a reservation on its destination until its whole
+        // transfer completes, so parcels to the same destination are
+        // serialized (their chunks must not interleave in the shared
+        // per-(sender,destination) rx ring).  Connections whose destination
+        // is already reserved by another in-flight connection are skipped
+        // and re-queued — a caller whose destination cannot do work right
+        // now moves on to the next connection. Does not block.
         bool background_work() noexcept
         {
             connection_ptr connection;
@@ -87,7 +108,8 @@ namespace hpx::parcelset::policies::openshmem {
                     connections_.pop_front();
 
                     // Steppable if it already owns its destination
-                    // reservation, or its destination is not reserved
+                    // reservation, or its destination is not reserved by
+                    // another, still in-flight connection.
                     if (c->reserved_dst_ || !busy_dsts_.count(c->dst()))
                     {
                         if (!c->reserved_dst_)
@@ -109,8 +131,10 @@ namespace hpx::parcelset::policies::openshmem {
                 return false;
             }
 
-            // poll_send() transfers at most one chunk and never blocks.  A
-            // finished connection releases its destination reservation; one
+            // poll_send() transfers as many chunks as credit allows in this call
+            // and never blocks.  A finished connection releases its destination
+            // reservation; one that still has chunks in flight is re-queued
+            // with the reservation held.
             bool const finished = connection->poll_send();
             if (finished)
             {
@@ -130,7 +154,8 @@ namespace hpx::parcelset::policies::openshmem {
             hpx::move_only_function<void(error_code const&)>;
 
         // Enqueue a parcel for sending; the actual transfer is driven by any
-        // progress thread.  Returns immediately (non-blocking)
+        // progress thread.  Returns immediately (non-blocking), which is
+        // required since this may be called from any HPX thread.
         bool send_immediate(parcelset::locality const& dest,
             parcel_buffer_type buffer, callback_fn_type&& callbackFn)
         {
