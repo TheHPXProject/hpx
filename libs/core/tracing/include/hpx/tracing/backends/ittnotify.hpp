@@ -282,6 +282,35 @@ namespace hpx::tracing {
         }
     };
 
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
+    // The task-lifecycle signals drive ITT overlapped tasks so VTune can
+    // follow a fiber as it migrates between worker threads. Each is emitted
+    // out-of-line and gated on the live tool state inside the translation
+    // unit, mirroring the other real ITT entry points below.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_staged(
+        char const* name, void const* task_id = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_created(char const* name,
+        void const* task_id, void const* parent_id = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_executing(
+        void const* task_id, char const* name, std::size_t worker) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_yielded(
+        void const* task_id, char const* name) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_suspended(void const* task_id,
+        char const* name, char const* desc = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_resumed(void const* task_id,
+        char const* name, char const* desc = nullptr) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_completed(
+        void const* task_id, char const* name) noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void task_deleted(
+        void const* task_id) noexcept;
+#else
     HPX_CXX_CORE_EXPORT constexpr void task_staged(
         char const*, void const* = nullptr) noexcept
     {
@@ -318,6 +347,7 @@ namespace hpx::tracing {
     }
 
     HPX_CXX_CORE_EXPORT constexpr void task_deleted(void const*) noexcept {}
+#endif
 
     /// \brief Producer-side signal: future state fulfilled (no-op stub for ITTNotify).
     HPX_CXX_CORE_EXPORT constexpr void future_fulfilled(
@@ -351,10 +381,16 @@ namespace hpx::tracing {
 
     /// \brief Signal emitted when a worker thread steals a task from
     ///        another worker.
+#if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void work_stolen(std::size_t thief,
+        std::size_t victim, void const* task_id,
+        char const* name = nullptr) noexcept;
+#else
     HPX_CXX_CORE_EXPORT constexpr void work_stolen(
         std::size_t, std::size_t, void const*, char const* = nullptr) noexcept
     {
     }
+#endif
 
     /// \brief Frame boundary marker.
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void frame_mark(

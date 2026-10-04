@@ -1190,10 +1190,13 @@ if(HPX_WITH_TRACY)
     HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
     CATEGORY "Profiling"
   )
+endif()
 
-  # Per-subsystem tracing gates. Each event class is compiled out when its
-  # option is OFF so that users profiling one subsystem do not pay the cost of
-  # the others. Defaults preserve current behaviour: all three classes on.
+# Per-subsystem tracing gates. Each event class is compiled out when its option
+# is OFF so a user profiling one subsystem does not pay for the others. Both the
+# Tracy and the ITTNotify backends honor these gates. Defaults keep current
+# behavior: all three classes on.
+if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   hpx_option(
     HPX_WITH_TRACING_LIFECYCLE_EVENTS
     BOOL
@@ -1226,10 +1229,12 @@ if(HPX_WITH_TRACY)
   if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
     hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
   endif()
+endif()
 
-  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX and ITTNotify
-  # already treat every lifecycle hook as a constexpr no-op, so sampling would
-  # gate dead code on those backends; only Tracy actually emits.
+if(HPX_WITH_TRACY)
+  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX treats every
+  # lifecycle hook as a constexpr no-op and the ITTNotify backend emits every
+  # task unconditionally, so sampling is meaningful only for Tracy.
   hpx_option(
     HPX_WITH_TRACING_SAMPLE_RATE
     STRING

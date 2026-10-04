@@ -20,6 +20,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace hpx::tracing {
 
@@ -194,6 +195,193 @@ namespace hpx::tracing {
         util::itt::emit_marker(
             get_itt_globals().domain, get_itt_globals().os_thread_sleep);
     }
+
+    ////////////////////////////////////////////////////////////////////////////
+    // task lifecycle
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS) ||                              \
+    defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+    namespace {
+
+        // A task's overlapped id is recomputed from its thread_data address at
+        // every site rather than stored. __itt_id_make is deterministic and
+        // the collector correlates begin/end/create/destroy by id value, so
+        // the same address always names the same live task.
+        ___itt_id task_id_value(void const* task_id) noexcept
+        {
+            return ::itt_id_value(const_cast<void*>(task_id), 0);
+        }
+    }    // namespace
+#endif
+
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
+    namespace {
+
+        // Per-worker stack of overlapped tasks open on this OS thread. Inline
+        // continuations nest a child inside a running parent on the same
+        // worker, so a single slot will not do. Depth stays tiny, so storage is
+        // inline and the vector is an overflow guard that is never reached.
+        struct task_id_stack
+        {
+            static constexpr std::size_t inline_capacity = 32;
+
+            bool empty() const noexcept
+            {
+                return count_ == 0;
+            }
+            void const* back() const noexcept
+            {
+                return count_ > inline_capacity ?
+                    overflow_[count_ - inline_capacity - 1] :
+                    inline_[count_ - 1];
+            }
+            void push(void const* p)
+            {
+                if (count_ >= inline_capacity)
+                    overflow_.push_back(p);
+                else
+                    inline_[count_] = p;
+                ++count_;
+            }
+            void pop() noexcept
+            {
+                if (count_ > inline_capacity)
+                    overflow_.pop_back();
+                if (count_ != 0)
+                    --count_;
+            }
+
+            void const* inline_[inline_capacity] = {};
+            std::vector<void const*> overflow_;
+            std::size_t count_ = 0;
+        };
+
+        thread_local task_id_stack open_tasks;
+
+        void begin_task(void const* task_id, char const* name) noexcept
+        {
+            // Begin is idempotent: a resume signals once from the scheduling
+            // loop and once from the woken fiber on the same worker, and an
+            // already-open task must not be opened twice.
+            if (!open_tasks.empty() && open_tasks.back() == task_id)
+                return;
+
+            open_tasks.push(task_id);
+            ___itt_id id = task_id_value(task_id);
+            util::itt::string_handle const sh(name != nullptr ? name : "task");
+            ::itt_task_begin_overlapped(
+                get_itt_globals().domain.domain_, &id, sh.handle_);
+        }
+
+        void end_current_worker() noexcept
+        {
+            // A park takes the whole fiber off this worker, so every task open
+            // here is ended. A nested inline child parks its parent too, which
+            // is why the entire worker stack is flushed rather than one frame.
+            auto const* domain = get_itt_globals().domain.domain_;
+            while (!open_tasks.empty())
+            {
+                ___itt_id id = task_id_value(open_tasks.back());
+                ::itt_task_end_overlapped(domain, &id);
+                open_tasks.pop();
+            }
+        }
+
+        void end_task(void const* task_id) noexcept
+        {
+            // Completion ends just this frame: an inline child finishing leaves
+            // its parent running on the same worker, so only a matching top of
+            // stack is closed.
+            if (open_tasks.empty() || open_tasks.back() != task_id)
+                return;
+
+            ___itt_id id = task_id_value(task_id);
+            ::itt_task_end_overlapped(get_itt_globals().domain.domain_, &id);
+            open_tasks.pop();
+        }
+    }    // namespace
+
+    void task_staged(char const* name, void const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        // A staged task has no thread_data yet, hence no id; a plain marker
+        // records the enqueue without opening an overlapped task.
+        util::itt::emit_marker(get_itt_globals().domain,
+            util::itt::string_handle(name != nullptr ? name : "staged"));
+    }
+
+    void task_created(char const*, void const* task_id, void const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        ___itt_id id = task_id_value(task_id);
+        ::itt_id_create(get_itt_globals().domain.domain_, &id);
+    }
+
+    void task_executing(
+        void const* task_id, char const* name, std::size_t) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+        begin_task(task_id, name);
+    }
+
+    void task_yielded(void const*, char const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+        end_current_worker();
+    }
+
+    void task_suspended(void const*, char const*, char const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+        end_current_worker();
+    }
+
+    void task_resumed(
+        void const* task_id, char const* name, char const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+        begin_task(task_id, name);
+    }
+
+    void task_completed(void const* task_id, char const*) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+        end_task(task_id);
+    }
+
+    void task_deleted(void const* task_id) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        ___itt_id id = task_id_value(task_id);
+        ::itt_id_destroy_value(get_itt_globals().domain.domain_, &id);
+    }
+#endif
+
+#if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+    void work_stolen(std::size_t, std::size_t, void const* task_id,
+        char const* name) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        // Tag the steal with the stolen task's id so it lands on that task's
+        // timeline instead of appearing as an anonymous instant.
+        ___itt_id id = task_id_value(task_id);
+        util::itt::string_handle const sh(
+            name != nullptr ? name : "work_stolen");
+        ::itt_marker(get_itt_globals().domain.domain_, &id, sh.handle_);
+    }
+#endif
 
 }    // namespace hpx::tracing
 
