@@ -140,11 +140,31 @@ namespace {
     }
 
     template <typename Policy>
-    void test_value_lifetimes(Policy policy)
+    void test_synchronous_value_lifetimes(Policy policy)
     {
         using noncopyable = std::unique_ptr<int>;
         using noncopyable_range = std::vector<noncopyable>&;
 
+        static_assert(!hpx::is_async_execution_policy_v<Policy>);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+            noncopyable_range, noncopyable>);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+            Policy, noncopyable_range, noncopyable>);
+
+        std::vector<noncopyable> pointers(3);
+        pointers.front() = std::make_unique<int>(1);
+        HPX_TEST_EQ(hpx::ranges::count(policy, pointers, noncopyable{}), 2);
+        HPX_TEST(hpx::ranges::contains(
+            policy, pointers.begin(), pointers.end(), noncopyable{}));
+    }
+
+    template <typename Policy>
+    void test_asynchronous_value_lifetimes(Policy policy)
+    {
+        using noncopyable = std::unique_ptr<int>;
+        using noncopyable_range = std::vector<noncopyable>&;
+
+        static_assert(hpx::is_async_execution_policy_v<Policy>);
         static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
             noncopyable_range, noncopyable const&>);
         static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
@@ -266,8 +286,11 @@ int hpx_main()
     test_queries(par_unseq);
     test_queries(seq(task));
     test_queries(par(task));
-    test_value_lifetimes(seq(task));
-    test_value_lifetimes(par(task));
+    test_synchronous_value_lifetimes(seq);
+    test_synchronous_value_lifetimes(par);
+    test_synchronous_value_lifetimes(par_unseq);
+    test_asynchronous_value_lifetimes(seq(task));
+    test_asynchronous_value_lifetimes(par(task));
     test_serial();
     return hpx::local::finalize();
 }

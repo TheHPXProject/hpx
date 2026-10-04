@@ -483,7 +483,7 @@ namespace hpx::ranges {
                 std::iter_value_t<std::ranges::iterator_t<Rng>>&>>>
         // clang-format off
             requires (
-                parallel::detail::algorithm_value_argument<T> &&
+                parallel::detail::algorithm_value_argument<ExPolicy, T> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::random_access_range<Rng> &&
                 std::ranges::sized_range<Rng> &&
@@ -507,7 +507,8 @@ namespace hpx::ranges {
             return hpx::parallel::detail::count_if<difference_type>().call(
                 HPX_FORWARD(ExPolicy, policy), std::ranges::begin(rng),
                 (std::ranges::begin(rng) + std::ranges::distance(rng)),
-                parallel::detail::equal_to_value(HPX_FORWARD(T, value)),
+                parallel::detail::equal_to_value<ExPolicy>(
+                    HPX_FORWARD(T, value)),
                 HPX_MOVE(proj));
         }
 
@@ -517,7 +518,7 @@ namespace hpx::ranges {
                 std::invoke_result_t<Proj&, std::iter_value_t<Iter>&>>>
         // clang-format off
             requires (
-                parallel::detail::algorithm_value_argument<T> &&
+                parallel::detail::algorithm_value_argument<ExPolicy, T> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::random_access_iterator<Iter> &&
                 std::sized_sentinel_for<Sent, Iter> &&
@@ -535,7 +536,8 @@ namespace hpx::ranges {
 
             return hpx::parallel::detail::count_if<difference_type>().call(
                 HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
-                parallel::detail::equal_to_value(HPX_FORWARD(T, value)),
+                parallel::detail::equal_to_value<ExPolicy>(
+                    HPX_FORWARD(T, value)),
                 HPX_MOVE(proj));
         }
 
@@ -597,7 +599,7 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::iter_value_t<Iter>&>>>
-            requires(parallel::detail::algorithm_value_argument<T> &&
+            requires(parallel::detail::algorithm_value_argument<ExPolicy, T> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::random_access_iterator<Iter> &&
                 std::sized_sentinel_for<Sent, Iter> &&
@@ -618,7 +620,7 @@ namespace hpx::ranges {
             typename Proj = hpx::identity,
             typename T = std::remove_cvref_t<
                 std::invoke_result_t<Proj&, std::ranges::range_value_t<Rng>&>>>
-            requires(parallel::detail::algorithm_value_argument<T> &&
+            requires(parallel::detail::algorithm_value_argument<ExPolicy, T> &&
                 hpx::is_execution_policy_v<ExPolicy> &&
                 std::ranges::random_access_range<Rng> &&
                 std::ranges::sized_range<Rng> &&
