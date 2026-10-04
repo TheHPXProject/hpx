@@ -180,11 +180,18 @@ namespace hpx::parcelset::policies::openshmem {
 
         // Per-PE symmetric-memory footprint in bytes for a given geometry
         // (identical on every PE by construction): two O(npes*slots*mtu)
+        // tx/rx arenas, two O(npes^2) credit matrices, plus one O(npes)
+        // fingerprint row that the parcelport's startup uniformity check
+        // publishes into (see config_words()).  The fingerprint row lives in
+        // this allocation rather than a separate shmem_malloc() because that
+        // call is collective and do_run() is not reached by every PE in
+        // lockstep (rank 0 runs in runtime_mode::console, the others in
+        // runtime_mode::worker).
         static constexpr std::size_t symmetric_bytes(
             std::size_t npes, std::size_t slots, std::size_t mtu) noexcept
         {
             return 2 * npes * slots * mtu +
-                2 * npes * npes * sizeof(std::uint32_t);
+                (2 * npes * npes + npes) * sizeof(std::uint32_t);
         }
 
         mailbox_array() = default;
@@ -218,7 +225,8 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 std::fprintf(stderr,
                     "openshmem: warning: symmetric memory mapping is %zu "
-                    "bytes (2 * npes * slots * mtu + 2 * npes^2 * 4 with "
+                    "bytes (2 * npes * slots * mtu + (2 * npes^2 + npes) * 4 "
+                    "with "
                     "npes=%zu slots=%zu mtu=%zu), more than half of the "
                     "configured symmetric segment (%zu bytes).  Lower "
                     "hpx.parcel.openshmem.slots (build-time "
@@ -249,6 +257,8 @@ namespace hpx::parcelset::policies::openshmem {
             produced_end_ = produced_beg_ + num_pes_ * num_pes_;
             consumed_beg_ = produced_end_;
             consumed_end_ = consumed_beg_ + num_pes_ * num_pes_;
+            config_beg_ = reinterpret_cast<std::uint32_t*>(consumed_end_);
+            config_end_ = config_beg_ + num_pes_;
 
             // Publish the zeroed state to all PEs before any peer drives
             // progress against us.
@@ -291,6 +301,8 @@ namespace hpx::parcelset::policies::openshmem {
           , produced_end_(other.produced_end_)
           , consumed_beg_(other.consumed_beg_)
           , consumed_end_(other.consumed_end_)
+          , config_beg_(other.config_beg_)
+          , config_end_(other.config_end_)
           , produced_locals_(other.produced_locals_)
           , consumed_locals_(other.consumed_locals_)
           , scan_rotate_(other.scan_rotate_)
@@ -311,6 +323,8 @@ namespace hpx::parcelset::policies::openshmem {
             other.produced_end_ = nullptr;
             other.consumed_beg_ = nullptr;
             other.consumed_end_ = nullptr;
+            other.config_beg_ = nullptr;
+            other.config_end_ = nullptr;
             other.produced_locals_ = nullptr;
             other.consumed_locals_ = nullptr;
             other.scan_rotate_ = nullptr;
@@ -335,6 +349,8 @@ namespace hpx::parcelset::policies::openshmem {
                 produced_end_ = other.produced_end_;
                 consumed_beg_ = other.consumed_beg_;
                 consumed_end_ = other.consumed_end_;
+                config_beg_ = other.config_beg_;
+                config_end_ = other.config_end_;
                 produced_locals_ = other.produced_locals_;
                 consumed_locals_ = other.consumed_locals_;
                 scan_rotate_ = other.scan_rotate_;
@@ -354,6 +370,8 @@ namespace hpx::parcelset::policies::openshmem {
                 other.produced_end_ = nullptr;
                 other.consumed_beg_ = nullptr;
                 other.consumed_end_ = nullptr;
+                other.config_beg_ = nullptr;
+                other.config_end_ = nullptr;
                 other.produced_locals_ = nullptr;
                 other.consumed_locals_ = nullptr;
                 other.scan_rotate_ = nullptr;
@@ -599,6 +617,23 @@ namespace hpx::parcelset::policies::openshmem {
             return mtu_;
         }
 
+        // The startup wire-protocol uniformity check in the parcelport needs
+        // one symmetric word per PE to publish its fingerprint into.  Hand out
+        // the row carved from this allocation instead of a separate
+        // shmem_malloc(): that call is collective, and do_run() is not reached
+        // by every PE in lockstep (rank 0 runs in runtime_mode::console, the
+        // others in runtime_mode::worker), so allocating there deadlocked the
+        // job before main().  This carve is identical on every PE and was
+        // already published behind the constructor's barrier.
+        // const: the caller (check_protocol_config_uniformity) is a const
+        // member of the parcelport and so sees a const mailbox_array.  The
+        // returned pointer is a copy, so the pointee stays writable; only the
+        // member pointer itself is const through this overload.
+        std::uint32_t* config_words() const noexcept
+        {
+            return config_beg_;
+        }
+
         constexpr std::size_t num_pes() const noexcept
         {
             return num_pes_;
@@ -627,6 +662,8 @@ namespace hpx::parcelset::policies::openshmem {
         std::uint32_t* produced_end_ = nullptr;
         std::uint32_t* consumed_beg_ = nullptr;
         std::uint32_t* consumed_end_ = nullptr;
+        std::uint32_t* config_beg_ = nullptr;
+        std::uint32_t* config_end_ = nullptr;
         std::atomic<std::uint32_t>* produced_locals_ = nullptr;
         std::atomic<std::uint32_t>* consumed_locals_ = nullptr;
         mutable std::atomic<std::uint32_t>* scan_rotate_ = nullptr;

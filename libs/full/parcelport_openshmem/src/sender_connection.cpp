@@ -44,6 +44,7 @@ namespace hpx::parcelset::policies::openshmem {
 
     // Stage one chunk: copy header + payload into the local buffer slot.
     // The actual shmem transfer is done by the caller via try_send().
+    // Returns the number of payload bytes staged (0 for an empty chunk).
     std::size_t sender_connection::stage_chunk() noexcept
     {
         auto& mailboxes = *mailboxes_;
@@ -56,7 +57,10 @@ namespace hpx::parcelset::policies::openshmem {
             mailboxes.get_buffer(static_cast<std::size_t>(dst_));
 
         // Protect the payload when checksumming is enabled; the receiver
-        // recomputes checksum over the exact same transferred region.
+        // recomputes crc32 over the exact same transferred region.  Header
+        // integrity is guaranteed by the receiver's structural/geometry
+        // validation instead.  Both sides must agree on the setting (it must
+        // be identical on every PE via hpx.parcel.openshmem.checksum).
         detail::message_header header{buffer_.size_, buffer_.data_size_,
             num_chunks_, chunk_idx_,
             static_cast<std::uint32_t>(total_data_size_ & 0xFFFFFFFF),
@@ -77,8 +81,15 @@ namespace hpx::parcelset::policies::openshmem {
         return chunk_size;
     }
 
-    // Non-blocking send driver: stage and transfer exactly one chunk per
-    // call via mailbox_array::try_send() (which polls credit once).
+    // Non-blocking send driver: stage and transfer as many chunks as the
+    // credit word allows in this call via mailbox_array::try_send()
+    // (which polls credit once).  Returns true when the entire
+    // multi-chunk transfer is complete, false while chunks remain but no
+    // credit is left, in which case the caller must re-queue the
+    // connection.  Never blocks.  The sender holds this connection's
+    // destination reservation for the whole transfer, so this never
+    // interleaves with another concurrent connection to the same
+    // destination.
     bool sender_connection::poll_send() noexcept
     {
         while (chunk_idx_ < num_chunks_)

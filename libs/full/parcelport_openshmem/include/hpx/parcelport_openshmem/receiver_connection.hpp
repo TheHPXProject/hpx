@@ -34,7 +34,8 @@ namespace hpx::parcelset::policies::openshmem {
             collecting = 3,
             decoded = 4,
             // A consumed page failed validation.  The remaining pages of the
-            // (discarded) message are skipped so the stream realigns
+            // (discarded) message are skipped so the stream realigns at the
+            // next message boundary.
             draining_malformed = 5,
             // Terminal: the connection produced no usable parcel.  Distinct
             // from 'decoded' so the caller knows a transfer was lost.
@@ -107,7 +108,9 @@ namespace hpx::parcelset::policies::openshmem {
             std::memcpy(&header, recv_buf_.data(), sizeof(header));
 
             // The page is now consumed (credit returned to the sender), so a
-            // failure must not lead to 'retry this page'
+            // failure must not lead to 'retry this page' — that would read
+            // the next page and silently lose the transfer.  Handle it as a
+            // terminal/loud failure instead.
             std::size_t chunk_size = 0;
             if (!detail::validate_message_page(recv_buf_.data(),
                     mailboxes_.mtu(), chunk_size,
@@ -118,6 +121,8 @@ namespace hpx::parcelset::policies::openshmem {
 
             // A connection always starts at a message boundary; a first chunk
             // with an index > 0 means the stream lost earlier pages
+            // (unrecoverable corruption).  Fail loudly rather than collecting
+            // a partial message.
             if (header.chunk_index != 0)
             {
                 return handle_malformed_header(header);
@@ -194,7 +199,8 @@ namespace hpx::parcelset::policies::openshmem {
             }
 
             // Sequence cross-checks: every continuation chunk must belong to
-            // the same message and arrive strictly in order.
+            // the same message and arrive strictly in order.  Any mismatch
+            // means the stream lost or reordered pages — fail loudly.
             if (header.message_id != expected_message_id_ ||
                 header.num_chunks != expected_chunks_ ||
                 header.chunk_index != received_chunks_)
@@ -219,6 +225,10 @@ namespace hpx::parcelset::policies::openshmem {
 
         // A page was already consumed (credit returned to the sender) and its
         // header failed validation, or a first/continuation chunk broke
+        // ordering guarantees.  The transfer cannot be salvaged: report it
+        // loudly and, whenever the message extent is still parseable, drain
+        // the message's remaining pages so the per-src stream realigns at the
+        // next message boundary.  Never re-enters the failed state silently.
         bool handle_malformed_header(
             detail::message_header const& header) noexcept
         {
@@ -252,7 +262,8 @@ namespace hpx::parcelset::policies::openshmem {
         }
 
         // Skip (consume + drop) the pages of the discarded message so the
-        // stream realigns.
+        // stream realigns.  Non-blocking: if the sender has not published the
+        // next page yet, re-queue and continue later.
         bool drain_malformed() noexcept
         {
             std::size_t const src_pe = static_cast<std::size_t>(src_);

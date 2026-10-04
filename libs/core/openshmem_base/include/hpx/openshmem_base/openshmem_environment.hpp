@@ -22,6 +22,16 @@
 
 namespace hpx::util {
 
+    // Wrapper around the OpenSHMEM runtime lifetime (shmem_init_thread() /
+    // shmem_finalize()) plus the small query surface the openshmem
+    // parcelport builds on: job rank/size, the process name, and the
+    // thread level negotiated at init().
+    //
+    // The negotiated thread level decides how the parcelport may drive the
+    // transport: with SHMEM_THREAD_MULTIPLE every io-service driver (and any
+    // HPX thread) may call shmem_* concurrently, whereas a lower level (
+    // e.g. SHMEM_THREAD_SERIALIZED) restricts all shmem_* calls to a single
+    // thread and the parcelport collapses its io pool to one driver.
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT openshmem_environment
     {
         static bool check_openshmem_environment(

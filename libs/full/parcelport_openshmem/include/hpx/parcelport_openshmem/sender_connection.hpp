@@ -68,6 +68,8 @@ namespace hpx::parcelset::policies::openshmem {
 
         // Store the completion handlers and prepare the parcel for sending.
         // The actual sending is driven by poll_send() from one progress
+        // thread at a time under the sender's per-destination reservation
+        // (each destination is single-flight).
         void async_write(handler_type&& handler,
             post_handler_type&& parcel_postprocess) noexcept
         {
@@ -80,8 +82,14 @@ namespace hpx::parcelset::policies::openshmem {
             prepare();
         }
 
-        // Non-blocking send driver.  Sends at most one chunk per call (each
-        // via the non-blocking mailbox_array::try_send()) and returns true
+        // Non-blocking send driver.  Sends as many chunks as credit allows in
+        // this call (each via the non-blocking mailbox_array::try_send())
+        // and returns true when the connection is complete, false when one
+        // or more chunks remain but no credit is left, in which case the
+        // connection must be re-queued.  The sender holds this connection's
+        // destination reservation for the whole transfer, so poll_send()
+        // never interleaves with another concurrent connection to the same
+        // destination.
         bool poll_send() noexcept;
 
     private:
@@ -108,6 +116,7 @@ namespace hpx::parcelset::policies::openshmem {
 
         // True while this connection holds the single-flight reservation on
         // its destination (see sender::busy_dsts_).  Only manipulated by the
+        // sender under connections_mtx_.
         bool reserved_dst_ = false;
     };
 }    // namespace hpx::parcelset::policies::openshmem

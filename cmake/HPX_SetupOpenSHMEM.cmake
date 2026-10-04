@@ -27,13 +27,29 @@ macro(hpx_setup_openshmem)
         hpx_add_config_define(HPX_HAVE_PARCELPORT_OPENSHMEM)
       endif()
 
+      # `OSHMEM_LIBRARIES` is derived from the public `Libs` field only, so it
+      # does not carry the UCX libraries that Open MPI keeps in `Libs.private`.
+      # A shared link picks those up transitively through liboshmem.so's
+      # DT_NEEDED entries; a static link does not, so append the explicitly
+      # resolved UCX paths in that case.  The paths are absolute, so they cannot
+      # be satisfied by a different UCX on the default search path.
+      set(_oshmem_link_libraries "${OSHMEM_LIBRARIES}")
+      if(HPX_OPENSHMEM_REQUIRE_UCX AND OpenSHMEM_UCX_LIBRARIES)
+        list(APPEND _oshmem_link_libraries ${OpenSHMEM_UCX_LIBRARIES})
+      endif()
+
       set(HPX_OPENSHMEM_LIBRARIES
-          "${OSHMEM_LIBRARIES}"
+          "${_oshmem_link_libraries}"
           CACHE INTERNAL "OpenSHMEM libraries" FORCE
       )
       set(HPX_OPENSHMEM_INCLUDE_DIRS
           "${OSHMEM_INCLUDE_DIRS}"
           CACHE INTERNAL "OpenSHMEM include directories" FORCE
+      )
+      set(HPX_OPENSHMEM_UCX_LIBRARIES
+          "${OpenSHMEM_UCX_LIBRARIES}"
+          CACHE INTERNAL "UCX libraries backing this OpenSHMEM installation"
+                FORCE
       )
     endif()
 
@@ -48,5 +64,6 @@ macro(hpx_setup_openshmem)
 
     hpx_info("OpenSHMEM libraries: ${HPX_OPENSHMEM_LIBRARIES}")
     hpx_info("OpenSHMEM include dirs: ${HPX_OPENSHMEM_INCLUDE_DIRS}")
+    hpx_info("OpenSHMEM UCX libraries: ${HPX_OPENSHMEM_UCX_LIBRARIES}")
   endif()
 endmacro()
