@@ -96,6 +96,18 @@ HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_create(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_destroy(
     ___itt_domain const*, ___itt_id const* id) noexcept;
 
+// Value-based id helpers. The id of a task is recomputed from its address
+// at every lifecycle site rather than stored, so these avoid the heap that
+// itt_make_id/itt_id_destroy use and operate on a plain id value.
+HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT ___itt_id itt_id_value(
+    void*, std::size_t) noexcept;
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_destroy_value(
+    ___itt_domain const*, ___itt_id const* id) noexcept;
+
+// Marker tagged with an id.
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_marker(___itt_domain const* domain,
+    ___itt_id const* id, ___itt_string_handle* name) noexcept;
+
 HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT __itt_heap_function
 itt_heap_function_create(char const*, char const*) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_heap_allocate_begin(

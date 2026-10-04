@@ -758,6 +758,28 @@ void itt_id_destroy(___itt_domain const* domain, ___itt_id const* id) noexcept
     delete id;
 }
 
+___itt_id itt_id_value(void* addr, std::size_t const extra) noexcept
+{
+    return HPX_INTERNAL_ITT_MAKE_ID(addr, extra);
+}
+
+void itt_id_destroy_value(
+    ___itt_domain const* domain, ___itt_id const* id) noexcept
+{
+    // Counterpart to itt_id_destroy for recomputed id values: it ends the id
+    // instance with the collector but owns no heap slot, so nothing is freed.
+    if (use_ittnotify_api && __itt_id_destroy_ptr && id != nullptr)
+        __itt_id_destroy_ptr(domain, *id);
+}
+
+void itt_marker(___itt_domain const* domain, ___itt_id const* id,
+    ___itt_string_handle* name) noexcept
+{
+    // Marker tagged with an id.
+    if (use_ittnotify_api && __itt_marker_ptr && id != nullptr)
+        __itt_marker_ptr(domain, *id, name, __itt_marker_scope_global);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 __itt_heap_function itt_heap_function_create(
     char const* name, char const* domain) noexcept
