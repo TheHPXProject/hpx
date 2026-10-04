@@ -218,6 +218,18 @@ int hpx_main(int, char*[])
         HPX_TEST(fpg_custom == ex::forward_progress_guarantee::concurrent);
     }
 
+    // Target 7: Bulk Execution
+    {
+        std::atomic<int> count{0};
+        ex::task_scheduler ts(ex::get_parallel_scheduler());
+
+        auto snd = ex::schedule(ts) | ex::bulk(10, [&](int) { ++count; });
+
+        hpx::this_thread::experimental::sync_wait(snd);
+
+        HPX_TEST(count == 10);
+    }
+
     return hpx::local::finalize();
 }
 
