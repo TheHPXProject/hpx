@@ -35,6 +35,7 @@ set(_hpx_full_modules
     parcelport_lci
     parcelport_lcw
     parcelport_mpi
+    parcelport_openshmem
     parcelport_tcp
     parcelports
     parcelset
