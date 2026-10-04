@@ -28,6 +28,7 @@ set(tests
     service_executors
     shared_parallel_executor
     standalone_thread_pool_executor
+    task_scheduler
     thread_pool_scheduler
 )
 
