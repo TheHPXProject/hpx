@@ -39,7 +39,12 @@ namespace hpx::parcelset::policies::openshmem {
         void run() noexcept {}
 
         // True if there are still partially received connections being
-        // processed (used by do_stop()). Called only from do_stop()
+        // processed (used by do_stop()). Called only from do_stop() (never
+        // from the progress thread), so a blocking lock is safe and avoids
+        // spurious "empty" results under contention.  A connection whose
+        // message is in-flight stays in either connections_ (re-queued
+        // between steps) or active_connections_ (its src is drained by an
+        // in-progress connection), so both must be checked.
         bool has_pending() noexcept
         {
             std::unique_lock l1(connections_mtx_);
