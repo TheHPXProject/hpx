@@ -38,7 +38,13 @@
 
 // NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
 // NOLINTBEGIN(bugprone-unhandled-exception-at-new)
+// TODO: Remove this guard once NVIDIA/stdexec#2304 is fixed and stdexec is bumped.
+// NVCC (up to 12.9) host compiler (gcc-12) fails to compile deduced auto return
+// types for constexpr functions returning senders in async_scope.hpp.
+// See: https://github.com/TheHPXProject/hpx/issues/7676
+#if !defined(__NVCC__)
 #include <exec/async_scope.hpp>
+#endif
 #include <exec/completion_signatures.hpp>
 #include <exec/ensure_started.hpp>
 #include <exec/env.hpp>
@@ -61,7 +67,10 @@
 
 namespace hpx::execution::experimental {
     // Async scope
+#if !defined(__NVCC__)
+    // See https://github.com/TheHPXProject/hpx/issues/7676
     HPX_CXX_CORE_EXPORT using exec::async_scope;
+#endif
 
     // Domain
     HPX_CXX_CORE_EXPORT using stdexec::default_domain;
