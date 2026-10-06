@@ -17,10 +17,9 @@
 namespace hpx::parallel::detail {
     /// \cond NOINTERNAL
 
-    // Asynchronous policy algorithms must own their values or borrow from an
-    // lvalue whose lifetime the caller keeps through the asynchronous work.
-    // Synchronous calls may also borrow temporaries because they do not return
-    // until the work has completed.
+    // Synchronous algorithms borrow their values because they finish before
+    // returning. Asynchronous algorithms copy values when possible and borrow
+    // only non-copyable lvalues whose lifetime the caller must preserve.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
     concept algorithm_value_argument =
         !hpx::is_async_execution_policy_v<ExPolicy> ||

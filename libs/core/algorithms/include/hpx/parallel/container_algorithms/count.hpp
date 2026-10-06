@@ -535,7 +535,7 @@ namespace hpx::ranges {
                 typename std::iterator_traits<Iter>::difference_type;
 
             return hpx::parallel::detail::count_if<difference_type>().call(
-                HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
+                HPX_FORWARD(ExPolicy, policy), first, last,
                 parallel::detail::equal_to_value<ExPolicy>(
                     HPX_FORWARD(T, value)),
                 HPX_MOVE(proj));

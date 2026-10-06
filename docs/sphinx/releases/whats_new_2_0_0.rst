@@ -23,9 +23,17 @@ General changes
 Breaking changes
 ================
 
+- The execution-policy overloads of ``hpx::ranges::all_of``, ``any_of``,
+  ``none_of``, ``count``, ``count_if``, ``contains``, ``equal``,
+  ``starts_with``, ``ends_with``, ``contains_subrange``, ``is_partitioned``,
+  and ``lexicographical_compare`` now follow P3179. Range arguments must model
+  ``std::ranges::random_access_range`` and ``std::ranges::sized_range``;
+  iterator/sentinel arguments must model ``std::random_access_iterator`` and
+  ``std::sized_sentinel_for``. Overloads without an execution policy continue
+  to accept forward ranges and iterator/sentinel pairs.
+
 Closed issues
 =============
 
 Closed pull requests
 ====================
-

@@ -78,6 +78,14 @@ void test_partitioned1()
         test_partitioned1(par, IteratorTag());
         test_partitioned1(par_unseq, IteratorTag());
     }
+    else
+    {
+        using base_iterator = std::vector<std::size_t>::iterator;
+        using iterator = test::test_iterator<base_iterator, IteratorTag>;
+        std::vector<std::size_t> values{2, 4, 1, 3};
+        HPX_TEST(hpx::ranges::is_partitioned(iterator(values.begin()),
+            iterator(values.end()), [](std::size_t n) { return n % 2 == 0; }));
+    }
 }
 
 void partitioned_test1()
@@ -152,6 +160,14 @@ void test_partitioned2()
         test_partitioned2(seq, IteratorTag());
         test_partitioned2(par, IteratorTag());
         test_partitioned2(par_unseq, IteratorTag());
+    }
+    else
+    {
+        using base_iterator = std::vector<std::size_t>::iterator;
+        using iterator = test::test_iterator<base_iterator, IteratorTag>;
+        std::vector<std::size_t> values{1, 3, 5};
+        HPX_TEST(hpx::ranges::is_partitioned(iterator(values.begin()),
+            iterator(values.end()), [](std::size_t n) { return n % 2 == 0; }));
     }
 }
 
@@ -238,6 +254,14 @@ void test_partitioned3()
         test_partitioned3(par, IteratorTag());
         test_partitioned3(par_unseq, IteratorTag());
     }
+    else
+    {
+        using base_iterator = std::vector<std::size_t>::iterator;
+        using iterator = test::test_iterator<base_iterator, IteratorTag>;
+        std::vector<std::size_t> values{2, 1, 4};
+        HPX_TEST(!hpx::ranges::is_partitioned(iterator(values.begin()),
+            iterator(values.end()), [](std::size_t n) { return n % 2 == 0; }));
+    }
 }
 
 void partitioned_test3()
@@ -305,6 +329,30 @@ void test_partitioned_exception()
         test_partitioned_exception(seq, IteratorTag());
         test_partitioned_exception(par, IteratorTag());
     }
+    else
+    {
+        using base_iterator = std::vector<std::size_t>::iterator;
+        using iterator = test::decorated_iterator<base_iterator, IteratorTag>;
+        std::vector<std::size_t> values{2, 1};
+        bool caught_exception = false;
+        try
+        {
+            hpx::ranges::is_partitioned(
+                iterator(
+                    values.begin(), []() { throw std::runtime_error("test"); }),
+                iterator(values.end()),
+                [](std::size_t n) { return n % 2 == 0; });
+        }
+        catch (hpx::exception_list const&)
+        {
+            caught_exception = true;
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+        HPX_TEST(caught_exception);
+    }
 }
 
 void partitioned_exception_test()
@@ -365,6 +413,30 @@ void test_partitioned_bad_alloc()
     {
         test_partitioned_bad_alloc(par, IteratorTag());
         test_partitioned_bad_alloc(seq, IteratorTag());
+    }
+    else
+    {
+        using base_iterator = std::vector<std::size_t>::iterator;
+        using iterator = test::decorated_iterator<base_iterator, IteratorTag>;
+        std::vector<std::size_t> values{2, 1};
+        bool caught_bad_alloc = false;
+        try
+        {
+            hpx::ranges::is_partitioned(
+                iterator(values.begin(), []() { throw std::bad_alloc(); }),
+                iterator(values.end()),
+                [](std::size_t n) { return n % 2 == 0; });
+            HPX_TEST(false);
+        }
+        catch (std::bad_alloc const&)
+        {
+            caught_bad_alloc = true;
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+        HPX_TEST(caught_bad_alloc);
     }
 }
 
