@@ -44,6 +44,7 @@
 #include <exec/env.hpp>
 #include <exec/execute.hpp>
 #include <exec/sender_for.hpp>
+#include <exec/single_thread_context.hpp>
 #include <exec/split.hpp>
 #include <exec/start_detached.hpp>
 #include <stdexec/execution.hpp>
@@ -206,6 +207,9 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using exec::ensure_started;
     HPX_CXX_CORE_EXPORT using exec::ensure_started_t;
 
+    // Read env
+    HPX_CXX_CORE_EXPORT using stdexec::read_env;
+
     // Environment queries
     HPX_CXX_CORE_EXPORT using exec::make_env;
     HPX_CXX_CORE_EXPORT using exec::make_env_t;
@@ -329,6 +333,26 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT using stdexec::scheduler;
 
     HPX_CXX_CORE_EXPORT using stdexec::operation_state;
+
+    // Async scope (P3149: async_scope - creating scopes for
+    // non-sequential concurrency)
+    HPX_CXX_CORE_EXPORT using stdexec::scope_association;
+    HPX_CXX_CORE_EXPORT using stdexec::scope_token;
+
+    HPX_CXX_CORE_EXPORT using stdexec::associate;
+    HPX_CXX_CORE_EXPORT using stdexec::associate_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::spawn;
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_future;
+    HPX_CXX_CORE_EXPORT using stdexec::spawn_future_t;
+
+    HPX_CXX_CORE_EXPORT using stdexec::simple_counting_scope;
+    HPX_CXX_CORE_EXPORT using stdexec::counting_scope;
+
+    // Single-thread context (exec:: utility)
+    HPX_CXX_CORE_EXPORT using exec::single_thread_context;
 
     // sender invokes
     HPX_CXX_CORE_EXPORT template <typename Sender, typename AlgorithmTag>

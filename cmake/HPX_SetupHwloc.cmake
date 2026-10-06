@@ -23,6 +23,11 @@ if(NOT HPX_WITH_FETCH_HWLOC)
       "to download it automatically."
     )
   endif()
+  # Some package managers (e.g. Conan) provide hwloc::hwloc instead of
+  # Hwloc::hwloc
+  if(NOT TARGET Hwloc::hwloc AND TARGET hwloc::hwloc)
+    add_library(Hwloc::hwloc ALIAS hwloc::hwloc)
+  endif()
 else()
   # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24
   if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
