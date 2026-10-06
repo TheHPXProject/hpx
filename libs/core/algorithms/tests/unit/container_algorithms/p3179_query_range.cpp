@@ -233,13 +233,15 @@ namespace {
             sized_range, invalid_predicate, projection>);
 
         std::vector<record> data = {{1}, {2}, {2}, {-1}};
-        sized_range r(data.begin(), sentinel{data.end()}, data.size());
-        sized_range prefix(data.begin(), sentinel{data.begin() + 2}, 2);
-        sized_range suffix(data.begin() + 2, sentinel{data.end()}, 2);
-        sized_range empty(data.end(), sentinel{data.end()}, 0);
+        sized_range r(
+            data.begin(), sentinel<iterator>{data.end()}, data.size());
+        sized_range prefix(
+            data.begin(), sentinel<iterator>{data.begin() + 2}, 2);
+        sized_range suffix(data.begin() + 2, sentinel<iterator>{data.end()}, 2);
+        sized_range empty(data.end(), sentinel<iterator>{data.end()}, 0);
         std::vector<record> unordered_data = {{1}, {-1}, {2}};
         sized_range unordered(unordered_data.begin(),
-            sentinel{unordered_data.end()}, unordered_data.size());
+            sentinel<iterator>{unordered_data.end()}, unordered_data.size());
         auto const proj = &record::value;
         auto const eq = std::ranges::equal_to{};
         HPX_TEST(!value(all_of(policy, r, positive{}, proj)));
