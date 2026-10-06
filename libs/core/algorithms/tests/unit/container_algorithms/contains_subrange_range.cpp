@@ -43,6 +43,12 @@ void test_contains_subrange(IteratorTag)
         iterator(std::end(c1)), iterator(std::begin(c2)),
         iterator(std::end(c2)));
     HPX_TEST_EQ(result, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains_subrange(iterator(empty.begin()),
+        iterator(empty.end()), iterator(c2.begin()), iterator(c2.end())));
+    HPX_TEST(!hpx::ranges::contains_subrange(iterator(c2.begin()),
+        iterator(c2.end()), iterator(c1.begin()), iterator(c1.end())));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -66,6 +72,12 @@ void test_contains_subrange(ExPolicy&& policy, IteratorTag)
         iterator(std::begin(c1)), iterator(std::end(c1)),
         iterator(std::begin(c2)), iterator(std::end(c2)));
     HPX_TEST_EQ(result1, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains_subrange(policy, iterator(empty.begin()),
+        iterator(empty.end()), iterator(c2.begin()), iterator(c2.end())));
+    HPX_TEST(!hpx::ranges::contains_subrange(policy, iterator(c2.begin()),
+        iterator(c2.end()), iterator(c1.begin()), iterator(c1.end())));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -91,6 +103,16 @@ void test_contains_subrange_async(ExPolicy&& policy, IteratorTag)
         iterator(std::begin(c2)), iterator(std::end(c2)));
     result.wait();
     HPX_TEST_EQ(result.get(), true);
+
+    std::vector<int> empty;
+    hpx::future<bool> empty_result =
+        hpx::ranges::contains_subrange(policy, iterator(empty.begin()),
+            iterator(empty.end()), iterator(c2.begin()), iterator(c2.end()));
+    HPX_TEST(!empty_result.get());
+    hpx::future<bool> longer_result =
+        hpx::ranges::contains_subrange(policy, iterator(c2.begin()),
+            iterator(c2.end()), iterator(c1.begin()), iterator(c1.end()));
+    HPX_TEST(!longer_result.get());
 }
 
 template <typename IteratorTag>

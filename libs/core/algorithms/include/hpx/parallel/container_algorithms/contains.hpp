@@ -205,7 +205,7 @@ namespace hpx::ranges {
             }
 
             return hpx::parallel::detail::any_of().call(
-                HPX_FORWARD(ExPolicy, policy), first, first + (last - first),
+                HPX_FORWARD(ExPolicy, policy), first, last,
                 parallel::detail::equal_to_value<ExPolicy>(HPX_FORWARD(T, val)),
                 HPX_MOVE(proj));
         }

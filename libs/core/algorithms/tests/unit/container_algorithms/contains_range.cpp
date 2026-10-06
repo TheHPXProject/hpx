@@ -39,6 +39,10 @@ void test_contains(IteratorTag)
     bool result1 = hpx::ranges::contains(
         iterator(std::begin(c)), iterator(std::end(c)), int(1));
     HPX_TEST_EQ(result1, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains(
+        iterator(empty.begin()), iterator(empty.end()), int(1)));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -62,6 +66,10 @@ void test_contains(ExPolicy&& policy, IteratorTag)
     bool result2 = hpx::ranges::contains(
         policy, iterator(std::begin(c)), iterator(std::end(c)), int(110));
     HPX_TEST_EQ(result2, false);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains(
+        policy, iterator(empty.begin()), iterator(empty.end()), int(1)));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -87,6 +95,11 @@ void test_contains_async(ExPolicy&& policy, IteratorTag)
         policy, iterator(std::begin(c)), iterator(std::end(c)), int(110));
     result2.wait();
     HPX_TEST_EQ(result2.get(), false);
+
+    std::vector<int> empty;
+    hpx::future<bool> result3 = hpx::ranges::contains(
+        policy, iterator(empty.begin()), iterator(empty.end()), int(1));
+    HPX_TEST(!result3.get());
 }
 
 template <typename IteratorTag>

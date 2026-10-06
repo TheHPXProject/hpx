@@ -199,6 +199,20 @@ namespace {
     }
 
     template <typename Policy>
+    void test_contains_string_literal(Policy policy)
+    {
+        std::vector<std::string> values{"x", "abc", "y"};
+        std::vector<std::string> empty;
+
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+            Policy, std::vector<std::string>&, char const(&)[4]>);
+
+        HPX_TEST(value(hpx::ranges::contains(policy, values, "abc")));
+        HPX_TEST(!value(hpx::ranges::contains(policy, values, "zzz")));
+        HPX_TEST(!value(hpx::ranges::contains(policy, empty, "abc")));
+    }
+
+    template <typename Policy>
     void test_queries(Policy policy)
     {
         using namespace hpx::ranges;
@@ -223,6 +237,9 @@ namespace {
         sized_range prefix(data.begin(), sentinel{data.begin() + 2}, 2);
         sized_range suffix(data.begin() + 2, sentinel{data.end()}, 2);
         sized_range empty(data.end(), sentinel{data.end()}, 0);
+        std::vector<record> unordered_data = {{1}, {-1}, {2}};
+        sized_range unordered(unordered_data.begin(),
+            sentinel{unordered_data.end()}, unordered_data.size());
         auto const proj = &record::value;
         auto const eq = std::ranges::equal_to{};
         HPX_TEST(!value(all_of(policy, r, positive{}, proj)));
@@ -242,12 +259,18 @@ namespace {
         HPX_TEST(value(contains_subrange(policy, r, suffix, eq, proj, proj)));
         HPX_TEST(
             value(contains_subrange(policy, empty, empty, eq, proj, proj)));
+        HPX_TEST(
+            !value(contains_subrange(policy, empty, prefix, eq, proj, proj)));
+        HPX_TEST(!value(contains_subrange(policy, prefix, r, eq, proj, proj)));
         HPX_TEST(value(lexicographical_compare(
             policy, prefix, r, std::ranges::less{}, proj, proj)));
         HPX_TEST(value(all_of(policy, empty, positive{}, proj)));
         HPX_TEST(!value(any_of(policy, empty, positive{}, proj)));
         HPX_TEST(value(none_of(policy, empty, positive{}, proj)));
         HPX_TEST_EQ(value(count(policy, empty, 2, proj)), 0);
+        HPX_TEST(!value(contains(policy, empty, 2, proj)));
+        HPX_TEST(value(is_partitioned(policy, empty, positive{}, proj)));
+        HPX_TEST(!value(is_partitioned(policy, unordered, positive{}, proj)));
 
         auto const last = sized_sentinel<iterator>{{data.end()}};
         HPX_TEST_EQ(value(count(policy, data.begin(), last, 2, proj)), 2);
@@ -258,6 +281,15 @@ namespace {
             policy, data.begin(), last, data.begin(), last, eq, proj, proj)));
         HPX_TEST(value(contains_subrange(
             policy, data.begin(), last, data.begin(), last, eq, proj, proj)));
+        HPX_TEST(value(
+            is_partitioned(policy, data.begin(), last, positive{}, proj)));
+        auto const empty_last = sized_sentinel<iterator>{{data.end()}};
+        HPX_TEST(value(
+            is_partitioned(policy, data.end(), empty_last, positive{}, proj)));
+        auto const unordered_last =
+            sized_sentinel<iterator>{{unordered_data.end()}};
+        HPX_TEST(!value(is_partitioned(
+            policy, unordered_data.begin(), unordered_last, positive{}, proj)));
     }
 
     void test_serial()
@@ -291,6 +323,11 @@ int hpx_main()
     test_synchronous_value_lifetimes(par_unseq);
     test_asynchronous_value_lifetimes(seq(task));
     test_asynchronous_value_lifetimes(par(task));
+    test_contains_string_literal(seq);
+    test_contains_string_literal(par);
+    test_contains_string_literal(par_unseq);
+    test_contains_string_literal(seq(task));
+    test_contains_string_literal(par(task));
     test_serial();
     return hpx::local::finalize();
 }
