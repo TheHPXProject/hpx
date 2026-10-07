@@ -122,12 +122,12 @@ namespace {
 
         signal_count = 0;
         std::atomic<int> signal_error{0};
-        std::jthread interrupter;
+        std::atomic<bool> stop_interrupting{false};
+        std::thread interrupter;
         auto const start_interrupting = process::on_fork_success([&](auto&) {
             pthread_t const reading_thread = ::pthread_self();
-            interrupter = std::jthread([&, reading_thread](
-                                           std::stop_token stop) {
-                while (!stop.stop_requested())
+            interrupter = std::thread([&, reading_thread] {
+                while (!stop_interrupting.load(std::memory_order_relaxed))
                 {
                     timespec delay{0, 10000000};
                     while (::nanosleep(&delay, &delay) == -1 && errno == EINTR)
@@ -147,6 +147,13 @@ namespace {
             delay_signal_test();
             e.exec_error = ENOENT;
         });
+        auto const stop_interrupter = [&] {
+            stop_interrupting.store(true, std::memory_order_relaxed);
+            if (interrupter.joinable())
+            {
+                interrupter.join();
+            }
+        };
 
         bool caught = false;
         try
@@ -163,11 +170,12 @@ namespace {
             HPX_TEST(message.find(std::generic_category().message(ENOENT)) !=
                 std::string::npos);
         }
-        interrupter.request_stop();
-        if (interrupter.joinable())
+        catch (...)
         {
-            interrupter.join();
+            stop_interrupter();
+            throw;
         }
+        stop_interrupter();
         HPX_TEST(caught);
         HPX_TEST_EQ(signal_count, 1);
         HPX_TEST_EQ(signal_error.load(), 0);
