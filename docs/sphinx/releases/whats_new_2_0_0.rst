@@ -19,6 +19,8 @@ General changes
   variants), which select the number of vector lanes explicitly. Execution
   policy properties, including ``num_lanes``, are exposed through
   ``hpx::execution::policy_traits``.
+- Fixed ``hpx::any_of`` with an execution policy to return ``false`` for an
+  empty range.
 
 Breaking changes
 ================
@@ -33,6 +35,11 @@ Breaking changes
   their existing constraints. In particular, the ``contains``
   iterator/sentinel overload requires both types to model
   ``std::input_iterator``.
+- The P3179-aligned overloads use standard ranges callable defaults and pass
+  predicates and projections by value. Their concept-based constraints may
+  produce different diagnostics than the previous iterator ``static_assert``
+  checks. Code that explicitly names HPX's former default callable types may
+  need to use the corresponding ``std::ranges`` callable types.
 
 Closed issues
 =============

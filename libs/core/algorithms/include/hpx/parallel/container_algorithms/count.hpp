@@ -71,10 +71,8 @@ namespace hpx { namespace ranges {
         typename T = std::remove_cvref_t<std::invoke_result_t<Proj&,
             std::iter_value_t<std::ranges::iterator_t<Rng>>&>>>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-        typename std::iterator_traits<typename hpx::traits::range_traits<
-            Rng>::iterator_type>::difference_type>
-    count(
-        ExPolicy&& policy, Rng&& rng, T const& value, Proj proj = Proj());
+        std::ranges::range_difference_t<Rng>>
+    count(ExPolicy&& policy, Rng&& rng, T&& value, Proj proj = Proj());
 
     /// Returns the number of elements in the range [first, last) satisfying
     /// a specific criteria. This version counts the elements that are equal to
@@ -134,8 +132,8 @@ namespace hpx { namespace ranges {
         typename T = std::remove_cvref_t<
             std::invoke_result_t<Proj&, std::iter_value_t<Iter>&>>>
     hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-        typename std::iterator_traits<Iter>::difference_type>
-    count(ExPolicy&& policy, Iter first, Sent last, T const& value,
+        std::iter_difference_t<Iter>>
+    count(ExPolicy&& policy, Iter first, Sent last, T&& value,
         Proj proj = Proj());
 
     /// Returns the number of elements in the range [first, last) satisfying
