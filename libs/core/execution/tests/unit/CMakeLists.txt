@@ -48,10 +48,18 @@ set(tests
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+if(HPX_WITH_CUDA)
+  list(APPEND tests algorithm_sender_cuda)
+endif()
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+foreach(test ${tests})
+  if(test STREQUAL "algorithm_sender_cuda")
+    set(sources ${test}.cu)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 2)
+  else()
+    set(sources ${test}.cpp)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 
