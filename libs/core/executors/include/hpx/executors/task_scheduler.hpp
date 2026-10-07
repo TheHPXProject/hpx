@@ -171,7 +171,7 @@ namespace hpx::execution::experimental {
 
     }    // namespace detail
 
-    // P3927R2: task_scheduler — a type-erased scheduler backed by
+    // P3927R2: task_scheduler -- a type-erased scheduler backed by
     // parallel_scheduler_backend.
     //
     // The task_scheduler wraps any scheduler conforming to HPX's scheduler
