@@ -41,6 +41,9 @@ void test_any_of()
     test_any_of(seq, IteratorTag());
     test_any_of(par, IteratorTag());
     test_any_of(par_unseq, IteratorTag());
+    test_any_of_empty(seq, IteratorTag());
+    test_any_of_empty(par, IteratorTag());
+    test_any_of_empty(par_unseq, IteratorTag());
 
     if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
     {
@@ -51,6 +54,8 @@ void test_any_of()
 
     test_any_of_async(seq(task), IteratorTag());
     test_any_of_async(par(task), IteratorTag());
+    test_any_of_empty(seq(task), IteratorTag());
+    test_any_of_empty(par(task), IteratorTag());
 
     if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
     {

@@ -213,6 +213,21 @@ namespace {
     }
 
     template <typename Policy>
+    void test_mixed_value_types(Policy policy)
+    {
+        std::vector<double> values{1.0, 2.0, 2.0, 3.0};
+
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+            std::vector<double>&, int>);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+            Policy, std::vector<double>&, int>);
+
+        HPX_TEST_EQ(value(hpx::ranges::count(policy, values, 2)), 2);
+        HPX_TEST(value(hpx::ranges::contains(policy, values, 2)));
+        HPX_TEST(!value(hpx::ranges::contains(policy, values, 4)));
+    }
+
+    template <typename Policy>
     void test_queries(Policy policy)
     {
         using namespace hpx::ranges;
@@ -330,6 +345,11 @@ int hpx_main()
     test_contains_string_literal(par_unseq);
     test_contains_string_literal(seq(task));
     test_contains_string_literal(par(task));
+    test_mixed_value_types(seq);
+    test_mixed_value_types(par);
+    test_mixed_value_types(par_unseq);
+    test_mixed_value_types(seq(task));
+    test_mixed_value_types(par(task));
     test_serial();
     return hpx::local::finalize();
 }
