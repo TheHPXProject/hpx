@@ -19,6 +19,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -46,6 +47,36 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 while (::waitpid(pid, nullptr, 0) == -1 && errno == EINTR)
                 {
                 }
+            }
+
+            static void terminate_and_wait_for_child(pid_t pid) noexcept
+            {
+                if (pid > 0)
+                {
+                    ::kill(pid, SIGKILL);
+                    wait_for_child(pid);
+                }
+            }
+
+            static bool set_close_on_exec(int fd) noexcept
+            {
+                int flags;
+                do
+                {
+                    flags = ::fcntl(fd, F_GETFD);
+                } while (flags == -1 && errno == EINTR);
+
+                if (flags == -1)
+                {
+                    return false;
+                }
+
+                int result;
+                do
+                {
+                    result = ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+                } while (result == -1 && errno == EINTR);
+                return result != -1;
             }
 
             static auto read_error_report(
@@ -79,32 +110,46 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class PosixExecutor>
             void on_fork_setup(PosixExecutor&) const
             {
+#if defined(linux) || defined(__linux) || defined(__linux__) ||                \
+    defined(__FreeBSD__)
+                if (::pipe2(fds_, O_CLOEXEC) == -1)
+                {
+                    int const error = errno;
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_setup", "pipe2(2) failed: {}",
+                        extract_error_string(error));
+                }
+#else
                 if (::pipe(fds_) == -1)
                 {
+                    int const error = errno;
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_setup", "pipe(2) failed: {}",
-                        extract_error_string(errno));
+                        extract_error_string(error));
                 }
-                if (::fcntl(fds_[1], F_SETFD, FD_CLOEXEC) == -1)
+                if (!set_close_on_exec(fds_[0]) || !set_close_on_exec(fds_[1]))
                 {
+                    int const error = errno;
                     ::close(fds_[0]);
                     ::close(fds_[1]);
 
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_setup", "fcntl(2) failed: {}",
-                        extract_error_string(errno));
+                        extract_error_string(error));
                 }
+#endif
             }
 
             template <class PosixExecutor>
             void on_fork_error(PosixExecutor&) const
             {
+                int const error = errno;
                 ::close(fds_[0]);
                 ::close(fds_[1]);
 
                 HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                     "throw_on_error::on_fork_error", "fork(2) failed: {}",
-                    extract_error_string(errno));
+                    extract_error_string(error));
             }
 
             template <class PosixExecutor>
@@ -144,7 +189,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 }
                 else if (read_error != 0)
                 {
-                    wait_for_child(e.child_pid);
+                    terminate_and_wait_for_child(e.child_pid);
                     HPX_THROW_EXCEPTION(hpx::error::kernel_error,
                         "throw_on_error::on_fork_success", "read(2) failed: {}",
                         extract_error_string(read_error));
