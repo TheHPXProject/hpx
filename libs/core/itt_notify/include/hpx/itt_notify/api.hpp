@@ -58,6 +58,9 @@ HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_frame_begin(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_frame_end(
     ___itt_domain const* frame, ___itt_id* id) noexcept;
 
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_marker(
+    ___itt_domain const* domain, ___itt_string_handle* name) noexcept;
+
 HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT int itt_mark_create(
     char const*) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_mark_off(int mark) noexcept;
@@ -75,6 +78,12 @@ HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_task_begin(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_task_end(
     ___itt_domain const*) noexcept;
 
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_task_begin_overlapped(
+    ___itt_domain const*, ___itt_id const* id,
+    ___itt_string_handle* name) noexcept;
+HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_task_end_overlapped(
+    ___itt_domain const*, ___itt_id const* id) noexcept;
+
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT ___itt_domain* itt_domain_create(
     char const*) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT ___itt_string_handle*
@@ -85,7 +94,7 @@ HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT ___itt_id* itt_make_id(
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_create(
     ___itt_domain const*, ___itt_id const* id) noexcept;
 HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void itt_id_destroy(
-    ___itt_id const* id) noexcept;
+    ___itt_domain const*, ___itt_id const* id) noexcept;
 
 HPX_CXX_CORE_EXPORT [[nodiscard]] HPX_CORE_EXPORT __itt_heap_function
 itt_heap_function_create(char const*, char const*) noexcept;
@@ -217,7 +226,8 @@ namespace hpx::util::itt {
 
         id(id const& rhs) = delete;
         id(id&& rhs) noexcept
-          : id_(rhs.id_)
+          : domain_(rhs.domain_)
+          , id_(rhs.id_)
         {
             rhs.id_ = nullptr;
         }
@@ -227,12 +237,14 @@ namespace hpx::util::itt {
         {
             if (this != &rhs)
             {
+                domain_ = rhs.domain_;
                 id_ = rhs.id_;
                 rhs.id_ = nullptr;
             }
             return *this;
         }
 
+        ___itt_domain const* domain_ = nullptr;
         ___itt_id* id_ = nullptr;
     };
 
@@ -372,6 +384,30 @@ namespace hpx::util::itt {
         ___itt_id* id_ = nullptr;
         string_handle sh_;
     };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // overlapped_task ends via an explicit id stored in the object, so the
+    // dtor can fire on a different OS thread than the ctor. That is the
+    // shape HPX fibers need: fiber_suspend_region opens on one worker and
+    // may be resumed on another when the scheduler steals the fiber.
+    HPX_CXX_CORE_EXPORT struct overlapped_task
+    {
+        HPX_CORE_EXPORT overlapped_task(
+            domain const& d, string_handle name) noexcept;
+        HPX_CORE_EXPORT ~overlapped_task();
+
+        overlapped_task(overlapped_task const&) = delete;
+        overlapped_task(overlapped_task&&) = delete;
+        overlapped_task& operator=(overlapped_task const&) = delete;
+        overlapped_task& operator=(overlapped_task&&) = delete;
+
+        domain const& domain_;
+        ___itt_id* id_ = nullptr;
+        string_handle sh_;
+    };
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void emit_marker(
+        domain const& d, string_handle const& name) noexcept;
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct heap_function
@@ -563,6 +599,11 @@ HPX_CXX_CORE_EXPORT constexpr void itt_frame_end(
 {
 }
 
+HPX_CXX_CORE_EXPORT constexpr void itt_marker(
+    ___itt_domain const*, ___itt_string_handle*) noexcept
+{
+}
+
 HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr int itt_mark_create(
     char const*) noexcept
 {
@@ -586,6 +627,15 @@ HPX_CXX_CORE_EXPORT constexpr void itt_task_end(___itt_domain const*) noexcept
 {
 }
 
+HPX_CXX_CORE_EXPORT constexpr void itt_task_begin_overlapped(
+    ___itt_domain const*, ___itt_id const*, ___itt_string_handle*) noexcept
+{
+}
+HPX_CXX_CORE_EXPORT constexpr void itt_task_end_overlapped(
+    ___itt_domain const*, ___itt_id const*) noexcept
+{
+}
+
 HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr ___itt_domain* itt_domain_create(
     char const*) noexcept
 {
@@ -606,7 +656,10 @@ HPX_CXX_CORE_EXPORT constexpr void itt_id_create(
     ___itt_domain const*, ___itt_id*) noexcept
 {
 }
-HPX_CXX_CORE_EXPORT constexpr void itt_id_destroy(___itt_id*) noexcept {}
+HPX_CXX_CORE_EXPORT constexpr void itt_id_destroy(
+    ___itt_domain const*, ___itt_id*) noexcept
+{
+}
 
 HPX_CXX_CORE_EXPORT [[nodiscard]] constexpr __itt_heap_function
 itt_heap_function_create(char const*, char const*) noexcept
@@ -785,6 +838,19 @@ namespace hpx::util::itt {
         {
         }
     };
+
+    HPX_CXX_CORE_EXPORT struct overlapped_task
+    {
+        constexpr overlapped_task(domain const&, string_handle const&) noexcept
+        {
+        }
+        ~overlapped_task() = default;
+    };
+
+    HPX_CXX_CORE_EXPORT constexpr void emit_marker(
+        domain const&, string_handle const&) noexcept
+    {
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct heap_function

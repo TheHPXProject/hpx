@@ -1082,7 +1082,9 @@ namespace hpx {
         //   - shared_future<void>::get() returns nothing.
         // Throws: the stored exception, if an exception was stored in the
         //         shared state.
-        // Postcondition: valid() == false.
+        // Postcondition: valid() is unchanged. Unlike future::get(), the
+        //                shared state is not released, so get() can be called
+        //                again and refers to the same stored value.
         hpx::traits::future_traits<shared_future>::result_type get()
             const    //-V659
             HPX_PRE(this->valid())

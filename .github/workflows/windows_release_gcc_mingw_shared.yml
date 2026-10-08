@@ -1,10 +1,10 @@
-# Copyright (c) 2023-2024 The STE||AR-Group
+# Copyright (c) 2023-2026 The STE||AR-Group
 #
 # SPDX-License-Identifier: BSL-1.0
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-name: Windows CI (Release, gcc/mingw toolset)
+name: Windows CI (Release, gcc/mingw toolset, shared libraries)
 
 on: [pull_request]
 
@@ -49,18 +49,30 @@ jobs:
               -DBOOST_ROOT="C:\Boost" \
               -DHWLOC_ROOT="C:\projects\hwloc-win64-build-2.8.0" \
               -DHPX_WITH_CXX_STANDARD=23 \
-              -DHPX_WITH_STATIC_LINKING=ON \
+              -DHPX_WITH_STATIC_LINKING=OFF \
               -DHPX_WITH_MALLOC=system \
               -DHPX_WITH_FETCH_ASIO=ON \
               -DHPX_WITH_PKGCONFIG=OFF \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
-              -DHPX_WITH_EXAMPLES=ON \
+              -DHPX_WITH_EXAMPLES=OFF \
               -DHPX_WITH_TESTS=ON \
               -DHPX_WITH_TESTS_UNIT=ON \
-              -DHPX_WITH_TESTS_EXAMPLES=ON \
-              -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
-              -DHPX_WITH_MODULES_AS_STATIC_LIBRARIES=OFF
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF
     - name: Build
       shell: bash
       run: |
           cmake --build build --config Release -- -j 2
+          cmake --build build --config Release \
+              --target any_sender_test \
+              --target any_sender_consumer_test \
+              --target rebind_policy_test \
+              -- -j 2
+    - name: Test
+      shell: pwsh
+      run: |
+        $env:PATH = "$env:GITHUB_WORKSPACE\build\bin;C:\Boost\lib;C:\projects\hwloc-win64-build-2.8.0\bin;$env:PATH"
+        cd build
+        ctest `
+          --output-on-failure `
+          --build-config Release `
+          --tests-regex "tests.unit.modules.execution_base.any_sender|tests.unit.modules.execution.rebind_policy"

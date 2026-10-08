@@ -134,6 +134,7 @@ namespace {
         typename stop_query_backend<StopSource>::query_target target)
     {
         StopSource source;
+        using stop_token_type = decltype(source.get_token());
         bool completed = false;
         bool stopped = false;
         bool found_token = false;
@@ -147,7 +148,7 @@ namespace {
         {
             auto operation =
                 ex::connect(ex::schedule(ex::get_parallel_scheduler()),
-                    stop_token_receiver<decltype(source.get_token())>{
+                    stop_token_receiver<stop_token_type>{
                         source.get_token(), completed, stopped});
             ex::start(operation);
         }
@@ -156,7 +157,7 @@ namespace {
             auto sender = ex::schedule(ex::get_parallel_scheduler()) |
                 ex::bulk_unchunked(ex::par, 4, [](std::size_t) {});
             auto operation = ex::connect(HPX_MOVE(sender),
-                stop_token_receiver<decltype(source.get_token())>{
+                stop_token_receiver<stop_token_type>{
                     source.get_token(), completed, stopped});
             ex::start(operation);
         }

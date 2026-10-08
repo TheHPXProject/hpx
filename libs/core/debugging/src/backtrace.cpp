@@ -61,6 +61,11 @@
 #include <windows.h>
 
 #include <dbghelp.h>
+
+// Name DbgHelp in this object file so that linking against a static
+// hpx_core.lib does not need dbghelp.lib on the link line as well. CMake
+// still adds it through hpx_base_libraries.
+#pragma comment(lib, "dbghelp.lib")
 #endif
 
 namespace hpx::util::stack_trace {
