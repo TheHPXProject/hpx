@@ -32,6 +32,10 @@ namespace hpx { namespace components { namespace process { namespace posix {
 
     namespace initializers {
 
+        namespace detail {
+            struct throw_on_error_test_access;
+        }
+
         class throw_on_error : public initializer_base
         {
             using error_report = std::array<int, 2>;
@@ -106,6 +110,56 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 return "child process setup";
             }
 
+            template <class PosixExecutor, typename Read>
+            void on_fork_success_impl(PosixExecutor& e, Read&& read) const
+            {
+                ::close(fds_[1]);
+                error_report report{};
+                std::size_t bytes_read = 0;
+                int read_error = 0;
+                while (bytes_read != error_report_size)
+                {
+                    auto const count = read(fds_[0], report, bytes_read);
+                    if (count > 0)
+                    {
+                        bytes_read += static_cast<std::size_t>(count);
+                    }
+                    else if (count == 0)
+                    {
+                        break;
+                    }
+                    else if (errno != EINTR)
+                    {
+                        read_error = errno;
+                        break;
+                    }
+                }
+                ::close(fds_[0]);
+
+                if (bytes_read == error_report_size)
+                {
+                    wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success", "{} failed: {}",
+                        error_operation<PosixExecutor>(report[1]),
+                        extract_error_string(report[0]));
+                }
+                else if (read_error != 0)
+                {
+                    terminate_and_wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success", "read(2) failed: {}",
+                        extract_error_string(read_error));
+                }
+                else if (bytes_read != 0)
+                {
+                    wait_for_child(e.child_pid);
+                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
+                        "throw_on_error::on_fork_success",
+                        "incomplete child error report");
+                }
+            }
+
         public:
             template <class PosixExecutor>
             void on_fork_setup(PosixExecutor&) const
@@ -155,52 +209,10 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class PosixExecutor>
             void on_fork_success(PosixExecutor& e) const
             {
-                ::close(fds_[1]);
-                error_report report{};
-                std::size_t bytes_read = 0;
-                int read_error = 0;
-                while (bytes_read != error_report_size)
-                {
-                    auto const count =
-                        read_error_report(fds_[0], report, bytes_read);
-                    if (count > 0)
-                    {
-                        bytes_read += static_cast<std::size_t>(count);
-                    }
-                    else if (count == 0)
-                    {
-                        break;
-                    }
-                    else if (errno != EINTR)
-                    {
-                        read_error = errno;
-                        break;
-                    }
-                }
-                ::close(fds_[0]);
-
-                if (bytes_read == error_report_size)
-                {
-                    wait_for_child(e.child_pid);
-                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
-                        "throw_on_error::on_fork_success", "{} failed: {}",
-                        error_operation<PosixExecutor>(report[1]),
-                        extract_error_string(report[0]));
-                }
-                else if (read_error != 0)
-                {
-                    terminate_and_wait_for_child(e.child_pid);
-                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
-                        "throw_on_error::on_fork_success", "read(2) failed: {}",
-                        extract_error_string(read_error));
-                }
-                else if (bytes_read != 0)
-                {
-                    wait_for_child(e.child_pid);
-                    HPX_THROW_EXCEPTION(hpx::error::kernel_error,
-                        "throw_on_error::on_fork_success",
-                        "incomplete child error report");
-                }
+                on_fork_success_impl(
+                    e, [](int fd, error_report& report, std::size_t offset) {
+                        return read_error_report(fd, report, offset);
+                    });
             }
 
             template <class PosixExecutor>
@@ -222,6 +234,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
 
         private:
+            friend struct detail::throw_on_error_test_access;
             friend class hpx::serialization::access;
 
             template <typename Archive>

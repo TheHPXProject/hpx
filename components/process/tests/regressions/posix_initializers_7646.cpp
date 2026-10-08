@@ -8,39 +8,49 @@
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/testing.hpp>
 
-#include <atomic>
+#include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <limits>
 #include <signal.h>
 #include <string>
 #include <system_error>
-#include <thread>
-#include <time.h>
+#include <utility>
 #include <vector>
 
-#include <pthread.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 namespace process = hpx::components::process;
 
-namespace {
-    sig_atomic_t volatile signal_count = 0;
-
-    extern "C" void handle_signal(int)
+namespace hpx::components::process::posix::initializers::detail {
+    struct throw_on_error_test_access
     {
-        signal_count = 1;
-    }
-
-    void delay_signal_test()
-    {
-        timespec delay{0, 100000000};
-        while (::nanosleep(&delay, &delay) == -1 && errno == EINTR)
+        template <typename PosixExecutor, typename Read>
+        static void on_fork_success(
+            throw_on_error const& handler, PosixExecutor& executor, Read&& read)
         {
+            handler.on_fork_success_impl(executor, std::forward<Read>(read));
         }
-    }
+    };
+}    // namespace hpx::components::process::posix::initializers::detail
+
+namespace {
+    struct test_executor
+    {
+        enum class error_origin
+        {
+            none,
+            setup,
+            chdir,
+            execve
+        };
+
+        pid_t child_pid = -1;
+    };
 
     void reap_child(process::util::child const& child, int expected_status)
     {
@@ -81,6 +91,79 @@ namespace {
         }
     }
 
+    void check_child_reaped(pid_t pid)
+    {
+        int status = 0;
+        errno = 0;
+        pid_t const result = ::waitpid(pid, &status, WNOHANG);
+        HPX_TEST_EQ(result, -1);
+        HPX_TEST_EQ(errno, ECHILD);
+
+        if (result == 0)
+        {
+            HPX_TEST_EQ(::kill(pid, SIGKILL), 0);
+            do
+            {
+                errno = 0;
+            } while (::waitpid(pid, &status, 0) == -1 && errno == EINTR);
+        }
+    }
+
+    pid_t fork_test_child(bool delayed_exit)
+    {
+        pid_t const pid = ::fork();
+        HPX_TEST(pid >= 0);
+        if (pid == 0)
+        {
+            if (delayed_exit)
+            {
+                ::sleep(10);
+            }
+            ::_exit(EXIT_FAILURE);
+        }
+        return pid;
+    }
+
+    template <typename Read>
+    void test_injected_read(Read&& read,
+        std::initializer_list<std::string> expected_messages,
+        bool delayed_exit = false)
+    {
+        process::throw_on_error handler;
+        test_executor executor;
+        handler.on_fork_setup(executor);
+        executor.child_pid = fork_test_child(delayed_exit);
+        if (executor.child_pid < 0)
+        {
+            return;
+        }
+
+        auto const start = std::chrono::steady_clock::now();
+        bool caught = false;
+        try
+        {
+            hpx::components::process::posix::initializers::detail::
+                throw_on_error_test_access::on_fork_success(
+                    handler, executor, std::forward<Read>(read));
+        }
+        catch (hpx::exception const& e)
+        {
+            caught = true;
+            std::string const message = e.what();
+            for (std::string const& expected : expected_messages)
+            {
+                HPX_TEST(message.find(expected) != std::string::npos);
+            }
+        }
+        HPX_TEST(caught);
+        if (delayed_exit)
+        {
+            HPX_TEST(std::chrono::steady_clock::now() - start <
+                std::chrono::seconds(5));
+        }
+        check_child_reaped(executor.child_pid);
+    }
+
     template <typename... Initializers>
     void test_error(int code, char const* operation, bool handler_first,
         Initializers const&... init)
@@ -110,78 +193,95 @@ namespace {
         check_no_children();
     }
 
-    template <typename... Initializers>
-    void test_interrupted_read(Initializers const&... init)
+    void test_error_report_reads()
     {
-        struct sigaction action{};
-        struct sigaction previous_action{};
-        action.sa_handler = &handle_signal;
-        sigemptyset(&action.sa_mask);
-        action.sa_flags = 0;
-        HPX_TEST_EQ(::sigaction(SIGUSR1, &action, &previous_action), 0);
+        std::array<int, 2> const fragmented_report{
+            {ENOENT, static_cast<int>(test_executor::error_origin::execve)}};
+        std::size_t fragments = 0;
+        test_injected_read(
+            [&](int, auto& destination, std::size_t offset) -> ssize_t {
+                std::size_t const count =
+                    fragments++ == 0 ? 1 : sizeof(fragmented_report) - offset;
+                std::memcpy(
+                    reinterpret_cast<char*>(destination.data()) + offset,
+                    reinterpret_cast<char const*>(fragmented_report.data()) +
+                        offset,
+                    count);
+                return static_cast<ssize_t>(count);
+            },
+            {"execve(2) failed", std::generic_category().message(ENOENT)});
 
-        signal_count = 0;
-        std::atomic<int> signal_error{0};
-        std::atomic<bool> stop_interrupting{false};
-        std::thread interrupter;
-        auto const start_interrupting = process::on_fork_success([&](auto&) {
-            pthread_t const reading_thread = ::pthread_self();
-            interrupter = std::thread([&, reading_thread] {
-                while (!stop_interrupting.load(std::memory_order_relaxed))
+        std::array<int, 2> const interrupted_report{
+            {EACCES, static_cast<int>(test_executor::error_origin::chdir)}};
+        bool interrupted = false;
+        test_injected_read(
+            [&](int, auto& destination, std::size_t offset) -> ssize_t {
+                if (!interrupted)
                 {
-                    timespec delay{0, 10000000};
-                    while (::nanosleep(&delay, &delay) == -1 && errno == EINTR)
-                    {
-                    }
-                    int const error = ::pthread_kill(reading_thread, SIGUSR1);
-                    if (error != 0)
-                    {
-                        signal_error = error;
-                        return;
-                    }
+                    interrupted = true;
+                    errno = EINTR;
+                    return -1;
                 }
-            });
-        });
-        auto const delayed_error = process::on_exec_setup([](auto& e) {
-            delay_signal_test();
-            delay_signal_test();
-            e.exec_error = ENOENT;
-        });
-        auto const stop_interrupter = [&] {
-            stop_interrupting.store(true, std::memory_order_relaxed);
-            if (interrupter.joinable())
+
+                std::size_t const count = sizeof(interrupted_report) - offset;
+                std::memcpy(
+                    reinterpret_cast<char*>(destination.data()) + offset,
+                    reinterpret_cast<char const*>(interrupted_report.data()) +
+                        offset,
+                    count);
+                return static_cast<ssize_t>(count);
+            },
+            {"chdir(2) failed", std::generic_category().message(EACCES)});
+        HPX_TEST(interrupted);
+
+        bool sent_prefix = false;
+        test_injected_read(
+            [&](int, auto& destination, std::size_t) -> ssize_t {
+                if (sent_prefix)
+                {
+                    return 0;
+                }
+                sent_prefix = true;
+                *reinterpret_cast<char*>(destination.data()) = 0;
+                return 1;
+            },
+            {"incomplete child error report"});
+
+        test_injected_read(
+            [](int, auto&, std::size_t) -> ssize_t {
+                errno = EIO;
+                return -1;
+            },
+            {"read(2) failed", std::generic_category().message(EIO)}, true);
+    }
+
+    void test_successful_exec_does_not_wait(process::inherit_env const& env)
+    {
+        auto const exe = process::run_exe("/bin/sleep");
+        auto const args =
+            process::set_args(std::vector<std::string>{"sleep", "10"});
+        auto const start = std::chrono::steady_clock::now();
+        auto child =
+            process::util::execute(exe, args, env, process::throw_on_error());
+        HPX_TEST(
+            std::chrono::steady_clock::now() - start < std::chrono::seconds(5));
+
+        HPX_TEST_EQ(::kill(child.pid, SIGKILL), 0);
+        int status = 0;
+        pid_t result;
+        do
+        {
+            result = ::waitpid(child.pid, &status, 0);
+        } while (result == -1 && errno == EINTR);
+        HPX_TEST_EQ(result, child.pid);
+        if (result == child.pid)
+        {
+            HPX_TEST(WIFSIGNALED(status));
+            if (WIFSIGNALED(status))
             {
-                interrupter.join();
+                HPX_TEST_EQ(WTERMSIG(status), SIGKILL);
             }
-        };
-
-        bool caught = false;
-        try
-        {
-            process::util::execute(start_interrupting,
-                process::throw_on_error(), init..., delayed_error);
         }
-        catch (hpx::exception const& e)
-        {
-            caught = true;
-            std::string const message = e.what();
-            HPX_TEST(message.find("child process setup failed") !=
-                std::string::npos);
-            HPX_TEST(message.find(std::generic_category().message(ENOENT)) !=
-                std::string::npos);
-        }
-        catch (...)
-        {
-            stop_interrupter();
-            throw;
-        }
-        stop_interrupter();
-        HPX_TEST(caught);
-        HPX_TEST_EQ(signal_count, 1);
-        HPX_TEST_EQ(signal_error.load(), 0);
-        check_no_children();
-
-        HPX_TEST_EQ(::sigaction(SIGUSR1, &previous_action, nullptr), 0);
     }
 }    // namespace
 
@@ -222,7 +322,8 @@ int main()
                 [=](auto& e) { e.exec_error = unknown_error; }));
     }
 
-    test_interrupted_read(exe, env);
+    test_error_report_reads();
+    test_successful_exec_does_not_wait(env);
 
     // Without throw_on_error the caller still observes an unsuccessful child.
     child = process::util::execute(exe, env, process::start_in_dir(""));
