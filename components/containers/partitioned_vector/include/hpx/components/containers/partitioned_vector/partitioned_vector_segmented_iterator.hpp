@@ -1095,7 +1095,7 @@ namespace hpx::traits {
         // avoids an AGAS lookup when an algorithm only needs placement.
         static std::uint32_t get_locality_id(segment_iterator const& iter)
         {
-            return iter.base()->locality_id_;
+            return iter->locality_id_;
         }
     };
 
@@ -1194,7 +1194,7 @@ namespace hpx::traits {
         // avoids an AGAS lookup when an algorithm only needs placement.
         static std::uint32_t get_locality_id(segment_iterator const& iter)
         {
-            return iter.base()->locality_id_;
+            return iter->locality_id_;
         }
     };
 
