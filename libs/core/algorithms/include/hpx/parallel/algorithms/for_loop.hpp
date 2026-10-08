@@ -861,7 +861,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1165,7 +1165,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
