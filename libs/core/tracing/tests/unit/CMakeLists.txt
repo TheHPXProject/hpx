@@ -32,20 +32,21 @@ add_hpx_executable(
   HPX_PREFIX ${HPX_BUILD_PREFIX}
   FOLDER "Tests/Unit/Modules/Core/Tracing"
 )
-target_compile_definitions(
-  itt_task_lifecycle_test
-  PRIVATE HPX_ITT_TEST_COLLECTOR="$<TARGET_FILE:hpx_itt_test_collector>"
-)
 target_link_libraries(itt_task_lifecycle_test PRIVATE ${CMAKE_DL_LIBS})
 add_dependencies(itt_task_lifecycle_test hpx_itt_test_collector)
 
+set(collector_arg --collector=$<TARGET_FILE:hpx_itt_test_collector>)
+
 # One worker makes inline execution deterministic; two exercise stealing.
 if(HPX_WITH_TRACING_LIFECYCLE_EVENTS)
-  add_hpx_unit_test("modules.tracing" itt_task_lifecycle THREADS_PER_LOCALITY 1)
+  add_hpx_unit_test(
+    "modules.tracing" itt_task_lifecycle ${collector_arg}
+    THREADS_PER_LOCALITY 1
+  )
 endif()
 if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
   add_hpx_unit_test(
-    "modules.tracing" itt_work_stealing
+    "modules.tracing" itt_work_stealing ${collector_arg}
     EXECUTABLE itt_task_lifecycle
     PSEUDO_DEPS_NAME itt_task_lifecycle
     THREADS_PER_LOCALITY 2

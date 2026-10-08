@@ -13,6 +13,7 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/program_options.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/runtime.hpp>
@@ -36,13 +37,15 @@
 
 namespace {
 
+    std::string collector_path;
+
     hpx_itt_test::event_count_fn event_count = nullptr;
     hpx_itt_test::events_fn events = nullptr;
     hpx_itt_test::note_fn note = nullptr;
 
     bool bind_collector()
     {
-        void* lib = dlopen(HPX_ITT_TEST_COLLECTOR, RTLD_NOW | RTLD_NOLOAD);
+        void* lib = dlopen(collector_path.c_str(), RTLD_NOW | RTLD_NOLOAD);
         if (lib == nullptr)
             return false;
 
@@ -408,12 +411,34 @@ int hpx_main()
 
 int main(int argc, char* argv[])
 {
-    // The ittnotify static part reads these on its first call, which happens
-    // during runtime start-up, so they have to be in place before init.
-    setenv("INTEL_LIBITTNOTIFY64", HPX_ITT_TEST_COLLECTOR, 1);
+    namespace po = hpx::program_options;
+
+    po::options_description desc_commandline(
+        "Usage: " HPX_APPLICATION_STRING " [options]");
+    desc_commandline.add_options()("collector", po::value<std::string>(),
+        "path of the recording ITT collector library");
+
+    // The ittnotify static part reads its environment on the first ITT call,
+    // which happens during runtime start-up, so the collector path has to be
+    // known before init rather than taken from hpx_main's variables_map.
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv)
+                  .options(desc_commandline)
+                  .allow_unregistered()
+                  .run(),
+        vm);
+    if (vm.count("collector") == 0)
+    {
+        HPX_TEST_MSG(false, "--collector=<path to collector library> missing");
+        return hpx::util::report_errors();
+    }
+    collector_path = vm["collector"].as<std::string>();
+
+    setenv("INTEL_LIBITTNOTIFY64", collector_path.c_str(), 1);
     setenv("INTEL_ITTNOTIFY_GROUPS", "structure", 1);
 
     hpx::local::init_params params;
+    params.desc_cmdline = desc_commandline;
     params.cfg = {"hpx.use_itt_notify=1"};
 
     HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, params), 0);
