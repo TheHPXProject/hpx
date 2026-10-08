@@ -71,6 +71,22 @@ namespace {
         void operator()(int, int) const;
     };
 
+    struct non_equality_comparable
+    {
+    };
+
+    struct move_only_predicate
+    {
+        move_only_predicate() = default;
+        move_only_predicate(move_only_predicate&&) = default;
+        move_only_predicate(move_only_predicate const&) = delete;
+
+        bool operator()(int value) const
+        {
+            return value > 0;
+        }
+    };
+
     using iterator = std::vector<record>::iterator;
     using sized_range = std::ranges::subrange<iterator, sentinel<iterator>,
         std::ranges::subrange_kind::sized>;
@@ -199,6 +215,35 @@ namespace {
     }
 
     template <typename Policy>
+    void test_asynchronous_array_lifetime(Policy policy)
+    {
+        static_assert(hpx::is_async_execution_policy_v<Policy>);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+            std::vector<std::string>&, char (&)[4]>);
+        static_assert(std::is_invocable_v<decltype(hpx::ranges::contains),
+            Policy, std::vector<std::string>&, char (&)[4]>);
+        static_assert(!std::is_invocable_v<decltype(hpx::ranges::count), Policy,
+            std::vector<std::string>&, char (&&)[4]>);
+        static_assert(!std::is_invocable_v<decltype(hpx::ranges::contains),
+            Policy, std::vector<std::string>&, char (&&)[4]>);
+
+        std::vector<std::string> values{"first", "abc"};
+        char needle[] = "abc";
+        hpx::promise<void> release;
+        auto gate = release.get_future().share();
+        auto project = [gate](std::string const& value) -> std::string const& {
+            gate.get();
+            return std::as_const(value);
+        };
+
+        auto counted = hpx::ranges::count(policy, values, needle, project);
+        auto contained = hpx::ranges::contains(policy, values, needle, project);
+        release.set_value();
+        HPX_TEST_EQ(counted.get(), 1);
+        HPX_TEST(contained.get());
+    }
+
+    template <typename Policy>
     void test_contains_string_literal(Policy policy)
     {
         std::vector<std::string> values{"x", "abc", "y"};
@@ -246,6 +291,16 @@ namespace {
 
         static_assert(!std::is_invocable_v<decltype(all_of), Policy,
             sized_range, invalid_predicate, projection>);
+        static_assert(!std::is_invocable_v<decltype(all_of), Policy,
+            sized_range, move_only_predicate, projection>);
+        static_assert(!std::is_invocable_v<decltype(count_if), Policy,
+            sized_range, move_only_predicate, projection>);
+        static_assert(!std::is_invocable_v<decltype(is_partitioned), Policy,
+            sized_range, move_only_predicate, projection>);
+        static_assert(!std::is_invocable_v<decltype(count), Policy, sized_range,
+            non_equality_comparable, projection>);
+        static_assert(!std::is_invocable_v<decltype(contains), Policy,
+            sized_range, non_equality_comparable, projection>);
 
         std::vector<record> data = {{1}, {2}, {2}, {-1}};
         sized_range r(
@@ -340,6 +395,8 @@ int hpx_main()
     test_synchronous_value_lifetimes(par_unseq);
     test_asynchronous_value_lifetimes(seq(task));
     test_asynchronous_value_lifetimes(par(task));
+    test_asynchronous_array_lifetime(seq(task));
+    test_asynchronous_array_lifetime(par(task));
     test_contains_string_literal(seq);
     test_contains_string_literal(par);
     test_contains_string_literal(par_unseq);
