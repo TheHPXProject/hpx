@@ -155,7 +155,12 @@ namespace hpx::threads::detail {
 
                 auto prev_state = thrd_stat.get_previous();
                 auto on_exit = hpx::experimental::scope_exit([&] {
-                    if (prev_state == thread_schedule_state::terminated)
+                    // A stackful child run directly comes back as unknown
+                    // once its function has returned, since the coroutine
+                    // resets its result on exit; a stackless one as
+                    // terminated.
+                    if (prev_state == thread_schedule_state::terminated ||
+                        prev_state == thread_schedule_state::unknown)
                     {
                         hpx::tracing::task_completed(thrdptr);
                     }
