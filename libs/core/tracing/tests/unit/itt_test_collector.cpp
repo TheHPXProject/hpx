@@ -15,6 +15,7 @@
 
 #include "itt_test_collector.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -154,17 +155,18 @@ HPX_ITT_TEST_EXPORT void __itt_metadata_add(__itt_domain const*, __itt_id id,
     record(hpx_itt_test::event_kind::metadata, id, name_of(key), value);
 }
 
-// Query side, looked up by the test with dlsym once the run has finished.
-HPX_ITT_TEST_EXPORT std::size_t hpx_itt_test_event_count()
+// Query side, looked up by the test with dlsym. The test reads while HPX
+// threads are still recording, and a later push_back may reallocate the list,
+// so it only ever gets a copy taken under the lock, never a pointer into it.
+HPX_ITT_TEST_EXPORT std::size_t hpx_itt_test_copy_events(
+    hpx_itt_test::event* out, std::size_t capacity)
 {
     std::lock_guard<std::mutex> l(mtx);
+    if (out != nullptr && capacity >= events.size())
+    {
+        std::copy(events.begin(), events.end(), out);
+    }
     return events.size();
-}
-
-HPX_ITT_TEST_EXPORT hpx_itt_test::event const* hpx_itt_test_events()
-{
-    std::lock_guard<std::mutex> l(mtx);
-    return events.data();
 }
 
 HPX_ITT_TEST_EXPORT std::size_t hpx_itt_test_note(char const* text)

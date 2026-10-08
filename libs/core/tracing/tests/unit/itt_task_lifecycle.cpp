@@ -39,8 +39,7 @@ namespace {
 
     std::string collector_path;
 
-    hpx_itt_test::event_count_fn event_count = nullptr;
-    hpx_itt_test::events_fn events = nullptr;
+    hpx_itt_test::copy_events_fn copy_events = nullptr;
     hpx_itt_test::note_fn note = nullptr;
 
     bool bind_collector()
@@ -49,18 +48,33 @@ namespace {
         if (lib == nullptr)
             return false;
 
-        event_count = reinterpret_cast<hpx_itt_test::event_count_fn>(
-            dlsym(lib, "hpx_itt_test_event_count"));
-        events = reinterpret_cast<hpx_itt_test::events_fn>(
-            dlsym(lib, "hpx_itt_test_events"));
+        copy_events = reinterpret_cast<hpx_itt_test::copy_events_fn>(
+            dlsym(lib, "hpx_itt_test_copy_events"));
         note = reinterpret_cast<hpx_itt_test::note_fn>(
             dlsym(lib, "hpx_itt_test_note"));
-        return event_count != nullptr && events != nullptr && note != nullptr;
+        return copy_events != nullptr && note != nullptr;
+    }
+
+    // Copy of everything recorded so far. Other workers may still be
+    // recording, so if the list grew between sizing and copying, retry.
+    std::vector<hpx_itt_test::event> events()
+    {
+        std::vector<hpx_itt_test::event> ev(copy_events(nullptr, 0));
+        for (;;)
+        {
+            std::size_t const total = copy_events(ev.data(), ev.size());
+            if (total <= ev.size())
+            {
+                ev.resize(total);
+                return ev;
+            }
+            ev.resize(total);
+        }
     }
 
     int markers(std::size_t from, std::size_t to, char const* name)
     {
-        hpx_itt_test::event const* ev = events();
+        auto const ev = events();
         int n = 0;
         for (std::size_t i = from; i != to; ++i)
         {
@@ -108,7 +122,7 @@ namespace {
     // the task is ever begun twice or ended while closed.
     int open_at(std::size_t from, std::size_t to, void const* task, int initial)
     {
-        hpx_itt_test::event const* ev = events();
+        auto const ev = events();
         int open = initial;
         for (std::size_t i = from; i != to; ++i)
         {
@@ -125,7 +139,7 @@ namespace {
 
     int begins(std::size_t from, std::size_t to, void const* task)
     {
-        hpx_itt_test::event const* ev = events();
+        auto const ev = events();
         int n = 0;
         for (std::size_t i = from; i != to; ++i)
         {
@@ -338,7 +352,7 @@ namespace {
             return;
         }
 
-        hpx_itt_test::event const* ev = events();
+        auto const ev = events();
         std::set<std::pair<std::uint64_t, std::uint64_t>> ids;
         for (std::size_t i = start; i != after; ++i)
         {

@@ -36,7 +36,8 @@ namespace hpx_itt_test {
         char name[64];
     };
 
-    using event_count_fn = std::size_t (*)();
-    using events_fn = event const* (*) ();
+    // Copies all recorded events into 'out' if 'capacity' is enough, and
+    // returns the total, so a result above 'capacity' means try again larger.
+    using copy_events_fn = std::size_t (*)(event* out, std::size_t capacity);
     using note_fn = std::size_t (*)(char const*);
 }    // namespace hpx_itt_test
