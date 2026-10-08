@@ -458,6 +458,7 @@ namespace hpx {
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_local.hpp>
 #include <hpx/modules/concepts.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
@@ -549,17 +550,17 @@ namespace hpx::parallel {
                     return execution::async_execute(policy.executor(),
                         [first, last, f = HPX_FORWARD(F, f),
                             proj = HPX_FORWARD(Proj, proj)]() -> RandIter {
-                            try
-                            {
-                                return std::stable_partition(first, last,
-                                    util::invoke_projected<F, Proj>(f, proj));
-                            }
-                            catch (...)
-                            {
-                                util::detail::handle_local_exceptions<
-                                    ExPolicy>::call(std::current_exception());
-                            }
-                            HPX_UNREACHABLE;
+                            return hpx::detail::try_catch_exception_ptr(
+                                [&]() -> RandIter {
+                                    return std::stable_partition(first, last,
+                                        util::invoke_projected<F, Proj>(
+                                            f, proj));
+                                },
+                                [](std::exception_ptr error) -> RandIter {
+                                    util::detail::handle_local_exceptions<
+                                        ExPolicy>::call(HPX_MOVE(error));
+                                    HPX_UNREACHABLE;
+                                });
                         });
                 }
 
@@ -677,46 +678,53 @@ namespace hpx::parallel {
                 future<RandIter> result;
                 auto last_iter = first;
 
-                try
-                {
-                    // advances last_iter to last and gets distance
-                    difference_type size =
-                        detail::advance_and_get_distance(last_iter, last);
+                hpx::detail::try_catch_exception_ptr(
+                    [&]() {
+                        // advances last_iter to last and gets distance
+                        difference_type size =
+                            detail::advance_and_get_distance(last_iter, last);
 
-                    if (size == 0)
-                    {
-                        result = hpx::make_ready_future(HPX_MOVE(last_iter));
-                    }
-                    else
-                    {
-                        std::size_t const cores = hpx::execution::experimental::
-                            processing_units_count(policy.parameters(),
-                                policy.executor(), hpx::chrono::null_duration,
-                                size);
+                        if (size == 0)
+                        {
+                            result =
+                                hpx::make_ready_future(HPX_MOVE(last_iter));
+                        }
+                        else
+                        {
+                            std::size_t const cores = hpx::execution::
+                                experimental::processing_units_count(
+                                    policy.parameters(), policy.executor(),
+                                    hpx::chrono::null_duration, size);
 
-                        std::size_t chunk_size =
-                            hpx::execution::experimental::get_chunk_size(
-                                policy.parameters(), policy.executor(),
-                                hpx::chrono::null_duration, cores, size);
+                            std::size_t chunk_size =
+                                hpx::execution::experimental::get_chunk_size(
+                                    policy.parameters(), policy.executor(),
+                                    hpx::chrono::null_duration, cores, size);
 
-                        std::size_t max_chunks = hpx::execution::experimental::
-                            maximal_number_of_chunks(policy.parameters(),
-                                policy.executor(), cores, size);
+                            std::size_t max_chunks = hpx::execution::
+                                experimental::maximal_number_of_chunks(
+                                    policy.parameters(), policy.executor(),
+                                    cores, size);
 
-                        util::detail::adjust_chunk_size_and_max_chunks(
-                            cores, size, max_chunks, chunk_size);
+                            util::detail::adjust_chunk_size_and_max_chunks(
+                                cores, size, max_chunks, chunk_size);
 
-                        result = stable_partition_helper()(
-                            HPX_FORWARD(ExPolicy, policy), first, last_iter,
-                            size, HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj),
-                            max_chunks);
-                    }
-                }
-                catch (...)
+                            result = stable_partition_helper()(
+                                HPX_FORWARD(ExPolicy, policy), first, last_iter,
+                                size, HPX_FORWARD(F, f),
+                                HPX_FORWARD(Proj, proj), max_chunks);
+                        }
+                    },
+                    [&result](std::exception_ptr error) {
+                        result = hpx::make_exceptional_future<RandIter>(
+                            HPX_MOVE(error));
+                    });
+
+                if (result.has_exception())
                 {
                     return algorithm_result::get(
                         detail::handle_exception<ExPolicy, RandIter>::call(
-                            std::current_exception()));
+                            HPX_MOVE(result)));
                 }
 
                 return algorithm_result::get(HPX_MOVE(result));
