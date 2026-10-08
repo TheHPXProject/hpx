@@ -134,8 +134,13 @@ namespace hpx::parallel::detail {
                 auto id = traits::get_id(segment);
                 if constexpr (requires { traits::get_locality_id(segment); })
                 {
-                    auto locality = hpx::naming::get_id_from_locality_id(
-                        traits::get_locality_id(segment));
+                    hpx::id_type locality;
+                    auto const locality_id = traits::get_locality_id(segment);
+                    if (locality_id != hpx::naming::invalid_locality_id)
+                    {
+                        locality =
+                            hpx::naming::get_id_from_locality_id(locality_id);
+                    }
                     runs.emplace_back(
                         HPX_MOVE(id), HPX_MOVE(locality), beg, end);
                 }
@@ -371,28 +376,48 @@ namespace hpx::parallel::detail {
         auto it = chunks.begin();
         while (it != chunks.end())
         {
-            std::vector<hpx::future<std::vector<value_type>>> pending;
+            auto batch_end = it;
+            for (std::size_t i = 0; i < limit && batch_end != chunks.end();
+                ++i, ++batch_end)
+            {
+            }
+
+            auto const count =
+                static_cast<std::size_t>(std::distance(it, batch_end));
+            std::vector<std::vector<value_type>> parts(count);
+            std::vector<hpx::future<void>> pending;
             pending.reserve(limit);
             std::exception_ptr error;
             try
             {
-                for (std::size_t i = 0; i < limit && it != chunks.end(); ++i)
+                auto current = it;
+                for (std::size_t i = 0; current != batch_end; ++i, ++current)
                 {
-                    auto pieces = *it;
+                    auto pieces = *current;
                     auto const host = pieces.front().locality;
-                    if (host == here)
-                    {
-                        pending.push_back(hpx::make_ready_future(
-                            segmented_fetch_values<LocalIter>::sequential(
-                                policy, pieces)));
-                    }
-                    else
+                    if (host != here)
                     {
                         pending.push_back(dispatch_async(host,
                             segmented_fetch_values<LocalIter>(), policy,
-                            std::true_type(), HPX_MOVE(pieces)));
+                            std::true_type(), HPX_MOVE(pieces))
+                                .then([&parts, i](
+                                          hpx::future<std::vector<value_type>>
+                                              ready) {
+                                    parts[i] = ready.get();
+                                }));
                     }
-                    ++it;
+                }
+
+                current = it;
+                for (std::size_t i = 0; current != batch_end; ++i, ++current)
+                {
+                    auto const& pieces = *current;
+                    if (pieces.front().locality == here)
+                    {
+                        parts[i] =
+                            segmented_fetch_values<LocalIter>::sequential(
+                                policy, pieces);
+                    }
                 }
             }
             catch (...)
@@ -400,13 +425,13 @@ namespace hpx::parallel::detail {
                 error = std::current_exception();
             }
             segmented_sort_wait<ExPolicy>(pending, error);
-            for (auto& future : pending)
+            for (auto& part : parts)
             {
-                auto part = future.get();
                 values.insert(values.end(),
                     std::make_move_iterator(part.begin()),
                     std::make_move_iterator(part.end()));
             }
+            it = batch_end;
         }
         return values;
     }
@@ -424,58 +449,77 @@ namespace hpx::parallel::detail {
         auto it = chunks.begin();
         while (it != chunks.end())
         {
+            auto batch_end = it;
+            for (std::size_t i = 0; i < limit && batch_end != chunks.end();
+                ++i, ++batch_end)
+            {
+            }
+
             std::vector<hpx::future<bool>> pending;
             pending.reserve(limit);
             std::exception_ptr error;
             try
             {
-                for (std::size_t i = 0; i < limit && it != chunks.end(); ++i)
+                auto current = first;
+                for (auto chunk = it; chunk != batch_end; ++chunk)
                 {
-                    auto pieces = *it;
+                    auto pieces = *chunk;
                     auto const host = pieces.front().locality;
-                    auto last = first +
+                    auto last = current +
                         static_cast<std::ptrdiff_t>(
                             segmented_sort_block_size(pieces));
-                    if (host == here)
-                    {
-                        using traits =
-                            hpx::traits::segmented_local_iterator_traits<
-                                LocalIter>;
-                        auto current = first;
-                        for (auto const& piece : pieces)
-                        {
-                            auto next = current + piece.size();
-                            hpx::move(policy, current, next,
-                                traits::local(piece.first));
-                            current = next;
-                        }
-                    }
-                    else
+                    if (host != here)
                     {
                         std::vector<value_type> values(
-                            std::make_move_iterator(first),
+                            std::make_move_iterator(current),
                             std::make_move_iterator(last));
                         pending.push_back(dispatch_async(host,
                             segmented_store_values<LocalIter>(), policy,
                             std::true_type(), HPX_MOVE(pieces),
                             HPX_MOVE(values)));
                     }
-                    first = last;
-                    ++it;
+                    current = last;
                 }
+
+                current = first;
+                for (auto chunk = it; chunk != batch_end; ++chunk)
+                {
+                    auto const& pieces = *chunk;
+                    auto last = current +
+                        static_cast<std::ptrdiff_t>(
+                            segmented_sort_block_size(pieces));
+                    if (pieces.front().locality == here)
+                    {
+                        using traits =
+                            hpx::traits::segmented_local_iterator_traits<
+                                LocalIter>;
+                        auto source = current;
+                        for (auto const& piece : pieces)
+                        {
+                            auto next = source + piece.size();
+                            hpx::move(policy, source, next,
+                                traits::local(piece.first));
+                            source = next;
+                        }
+                    }
+                    current = last;
+                }
+                first = current;
             }
             catch (...)
             {
                 error = std::current_exception();
             }
             segmented_sort_wait<ExPolicy>(pending, error);
+            it = batch_end;
         }
         return first;
     }
 
     // Merge the sorted input runs without constructing a second full-size
     // output buffer. Values are selected once into one destination buffer at
-    // a time.
+    // a time. Stores are incremental and therefore cannot be rolled back if a
+    // later comparison or destination operation throws.
     template <typename T, typename Pred, typename Emit>
     void segmented_sort_kway_for_each(std::vector<T>& values,
         std::vector<std::size_t> const& offsets,
@@ -682,8 +726,9 @@ namespace hpx::parallel::detail {
     };
 
     // Fetch each sorted run once onto the locality already holding the most
-    // participating data, perform one k-way merge there, and write each final
-    // run once. Network traffic is therefore linear in the input size.
+    // participating data, perform one serial k-way merge there, and write each
+    // final run once. Network traffic and coordinator storage are linear in the
+    // input size.
     template <typename ExPolicy, typename LocalIter, typename Comp,
         typename Proj, typename IsSeq>
     void segmented_sort_merge_runs(ExPolicy const& policy,
@@ -784,6 +829,11 @@ namespace hpx::segmented {
     /// A parallel policy overlaps independent locality operations. For ranges
     /// spanning localities, the comparator must be copyable and serializable
     /// by HPX.
+    ///
+    /// The final merge runs serially on one participating locality and uses
+    /// storage proportional to the input size. Destination runs are committed
+    /// incrementally; an exception during this phase can leave a partially
+    /// reordered range.
     HPX_CXX_EXPORT template <typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::traits::is_iterator_v<SegIter> &&
@@ -807,6 +857,12 @@ namespace hpx::segmented {
     ///
     /// For ranges spanning localities, the comparator must be copyable and
     /// serializable by HPX.
+    ///
+    /// The policy controls local partition sorting and whether independent
+    /// locality operations overlap. The final merge runs serially on one
+    /// participating locality and uses storage proportional to the input size.
+    /// Destination runs are committed incrementally; an exception during this
+    /// phase can leave a partially reordered range.
     HPX_CXX_EXPORT template <typename ExPolicy, typename SegIter,
         typename Comp = hpx::parallel::detail::less>
         requires(hpx::is_execution_policy_v<ExPolicy> &&

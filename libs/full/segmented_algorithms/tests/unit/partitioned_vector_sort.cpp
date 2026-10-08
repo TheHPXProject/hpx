@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -205,11 +206,11 @@ bool caught_sort_exception(std::function<void()> const& f)
     {
         f();
     }
-    catch (std::exception const&)
+    catch (hpx::exception_list const&)
     {
         return true;
     }
-    catch (...)
+    catch (std::runtime_error const&)
     {
         return true;
     }
@@ -610,6 +611,11 @@ namespace hpx::traits {
         {
             return base_traits::local(iter.base);
         }
+
+        static std::uint32_t get_locality_id(segment_iterator const&)
+        {
+            return hpx::naming::invalid_locality_id;
+        }
     };
 }    // namespace hpx::traits
 
@@ -639,6 +645,14 @@ void test_async_run_collection(ExPolicy const& policy)
     HPX_TEST(status == hpx::future_status::ready);
     auto got = copy_values(values);
     HPX_TEST(std::is_sorted(got.begin(), got.end()));
+
+    auto runs = hpx::parallel::detail::segmented_sort_runs(
+        collection_probe_iterator{values.begin(), gate},
+        collection_probe_iterator{values.end(), gate});
+    for (auto const& run : runs)
+    {
+        HPX_TEST(run.locality == hpx::find_here());
+    }
 }
 
 void test_transfer_batches(std::vector<hpx::id_type> const& localities)
