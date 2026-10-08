@@ -26,8 +26,10 @@ namespace hpx::util::logging {
     @file hpx/logging/logging.hpp
 
     Include this file when you're using the logging lib, but don't necessarily want to
-    use @ref manipulator "formatters and destinations".
-    If you want to use @ref manipulator "formatters and destinations",
+    use @ref hpx::util::logging::formatter::manipulator "formatters" and
+    @ref hpx::util::logging::destination::manipulator "destinations".
+    If you want to use @ref hpx::util::logging::formatter::manipulator "formatters" and
+    @ref hpx::util::logging::destination::manipulator "destinations",
     then you can include this one instead:
 
     @code

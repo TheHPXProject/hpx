@@ -57,7 +57,9 @@ add_hpx_module(
   GLOBAL_HEADER_GEN ON
   GLOBAL_HEADER_MODULE_GEN ON
   HEADERS ${segmented_algorithms_headers}
-  ADD_TO_GLOBAL_HEADER "hpx/parallel/segmented_algorithms/detail/dispatch.hpp"
+  ADD_TO_GLOBAL_HEADER
+    "hpx/parallel/segmented_algorithms/detail/dispatch.hpp"
+    "hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp"
   COMPAT_HEADERS ${segmented_algorithms_compat_headers}
   DEPENDENCIES hpx_core
   MODULE_DEPENDENCIES

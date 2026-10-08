@@ -4,7 +4,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file parallel/executors/collect_chunking_parameters.hpp
+/// \file collect_chunking_parameters.hpp
 /// \page hpx::execution::experimental::collect_chunking_parameters
 /// \headerfile hpx/execution.hpp
 

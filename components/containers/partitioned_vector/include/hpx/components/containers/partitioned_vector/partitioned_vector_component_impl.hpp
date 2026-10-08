@@ -24,6 +24,8 @@
 #include <utility>
 #include <vector>
 
+/// \cond NOINTERNAL
+
 namespace hpx::server {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -626,3 +628,5 @@ namespace hpx {
 #endif
     }
 }    // namespace hpx
+
+/// \endcond

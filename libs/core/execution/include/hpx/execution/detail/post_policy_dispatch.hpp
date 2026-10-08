@@ -70,7 +70,6 @@ namespace hpx::detail {
         auto* const scheduler = thrd_data->get_scheduler_base();
 
         threads::thread_schedule_hint const schedulehint(
-            threads::thread_schedule_hint_mode::thread,
             static_cast<std::int16_t>(thrd_data->get_last_worker_thread_num()));
         scheduler->schedule_thread(
             tid, schedulehint, false, thrd_data->get_priority());
@@ -127,7 +126,6 @@ namespace hpx::detail {
                     HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...),
                 desc, policy.priority(),
                 threads::thread_schedule_hint(
-                    threads::thread_schedule_hint_mode::thread,
                     static_cast<std::int16_t>(get_worker_thread_num()),
                     hint.placement_mode(),
                     hpx::threads::thread_execution_hint::none,

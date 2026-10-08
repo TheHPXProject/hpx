@@ -282,12 +282,14 @@ namespace hpx::util::logging::writer {
     @endcode
 
 
-    Contains a very easy interface for using @ref manipulator
-        "formatters and destinations":
+    Contains a very easy interface for using
+    @ref hpx::util::logging::formatter::manipulator "formatters" and
+    @ref hpx::util::logging::destination::manipulator "destinations":
     - at construction, specify 2 params: the %formatter string and the
       destinations string
 
-    Setting the @ref manipulator "formatters and destinations" to
+    Setting the @ref hpx::util::logging::formatter::manipulator "formatters"
+    and @ref hpx::util::logging::destination::manipulator "destinations" to
     write to is extremely simple:
 
     @code

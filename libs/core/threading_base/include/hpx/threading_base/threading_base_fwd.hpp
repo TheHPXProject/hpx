@@ -4,7 +4,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/runtime/threads/thread_data_fwd.hpp
+/// \file threading_base_fwd.hpp
 
 #pragma once
 
