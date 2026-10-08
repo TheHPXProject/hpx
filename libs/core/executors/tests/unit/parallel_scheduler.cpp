@@ -116,7 +116,7 @@ namespace {
             source_.request_stop();
             // P3804R2: Query for the adapted inplace_stop_token, not the native type
             auto token =
-                proxy.try_query<hpx::inplace_stop_token>(ex::get_stop_token);
+                proxy.try_query<ex::inplace_stop_token>(ex::get_stop_token);
             found_token_ = token.has_value() && token->stop_requested();
             found_unsupported_ =
                 proxy.try_query<int>(ex::get_stop_token).has_value();
@@ -145,9 +145,10 @@ namespace {
 
         if (target == stop_query_backend<StopSource>::query_target::schedule)
         {
-            auto operation = ex::connect(
-                ex::schedule(ex::get_parallel_scheduler()),
-                stop_token_receiver{source.get_token(), completed, stopped});
+            auto operation =
+                ex::connect(ex::schedule(ex::get_parallel_scheduler()),
+                    stop_token_receiver<decltype(source.get_token())>{
+                        source.get_token(), completed, stopped});
             ex::start(operation);
         }
         else
@@ -155,7 +156,8 @@ namespace {
             auto sender = ex::schedule(ex::get_parallel_scheduler()) |
                 ex::bulk_unchunked(ex::par, 4, [](std::size_t) {});
             auto operation = ex::connect(HPX_MOVE(sender),
-                stop_token_receiver{source.get_token(), completed, stopped});
+                stop_token_receiver<decltype(source.get_token())>{
+                    source.get_token(), completed, stopped});
             ex::start(operation);
         }
 
