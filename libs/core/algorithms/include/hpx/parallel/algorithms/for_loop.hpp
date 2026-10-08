@@ -807,6 +807,29 @@ namespace hpx::parallel {
             (hpx::get<Is>(args).exit_iteration(size), ...);
         }
 
+        HPX_CXX_CORE_EXPORT HPX_HOST_DEVICE constexpr std::size_t
+        stride_iteration_count(
+            std::size_t size, std::size_t stride_size) noexcept
+        {
+            return size == 0 ? 0 : 1 + (size - 1) / stride_size;
+        }
+
+        HPX_CXX_CORE_EXPORT template <typename B, typename E>
+        HPX_HOST_DEVICE constexpr std::size_t loop_size(B first, E last)
+        {
+            if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
+                std::is_integral_v<E> && std::is_signed_v<E>)
+            {
+                if (first >= last)
+                {
+                    return 0;
+                }
+            }
+
+            return static_cast<std::size_t>(
+                parallel::detail::distance(first, last));
+        }
+
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
             typename S = void, typename Tuple = hpx::tuple<>>
@@ -1117,8 +1140,8 @@ namespace hpx::parallel {
             }
 
             template <typename B>
-            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void loop_n(B part_begin,
-                std::size_t part_steps, std::size_t part_index,
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void const_loop_n(
+                B part_begin, std::size_t part_steps, std::size_t part_index,
                 std::uint32_t current_thread)
             {
                 if constexpr (hpx::execution_policy_has_scheduler_executor_v<
@@ -1160,7 +1183,8 @@ namespace hpx::parallel {
                 }
                 else
                 {
-                    loop_n(part_begin, part_steps, part_index, current_thread);
+                    const_loop_n(
+                        part_begin, part_steps, part_index, current_thread);
                 }
             }
 
@@ -1415,7 +1439,7 @@ namespace hpx::parallel {
                     static_cast<std::size_t>(parallel::detail::abs(stride));
                 auto pack = hpx::util::make_index_pack_t<sizeof...(Args) + 1>();
                 detail::exit_iteration(all_args, pack,
-                    size / stride_size + (size % stride_size != 0));
+                    detail::stride_iteration_count(size, stride_size));
 
                 return {};
             }
@@ -1508,8 +1532,8 @@ namespace hpx::parallel {
                                     static_cast<std::size_t>(
                                         parallel::detail::abs(stride));
                                 detail::exit_iteration(args, pack,
-                                    size / stride_size +
-                                        (size % stride_size != 0));
+                                    detail::stride_iteration_count(
+                                        size, stride_size));
                                 return hpx::util::unused;
                             }));
                 }
@@ -1522,8 +1546,11 @@ namespace hpx::parallel {
         auto for_loop(ExPolicy&& policy, B first, E last,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
-                std::is_integral_v<E> && std::is_signed_v<E> &&
+            constexpr bool has_signed_integral_bounds = std::is_integral_v<B> &&
+                std::is_signed_v<B> && std::is_integral_v<E> &&
+                std::is_signed_v<E>;
+
+            if constexpr (has_signed_integral_bounds &&
                 !hpx::execution_policy_has_scheduler_executor_v<ExPolicy>)
             {
                 if (first >= last)
@@ -1536,7 +1563,7 @@ namespace hpx::parallel {
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
-            std::size_t size = parallel::detail::distance(first, last);
+            std::size_t size = detail::loop_size(first, last);
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
@@ -1616,7 +1643,7 @@ namespace hpx::parallel {
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
-            std::size_t size = parallel::detail::distance(first, last);
+            std::size_t size = detail::loop_size(first, last);
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
