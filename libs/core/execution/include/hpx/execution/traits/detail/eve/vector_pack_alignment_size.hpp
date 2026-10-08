@@ -22,9 +22,8 @@
 namespace hpx::parallel::traits {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_vector_pack<eve::wide<T, eve::expected_cardinal_t<T>>>
-      : std::true_type
+    HPX_CXX_CORE_EXPORT template <typename T, typename Cardinal>
+    struct is_vector_pack<eve::wide<T, Cardinal>> : std::true_type
     {
     };
 
@@ -34,9 +33,8 @@ namespace hpx::parallel::traits {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_scalar_vector_pack<eve::wide<T, eve::expected_cardinal_t<T>>>
-      : std::false_type
+    HPX_CXX_CORE_EXPORT template <typename T, typename Cardinal>
+    struct is_scalar_vector_pack<eve::wide<T, Cardinal>> : std::false_type
     {
     };
 

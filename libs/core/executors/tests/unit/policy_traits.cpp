@@ -28,7 +28,7 @@ template <typename Policy, bool ExpectPolicy, bool ExpectRebound,
     bool ExpectAsync, bool ExpectVectorpack>
 constexpr bool check_policy_traits()
 {
-    using traits = hpx::detail::policy_traits<Policy>;
+    using traits = hpx::execution::policy_traits<Policy>;
     static_assert(traits::is_policy == ExpectPolicy);
     static_assert(traits::is_rebound == ExpectRebound);
     static_assert(traits::is_parallel == ExpectParallel);
@@ -50,6 +50,16 @@ constexpr bool check_policy_traits()
     static_assert(hpx::is_async_execution_policy_v<Policy> == ExpectAsync);
     static_assert(
         hpx::is_vectorpack_execution_policy_v<Policy> == ExpectVectorpack);
+
+    // Companion concepts must agree with the corresponding is_*_v traits.
+    static_assert(hpx::execution_policy<Policy> == ExpectPolicy);
+    static_assert(hpx::rebound_execution_policy<Policy> == ExpectRebound);
+    static_assert(hpx::parallel_execution_policy<Policy> == ExpectParallel);
+    static_assert(hpx::sequenced_execution_policy<Policy> == ExpectSequenced);
+    static_assert(
+        hpx::unsequenced_execution_policy<Policy> == ExpectUnsequenced);
+    static_assert(hpx::async_execution_policy<Policy> == ExpectAsync);
+    static_assert(hpx::vectorpack_execution_policy<Policy> == ExpectVectorpack);
 
     return true;
 }

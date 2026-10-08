@@ -47,6 +47,9 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Copies retain the partition, so indexing can return its reference.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;
@@ -96,6 +99,9 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Copies retain the partition, so indexing can return its reference.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::const_local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;

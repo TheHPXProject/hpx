@@ -10,14 +10,21 @@
 #if !defined(HPX_CLANG_VERSION) ||                                             \
     ((HPX_CLANG_VERSION / 10000) != 11 && (HPX_CLANG_VERSION / 10000) != 8)
 
+#include "bulk_shape.hpp"
+
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/execution_base.hpp>
+#include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 
+#include <array>
+#include <atomic>
 #include <cstdlib>
+#include <forward_list>
 #include <functional>
 #include <string>
 #include <type_traits>
@@ -304,8 +311,24 @@ void test_bulk_then_void(Executor&& exec)
 
 ///////////////////////////////////////////////////////////////////////////////
 template <typename Executor>
+void test_unsized_shape(Executor& exec)
+{
+    std::forward_list<int> input{0, 1, 2};
+    hpx::util::iterator_range shape(input);
+    static_assert(!std::ranges::sized_range<decltype(shape)>);
+    std::array<std::atomic<int>, 3> visits{};
+    auto work = hpx::parallel::execution::bulk_async_execute(
+        exec, [&visits](int i) { ++visits[i]; }, shape);
+    hpx::wait_all(work);
+    for (auto const& count : visits)
+        HPX_TEST_EQ(count.load(), 1);
+}
+
+template <typename Executor>
 void test_executor(Executor&& exec)
 {
+    executor_test::test_bulk_shape<true>(exec);
+    test_unsized_shape(exec);
     test_post(exec);
 
     test_sync(exec);
@@ -326,6 +349,9 @@ int hpx_main()
     scheduler_executor exec(thread_pool_scheduler{});
 
     test_executor(exec);
+
+    scheduler_executor generic_exec(stdexec::inline_scheduler{});
+    executor_test::test_bulk_shape<true>(generic_exec);
 
     return hpx::local::finalize();
 }

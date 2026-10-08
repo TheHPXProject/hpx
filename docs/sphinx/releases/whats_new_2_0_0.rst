@@ -14,6 +14,12 @@
 General changes
 ===============
 
+- **Fixed-size SIMD policies**: added ``hpx::execution::fixed_size_simd<N>``
+  and ``hpx::execution::par_fixed_size_simd<N>`` (plus their ``task``
+  variants), which select the number of vector lanes explicitly. Execution
+  policy properties, including ``num_lanes``, are exposed through
+  ``hpx::execution::policy_traits``.
+
 Breaking changes
 ================
 

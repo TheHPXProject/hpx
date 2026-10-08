@@ -347,9 +347,11 @@ The |hpx| configuration section
        process. On Linux, ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero
        pages on next touch. FreeBSD's ``MADV_DONTNEED`` only lowers page
        priority and does **not** scrub residual stack data; ``MADV_FREE`` is
-       not a substitute for that guarantee either. Prefer mode ``2`` on Linux
-       when residual-data behaviour is unacceptable; do not rely on stack
-       recycle advice to scrub secrets.
+       not a substitute for that guarantee either. Even on Linux, mode ``2``
+       does not sanitize the entire stack: the top page is excluded, a clean
+       watermark skips advice, and failed advice leaves old contents in place
+       for reuse. Do not rely on any stack recycling mode to scrub secrets;
+       clear sensitive data explicitly before its lifetime ends.
 
 The ``hpx.tracing`` configuration section
 .........................................

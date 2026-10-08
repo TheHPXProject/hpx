@@ -541,14 +541,8 @@ launch policy ``hpx::launch::sync`` can be used to make
 :hpx:member:`hpx::lcos::local::channel::get` block until a value is set and
 return the value directly.
 
-A channel component is created on one :term:`locality` and can be sent to
-another :term:`locality` using an action. This example also demonstrates how a
-channel can be used as a range of values:
-
-.. literalinclude:: ../../examples/quickstart/channel_docs.cpp
-   :language: c++
-   :start-after: //[channel
-   :end-before: //]
+Channels can also be used across localities as channel components. See
+:ref:`distributed_channels` for how to create and register them.
 
 
 .. _task_block:

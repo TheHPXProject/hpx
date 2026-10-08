@@ -24,7 +24,7 @@ template <typename Policy, bool ExpectPolicy, bool ExpectRebound,
     bool ExpectAsync, bool ExpectVectorpack>
 constexpr bool check_policy_traits()
 {
-    using traits = hpx::detail::policy_traits<Policy>;
+    using traits = hpx::execution::policy_traits<Policy>;
     static_assert(traits::is_policy == ExpectPolicy);
     static_assert(traits::is_rebound == ExpectRebound);
     static_assert(traits::is_parallel == ExpectParallel);

@@ -148,6 +148,8 @@ namespace hpx::threads::coroutines::detail::posix {
 
     inline bool reset_stack(void* stack, std::size_t size)
     {
+        // The coroutine must have exited; advice and watermark restoration
+        // must run on its caller's stack, after all destructor-induced yields.
         void** watermark = static_cast<void**>(stack) +
             ((size - EXEC_PAGESIZE) / sizeof(void*));
 
@@ -165,9 +167,9 @@ namespace hpx::threads::coroutines::detail::posix {
             // lowers page priority and may retain prior contents. Mode 1
             // (MADV_FREE) may also leave prior stack contents readable
             // until reclaim; mode 0 never discards them. HPX does not scrub
-            // stacks here -- that would defeat the TLB win. Prefer mode 2
-            // on Linux when residual data on recycle is unacceptable; do
-            // not rely on recycle advice to scrub secrets on FreeBSD.
+            // stacks here -- that would defeat the TLB win. Even on Linux,
+            // mode 2 excludes the top page, skips clean watermarks, and can
+            // fail. Do not rely on any recycling mode to scrub secrets.
             bool advised = false;
             if (unbind_on_reset == 2)
             {

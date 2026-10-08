@@ -12,8 +12,6 @@
 #include <hpx/modules/tracy.hpp>
 #include <hpx/tracing/tracing.hpp>
 
-#include <tracy/TracyC.h>
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -588,7 +586,7 @@ namespace hpx::tracing {
         std::string_view version_info) noexcept
     {
         if (!version_info.empty())
-            TracyCAppInfo(version_info.data(), version_info.size());
+            hpx::tracy::emit_appinfo(version_info.data(), version_info.size());
     }
 
 }    // namespace hpx::tracing

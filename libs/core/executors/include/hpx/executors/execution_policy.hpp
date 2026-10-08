@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2016 Marcin Copik
 //
@@ -407,6 +407,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr sequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~sequenced_task_policy_shim() {}
@@ -485,6 +490,10 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+
             constexpr sequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~sequenced_policy_shim() {}
@@ -564,6 +573,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_async = true;
+
             constexpr parallel_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_task_policy_shim() {}
@@ -640,6 +654,10 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+
             constexpr parallel_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_policy_shim() {}
@@ -740,6 +758,12 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_unsequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr parallel_unsequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_unsequenced_task_policy_shim() {}
@@ -814,6 +838,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_unsequenced = true;
+
             constexpr parallel_unsequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_unsequenced_policy_shim() {}
@@ -897,6 +926,12 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_unsequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr unsequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~unsequenced_task_policy_shim() {}
@@ -967,6 +1002,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_unsequenced = true;
+
             constexpr unsequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~unsequenced_policy_shim() {}
@@ -1301,106 +1341,6 @@ namespace hpx::execution {
         }
     }    // namespace detail
 }    // namespace hpx::execution
-
-namespace hpx::detail {
-
-    ///////////////////////////////////////////////////////////////////////////
-    // Register each concrete execution policy defined above with
-    // policy_traits. This is the single place where the
-    // is_execution_policy, is_parallel_execution_policy,
-    // is_sequenced_execution_policy, is_unsequenced_execution_policy,
-    // is_async_execution_policy, and is_rebound_execution_policy
-    // customization points learn about the policies defined in this header,
-    // replacing what used to be a separate specialization of each of those
-    // traits for every policy below.
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::sequenced_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_sequenced = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<hpx::execution::detail::sequenced_task_policy_shim<
-        Executor, Parameters>> : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_sequenced = true;
-        static constexpr bool is_async = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::parallel_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_parallel = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::parallel_task_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_parallel = true;
-        static constexpr bool is_async = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::unsequenced_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_sequenced = true;
-        static constexpr bool is_unsequenced = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<hpx::execution::detail::unsequenced_task_policy_shim<
-        Executor, Parameters>> : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_sequenced = true;
-        static constexpr bool is_unsequenced = true;
-        static constexpr bool is_async = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<hpx::execution::detail::
-            parallel_unsequenced_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_parallel = true;
-        static constexpr bool is_unsequenced = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_rebound = true;
-        static constexpr bool is_parallel = true;
-        static constexpr bool is_unsequenced = true;
-        static constexpr bool is_async = true;
-    };
-    /// \endcond
-}    // namespace hpx::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental {

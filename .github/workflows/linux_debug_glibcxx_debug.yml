@@ -1,0 +1,55 @@
+# Copyright (c) 2026 Mohammad Izaan
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Linux CI (Debug, _GLIBCXX_DEBUG)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: stellargroup/build_env:17
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Configure
+      shell: bash
+      run: |
+          cmake \
+              . \
+              -Bbuild \
+              -GNinja \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DCMAKE_CXX_FLAGS="-D_GLIBCXX_DEBUG" \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
+              -DHPX_WITH_EXAMPLES=ON \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+              -DHPX_WITH_VERIFY_LOCKS=ON \
+              -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+              -DHPX_WITH_THREAD_QUEUE_WAITTIME=ON \
+              -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --target all
+          cmake --build build --target examples
+    - name: Test
+      shell: bash
+      run: |
+          cd build
+          ctest \
+            --output-on-failure \
+            --tests-regex tests.examples \
+            --exclude-regex tests.examples.transpose.transpose_block_numa \
+            --exclude-regex tests.examples.quickstart.1d_wave_equation

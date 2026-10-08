@@ -98,6 +98,11 @@ bool use_ittnotify_api = false;
         __itt_frame_end_v3_ptr(domain, id);                                    \
     /**/
 
+#define HPX_INTERNAL_ITT_MARKER(domain, name)                                  \
+    if (use_ittnotify_api && __itt_marker_ptr)                                 \
+        __itt_marker_ptr(domain, __itt_null, name, __itt_marker_scope_global); \
+    /**/
+
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_INTERNAL_ITT_MARK_CREATE(name)                                     \
     (use_ittnotify_api && __itt_mark_create_ptr) ?                             \
@@ -136,6 +141,15 @@ bool use_ittnotify_api = false;
         __itt_task_end_ptr(domain);                                            \
     /**/
 
+#define HPX_INTERNAL_ITT_TASK_BEGIN_OVERLAPPED(domain, id, name)               \
+    if (use_ittnotify_api && __itt_task_begin_overlapped_ptr)                  \
+        __itt_task_begin_overlapped_ptr(domain, id, __itt_null, name);         \
+    /**/
+#define HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, id)                       \
+    if (use_ittnotify_api && __itt_task_end_overlapped_ptr)                    \
+        __itt_task_end_overlapped_ptr(domain, id);                             \
+    /**/
+
 #define HPX_INTERNAL_ITT_DOMAIN_CREATE(name)                                   \
     (use_ittnotify_api && __itt_domain_create_ptr) ?                           \
         __itt_domain_create_ptr(name) :                                        \
@@ -153,7 +167,6 @@ bool use_ittnotify_api = false;
     if (use_ittnotify_api && __itt_id_create_ptr)                              \
         __itt_id_create_ptr(domain, id);                                       \
     /**/
-#define HPX_INTERNAL_ITT_ID_DESTROY(id) delete id
 
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_INTERNAL_ITT_HEAP_FUNCTION_CREATE(name, domain)                    \
@@ -333,11 +346,12 @@ namespace hpx::util::itt {
     }
 
     id::id(domain const& domain, void* addr, unsigned long const extra) noexcept
+      : domain_(domain.domain_)
     {
         if (use_ittnotify_api)
         {
             id_ = HPX_ITT_MAKE_ID(addr, extra);
-            HPX_ITT_ID_CREATE(domain.domain_, id_);
+            HPX_ITT_ID_CREATE(domain_, id_);
         }
     }
 
@@ -345,7 +359,7 @@ namespace hpx::util::itt {
     {
         if (use_ittnotify_api)
         {
-            HPX_ITT_ID_DESTROY(id_);
+            HPX_ITT_ID_DESTROY(domain_, id_);
         }
     }
 
@@ -405,9 +419,12 @@ namespace hpx::util::itt {
     {
         if (use_ittnotify_api)
         {
+            // id derives from `this`, not the shared name handle, to avoid
+            // collisions between concurrent same-name tasks.
             id_ = HPX_ITT_MAKE_ID(
-                domain_.domain_, reinterpret_cast<std::size_t>(sh_.handle_));
+                domain_.domain_, reinterpret_cast<std::size_t>(this));
 
+            HPX_ITT_ID_CREATE(domain_.domain_, id_);
             HPX_ITT_TASK_BEGIN_ID(domain_.domain_, id_, sh_.handle_);
         }
     }
@@ -420,8 +437,9 @@ namespace hpx::util::itt {
         if (use_ittnotify_api)
         {
             id_ = HPX_ITT_MAKE_ID(
-                domain_.domain_, reinterpret_cast<std::size_t>(sh_.handle_));
+                domain_.domain_, reinterpret_cast<std::size_t>(this));
 
+            HPX_ITT_ID_CREATE(domain_.domain_, id_);
             HPX_ITT_TASK_BEGIN_ID(domain_.domain_, id_, sh_.handle_);
             add_metadata(string_handle(sh_.handle_), metadata);
         }
@@ -432,8 +450,42 @@ namespace hpx::util::itt {
         if (use_ittnotify_api)
         {
             HPX_ITT_TASK_END(domain_.domain_);
-            delete id_;
+            HPX_ITT_ID_DESTROY(domain_.domain_, id_);
         }
+    }
+
+    overlapped_task::overlapped_task(
+        domain const& d, string_handle name) noexcept
+      : domain_(d)
+      , sh_(HPX_MOVE(name))
+    {
+        if (use_ittnotify_api)
+        {
+            // The extra value comes from `this` rather than the string
+            // handle: callers reuse cached name handles across concurrent
+            // instances, so a handle-derived id would collide.
+            id_ = HPX_ITT_MAKE_ID(
+                domain_.domain_, reinterpret_cast<std::size_t>(this));
+            // An overlapped task's id must be created before use and cannot
+            // be __itt_null; the destroy in the dtor lets a later region at
+            // the same stack address reuse the id value safely.
+            HPX_ITT_ID_CREATE(domain_.domain_, id_);
+            HPX_ITT_TASK_BEGIN_OVERLAPPED(domain_.domain_, id_, sh_.handle_);
+        }
+    }
+
+    overlapped_task::~overlapped_task()
+    {
+        if (use_ittnotify_api)
+        {
+            HPX_ITT_TASK_END_OVERLAPPED(domain_.domain_, id_);
+            HPX_ITT_ID_DESTROY(domain_.domain_, id_);
+        }
+    }
+
+    void emit_marker(domain const& d, string_handle const& name) noexcept
+    {
+        HPX_ITT_MARKER(d.domain_, name.handle_);
     }
 
     void task::add_metadata(
@@ -615,6 +667,12 @@ void itt_frame_end(___itt_domain const* domain, ___itt_id* id) noexcept
     HPX_INTERNAL_ITT_FRAME_END(domain, id)
 }
 
+void itt_marker(
+    ___itt_domain const* domain, ___itt_string_handle* name) noexcept
+{
+    HPX_INTERNAL_ITT_MARKER(domain, name)
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int itt_mark_create(char const* name) noexcept
 {
@@ -655,8 +713,20 @@ void itt_task_begin(___itt_domain const* domain, ___itt_id const* id,
     HPX_INTERNAL_ITT_TASK_BEGIN_ID(domain, *id, name)
 }
 
-void itt_task_end(___itt_domain const* domain) noexcept {
-    HPX_INTERNAL_ITT_TASK_END(domain)}
+void itt_task_end(___itt_domain const* domain) noexcept
+{
+    HPX_INTERNAL_ITT_TASK_END(domain)
+}
+
+void itt_task_begin_overlapped(___itt_domain const* domain, ___itt_id const* id,
+    ___itt_string_handle* name) noexcept
+{
+    HPX_INTERNAL_ITT_TASK_BEGIN_OVERLAPPED(domain, *id, name)
+}
+
+void itt_task_end_overlapped(
+    ___itt_domain const* domain, ___itt_id const* id) noexcept {
+    HPX_INTERNAL_ITT_TASK_END_OVERLAPPED(domain, *id)}
 
 ___itt_domain* itt_domain_create(char const* name) noexcept
 {
@@ -678,9 +748,14 @@ void itt_id_create(___itt_domain const* domain, ___itt_id const* id) noexcept
     HPX_INTERNAL_ITT_ID_CREATE(domain, *id)
 }
 
-void itt_id_destroy(___itt_id const* id) noexcept
+void itt_id_destroy(___itt_domain const* domain, ___itt_id const* id) noexcept
 {
-    HPX_INTERNAL_ITT_ID_DESTROY(id);
+    // End the id instance's lifetime with the collector before releasing the
+    // heap slot. Skipping __itt_id_destroy would let a later task reuse the
+    // same id value while the collector still considers the old one live.
+    if (use_ittnotify_api && __itt_id_destroy_ptr && id != nullptr)
+        __itt_id_destroy_ptr(domain, *id);
+    delete id;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

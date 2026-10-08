@@ -106,7 +106,7 @@ build an executable using |cmake|_ and |hpx|:
    project(my_hpx_project CXX)
    find_package(HPX REQUIRED)
    add_executable(my_hpx_program main.cpp)
-   target_link_libraries(my_hpx_program HPX::hpx HPX::wrap_main hpx::iostreams_component)
+   target_link_libraries(my_hpx_program HPX::hpx HPX::wrap_main HPX::iostreams_component)
 
 The next step is to create a ``main.cpp`` with the contents below:
 
@@ -149,7 +149,7 @@ the two includes and ``hpx::cout``.
    * ``HPX::wrap_main`` is required if you are implicitly using ``main()`` as the
      runtime entry point. See :ref:`minimal` for more information.
 
-   * ``hpx::iostreams_component`` is optional for a minimal project but lets us
+   * ``HPX::iostreams_component`` is optional for a minimal project but lets us
      use the |hpx| equivalent of ``std::cout``, i.e., the |hpx| :ref:`iostreams`
      functionality in our application.
 

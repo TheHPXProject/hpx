@@ -353,13 +353,21 @@ namespace hpx::lcos::local {
             std::size_t cancel(std::exception_ptr const& e, Lock& l)
             {
                 HPX_ASSERT_OWNS_LOCK(l);
+
+                std::size_t count = 0;
                 if (pop_active_)
                 {
                     pop_.set_exception(e);
                     pop_active_ = false;
-                    return 1;
+                    ++count;
                 }
-                return 0;
+                if (push_active_)
+                {
+                    push_.set_exception(e);
+                    push_active_ = false;
+                    ++count;
+                }
+                return count;
             }
 
             template <typename Lock>
@@ -410,6 +418,13 @@ namespace hpx::lcos::local {
             {
                 HPX_ASSERT_OWNS_LOCK(l);
                 return push_active_;
+            }
+
+            template <typename Lock>
+            bool has_pending_pop_request(Lock& l) const noexcept
+            {
+                HPX_ASSERT_OWNS_LOCK(l);
+                return pop_active_;
             }
 
         private:
@@ -527,7 +542,8 @@ namespace hpx::lcos::local {
 
                 closed_ = true;
 
-                if (buffer_.is_empty(l) || !buffer_.has_pending_request(l))
+                if ((buffer_.is_empty(l) || !buffer_.has_pending_request(l)) &&
+                    !buffer_.has_pending_pop_request(l))
                 {
                     return 0;
                 }
@@ -550,10 +566,7 @@ namespace hpx::lcos::local {
                 std::unique_lock<mutex_type> l(mtx_);
                 closed_ = true;
 
-                if (!buffer_.is_empty(l))
-                {
-                    buffer_.cancel(e, l);
-                }
+                buffer_.cancel(e, l);
             }
 
         private:

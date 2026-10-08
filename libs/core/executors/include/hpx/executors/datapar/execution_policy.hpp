@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2023 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -21,6 +21,7 @@
 #include <hpx/modules/properties.hpp>
 #include <hpx/modules/serialization.hpp>
 
+#include <cstddef>
 #include <type_traits>
 #include <utility>
 
@@ -30,64 +31,73 @@ namespace hpx::execution {
 
         // Extension: The class simd_task_policy_shim is an execution policy
         // type used as a unique type to disambiguate parallel algorithm
-        // overloading based on combining a underlying \a sequenced_task_policy
+        // overloading based on combining an underlying \a sequenced_task_policy
         // and an executor and indicate that a parallel algorithm's execution
-        // may not be parallelized  (has to run sequentially).
+        // may not be parallelized  (has to run sequentially). It should
+        // vectorize the execution of the algorithm using the given number of
+        // vector lanes N (if N == 0, the native number of vector lanes is
+        // used).
         //
         // The algorithm returns a future representing the result of the
         // corresponding algorithm when invoked with the sequenced_policy.
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
         struct simd_task_policy_shim
-          : execution_policy<simd_task_policy_shim, Executor, Parameters,
-                unsequenced_execution_tag>
-          , simd_async_policy_mappings<
-                simd_task_policy_shim<Executor, Parameters>>
         {
-        private:
-            using base_type = execution_policy<simd_task_policy_shim, Executor,
-                Parameters, unsequenced_execution_tag>;
+            template <typename Executor, typename Parameters>
+            struct policy
+              : execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>
+              , simd_async_policy_mappings<policy<Executor, Parameters>>
+            {
+            private:
+                using base_type = execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>;
 
-        public:
-            /// \cond NOINTERNAL
-            constexpr simd_task_policy_shim() = default;
+            public:
+                /// \cond NOINTERNAL
+                static constexpr bool is_policy = true;
+                static constexpr bool is_sequenced = true;
+                static constexpr bool is_async = true;
+                static constexpr bool is_vectorpack = true;
+
+                static constexpr std::size_t num_lanes = N;
+
+                constexpr policy() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
-            constexpr ~simd_task_policy_shim() {}
+                constexpr ~policy() {}
 #endif
 
-            template <typename Executor_, typename Parameters_>
-            constexpr simd_task_policy_shim(
-                Executor_&& exec, Parameters_&& params)
-              : base_type(HPX_FORWARD(Executor_, exec),
-                    HPX_FORWARD(Parameters_, params))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                constexpr policy(Executor_&& exec, Parameters_&& params)
+                  : base_type(HPX_FORWARD(Executor_, exec),
+                        HPX_FORWARD(Parameters_, params))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    !std::is_same_v<
-                        simd_task_policy_shim<Executor_, Parameters_>,
-                        simd_task_policy_shim> &&
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            explicit constexpr simd_task_policy_shim(
-                simd_task_policy_shim<Executor_, Parameters_> const& rhs)
-              : base_type(
-                    simd_task_policy_shim(rhs.executor(), rhs.parameters()))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                explicit constexpr policy(
+                    policy<Executor_, Parameters_> const& rhs)
+                  : base_type(policy(rhs.executor(), rhs.parameters()))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            simd_task_policy_shim& operator=(
-                simd_task_policy_shim<Executor_, Parameters_> const& rhs)
-            {
-                base_type::operator=(
-                    simd_task_policy_shim(rhs.executor(), rhs.parameters()));
-                return *this;
-            }
-            /// \endcond
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                policy& operator=(policy<Executor_, Parameters_> const& rhs)
+                {
+                    base_type::operator=(
+                        policy(rhs.executor(), rhs.parameters()));
+                    return *this;
+                }
+                /// \endcond
+            };
         };
     }    // namespace detail
 
@@ -95,80 +105,123 @@ namespace hpx::execution {
     /// Extension: The class simd_task_policy is an execution policy type used
     /// as a unique type to disambiguate parallel algorithm overloading and
     /// indicate that a parallel algorithm's execution may not be parallelized
-    /// (has to run sequentially).
+    /// (has to run sequentially). It should vectorize the execution of the
+    /// algorithm using the native number of vector lanes.
     ///
     /// The algorithm returns a future representing the result of the
     /// corresponding algorithm when invoked with the sequenced_policy.
     HPX_CXX_CORE_EXPORT using simd_task_policy =
-        detail::simd_task_policy_shim<sequenced_executor,
+        detail::simd_task_policy_shim<0>::policy<sequenced_executor,
+            hpx::traits::executor_parameters_type_t<sequenced_executor>>;
+
+    /// The class fixed_size_simd_task_policy is an execution policy type used
+    /// as a unique type to disambiguate parallel algorithm overloading and
+    /// require that a parallel algorithm's execution may not be parallelized.
+    /// It should vectorize the execution of the algorithm using the given
+    /// number of vector lanes.
+    ///
+    /// The algorithm returns a future representing the result of the
+    /// corresponding algorithm when invoked with the sequenced_policy.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    using fixed_size_simd_task_policy =
+        detail::simd_task_policy_shim<N>::template policy<sequenced_executor,
             hpx::traits::executor_parameters_type_t<sequenced_executor>>;
 
     namespace detail {
 
         // The class simd_policy is an execution policy type used as a unique
         // type to disambiguate parallel algorithm overloading and require that
-        // a parallel algorithm's execution may not be parallelized.
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+        // a parallel algorithm's execution may not be parallelized. It should
+        // vectorize the execution of the algorithm using the given number of
+        // vector lanes N (if N == 0, the native number of vector lanes is
+        // used).
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
         struct simd_policy_shim
-          : execution_policy<simd_policy_shim, Executor, Parameters,
-                unsequenced_execution_tag>
-          , simd_sync_policy_mappings<simd_policy_shim<Executor, Parameters>>
         {
-        private:
-            using base_type = execution_policy<simd_policy_shim, Executor,
-                Parameters, unsequenced_execution_tag>;
+            template <typename Executor, typename Parameters>
+            struct policy
+              : execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>
+              , simd_sync_policy_mappings<policy<Executor, Parameters>>
+            {
+            private:
+                using base_type = execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>;
 
-        public:
-            /// \cond NOINTERNAL
-            constexpr simd_policy_shim() = default;
+            public:
+                /// \cond NOINTERNAL
+                static constexpr bool is_policy = true;
+                static constexpr bool is_sequenced = true;
+                static constexpr bool is_vectorpack = true;
+
+                static constexpr std::size_t num_lanes = N;
+
+                constexpr policy() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
-            constexpr ~simd_policy_shim() {}
+                constexpr ~policy() {}
 #endif
 
-            template <typename Executor_, typename Parameters_>
-            constexpr simd_policy_shim(Executor_&& exec, Parameters_&& params)
-              : base_type(HPX_FORWARD(Executor_, exec),
-                    HPX_FORWARD(Parameters_, params))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                constexpr policy(Executor_&& exec, Parameters_&& params)
+                  : base_type(HPX_FORWARD(Executor_, exec),
+                        HPX_FORWARD(Parameters_, params))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    !std::is_same_v<simd_policy_shim<Executor_, Parameters_>,
-                        simd_policy_shim> &&
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            explicit constexpr simd_policy_shim(
-                simd_policy_shim<Executor_, Parameters_> const& rhs)
-              : base_type(simd_policy_shim(rhs.executor(), rhs.parameters()))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                explicit constexpr policy(
+                    policy<Executor_, Parameters_> const& rhs)
+                  : base_type(policy(rhs.executor(), rhs.parameters()))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            simd_policy_shim& operator=(
-                simd_policy_shim<Executor_, Parameters_> const& rhs)
-            {
-                base_type::operator=(
-                    simd_policy_shim(rhs.executor(), rhs.parameters()));
-                return *this;
-            }
-            /// \endcond
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                policy& operator=(policy<Executor_, Parameters_> const& rhs)
+                {
+                    base_type::operator=(
+                        policy(rhs.executor(), rhs.parameters()));
+                    return *this;
+                }
+                /// \endcond
+            };
         };
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     /// The class simd_policy is an execution policy type used as a unique type
     /// to disambiguate parallel algorithm overloading and require that a
-    /// parallel algorithm's execution may not be parallelized.
+    /// parallel algorithm's execution may not be parallelized. It should
+    /// vectorize the execution of the algorithm using the native number of
+    /// vector lanes.
     HPX_CXX_CORE_EXPORT using simd_policy =
-        detail::simd_policy_shim<sequenced_executor,
+        detail::simd_policy_shim<0>::policy<sequenced_executor,
             hpx::traits::executor_parameters_type_t<sequenced_executor>>;
 
-    /// Default sequential execution policy object.
+    /// Default sequential vectorizing execution policy object.
     HPX_CXX_CORE_EXPORT inline constexpr simd_policy simd{};
+
+    /// The class fixed_size_simd_policy is an execution policy type used as a
+    /// unique type to disambiguate parallel algorithm overloading and require
+    /// that a parallel algorithm's execution may not be parallelized. It should
+    /// vectorize the execution of the algorithm using the given number of
+    /// vector lanes.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    using fixed_size_simd_policy =
+        detail::simd_policy_shim<N>::template policy<sequenced_executor,
+            hpx::traits::executor_parameters_type_t<sequenced_executor>>;
+
+    /// Sequential vectorizing execution policy object using the given number of
+    /// vector lanes.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    inline constexpr fixed_size_simd_policy<N> fixed_size_simd{};
 
     namespace detail {
 
@@ -176,70 +229,91 @@ namespace hpx::execution {
         // The class par_simd_policy is an execution policy type used as a
         // unique type to disambiguate parallel algorithm overloading and
         // indicate that a parallel algorithm's execution may be parallelized.
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
         struct par_simd_task_policy_shim
-          : execution_policy<par_simd_task_policy_shim, Executor, Parameters,
-                unsequenced_execution_tag>
-          , par_simd_async_policy_mappings<
-                par_simd_task_policy_shim<Executor, Parameters>>
         {
-        private:
-            using base_type = execution_policy<par_simd_task_policy_shim,
-                Executor, Parameters, unsequenced_execution_tag>;
+            template <typename Executor, typename Parameters>
+            struct policy
+              : execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>
+              , par_simd_async_policy_mappings<policy<Executor, Parameters>>
+            {
+            private:
+                using base_type = execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>;
 
-        public:
-            /// \cond NOINTERNAL
-            constexpr par_simd_task_policy_shim() = default;
+            public:
+                /// \cond NOINTERNAL
+                static constexpr bool is_policy = true;
+                static constexpr bool is_parallel = true;
+                static constexpr bool is_async = true;
+                static constexpr bool is_vectorpack = true;
+
+                static constexpr std::size_t num_lanes = N;
+
+                constexpr policy() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
-            constexpr ~par_simd_task_policy_shim() {}
+                constexpr ~policy() {}
 #endif
 
-            template <typename Executor_, typename Parameters_>
-            constexpr par_simd_task_policy_shim(
-                Executor_&& exec, Parameters_&& params)
-              : base_type(HPX_FORWARD(Executor_, exec),
-                    HPX_FORWARD(Parameters_, params))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                constexpr policy(Executor_&& exec, Parameters_&& params)
+                  : base_type(HPX_FORWARD(Executor_, exec),
+                        HPX_FORWARD(Parameters_, params))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    !std::is_same_v<
-                        par_simd_task_policy_shim<Executor_, Parameters_>,
-                        par_simd_task_policy_shim> &&
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            explicit constexpr par_simd_task_policy_shim(
-                par_simd_task_policy_shim<Executor_, Parameters_> const& rhs)
-              : base_type(
-                    par_simd_task_policy_shim(rhs.executor(), rhs.parameters()))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                explicit constexpr policy(
+                    policy<Executor_, Parameters_> const& rhs)
+                  : base_type(policy(rhs.executor(), rhs.parameters()))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            par_simd_task_policy_shim& operator=(
-                par_simd_task_policy_shim<Executor_, Parameters_> const& rhs)
-            {
-                base_type::operator=(par_simd_task_policy_shim(
-                    rhs.executor(), rhs.parameters()));
-                return *this;
-            }
-            /// \endcond
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                policy& operator=(policy<Executor_, Parameters_> const& rhs)
+                {
+                    base_type::operator=(
+                        policy(rhs.executor(), rhs.parameters()));
+                    return *this;
+                }
+                /// \endcond
+            };
         };
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
     /// Extension: The class par_simd_task_policy is an execution policy type
     /// used as a unique type to disambiguate parallel algorithm overloading and
-    /// indicate that a parallel algorithm's execution may be parallelized.
+    /// indicate that a parallel algorithm's execution may be parallelized. It
+    /// should vectorize the execution of the algorithm using the native number
+    /// of vector lanes.
     ///
     /// The algorithm returns a future representing the result of the
     /// corresponding algorithm when invoked with the parallel_policy.
     HPX_CXX_CORE_EXPORT using par_simd_task_policy =
-        detail::par_simd_task_policy_shim<parallel_executor,
+        detail::par_simd_task_policy_shim<0>::policy<parallel_executor,
+            hpx::traits::executor_parameters_type_t<parallel_executor>>;
+
+    /// The class par_fixed_size_simd_task_policy is an execution policy type
+    /// used as a unique type to disambiguate parallel algorithm overloading and
+    /// indicate that a parallel algorithm's execution may be parallelized. It
+    /// should vectorize the execution of the algorithm using the given number
+    /// of vector lanes.
+    ///
+    /// The algorithm returns a future representing the result of the
+    /// corresponding algorithm when invoked with the parallel_policy.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    using par_fixed_size_simd_task_policy =
+        detail::par_simd_task_policy_shim<N>::template policy<parallel_executor,
             hpx::traits::executor_parameters_type_t<parallel_executor>>;
 
     namespace detail {
@@ -247,71 +321,96 @@ namespace hpx::execution {
         // The class par_simd_policy_shim is an execution policy type used as a
         // unique type to disambiguate parallel algorithm overloading and
         // indicate that a parallel algorithm's execution may be parallelized.
-        HPX_CXX_CORE_EXPORT template <typename Executor, typename Parameters>
+        // It should vectorize the execution of the algorithm using the given
+        // number of vector lanes N (if N == 0, the native number of vector
+        // lanes is used).
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
         struct par_simd_policy_shim
-          : execution_policy<par_simd_policy_shim, Executor, Parameters,
-                unsequenced_execution_tag>
-          , par_simd_sync_policy_mappings<
-                par_simd_policy_shim<Executor, Parameters>>
         {
-        private:
-            using base_type = execution_policy<par_simd_policy_shim, Executor,
-                Parameters, unsequenced_execution_tag>;
+            template <typename Executor, typename Parameters>
+            struct policy
+              : execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>
+              , par_simd_sync_policy_mappings<policy<Executor, Parameters>>
+            {
+            private:
+                using base_type = execution_policy<policy, Executor, Parameters,
+                    unsequenced_execution_tag>;
 
-        public:
-            /// \cond NOINTERNAL
-            constexpr par_simd_policy_shim() = default;
+            public:
+                /// \cond NOINTERNAL
+                static constexpr bool is_policy = true;
+                static constexpr bool is_parallel = true;
+                static constexpr bool is_vectorpack = true;
+
+                static constexpr std::size_t num_lanes = N;
+
+                constexpr policy() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
-            constexpr ~par_simd_policy_shim() {}
+                constexpr ~policy() {}
 #endif
 
-            template <typename Executor_, typename Parameters_>
-            constexpr par_simd_policy_shim(
-                Executor_&& exec, Parameters_&& params)
-              : base_type(HPX_FORWARD(Executor_, exec),
-                    HPX_FORWARD(Parameters_, params))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                constexpr policy(Executor_&& exec, Parameters_&& params)
+                  : base_type(HPX_FORWARD(Executor_, exec),
+                        HPX_FORWARD(Parameters_, params))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    !std::is_same_v<
-                        par_simd_policy_shim<Executor_, Parameters_>,
-                        par_simd_policy_shim> &&
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            explicit constexpr par_simd_policy_shim(
-                par_simd_policy_shim<Executor_, Parameters_> const& rhs)
-              : base_type(
-                    par_simd_policy_shim(rhs.executor(), rhs.parameters()))
-            {
-            }
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                explicit constexpr policy(
+                    policy<Executor_, Parameters_> const& rhs)
+                  : base_type(policy(rhs.executor(), rhs.parameters()))
+                {
+                }
 
-            template <typename Executor_, typename Parameters_,
-                typename = std::enable_if_t<
-                    std::is_convertible_v<Executor_, Executor> &&
-                    std::is_convertible_v<Parameters_, Parameters>>>
-            par_simd_policy_shim& operator=(
-                par_simd_policy_shim<Executor_, Parameters_> const& rhs)
-            {
-                base_type::operator=(
-                    par_simd_policy_shim(rhs.executor(), rhs.parameters()));
-                return *this;
-            }
-            /// \endcond
+                template <typename Executor_, typename Parameters_>
+                    requires(!std::is_same_v<policy<Executor_, Parameters_>,
+                                 policy> &&
+                        std::is_convertible_v<Executor_, Executor> &&
+                        std::is_convertible_v<Parameters_, Parameters>)
+                policy& operator=(policy<Executor_, Parameters_> const& rhs)
+                {
+                    base_type::operator=(
+                        policy(rhs.executor(), rhs.parameters()));
+                    return *this;
+                }
+                /// \endcond
+            };
         };
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    /// Extension: The class par_simd_policy is an execution policy type
-    /// used as a unique type to disambiguate parallel algorithm overloading and
-    /// indicate that a parallel algorithm's execution may be parallelized.
+    /// Extension: The class par_simd_policy is an execution policy type used as
+    /// a unique type to disambiguate parallel algorithm overloading and
+    /// indicate that a parallel algorithm's execution may be parallelized. It
+    /// should vectorize the execution of the algorithm using the native number
+    /// of vector lanes.
     HPX_CXX_CORE_EXPORT using par_simd_policy =
-        detail::par_simd_policy_shim<parallel_executor,
+        detail::par_simd_policy_shim<0>::policy<parallel_executor,
             hpx::traits::executor_parameters_type_t<parallel_executor>>;
 
-    /// Default data-parallel execution policy object.
+    /// Default parallel vectorizing execution policy object.
     HPX_CXX_CORE_EXPORT inline constexpr par_simd_policy par_simd{};
+
+    /// Extension: The class par_simd_policy is an execution policy type used as
+    /// a unique type to disambiguate parallel algorithm overloading and
+    /// indicate that a parallel algorithm's execution may be parallelized. It
+    /// should vectorize the execution of the algorithm using the given number
+    /// of vector lanes.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    using par_fixed_size_simd_policy =
+        detail::par_simd_policy_shim<N>::template policy<parallel_executor,
+            hpx::traits::executor_parameters_type_t<parallel_executor>>;
+
+    /// Parallelizing vectorizing execution policy object using the given number
+    /// of vector lanes.
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    inline constexpr par_fixed_size_simd_policy<N> par_fixed_size_simd{};
 
     namespace detail {
 
@@ -353,60 +452,5 @@ namespace hpx::execution {
 }    // namespace hpx::execution
 
 #include <hpx/executors/datapar/detail/execution_policy_mapping_members_impl.hpp>
-
-namespace hpx::detail {
-
-    ///////////////////////////////////////////////////////////////////////////
-    // extensions
-    //
-    // Register each simd/vectorpack execution policy defined above with
-    // policy_traits, replacing what used to be a separate specialization of
-    // is_execution_policy, is_sequenced_execution_policy,
-    // is_async_execution_policy, is_parallel_execution_policy, and
-    // is_vectorpack_execution_policy for each of the policies below.
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::simd_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_sequenced = true;
-        static constexpr bool is_vectorpack = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::simd_task_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_sequenced = true;
-        static constexpr bool is_async = true;
-        static constexpr bool is_vectorpack = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::par_simd_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_parallel = true;
-        static constexpr bool is_vectorpack = true;
-    };
-
-    template <typename Executor, typename Parameters>
-    struct policy_traits<
-        hpx::execution::detail::par_simd_task_policy_shim<Executor, Parameters>>
-      : policy_traits_default
-    {
-        static constexpr bool is_policy = true;
-        static constexpr bool is_parallel = true;
-        static constexpr bool is_async = true;
-        static constexpr bool is_vectorpack = true;
-    };
-    /// \endcond
-}    // namespace hpx::detail
 
 #endif

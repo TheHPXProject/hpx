@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.2
+    - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
       run: |
@@ -56,7 +56,7 @@ jobs:
             --target ALL_BUILD \
             -- -maxcpucount:2 -verbosity:minimal -nologo
           cmake --build build --config Debug \
-            --target autolink_test \
+            --target autolink_test auto_wrap_main_test \
             -- -maxcpucount:2 -verbosity:minimal -nologo
     - name: Install
       shell: bash
@@ -70,5 +70,5 @@ jobs:
           ctest `
           --output-on-failure `
             --build-config Debug `
-            --tests-regex 'tests\.examples|tests\.unit\.modules\.config\.autolink' `
+            --tests-regex 'tests\.examples|tests\.unit\.modules\.config\.autolink|tests\.unit\.init\.auto_wrap_main' `
             --exclude-regex "$exclude_regex|tests\.examples\.quickstart\.(command_line_handling|component_with_custom_heap)"

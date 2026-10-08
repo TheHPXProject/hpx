@@ -83,7 +83,10 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(shape) == 1)
+                    auto const shape_begin = std::begin(shape);
+                    auto const shape_end = std::end(shape);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
                             partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
@@ -183,7 +186,10 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(shape) == 1)
+                    auto const shape_begin = std::begin(shape);
+                    auto const shape_end = std::end(shape);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
                             partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},

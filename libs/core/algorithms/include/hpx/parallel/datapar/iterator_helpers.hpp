@@ -42,25 +42,30 @@ namespace hpx::parallel::util::detail {
         is_lvalue_ref<decltype(*std::declval<It&>())>::value;
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter>
-    struct is_data_aligned_impl
+    HPX_CXX_CORE_EXPORT template <typename V, typename Iter>
+    struct is_pack_aligned_impl
     {
         static HPX_FORCEINLINE bool call(Iter& it) noexcept
         {
-            using value_type =
-                std::iterator_traits<std::remove_const_t<Iter>>::value_type;
-            using pack_type = traits::vector_pack_type_t<value_type>;
+            constexpr std::size_t alignment =
+                parallel::traits::vector_pack_alignment_v<V>;
 
-            return (reinterpret_cast<std::uintptr_t>(std::addressof(*it)) &
-                       (traits::vector_pack_alignment<pack_type>::value - 1)) ==
-                0;
+            static_assert(
+                alignment != 0, "vector_pack_alignment<V> must be non-zero");
+
+            // modulo instead of a bit mask: correct for any alignment, and
+            // compiled to a mask when alignment is a power of two
+            return (reinterpret_cast<std::uintptr_t>(std::addressof(*it)) %
+                       alignment) == 0;
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iter>
-    HPX_FORCEINLINE bool is_data_aligned(Iter& it) noexcept
+    // Alignment check for the default pack type.
+    // Alignment check against an explicitly selected pack type V.
+    HPX_CXX_CORE_EXPORT template <typename V, typename Iter>
+    HPX_FORCEINLINE bool is_pack_aligned(Iter& it) noexcept
     {
-        return is_data_aligned_impl<Iter>::call(it);
+        return is_pack_aligned_impl<V, Iter>::call(it);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -117,14 +122,14 @@ namespace hpx::parallel::util::detail {
         iterator_datapar_compatible<Iter>::value;
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter, bool IsConst = false,
-        typename Enable = void>
+    HPX_CXX_CORE_EXPORT template <typename Iter, std::size_t N,
+        bool IsConst = false, typename Enable = void>
     struct datapar_loop_step
     {
         using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
-        using V = traits::vector_pack_type_t<value_type>;
+        using V = traits::vector_pack_type_t<value_type, N>;
 
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
@@ -201,12 +206,12 @@ namespace hpx::parallel::util::detail {
         }
     };
 
-    template <typename I, bool IsConst>
-    struct datapar_loop_step<I, IsConst,
+    template <typename I, std::size_t N, bool IsConst>
+    struct datapar_loop_step<I, N, IsConst,
         std::enable_if_t<std::is_integral_v<I>>>
     {
         using V1 = traits::vector_pack_type_t<I, 1>;
-        using V = traits::vector_pack_type_t<I>;
+        using V = traits::vector_pack_type_t<I, N>;
 
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(F&& f, I& i)
@@ -235,13 +240,14 @@ namespace hpx::parallel::util::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
+    HPX_CXX_CORE_EXPORT template <typename Iter, std::size_t N,
+        typename Enable = void>
     struct datapar_loop_pred_step
     {
         using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
-        using V = traits::vector_pack_type_t<value_type>;
+        using V = traits::vector_pack_type_t<value_type, N>;
 
         // Return -1 if the element does not satisfy predicate.
         // Return 0 if predicate satisfies.
@@ -277,13 +283,14 @@ namespace hpx::parallel::util::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
+    HPX_CXX_CORE_EXPORT template <typename Iter, std::size_t N,
+        typename Enable = void>
     struct datapar_loop_step_ind
     {
         using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
-        using V = traits::vector_pack_type_t<value_type>;
+        using V = traits::vector_pack_type_t<value_type, N>;
 
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
@@ -338,13 +345,13 @@ namespace hpx::parallel::util::detail {
     };
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter>
+    HPX_CXX_CORE_EXPORT template <typename Iter, std::size_t N>
     struct datapar_loop_idx_step
     {
         using value_type = std::iterator_traits<Iter>::value_type;
 
         using V1 = traits::vector_pack_type_t<value_type, 1>;
-        using V = traits::vector_pack_type_t<value_type>;
+        using V = traits::vector_pack_type_t<value_type, N>;
 
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
@@ -368,41 +375,6 @@ namespace hpx::parallel::util::detail {
             {
                 traits::vector_pack_store<V, value_type>::aligned(tmp, it);
             }
-        }
-    };
-
-    ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT template <typename Iter, typename Enable = void>
-    struct datapar_loop_step_tok
-    {
-        using value_type = std::iterator_traits<Iter>::value_type;
-
-        using V1 = traits::vector_pack_type_t<value_type, 1>;
-        using V = traits::vector_pack_type_t<value_type>;
-
-        template <typename F>
-        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
-            F&& f, Iter& it)
-        {
-            V1 tmp(traits::vector_pack_load<V1, value_type>::unaligned(it));
-            HPX_INVOKE(f, &tmp);
-            if constexpr (dereference_is_lvalue_ref_v<Iter>)
-            {
-                traits::vector_pack_store<V1, value_type>::unaligned(tmp, it);
-            }
-        }
-
-        template <typename F>
-        HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr std::size_t callv(
-            F&& f, Iter& it)
-        {
-            V tmp(traits::vector_pack_load<V, value_type>::aligned(it));
-            HPX_INVOKE(f, &tmp);
-            if constexpr (dereference_is_lvalue_ref_v<Iter>)
-            {
-                traits::vector_pack_store<V, value_type>::aligned(tmp, it);
-            }
-            return traits::vector_pack_size_v<V>;
         }
     };
 
@@ -494,7 +466,7 @@ namespace hpx::parallel::util::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2>
+    HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2, std::size_t N>
     struct datapar_loop_step2
     {
         using value1_type = std::iterator_traits<Iter1>::value_type;
@@ -503,8 +475,8 @@ namespace hpx::parallel::util::detail {
         using V11 = traits::vector_pack_type_t<value1_type, 1>;
         using V12 = traits::vector_pack_type_t<value2_type, 1>;
 
-        using V1 = traits::vector_pack_type_t<value1_type>;
-        using V2 = traits::vector_pack_type_t<value2_type>;
+        using V1 = traits::vector_pack_type_t<value1_type, N>;
+        using V2 = traits::vector_pack_type_t<value2_type, N>;
 
         template <typename F>
         HPX_HOST_DEVICE
@@ -522,13 +494,13 @@ namespace hpx::parallel::util::detail {
                 V2*>
             callv(F&& f, Iter1& it1, Iter2& it2)
         {
-            HPX_ASSERT(is_data_aligned(it1) && is_data_aligned(it2));
+            HPX_ASSERT(is_pack_aligned<V1>(it1) && is_pack_aligned<V2>(it2));
             return invoke_vectorized_in2<V1, V2>::call_aligned(
                 HPX_FORWARD(F, f), it1, it2);
         }
     };
 
-    HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2>
+    HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2, std::size_t N>
     struct datapar_loop_step2_ind
     {
         using value1_type = std::iterator_traits<Iter1>::value_type;
@@ -537,8 +509,8 @@ namespace hpx::parallel::util::detail {
         using V11 = traits::vector_pack_type_t<value1_type, 1>;
         using V12 = traits::vector_pack_type_t<value2_type, 1>;
 
-        using V1 = traits::vector_pack_type_t<value1_type>;
-        using V2 = traits::vector_pack_type_t<value2_type>;
+        using V1 = traits::vector_pack_type_t<value1_type, N>;
+        using V2 = traits::vector_pack_type_t<value2_type, N>;
 
         template <typename F>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr auto call1(
@@ -750,7 +722,8 @@ namespace hpx::parallel::util::detail {
         }
     };
 
-    HPX_CXX_CORE_EXPORT struct datapar_transform_loop_step
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    struct datapar_transform_loop_step
     {
         template <typename F, typename InIter, typename OutIter>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
@@ -786,9 +759,9 @@ namespace hpx::parallel::util::detail {
         {
             using value_type = std::iterator_traits<InIter>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
-            HPX_ASSERT(is_data_aligned(it) && is_data_aligned(dest));
+            HPX_ASSERT(is_pack_aligned<V>(it) && is_pack_aligned<V>(dest));
             invoke_vectorized_inout1<V>::call_aligned(
                 HPX_FORWARD(F, f), it, dest);
         }
@@ -801,17 +774,18 @@ namespace hpx::parallel::util::detail {
             using value1_type = std::iterator_traits<InIter1>::value_type;
             using value2_type = std::iterator_traits<InIter2>::value_type;
 
-            using V1 = traits::vector_pack_type_t<value1_type>;
-            using V2 = traits::vector_pack_type_t<value2_type>;
+            using V1 = traits::vector_pack_type_t<value1_type, N>;
+            using V2 = traits::vector_pack_type_t<value2_type, N>;
 
-            HPX_ASSERT(is_data_aligned(it1) && is_data_aligned(it2) &&
-                is_data_aligned(dest));
+            HPX_ASSERT(is_pack_aligned<V1>(it1) && is_pack_aligned<V2>(it2) &&
+                is_pack_aligned<V1>(dest));
             invoke_vectorized_inout2<V1, V2>::call_aligned(
                 HPX_FORWARD(F, f), it1, it2, dest);
         }
     };
 
-    HPX_CXX_CORE_EXPORT struct datapar_transform_loop_step_ind
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
+    struct datapar_transform_loop_step_ind
     {
         template <typename F, typename InIter, typename OutIter>
         HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr void call1(
@@ -847,9 +821,9 @@ namespace hpx::parallel::util::detail {
         {
             using value_type = std::iterator_traits<InIter>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
-            HPX_ASSERT(is_data_aligned(it) && is_data_aligned(dest));
+            HPX_ASSERT(is_pack_aligned<V>(it) && is_pack_aligned<V>(dest));
             invoke_vectorized_inout1_ind<V>::call_aligned(
                 HPX_FORWARD(F, f), it, dest);
         }
@@ -862,11 +836,11 @@ namespace hpx::parallel::util::detail {
             using value1_type = std::iterator_traits<InIter1>::value_type;
             using value2_type = std::iterator_traits<InIter2>::value_type;
 
-            using V1 = traits::vector_pack_type_t<value1_type>;
-            using V2 = traits::vector_pack_type_t<value2_type>;
+            using V1 = traits::vector_pack_type_t<value1_type, N>;
+            using V2 = traits::vector_pack_type_t<value2_type, N>;
 
-            HPX_ASSERT(is_data_aligned(it1) && is_data_aligned(it2) &&
-                is_data_aligned(dest));
+            HPX_ASSERT(is_pack_aligned<V1>(it1) && is_pack_aligned<V2>(it2) &&
+                is_pack_aligned<V1>(dest));
             invoke_vectorized_inout2_ind<V1, V2>::call_aligned(
                 HPX_FORWARD(F, f), it1, it2, dest);
         }
