@@ -147,7 +147,7 @@ namespace hpx {
         using mutex_type = hpx::spinlock;
 
     public:
-        using arrival_token = bool;
+        using arrival_token = std::size_t;
 
         // Returns:        The maximum expected count that the implementation
         //                 supports.
@@ -173,7 +173,7 @@ namespace hpx {
           , expected_(expected)
           , arrived_(expected)
           , completion_(HPX_MOVE(completion))
-          , phase_(false)
+          , phase_(0)
         {
             // different versions of clang-format disagree
             // clang-format off
@@ -184,24 +184,31 @@ namespace hpx {
         ~barrier() = default;
 
     private:
+        struct arrive_result
+        {
+            arrival_token old_phase;
+            bool done;
+        };
+
         /// \cond NOINTERNAL
-        [[nodiscard]] arrival_token arrive_locked(
+        [[nodiscard]] arrive_result arrive_locked(
             std::unique_lock<mutex_type>& l, std::ptrdiff_t update = 1)
         {
             HPX_ASSERT_OWNS_LOCK(l);
             HPX_ASSERT_LOCKED(l, arrived_ >= update);
 
-            bool const old_phase = phase_;
+            std::size_t const old_phase = phase_;
             std::ptrdiff_t const result = (arrived_ -= update);
             std::ptrdiff_t const new_expected = expected_;
-            if (result == 0)
+            bool const done = (result == 0);
+            if (done)
             {
                 completion_();
                 arrived_ = new_expected;
-                phase_ = !old_phase;
+                ++phase_;
                 cond_.notify_all(HPX_MOVE(l));
             }
-            return old_phase;
+            return {old_phase, done};
         }
         /// \endcond
 
@@ -231,7 +238,7 @@ namespace hpx {
         {
             auto const mtx = mtx_;    // keep alive
             std::unique_lock<mutex_type> l(mtx->mtx_);
-            return arrive_locked(l, update);
+            return arrive_locked(l, update).old_phase;
         }
 
         /// Preconditions:  arrival is associated with the phase synchronization
@@ -264,7 +271,11 @@ namespace hpx {
         {
             auto const mtx = mtx_;    // keep alive
             std::unique_lock<mutex_type> l(mtx->mtx_);
-            arrival_token const old_phase = arrive_locked(l, 1);
+            auto const [old_phase, done] = arrive_locked(l, 1);
+            if (done)
+            {
+                return;
+            }
             while (phase_ == old_phase)
             {
                 cond_.wait(l, "barrier::wait");
@@ -294,7 +305,7 @@ namespace hpx {
             std::unique_lock<mutex_type> l(mtx->mtx_);
             HPX_ASSERT_LOCKED(l, expected_ > 0);
             --expected_;
-            [[maybe_unused]] bool result = arrive_locked(l, 1);
+            [[maybe_unused]] auto res = arrive_locked(l, 1);
         }
 
     private:
@@ -304,7 +315,7 @@ namespace hpx {
         std::ptrdiff_t expected_;
         std::ptrdiff_t arrived_;
         OnCompletion completion_;
-        bool phase_;
+        std::size_t phase_;
     };
 
     /// \cond NOINTERNAL

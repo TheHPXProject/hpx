@@ -19,12 +19,13 @@ namespace hpx::datapar::experimental {
 
     HPX_CXX_CORE_EXPORT template <typename Vector, typename T>
     HPX_HOST_DEVICE HPX_FORCEINLINE auto set(
-        Vector& vec, std::size_t index, T val) noexcept
+        Vector& vec, std::size_t const index, T val) noexcept
     {
         vec.set(static_cast<int>(index), val);
     }
 
     HPX_CXX_CORE_EXPORT using simd_abi::native;
+    HPX_CXX_CORE_EXPORT using simd_abi::max_fixed_size;
 }    // namespace hpx::datapar::experimental
 
 #endif
@@ -41,6 +42,7 @@ namespace hpx::datapar::experimental {
     HPX_CXX_CORE_EXPORT using std::experimental::simd_mask;
 
     HPX_CXX_CORE_EXPORT using std::experimental::simd_abi::native;
+    HPX_CXX_CORE_EXPORT using std::experimental::simd_abi::max_fixed_size;
 
     HPX_CXX_CORE_EXPORT using std::experimental::memory_alignment_v;
     HPX_CXX_CORE_EXPORT using std::experimental::element_aligned;
@@ -99,6 +101,7 @@ namespace hpx::datapar::experimental {
 
     HPX_CXX_CORE_EXPORT using namespace sve::experimental;
     HPX_CXX_CORE_EXPORT using simd_abi::native;
+    HPX_CXX_CORE_EXPORT using simd_abi::max_fixed_size;
 
     HPX_CXX_CORE_EXPORT template <typename Vector, typename T>
     HPX_HOST_DEVICE HPX_FORCEINLINE auto set(

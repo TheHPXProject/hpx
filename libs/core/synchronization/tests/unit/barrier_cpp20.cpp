@@ -207,6 +207,147 @@ void test_barrier_oncomplete_split()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_barrier_arrive_and_wait_single_expected()
+{
+    constexpr std::size_t tasks = 4;
+    constexpr std::size_t iterations = 10000;
+
+    hpx::barrier<> b(1);
+    std::atomic<std::size_t> counter(0);
+
+    std::vector<hpx::future<void>> results;
+    results.reserve(tasks);
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        results.push_back(hpx::async([&b, &counter]() {
+            for (std::size_t n = 0; n != iterations; ++n)
+            {
+                b.arrive_and_wait();
+                ++counter;
+            }
+        }));
+    }
+
+    hpx::wait_all(results);
+
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        HPX_TEST(!results[i].has_exception());
+    }
+
+    HPX_TEST_EQ(counter.load(), std::size_t(tasks * iterations));
+}
+
+void test_barrier_oncomplete_single_expected()
+{
+    constexpr std::size_t tasks = 4;
+    constexpr std::size_t iterations = 10000;
+
+    complete = 0;
+    hpx::barrier<oncomplete> b(1);
+    std::atomic<std::size_t> counter(0);
+
+    std::vector<hpx::future<void>> results;
+    results.reserve(tasks);
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        results.push_back(hpx::async([&b, &counter]() {
+            for (std::size_t n = 0; n != iterations; ++n)
+            {
+                b.arrive_and_wait();
+                ++counter;
+            }
+        }));
+    }
+
+    hpx::wait_all(results);
+
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        HPX_TEST(!results[i].has_exception());
+    }
+
+    HPX_TEST_EQ(counter.load(), std::size_t(tasks * iterations));
+    HPX_TEST_EQ(complete.load(), std::size_t(tasks * iterations));
+}
+
+void test_barrier_mixed_single_expected()
+{
+    constexpr std::size_t tasks = 4;
+    constexpr std::size_t iterations = 10000;
+
+    hpx::barrier<> b(1);
+    std::atomic<std::size_t> counter(0);
+
+    std::vector<hpx::future<void>> results;
+    results.reserve(tasks);
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        results.push_back(hpx::async([&b, &counter, i]() {
+            for (std::size_t n = 0; n != iterations; ++n)
+            {
+                if (i % 2 == 0)
+                {
+                    b.arrive_and_wait();
+                }
+                else
+                {
+                    auto token = b.arrive();
+                    b.wait(std::move(token));
+                }
+                ++counter;
+            }
+        }));
+    }
+
+    hpx::wait_all(results);
+
+    for (std::size_t i = 0; i != tasks; ++i)
+    {
+        HPX_TEST(!results[i].has_exception());
+    }
+
+    HPX_TEST_EQ(counter.load(), std::size_t(tasks * iterations));
+}
+
+void test_barrier_arrive_and_drop_single_expected()
+{
+    constexpr std::size_t initial_tasks = 4;
+    constexpr std::size_t iterations = 10000;
+
+    hpx::barrier<> b(initial_tasks);
+    std::atomic<std::size_t> counter(0);
+
+    for (std::size_t i = 0; i != initial_tasks - 1; ++i)
+    {
+        b.arrive_and_drop();
+    }
+
+    constexpr std::size_t runner_tasks = 4;
+    std::vector<hpx::future<void>> results;
+    results.reserve(runner_tasks);
+    for (std::size_t i = 0; i != runner_tasks; ++i)
+    {
+        results.push_back(hpx::async([&b, &counter]() {
+            for (std::size_t n = 0; n != iterations; ++n)
+            {
+                b.arrive_and_wait();
+                ++counter;
+            }
+        }));
+    }
+
+    hpx::wait_all(results);
+
+    for (std::size_t i = 0; i != runner_tasks; ++i)
+    {
+        HPX_TEST(!results[i].has_exception());
+    }
+
+    HPX_TEST_EQ(counter.load(), std::size_t(runner_tasks * iterations));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_barrier_empty_oncomplete();
@@ -214,6 +355,11 @@ int hpx_main()
 
     test_barrier_empty_oncomplete_split();
     test_barrier_oncomplete_split();
+
+    test_barrier_arrive_and_wait_single_expected();
+    test_barrier_oncomplete_single_expected();
+    test_barrier_mixed_single_expected();
+    test_barrier_arrive_and_drop_single_expected();
 
     return hpx::local::finalize();
 }

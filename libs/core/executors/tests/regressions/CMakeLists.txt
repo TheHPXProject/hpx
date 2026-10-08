@@ -8,6 +8,7 @@
 set(tests
     bulk_then_execute_3182
     bulk_sync_wait
+    fork_from_other_context
     fork_join_with_result
     future_then_async_executor
     parallel_executor_1781

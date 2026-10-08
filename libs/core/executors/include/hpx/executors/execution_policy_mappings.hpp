@@ -1,4 +1,4 @@
-//  Copyright (c) 2022-2023 Hartmut Kaiser
+//  Copyright (c) 2022-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Sai Charan Arvapally
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -34,7 +34,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_non_par(); }
+            requires(requires(Target const& t) { t.to_non_par(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_non_par();
@@ -61,7 +61,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_par(); }
+            requires(requires(Target const& t) { t.to_par(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_par();
@@ -89,7 +89,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_non_task(); }
+            requires(requires(Target const& t) { t.to_non_task(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_non_task();
@@ -116,7 +116,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_task(); }
+            requires(requires(Target const& t) { t.to_task(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_task();
@@ -144,7 +144,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_non_unseq(); }
+            requires(requires(Target const& t) { t.to_non_unseq(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_non_unseq();
@@ -171,7 +171,7 @@ namespace hpx::execution::experimental {
     {
         // Forward to member function if available
         template <typename Target>
-            requires requires(Target const& t) { t.to_unseq(); }
+            requires(requires(Target const& t) { t.to_unseq(); })
         constexpr decltype(auto) operator()(Target const& target) const
         {
             return target.to_unseq();

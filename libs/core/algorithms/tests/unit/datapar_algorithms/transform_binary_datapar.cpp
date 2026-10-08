@@ -24,6 +24,18 @@ void test_transform_binary()
 
     test_transform_binary_async(simd(task), IteratorTag());
     test_transform_binary_async(par_simd(task), IteratorTag());
+
+    test_transform_binary(fixed_size_simd<1>, IteratorTag());
+    test_transform_binary(par_fixed_size_simd<1>, IteratorTag());
+
+    test_transform_binary_async(fixed_size_simd<2>(task), IteratorTag());
+    test_transform_binary_async(par_fixed_size_simd<2>(task), IteratorTag());
+
+    test_transform_binary(fixed_size_simd<1>, IteratorTag());
+    test_transform_binary(par_fixed_size_simd<1>, IteratorTag());
+
+    test_transform_binary_async(fixed_size_simd<2>(task), IteratorTag());
+    test_transform_binary_async(par_fixed_size_simd<2>(task), IteratorTag());
 }
 
 void transform_binary_test()
@@ -35,8 +47,8 @@ void transform_binary_test()
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    unsigned int seed = (unsigned int) std::time(nullptr);
-    if (vm.count("seed"))
+    unsigned int seed = static_cast<unsigned int>(std::time(nullptr));
+    if (vm.contains("seed"))
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;
