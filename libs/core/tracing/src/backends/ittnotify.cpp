@@ -14,13 +14,13 @@
 #include <hpx/modules/itt_notify.hpp>
 #include <hpx/tracing/tracing.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace hpx::tracing {
 
@@ -34,6 +34,12 @@ namespace hpx::tracing {
             util::itt::string_handle fiber_suspend;
             util::itt::string_handle background;
             util::itt::string_handle os_thread_sleep;
+            util::itt::string_handle task_stack_full;
+            util::itt::string_handle saved_frames_full;
+            util::itt::string_handle work_stolen;
+            util::itt::string_handle thief;
+            util::itt::string_handle victim;
+            util::itt::string_handle task;
 
             itt_globals() noexcept
               : domain("hpx")
@@ -41,6 +47,12 @@ namespace hpx::tracing {
               , fiber_suspend("fiber_suspend")
               , background("hpx::background")
               , os_thread_sleep("os_thread_sleep")
+              , task_stack_full("task_stack_full")
+              , saved_frames_full("saved_frames_full")
+              , work_stolen("work_stolen")
+              , thief("thief")
+              , victim("victim")
+              , task("task")
             {
             }
         };
@@ -198,8 +210,7 @@ namespace hpx::tracing {
 
     ////////////////////////////////////////////////////////////////////////////
     // task lifecycle
-#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS) ||                              \
-    defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
     namespace {
 
         // A task's overlapped id is recomputed from its thread_data address at
@@ -210,93 +221,193 @@ namespace hpx::tracing {
         {
             return ::itt_id_value(const_cast<void*>(task_id), 0);
         }
-    }    // namespace
-#endif
 
-#if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
-    namespace {
-
-        // Per-worker stack of overlapped tasks open on this OS thread. Inline
-        // continuations nest a child inside a running parent on the same
-        // worker, so a single slot will not do. Depth stays tiny, so storage is
-        // inline and the vector is an overflow guard that is never reached.
-        struct task_id_stack
+        // Emits a marker the first time one of the fixed limits below is hit,
+        // so a trace that lost frames says so instead of looking complete.
+        void report_once(std::atomic<bool>& reported,
+            util::itt::string_handle const& name) noexcept
         {
-            static constexpr std::size_t inline_capacity = 32;
+            if (!reported.exchange(true, std::memory_order_relaxed))
+                util::itt::emit_marker(get_itt_globals().domain, name);
+        }
 
-            bool empty() const noexcept
-            {
-                return count_ == 0;
-            }
-            void const* back() const noexcept
-            {
-                return count_ > inline_capacity ?
-                    overflow_[count_ - inline_capacity - 1] :
-                    inline_[count_ - 1];
-            }
-            void push(void const* p)
-            {
-                if (count_ >= inline_capacity)
-                    overflow_.push_back(p);
-                else
-                    inline_[count_] = p;
-                ++count_;
-            }
-            void pop() noexcept
-            {
-                if (count_ > inline_capacity)
-                    overflow_.pop_back();
-                if (count_ != 0)
-                    --count_;
-            }
-
-            void const* inline_[inline_capacity] = {};
-            std::vector<void const*> overflow_;
-            std::size_t count_ = 0;
+        struct frame
+        {
+            void const* task;
+            char const* name;
         };
 
-        thread_local task_id_stack open_tasks;
+        // Inline continuations nest a child inside a running parent on the
+        // same worker, so each worker keeps the stack of tasks open on it.
+        // Storage is fixed so a hook never allocates; frames past the capacity
+        // still count towards the depth but get no segment of their own.
+        constexpr std::size_t max_frames = 32;
 
-        void begin_task(void const* task_id, char const* name) noexcept
+        struct open_frames
         {
-            // Begin is idempotent: a resume signals once from the scheduling
-            // loop and once from the woken fiber on the same worker, and an
-            // already-open task must not be opened twice.
-            if (!open_tasks.empty() && open_tasks.back() == task_id)
-                return;
+            frame frames[max_frames] = {};
+            std::size_t stored = 0;
+            std::size_t depth = 0;
+        };
 
-            open_tasks.push(task_id);
-            ___itt_id id = task_id_value(task_id);
+        thread_local open_frames worker;
+
+        // A park takes the whole fiber, inline frames included, and it may
+        // resume on another worker. The frames above the outer task wait here,
+        // keyed by that task, until it begins again. Fixed size for the same
+        // reason as above; when full, those frames are not reopened.
+        constexpr std::size_t max_saved = 64;
+
+        struct saved_frames
+        {
+            std::atomic<void const*> owner{nullptr};
+            frame frames[max_frames - 1] = {};
+            std::size_t stored = 0;
+            std::size_t extra_depth = 0;
+        };
+
+        saved_frames saved[max_saved];
+        std::atomic<std::size_t> saved_count{0};
+        char const claimed = 0;
+
+        std::atomic<bool> stack_full_reported{false};
+        std::atomic<bool> table_full_reported{false};
+
+        void push_frame(void const* task, char const* name) noexcept
+        {
+            if (worker.stored == max_frames)
+            {
+                ++worker.depth;
+                report_once(
+                    stack_full_reported, get_itt_globals().task_stack_full);
+                return;
+            }
+
+            worker.frames[worker.stored++] = {task, name};
+            ++worker.depth;
+
+            ___itt_id id = task_id_value(task);
             util::itt::string_handle const sh(name != nullptr ? name : "task");
             ::itt_task_begin_overlapped(
                 get_itt_globals().domain.domain_, &id, sh.handle_);
         }
 
-        void end_current_worker() noexcept
+        void save_frames() noexcept
         {
-            // A park takes the whole fiber off this worker, so every task open
-            // here is ended. A nested inline child parks its parent too, which
-            // is why the entire worker stack is flushed rather than one frame.
-            auto const* domain = get_itt_globals().domain.domain_;
-            while (!open_tasks.empty())
+            for (auto& slot : saved)
             {
-                ___itt_id id = task_id_value(open_tasks.back());
-                ::itt_task_end_overlapped(domain, &id);
-                open_tasks.pop();
+                void const* expected = nullptr;
+                if (!slot.owner.compare_exchange_strong(expected, &claimed,
+                        std::memory_order_acquire, std::memory_order_relaxed))
+                {
+                    continue;
+                }
+
+                slot.stored = worker.stored - 1;
+                for (std::size_t i = 0; i != slot.stored; ++i)
+                    slot.frames[i] = worker.frames[i + 1];
+                slot.extra_depth = worker.depth - worker.stored;
+
+                slot.owner.store(
+                    worker.frames[0].task, std::memory_order_release);
+                saved_count.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
+            report_once(
+                table_full_reported, get_itt_globals().saved_frames_full);
+        }
+
+        saved_frames* find_saved(void const* task) noexcept
+        {
+            if (saved_count.load(std::memory_order_relaxed) == 0)
+                return nullptr;
+
+            for (auto& slot : saved)
+            {
+                if (slot.owner.load(std::memory_order_acquire) == task)
+                    return &slot;
+            }
+            return nullptr;
+        }
+
+        void release(saved_frames& slot) noexcept
+        {
+            slot.owner.store(nullptr, std::memory_order_release);
+            saved_count.fetch_sub(1, std::memory_order_relaxed);
+        }
+
+        void begin_task(void const* task, char const* name) noexcept
+        {
+            if (worker.depth != 0)
+            {
+                if (worker.stored == worker.depth &&
+                    worker.frames[worker.stored - 1].task == task)
+                {
+                    return;
+                }
+                push_frame(task, name);
+                return;
+            }
+
+            push_frame(task, name);
+            if (saved_frames* slot = find_saved(task))
+            {
+                for (std::size_t i = 0; i != slot->stored; ++i)
+                    push_frame(slot->frames[i].task, slot->frames[i].name);
+                worker.depth += slot->extra_depth;
+                release(*slot);
             }
         }
 
-        void end_task(void const* task_id) noexcept
+        // The resume hook fires from the woken fiber after the scheduler has
+        // already begun its outer task. It never starts a new nesting level,
+        // so it only opens a segment if nothing on this worker has yet.
+        void resume_task(void const* task, char const* name) noexcept
         {
-            // Completion ends just this frame: an inline child finishing leaves
-            // its parent running on the same worker, so only a matching top of
-            // stack is closed.
-            if (open_tasks.empty() || open_tasks.back() != task_id)
-                return;
+            if (worker.depth == 0)
+                begin_task(task, name);
+        }
 
-            ___itt_id id = task_id_value(task_id);
+        // A park takes the whole fiber off this worker, so every open frame
+        // is ended; the inline ones are saved to reopen with the outer task.
+        void end_current_worker() noexcept
+        {
+            if (worker.depth == 0)
+                return;
+            if (worker.depth > 1)
+                save_frames();
+
+            auto const* domain = get_itt_globals().domain.domain_;
+            while (worker.stored != 0)
+            {
+                ___itt_id id =
+                    task_id_value(worker.frames[--worker.stored].task);
+                ::itt_task_end_overlapped(domain, &id);
+            }
+            worker.depth = 0;
+        }
+
+        // Completion ends just the innermost frame, since an inline child
+        // finishing leaves its parent running. Past the capacity that frame
+        // has no segment, and inline frames unwind in order, so it is only
+        // counted down.
+        void end_task(void const* task) noexcept
+        {
+            if (worker.depth > worker.stored)
+            {
+                --worker.depth;
+                return;
+            }
+            if (worker.stored == 0 ||
+                worker.frames[worker.stored - 1].task != task)
+            {
+                return;
+            }
+
+            ___itt_id id = task_id_value(task);
             ::itt_task_end_overlapped(get_itt_globals().domain.domain_, &id);
-            open_tasks.pop();
+            --worker.stored;
+            --worker.depth;
         }
     }    // namespace
 
@@ -347,7 +458,7 @@ namespace hpx::tracing {
     {
         if (!use_ittnotify_api)
             return;
-        begin_task(task_id, name);
+        resume_task(task_id, name);
     }
 
     void task_completed(void const* task_id, char const*) noexcept
@@ -362,24 +473,43 @@ namespace hpx::tracing {
         if (!use_ittnotify_api)
             return;
 
+        // A parked task destroyed without resuming must not leave its frames
+        // behind for the next task allocated at the same address.
+        if (saved_frames* slot = find_saved(task_id))
+            release(*slot);
+
         ___itt_id id = task_id_value(task_id);
         ::itt_id_destroy_value(get_itt_globals().domain.domain_, &id);
     }
 #endif
 
 #if defined(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
-    void work_stolen(std::size_t, std::size_t, void const* task_id,
-        char const* name) noexcept
+    void work_stolen(std::size_t thief, std::size_t victim, void const* task_id,
+        char const*) noexcept
     {
         if (!use_ittnotify_api)
             return;
 
-        // Tag the steal with the stolen task's id so it lands on that task's
-        // timeline instead of appearing as an anonymous instant.
-        ___itt_id id = task_id_value(task_id);
-        util::itt::string_handle const sh(
-            name != nullptr ? name : "work_stolen");
-        ::itt_marker(get_itt_globals().domain.domain_, &id, sh.handle_);
+        // A marker id only names that marker, so each steal gets a fresh one
+        // from a per-thread counter. The stolen task is carried as metadata,
+        // which needs no live task id and so also works with lifecycle off.
+        thread_local std::size_t steal_count = 0;
+        std::size_t const n = ++steal_count;
+        ___itt_id id = ::itt_id_value(&steal_count, n);
+
+        auto const& g = get_itt_globals();
+        auto const* domain = g.domain.domain_;
+        std::uint64_t const thief_id = thief;
+        std::uint64_t const victim_id = victim;
+        std::uint64_t const task = static_cast<std::uint64_t>(
+            reinterpret_cast<std::uintptr_t>(task_id));
+
+        ::itt_id_create(domain, &id);
+        ::itt_marker(domain, &id, g.work_stolen.handle_);
+        ::itt_metadata_add(domain, &id, g.thief.handle_, thief_id);
+        ::itt_metadata_add(domain, &id, g.victim.handle_, victim_id);
+        ::itt_metadata_add(domain, &id, g.task.handle_, task);
+        ::itt_id_destroy_value(domain, &id);
     }
 #endif
 
