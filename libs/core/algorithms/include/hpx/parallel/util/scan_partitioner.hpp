@@ -244,16 +244,14 @@ namespace hpx::parallel::util {
             static std::exception_ptr transform_exception(
                 std::exception_ptr error) noexcept
             {
-                try
-                {
-                    handle_local_exceptions::call(error);
-                }
-                catch (...)
-                {
-                    return std::current_exception();
-                }
-
-                HPX_UNREACHABLE;
+                return hpx::detail::try_catch_exception_ptr(
+                    [&]() -> std::exception_ptr {
+                        handle_local_exceptions::call(HPX_MOVE(error));
+                        HPX_UNREACHABLE;
+                    },
+                    [](std::exception_ptr transformed) -> std::exception_ptr {
+                        return transformed;
+                    });
             }
 
             template <typename FwdIter>

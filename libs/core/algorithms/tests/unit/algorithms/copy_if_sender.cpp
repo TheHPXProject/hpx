@@ -80,6 +80,75 @@ struct scan_output_value
     }
 };
 
+enum class scan_failure_phase
+{
+    first,
+    prefix,
+    final
+};
+
+auto make_scan_partitioner_sender(scan_failure_phase phase)
+{
+    using namespace hpx::execution;
+
+    static std::vector<int> input(128, 1);
+    auto exec = ex::explicit_scheduler_executor(
+        ex::thread_pool_policy_scheduler(hpx::launch::async));
+    auto policy = par(task).with(ex::static_chunk_size(8)).on(exec);
+    using policy_type = std::decay_t<decltype(policy)>;
+    using partitioner = hpx::parallel::util::scan_partitioner<policy_type,
+        std::size_t, std::size_t>;
+
+    return partitioner::call(
+        policy, input.begin(), input.size(), std::size_t(0),
+        [phase](auto, std::size_t size) -> std::size_t {
+            if (phase == scan_failure_phase::first)
+            {
+                throw std::runtime_error("first scan phase");
+            }
+            return size;
+        },
+        [phase](std::size_t lhs, std::size_t rhs) -> std::size_t {
+            if (phase == scan_failure_phase::prefix)
+            {
+                throw std::runtime_error("scan prefix combination");
+            }
+            return lhs + rhs;
+        },
+        [phase](auto, std::size_t, std::size_t) {
+            if (phase == scan_failure_phase::final)
+            {
+                throw std::runtime_error("final scan phase");
+            }
+        },
+        [](std::vector<std::size_t>&& results,
+            std::vector<hpx::future<void>>&&) { return results.back(); });
+}
+
+void test_scan_partitioner_exceptions()
+{
+    for (scan_failure_phase phase : {scan_failure_phase::first,
+             scan_failure_phase::prefix, scan_failure_phase::final})
+    {
+        auto sender = make_scan_partitioner_sender(phase);
+        bool caught = false;
+        try
+        {
+            tt::sync_wait(HPX_MOVE(sender));
+        }
+        catch (hpx::exception_list const& errors)
+        {
+            HPX_TEST_NEQ(errors.size(), std::size_t(0));
+            caught = true;
+        }
+        catch (...)
+        {
+            HPX_TEST(false);
+        }
+        HPX_TEST(caught);
+    }
+}
+
 void test_copy_if_sender_lifecycle()
 {
     using namespace hpx::execution;
@@ -324,6 +393,7 @@ void copy_if_sender_test()
 int hpx_main()
 {
     test_copy_if_sender_lifecycle();
+    test_scan_partitioner_exceptions();
     copy_if_sender_test<std::forward_iterator_tag>();
     copy_if_sender_test<std::random_access_iterator_tag>();
     return hpx::local::finalize();
