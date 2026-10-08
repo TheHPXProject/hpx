@@ -111,7 +111,7 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
 
             template <class PosixExecutor, typename Read>
-            void on_fork_success_impl(PosixExecutor& e, Read&& read) const
+            void on_fork_success_impl(PosixExecutor& e, Read&& read_some) const
             {
                 ::close(fds_[1]);
                 error_report report{};
@@ -119,10 +119,17 @@ namespace hpx { namespace components { namespace process { namespace posix {
                 int read_error = 0;
                 while (bytes_read != error_report_size)
                 {
-                    auto const count = read(fds_[0], report, bytes_read);
+                    auto const remaining = error_report_size - bytes_read;
+                    auto const count = read_some(fds_[0], report, bytes_read);
                     if (count > 0)
                     {
-                        bytes_read += static_cast<std::size_t>(count);
+                        auto const count_size = static_cast<std::size_t>(count);
+                        if (count_size > remaining)
+                        {
+                            read_error = EIO;
+                            break;
+                        }
+                        bytes_read += count_size;
                     }
                     else if (count == 0)
                     {

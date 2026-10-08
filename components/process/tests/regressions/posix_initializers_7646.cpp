@@ -30,10 +30,11 @@ namespace hpx::components::process::posix::initializers::detail {
     struct throw_on_error_test_access
     {
         template <typename PosixExecutor, typename Read>
-        static void on_fork_success(
-            throw_on_error const& handler, PosixExecutor& executor, Read&& read)
+        static void on_fork_success(throw_on_error const& handler,
+            PosixExecutor& executor, Read&& read_some)
         {
-            handler.on_fork_success_impl(executor, std::forward<Read>(read));
+            handler.on_fork_success_impl(
+                executor, std::forward<Read>(read_some));
         }
     };
 }    // namespace hpx::components::process::posix::initializers::detail
@@ -251,6 +252,12 @@ namespace {
             [](int, auto&, std::size_t) -> ssize_t {
                 errno = EIO;
                 return -1;
+            },
+            {"read(2) failed", std::generic_category().message(EIO)}, true);
+
+        test_injected_read(
+            [](int, auto&, std::size_t) -> ssize_t {
+                return static_cast<ssize_t>(3 * sizeof(int));
             },
             {"read(2) failed", std::generic_category().message(EIO)}, true);
     }
