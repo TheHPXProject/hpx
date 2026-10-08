@@ -12,6 +12,6 @@
 int main()
 {
     hpx::experimental::sandbox::describe_environment(std::cout);
-    std::cout << "Hello raw g++\n";
+    std::cout << "Hello raw compiler\n";
     return 0;
 }

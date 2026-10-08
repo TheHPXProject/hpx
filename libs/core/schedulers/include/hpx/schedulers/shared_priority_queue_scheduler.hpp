@@ -414,8 +414,9 @@ namespace hpx::threads::policies {
             }
 
             // we do not allow threads created on other queues to 'run now'
-            // as this causes cross-thread allocations and map accesses
-            if (local_num != thread_num &&
+            // as this causes cross-thread allocations and map accesses,
+            // unless the caller requested a thread handle (thrd != nullptr)
+            if (thrd == nullptr && local_num != thread_num &&
                 (data.initial_state == thread_schedule_state::pending ||
                     data.initial_state == thread_schedule_state::pending_boost))
             {

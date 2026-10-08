@@ -28,8 +28,10 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 #include <variant>
 
@@ -231,6 +233,21 @@ namespace hpx::execution::experimental {
                 {
                     return get_stop_token(get_env(op_.receiver_))
                         .stop_requested();
+                }
+
+            protected:
+                void query_env(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result) const noexcept override
+                {
+                    using token_type = std::decay_t<decltype(get_stop_token(
+                        get_env(op_.receiver_)))>;
+                    if (query_type == typeid(get_stop_token_t) &&
+                        result_type == typeid(token_type))
+                    {
+                        static_cast<std::optional<token_type>*>(result)
+                            ->emplace(get_stop_token(get_env(op_.receiver_)));
+                    }
                 }
             };
 
@@ -739,6 +756,21 @@ namespace hpx::execution::experimental {
                 bool stop_requested() const noexcept override
                 {
                     return get_stop_token(get_env(receiver_)).stop_requested();
+                }
+
+            protected:
+                void query_env(std::type_info const& query_type,
+                    std::type_info const& result_type,
+                    void* result) const noexcept override
+                {
+                    using token_type = std::decay_t<decltype(get_stop_token(
+                        get_env(receiver_)))>;
+                    if (query_type == typeid(get_stop_token_t) &&
+                        result_type == typeid(token_type))
+                    {
+                        static_cast<std::optional<token_type>*>(result)
+                            ->emplace(get_stop_token(get_env(receiver_)));
+                    }
                 }
             };
 

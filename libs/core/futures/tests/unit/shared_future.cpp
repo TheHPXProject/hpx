@@ -435,6 +435,23 @@ void test_shared_future_ref()
     HPX_TEST_EQ(&f.get(), &i);
 }
 
+// #7680: shared_future::get() must not invalidate the future
+void test_shared_future_get_keeps_valid()
+{
+    hpx::shared_future<int> const f = hpx::make_ready_future(42).share();
+
+    int const& result = f.get();
+    HPX_TEST(f.valid());
+    HPX_TEST_EQ(result, 42);
+    HPX_TEST_EQ(f.get(), 42);
+    HPX_TEST_EQ(&f.get(), &result);
+
+    hpx::shared_future<void> const fv = hpx::make_ready_future().share();
+    fv.get();
+    HPX_TEST(fv.valid());
+    fv.get();
+}
+
 void test_shared_future_for_string()
 {
     hpx::promise<std::string> pt;
@@ -1514,6 +1531,7 @@ int hpx_main(variables_map&)
         test_shared_future_can_be_move_assigned_from_shared_future();
         test_shared_future_void();
         test_shared_future_ref();
+        test_shared_future_get_keeps_valid();
         test_shared_future_for_string();
         test_wait_callback();
         test_wait_callback_with_timed_wait();

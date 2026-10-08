@@ -153,9 +153,7 @@ set(_is_library "$<IN_LIST:$<TARGET_PROPERTY:TYPE>,${_library_types}>")
 add_library(hpx INTERFACE)
 add_library(init INTERFACE)
 add_library(wrap_main INTERFACE)
-if(NOT MSVC)
-  add_library(auto_wrap_main INTERFACE)
-endif()
+add_library(auto_wrap_main INTERFACE)
 
 target_link_libraries(hpx INTERFACE hpx_full)
 
@@ -195,16 +193,32 @@ target_link_libraries(hpx INTERFACE hpx_interface)
 set(hpx_targets hpx wrap_main init plugin component)
 set(hpx_internal_targets hpx_full hpx_interface hpx_interface_wrap_main)
 
-if(NOT MSVC)
-  add_library(hpx_interface_auto_wrap_main INTERFACE)
+add_library(hpx_interface_auto_wrap_main INTERFACE)
+if(MSVC)
+  # MSVC has no weak symbols, so instead we force-include hpx/hpx_main.hpp into
+  # all C++ sources of the executable, which redefines main() the same way as
+  # explicitly including the header would.
+  target_link_libraries(
+    hpx_interface_auto_wrap_main INTERFACE hpx_interface_wrap_main
+  )
+  target_compile_options(
+    hpx_interface_auto_wrap_main
+    INTERFACE
+      "$<$<AND:${_is_executable},$<COMPILE_LANGUAGE:CXX>>:/FIhpx/hpx_main.hpp>"
+  )
+  target_compile_definitions(
+    hpx_interface_auto_wrap_main
+    INTERFACE "$<${_is_executable}:HPX_AUTO_WRAP_MAIN_FORCE_INCLUDE>"
+  )
+else()
   target_link_libraries(
     hpx_interface_auto_wrap_main
     INTERFACE $<${_is_executable}:HPXInternal::hpx_auto_wrap>
   )
-  target_link_libraries(auto_wrap_main INTERFACE hpx_interface_auto_wrap_main)
-  set(hpx_targets ${hpx_targets} auto_wrap_main)
-  set(hpx_internal_targets ${hpx_internal_targets} hpx_interface_auto_wrap_main)
 endif()
+target_link_libraries(auto_wrap_main INTERFACE hpx_interface_auto_wrap_main)
+set(hpx_targets ${hpx_targets} auto_wrap_main)
+set(hpx_internal_targets ${hpx_internal_targets} hpx_interface_auto_wrap_main)
 
 # HPX::component is to be linked privately to all HPX components
 #

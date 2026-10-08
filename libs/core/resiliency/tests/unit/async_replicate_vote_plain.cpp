@@ -12,13 +12,11 @@
 #include <hpx/modules/resiliency.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <atomic>
 #include <cstddef>
-#include <random>
 #include <vector>
 
-std::random_device rd;
-std::mt19937 mt(rd());
-std::uniform_real_distribution<double> dist(1.0, 10.0);
+std::atomic<std::size_t> invocation_count{0};
 
 int vote(std::vector<int> vect)
 {
@@ -27,9 +25,9 @@ int vote(std::vector<int> vect)
 
 int universal_ans()
 {
-    if (dist(mt) > 5)
-        return 42;
-    return 84;
+    auto const invocation =
+        invocation_count.fetch_add(1, std::memory_order_relaxed);
+    return invocation % 2 == 0 ? 42 : 84;
 }
 
 bool validate(int ans)

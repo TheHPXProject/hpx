@@ -2953,6 +2953,12 @@ if(PYTHONINTERP_FOUND OR Python_FOUND)
       WORLD_READ
       WORLD_EXECUTE
   )
+  install(
+    PROGRAMS "${PROJECT_SOURCE_DIR}/tools/hpx-top.py"
+             "${PROJECT_SOURCE_DIR}/tools/hpx_stat_viewer.py"
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT runtime
+  )
 endif()
 
 install(

@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.2
+    - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
       run: |
@@ -77,3 +77,11 @@ jobs:
           --config Release \
           --copy-dlls \
           --build-dir build/smoke/build
+    - name: Raw cl.exe hpx_main smoke test
+      shell: pwsh
+      run: |
+        .github/ci-scripts/godbolt_minimal_smoke/run_raw_msvc_smoke.ps1 `
+          -Prefix "$PWD/build/install" `
+          -CMakeBuildDir build/smoke/build `
+          -Config Release `
+          -OutDir build/smoke

@@ -23,6 +23,9 @@ set(tests
     partitioned_vector_iter
     partitioned_vector_max_element1
     partitioned_vector_max_element2
+    partitioned_vector_merge
+    partitioned_vector_merge_extended
+    partitioned_vector_merge_regressions
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
@@ -86,16 +89,22 @@ foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  if("${test}" STREQUAL "partitioned_vector_sort")
+  if(test STREQUAL "partitioned_vector_merge")
+    set(test_localities 3)
+  elseif(test STREQUAL "partitioned_vector_merge_extended")
+    set(test_localities 4)
+  elseif(test STREQUAL "partitioned_vector_merge_regressions")
+    set(test_localities 3)
+  elseif(test STREQUAL "partitioned_vector_sort")
     # Four localities exercise concurrent merges and remote transfers.
-    set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 4
-                           THREADS_PER_LOCALITY 4
-    )
+    set(test_localities 4)
   else()
-    set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 2
-                           THREADS_PER_LOCALITY 4
-    )
+    set(test_localities 2)
   endif()
+
+  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES ${test_localities}
+                         THREADS_PER_LOCALITY 4
+  )
 
   source_group("Source Files" FILES ${sources})
 
