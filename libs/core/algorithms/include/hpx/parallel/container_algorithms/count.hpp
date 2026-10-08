@@ -65,6 +65,10 @@ namespace hpx { namespace ranges {
     ///
     /// \note Policy overloads require random access iterators and sized
     ///       sentinels, or random access ranges that are also sized ranges.
+    ///       With a task policy, copyable search values are copied into the
+    ///       operation state. Noncopyable lvalues, including arrays, are
+    ///       borrowed and must remain valid until the returned future is ready,
+    ///       even if that future is discarded.
     ///
     template <typename ExPolicy, typename Rng,
         typename Proj = hpx::identity,
@@ -126,6 +130,10 @@ namespace hpx { namespace ranges {
     ///
     /// \note Policy overloads require random access iterators and sized
     ///       sentinels, or random access ranges that are also sized ranges.
+    ///       With a task policy, copyable search values are copied into the
+    ///       operation state. Noncopyable lvalues, including arrays, are
+    ///       borrowed and must remain valid until the returned future is ready,
+    ///       even if that future is discarded.
     ///
     template <typename ExPolicy, typename Iter, typename Sent,
         typename Proj = hpx::identity,

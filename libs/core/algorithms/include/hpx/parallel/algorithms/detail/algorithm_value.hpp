@@ -17,15 +17,20 @@
 namespace hpx::parallel::detail {
     /// \cond NOINTERNAL
 
-    // Synchronous algorithms borrow their values because they finish before
-    // returning. Asynchronous algorithms copy values when possible and borrow
-    // only non-copyable lvalues whose lifetime the caller must preserve.
+    /// \brief Checks whether an algorithm value can safely be captured for the
+    ///        given execution policy.
+    ///
+    /// Synchronous algorithms borrow their values because they finish before
+    /// returning. Asynchronous algorithms copy values when possible and borrow
+    /// only non-copyable lvalues whose lifetime the caller must preserve.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
     concept algorithm_value_argument =
         !hpx::is_async_execution_policy_v<ExPolicy> ||
         std::is_lvalue_reference_v<T> ||
         std::is_copy_constructible_v<std::remove_cvref_t<T>>;
 
+    /// \brief Stores or borrows an algorithm value according to the execution
+    ///        policy and the value's copyability.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
     class algorithm_value
     {
@@ -38,6 +43,7 @@ namespace hpx::parallel::detail {
         storage_type value_;
 
     public:
+        /// \brief Constructs storage for \a value.
         template <typename U>
             requires(algorithm_value_argument<ExPolicy, U> &&
                 std::is_same_v<std::remove_cvref_t<U>, T>)
@@ -46,6 +52,7 @@ namespace hpx::parallel::detail {
         {
         }
 
+        /// \brief Returns the stored or borrowed value.
         HPX_HOST_DEVICE constexpr T const& get() const noexcept
         {
             if constexpr (owns_value)
@@ -55,32 +62,7 @@ namespace hpx::parallel::detail {
         }
     };
 
-    // Unwrapping borrows from a named value or its storage. Reject temporaries
-    // so the returned reference cannot outlive them.
-    HPX_CXX_CORE_EXPORT template <typename T>
-    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(
-        T const&& value) noexcept = delete;
-
-    HPX_CXX_CORE_EXPORT template <typename T>
-    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(T& value) noexcept
-    {
-        return std::as_const(value);
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
-    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(
-        algorithm_value<ExPolicy, T>& value) noexcept
-    {
-        return value.get();
-    }
-
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
-    HPX_HOST_DEVICE constexpr T const& unwrap_algorithm_value(
-        algorithm_value<ExPolicy, T> const& value) noexcept
-    {
-        return value.get();
-    }
-
+    /// \brief Creates an equality predicate with policy-aware value storage.
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename T>
         requires(algorithm_value_argument<ExPolicy, T>)
     constexpr auto equal_to_value(T&& value)

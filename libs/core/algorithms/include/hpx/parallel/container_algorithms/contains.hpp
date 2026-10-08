@@ -137,6 +137,12 @@ namespace hpx::parallel::detail {
 
 namespace hpx::ranges {
 
+    /// \brief Returns whether the value occurs in an iterator range or range.
+    ///
+    /// \note With a task policy, copyable search values are copied into the
+    ///       operation state. Noncopyable lvalues, including arrays, are
+    ///       borrowed and must remain valid until the returned future is ready,
+    ///       even if that future is discarded.
     HPX_CXX_CORE_EXPORT inline constexpr struct contains_t final
       : hpx::detail::tag_dispatch<contains_t, hpx::detail::no_base>
     {

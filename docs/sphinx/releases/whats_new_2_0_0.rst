@@ -40,6 +40,10 @@ Breaking changes
   produce different diagnostics than the previous iterator ``static_assert``
   checks. Code that explicitly names HPX's former default callable types may
   need to use the corresponding ``std::ranges`` callable types.
+- The ``count`` and ``contains`` task-policy overloads store an owned copy of
+  copyable search values in their asynchronous operation state. Noncopyable
+  lvalues, including arrays, are borrowed and must remain valid until the
+  returned future becomes ready, even if the future is discarded.
 
 Closed issues
 =============
