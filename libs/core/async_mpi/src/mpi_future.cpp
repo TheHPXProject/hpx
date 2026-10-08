@@ -425,8 +425,11 @@ namespace hpx { namespace mpi { namespace experimental {
         {
             int required = MPI_THREAD_MULTIPLE;
             int provided;
+            int was_initialized = 0;
+            MPI_Initialized(&was_initialized);
             hpx::util::mpi_environment::init(
                 nullptr, nullptr, required, required, provided);
+            detail::get_mpi_info().mpi_initialized_ = !was_initialized;
             if (provided != required)
             {
                 mpi_debug.error(debug::str<>("hpx::mpi::experimental::init"),
@@ -487,8 +490,13 @@ namespace hpx { namespace mpi { namespace experimental {
             detail::hpx_mpi_errhandler = 0;
         }
 
-        // clean up if we initialized mpi
-        hpx::util::mpi_environment::finalize();
+        // clean up only if we initialized mpi, MPI might still be in use
+        // elsewhere (e.g. by the MPI parcelport) otherwise
+        if (detail::get_mpi_info().mpi_initialized_)
+        {
+            detail::get_mpi_info().mpi_initialized_ = false;
+            hpx::util::mpi_environment::finalize();
+        }
 
         mpi_debug.debug(debug::str<>("Clearing mode"), detail::get_mpi_info(),
             "disable_user_polling");

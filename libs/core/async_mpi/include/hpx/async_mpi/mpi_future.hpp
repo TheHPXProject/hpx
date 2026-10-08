@@ -121,6 +121,8 @@ namespace hpx::mpi::experimental {
         HPX_CXX_CORE_EXPORT struct mpi_info
         {
             bool error_handler_initialized_ = false;
+            // true if hpx::mpi::experimental::init called MPI_Init itself
+            bool mpi_initialized_ = false;
             int rank_ = -1;
             int size_ = -1;
             // requests vector holds the requests that are checked

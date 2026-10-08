@@ -227,6 +227,21 @@ namespace hpx {
             return post_l_p<Action>(
                 target, HPX_MOVE(addr), policy, HPX_FORWARD(Ts, vs)...);
         }
+
+        template <typename Action>
+        struct post_action_client_dispatch
+        {
+            template <typename Client, typename Stub, typename Data,
+                typename... Ts>
+            HPX_FORCEINLINE bool operator()(
+                components::client_base<Client, Stub, Data> const& c,
+                hpx::launch policy, Ts&&... ts) const
+            {
+                HPX_ASSERT(c.is_ready());
+                return hpx::detail::post_impl<Action>(
+                    c.get_id(), policy, HPX_FORWARD(Ts, ts)...);
+            }
+        };
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
@@ -249,8 +264,18 @@ namespace hpx {
         static_assert(traits::is_valid_action_v<Action, component_type>,
             "The action to invoke is not supported by the target");
 
-        return hpx::detail::post_impl<Action>(
-            c.get_id(), policy, HPX_FORWARD(Ts, vs)...);
+        // invoke directly if client is ready
+        if (c.is_ready())
+        {
+            return hpx::detail::post_impl<Action>(
+                c.get_id(), policy, HPX_FORWARD(Ts, vs)...);
+        }
+
+        // defer invocation otherwise, the target is not known yet
+        c.then(util::one_shot(
+            hpx::bind_back(detail::post_action_client_dispatch<Action>(),
+                policy, HPX_FORWARD(Ts, vs)...)));
+        return false;
     }
 
     HPX_CXX_EXPORT template <typename Action, typename DistPolicy,
@@ -294,8 +319,7 @@ namespace hpx {
             constexpr hpx::launch::async_policy policy(
                 actions::action_priority<Action>(),
                 actions::action_stacksize<Action>());
-            return hpx::post_p<Derived>(
-                c.get_id(), policy, HPX_FORWARD(Ts, ts)...);
+            return hpx::post_p<Derived>(c, policy, HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename Component, typename Signature, typename Derived,
@@ -336,7 +360,7 @@ namespace hpx {
         constexpr hpx::launch::async_policy policy(
             actions::action_priority<Action>(),
             actions::action_stacksize<Action>());
-        return hpx::post_p<Action>(c.get_id(), policy, HPX_FORWARD(Ts, vs)...);
+        return hpx::post_p<Action>(c, policy, HPX_FORWARD(Ts, vs)...);
     }
 
     HPX_CXX_EXPORT template <typename Action, typename DistPolicy,

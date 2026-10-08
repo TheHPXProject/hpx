@@ -298,8 +298,10 @@ namespace hpx::detail {
 
             constexpr auto priority = traits::action_priority_v<Derived>;
             constexpr auto stacksize = traits::action_stacksize_v<Derived>;
-            return async<Derived>(launch::async_policy(priority, stacksize),
-                c.get_id(), HPX_FORWARD(Ts, vs)...);
+            // pass on the client itself, this defers the invocation if the
+            // client's id is not available yet
+            return async<Derived>(launch::async_policy(priority, stacksize), c,
+                HPX_FORWARD(Ts, vs)...);
         }
 
         template <typename Component, typename Signature, typename Derived,

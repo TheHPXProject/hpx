@@ -140,7 +140,9 @@ namespace hpx::util {
     int mpi_environment::init(
         int*, char***, int const minimal, int const required, int& provided)
     {
-        has_called_init_ = false;
+        // Note: has_called_init_ is deliberately not reset here. It must keep
+        // recording whether MPI was initialized by an earlier call, otherwise
+        // MPI would not be finalized by its owner.
 
         // Check if MPI_Init has been called previously
         int is_initialized = 0;
