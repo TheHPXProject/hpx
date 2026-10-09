@@ -40,7 +40,7 @@ namespace hpx::parallel::detail {
 
     ///////////////////////////////////////////////////////////////////////////
 
-    template <typename ExPolicy, typename T>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T>
     HPX_FORCEINLINE T get_capture_result(hpx::future<T>&& ready)
     {
         using policy_type = std::decay_t<ExPolicy>;
@@ -65,7 +65,7 @@ namespace hpx::parallel::detail {
         return ready.get();
     }
 
-    template <typename ExPolicy, typename T>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T>
     HPX_FORCEINLINE hpx::future<T> handle_capture_exceptions(
         hpx::future<T>&& operation)
     {
@@ -74,7 +74,7 @@ namespace hpx::parallel::detail {
         });
     }
 
-    template <typename ExPolicy, typename T>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T>
     std::vector<T> get_capture_results(std::vector<hpx::future<T>> operations)
     {
         bool const has_exceptions = hpx::wait_all_nothrow(operations);
@@ -114,7 +114,7 @@ namespace hpx::parallel::detail {
         return results;
     }
 
-    template <typename ExPolicy, typename T1, typename T2>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T1, typename T2>
     std::pair<T1, T2> get_capture_results(
         hpx::future<T1> operation1, hpx::future<T2> operation2)
     {
@@ -163,7 +163,7 @@ namespace hpx::parallel::detail {
         return {operation1.get(), operation2.get()};
     }
 
-    template <typename ExPolicy, typename T1, typename T2>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T1, typename T2>
     std::pair<std::vector<T1>, std::vector<T2>> get_capture_results(
         std::vector<hpx::future<T1>> operations1,
         std::vector<hpx::future<T2>> operations2)
@@ -230,7 +230,7 @@ namespace hpx::parallel::detail {
         return {HPX_MOVE(results1), HPX_MOVE(results2)};
     }
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct partition_range
     {
         hpx::id_type partition_id;
@@ -238,7 +238,8 @@ namespace hpx::parallel::detail {
         LocalIterator last;
     };
 
-    template <typename RangeList1, typename RangeList2, typename OutIterator>
+    HPX_CXX_EXPORT template <typename RangeList1, typename RangeList2,
+        typename OutIterator>
     struct capture_dispatch_chunk
     {
         std::size_t input1_size;
@@ -255,10 +256,10 @@ namespace hpx::parallel::detail {
     // Collection may temporarily hold both locality-grouped and reordered
     // buffers, so direct element storage can approach twice this value.
     // Container overhead and dynamic storage owned by elements are excluded.
-    inline constexpr std::size_t max_capture_batch_bytes =
+    HPX_CXX_EXPORT inline constexpr std::size_t max_capture_batch_bytes =
         std::size_t{128} * 1024 * 1024;
 
-    template <typename Value1, typename Value2>
+    HPX_CXX_EXPORT template <typename Value1, typename Value2>
     constexpr std::size_t max_capture_batch_elements() noexcept
     {
         constexpr std::size_t element_bytes =
@@ -269,20 +270,20 @@ namespace hpx::parallel::detail {
         return (std::max) (std::size_t(1), count);
     }
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct indexed_partition_range
     {
         std::size_t original_index;
         partition_range<LocalIterator> range;
     };
 
-    struct projected_value_target
+    HPX_CXX_EXPORT struct projected_value_target
     {
         std::size_t search_index;
         std::uint8_t operand_index;
     };
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct projected_value_request
     {
         hpx::id_type partition_id;
@@ -290,7 +291,7 @@ namespace hpx::parallel::detail {
         LocalIterator position;
     };
 
-    template <typename Key>
+    HPX_CXX_EXPORT template <typename Key>
     struct projected_value_result
     {
         static_assert(std::is_move_constructible_v<Key>,
@@ -305,21 +306,21 @@ namespace hpx::parallel::detail {
         std::vector<Key> values;
     };
 
-    struct collected_range_slice
+    HPX_CXX_EXPORT struct collected_range_slice
     {
         std::size_t original_index;
         std::size_t offset;
         std::size_t size;
     };
 
-    template <typename Value>
+    HPX_CXX_EXPORT template <typename Value>
     struct collected_partition_values
     {
         std::vector<Value> values;
         std::vector<collected_range_slice> slices;
     };
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct locality_range_batch
     {
         hpx::id_type locality_id;
@@ -329,7 +330,7 @@ namespace hpx::parallel::detail {
         std::vector<indexed_partition_range<LocalIterator>> ranges;
     };
 
-    HPX_FORCEINLINE hpx::id_type get_partition_locality(
+    HPX_CXX_EXPORT HPX_FORCEINLINE hpx::id_type get_partition_locality(
         hpx::id_type const& partition_id)
     {
         if (hpx::naming::detail::is_migratable(partition_id.get_gid()))
@@ -340,7 +341,7 @@ namespace hpx::parallel::detail {
         return hpx::naming::get_locality_from_id(partition_id);
     }
 
-    template <typename Value, typename LocalIterator>
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
     struct transmitter
     {
         using indexed_range_type = indexed_partition_range<LocalIterator>;
@@ -400,7 +401,7 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename Value, typename LocalIterator>
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
     struct send_values_action
       : hpx::actions::make_action<
             collected_partition_values<Value> (*)(
@@ -416,7 +417,7 @@ namespace hpx::parallel::detail {
     // source locality. The action receives all ranges that were grouped for
     // that locality and returns their copied values asynchronously.
 
-    template <typename Value, typename LocalIterator>
+    HPX_CXX_EXPORT template <typename Value, typename LocalIterator>
     hpx::future<collected_partition_values<Value>> capture_async(
         hpx::id_type const& routing_partition_id,
         std::vector<indexed_partition_range<LocalIterator>> ranges)
@@ -427,7 +428,8 @@ namespace hpx::parallel::detail {
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
     }
 
-    template <typename Key, typename LocalIterator, typename Proj>
+    HPX_CXX_EXPORT template <typename Key, typename LocalIterator,
+        typename Proj>
     struct projected_value_collector
     {
         using request_type = projected_value_request<LocalIterator>;
@@ -472,7 +474,8 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename Key, typename LocalIterator, typename Proj>
+    HPX_CXX_EXPORT template <typename Key, typename LocalIterator,
+        typename Proj>
     struct get_projected_values_action
       : hpx::actions::make_action<
             std::vector<projected_value_result<Key>> (*)(
@@ -492,8 +495,8 @@ namespace hpx::parallel::detail {
     // Remote exceptions are normalized according to ExPolicy before the
     // returned future is made ready.
 
-    template <typename ExPolicy, typename Key, typename LocalIterator,
-        typename Proj>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Key,
+        typename LocalIterator, typename Proj>
     hpx::future<std::vector<projected_value_result<Key>>>
     capture_projected_values_async(hpx::id_type const& routing_partition_id,
         std::vector<projected_value_request<LocalIterator>> requests,
@@ -520,7 +523,7 @@ namespace hpx::parallel::detail {
     // an accessible partition. Incrementing its local iterator reconstructs the
     // correct local half-open end position.
 
-    template <typename Iterator>
+    HPX_CXX_EXPORT template <typename Iterator>
     auto make_partition_ranges(Iterator first, Iterator last)
     {
         using traits = hpx::traits::segmented_iterator_traits<Iterator>;
@@ -582,7 +585,7 @@ namespace hpx::parallel::detail {
         return ranges;
     }
 
-    template <typename ExPolicy, typename IsSeq>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename IsSeq>
     struct range_collector
     {
         using policy_type = std::decay_t<ExPolicy>;
@@ -804,8 +807,9 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename OutputIterator, typename IsSeq, typename Dispatcher,
-        typename Algo, typename ExPolicy, typename... CallArgs>
+    HPX_CXX_EXPORT template <typename OutputIterator, typename IsSeq,
+        typename Dispatcher, typename Algo, typename ExPolicy,
+        typename... CallArgs>
     HPX_FORCEINLINE parallel::util::detail::algorithm_result_t<ExPolicy,
         std::decay_t<OutputIterator>>
     invoke_capture_dispatcher(
@@ -841,8 +845,8 @@ namespace hpx::parallel::detail {
         }
     }
 
-    template <typename Value1, typename Value2, typename Chunk, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
+    HPX_CXX_EXPORT template <typename Value1, typename Value2, typename Chunk,
+        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
     struct batch_receiver
     {
         using chunk_type = std::decay_t<Chunk>;
@@ -1504,8 +1508,9 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename Value1, typename Value2, typename Chunk, typename Algo,
-        typename R, typename ExPolicy, typename IsSeq, typename... Args>
+    HPX_CXX_EXPORT template <typename Value1, typename Value2, typename Chunk,
+        typename Algo, typename R, typename ExPolicy, typename IsSeq,
+        typename... Args>
     struct get_values_from_chunk_batch_action
       : hpx::actions::make_action<R (*)(Algo const&, ExPolicy,
                                       std::vector<Chunk>, Args...),
@@ -1527,8 +1532,8 @@ namespace hpx::parallel::detail {
     // normalizes local and remote exceptions into the execution-policy-required
     // form.
 
-    template <typename Value1, typename Value2, typename Chunk, typename Algo,
-        typename ExPolicy, typename IsSeq, typename... Args>
+    HPX_CXX_EXPORT template <typename Value1, typename Value2, typename Chunk,
+        typename Algo, typename ExPolicy, typename IsSeq, typename... Args>
     HPX_FORCEINLINE
         hpx::future<std::vector<decltype(std::declval<Chunk>().dest)>>
         capture_dispatch_batch_async(hpx::id_type const& routing_partition_id,

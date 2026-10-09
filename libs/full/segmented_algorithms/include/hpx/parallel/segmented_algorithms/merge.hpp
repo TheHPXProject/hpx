@@ -113,7 +113,7 @@ namespace hpx::parallel::detail {
         return table;
     }
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct partition_position
     {
         hpx::id_type locality_id;
@@ -163,7 +163,7 @@ namespace hpx::parallel::detail {
             std::next(range.first, local_offset)};
     }
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     struct locality_probe_batch
     {
         hpx::id_type locality_id;
@@ -172,23 +172,23 @@ namespace hpx::parallel::detail {
         std::vector<projected_value_request<LocalIterator>> requests;
     };
 
-    struct probe_request_location
+    HPX_CXX_EXPORT struct probe_request_location
     {
         std::size_t batch_index;
         std::size_t request_index;
     };
 
-    using probe_request_lookup =
+    HPX_CXX_EXPORT using probe_request_lookup =
         std::unordered_map<std::size_t, probe_request_location>;
 
-    inline constexpr std::size_t invalid_probe_batch_index =
+    HPX_CXX_EXPORT inline constexpr std::size_t invalid_probe_batch_index =
         (std::numeric_limits<std::size_t>::max)();
 
     // Adds a projected-value probe to its source-locality batch. The per-round
     // lookup deduplicates identical input positions in expected constant time,
     // while each request retains every diagonal search target that needs it.
 
-    template <typename LocalIterator>
+    HPX_CXX_EXPORT template <typename LocalIterator>
     void append_probe(std::vector<locality_probe_batch<LocalIterator>>& batches,
         probe_request_lookup& lookup,
         std::vector<std::size_t>& locality_to_batch,
@@ -240,7 +240,7 @@ namespace hpx::parallel::detail {
             probe_request_location{batch_index, request_index});
     }
 
-    struct diagonal_search_state
+    HPX_CXX_EXPORT struct diagonal_search_state
     {
         std::size_t k;
         std::size_t a_low;
@@ -252,7 +252,8 @@ namespace hpx::parallel::detail {
         bool complete = false;
     };
 
-    [[noreturn]] inline void throw_invalid_diagonal_state(char const* function)
+    HPX_CXX_EXPORT [[noreturn]] inline void throw_invalid_diagonal_state(
+        char const* function)
     {
         HPX_THROW_EXCEPTION(hpx::error::bad_parameter, function,
             "segmented merge could not determine a valid merge-path "
@@ -260,7 +261,7 @@ namespace hpx::parallel::detail {
             "must impose a strict weak ordering");
     }
 
-    HPX_FORCEINLINE void validate_diagonal_bounds(
+    HPX_CXX_EXPORT HPX_FORCEINLINE void validate_diagonal_bounds(
         diagonal_search_state const& state, std::size_t len1, std::size_t len2,
         char const* function)
     {
@@ -286,7 +287,7 @@ namespace hpx::parallel::detail {
     // If the bounds already identify one possible value, the intersection is
     // complete and no projected-value probes are required.
 
-    HPX_FORCEINLINE diagonal_search_state make_diagonal_state(
+    HPX_CXX_EXPORT HPX_FORCEINLINE diagonal_search_state make_diagonal_state(
         std::size_t len1, std::size_t len2, std::size_t k)
     {
         diagonal_search_state state{
@@ -302,8 +303,9 @@ namespace hpx::parallel::detail {
         return state;
     }
 
-    HPX_FORCEINLINE void constrain_diagonal_state(diagonal_search_state& state,
-        diagonal_search_state const& left, diagonal_search_state const& right)
+    HPX_CXX_EXPORT HPX_FORCEINLINE void constrain_diagonal_state(
+        diagonal_search_state& state, diagonal_search_state const& left,
+        diagonal_search_state const& right)
     {
         if (state.a_low > state.a_high || !left.complete || !right.complete ||
             left.k > state.k || state.k > right.k || left.a > right.a ||
@@ -339,11 +341,22 @@ namespace hpx::parallel::detail {
         }
     }
 
-    enum : std::uint8_t
-    {
-        input_previous = 0,
-        input_current = 1
+    HPX_CXX_EXPORT enum class input : std::uint8_t {
+        previous = 0,
+        current = 1
     };
+
+    HPX_CXX_EXPORT constexpr bool operator==(
+        std::uint8_t const lhs, input rhs) noexcept
+    {
+        return lhs == static_cast<std::uint8_t>(rhs);
+    }
+
+    HPX_CXX_EXPORT constexpr bool operator==(
+        input lhs, std::uint8_t const rhs) noexcept
+    {
+        return static_cast<std::uint8_t>(lhs) == rhs;
+    }
 
     // Stable Merge Path diagonal partitioning.
     // Find the stable merge-path co-rank (a, b) for output position k,
@@ -357,7 +370,7 @@ namespace hpx::parallel::detail {
     // elements from the first input precede equivalent elements from
     // the second input.
 
-    template <typename Key1, typename Key2>
+    HPX_CXX_EXPORT template <typename Key1, typename Key2>
     struct diagonal_probe_values
     {
         std::shared_ptr<Key1> a_previous;
@@ -386,7 +399,8 @@ namespace hpx::parallel::detail {
     // positions are translated through the range tables and appended to
     // locality batches. Boundary values that cannot be referenced are omitted.
 
-    template <typename Table1, typename Table2, typename Key1, typename Key2>
+    HPX_CXX_EXPORT template <typename Table1, typename Table2, typename Key1,
+        typename Key2>
     void prepare_diagonal_probes(diagonal_search_state& state,
         std::size_t search_index, std::size_t len1, std::size_t len2,
         Table1 const& table1, Table2 const& table2,
@@ -435,20 +449,20 @@ namespace hpx::parallel::detail {
         {
             append_probe(batches1, lookup1, locality_to_batch1,
                 find_partition_position(table1, state.a - 1), search_index,
-                input_previous);
+                static_cast<std::uint8_t>(input::previous));
             append_probe(batches2, lookup2, locality_to_batch2,
                 find_partition_position(table2, state.b), search_index,
-                input_current);
+                static_cast<std::uint8_t>(input::current));
         }
 
         if (state.b != 0 && state.a != len1)
         {
             append_probe(batches2, lookup2, locality_to_batch2,
                 find_partition_position(table2, state.b - 1), search_index,
-                input_previous);
+                static_cast<std::uint8_t>(input::previous));
             append_probe(batches1, lookup1, locality_to_batch1,
                 find_partition_position(table1, state.a), search_index,
-                input_current);
+                static_cast<std::uint8_t>(input::current));
         }
     }
 
@@ -462,7 +476,7 @@ namespace hpx::parallel::detail {
     // construction-aware deserialization of non-default-constructible key
     // types.
 
-    template <typename Key1, typename Key2>
+    HPX_CXX_EXPORT template <typename Key1, typename Key2>
     void store_input1_probe_results(
         std::vector<projected_value_result<Key1>> results,
         std::vector<diagonal_probe_values<Key1, Key2>>& values)
@@ -484,13 +498,13 @@ namespace hpx::parallel::detail {
                 HPX_ASSERT(target.search_index < values.size());
                 auto& search_values = values[target.search_index];
 
-                if (target.operand_index == input_previous)
+                if (target.operand_index == input::previous)
                 {
                     search_values.a_previous = shared_value;
                 }
                 else
                 {
-                    HPX_ASSERT(target.operand_index == input_current);
+                    HPX_ASSERT(target.operand_index == input::current);
                     search_values.a_current = shared_value;
                 }
             }
@@ -504,7 +518,7 @@ namespace hpx::parallel::detail {
     // target metadata determines whether the key represents B[b - 1] or B[b]
     // for the corresponding diagonal-search state.
 
-    template <typename Key1, typename Key2>
+    HPX_CXX_EXPORT template <typename Key1, typename Key2>
     void store_input2_probe_results(
         std::vector<projected_value_result<Key2>> results,
         std::vector<diagonal_probe_values<Key1, Key2>>& values)
@@ -526,13 +540,13 @@ namespace hpx::parallel::detail {
                 HPX_ASSERT(target.search_index < values.size());
                 auto& search_values = values[target.search_index];
 
-                if (target.operand_index == input_previous)
+                if (target.operand_index == input::previous)
                 {
                     search_values.b_previous = shared_value;
                 }
                 else
                 {
-                    HPX_ASSERT(target.operand_index == input_current);
+                    HPX_ASSERT(target.operand_index == input::current);
                     search_values.b_current = shared_value;
                 }
             }
@@ -550,7 +564,7 @@ namespace hpx::parallel::detail {
     // the binary-search bounds are reduced in the direction indicated by the
     // failed condition.
 
-    template <typename Key1, typename Key2, typename Comp>
+    HPX_CXX_EXPORT template <typename Key1, typename Key2, typename Comp>
     void update_diagonal_state(diagonal_search_state& state, std::size_t len1,
         std::size_t len2, diagonal_probe_values<Key1, Key2> const& values,
         Comp& comp)
@@ -603,8 +617,9 @@ namespace hpx::parallel::detail {
     // For seq(task), planning runs asynchronously from the caller, but its planning
     // task still waits for the remote probe operations.
 
-    template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
-        typename Table2, typename Comp, typename Proj1, typename Proj2>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Key1, typename Key2,
+        typename Table1, typename Table2, typename Comp, typename Proj1,
+        typename Proj2>
     void resolve_diagonal_intersections(
         std::vector<diagonal_search_state>& states, std::size_t len1,
         std::size_t len2, Table1 const& table1, Table2 const& table2,
@@ -684,8 +699,9 @@ namespace hpx::parallel::detail {
     // All locality batches for both inputs are launched concurrently and joined
     // before the search states are updated.
 
-    template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
-        typename Table2, typename Comp, typename Proj1, typename Proj2>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Key1, typename Key2,
+        typename Table1, typename Table2, typename Comp, typename Proj1,
+        typename Proj2>
     void resolve_diagonal_intersections(
         std::vector<diagonal_search_state>& states, std::size_t len1,
         std::size_t len2, Table1 const& table1, Table2 const& table2,
@@ -794,9 +810,9 @@ namespace hpx::parallel::detail {
         }
     }
 
-    template <typename ExPolicy, typename Key1, typename Key2, typename Table1,
-        typename Table2, typename Comp, typename Proj1, typename Proj2,
-        typename IsSeq>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Key1, typename Key2,
+        typename Table1, typename Table2, typename Comp, typename Proj1,
+        typename Proj2, typename IsSeq>
     void resolve_constrained_diagonal_intersections(
         std::vector<diagonal_search_state>& states, std::size_t len1,
         std::size_t len2, Table1 const& table1, Table2 const& table2,
@@ -870,7 +886,7 @@ namespace hpx::parallel::detail {
         }
     }
 
-    template <typename SegmentIterator, typename LocalIterator>
+    HPX_CXX_EXPORT template <typename SegmentIterator, typename LocalIterator>
     struct output_chunk_position
     {
         SegmentIterator segment;
@@ -879,7 +895,7 @@ namespace hpx::parallel::detail {
         std::size_t k1;
     };
 
-    template <typename Chunk>
+    HPX_CXX_EXPORT template <typename Chunk>
     struct destination_chunk_batch
     {
         hpx::id_type locality_id;
@@ -899,7 +915,7 @@ namespace hpx::parallel::detail {
     // Large destination partitions may produce multiple chunks so each chunk's
     // estimated captured input payload remains within the configured limit.
 
-    template <typename Traits3, typename Iter3, typename F>
+    HPX_CXX_EXPORT template <typename Traits3, typename Iter3, typename F>
     HPX_FORCEINLINE auto for_each_output_chunk(Traits3, Iter3 const& dest,
         std::size_t total_size, std::size_t max_chunk_size, F&& handle_chunk)
         -> std::pair<typename Traits3::segment_iterator,
@@ -956,7 +972,7 @@ namespace hpx::parallel::detail {
         return {HPX_MOVE(seg_out), HPX_MOVE(loc_output)};
     }
 
-    template <typename OutIterator>
+    HPX_CXX_EXPORT template <typename OutIterator>
     struct captured_merge
       : algorithm<captured_merge<OutIterator>,
             util::in_in_out_result<hpx::util::unused_type,
@@ -1027,7 +1043,7 @@ namespace hpx::parallel::detail {
         }
     };
 
-    template <typename ExPolicy, typename T>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename T>
     HPX_FORCEINLINE hpx::future<T> make_policy_exceptional_future(
         std::exception_ptr exception)
     {
@@ -1050,7 +1066,7 @@ namespace hpx::parallel::detail {
         std::terminate();
     }
 
-    template <typename Traits, typename Chunk>
+    HPX_CXX_EXPORT template <typename Traits, typename Chunk>
     struct destination_chunk_batches
     {
         using segment_iterator = Traits::segment_iterator;
@@ -1062,7 +1078,7 @@ namespace hpx::parallel::detail {
         std::size_t final_chunk_position = 0;
     };
 
-    template <typename Iter1, typename Iter2, typename Iter3>
+    HPX_CXX_EXPORT template <typename Iter1, typename Iter2, typename Iter3>
     struct segmented_merge_types
     {
         using input_traits1 =
@@ -1117,9 +1133,9 @@ namespace hpx::parallel::detail {
     // final_batch_index and final_chunk_position identify the chunk producing
     // the algorithm's final output iterator.
 
-    template <typename ExPolicy, typename Traits3, typename Chunk,
-        typename Iter1, typename Iter2, typename Iter3, typename Comp,
-        typename Proj1, typename Proj2, typename IsSeq>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Traits3,
+        typename Chunk, typename Iter1, typename Iter2, typename Iter3,
+        typename Comp, typename Proj1, typename Proj2, typename IsSeq>
     destination_chunk_batches<Traits3, Chunk> make_destination_chunk_batches(
         Traits3, Iter1 const& first1, std::size_t len1, Iter2 const& first2,
         std::size_t len2, Iter3 const& dest, Comp& comp, Proj1& proj1,
@@ -1216,7 +1232,8 @@ namespace hpx::parallel::detail {
         return chunk_batches;
     }
 
-    template <typename Result, typename Iter1, typename Iter2, typename Iter3>
+    HPX_CXX_EXPORT template <typename Result, typename Iter1, typename Iter2,
+        typename Iter3>
     hpx::future<Result> make_merge_result_future(
         hpx::future<Iter3>&& end_dest, Iter1 last1, Iter2 last2)
     {
@@ -1227,7 +1244,7 @@ namespace hpx::parallel::detail {
             });
     }
 
-    template <typename ExPolicy, typename Result>
+    HPX_CXX_EXPORT template <typename ExPolicy, typename Result>
     util::detail::algorithm_result_t<ExPolicy, Result>
     handle_merge_planning_exception(std::exception_ptr exception)
     {
@@ -1252,8 +1269,9 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     // Sequential remote implementation
 
-    template <typename Algo, typename ExPolicy, typename Iter1, typename Iter2,
-        typename Iter3, typename Comp, typename Proj1, typename Proj2>
+    HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename Iter1,
+        typename Iter2, typename Iter3, typename Comp, typename Proj1,
+        typename Proj2>
     HPX_FORCEINLINE util::detail::algorithm_result_t<ExPolicy,
         util::in_in_out_result<Iter1, Iter2, Iter3>>
     segmented_merge_sequential(Algo&& algo, ExPolicy policy, Iter1 first1,
@@ -1443,8 +1461,9 @@ namespace hpx::parallel::detail {
     ///////////////////////////////////////////////////////////////////////////
     // Parallel remote implementation
 
-    template <typename Algo, typename ExPolicy, typename Iter1, typename Iter2,
-        typename Iter3, typename Comp, typename Proj1, typename Proj2>
+    HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename Iter1,
+        typename Iter2, typename Iter3, typename Comp, typename Proj1,
+        typename Proj2>
     HPX_FORCEINLINE util::detail::algorithm_result_t<ExPolicy,
         util::in_in_out_result<Iter1, Iter2, Iter3>>
     segmented_merge_parallel(Algo&& algo, ExPolicy policy, Iter1 first1,
@@ -1596,8 +1615,9 @@ namespace hpx::parallel::detail {
 
     ///////////////////////////////////////////////////////////////////////////
 
-    template <typename Algo, typename ExPolicy, typename Iter1, typename Iter2,
-        typename Iter3, typename Comp, typename Proj1, typename Proj2>
+    HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename Iter1,
+        typename Iter2, typename Iter3, typename Comp, typename Proj1,
+        typename Proj2>
     util::detail::algorithm_result_t<ExPolicy,
         util::in_in_out_result<Iter1, Iter2, Iter3>>
     segmented_merge(Algo&& algo, ExPolicy policy, Iter1 first1, Iter1 last1,
@@ -1651,7 +1671,7 @@ namespace hpx::segmented {
         concept segmented_merge_iterator = hpx::traits::is_iterator_v<Iter> &&
             hpx::traits::is_segmented_iterator_v<Iter> &&
             std::random_access_iterator<Iter>;
-    }
+    }    // namespace detail
 
     HPX_CXX_EXPORT template <typename ExPolicy, typename Iter1, typename Iter2,
         typename Iter3, typename Comp = hpx::parallel::detail::less>
