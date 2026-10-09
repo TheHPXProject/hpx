@@ -4,13 +4,10 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-# The ITT test loads a recording collector through the ittnotify static part,
-# which uses dlopen, so it is only built for the ITT backend on non-Windows, and
-# only when one of the event classes it checks is compiled in.
-if(NOT HPX_WITH_ITTNOTIFY
-   OR WIN32
-   OR NOT (HPX_WITH_TRACING_LIFECYCLE_EVENTS
-           OR HPX_WITH_TRACING_WORK_STEALING_EVENTS)
+# Built only for the ITT backend, when one of the event classes it checks is
+# compiled in.
+if(NOT HPX_WITH_ITTNOTIFY OR NOT (HPX_WITH_TRACING_LIFECYCLE_EVENTS
+                                  OR HPX_WITH_TRACING_WORK_STEALING_EVENTS)
 )
   return()
 endif()
@@ -32,7 +29,6 @@ add_hpx_executable(
   HPX_PREFIX ${HPX_BUILD_PREFIX}
   FOLDER "Tests/Unit/Modules/Core/Tracing"
 )
-target_link_libraries(itt_task_lifecycle_test PRIVATE ${CMAKE_DL_LIBS})
 add_dependencies(itt_task_lifecycle_test hpx_itt_test_collector)
 
 set(collector_arg --collector=$<TARGET_FILE:hpx_itt_test_collector>)

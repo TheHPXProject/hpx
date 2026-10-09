@@ -62,7 +62,7 @@ namespace {
         if (trace)
         {
             static char const* const kinds[] = {"id_create", "id_destroy",
-                "begin", "end", "marker", "metadata", "note"};
+                "begin", "end", "marker", "metadata", "note", "domain"};
             std::fprintf(stderr, "itt[%zu] %-10s %llx,%llx %s\n",
                 events.size() - 1, kinds[static_cast<int>(kind)],
                 static_cast<unsigned long long>(e.d1),
@@ -91,6 +91,9 @@ HPX_ITT_TEST_EXPORT char const* __itt_api_version()
 
 HPX_ITT_TEST_EXPORT __itt_domain* __itt_domain_create(char const* name)
 {
+    // Recorded so the test can tell that ITT itself loaded this library.
+    record(hpx_itt_test::event_kind::domain_create, __itt_null, name);
+
     std::lock_guard<std::mutex> l(handles_mtx);
     auto& d = domains[name];
     if (!d)

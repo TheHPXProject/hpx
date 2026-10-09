@@ -13,6 +13,9 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/errors.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/plugin.hpp>
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/threading_base.hpp>
@@ -21,8 +24,6 @@
 
 #include "itt_test_collector.hpp"
 
-#include <dlfcn.h>
-
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -30,8 +31,10 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -39,20 +42,44 @@ namespace {
 
     std::string collector_path;
 
-    hpx_itt_test::copy_events_fn copy_events = nullptr;
-    hpx_itt_test::note_fn note = nullptr;
+    // Each symbol is held together with its deleter, which keeps a reference
+    // on the collector library for as long as the symbol is in use.
+    std::shared_ptr<std::remove_pointer_t<hpx_itt_test::copy_events_fn>>
+        copy_events_fn;
+    std::shared_ptr<std::remove_pointer_t<hpx_itt_test::note_fn>> note_fn;
+
+    std::size_t copy_events(hpx_itt_test::event* out, std::size_t capacity)
+    {
+        return copy_events_fn.get()(out, capacity);
+    }
+
+    std::size_t note(char const* text)
+    {
+        return note_fn.get()(text);
+    }
 
     bool bind_collector()
     {
-        void* lib = dlopen(collector_path.c_str(), RTLD_NOW | RTLD_NOLOAD);
-        if (lib == nullptr)
+        using copy_deleter = hpx::function<void(hpx_itt_test::copy_events_fn)>;
+        using note_deleter = hpx::function<void(hpx_itt_test::note_fn)>;
+
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::util::plugin::dll lib(collector_path);
+
+        auto [copy, copy_d] =
+            lib.get<hpx_itt_test::copy_events_fn, copy_deleter>(
+                "hpx_itt_test_copy_events", ec);
+        if (ec)
             return false;
 
-        copy_events = reinterpret_cast<hpx_itt_test::copy_events_fn>(
-            dlsym(lib, "hpx_itt_test_copy_events"));
-        note = reinterpret_cast<hpx_itt_test::note_fn>(
-            dlsym(lib, "hpx_itt_test_note"));
-        return copy_events != nullptr && note != nullptr;
+        auto [add_note, note_d] = lib.get<hpx_itt_test::note_fn, note_deleter>(
+            "hpx_itt_test_note", ec);
+        if (ec)
+            return false;
+
+        copy_events_fn.reset(copy, copy_d);
+        note_fn.reset(add_note, note_d);
+        return true;
     }
 
     // Copy of everything recorded so far. Other workers may still be
@@ -70,6 +97,22 @@ namespace {
             }
             ev.resize(total);
         }
+    }
+
+    // plugin::dll loads the library itself if nothing has yet, so binding
+    // alone does not show ITT is using it. ITT creating the hpx domain
+    // through it does.
+    bool itt_uses_collector()
+    {
+        for (auto const& e : events())
+        {
+            if (e.kind == hpx_itt_test::event_kind::domain_create &&
+                std::strcmp(e.name, "hpx") == 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     int markers(std::size_t from, std::size_t to, char const* name)
@@ -397,7 +440,12 @@ int hpx_main()
 {
     if (!bind_collector())
     {
-        HPX_TEST_MSG(false, "ITT test collector was not loaded");
+        HPX_TEST_MSG(false, "ITT test collector could not be loaded");
+        return hpx::local::finalize();
+    }
+    if (!itt_uses_collector())
+    {
+        HPX_TEST_MSG(false, "ITT did not load the test collector");
         return hpx::local::finalize();
     }
 
@@ -448,8 +496,13 @@ int main(int argc, char* argv[])
     }
     collector_path = vm["collector"].as<std::string>();
 
-    setenv("INTEL_LIBITTNOTIFY64", collector_path.c_str(), 1);
-    setenv("INTEL_ITTNOTIFY_GROUPS", "structure", 1);
+#if defined(_WIN32)
+    _putenv_s("INTEL_LIBITTNOTIFY64", collector_path.c_str());
+    _putenv_s("INTEL_ITTNOTIFY_GROUPS", "structure");
+#else
+    ::setenv("INTEL_LIBITTNOTIFY64", collector_path.c_str(), 1);
+    ::setenv("INTEL_ITTNOTIFY_GROUPS", "structure", 1);
+#endif
 
     hpx::local::init_params params;
     params.desc_cmdline = desc_commandline;

@@ -23,7 +23,8 @@ namespace hpx_itt_test {
         task_end,
         marker,
         metadata,
-        note
+        note,
+        domain_create
     };
 
     struct event
