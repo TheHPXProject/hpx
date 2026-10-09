@@ -90,19 +90,19 @@ namespace hpx::threads::policies {
             // Exponential back-off with a maximum sleep time.
             constexpr double max_exponent =
                 std::numeric_limits<double>::max_exponent - 1;
+            std::uint32_t const count =
+                data.wait_count.fetch_add(1, std::memory_order_relaxed);
             double const exponent =
-                (std::min) (static_cast<double>(data.wait_count), max_exponent);
+                (std::min) (static_cast<double>(count), max_exponent);
 
             std::chrono::microseconds const period(std::lround(
                 (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
-
-            ++data.wait_count;
 
             if (data.wait_cond.wait_for(l, period) ==    //-V1089
                 std::cv_status::no_timeout)
             {
                 // reset counter if thread was woken up
-                data.wait_count = 0;
+                data.wait_count.store(0, std::memory_order_relaxed);
             }
             return true;
         }
@@ -126,7 +126,8 @@ namespace hpx::threads::policies {
                 if (modes_[i].data_.load(std::memory_order_relaxed) &
                     policies::scheduler_mode::enable_idle_backoff)
                 {
-                    wait_count_data_[i].data_.wait_count = 0;
+                    wait_count_data_[i].data_.wait_count.store(
+                        0, std::memory_order_relaxed);
                     wait_count_data_[i].data_.wait_cond.notify_one();
                 }
             }
@@ -137,7 +138,8 @@ namespace hpx::threads::policies {
             auto const size = wait_count_data_.size();
             for (std::size_t i = 0; i != size; ++i)
             {
-                wait_count_data_[i].data_.wait_count = 0;
+                wait_count_data_[i].data_.wait_count.store(
+                    0, std::memory_order_relaxed);
                 wait_count_data_[i].data_.wait_cond.notify_one();
             }
         }
