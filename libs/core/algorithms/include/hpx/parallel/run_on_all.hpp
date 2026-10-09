@@ -20,6 +20,7 @@
 #include <hpx/parallel/algorithms/for_loop_reduction.hpp>
 
 #include <cstddef>
+#include <exception>
 #include <memory>
 #include <tuple>
 #include <type_traits>
@@ -115,6 +116,73 @@ namespace hpx::experimental {
             return run_on_all(
                 HPX_FORWARD(ExPolicy, policy), HPX_MOVE(f), std::get<Is>(t)...);
         }
+
+        HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F,
+            typename... Reductions>
+        // clang-format off
+            requires (
+                hpx::execution::experimental::is_scheduler_v<std::decay_t<Scheduler>>
+            )
+        // clang-format on
+        decltype(auto) run_on_all_sched(
+            Scheduler&& sched, F&& f, Reductions&&... reductions)
+        {
+            auto cores =
+                hpx::execution::experimental::processing_units_count(sched);
+
+            namespace ex = hpx::execution::experimental;
+
+            auto all_reductions =
+                std::make_tuple(HPX_FORWARD(Reductions, reductions)...);
+            auto sp = std::make_shared<decltype(all_reductions)>(
+                HPX_MOVE(all_reductions));
+
+            std::apply([&](auto&... r) { (r.init_iteration(0, 0), ...); }, *sp);
+
+            // Extract lambdas before pipeline composition. This prevents a
+            // Clang 22 template-instantiation crash (exit code 139).
+            auto bulk_task = [sp, f = HPX_FORWARD(F, f)](std::size_t i) {
+                std::apply(
+                    [&](auto&... r) { f(r.iteration_value(i)...); }, *sp);
+            };
+
+            auto cleanup_task = [sp]() mutable {
+                std::apply([](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
+            };
+
+            auto cleanup_error = [sp]() mutable {
+                std::apply([](auto&... r) { (r.exit_iteration(0), ...); }, *sp);
+            };
+
+            return ex::schedule(HPX_FORWARD(Scheduler, sched)) |
+                ex::bulk(cores, HPX_MOVE(bulk_task)) |
+                ex::let_error([cleanup_error = HPX_MOVE(cleanup_error)](
+                                  std::exception_ptr ep) mutable {
+                    try
+                    {
+                        HPX_INVOKE(cleanup_error);
+                    }
+                    // NOLINTNEXTLINE(bugprone-empty-catch)
+                    catch (...)
+                    {
+                        // silently swallow secondary exceptions during cleanup
+                    }
+                    return ex::just_error(HPX_MOVE(ep));
+                }) |
+                ex::then(HPX_MOVE(cleanup_task));
+        }
+
+        HPX_CXX_CORE_EXPORT template <typename Scheduler, std::size_t... Is,
+            typename... Ts>
+        decltype(auto) run_on_all_sched(
+            Scheduler&& sched, hpx::util::index_pack<Is...>, Ts&&... ts)
+        {
+            auto&& t = std::forward_as_tuple(HPX_FORWARD(Ts, ts)...);
+            auto f = std::get<sizeof...(Ts) - 1>(t);
+
+            return run_on_all_sched(
+                HPX_FORWARD(Scheduler, sched), HPX_MOVE(f), std::get<Is>(t)...);
+        }
     }    // namespace detail
     /// \endcond
 
@@ -141,6 +209,30 @@ namespace hpx::experimental {
     }
 
     /// Run a function on all available worker threads with reduction support
+    /// using the given P2300 scheduler
+    ///
+    /// \tparam Scheduler The scheduler type
+    /// \tparam T         The first type in a list of reduction types and the
+    ///                   function type to invoke (last argument)
+    /// \tparam Ts        The list of reduction types and the function type to
+    ///                   invoke (last argument)
+    /// \param sched      The scheduler to use
+    /// \param t          The first in a list of reductions and the function to
+    ///                   invoke (last argument)
+    /// \param ts         The list of reductions and the function to invoke (last
+    ///                   argument)
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename T,
+        typename... Ts>
+        requires(hpx::execution::experimental::is_scheduler_v<
+            std::decay_t<Scheduler>>)
+    decltype(auto) run_on_all(Scheduler&& sched, T&& t, Ts&&... ts)
+    {
+        return detail::run_on_all_sched(HPX_FORWARD(Scheduler, sched),
+            hpx::util::make_index_pack_t<sizeof...(Ts)>(), HPX_FORWARD(T, t),
+            HPX_FORWARD(Ts, ts)...);
+    }
+
+    /// Run a function on all available worker threads with reduction support
     /// using the \a hpx::execution::par execution policy
     ///
     /// \tparam T        The first type in a list of reduction types and the
@@ -152,7 +244,8 @@ namespace hpx::experimental {
     /// \param ts        The list of reductions and the function to invoke (last
     ///                  argument)
     HPX_CXX_CORE_EXPORT template <typename T, typename... Ts>
-        requires(!hpx::is_execution_policy_v<T>)
+        requires(!hpx::is_execution_policy_v<T> &&
+            !hpx::execution::experimental::is_scheduler_v<std::decay_t<T>>)
     decltype(auto) run_on_all(T&& t, Ts&&... ts)
     {
         return detail::run_on_all(hpx::execution::par,
