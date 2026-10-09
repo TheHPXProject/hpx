@@ -59,6 +59,7 @@ set(tests
     partitioned_vector_reduce
     partitioned_vector_replace
     partitioned_vector_replace_copy
+    partitioned_vector_sort
 )
 
 set(partitioned_vector_inclusive_scan_PARAMETERS RUN_SERIAL)
@@ -94,6 +95,9 @@ foreach(test ${tests})
     set(test_localities 4)
   elseif(test STREQUAL "partitioned_vector_merge_regressions")
     set(test_localities 3)
+  elseif(test STREQUAL "partitioned_vector_sort")
+    # Four localities exercise concurrent merges and remote transfers.
+    set(test_localities 4)
   else()
     set(test_localities 2)
   endif()
@@ -120,3 +124,15 @@ foreach(test ${tests})
   )
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES)
+  # These tests inspect implementation helpers that are not exported by
+  # HPX.Full.
+  foreach(test partitioned_vector_merge_extended
+               partitioned_vector_merge_regressions partitioned_vector_sort
+  )
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()

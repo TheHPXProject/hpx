@@ -50,7 +50,7 @@ namespace examples { namespace server {
 
         bool empty() const
         {
-            return tuple_fields_[0].empty();
+            return tuple_fields_.empty() || tuple_fields_[0].empty();
         }
 
         int insert(tuple_type const& tp)
@@ -80,6 +80,11 @@ namespace examples { namespace server {
         {
             tuple_type result;
 
+            // Uninitialized warehouse: no field containers yet. Do not call
+            // empty() here; that would index tuple_fields_[0].
+            if (tuple_fields_.empty())
+                return result;
+
             if (tp.empty())
             {
                 return read_random_tuple();
@@ -102,6 +107,11 @@ namespace examples { namespace server {
         tuple_type match_and_erase(tuple_type const& tp)
         {
             tuple_type result;
+
+            // Uninitialized warehouse: no field containers yet. Do not call
+            // empty() here; that would index tuple_fields_[0].
+            if (tuple_fields_.empty())
+                return result;
 
             if (tp.empty())
             {

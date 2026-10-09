@@ -1090,6 +1090,13 @@ namespace hpx::traits {
         {
             return iter->get_id();
         }
+
+        // Extract the locality id stored in the partition metadata. This
+        // avoids an AGAS lookup when an algorithm only needs placement.
+        static std::uint32_t get_locality_id(segment_iterator const& iter)
+        {
+            return iter->locality_id_;
+        }
     };
 
     template <typename T, typename Data>
@@ -1181,6 +1188,13 @@ namespace hpx::traits {
         static id_type get_id(segment_iterator const& iter)
         {
             return iter->get_id();
+        }
+
+        // Extract the locality id stored in the partition metadata. This
+        // avoids an AGAS lookup when an algorithm only needs placement.
+        static std::uint32_t get_locality_id(segment_iterator const& iter)
+        {
+            return iter->locality_id_;
         }
     };
 
