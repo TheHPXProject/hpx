@@ -450,10 +450,9 @@ namespace hpx {
                 hpx::is_invocable_v<Pred,
                     typename std::iterator_traits<FwdIter>::value_type, T>)
         // clang-format on
-        static typename parallel::util::detail::algorithm_result<ExPolicy,
-            FwdIter>::type
-        invoke_default(ExPolicy&& policy, FwdIter first, FwdIter last,
-            Size count, T const& value, Pred pred = Pred(), Proj proj = Proj())
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter first,
+            FwdIter last, Size count, T const& value, Pred pred = Pred(),
+            Proj proj = Proj())
         {
             return hpx::parallel::detail::search_n<FwdIter, FwdIter>().call(
                 HPX_FORWARD(ExPolicy, policy), first, last, count, value,

@@ -502,6 +502,8 @@ namespace hpx::parallel {
         struct inclusive_scan
           : public algorithm<inclusive_scan<IterPair>, IterPair>
         {
+            static constexpr bool uses_legacy_futures = true;
+
             constexpr inclusive_scan() noexcept
               : algorithm<inclusive_scan, IterPair>("inclusive_scan")
             {
@@ -528,10 +530,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename T, typename Op>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, T init, Op&& op)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, T init, Op&& op)
             {
                 using result = util::detail::algorithm_result<ExPolicy,
                     util::in_out_result<FwdIter1, FwdIter2>>;
@@ -610,10 +610,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Op>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, Op&& op)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, Op&& op)
             {
                 if (first != last)
                 {
@@ -674,8 +672,7 @@ namespace hpx {
                 hpx::traits::is_iterator_v<FwdIter2>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, FwdIter1 first, FwdIter1 last, FwdIter2 dest)
         {
             static_assert(std::forward_iterator<FwdIter1>,
@@ -734,9 +731,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Op op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Op op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -795,9 +791,8 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, Op op, T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, Op op, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

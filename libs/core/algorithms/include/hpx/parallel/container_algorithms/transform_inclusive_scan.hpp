@@ -893,10 +893,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            transform_inclusive_scan_result<FwdIter1, FwdIter2>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, BinOp binary_op, UnOp unary_op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, BinOp binary_op, UnOp unary_op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -960,10 +958,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            transform_inclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, BinOp binary_op,
-            UnOp unary_op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            O dest, BinOp binary_op, UnOp unary_op)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;
@@ -1037,10 +1033,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            transform_inclusive_scan_result<FwdIter1, FwdIter2>>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, Sent last,
-            FwdIter2 dest, BinOp binary_op, UnOp unary_op, T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            Sent last, FwdIter2 dest, BinOp binary_op, UnOp unary_op, T init)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");
@@ -1109,10 +1103,8 @@ namespace hpx::ranges {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy,
-            transform_inclusive_scan_result<std::ranges::iterator_t<Rng>, O>>
-        invoke_default(ExPolicy&& policy, Rng&& rng, O dest, BinOp binary_op,
-            UnOp unary_op, T init)
+        static decltype(auto) invoke_default(ExPolicy&& policy, Rng&& rng,
+            O dest, BinOp binary_op, UnOp unary_op, T init)
         {
             using iterator_type =
                 typename hpx::traits::range_traits<Rng>::iterator_type;

@@ -242,6 +242,8 @@ namespace hpx::parallel {
         struct transform_exclusive_scan
           : public algorithm<transform_exclusive_scan<IterPair>, IterPair>
         {
+            static constexpr bool uses_legacy_futures = true;
+
             constexpr transform_exclusive_scan() noexcept
               : algorithm<transform_exclusive_scan, IterPair>(
                     "transform_exclusive_scan")
@@ -261,10 +263,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
                 typename FwdIter2, typename Conv, typename T, typename Op>
-            static util::detail::algorithm_result_t<ExPolicy,
-                util::in_out_result<FwdIter1, FwdIter2>>
-            parallel(ExPolicy&& policy, FwdIter1 first, Sent last,
-                FwdIter2 dest, Conv&& conv, T&& init, Op&& op)
+            static decltype(auto) parallel(ExPolicy&& policy, FwdIter1 first,
+                Sent last, FwdIter2 dest, Conv&& conv, T&& init, Op&& op)
             {
                 using result_type = util::in_out_result<FwdIter1, FwdIter2>;
                 using result =
@@ -396,9 +396,9 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy, FwdIter2>
-        invoke_default(ExPolicy&& policy, FwdIter1 first, FwdIter1 last,
-            FwdIter2 dest, T init, BinOp binary_op, UnOp unary_op)
+        static decltype(auto) invoke_default(ExPolicy&& policy, FwdIter1 first,
+            FwdIter1 last, FwdIter2 dest, T init, BinOp binary_op,
+            UnOp unary_op)
         {
             static_assert(std::forward_iterator<FwdIter1>,
                 "Requires at least forward iterator.");

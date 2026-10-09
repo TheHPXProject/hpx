@@ -920,6 +920,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename IterTuple>
         struct merge : public algorithm<merge<IterTuple>, IterTuple>
         {
+            static constexpr bool uses_legacy_futures = true;
+
             constexpr merge() noexcept
               : algorithm<merge, IterTuple>("merge")
             {
@@ -941,11 +943,9 @@ namespace hpx::parallel {
             template <typename ExPolicy, typename Iter1, typename Sent1,
                 typename Iter2, typename Sent2, typename Iter3, typename Comp,
                 typename Proj1, typename Proj2>
-            static typename util::detail::algorithm_result<ExPolicy,
-                util::in_in_out_result<Iter1, Iter2, Iter3>>::type
-            parallel(ExPolicy&& policy, Iter1 first1, Sent1 last1, Iter2 first2,
-                Sent2 last2, Iter3 dest, Comp&& comp, Proj1&& proj1,
-                Proj2&& proj2)
+            static decltype(auto) parallel(ExPolicy&& policy, Iter1 first1,
+                Sent1 last1, Iter2 first2, Sent2 last2, Iter3 dest, Comp&& comp,
+                Proj1&& proj1, Proj2&& proj2)
             {
                 using result_type = util::in_in_out_result<Iter1, Iter2, Iter3>;
                 using algorithm_result =
@@ -1041,13 +1041,14 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
+                    std::exception_ptr const error = std::current_exception();
                     fut.wait();
 
                     std::vector<hpx::future<void>> futures;
                     futures.reserve(2);
                     futures.emplace_back(HPX_MOVE(fut));
-                    futures.emplace_back(hpx::make_exceptional_future<void>(
-                        std::current_exception()));
+                    futures.emplace_back(
+                        hpx::make_exceptional_future<void>(error));
 
                     std::list<std::exception_ptr> errors;
                     util::detail::handle_local_exceptions<ExPolicy>::call(
@@ -1096,13 +1097,14 @@ namespace hpx::parallel {
                 }
                 catch (...)
                 {
+                    std::exception_ptr const error = std::current_exception();
                     fut.wait();
 
                     std::vector<hpx::future<void>> futures;
                     futures.reserve(2);
                     futures.emplace_back(HPX_MOVE(fut));
-                    futures.emplace_back(hpx::make_exceptional_future<void>(
-                        std::current_exception()));
+                    futures.emplace_back(
+                        hpx::make_exceptional_future<void>(error));
 
                     std::list<std::exception_ptr> errors;
                     util::detail::handle_local_exceptions<ExPolicy>::call(
@@ -1145,6 +1147,8 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename Result>
         struct inplace_merge : public algorithm<inplace_merge<Result>, Result>
         {
+            static constexpr bool uses_legacy_futures = true;
+
             constexpr inplace_merge() noexcept
               : algorithm<inplace_merge, Result>("inplace_merge")
             {
@@ -1161,9 +1165,8 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename Iter, typename Sent,
                 typename Comp, typename Proj>
-            static util::detail::algorithm_result_t<ExPolicy, Iter> parallel(
-                ExPolicy&& policy, Iter first, Iter middle, Sent last,
-                Comp&& comp, Proj&& proj)
+            static decltype(auto) parallel(ExPolicy&& policy, Iter first,
+                Iter middle, Sent last, Comp&& comp, Proj&& proj)
             {
                 using result = util::detail::algorithm_result<ExPolicy, Iter>;
 
@@ -1217,8 +1220,7 @@ namespace hpx {
                     typename std::iterator_traits<RandIter2>::value_type
                 >
             )
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy,
-            RandIter3>
+        static decltype(auto)
         invoke_default(ExPolicy&& policy,
             RandIter1 first1, RandIter1 last1, RandIter2 first2,
             RandIter2 last2, RandIter3 dest, Comp comp = Comp())
@@ -1292,14 +1294,13 @@ namespace hpx {
                 >
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, RandIter first, RandIter middle,
-            RandIter last, Comp comp = Comp())
+        static decltype(auto) invoke_default(ExPolicy&& policy, RandIter first,
+            RandIter middle, RandIter last, Comp comp = Comp())
         {
             static_assert(std::random_access_iterator<RandIter>,
                 "Required at least random access iterator.");
 
-            return hpx::parallel::detail::get_void_result(
+            return hpx::parallel::util::detail::algorithm_result<ExPolicy>::get(
                 hpx::parallel::detail::inplace_merge<RandIter>().call(
                     HPX_FORWARD(ExPolicy, policy), first, middle, last,
                     HPX_MOVE(comp), hpx::identity_v));

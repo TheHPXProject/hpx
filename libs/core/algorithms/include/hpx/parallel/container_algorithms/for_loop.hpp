@@ -755,8 +755,8 @@ namespace hpx::ranges::experimental {
                 std::sentinel_for<Sent, Iter>
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, Iter first, Sent last, Args&&... args)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, Iter first, Sent last, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop must be called with at least a function object");
@@ -794,8 +794,8 @@ namespace hpx::ranges::experimental {
                     hpx::traits::is_range_generator_v<R>)
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, R&& rng, Args&&... args)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, R&& rng, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop must be called with at least a function object");
@@ -862,8 +862,7 @@ namespace hpx::ranges::experimental {
                 std::sentinel_for<Sent, Iter>
             )
         // clang-format on
-        static parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(
+        static decltype(auto) invoke_default(
             ExPolicy&& policy, Iter first, Sent last, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
@@ -906,8 +905,8 @@ namespace hpx::ranges::experimental {
                 std::ranges::range<Rng>
             )
         // clang-format on
-        static hpx::parallel::util::detail::algorithm_result_t<ExPolicy>
-        invoke_default(ExPolicy&& policy, Rng&& rng, S stride, Args&&... args)
+        static decltype(auto) invoke_default(
+            ExPolicy&& policy, Rng&& rng, S stride, Args&&... args)
         {
             static_assert(sizeof...(Args) >= 1,
                 "for_loop_strided must be called with at least a function "
