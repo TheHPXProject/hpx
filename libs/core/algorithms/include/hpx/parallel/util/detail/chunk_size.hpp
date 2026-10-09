@@ -232,7 +232,7 @@ namespace hpx::parallel::util::detail {
         adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         if (stride != 1)
         {
@@ -269,7 +269,7 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         auto test_function = [&](std::size_t test_chunk_size) -> std::size_t {
             if (test_chunk_size == 0)
@@ -357,7 +357,7 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::maximal_number_of_chunks(
                 policy.parameters(), policy.executor(), cores, count);
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
@@ -476,7 +476,7 @@ namespace hpx::parallel::util::detail {
                 policy.parameters(), policy.executor(), cores, count);
 
         FwdIter last = parallel::detail::next(begin, count);
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
@@ -528,7 +528,7 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         std::size_t base_idx = 0;
         auto test_function = [&](std::size_t test_chunk_size) -> std::size_t {
@@ -621,7 +621,7 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::maximal_number_of_chunks(
                 policy.parameters(), policy.executor(), cores, count);
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
