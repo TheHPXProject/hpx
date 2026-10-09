@@ -295,7 +295,7 @@ namespace hpx::threads::policies {
         {
             pu_mutex_type wait_mtx;
             std::condition_variable wait_cond;
-            std::uint32_t wait_count = 0;
+            std::atomic<std::uint32_t> wait_count{0};
         };
         std::vector<util::cache_line_data<idle_backoff_data>> wait_count_data_;
 #endif
