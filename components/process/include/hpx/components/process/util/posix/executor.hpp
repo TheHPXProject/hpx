@@ -16,6 +16,7 @@
 #if !defined(HPX_WINDOWS)
 #include <hpx/components/process/util/child.hpp>
 
+#include <cerrno>
 #include <cstdlib>
 
 #include <sys/types.h>
@@ -25,6 +26,14 @@ namespace hpx { namespace components { namespace process { namespace posix {
 
     struct executor
     {
+        enum class error_origin
+        {
+            none,
+            setup,
+            chdir,
+            execve
+        };
+
         executor()
           : exe(nullptr)
           , cmd_line(nullptr)
@@ -92,7 +101,15 @@ namespace hpx { namespace components { namespace process { namespace posix {
             template <class Arg>
             void operator()(Arg& arg) const
             {
-                arg.on_exec_setup(e_);
+                if (e_.exec_error == 0)
+                {
+                    e_.exec_error_origin = error_origin::setup;
+                    arg.on_exec_setup(e_);
+                    if (e_.exec_error == 0)
+                    {
+                        e_.exec_error_origin = error_origin::none;
+                    }
+                }
             }
         };
 
@@ -124,13 +141,21 @@ namespace hpx { namespace components { namespace process { namespace posix {
             }
             else if (pid == 0)
             {
+                exec_error = 0;
+                exec_error_origin = error_origin::none;
                 (call_on_exec_setup(*this)(ts), ...);
-                ::execve(exe, cmd_line, env);
+                if (exec_error == 0)
+                {
+                    exec_error_origin = error_origin::execve;
+                    ::execve(exe, cmd_line, env);
+                    exec_error = errno;
+                }
                 (call_on_exec_error(*this)(ts), ...);
 
                 _exit(EXIT_FAILURE);
             }
 
+            child_pid = pid;
             (call_on_fork_success(*this)(ts), ...);
 
             return child(pid);
@@ -139,6 +164,10 @@ namespace hpx { namespace components { namespace process { namespace posix {
         char const* exe;
         char** cmd_line;
         char** env;
+        // Preserve child setup errors until the error initializers report them.
+        int exec_error = 0;
+        error_origin exec_error_origin = error_origin::none;
+        pid_t child_pid = -1;
     };
 
 }}}}    // namespace hpx::components::process::posix
