@@ -1190,10 +1190,13 @@ if(HPX_WITH_TRACY)
     HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
     CATEGORY "Profiling"
   )
+endif()
 
-  # Per-subsystem tracing gates. Each event class is compiled out when its
-  # option is OFF so that users profiling one subsystem do not pay the cost of
-  # the others. Defaults preserve current behaviour: all three classes on.
+# Per-subsystem tracing gates, compiled out when OFF so a user profiling one
+# subsystem does not pay for the others. Lifecycle and work-stealing are honored
+# by both the Tracy and the ITTNotify backends; causal events remain Tracy-only
+# since ITT has no causal hooks. Defaults keep current behavior: all on.
+if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   hpx_option(
     HPX_WITH_TRACING_LIFECYCLE_EVENTS
     BOOL
@@ -1206,6 +1209,19 @@ if(HPX_WITH_TRACY)
   endif()
 
   hpx_option(
+    HPX_WITH_TRACING_WORK_STEALING_EVENTS
+    BOOL
+    "Emit work-stealing events when a worker steals a task from another. Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
+  endif()
+endif()
+
+if(HPX_WITH_TRACY)
+  hpx_option(
     HPX_WITH_TRACING_CAUSAL_EVENTS
     BOOL
     "Emit causal chain events (future_fulfilled, future_exception_set, continuation_run, continuation_finished, handle_on_completed_fired). Default: ON."
@@ -1216,20 +1232,9 @@ if(HPX_WITH_TRACY)
     hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
   endif()
 
-  hpx_option(
-    HPX_WITH_TRACING_WORK_STEALING_EVENTS
-    BOOL
-    "Emit work-stealing events when a worker steals a task from another. Default: ON."
-    ON
-    CATEGORY "Profiling"
-  )
-  if(HPX_WITH_TRACING_WORK_STEALING_EVENTS)
-    hpx_add_config_define(HPX_HAVE_TRACING_WORK_STEALING_EVENTS)
-  endif()
-
-  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX and ITTNotify
-  # already treat every lifecycle hook as a constexpr no-op, so sampling would
-  # gate dead code on those backends; only Tracy actually emits.
+  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX treats every
+  # lifecycle hook as a constexpr no-op and the ITTNotify backend emits every
+  # task unconditionally, so sampling is meaningful only for Tracy.
   hpx_option(
     HPX_WITH_TRACING_SAMPLE_RATE
     STRING

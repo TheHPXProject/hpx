@@ -54,6 +54,7 @@ jobs:
       run: |
           cmake --build build --target all
           cmake --build build --target examples
+          cmake --build build --target tests.unit.modules.tracing
     - name: Test
       shell: bash
       run: |
@@ -65,7 +66,7 @@ jobs:
           cd build
           ctest \
             --output-on-failure \
-            --tests-regex tests.examples.itt_notify \
+            --tests-regex "tests.examples.itt_notify|tests.unit.modules.tracing" \
             -j1
     - name: Verify ITT API usage
       shell: bash
