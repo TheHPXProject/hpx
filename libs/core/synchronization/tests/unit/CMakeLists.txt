@@ -81,6 +81,45 @@ foreach(test ${tests})
 
 endforeach()
 
+# Contract tests for hpx::latch: HPX_PRE needs native C++26 contracts, while
+# HPX_CONTRACT_ASSERT is tested in fallback mode (it compiles out in IGNORE).
+if(HPX_WITH_CXX26_CONTRACTS)
+  set(latch_contract_violation_tests
+      latch_ctor_contract_violation latch_count_down_contract_violation
+      latch_arrive_and_wait_contract_violation
+  )
+
+  foreach(test ${latch_contract_violation_tests})
+    set(${test}_PARAMETERS FAILURE_EXPECTED)
+
+    source_group("Source Files" FILES ${test}.cpp)
+
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${test}.cpp
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Tests/Unit/Modules/Core/Synchronization"
+    )
+
+    add_hpx_unit_test("modules.synchronization" ${test} ${${test}_PARAMETERS})
+  endforeach()
+elseif(NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
+  set(test latch_fallback_handler)
+
+  source_group("Source Files" FILES ${test}.cpp)
+
+  add_hpx_executable(
+    ${test}_test INTERNAL_FLAGS
+    SOURCES ${test}.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Core/Synchronization"
+  )
+
+  add_hpx_unit_test("modules.synchronization" ${test} THREADS_PER_LOCALITY 4)
+endif()
+
 if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
   # Clang (last tested version is v22) fails compiling the following tests when
   # C++ module support is enabled.
