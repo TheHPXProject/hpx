@@ -813,7 +813,10 @@ namespace hpx::parallel {
 
             auto const count = static_cast<std::size_t>(size);
             auto const step = static_cast<std::size_t>(stride);
-            return (count + step - 1) / step;
+
+            // rounding up by adding the stride first would wrap for a stride
+            // close to the largest value a std::size_t can hold
+            return count / step + (count % step != 0 ? 1 : 0);
         }
 
         // Distance covered by the given number of iterations taken with the
@@ -833,7 +836,14 @@ namespace hpx::parallel {
 
             auto const count = static_cast<std::size_t>(size);
             auto const step = static_cast<std::size_t>(stride);
-            return (count - 1) * step + 1;
+            std::size_t const distance = (count - 1) * step + 1;
+
+            // the last iteration starts at (count - 1) * stride, so a stride
+            // large enough to put it past the end of the address space cannot
+            // be expressed as a distance at all
+            HPX_ASSERT(iteration_count(distance, stride) == count);
+
+            return distance;
         }
 
         ///////////////////////////////////////////////////////////////////////
