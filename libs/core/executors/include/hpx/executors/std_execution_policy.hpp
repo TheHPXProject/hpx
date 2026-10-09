@@ -1,10 +1,10 @@
-//  Copyright (c) 2021-2023 Hartmut Kaiser
+//  Copyright (c) 2021-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/execution/std_execution_policy.hpp
+/// \file std_execution_policy.hpp
 
 #pragma once
 
@@ -16,7 +16,7 @@
 #include <execution>
 #include <type_traits>
 
-namespace hpx::detail {
+namespace hpx::execution {
 
     // Specialize our is_execution_policy traits for the corresponding std
     // versions
@@ -24,7 +24,7 @@ namespace hpx::detail {
     /// \cond NOINTERNAL
     template <>
     struct policy_traits<std::execution::sequenced_policy>
-      : policy_traits_default
+      : detail::policy_traits_default
     {
         static constexpr bool is_policy = true;
         static constexpr bool is_sequenced = true;
@@ -32,7 +32,7 @@ namespace hpx::detail {
 
     template <>
     struct policy_traits<std::execution::parallel_policy>
-      : policy_traits_default
+      : detail::policy_traits_default
     {
         static constexpr bool is_policy = true;
         static constexpr bool is_parallel = true;
@@ -40,7 +40,7 @@ namespace hpx::detail {
 
     template <>
     struct policy_traits<std::execution::parallel_unsequenced_policy>
-      : policy_traits_default
+      : detail::policy_traits_default
     {
         static constexpr bool is_policy = true;
         static constexpr bool is_parallel = true;
@@ -50,7 +50,7 @@ namespace hpx::detail {
 #if defined(HPX_HAVE_CXX20_STD_EXECUTION_POLICES)
     template <>
     struct policy_traits<std::execution::unsequenced_policy>
-      : policy_traits_default
+      : detail::policy_traits_default
     {
         static constexpr bool is_policy = true;
         static constexpr bool is_sequenced = true;
@@ -58,6 +58,6 @@ namespace hpx::detail {
     };
 #endif
     /// \endcond
-}    // namespace hpx::detail
+}    // namespace hpx::execution
 
 #endif

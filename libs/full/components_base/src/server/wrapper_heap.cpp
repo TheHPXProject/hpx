@@ -15,6 +15,7 @@
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/thread_support.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #if HPX_DEBUG_WRAPPER_HEAP != 0
@@ -145,44 +146,97 @@ namespace hpx::components::detail {
 
     bool wrapper_heap::alloc(void** result, std::size_t count)
     {
-        [[maybe_unused]] util::itt::heap_allocate heap_allocate(
-            heap_alloc_function_, result, count * parameters_.element_size,
-            HPX_WRAPPER_HEAP_INITIALIZED_MEMORY);
-
-        if (nullptr == pool_)
-        {
+        if (nullptr == pool_ || count > parameters_.capacity)
             return false;
-        }
 
         std::size_t const num_bytes = count * parameters_.element_size;
+
+        [[maybe_unused]] util::itt::heap_allocate heap_allocate(
+            heap_alloc_function_, result, num_bytes,
+            HPX_WRAPPER_HEAP_INITIALIZED_MEMORY);
+
         std::size_t const total_num_bytes =
             parameters_.capacity * parameters_.element_size;
 
-        if (first_free_ + num_bytes > pool_ + total_num_bytes)
+        char* p = first_free_.load(std::memory_order_relaxed);
+        char* const last = pool_ + total_num_bytes - num_bytes;
+
+        while (p <= last)
         {
-            return false;
-        }
+            char* const next = p + num_bytes;
+
+            if (first_free_.compare_exchange_weak(p, next,
+                    std::memory_order_relaxed, std::memory_order_relaxed))
+            {
+                [[maybe_unused]] std::size_t const previous_free_size =
+                    free_size_.fetch_sub(count, std::memory_order_relaxed);
+                HPX_ASSERT(previous_free_size >= count);
 
 #if defined(HPX_DEBUG)
-        alloc_count_ += count;
+                alloc_count_.fetch_add(count, std::memory_order_relaxed);
 #endif
-
-        char* p = first_free_.fetch_add(
-            static_cast<std::ptrdiff_t>(count * parameters_.element_size),
-            std::memory_order_relaxed);
-
-        if (p + num_bytes > pool_ + total_num_bytes)
-        {
-            return false;
-        }
 
 #if HPX_DEBUG_WRAPPER_HEAP != 0
-        // init memory blocks
-        debug::fill_bytes(p, initial_value, count * parameters_.element_size);
+                // init memory blocks
+                debug::fill_bytes(
+                    p, initial_value, count * parameters_.element_size);
 #endif
 
-        *result = p;
-        return true;
+                *result = p;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool wrapper_heap::reclaim_if_unusable(std::size_t count)
+    {
+        [[maybe_unused]] util::itt::heap_internal_access hia;
+
+        if (nullptr == pool_)
+            return true;
+
+        if (count > parameters_.capacity)
+            return false;
+
+        std::size_t const total_num_bytes =
+            parameters_.capacity * parameters_.element_size;
+
+        char* const end = pool_ + total_num_bytes;
+        char* const first = first_free_.load(std::memory_order_relaxed);
+
+        HPX_ASSERT(first != nullptr);
+        HPX_ASSERT(first <= end);
+
+        // An end cursor means this heap has already been exhausted or retired.
+        if (first == end)
+            return false;
+
+        std::size_t const remaining_bytes =
+            static_cast<std::size_t>(end - first);
+        std::size_t const remaining_slots =
+            remaining_bytes / parameters_.element_size;
+
+        if (remaining_slots >= count)
+            return false;
+
+        // No future allocation may use this trailing region. Retiring the
+        // tail changes allocatability, but not the number of live slots.
+        first_free_.store(end, std::memory_order_relaxed);
+
+        std::size_t const current_free_size =
+            free_size_.load(std::memory_order_relaxed);
+
+        HPX_ASSERT(current_free_size <= parameters_.capacity);
+
+        if (current_free_size == parameters_.capacity)
+        {
+            free_pool();
+            return true;
+        }
+
+        return false;
     }
 
     void wrapper_heap::free([[maybe_unused]] void* p, std::size_t count)
@@ -214,14 +268,24 @@ namespace hpx::components::detail {
         size_t const current_free_size =
             free_size_.fetch_add(count, std::memory_order_relaxed) + count;
 
-        // release the pool if this one was the last allocated item
+        HPX_ASSERT(current_free_size <= parameters_.capacity);
+
+        // Release only if there are no live allocations and the bump tail
+        // has either been completely consumed or explicitly retired.
         if (current_free_size == parameters_.capacity)
-            free_pool();
+        {
+            std::size_t const total_num_bytes =
+                parameters_.capacity * parameters_.element_size;
+            char* const end = pool_ + total_num_bytes;
+
+            if (first_free_.load(std::memory_order_relaxed) == end)
+                free_pool();
+        }
     }
 
     bool wrapper_heap::did_alloc(void* p) const
     {
-        // no lock is necessary here as all involved variables are immutable
+        // The owning heap list synchronizes this query against reclamation.
         [[maybe_unused]] util::itt::heap_internal_access hia;
 
         if (nullptr == pool_)
@@ -312,6 +376,16 @@ namespace hpx::components::detail {
                 std::memory_order_relaxed);
         }
 
+        [[maybe_unused]] char* const first =
+            first_free_.load(std::memory_order_relaxed);
+        [[maybe_unused]] char* const end = pool_ + total_num_bytes;
+
+        HPX_ASSERT(first >= pool_);
+        HPX_ASSERT(first <= end);
+        HPX_ASSERT(parameters_.element_size != 0);
+
+        // free_size_ tracks slots not occupied by live allocations.
+        // first_free_ separately tracks the bump-allocatable tail.
         free_size_.store(parameters_.capacity, std::memory_order_release);
 
         LOSH_(info).format("wrapper_heap ({}): init_pool ({}) size: {}.",
@@ -325,6 +399,11 @@ namespace hpx::components::detail {
     {
         if (pool_ != nullptr)
         {
+#if defined(HPX_DEBUG)
+            std::size_t const alloc_count =
+                alloc_count_.load(std::memory_order_relaxed);
+#endif
+
             LOSH_(debug)
                     .format("wrapper_heap ({})",
                         !class_name_.empty() ? class_name_.c_str() :
@@ -332,13 +411,13 @@ namespace hpx::components::detail {
 #if defined(HPX_DEBUG)
                     .format(": releasing heap: alloc count: {}, free "
                             "count: {}",
-                        alloc_count_, free_count_)
+                        alloc_count, free_count_)
 #endif
                 << ".";
 
             if (wrapper_heap::size() > 0
 #if defined(HPX_DEBUG)
-                || alloc_count_ != free_count_
+                || alloc_count != free_count_
 #endif
             )
             {

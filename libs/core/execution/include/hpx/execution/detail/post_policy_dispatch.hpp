@@ -14,11 +14,67 @@
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/threading_base.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include <utility>
 
 namespace hpx::detail {
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Run tid, a thread created as pending_do_not_schedule by a fork, next.
+    // The work has been handed off at this point, so a failure to yield is
+    // not reported to the caller; tid gets scheduled instead.
+    inline void run_forked_thread(threads::thread_id_ref_type const& tid,
+        threads::thread_description const& desc)
+    {
+        if (threads::thread_id_type const tid_self = threads::get_self_id())
+        {
+            try
+            {
+                // yield_to(tid), suspend dispatches tid to its own scheduler
+                // if that differs from ours
+                hpx::this_thread::suspend(
+                    threads::thread_schedule_state::pending, tid.noref(), desc);
+                return;
+            }
+            catch (hpx::thread_interrupted const&)
+            {
+                // re-arm, the interruption fires at the next interruption
+                // point instead; ignore if interrupts were disabled
+                // meanwhile (interrupt() throws thread_not_interruptable)
+                try
+                {
+                    get_thread_id_data(tid_self)->interrupt();
+                }
+                catch (hpx::exception const& e)
+                {
+                    // thread_not_interruptable: interruption was disabled
+                    // on this thread in the meantime
+                    (void) e;
+                }
+            }
+            catch (hpx::exception const& e)
+            {
+                // yield_aborted
+                (void) e;
+            }
+        }
+
+        // Not on an HPX thread, or suspend failed (possibly after yielding).
+        // A duplicate queue entry is harmless: the scheduling loop only runs
+        // a thread that is still pending. Preserve the registered priority
+        // and worker placement, and wake an idling worker: set_thread_state
+        // would do both, going through schedule_thread directly does not.
+        auto* const thrd_data = get_thread_id_data(tid);
+        auto* const scheduler = thrd_data->get_scheduler_base();
+
+        threads::thread_schedule_hint const schedulehint(
+            static_cast<std::int16_t>(thrd_data->get_last_worker_thread_num()));
+        scheduler->schedule_thread(
+            tid, schedulehint, false, thrd_data->get_priority());
+        scheduler->do_some_work(static_cast<std::size_t>(-1));
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // forward declaration
@@ -70,7 +126,6 @@ namespace hpx::detail {
                     HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...),
                 desc, policy.priority(),
                 threads::thread_schedule_hint(
-                    threads::thread_schedule_hint_mode::thread,
                     static_cast<std::int16_t>(get_worker_thread_num()),
                     hint.placement_mode(),
                     hpx::threads::thread_execution_hint::none,
@@ -80,17 +135,11 @@ namespace hpx::detail {
 
             threads::thread_id_ref_type const tid =
                 threads::register_thread(data, pool);
-            threads::thread_id_type const tid_self = threads::get_self_id();
 
             // make sure this thread is executed last
-            if (tid && tid_self &&
-                get_thread_id_data(tid)->get_scheduler_base() ==
-                    get_thread_id_data(tid_self)->get_scheduler_base())
+            if (tid)
             {
-                // yield_to(tid)
-                hpx::this_thread::suspend(
-                    threads::thread_schedule_state::pending, tid.noref(),
-                    "post_policy_dispatch(suspend)");
+                run_forked_thread(tid, "post_policy_dispatch(suspend)");
             }
         }
 

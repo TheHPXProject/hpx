@@ -326,7 +326,8 @@ namespace hpx::parcelset::policies::lci {
                 state.store(
                     connection_state::locked, std::memory_order_relaxed);
                 auto ret = unified_followup_send(
-                    const_cast<void*>(chunk.data_.cpos_), chunk.size_);
+                    const_cast<void*>(std::as_const(chunk).data()),
+                    chunk.size_);
                 if (ret.status == return_status_t::done)
                 {
                     ++send_chunks_idx;

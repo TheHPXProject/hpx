@@ -81,24 +81,45 @@ if(NOT TARGET tracy::tracy)
     tracy SYSTEM INTERFACE $<BUILD_INTERFACE:${TRACY_ROOT}/public>
                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
-  target_link_libraries(tracy INTERFACE TracyClient)
+
+  # Static builds link TracyClient into consumers, so it must ship and be
+  # exported. Shared builds absorb it into hpx_core, so tracy only needs it at
+  # build time and the wrapper alone goes in the export set.
+  set(tracy_targets tracy)
+  if(HPX_WITH_STATIC_LINKING)
+    list(APPEND tracy_targets TracyClient)
+    target_link_libraries(tracy INTERFACE TracyClient)
+  else()
+    target_link_libraries(tracy INTERFACE $<BUILD_INTERFACE:TracyClient>)
+  endif()
 
   install(
-    TARGETS tracy
+    TARGETS ${tracy_targets}
     EXPORT HPXTracyTarget
     COMPONENT core
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 
-  install(
-    DIRECTORY ${TRACY_ROOT}/public/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    COMPONENT core
-    FILES_MATCHING
-    PATTERN "*.hpp"
-  )
+  # Only static builds ship Tracy's headers, next to the exported TracyClient.
+  # libbacktrace is Tracy's bundled internal impl; its headers include a generic
+  # config.h that would collide with any consumer's own build. Tracy's upstream
+  # install(FILES) excludes it for the same reason.
+  if(HPX_WITH_STATIC_LINKING)
+    install(
+      DIRECTORY ${TRACY_ROOT}/public/
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+      COMPONENT core
+      FILES_MATCHING
+      PATTERN "*.hpp"
+      PATTERN "*.h"
+      PATTERN "libbacktrace" EXCLUDE
+    )
+  endif()
 
   export(
-    TARGETS tracy
+    TARGETS ${tracy_targets}
     NAMESPACE tracy::
     FILE "${CMAKE_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXTracyTarget.cmake"
   )

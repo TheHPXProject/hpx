@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -9,6 +9,8 @@
 #include <hpx/config.hpp>
 
 #if defined(HPX_HAVE_DATAPAR)
+#include <hpx/execution/traits/vector_pack_type.hpp>
+
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -28,7 +30,7 @@ namespace hpx::parallel::traits {
     inline constexpr bool is_vector_pack_v = is_vector_pack<T>::value;
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    using is_vector_pack_t = typename is_vector_pack<T>::type;
+    using is_vector_pack_t = is_vector_pack<T>::type;
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
     struct is_scalar_vector_pack;
@@ -59,10 +61,9 @@ namespace hpx::parallel::traits {
     struct vector_pack_alignment<hpx::tuple<Vector...>,
         std::enable_if_t<hpx::util::all_of_v<is_vector_pack_t<Vector>...>>>
     {
-        using pack_type =
-            typename hpx::tuple_element<0, hpx::tuple<Vector...>>::type;
+        using pack_type = hpx::tuple_element<0, hpx::tuple<Vector...>>::type;
 
-        static constexpr std::size_t const value =
+        static constexpr std::size_t value =
             vector_pack_alignment<pack_type>::value;
     };
 
@@ -78,11 +79,9 @@ namespace hpx::parallel::traits {
     struct vector_pack_size<hpx::tuple<Vector...>,
         std::enable_if_t<hpx::util::all_of_v<is_vector_pack_t<Vector>...>>>
     {
-        using pack_type =
-            typename hpx::tuple_element<0, hpx::tuple<Vector...>>::type;
+        using pack_type = hpx::tuple_element<0, hpx::tuple<Vector...>>::type;
 
-        static constexpr std::size_t const value =
-            vector_pack_size<pack_type>::value;
+        static constexpr std::size_t value = vector_pack_size<pack_type>::value;
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>

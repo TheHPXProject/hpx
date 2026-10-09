@@ -265,7 +265,7 @@ namespace hpx::parcelset::policies::gasnet {
                     std::memcpy(hpx::util::gasnet_environment::segments
                                     [hpx::util::gasnet_environment::rank()]
                                         .addr,
-                        c.data_.cpos_, static_cast<int>(c.size_));
+                        std::as_const(c).data(), static_cast<int>(c.size_));
 
                     hpx::util::gasnet_environment::put(
                         static_cast<std::uint8_t*>(

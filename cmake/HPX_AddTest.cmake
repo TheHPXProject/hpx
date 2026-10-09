@@ -45,7 +45,12 @@ function(add_hpx_test category name)
     set(${name}_EXECUTABLE ${name})
   endif()
 
-  if(TARGET ${${name}_EXECUTABLE}_test)
+  # Example binaries are not named *_test. Prefer that target so a same-named
+  # unit test (e.g. parallel_scheduler_test) does not replace the example
+  # executable in tests.examples.*.
+  if("${category}" MATCHES "tests.examples" AND TARGET ${${name}_EXECUTABLE})
+    set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}>")
+  elseif(TARGET ${${name}_EXECUTABLE}_test)
     set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}_test>")
   elseif(TARGET ${${name}_EXECUTABLE})
     set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}>")
@@ -105,6 +110,7 @@ function(add_hpx_test category name)
   foreach(arg ${${name}_UNPARSED_ARGUMENTS})
     set(args ${args} "${arg}")
   endforeach()
+  list(APPEND args ${${name}_ARGS})
   set(args "-v" "--" ${args})
   if(${HPX_WITH_TESTS_DEBUG_LOG})
     set(args ${args}

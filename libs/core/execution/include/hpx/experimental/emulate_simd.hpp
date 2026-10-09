@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -38,24 +39,29 @@ namespace hpx::datapar::experimental {
 
     namespace simd_abi {
 
-        struct scalar
+        HPX_CXX_CORE_EXPORT struct scalar
         {
         };
-        struct simd_emulation_abi
+        HPX_CXX_CORE_EXPORT struct simd_emulation_abi
         {
         };
 
-        template <typename T>
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
+        struct fixed_size_simd_emulation_abi
+        {
+        };
+
+        HPX_CXX_CORE_EXPORT template <typename T>
         inline constexpr int max_fixed_size = detail::max_vector_pack_size;
 
-        template <typename T>
+        HPX_CXX_CORE_EXPORT template <typename T>
         using compatible = simd_emulation_abi;
 
-        template <typename T>
+        HPX_CXX_CORE_EXPORT template <typename T>
         using native = simd_emulation_abi;
 
-        template <typename T, size_t N>
-        using fixed_size = simd_emulation_abi;
+        HPX_CXX_CORE_EXPORT template <typename T, std::size_t N>
+        using fixed_size = fixed_size_simd_emulation_abi<N>;
     }    // namespace simd_abi
 
     HPX_CXX_CORE_EXPORT struct element_aligned_tag
@@ -64,7 +70,7 @@ namespace hpx::datapar::experimental {
     HPX_CXX_CORE_EXPORT struct vector_aligned_tag
     {
     };
-    HPX_CXX_CORE_EXPORT template <size_t>
+    HPX_CXX_CORE_EXPORT template <std::size_t>
     struct overaligned_tag
     {
     };
@@ -72,7 +78,7 @@ namespace hpx::datapar::experimental {
     HPX_CXX_CORE_EXPORT inline constexpr element_aligned_tag element_aligned{};
     HPX_CXX_CORE_EXPORT inline constexpr vector_aligned_tag vector_aligned{};
 
-    HPX_CXX_CORE_EXPORT template <size_t N>
+    HPX_CXX_CORE_EXPORT template <std::size_t N>
     inline constexpr overaligned_tag<N> overaligned{};
 
     // ----------------------------------------------------------------------
@@ -114,19 +120,26 @@ namespace hpx::datapar::experimental {
         typename Abi = simd_abi::compatible<T>>
     struct simd_size
     {
-        static constexpr size_t value = detail::simd_impl<T>::size;
+        static constexpr std::size_t value = detail::simd_impl<T>::size;
+    };
+    template <typename T, std::size_t N>
+    struct simd_size<T, simd_abi::fixed_size<T, N>>
+    {
+        static constexpr std::size_t value = N;
     };
     HPX_CXX_CORE_EXPORT template <typename T,
         typename Abi = simd_abi::compatible<T>>
-    inline constexpr size_t simd_size_v = simd_size<T, Abi>::value;
+    inline constexpr std::size_t simd_size_v = simd_size<T, Abi>::value;
 
     HPX_CXX_CORE_EXPORT template <typename T, class U = T::value_type>
     struct memory_alignment
     {
-        static constexpr size_t value = detail::max_vector_pack_size;
+        static constexpr std::size_t value =
+            std::bit_ceil(sizeof(U) * simd_size_v<U, typename T::abi_type>);
     };
     HPX_CXX_CORE_EXPORT template <typename T, class U = T::value_type>
-    inline constexpr size_t memory_alignment_v = memory_alignment<T, U>::value;
+    inline constexpr std::size_t memory_alignment_v =
+        memory_alignment<T, U>::value;
 
     // ----------------------------------------------------------------------
     // class template simd [simd.class]
@@ -136,7 +149,7 @@ namespace hpx::datapar::experimental {
     class simd;
     HPX_CXX_CORE_EXPORT template <typename T>
     using native_simd = simd<T, simd_abi::native<T>>;
-    HPX_CXX_CORE_EXPORT template <typename T, size_t N>
+    HPX_CXX_CORE_EXPORT template <typename T, std::size_t N>
     using fixed_size_simd = simd<T, simd_abi::fixed_size<T, N>>;
 
     // ----------------------------------------------------------------------
@@ -173,7 +186,7 @@ namespace hpx::datapar::experimental {
     class simd
     {
     private:
-        using Vector = std::array<T, detail::simd_impl<T>::size>;
+        using Vector = std::array<T, simd_size<T, Abi>::value>;
         Vector vec;
 
     public:
@@ -183,7 +196,7 @@ namespace hpx::datapar::experimental {
 
         static constexpr std::size_t size()
         {
-            return detail::simd_impl<T>::size;
+            return simd_size<T, Abi>::value;
         }
 
         // ----------------------------------------------------------------------

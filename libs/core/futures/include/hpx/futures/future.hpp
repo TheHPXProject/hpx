@@ -780,7 +780,7 @@ namespace hpx {
         }
 
         /// \copybrief hpx::future::then(F&& f, error_code& ec = throws)
-        /// \copydetail hpx::future::then(F&& f, error_code& ec = throws)
+        /// \copydetails hpx::future::then(F&& f, error_code& ec = throws)
         ///
         /// \tparam T0          The type of executor or launch policy.
         /// \tparam F           The type of the function/function object to use
@@ -1082,7 +1082,9 @@ namespace hpx {
         //   - shared_future<void>::get() returns nothing.
         // Throws: the stored exception, if an exception was stored in the
         //         shared state.
-        // Postcondition: valid() == false.
+        // Postcondition: valid() is unchanged. Unlike future::get(), the
+        //                shared state is not released, so get() can be called
+        //                again and refers to the same stored value.
         hpx::traits::future_traits<shared_future>::result_type get()
             const    //-V659
             HPX_PRE(this->valid())

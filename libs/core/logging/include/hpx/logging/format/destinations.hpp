@@ -114,8 +114,7 @@ namespace hpx::util::logging::destination {
     HPX_CXX_CORE_EXPORT struct file : manipulator
     {
         /**
-         @brief settings for when constructing a file class. To see how it's used,
-         see @ref dealing_with_flags.
+         @brief Settings for constructing a file destination.
         */
         struct file_settings
         {
@@ -141,8 +140,7 @@ namespace hpx::util::logging::destination {
         @brief constructs the file destination
 
         @param file_name name of the file
-        @param set [optional] file settings - see file_settings class,
-        and @ref dealing_with_flags
+        @param set [optional] file settings - see the file_settings class.
         */
         [[nodiscard]] HPX_CORE_EXPORT static std::unique_ptr<file> make(
             std::string const& file_name, file_settings set = {});

@@ -116,7 +116,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
         hpx::chrono::high_resolution_timer t;
 
-        std::atomic<std::uint64_t> counter(iterations);
+        // The continuations below refer to the local variables of this scope.
+        // Count every one of them, including the send rank 0 uses to start
+        // each iteration, so that the scope stays alive until all have run.
+        std::atomic<std::uint64_t> counter(
+            rank == 0 ? 2 * iterations : iterations);
         for (std::uint64_t i = 0; (i != iterations); ++i)
         {
             tokens[i] = (rank == 0) ? 1 : -1;
@@ -155,8 +159,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
             {
                 auto f_send = hpx::async(
                     limexec, MPI_Isend, &tokens[i], 1, MPI_INT, rank_to, i);
-                f_send.then([=, &tokens](auto&&) {
+                f_send.then([=, &tokens, &counter](auto&&) {
                     msg_send(rank, size, rank_to, rank_from, tokens[i], i);
+                    --counter;
                 });
             }
         }

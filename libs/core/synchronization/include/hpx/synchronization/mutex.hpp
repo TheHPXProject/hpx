@@ -85,8 +85,6 @@ namespace hpx {
         ///       begins. This makes it safe to lock a \a mutex in a constructor
         ///       of any static object.
         ///
-        /// \param description description of the \a mutex.
-        ///
 #if defined(HPX_HAVE_TRACING)
         HPX_CORE_EXPORT mutex(char const* const description = "");
 #else

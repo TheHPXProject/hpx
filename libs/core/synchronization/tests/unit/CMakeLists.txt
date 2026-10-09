@@ -81,6 +81,17 @@ foreach(test ${tests})
 
 endforeach()
 
+if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
+  # Clang (last tested version is v22) fails compiling the following tests when
+  # C++ module support is enabled.
+  set(failing_clang_tests async_rw_mutex)
+  foreach(test ${failing_clang_tests})
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()
+
 if(HPX_WITH_COMPILE_ONLY_TESTS)
   # add compile time tests
   set(compile_tests)

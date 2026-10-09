@@ -36,6 +36,13 @@ add_hpx_module(
   SOURCES ${tracy_sources}
   HEADERS ${tracy_headers}
   MODULE_DEPENDENCIES hpx_config ${additional_dependencies}
-  DEPENDENCIES tracy::tracy
   CMAKE_SUBDIRS tests
 )
+
+# Shared builds absorb TracyClient into hpx_core, so keep the target out of the
+# export. Static builds still need it at link time.
+if(HPX_WITH_STATIC_LINKING)
+  target_link_libraries(hpx_tracy PUBLIC tracy::tracy)
+else()
+  target_link_libraries(hpx_tracy PUBLIC $<BUILD_INTERFACE:tracy::tracy>)
+endif()

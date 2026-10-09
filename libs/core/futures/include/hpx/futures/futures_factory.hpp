@@ -127,7 +127,6 @@ namespace hpx::lcos::local {
                         threads::thread_description(f_, annotation),
                         policy.priority(),
                         threads::thread_schedule_hint(
-                            hpx::threads::thread_schedule_hint_mode::thread,
                             static_cast<std::int16_t>(get_worker_thread_num()),
                             hint.placement_mode(), hint.runs_as_child_mode()),
                         policy.stacksize(),

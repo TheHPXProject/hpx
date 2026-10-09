@@ -376,7 +376,16 @@ namespace hpx::lcos::detail {
                 }
 
                 // reload the state, it's not empty anymore
-                s = state_.load(std::memory_order_relaxed);
+                //
+                // Use memory_order_acquire (not relaxed) to establish a
+                // happens-before relationship with the memory_order_release
+                // CAS in set_value() / set_exception().  Without an acquire
+                // here, weakly-ordered CPUs (ARM, POWER) are permitted to
+                // reorder the subsequent read of storage_ before the release
+                // store of state_ has been observed, which would silently
+                // return stale (uninitialised) bytes to the caller of
+                // future::get().
+                s = state_.load(std::memory_order_acquire);
             }
         }
 

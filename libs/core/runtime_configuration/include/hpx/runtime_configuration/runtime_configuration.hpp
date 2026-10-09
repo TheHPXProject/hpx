@@ -115,6 +115,8 @@ namespace hpx::util {
 #if defined(__linux) || defined(linux) || defined(__linux__) ||                \
     defined(__FreeBSD__)
         bool use_stack_guard_pages() const;
+        // 0: never, 1: MADV_FREE/keep (default), 2: MADV_DONTNEED (legacy)
+        int stack_unbind_on_reset() const;
 #endif
 
         // return trace_depth for stack-backtraces

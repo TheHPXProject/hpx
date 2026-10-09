@@ -88,6 +88,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
+    gen.seed(seed);
 
     count_if_test();
     count_if_exception_test();

@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <hpx/modules/itt_notify.hpp>
 
@@ -51,7 +52,7 @@ namespace hpx::tracing {
         loop_context& operator=(loop_context const&) = delete;
 
         util::itt::stack_context stack_ctx;
-        util::itt::thread_domain thread_domain;
+        util::itt::domain const& domain;
         util::itt::string_handle task_id;
         util::itt::string_handle task_phase;
     };
@@ -77,32 +78,60 @@ namespace hpx::tracing {
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] mark_event
     {
-        constexpr explicit mark_event(char const*) noexcept {}
+        HPX_CORE_EXPORT explicit mark_event(char const* name) noexcept;
     };
 
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct fiber_region_init_data
     {
+        char const* name = nullptr;
     };
 
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] fiber_region
     {
-        constexpr explicit fiber_region(
-            fiber_region_init_data const&, std::size_t) noexcept
-        {
-        }
+        HPX_CORE_EXPORT explicit fiber_region(
+            fiber_region_init_data const& data,
+            std::size_t num_thread) noexcept;
+        HPX_CORE_EXPORT ~fiber_region();
+
+        fiber_region(fiber_region const&) = delete;
+        fiber_region& operator=(fiber_region const&) = delete;
+
+    private:
+        util::itt::task task_;
     };
 
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] fiber_suspend_region
     {
-        constexpr explicit fiber_suspend_region(char const*) noexcept {}
+        HPX_CORE_EXPORT explicit fiber_suspend_region(
+            char const* desc) noexcept;
+        HPX_CORE_EXPORT ~fiber_suspend_region();
+
+        fiber_suspend_region(fiber_suspend_region const&) = delete;
+        fiber_suspend_region& operator=(fiber_suspend_region const&) = delete;
+
+    private:
+        // overlapped_task, not task: the region can span a self.yield()
+        // and be destroyed on a different worker than it was constructed
+        // on. __itt_task_end without an id would close whatever is on the
+        // resuming worker's stack.
+        util::itt::overlapped_task task_;
     };
 
     ////////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] background_work_region
     {
-        constexpr explicit background_work_region(std::size_t = 0) noexcept {}
+        HPX_CORE_EXPORT explicit background_work_region(
+            std::size_t num_thread = 0) noexcept;
+        HPX_CORE_EXPORT ~background_work_region();
+
+        background_work_region(background_work_region const&) = delete;
+        background_work_region& operator=(
+            background_work_region const&) = delete;
+
+    private:
+        util::itt::task task_;
     };
 
     ////////////////////////////////////////////////////////////////////////////
@@ -320,28 +349,30 @@ namespace hpx::tracing {
     {
     }
 
-    /// \brief Signal emitted when a worker thread steals a task from another worker.
+    /// \brief Signal emitted when a worker thread steals a task from
+    ///        another worker.
     HPX_CXX_CORE_EXPORT constexpr void work_stolen(
         std::size_t, std::size_t, void const*, char const* = nullptr) noexcept
     {
     }
 
-    /// \brief Frame boundary marker (no-op stub for ITTNotify).
-    HPX_CXX_CORE_EXPORT constexpr void frame_mark(
-        char const* = nullptr) noexcept
-    {
-    }
+    /// \brief Frame boundary marker.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void frame_mark(
+        char const* name = nullptr) noexcept;
 
-    HPX_CXX_CORE_EXPORT constexpr void os_thread_sleep(std::size_t) noexcept {}
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void os_thread_sleep(
+        std::size_t num_thread) noexcept;
 
-    HPX_CXX_CORE_EXPORT constexpr void tracing_init(
-        char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
-    {
-    }
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const*, int,
+        char**, std::uint32_t = 0, std::uint32_t = 1,
+        std::string_view = {}) noexcept;
 
     HPX_CXX_CORE_EXPORT constexpr void tracing_finalize() noexcept {}
 
-    HPX_CXX_CORE_EXPORT constexpr void register_thread(char const*) noexcept {}
+    HPX_CXX_CORE_EXPORT inline void register_thread(char const* name) noexcept
+    {
+        HPX_ITT_THREAD_SET_NAME(name);
+    }
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void create_counter(
         std::string const& full_name, std::string const& short_name) noexcept;

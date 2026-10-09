@@ -5,3 +5,6 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 configuration_slurm_partition="jenkins-compute"
+
+# medusa08 runs the performance tests, keep the coverage build off it
+configuration_slurm_exclude="medusa08"

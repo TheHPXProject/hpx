@@ -41,6 +41,8 @@ jobs:
       run: |
           cmake --build build --target all
           cmake --build build --target examples
+          cmake --build build --target \
+            tests.unit.modules.coroutines tests.regressions.modules.coroutines
     - name: Test
       shell: bash
       run: |
@@ -50,6 +52,12 @@ jobs:
           cd build
           ctest \
             --output-on-failure \
-            --tests-regex tests.examples \
+            --tests-regex 'tests.examples|tests.(unit|regressions).modules.coroutines' \
             --exclude-regex tests.examples.transpose.transpose_block_numa \
             --exclude-regex tests.examples.quickstart.1d_wave_equation
+          for use_after_return in 0 1; do
+            export ASAN_OPTIONS=fast_unwind_on_malloc=0
+            ASAN_OPTIONS+=":detect_stack_use_after_return=$use_after_return"
+            ctest --output-on-failure \
+              --tests-regex tests.unit.modules.coroutines.coroutine_stack_recycling
+          done

@@ -10,3 +10,9 @@ if(NOT Hwloc_FOUND)
     "Hwloc could not be found, please specify Hwloc_ROOT to point to the correct location"
   )
 endif()
+
+# Some package managers (e.g. Conan) provide hwloc::hwloc instead of
+# Hwloc::hwloc
+if(NOT TARGET Hwloc::hwloc AND TARGET hwloc::hwloc)
+  add_library(Hwloc::hwloc ALIAS hwloc::hwloc)
+endif()

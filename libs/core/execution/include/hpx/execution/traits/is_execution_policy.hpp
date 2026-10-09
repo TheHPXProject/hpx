@@ -1,4 +1,5 @@
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -18,43 +19,44 @@ namespace hpx::detail {
 
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct is_execution_policy : std::bool_constant<policy_traits<T>::is_policy>
+    struct is_execution_policy
+      : std::bool_constant<execution::policy_traits<T>::is_policy>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
     struct is_parallel_execution_policy
-      : std::bool_constant<policy_traits<T>::is_parallel>
+      : std::bool_constant<execution::policy_traits<T>::is_parallel>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
     struct is_sequenced_execution_policy
-      : std::bool_constant<policy_traits<T>::is_sequenced>
+      : std::bool_constant<execution::policy_traits<T>::is_sequenced>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
     struct is_async_execution_policy
-      : std::bool_constant<policy_traits<T>::is_async>
+      : std::bool_constant<execution::policy_traits<T>::is_async>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
     struct is_rebound_execution_policy
-      : std::bool_constant<policy_traits<Executor>::is_rebound>
+      : std::bool_constant<execution::policy_traits<Executor>::is_rebound>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
     struct is_unsequenced_execution_policy
-      : std::bool_constant<policy_traits<Executor>::is_unsequenced>
+      : std::bool_constant<execution::policy_traits<Executor>::is_unsequenced>
     {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Executor>
     struct is_vectorpack_execution_policy
-      : std::bool_constant<policy_traits<Executor>::is_vectorpack>
+      : std::bool_constant<execution::policy_traits<Executor>::is_vectorpack>
     {
     };
     /// \endcond
@@ -108,6 +110,9 @@ namespace hpx {
     inline constexpr bool is_parallel_execution_policy_v =
         is_parallel_execution_policy<T>::value;
 
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept parallel_execution_policy = is_parallel_execution_policy_v<T>;
+
     ///////////////////////////////////////////////////////////////////////////
     /// Extension: Detect whether given execution policy does not enable
     ///            parallelization
@@ -133,6 +138,9 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr bool is_sequenced_execution_policy_v =
         is_sequenced_execution_policy<T>::value;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept sequenced_execution_policy = is_sequenced_execution_policy_v<T>;
 
     ///////////////////////////////////////////////////////////////////////////
     /// Extension: Detect whether given execution policy makes algorithms
@@ -160,6 +168,9 @@ namespace hpx {
     inline constexpr bool is_async_execution_policy_v =
         is_async_execution_policy<T>::value;
 
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept async_execution_policy = is_async_execution_policy_v<T>;
+
     /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT template <typename T>
     struct is_rebound_execution_policy
@@ -170,6 +181,9 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr bool is_rebound_execution_policy_v =
         is_rebound_execution_policy<T>::value;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept rebound_execution_policy = is_rebound_execution_policy_v<T>;
 
     // extension:
     HPX_CXX_CORE_EXPORT template <typename T>
@@ -183,6 +197,9 @@ namespace hpx {
         is_unsequenced_execution_policy<T>::value;
 
     HPX_CXX_CORE_EXPORT template <typename T>
+    concept unsequenced_execution_policy = is_unsequenced_execution_policy_v<T>;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
     struct is_vectorpack_execution_policy
       : hpx::detail::is_vectorpack_execution_policy<std::decay_t<T>>
     {
@@ -191,6 +208,9 @@ namespace hpx {
     HPX_CXX_CORE_EXPORT template <typename T>
     inline constexpr bool is_vectorpack_execution_policy_v =
         is_vectorpack_execution_policy<T>::value;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept vectorpack_execution_policy = is_vectorpack_execution_policy_v<T>;
 
     ////////////////////////////////////////////////////////////////////////////
     // execution_policy_has_scheduler_executor evaluates to true if the executor

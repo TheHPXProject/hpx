@@ -87,11 +87,7 @@ int main(int argc, char* argv[])
             hpx::resource::scheduling_policy::abp_priority_fifo,
             hpx::resource::scheduling_policy::abp_priority_lifo,
 #endif
-        // The shared priority scheduler may choose not to create a thread,
-        // even when run_now = true and a thread is expected. This can fire
-        // an assert in the scheduling_loop if a background thread is not
-        // created.
-        //hpx::resource::scheduling_policy::shared_priority,
+            hpx::resource::scheduling_policy::shared_priority,
 
 #if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
             hpx::resource::scheduling_policy::local_workrequesting_fifo,

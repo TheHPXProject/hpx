@@ -12,6 +12,7 @@
 #include <hpx/iterator_support/traits/is_iterator.hpp>
 #include <hpx/iterator_support/traits/is_range.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <iterator>
 #include <ranges>
@@ -27,24 +28,29 @@ namespace hpx::util {
         static_assert(hpx::traits::is_iterator_v<Iterator>);
         static_assert(std::sentinel_for<Sentinel, Iterator>);
 
+        static constexpr bool is_nothrow_iterator_pair_constructible =
+            std::is_nothrow_move_constructible_v<Iterator> &&
+            std::is_nothrow_move_constructible_v<Sentinel>;
+
     public:
         HPX_HOST_DEVICE iterator_range() = default;
 
-        HPX_HOST_DEVICE constexpr iterator_range(
-            Iterator iterator, Sentinel sentinel) noexcept
+        HPX_HOST_DEVICE constexpr iterator_range(Iterator iterator,
+            Sentinel sentinel) noexcept(is_nothrow_iterator_pair_constructible)
           : _iterator(HPX_MOVE(iterator))
           , _sentinel(HPX_MOVE(sentinel))
         {
         }
 
-        // clang-format off
-        template <typename Range,
-            typename Enable =
-                std::enable_if_t<
-                    std::ranges::range<std::decay_t<Range>> &&
-                   !std::is_same_v<iterator_range, std::decay_t<Range>>>>
-        // clang-format on
-        HPX_HOST_DEVICE explicit constexpr iterator_range(Range&& r) noexcept
+        template <typename Range>
+            requires(std::ranges::borrowed_range<Range> &&
+                std::constructible_from<Iterator,
+                    decltype(util::begin(std::declval<Range&>()))> &&
+                std::constructible_from<Sentinel,
+                    decltype(util::end(std::declval<Range&>()))> &&
+                !std::same_as<iterator_range, std::decay_t<Range>>)
+        HPX_HOST_DEVICE explicit constexpr iterator_range(Range&& r) noexcept(
+            noexcept(iterator_range(util::begin(r), util::end(r))))
           : iterator_range(util::begin(r), util::end(r))
         {
         }
@@ -54,12 +60,14 @@ namespace hpx::util {
             return _iterator;
         }
 
-        [[nodiscard]] HPX_HOST_DEVICE constexpr Iterator end() const
+        [[nodiscard]] HPX_HOST_DEVICE constexpr Sentinel end() const
         {
             return _sentinel;
         }
 
-        [[nodiscard]] HPX_HOST_DEVICE constexpr std::ptrdiff_t size() const
+        [[nodiscard]] HPX_HOST_DEVICE constexpr std::iter_difference_t<Iterator>
+        size() const
+            requires(std::sized_sentinel_for<Sentinel, Iterator>)
         {
             return std::ranges::distance(_iterator, _sentinel);
         }
@@ -75,11 +83,13 @@ namespace hpx::util {
     };
 
     HPX_CXX_CORE_EXPORT template <typename Range>
-    iterator_range(Range& r) -> iterator_range<std::ranges::iterator_t<Range>>;
+    iterator_range(Range& r) -> iterator_range<std::ranges::iterator_t<Range>,
+        std::ranges::sentinel_t<Range>>;
 
     HPX_CXX_CORE_EXPORT template <typename Range>
     iterator_range(Range const& r)
-        -> iterator_range<std::ranges::iterator_t<Range const>>;
+        -> iterator_range<std::ranges::iterator_t<Range const>,
+            std::ranges::sentinel_t<Range const>>;
 
     HPX_CXX_CORE_EXPORT template <typename Iterator, typename Sentinel>
     iterator_range(Iterator it, Sentinel sent)
@@ -87,7 +97,7 @@ namespace hpx::util {
 
     template <typename Range,
         typename Iterator = std::ranges::iterator_t<Range>,
-        typename Sentinel = std::ranges::iterator_t<Range>>
+        typename Sentinel = std::ranges::sentinel_t<Range>>
     HPX_DEPRECATED_V(1, 9,
         "hpx::util::make_iterator_range is deprecated, use "
         "hpx::util::iterator_range instead")
@@ -100,7 +110,7 @@ namespace hpx::util {
 
     template <typename Range,
         typename Iterator = std::ranges::iterator_t<Range const>,
-        typename Sentinel = std::ranges::iterator_t<Range const>>
+        typename Sentinel = std::ranges::sentinel_t<Range const>>
     HPX_DEPRECATED_V(1, 9,
         "hpx::util::make_iterator_range is deprecated, use "
         "hpx::util::iterator_range instead")
@@ -122,6 +132,19 @@ namespace hpx::util {
         return iterator_range<Iterator, Sentinel>(HPX_MOVE(it), HPX_MOVE(sent));
     }
 }    // namespace hpx::util
+
+namespace std::ranges {
+
+    // The range owns only its iterators; destroying it does not invalidate
+    // them.
+    template <typename I, typename S>
+    inline constexpr bool
+        enable_borrowed_range<hpx::util::iterator_range<I, S>> = true;
+
+    template <typename I, typename S>
+    inline constexpr bool disable_sized_range<hpx::util::iterator_range<I, S>> =
+        !std::sized_sentinel_for<S, I>;
+}    // namespace std::ranges
 
 namespace hpx::ranges {
 

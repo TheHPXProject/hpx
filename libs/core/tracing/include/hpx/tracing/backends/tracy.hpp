@@ -14,10 +14,9 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include <hpx/modules/tracy.hpp>
-
-#include <tracy/TracyC.h>
 
 #include <hpx/config/warnings_prefix.hpp>
 
@@ -34,13 +33,12 @@ namespace hpx::tracing {
         return name;
     }
 
-    // Inline connection-gate. When no Tracy client is attached, the per-task
-    // hot-path entries below short-circuit at the call site to a single
-    // atomic load.
+    // Goes through hpx::tracy so users need no Tracy headers and the
+    // symbol is exported from hpx_core on Windows.
     namespace detail {
         HPX_CXX_CORE_EXPORT inline bool is_profiler_connected() noexcept
         {
-            return ___tracy_connected() != 0;
+            return hpx::tracy::is_profiler_connected();
         }
     }    // namespace detail
 
@@ -53,7 +51,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] loop_context
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] loop_context
     {
         constexpr explicit loop_context() noexcept {}
 
@@ -152,23 +150,23 @@ namespace hpx::tracing {
     // so that a lock announced while disconnected keeps skipping its
     // per-cycle events even if a client connects mid-lifetime -- announce
     // and per-cycle events stay consistent.
-    HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT [[maybe_unused]] lock_context
+    HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
-        explicit lock_context(
+        HPX_CORE_EXPORT explicit lock_context(
             char const* name = nullptr, void const* addr = nullptr) noexcept;
-        explicit lock_context(char const* prefix, char const* suffix,
-            void const* addr = nullptr) noexcept;
+        HPX_CORE_EXPORT explicit lock_context(char const* prefix,
+            char const* suffix, void const* addr = nullptr) noexcept;
 
-        ~lock_context();
+        HPX_CORE_EXPORT ~lock_context();
 
         lock_context(lock_context const&) = delete;
         lock_context& operator=(lock_context const&) = delete;
 
-        bool before_lock() const noexcept;
-        void after_lock() const noexcept;
-        void after_try_lock(bool acquired) const noexcept;
-        void before_unlock() const noexcept;
-        void after_unlock() const noexcept;
+        HPX_CORE_EXPORT bool before_lock() const noexcept;
+        HPX_CORE_EXPORT void after_lock() const noexcept;
+        HPX_CORE_EXPORT void after_try_lock(bool acquired) const noexcept;
+        HPX_CORE_EXPORT void before_unlock() const noexcept;
+        HPX_CORE_EXPORT void after_unlock() const noexcept;
 
     private:
         bool active_;
@@ -631,10 +629,12 @@ namespace hpx::tracing {
         detail::os_thread_sleep_impl(num_thread);
     }
 
-    HPX_CXX_CORE_EXPORT constexpr void tracing_init(
-        char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
-    {
-    }
+    // Non-empty version_info is recorded as a Tracy App Info line so a
+    // capture can be correlated with the HPX build. Buffered by Tracy
+    // until a profiler attaches.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const*, int,
+        char**, std::uint32_t = 0, std::uint32_t = 1,
+        std::string_view version_info = {}) noexcept;
 
     HPX_CXX_CORE_EXPORT constexpr void tracing_finalize() noexcept {}
 

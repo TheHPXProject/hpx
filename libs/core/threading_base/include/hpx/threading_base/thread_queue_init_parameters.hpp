@@ -50,7 +50,9 @@ namespace hpx::threads::policies {
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
           , min_add_new_count_(min_add_new_count)
           , max_add_new_count_(max_add_new_count)
-          , min_delete_count_(min_delete_count)
+          , min_delete_count_(min_delete_count < max_delete_count ?
+                    min_delete_count :
+                    max_delete_count)
           , max_delete_count_(max_delete_count)
           , max_terminated_threads_(max_terminated_threads)
           , init_threads_count_(init_threads_count)

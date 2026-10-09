@@ -46,10 +46,12 @@ namespace hpx::lcos::local::detail {
 
         while (value_ < count)
         {
-            // return false if unblocked by timeout expiring
+            // return false only if unblocked by timeout expiring;
+            // a signal wakeup (thread_restart_state::signaled) must
+            // fall through so the while predicate is re-evaluated.
             if (cond_.wait_until(
-                    l, abs_time, "counting_semaphore::wait_until") !=
-                threads::thread_restart_state::unknown)
+                    l, abs_time, "counting_semaphore::wait_until") ==
+                threads::thread_restart_state::timeout)
             {
                 return false;
             }

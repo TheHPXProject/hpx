@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Sai Charan Arvapally
+// Copyright (c) 2026 the-ivii
 //
 // SPDX-License-Identifier: BSL-1.0
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -22,7 +23,10 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <span>
+#include <type_traits>
+#include <typeinfo>
 
 namespace hpx::execution::experimental {
 
@@ -41,16 +45,31 @@ namespace hpx::execution::experimental {
 
     // P2079R10 / P3804R2 receiver_proxy: type-erased completion interface.
     // The backend calls these to signal completion back to the frontend.
-    // stop_requested() allows the backend to poll for cancellation during
-    // execution (partial substitute for try_query<inplace_stop_token>).
+    // try_query() exposes supported receiver environment properties to a
+    // replacement backend. P2079R10 requires get_stop_token_t with an
+    // inplace_stop_token result to be supported. HPX's in_place_stop_token is
+    // supported as well.
     //
-    // P3804R2: No virtual destructor - objects are never destroyed polymorphically.
-    // The frontend knows the concrete type and destroys it directly.
     HPX_CXX_CORE_EXPORT struct parallel_scheduler_receiver_proxy
     {
+        virtual ~parallel_scheduler_receiver_proxy() = default;
+
         virtual void set_value() noexcept = 0;
         virtual void set_error(std::exception_ptr) noexcept = 0;
         virtual void set_stopped() noexcept = 0;
+
+        template <typename P, typename Query>
+        [[nodiscard]] std::optional<P> try_query(Query) const noexcept
+        {
+            static_assert(std::is_object_v<P> && !std::is_array_v<P> &&
+                    std::is_same_v<P, std::remove_cv_t<P>>,
+                "P must be a cv-unqualified non-array object type");
+
+            std::optional<P> result;
+            query_env(typeid(std::remove_cvref_t<Query>), typeid(P), &result);
+            return result;
+        }
+
         // P2079R10 4.2 / P3804R2: backends can poll this to check if work should stop.
         // Returns true if the associated stop token has been signalled.
         // const-qualified per P3804R2 (aligns with try_query being const).
@@ -60,9 +79,8 @@ namespace hpx::execution::experimental {
         }
 
     protected:
-        // P3804R2: Protected non-virtual destructor.
-        // Prevents polymorphic deletion while allowing derived classes to clean up.
-        ~parallel_scheduler_receiver_proxy() = default;
+        virtual void query_env(std::type_info const& query_type,
+            std::type_info const& result_type, void* result) const noexcept = 0;
     };
 
     // P2079R10 bulk_item_receiver_proxy: extends receiver_proxy with

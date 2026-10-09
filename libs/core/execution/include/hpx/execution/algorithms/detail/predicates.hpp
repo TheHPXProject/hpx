@@ -90,7 +90,7 @@ namespace hpx::parallel::detail {
         HPX_FORCEINLINE constexpr static std::size_t call(
             Iter1 iter1, Iter2 iter2)
         {
-            return std::distance(iter1, iter2);
+            return static_cast<std::size_t>(std::distance(iter1, iter2));
         }
     };
 

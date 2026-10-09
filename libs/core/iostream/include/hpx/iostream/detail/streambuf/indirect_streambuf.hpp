@@ -33,6 +33,7 @@
 #include <hpx/modules/datastructures.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iosfwd>
@@ -324,8 +325,12 @@ namespace hpx::iostream::detail {
             (std::min) (static_cast<std::streamsize>(gptr() - eback()),
                 pback_size_);
         if (keep)
-            traits_type::move(
-                buf.data() + (pback_size_ - keep), gptr() - keep, keep);
+        {
+            // keep is bounded by pback_size_, which is the size of the
+            // putback area, so it always fits
+            traits_type::move(buf.data() + (pback_size_ - keep), gptr() - keep,
+                static_cast<std::size_t>(keep));
+        }
 
         // Set pointers to reasonable values in case read throws.
         setg(buf.data() + pback_size_ - keep, buf.data() + pback_size_,

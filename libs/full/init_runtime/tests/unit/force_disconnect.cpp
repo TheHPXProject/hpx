@@ -157,6 +157,36 @@ std::uint32_t ping_locality()
 }
 HPX_PLAIN_ACTION(ping_locality, ping_locality_action)
 
+// The launch latch is released before the worker finishes runtime startup.
+// Wait for the running state before testing its disconnection.
+bool worker_is_running()
+{
+    return hpx::is_running();
+}
+HPX_PLAIN_ACTION(worker_is_running, worker_is_running_action)
+
+void wait_for_worker_startup(hpx::id_type const& id)
+{
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    do
+    {
+        hpx::future<bool> ready = hpx::async<worker_is_running_action>(id);
+        if (ready.wait_until(deadline) != hpx::future_status::ready)
+        {
+            break;
+        }
+        if (ready.get())
+        {
+            return;
+        }
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    HPX_THROW_EXCEPTION(hpx::error::invalid_status, "wait_for_worker_startup",
+        "worker did not finish runtime startup");
+}
+
 // A long-running action used to simulate a parcel that is still in flight while
 // the target locality is being force-disconnected.
 std::uint32_t sleep_locality(int const ms)
@@ -194,6 +224,10 @@ std::pair<process::child, hpx::id_type> launch_worker(
         }
     }
     HPX_TEST(new_locality);
+    if (new_locality)
+    {
+        wait_for_worker_startup(new_locality);
+    }
 
     return std::make_pair(HPX_MOVE(worker), new_locality);
 }
@@ -690,6 +724,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
     HPX_TEST(w2);
 
     HPX_TEST_EQ(hpx::find_all_localities().size(), static_cast<std::size_t>(3));
+
+    for (hpx::id_type const& id : hpx::find_remote_localities())
+    {
+        wait_for_worker_startup(id);
+    }
 
     auto const [first, second] = test_force_disconnect_removes_locality();
     test_double_disconnect_should_fail(first);

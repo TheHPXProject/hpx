@@ -22,6 +22,8 @@
 
 #include <windows.h>
 
+#include <hpx/config/warnings_prefix.hpp>
+
 namespace hpx::util::detail {
 
     /// \brief The result of a single SymFromAddr lookup, as needed by
@@ -86,5 +88,7 @@ namespace hpx::util::detail {
     ///        \a get_symbol().
     HPX_CORE_EXPORT dbghelp_symbol_cache& get_dbghelp_symbol_cache();
 }    // namespace hpx::util::detail
+
+#include <hpx/config/warnings_suffix.hpp>
 
 #endif    // HPX_WINDOWS

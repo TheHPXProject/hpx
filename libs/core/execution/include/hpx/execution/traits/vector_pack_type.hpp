@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -24,7 +24,7 @@ namespace hpx::parallel::traits {
 
     HPX_CXX_CORE_EXPORT template <typename T, std::size_t N = 0,
         typename Abi = void>
-    using vector_pack_type_t = typename vector_pack_type<T, N, Abi>::type;
+    using vector_pack_type_t = vector_pack_type<T, N, Abi>::type;
 
     // handle tuple<> transformations
     template <typename... T, std::size_t N, typename Abi>
@@ -41,7 +41,7 @@ namespace hpx::parallel::traits {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T, typename NewT>
-    using rebind_pack_t = typename rebind_pack<T, NewT>::type;
+    using rebind_pack_t = rebind_pack<T, NewT>::type;
 
     ////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename T, typename Enable = void>
@@ -51,7 +51,7 @@ namespace hpx::parallel::traits {
     };
 
     HPX_CXX_CORE_EXPORT template <typename T>
-    using vector_pack_mask_type_t = typename vector_pack_mask_type<T>::type;
+    using vector_pack_mask_type_t = vector_pack_mask_type<T>::type;
 }    // namespace hpx::parallel::traits
 
 #if !defined(__CUDACC__)

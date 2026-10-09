@@ -296,6 +296,15 @@ namespace hpx::execution::experimental {
             return default_pool;
         }
 
+        static std::shared_ptr<parallel_scheduler_backend> make_backend(
+            hpx::threads::thread_pool_base& pool)
+        {
+            HPX_ASSERT(pool.get_os_thread_count() > 0);
+            return std::make_shared<hpx_parallel_scheduler_backend>(
+                thread_pool_policy_scheduler<hpx::launch>(
+                    &pool, hpx::launch::async));
+        }
+
         // Default factory creates the HPX backend
         static std::shared_ptr<parallel_scheduler_backend>
         default_parallel_scheduler_backend_factory()
@@ -305,9 +314,7 @@ namespace hpx::execution::experimental {
             {
                 std::terminate();
             }
-            return std::make_shared<hpx_parallel_scheduler_backend>(
-                thread_pool_policy_scheduler<hpx::launch>(
-                    pool, hpx::launch::async));
+            return make_backend(*pool);
         }
 
         // Mutex protecting the live backend instance.
@@ -377,6 +384,12 @@ namespace hpx::execution::experimental {
             std::terminate();
         }
         return parallel_scheduler(HPX_MOVE(backend));
+    }
+
+    parallel_scheduler get_parallel_scheduler(
+        hpx::threads::thread_pool_base& pool)
+    {
+        return parallel_scheduler(detail::make_backend(pool));
     }
 
     std::ostream& operator<<(std::ostream& os, parallel_scheduler const&)

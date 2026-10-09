@@ -18,6 +18,10 @@ namespace hpx::threads::coroutines::detail::posix {
     // this global variable is used to control whether guard pages will be used
     // or not
     bool use_guard_pages = true;
+
+    // Default to MADV_FREE (or keep-resident) when recycling mmap'd stacks.
+    // See hpx.stacks.unbind_on_reset and #6793.
+    int unbind_on_reset = 1;
 }    // namespace hpx::threads::coroutines::detail::posix
 
 #endif

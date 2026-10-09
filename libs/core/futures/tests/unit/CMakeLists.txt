@@ -8,6 +8,7 @@
 set(tests
     direct_scoped_execution
     future
+    future_concepts
     future_ref
     future_then
     future_monadic_operations

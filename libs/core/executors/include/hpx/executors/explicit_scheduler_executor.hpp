@@ -4,11 +4,12 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file parallel/executors/explicit_scheduler_executor.hpp
+/// \file explicit_scheduler_executor.hpp
 
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/executors/detail/indexed_shape.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
@@ -20,6 +21,7 @@
 #include <cstddef>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -181,21 +183,23 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires(detail::indexable_shape<S>)
         decltype(auto) bulk_async_execute(
-            F&& f, S const& shape, Ts&&... ts) const
+            F&& f, S const& input_shape, Ts&&... ts) const
         {
+            auto shape = detail::make_indexed_shape(input_shape);
             using shape_element = hpx::traits::range_traits<S>::value_type;
             using result_type = hpx::util::detail::invoke_deferred_result_t<F,
                 shape_element, Ts...>;
 
             if constexpr (std::is_void_v<result_type>)
             {
-                // stdexec::bulk requires integral shape and execution policy
-                using size_type = decltype(std::ranges::size(shape));
-                size_type const n = std::ranges::size(shape);
+                // stdexec::bulk requires an integral shape.
+                using size_type = std::size_t;
+                size_type const n =
+                    static_cast<size_type>(std::ranges::distance(shape));
                 return bulk(schedule(sched_), n,
-                    [shape,
+                    [shape = HPX_MOVE(shape),
                         bound_f = hpx::bind_back(HPX_FORWARD(F, f),
                             HPX_FORWARD(Ts, ts)...)](size_type i) mutable {
                         auto it = std::ranges::begin(shape);
@@ -212,26 +216,27 @@ namespace hpx::execution::experimental {
                     "explicit_scheduler_executor::bulk_async_execution "
                     "can result in data races!");
 
-                using size_type = decltype(std::ranges::size(shape));
-                size_type const shape_size = std::ranges::size(shape);
+                using size_type = std::size_t;
+                size_type const shape_size =
+                    static_cast<size_type>(std::ranges::distance(shape));
 
                 using result_vector_type = std::vector<result_type>;
                 result_vector_type result_vector(shape_size);
 
                 auto f_wrapper = [](size_type const i,
                                      result_vector_type& result_vector,
-                                     S const& shape, F& f, Ts&... ts) {
+                                     auto const& shape, F& f, Ts&... ts) {
                     auto it = std::ranges::begin(shape);
                     result_vector[i] = HPX_INVOKE(f, *std::next(it, i), ts...);
                 };
 
                 auto get_result = [](result_vector_type&& result_vector,
-                                      S const&, F&&, Ts&&...) {
+                                      auto const&, F&&, Ts&&...) {
                     return HPX_MOVE(result_vector);
                 };
 
                 return continues_on(
-                           just(HPX_MOVE(result_vector), shape,
+                           just(HPX_MOVE(result_vector), HPX_MOVE(shape),
                                HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...),
                            sched_) |
                     bulk(shape_size, HPX_MOVE(f_wrapper)) |
@@ -251,12 +256,12 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires(detail::indexable_shape<S>)
         decltype(auto) bulk_sync_execute(
-            F&& f, S const& shape, Ts&&... ts) const
+            F&& f, S const& input_shape, Ts&&... ts) const
         {
             hpx::this_thread::experimental::sync_wait(bulk_async_execute(
-                HPX_FORWARD(F, f), shape, HPX_FORWARD(Ts, ts)...));
+                HPX_FORWARD(F, f), input_shape, HPX_FORWARD(Ts, ts)...));
         }
 
         // Integral shape overload - passes integral directly to bulk
@@ -275,10 +280,11 @@ namespace hpx::execution::experimental {
 
         // Range shape overload
         template <typename F, typename S, typename Future, typename... Ts>
-            requires(!std::is_integral_v<S>)
+            requires(detail::indexable_shape<S>)
         auto bulk_then_execute(
-            F&& f, S const& shape, Future&& predecessor, Ts&&... ts) const
+            F&& f, S const& input_shape, Future&& predecessor, Ts&&... ts) const
         {
+            auto shape = detail::make_indexed_shape(input_shape);
             using result_type =
                 parallel::execution::detail::then_bulk_function_result_t<F, S,
                     Future, Ts...>;
@@ -289,11 +295,12 @@ namespace hpx::execution::experimental {
             auto pre_req =
                 when_all(keep_future(HPX_FORWARD(Future, predecessor)));
 
-            using size_type = decltype(std::ranges::size(shape));
-            size_type const n = std::ranges::size(shape);
+            using size_type = std::size_t;
+            size_type const n =
+                static_cast<size_type>(std::ranges::distance(shape));
             return continues_on(HPX_MOVE(pre_req), sched_) |
                 bulk(n,
-                    [shape,
+                    [shape = HPX_MOVE(shape),
                         bound_f = hpx::bind_back(
                             HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...)](
                         size_type i, auto&... receiver_args) mutable {

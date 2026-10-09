@@ -1,4 +1,5 @@
 //  Copyright (c) 2022 Srinivas Yadav
+//  Copyright (c) 2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -30,7 +31,7 @@ namespace hpx::parallel::traits {
     HPX_CXX_CORE_EXPORT template <typename Scalar>
         requires(is_scalar_vector_pack_v<Scalar>)
     HPX_HOST_DEVICE HPX_FORCEINLINE auto get(
-        Scalar& sc, [[maybe_unused]] std::size_t index) noexcept
+        Scalar& sc, [[maybe_unused]] std::size_t const index) noexcept
     {
         HPX_ASSERT(index == 0);
         return sc;
@@ -48,7 +49,7 @@ namespace hpx::parallel::traits {
     HPX_CXX_CORE_EXPORT template <typename Scalar, typename T>
         requires(is_scalar_vector_pack_v<Scalar>)
     HPX_HOST_DEVICE HPX_FORCEINLINE auto set(
-        Scalar& sc, [[maybe_unused]] std::size_t index, T val) noexcept
+        Scalar& sc, [[maybe_unused]] std::size_t const index, T val) noexcept
     {
         HPX_ASSERT(index == 0);
         sc = val;

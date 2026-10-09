@@ -7,3 +7,6 @@
 
 configuration_slurm_partition="jenkins-compute"
 configuration_slurm_num_nodes="1"
+
+# medusa08 runs the performance tests, keep the build matrix off it
+configuration_slurm_exclude="medusa08"
