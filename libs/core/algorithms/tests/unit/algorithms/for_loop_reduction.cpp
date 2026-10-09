@@ -99,10 +99,43 @@ void test_for_loop_reduction_min(ExPolicy&& policy, IteratorTag)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// a reduction next to another argument has to be recognised as one that needs
+// the worker thread number, it indexes its per thread storage with it
+template <typename ExPolicy, typename IteratorTag>
+void test_for_loop_reduction_plus_induction(ExPolicy&& policy, IteratorTag)
+{
+    static_assert(hpx::is_execution_policy<ExPolicy>::value,
+        "hpx::is_execution_policy<ExPolicy>::value");
+
+    typedef std::vector<std::size_t>::iterator base_iterator;
+    typedef test::test_iterator<base_iterator, IteratorTag> iterator;
+
+    std::vector<std::size_t> c(10007);
+    std::iota(std::begin(c), std::end(c), gen());
+
+    std::size_t sum = 0;
+    std::size_t count = 0;
+    hpx::experimental::for_loop(std::forward<ExPolicy>(policy),
+        iterator(std::begin(c)), iterator(std::end(c)),
+        hpx::experimental::reduction_plus(sum),
+        hpx::experimental::induction(count),
+        [](iterator it, std::size_t& sum, std::size_t) { sum += *it; });
+
+    // verify values
+    std::size_t const sum2 =
+        std::accumulate(std::begin(c), std::end(c), std::size_t(0));
+    HPX_TEST_EQ(sum, sum2);
+    HPX_TEST_EQ(count, c.size());
+}
+
+///////////////////////////////////////////////////////////////////////////////
 template <typename IteratorTag>
 void test_for_loop_reduction()
 {
     using namespace hpx::execution;
+
+    test_for_loop_reduction_plus_induction(seq, IteratorTag());
+    test_for_loop_reduction_plus_induction(par, IteratorTag());
 
     test_for_loop_reduction_plus(seq, IteratorTag());
     test_for_loop_reduction_plus(par, IteratorTag());

@@ -876,7 +876,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1042,7 +1042,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1299,7 +1299,9 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Args>...>>)
+                                                      std::decay_t<Arg>>,
+                                  has_needs_current_thread_num<
+                                      std::decay_t<Args>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1310,8 +1312,8 @@ namespace hpx::parallel {
                 std::size_t count = size;
                 while (count >= static_cast<std::size_t>(stride))
                 {
-                    HPX_INVOKE(f, first, arg.iteration_value(),
-                        args.iteration_value()...);
+                    HPX_INVOKE(f, first, arg.iteration_value(current_thread),
+                        args.iteration_value(current_thread)...);
 
                     first = parallel::detail::next(first, stride);
                     count -= stride;
