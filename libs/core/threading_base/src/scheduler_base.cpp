@@ -91,14 +91,12 @@ namespace hpx::threads::policies {
             constexpr double max_exponent =
                 std::numeric_limits<double>::max_exponent - 1;
             std::uint32_t const count =
-                data.wait_count.load(std::memory_order_relaxed);
+                data.wait_count.fetch_add(1, std::memory_order_relaxed);
             double const exponent =
                 (std::min) (static_cast<double>(count), max_exponent);
 
             std::chrono::microseconds const period(std::lround(
                 (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
-
-            data.wait_count.fetch_add(1, std::memory_order_relaxed);
 
             if (data.wait_cond.wait_for(l, period) ==    //-V1089
                 std::cv_status::no_timeout)
