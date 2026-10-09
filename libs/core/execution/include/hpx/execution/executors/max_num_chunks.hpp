@@ -4,7 +4,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file parallel/executors/max_num_chunks.hpp
+/// \file max_num_chunks.hpp
 /// \page hpx::execution::experimental::max_num_chunks
 /// \headerfile hpx/execution.hpp
 

@@ -29,9 +29,9 @@ namespace hpx::util::logging {
     /// @brief Formatter is a manipulator.
     /// It allows you to format the message before writing it to the destination(s)
     ///
-    /// Examples of formatters are : @ref formatter::time_t "prepend the time",
-    /// @ref formatter::high_precision_time_t "prepend high-precision time",
-    /// @ref formatter::idx_t "prepend the index of the message", etc.
+    /// Examples of formatters are: \c formatter::time_t (prepend the time),
+    /// \c formatter::high_precision_time_t (prepend high-precision time), and
+    /// \c formatter::idx_t (prepend the index of the message).
 
     namespace formatter {
 

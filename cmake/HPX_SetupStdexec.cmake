@@ -32,6 +32,9 @@ if(HPX_WITH_FETCH_STDEXEC)
   set(_hpx_stdexec_inline_nvcc_patch
       "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecInlineSchedulerNvcc.patch"
   )
+  set(_hpx_stdexec_async_scope_nvcc_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecAsyncScopeNvcc.patch"
+  )
 
   include(FetchContent)
   # We only consume stdexec's headers; HPX wraps them with its own `Stdexec`
@@ -54,6 +57,10 @@ if(HPX_WITH_FETCH_STDEXEC)
       -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
       "-DHPX_STDEXEC_NVCC_PATCH_FILE=${_hpx_stdexec_inline_nvcc_patch}"
+      "-DHPX_STDEXEC_NVCC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}"
+      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_NVCC_PATCH_FILE=${_hpx_stdexec_async_scope_nvcc_patch}"
       "-DHPX_STDEXEC_NVCC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}"
       -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake
   )

@@ -219,10 +219,10 @@ namespace hpx::util::cache {
         ///////////////////////////////////////////////////////////////////////
         /// \brief Get a specific entry identified by the given key.
         ///
-        /// \param k      [in] The key for the entry which should be retrieved
+        /// \param[in] k The key for the entry which should be retrieved
         ///               from the cache.
-        /// \param realkey[out] Return the full real key found in the cache
-        /// \param val    [out] If the entry indexed by the key is found in the
+        /// \param[out] realkey Return the full real key found in the cache
+        /// \param[out] val If the entry indexed by the key is found in the
         ///               cache this value on successful return will be a copy
         ///               of the corresponding entry.
         ///
