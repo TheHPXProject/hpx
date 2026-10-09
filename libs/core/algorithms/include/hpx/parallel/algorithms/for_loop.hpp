@@ -802,6 +802,20 @@ namespace hpx::parallel {
             (hpx::get<Is>(args).exit_iteration(size), ...);
         }
 
+        // Number of times the loop body is invoked while covering the given
+        // distance with the given stride. The induction and reduction objects
+        // need this count, not the distance, to produce their live-out values.
+        HPX_CXX_CORE_EXPORT template <typename Size, typename S>
+        HPX_HOST_DEVICE constexpr std::size_t iteration_count(
+            Size size, S stride) noexcept
+        {
+            HPX_ASSERT(stride > 0);
+
+            auto const count = static_cast<std::size_t>(size);
+            auto const step = static_cast<std::size_t>(stride);
+            return (count + step - 1) / step;
+        }
+
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
             typename S = void, typename Tuple = hpx::tuple<>>
@@ -1283,8 +1297,10 @@ namespace hpx::parallel {
                 }
 
                 // make sure live-out variables are properly set on return
-                arg.exit_iteration(size);
-                (args.exit_iteration(size), ...);
+                std::size_t const iterations =
+                    detail::iteration_count(size, stride);
+                arg.exit_iteration(iterations);
+                (args.exit_iteration(iterations), ...);
 
                 return {};
             }
@@ -1362,6 +1378,9 @@ namespace hpx::parallel {
                     args_type args =
                         hpx::forward_as_tuple(HPX_FORWARD(Ts, ts)...);
 
+                    std::size_t const iterations =
+                        detail::iteration_count(size, stride);
+
                     return util::detail::algorithm_result<policy_type>::get(
                         util::partitioner<policy_type>::call_with_index(
                             hinted_policy, first, size, stride,
@@ -1373,7 +1392,7 @@ namespace hpx::parallel {
                                         Ts)>();
                                 // make sure live-out variables are properly set on
                                 // return
-                                detail::exit_iteration(args, pack, size);
+                                detail::exit_iteration(args, pack, iterations);
                                 return hpx::util::unused;
                             }));
                 }
