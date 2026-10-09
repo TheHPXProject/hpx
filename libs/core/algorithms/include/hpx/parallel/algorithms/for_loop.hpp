@@ -563,8 +563,8 @@ namespace hpx { namespace experimental {
     ///
     /// \param first        Refers to the beginning of the sequence of elements
     ///                     the algorithm will be applied to.
-    /// \param size         Refers to the number of items the algorithm will be
-    ///                     applied to.
+    /// \param size         Refers to the number of times the loop body will be
+    ///                     invoked.
     /// \param stride       Refers to the stride of the iteration steps. This
     ///                     shall have a positive value, negative strides are
     ///                     not supported.
@@ -653,8 +653,8 @@ namespace hpx { namespace experimental {
     ///                     the iterations.
     /// \param first        Refers to the beginning of the sequence of elements
     ///                     the algorithm will be applied to.
-    /// \param size         Refers to the number of items the algorithm will be
-    ///                     applied to.
+    /// \param size         Refers to the number of times the loop body will be
+    ///                     invoked.
     /// \param stride       Refers to the stride of the iteration steps. This
     ///                     shall have a positive value, negative strides are
     ///                     not supported.
@@ -814,6 +814,26 @@ namespace hpx::parallel {
             auto const count = static_cast<std::size_t>(size);
             auto const step = static_cast<std::size_t>(stride);
             return (count + step - 1) / step;
+        }
+
+        // Distance covered by the given number of iterations taken with the
+        // given stride. This is the inverse of iteration_count() and is what
+        // turns the iteration count the for_loop_n algorithms are given into
+        // the distance the underlying implementation works on.
+        HPX_CXX_CORE_EXPORT template <typename Size, typename S>
+        HPX_HOST_DEVICE constexpr std::size_t iteration_distance(
+            Size size, S stride) noexcept
+        {
+            HPX_ASSERT(stride > 0);
+
+            if (size == Size(0) || parallel::detail::is_negative(size))
+            {
+                return 0;
+            }
+
+            auto const count = static_cast<std::size_t>(size);
+            auto const step = static_cast<std::size_t>(stride);
+            return (count - 1) * step + 1;
         }
 
         ///////////////////////////////////////////////////////////////////////
@@ -1541,11 +1561,15 @@ namespace hpx::parallel {
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
+            // size is the number of iterations to perform, the underlying
+            // algorithm works on the distance those iterations cover
+            std::size_t const distance = iteration_distance(size, stride);
+
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
             return for_loop_strided_algo().call(HPX_FORWARD(ExPolicy, policy),
-                first, size, stride, HPX_MOVE(f), hpx::get<Is>(t)...);
+                first, distance, stride, HPX_MOVE(f), hpx::get<Is>(t)...);
         }
         /// \endcond
     }    // namespace detail

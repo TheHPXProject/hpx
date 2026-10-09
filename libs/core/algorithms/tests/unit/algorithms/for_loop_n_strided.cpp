@@ -43,25 +43,29 @@ void test_for_loop_n_strided(ExPolicy&& policy, IteratorTag)
 
     int stride = dis(gen);    //-V103
 
+    // the loop body is invoked exactly n times, pick the number of iterations
+    // that keeps the last one inside the sequence
+    std::size_t const step = static_cast<std::size_t>(stride);
+    std::size_t const n = (c.size() + step - 1) / step;
+
     hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(policy),
-        iterator(std::begin(c)), c.size(), stride,
-        [](iterator it) { *it = 42; });
+        iterator(std::begin(c)), n, stride, [](iterator it) { *it = 42; });
 
     // verify values
     std::size_t count = 0;
     for (std::size_t i = 0; i != c.size(); ++i)
     {
-        if (i % stride == 0)    //-V104
+        if (i % step == 0)
         {
             HPX_TEST_EQ(c[i], std::size_t(42));
+            ++count;
         }
         else
         {
             HPX_TEST_NEQ(c[i], std::size_t(42));
         }
-        ++count;
     }
-    HPX_TEST_EQ(count, c.size());
+    HPX_TEST_EQ(count, n);
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -80,26 +84,28 @@ void test_for_loop_n_strided_async(ExPolicy&& p, IteratorTag)
 
     int stride = dis(gen);    //-V103
 
+    std::size_t const step = static_cast<std::size_t>(stride);
+    std::size_t const n = (c.size() + step - 1) / step;
+
     auto f = hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(p),
-        iterator(std::begin(c)), c.size(), stride,
-        [](iterator it) { *it = 42; });
+        iterator(std::begin(c)), n, stride, [](iterator it) { *it = 42; });
     f.wait();
 
     // verify values
     std::size_t count = 0;
     for (std::size_t i = 0; i != c.size(); ++i)
     {
-        if (i % stride == 0)    //-V104
+        if (i % step == 0)
         {
             HPX_TEST_EQ(c[i], std::size_t(42));
+            ++count;
         }
         else
         {
             HPX_TEST_NEQ(c[i], std::size_t(42));
         }
-        ++count;
     }
-    HPX_TEST_EQ(count, c.size());
+    HPX_TEST_EQ(count, n);
 }
 
 template <typename IteratorTag>
@@ -138,24 +144,27 @@ void test_for_loop_n_strided_idx(ExPolicy&& policy)
 
     int stride = dis(gen);    //-V103
 
-    hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(policy), 0,
-        c.size(), stride, [&c](std::size_t i) { c[i] = 42; });
+    std::size_t const step = static_cast<std::size_t>(stride);
+    std::size_t const n = (c.size() + step - 1) / step;
+
+    hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(policy), 0, n,
+        stride, [&c](std::size_t i) { c[i] = 42; });
 
     // verify values
     std::size_t count = 0;
     for (std::size_t i = 0; i != c.size(); ++i)
     {
-        if (i % stride == 0)    //-V104
+        if (i % step == 0)
         {
             HPX_TEST_EQ(c[i], std::size_t(42));
+            ++count;
         }
         else
         {
             HPX_TEST_NEQ(c[i], std::size_t(42));
         }
-        ++count;
     }
-    HPX_TEST_EQ(count, c.size());
+    HPX_TEST_EQ(count, n);
 }
 
 template <typename ExPolicy>
@@ -171,25 +180,28 @@ void test_for_loop_n_strided_idx_async(ExPolicy&& p)
 
     int stride = dis(gen);    //-V103
 
+    std::size_t const step = static_cast<std::size_t>(stride);
+    std::size_t const n = (c.size() + step - 1) / step;
+
     auto f = hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(p), 0,
-        c.size(), stride, [&c](std::size_t i) { c[i] = 42; });
+        n, stride, [&c](std::size_t i) { c[i] = 42; });
     f.wait();
 
     // verify values
     std::size_t count = 0;
     for (std::size_t i = 0; i != c.size(); ++i)
     {
-        if (i % stride == 0)    //-V104
+        if (i % step == 0)
         {
             HPX_TEST_EQ(c[i], std::size_t(42));
+            ++count;
         }
         else
         {
             HPX_TEST_NEQ(c[i], std::size_t(42));
         }
-        ++count;
     }
-    HPX_TEST_EQ(count, c.size());
+    HPX_TEST_EQ(count, n);
 }
 
 void for_loop_n_strided_test_idx()
@@ -205,6 +217,43 @@ void for_loop_n_strided_test_idx()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// the second argument is the number of iterations to perform, not the distance
+// those iterations cover (see N4755, 7.2.4, paragraph 2.1)
+template <typename ExPolicy>
+void test_for_loop_n_strided_count(ExPolicy&& policy)
+{
+    std::vector<std::size_t> c(100, 0);
+
+    hpx::experimental::for_loop_n_strided(std::forward<ExPolicy>(policy), 0,
+        std::size_t(10), 3, [&c](std::size_t i) { ++c[i]; });
+
+    // the body should have run for 0, 3, 6, ... 27
+    std::size_t count = 0;
+    for (std::size_t i = 0; i != c.size(); ++i)
+    {
+        if (i < 30 && i % 3 == 0)
+        {
+            HPX_TEST_EQ(c[i], std::size_t(1));
+            ++count;
+        }
+        else
+        {
+            HPX_TEST_EQ(c[i], std::size_t(0));
+        }
+    }
+    HPX_TEST_EQ(count, std::size_t(10));
+}
+
+void for_loop_n_strided_test_count()
+{
+    using namespace hpx::execution;
+
+    test_for_loop_n_strided_count(seq);
+    test_for_loop_n_strided_count(par);
+    test_for_loop_n_strided_count(par_unseq);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -216,6 +265,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     for_loop_n_strided_test();
     for_loop_n_strided_test_idx();
+    for_loop_n_strided_test_count();
 
     return hpx::local::finalize();
 }

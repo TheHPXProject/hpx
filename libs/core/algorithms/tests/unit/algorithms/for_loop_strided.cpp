@@ -9,6 +9,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <iostream>
 #include <numeric>
@@ -205,6 +206,38 @@ void for_loop_strided_test_idx()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// a live-out induction variable is advanced by the number of iterations, not
+// by the distance those iterations cover (see N4755, 7.2.3, paragraph 4)
+template <typename ExPolicy>
+void test_for_loop_strided_induction(ExPolicy&& policy)
+{
+    int stride = dis(gen);    //-V103
+
+    constexpr std::size_t size = 10007;
+
+    std::size_t const step = static_cast<std::size_t>(stride);
+    std::size_t const expected = (size + step - 1) / step;
+
+    std::size_t live_out = 0;
+    std::atomic<std::size_t> count(0);
+
+    hpx::experimental::for_loop_strided(std::forward<ExPolicy>(policy),
+        std::size_t(0), size, stride, hpx::experimental::induction(live_out),
+        [&count](std::size_t, std::size_t) { ++count; });
+
+    HPX_TEST_EQ(count.load(), expected);
+    HPX_TEST_EQ(live_out, expected);
+}
+
+void for_loop_strided_test_induction()
+{
+    using namespace hpx::execution;
+
+    test_for_loop_strided_induction(seq);
+    test_for_loop_strided_induction(par);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -216,6 +249,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     for_loop_strided_test();
     for_loop_strided_test_idx();
+    for_loop_strided_test_induction();
 
     return hpx::local::finalize();
 }

@@ -23,6 +23,22 @@ General changes
 Breaking changes
 ================
 
+- ``hpx::experimental::for_loop_n_strided`` now invokes the loop body exactly
+  ``n`` times, as required by N4755, 7.2.4, paragraph 2.1. It used to read
+  ``n`` as the distance to cover and invoked the body ``ceil(n / stride)``
+  times instead, so code that scaled ``n`` by the stride to work around this
+  has to stop doing that.
+- Negative strides are no longer supported by
+  ``hpx::experimental::for_loop_strided``,
+  ``hpx::experimental::for_loop_n_strided`` and
+  ``hpx::ranges::experimental::for_loop_strided``. N4755, 7.2.4,
+  paragraph 2.1 only describes a forward traversal, so the stride is now
+  required to be positive.
+- A live-out induction variable handed to one of the strided ``for_loop``
+  algorithms is now advanced by the number of iterations instead of by the
+  distance those iterations cover. The value it ended up with used to be too
+  large by a factor of the stride.
+
 Closed issues
 =============
 
