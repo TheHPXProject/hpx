@@ -15,6 +15,7 @@
 #include <numeric>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "test_utils.hpp"
@@ -38,6 +39,10 @@ void test_contains(IteratorTag)
     bool result1 = hpx::ranges::contains(
         iterator(std::begin(c)), iterator(std::end(c)), int(1));
     HPX_TEST_EQ(result1, true);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains(
+        iterator(empty.begin()), iterator(empty.end()), int(1)));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -61,6 +66,10 @@ void test_contains(ExPolicy&& policy, IteratorTag)
     bool result2 = hpx::ranges::contains(
         policy, iterator(std::begin(c)), iterator(std::end(c)), int(110));
     HPX_TEST_EQ(result2, false);
+
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::contains(
+        policy, iterator(empty.begin()), iterator(empty.end()), int(1)));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -86,6 +95,11 @@ void test_contains_async(ExPolicy&& policy, IteratorTag)
         policy, iterator(std::begin(c)), iterator(std::end(c)), int(110));
     result2.wait();
     HPX_TEST_EQ(result2.get(), false);
+
+    std::vector<int> empty;
+    hpx::future<bool> result3 = hpx::ranges::contains(
+        policy, iterator(empty.begin()), iterator(empty.end()), int(1));
+    HPX_TEST(!result3.get());
 }
 
 template <typename IteratorTag>
@@ -95,13 +109,16 @@ void test_contains()
 
     test_contains(IteratorTag());
 
-    test_contains(seq, IteratorTag());
-    test_contains(par, IteratorTag());
-    test_contains(par_unseq, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains(seq, IteratorTag());
+        test_contains(par, IteratorTag());
+        test_contains(par_unseq, IteratorTag());
 
-    test_contains_async(seq(task), IteratorTag());
-    test_contains_async(par(task), IteratorTag());
-    test_contains_async(par_unseq(task), IteratorTag());
+        test_contains_async(seq(task), IteratorTag());
+        test_contains_async(par(task), IteratorTag());
+        test_contains_async(par_unseq(task), IteratorTag());
+    }
 }
 
 void contains_test()
@@ -236,11 +253,14 @@ void test_contains_exception()
 
     test_contains_exception(IteratorTag());
 
-    test_contains_exception(seq, IteratorTag());
-    test_contains_exception(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_exception(seq, IteratorTag());
+        test_contains_exception(par, IteratorTag());
 
-    test_contains_exception_async(seq(task), IteratorTag());
-    test_contains_exception_async(par(task), IteratorTag());
+        test_contains_exception_async(seq(task), IteratorTag());
+        test_contains_exception_async(par(task), IteratorTag());
+    }
 }
 
 void contains_exception_test()
@@ -332,11 +352,14 @@ void test_contains_bad_alloc()
 {
     using namespace hpx::execution;
 
-    test_contains_bad_alloc(seq, IteratorTag());
-    test_contains_bad_alloc(par, IteratorTag());
+    if constexpr (std::is_same_v<IteratorTag, std::random_access_iterator_tag>)
+    {
+        test_contains_bad_alloc(seq, IteratorTag());
+        test_contains_bad_alloc(par, IteratorTag());
 
-    test_contains_bad_alloc_async(seq(task), IteratorTag());
-    test_contains_bad_alloc_async(par(task), IteratorTag());
+        test_contains_bad_alloc_async(seq(task), IteratorTag());
+        test_contains_bad_alloc_async(par(task), IteratorTag());
+    }
 }
 
 void contains_bad_alloc_test()

@@ -461,7 +461,7 @@ namespace hpx::parallel {
                 {
                     if (first == last)
                     {
-                        return result::get(true);
+                        return result::get(false);
                     }
                 }
 

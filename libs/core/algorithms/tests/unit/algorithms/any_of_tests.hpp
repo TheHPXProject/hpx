@@ -70,6 +70,27 @@ void test_any_of(ExPolicy&& policy, IteratorTag)
     }
 }
 
+template <typename ExPolicy, typename IteratorTag>
+void test_any_of_empty(ExPolicy&& policy, IteratorTag)
+{
+    using base_iterator = std::vector<int>::iterator;
+    using iterator = test::test_iterator<base_iterator, IteratorTag>;
+
+    std::vector<int> values;
+    auto result =
+        hpx::any_of(HPX_FORWARD(ExPolicy, policy), iterator(values.begin()),
+            iterator(values.end()), [](int value) { return value != 0; });
+
+    if constexpr (hpx::is_async_execution_policy_v<ExPolicy>)
+    {
+        HPX_TEST(!result.get());
+    }
+    else
+    {
+        HPX_TEST(!result);
+    }
+}
+
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_any_of_sender(LnPolicy ln_policy, ExPolicy&& ex_policy, IteratorTag)
 {
