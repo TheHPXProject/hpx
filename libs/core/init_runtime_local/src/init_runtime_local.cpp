@@ -359,6 +359,12 @@ namespace hpx {
             {
                 HPX_UNUSED(hpx::filesystem::initial_path());
 
+#if defined(HPX_WINDOWS) && defined(HPX_HAVE_APEX)
+                // artificially force the apex shared library to be loaded by the
+                // application
+                apex::version();
+#endif
+
                 hpx::assertion::set_assertion_handler(
                     &hpx::detail::assertion_handler);
                 hpx::util::set_test_failure_handler(

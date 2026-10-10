@@ -10,7 +10,11 @@
 # APEX might add an option to control the format of the generated output in the
 # future, we should re-enable the test at that point.
 
-set(tests apex_action_count) # annotation_check)
+set(tests apex_local_run)
+
+if(HPX_WITH_DISTRIBUTED_RUNTIME)
+  set(tests ${tests} apex_action_count)
+endif()
 
 foreach(test ${tests})
   set(sources ${test}.cpp)

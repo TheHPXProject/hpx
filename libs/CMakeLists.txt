@@ -542,6 +542,10 @@ if(HPX_WITH_TRACY)
   endif()
 endif()
 
+if(NOT HPX_WITH_DISTRIBUTED_RUNTIME AND TARGET APEX::apex)
+  target_link_libraries(hpx_core INTERFACE APEX::apex)
+endif()
+
 if(TARGET STDEXEC::stdexec)
   target_link_libraries(hpx_core INTERFACE STDEXEC::stdexec)
 endif()

@@ -35,6 +35,16 @@ HPX_CXX_CORE_EXPORT extern HPX_CORE_EXPORT char** freebsd_environ;
 HPX_CXX_CORE_EXPORT extern char** environ;
 #endif
 
+#if defined(HPX_WINDOWS) && defined(HPX_HAVE_APEX)
+#include <string>
+
+namespace apex {
+
+    // force linking of the application with APEX
+    HPX_SYMBOL_IMPORT std::string& version();
+}    // namespace apex
+#endif
+
 #include <hpx/config/warnings_prefix.hpp>
 
 namespace hpx {
