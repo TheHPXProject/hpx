@@ -59,7 +59,8 @@
 #if defined(HPX_HAVE_CONTRACTS_MODE) &&                                        \
     HPX_HAVE_CONTRACTS_MODE == HPX_HAVE_CONTRACTS_MODE_IGNORE
 
-#define HPX_CONTRACT_ASSERT(x)
+// If contracts are disabled, use HPX_ASSERT instead.
+#define HPX_CONTRACT_ASSERT(x) HPX_ASSERT(x)
 
 #else    // ENFORCE, QUICK_ENFORCE or OBSERVE: runtime checking
 
