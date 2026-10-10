@@ -208,9 +208,8 @@ namespace hpx { namespace experimental {
     /// \param last         Refers to the end of the sequence of elements
     ///                     the algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if I has integral type or meets the requirements
-    ///                     of a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -298,9 +297,8 @@ namespace hpx { namespace experimental {
     /// \param last         Refers to the end of the sequence of elements
     ///                     the algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if I has integral type or meets the requirements
-    ///                     of a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -565,12 +563,11 @@ namespace hpx { namespace experimental {
     ///
     /// \param first        Refers to the beginning of the sequence of elements
     ///                     the algorithm will be applied to.
-    /// \param size         Refers to the number of items the algorithm will be
-    ///                     applied to.
+    /// \param size         Refers to the number of times the loop body will be
+    ///                     invoked.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if I has integral type or meets the requirements
-    ///                     of a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -656,12 +653,11 @@ namespace hpx { namespace experimental {
     ///                     the iterations.
     /// \param first        Refers to the beginning of the sequence of elements
     ///                     the algorithm will be applied to.
-    /// \param size         Refers to the number of items the algorithm will be
-    ///                     applied to.
+    /// \param size         Refers to the number of times the loop body will be
+    ///                     invoked.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if I has integral type or meets the requirements
-    ///                     of a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -757,7 +753,6 @@ namespace hpx { namespace experimental {
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
-#include <limits>
 #include <ranges>
 #include <type_traits>
 #include <utility>
@@ -807,6 +802,50 @@ namespace hpx::parallel {
             (hpx::get<Is>(args).exit_iteration(size), ...);
         }
 
+        // Number of times the loop body is invoked while covering the given
+        // distance with the given stride. The induction and reduction objects
+        // need this count, not the distance, to produce their live-out values.
+        HPX_CXX_CORE_EXPORT template <typename Size, typename S>
+        HPX_HOST_DEVICE constexpr std::size_t iteration_count(
+            Size size, S stride) noexcept
+        {
+            HPX_ASSERT(stride > 0);
+
+            auto const count = static_cast<std::size_t>(size);
+            auto const step = static_cast<std::size_t>(stride);
+
+            // rounding up by adding the stride first would wrap for a stride
+            // close to the largest value a std::size_t can hold
+            return count / step + (count % step != 0 ? 1 : 0);
+        }
+
+        // Distance covered by the given number of iterations taken with the
+        // given stride. This is the inverse of iteration_count() and is what
+        // turns the iteration count the for_loop_n algorithms are given into
+        // the distance the underlying implementation works on.
+        HPX_CXX_CORE_EXPORT template <typename Size, typename S>
+        HPX_HOST_DEVICE constexpr std::size_t iteration_distance(
+            Size size, S stride) noexcept
+        {
+            HPX_ASSERT(stride > 0);
+
+            if (size == Size(0) || parallel::detail::is_negative(size))
+            {
+                return 0;
+            }
+
+            auto const count = static_cast<std::size_t>(size);
+            auto const step = static_cast<std::size_t>(stride);
+            std::size_t const distance = (count - 1) * step + 1;
+
+            // the last iteration starts at (count - 1) * stride, so a stride
+            // large enough to put it past the end of the address space cannot
+            // be expressed as a distance at all
+            HPX_ASSERT(iteration_count(distance, stride) == count);
+
+            return distance;
+        }
+
         ///////////////////////////////////////////////////////////////////////
         HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
             typename S = void, typename Tuple = hpx::tuple<>>
@@ -837,7 +876,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -854,7 +893,7 @@ namespace hpx::parallel {
                         detail::next_iteration(args_, pack, current_thread);
                     }
                 }
-                else if (stride_ > 0)
+                else
                 {
                     while (part_steps >= static_cast<std::size_t>(stride_))
                     {
@@ -873,40 +912,6 @@ namespace hpx::parallel {
                         detail::invoke_iteration(
                             args_, pack, f_, part_begin, current_thread);
                         detail::next_iteration(args_, pack, current_thread);
-                    }
-                }
-                else
-                {
-                    // Silence unary minus warning for unsigned types
-                    if constexpr (std::is_signed_v<S>)
-                    {
-                        // the magnitude of the stride is taken below and in
-                        // the loop condition, which rules out the smallest
-                        // value a signed type can hold
-                        HPX_ASSERT(stride_ != (std::numeric_limits<S>::min)());
-
-                        while (part_steps >= static_cast<std::size_t>(-stride_))
-                        {
-                            detail::invoke_iteration(
-                                args_, pack, f_, part_begin, current_thread);
-
-                            part_begin =
-                                parallel::detail::next(part_begin, stride_);
-                            part_steps -= static_cast<std::size_t>(-stride_);
-
-                            detail::next_iteration(args_, pack, current_thread);
-                        }
-
-                        if (part_steps != 0)
-                        {
-                            detail::invoke_iteration(
-                                args_, pack, f_, part_begin, current_thread);
-                            detail::next_iteration(args_, pack, current_thread);
-                        }
-                    }
-                    else
-                    {
-                        HPX_UNREACHABLE;
                     }
                 }
             }
@@ -970,7 +975,7 @@ namespace hpx::parallel {
                 {
                     (*this)(part_begin, part_steps);
                 }
-                else if (stride_ > 0)
+                else
                 {
                     while (part_steps >= static_cast<std::size_t>(stride_))
                     {
@@ -984,35 +989,6 @@ namespace hpx::parallel {
                     if (part_steps != 0)
                     {
                         HPX_INVOKE(f_, part_begin);
-                    }
-                }
-                else
-                {
-                    // Silence unary minus warning for unsigned types
-                    if constexpr (std::is_signed_v<S>)
-                    {
-                        // the magnitude of the stride is taken below and in
-                        // the loop condition, which rules out the smallest
-                        // value a signed type can hold
-                        HPX_ASSERT(stride_ != (std::numeric_limits<S>::min)());
-
-                        while (part_steps >= static_cast<std::size_t>(-stride_))
-                        {
-                            HPX_INVOKE(f_, part_begin);
-
-                            part_begin =
-                                parallel::detail::next(part_begin, stride_);
-                            part_steps -= static_cast<std::size_t>(-stride_);
-                        }
-
-                        if (part_steps != 0)
-                        {
-                            HPX_INVOKE(f_, part_begin);
-                        }
-                    }
-                    else
-                    {
-                        HPX_UNREACHABLE;
                     }
                 }
             }
@@ -1066,7 +1042,7 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Ts>...>>)
+                                  std::decay_t<Ts>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1296,7 +1272,7 @@ namespace hpx::parallel {
                     parallel::util::const_loop_n<std::decay_t<ExPolicy>>(
                         first, count, HPX_FORWARD(F, f));
                 }
-                else if (stride > 0)
+                else
                 {
                     while (count >= static_cast<std::size_t>(stride))
                     {
@@ -1304,21 +1280,6 @@ namespace hpx::parallel {
 
                         first = parallel::detail::next(first, stride);
                         count -= stride;
-                    }
-
-                    if (count != 0)
-                    {
-                        HPX_INVOKE(f, first);
-                    }
-                }
-                else
-                {
-                    while (count >= static_cast<std::size_t>(-stride))
-                    {
-                        HPX_INVOKE(f, first);
-
-                        first = parallel::detail::next(first, stride);
-                        count += stride;
                     }
 
                     if (count != 0)
@@ -1338,7 +1299,9 @@ namespace hpx::parallel {
             {
                 std::size_t current_thread = -1;
                 if constexpr (hpx::util::any_of_v<has_needs_current_thread_num<
-                                  std::decay_t<Args>...>>)
+                                                      std::decay_t<Arg>>,
+                                  has_needs_current_thread_num<
+                                      std::decay_t<Args>>...>)
                 {
                     current_thread = hpx::get_worker_thread_num();
                 }
@@ -1347,34 +1310,16 @@ namespace hpx::parallel {
                 (args.init_iteration(0, current_thread), ...);
 
                 std::size_t count = size;
-                if (stride > 0)
+                while (count >= static_cast<std::size_t>(stride))
                 {
-                    while (count >= static_cast<std::size_t>(stride))
-                    {
-                        HPX_INVOKE(f, first, arg.iteration_value(),
-                            args.iteration_value()...);
+                    HPX_INVOKE(f, first, arg.iteration_value(current_thread),
+                        args.iteration_value(current_thread)...);
 
-                        first = parallel::detail::next(first, stride);
-                        count -= stride;
+                    first = parallel::detail::next(first, stride);
+                    count -= stride;
 
-                        arg.next_iteration(current_thread);
-                        (args.next_iteration(current_thread), ...);
-                    }
-                }
-                else
-                {
-                    while (count >= static_cast<std::size_t>(-stride))
-                    {
-                        HPX_INVOKE(f, first,
-                            arg.iteration_value(current_thread),
-                            args.iteration_value(current_thread)...);
-
-                        first = parallel::detail::next(first, stride);
-                        count += stride;
-
-                        arg.next_iteration(current_thread);
-                        (args.next_iteration(current_thread), ...);
-                    }
+                    arg.next_iteration(current_thread);
+                    (args.next_iteration(current_thread), ...);
                 }
 
                 if (count != 0)
@@ -1384,8 +1329,10 @@ namespace hpx::parallel {
                 }
 
                 // make sure live-out variables are properly set on return
-                arg.exit_iteration(size);
-                (args.exit_iteration(size), ...);
+                std::size_t const iterations =
+                    detail::iteration_count(size, stride);
+                arg.exit_iteration(iterations);
+                (args.exit_iteration(iterations), ...);
 
                 return {};
             }
@@ -1463,6 +1410,9 @@ namespace hpx::parallel {
                     args_type args =
                         hpx::forward_as_tuple(HPX_FORWARD(Ts, ts)...);
 
+                    std::size_t const iterations =
+                        detail::iteration_count(size, stride);
+
                     return util::detail::algorithm_result<policy_type>::get(
                         util::partitioner<policy_type>::call_with_index(
                             hinted_policy, first, size, stride,
@@ -1474,7 +1424,7 @@ namespace hpx::parallel {
                                         Ts)>();
                                 // make sure live-out variables are properly set on
                                 // return
-                                detail::exit_iteration(args, pack, size);
+                                detail::exit_iteration(args, pack, iterations);
                                 return hpx::util::unused;
                             }));
                 }
@@ -1552,8 +1502,8 @@ namespace hpx::parallel {
         auto for_loop_strided(ExPolicy&& policy, B first, E last, S stride,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            // stride shall not be zero
-            HPX_ASSERT(stride != 0);
+            // stride shall be positive, negative strides are not supported
+            HPX_ASSERT(stride > 0);
 
             if constexpr (std::is_integral_v<B> && std::is_signed_v<B> &&
                 std::is_integral_v<E> && std::is_signed_v<E> &&
@@ -1563,14 +1513,6 @@ namespace hpx::parallel {
                 {
                     return util::detail::algorithm_result<ExPolicy>::get();
                 }
-            }
-
-            // stride should be negative only if E is an integral type or at
-            // least a bidirectional iterator
-            if (stride < 0)
-            {
-                HPX_ASSERT(
-                    std::is_integral_v<E> || std::bidirectional_iterator<E>);
             }
 
             static_assert(std::is_integral_v<B> || std::forward_iterator<B>,
@@ -1590,8 +1532,8 @@ namespace hpx::parallel {
         auto for_loop_strided_range(ExPolicy&& policy, R r, S stride,
             hpx::util::index_pack<Is...>, Args&&... args)
         {
-            // stride shall not be zero
-            HPX_ASSERT(stride != 0);
+            // stride shall be positive, negative strides are not supported
+            HPX_ASSERT(stride > 0);
 
             constexpr bool scheduler_policy =
                 hpx::execution_policy_has_scheduler_executor_v<ExPolicy>;
@@ -1602,14 +1544,6 @@ namespace hpx::parallel {
                 {
                     return util::detail::algorithm_result<ExPolicy>::get();
                 }
-            }
-
-            // stride should be negative only if R exposes at least a
-            // bidirectional iterator
-            if (stride < 0)
-            {
-                HPX_ASSERT(std::bidirectional_iterator<
-                    hpx::traits::range_category_t<R>>);
             }
 
             static_assert(
@@ -1632,26 +1566,22 @@ namespace hpx::parallel {
             B first, Size size, S stride, hpx::util::index_pack<Is...>,
             Args&&... args)
         {
-            // stride shall not be zero
-            HPX_ASSERT(stride != 0);
-
-            // stride should be negative only if E is an integral type or at
-            // least a bidirectional iterator
-            if (stride < 0)
-            {
-                HPX_ASSERT(
-                    std::is_integral_v<B> || std::bidirectional_iterator<B>);
-            }
+            // stride shall be positive, negative strides are not supported
+            HPX_ASSERT(stride > 0);
 
             static_assert(std::is_integral_v<B> || std::forward_iterator<B>,
                 "Requires at least forward iterator or integral loop "
                 "boundaries.");
 
+            // size is the number of iterations to perform, the underlying
+            // algorithm works on the distance those iterations cover
+            std::size_t const distance = iteration_distance(size, stride);
+
             auto&& t = hpx::forward_as_tuple(HPX_FORWARD(Args, args)...);
 
             auto f = hpx::get<sizeof...(Args) - 1>(t);
             return for_loop_strided_algo().call(HPX_FORWARD(ExPolicy, policy),
-                first, size, stride, HPX_MOVE(f), hpx::get<Is>(t)...);
+                first, distance, stride, HPX_MOVE(f), hpx::get<Is>(t)...);
         }
         /// \endcond
     }    // namespace detail

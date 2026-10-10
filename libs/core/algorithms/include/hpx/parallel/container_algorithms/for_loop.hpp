@@ -383,8 +383,8 @@ namespace hpx { namespace ranges { namespace experimental {
     /// \param last         Refers to the end of the sequence of elements
     ///                     the algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if Iter meets the requirements a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -478,8 +478,8 @@ namespace hpx { namespace ranges { namespace experimental {
     /// \param last         Refers to the end of the sequence of elements
     ///                     the algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if Iter meets the requirements a bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -564,9 +564,8 @@ namespace hpx { namespace ranges { namespace experimental {
     /// \param rng          Refers to theof the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if Rng::iterator meets the requirements a
-    ///                     bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
@@ -657,9 +656,8 @@ namespace hpx { namespace ranges { namespace experimental {
     /// \param rng          Refers to theof the sequence of elements the
     ///                     algorithm will be applied to.
     /// \param stride       Refers to the stride of the iteration steps. This
-    ///                     shall have non-zero value and shall be negative
-    ///                     only if Rng::iterator meets the requirements a
-    ///                     bidirectional iterator.
+    ///                     shall have a positive value, negative strides are
+    ///                     not supported.
     /// \param args         The last element of this parameter pack is the
     ///                     function (object) to invoke, while the remaining
     ///                     elements of the parameter pack are instances of
