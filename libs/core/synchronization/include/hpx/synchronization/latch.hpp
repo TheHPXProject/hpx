@@ -104,12 +104,16 @@ namespace hpx {
             std::ptrdiff_t const old_count =
                 counter_.fetch_sub(update, std::memory_order_acq_rel);
 
-            HPX_CONTRACT_ASSERT(old_count >= update);
-
             if (old_count == update)
             {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
+            }
+            else
+            {
+                // report a violation outside of the lock, using only locals
+                l.unlock();
+                HPX_CONTRACT_ASSERT(old_count >= update);
             }
         }
 
