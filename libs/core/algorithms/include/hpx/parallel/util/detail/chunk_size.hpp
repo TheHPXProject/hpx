@@ -49,7 +49,7 @@ namespace hpx::parallel::util::detail {
             }
             base_exec.num_cores_ = cores;
             policy = hpx::execution::experimental::create_rebound_policy(
-                policy, HPX_MOVE(exec), policy.parameters());
+                policy, HPX_MOVE(exec));
         }
         else if constexpr (requires {
                                policy.query(hpx::execution::experimental::

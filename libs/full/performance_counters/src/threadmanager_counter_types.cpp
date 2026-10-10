@@ -90,13 +90,14 @@ namespace hpx::performance_counters::detail {
         }
         else if (paths.instancename_ == "pool")
         {
-            if (paths.instanceindex_ >= 0 &&
-                static_cast<std::size_t>(paths.instanceindex_) <
-                    hpx::resource::get_num_thread_pools())
+            if (auto const index =
+                    static_cast<std::size_t>(paths.instanceindex_);
+                paths.instanceindex_ >= 0 &&
+                index < hpx::resource::get_num_thread_pools())
             {
                 // specific for given pool counter
                 threads::thread_pool_base& pool_instance =
-                    hpx::resource::get_thread_pool(paths.instanceindex_);
+                    hpx::resource::get_thread_pool(index);
 
                 using detail::create_raw_counter;
                 hpx::function<std::int64_t(bool)> f =
@@ -166,12 +167,13 @@ namespace hpx::performance_counters::detail {
                     &pool);
                 return create_raw_counter(info, HPX_MOVE(f), ec);
             }
-            else if (static_cast<std::size_t>(paths.instanceindex_) <
-                hpx::resource::get_num_thread_pools())
+            else if (auto const index =
+                         static_cast<std::size_t>(paths.instanceindex_);
+                index < hpx::resource::get_num_thread_pools())
             {
                 // counter specific for given pool
                 threads::thread_pool_base& pool_instance =
-                    hpx::resource::get_thread_pool(paths.instanceindex_);
+                    hpx::resource::get_thread_pool(index);
 
                 hpx::function<std::int64_t()> f = hpx::bind_back(
                     &threads::thread_pool_base::get_scheduler_utilization,
@@ -221,13 +223,14 @@ namespace hpx::performance_counters::detail {
         }
         else if (paths.instancename_ == "pool")
         {
-            if (paths.instanceindex_ >= 0 &&
-                static_cast<std::size_t>(paths.instanceindex_) <
-                    hpx::resource::get_num_thread_pools())
+            if (auto const index =
+                    static_cast<std::size_t>(paths.instanceindex_);
+                paths.instanceindex_ >= 0 &&
+                index < hpx::resource::get_num_thread_pools())
             {
                 // specific for given pool counter
                 threads::thread_pool_base& pool_instance =
-                    hpx::resource::get_thread_pool(paths.instanceindex_);
+                    hpx::resource::get_thread_pool(index);
 
                 using detail::create_raw_counter;
                 hpx::function<std::int64_t(bool)> f =

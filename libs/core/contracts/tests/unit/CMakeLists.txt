@@ -45,6 +45,12 @@ else()
 
   # violation handlers will not be called
   if(HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
+    # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, which aborts only in Debug
+    set(default_handler_aborts_PARAMETERS FAILURE_EXPECTED_DEBUG)
+    set(declaration_contracts_fail_contract_assert_PARAMETERS
+        FAILURE_EXPECTED_DEBUG
+    )
+    set(fallback_contracts_fail_PARAMETERS FAILURE_EXPECTED_DEBUG)
     set(handler_receives_correct_info_PARAMETERS FAILURE_EXPECTED)
     set(violation_handler_invoked_PARAMETERS FAILURE_EXPECTED)
   endif()

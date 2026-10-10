@@ -119,7 +119,7 @@ namespace hpx::performance_counters {
             return get_values<T>(reset).get(ec);
         }
 
-        std::size_t get_invocation_count() const;
+        std::uint64_t get_invocation_count() const;
 
     protected:
         bool find_counter(counter_info const& info, bool reset, error_code& ec);
