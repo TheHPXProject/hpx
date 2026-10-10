@@ -11,6 +11,7 @@
 #pragma once
 
 #include <hpx/assert.hpp>
+#include <hpx/contracts.hpp>
 #include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/synchronization/detail/condition_variable.hpp>
@@ -48,7 +49,9 @@ namespace hpx {
         /// Synchronization: None
         /// Postconditions: counter_ == count.
         ///
-        explicit latch(std::ptrdiff_t const count)
+        /// \note Enforced by HPX_PRE if native C++26 contracts are available.
+        ///
+        explicit latch(std::ptrdiff_t const count) HPX_PRE(count >= 0)
           : counter_(count)
           , notified_(count == 0)
         {
@@ -87,9 +90,12 @@ namespace hpx {
         /// Synchronization: Synchronizes with all calls that block on this
         /// latch and with all try_wait calls on this latch that return true .
         ///
+        /// \note n >= 0 is enforced by HPX_PRE if native C++26 contracts are
+        ///       available; counter_ >= n by HPX_CONTRACT_ASSERT.
+        ///
         /// \throws Nothing.
         ///
-        void count_down(std::ptrdiff_t const update)
+        void count_down(std::ptrdiff_t const update) HPX_PRE(update >= 0)
         {
             HPX_ASSERT(update >= 0);
 
@@ -98,12 +104,16 @@ namespace hpx {
             std::ptrdiff_t const old_count =
                 counter_.fetch_sub(update, std::memory_order_acq_rel);
 
-            HPX_ASSERT(old_count >= update);
-
             if (old_count == update)
             {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
+            }
+            else
+            {
+                // report a violation outside of the lock, using only locals
+                l.unlock();
+                HPX_CONTRACT_ASSERT(old_count >= update);
             }
         }
 
@@ -144,7 +154,12 @@ namespace hpx {
         /// Effects: Equivalent to:
         ///             count_down(update);
         ///             wait();
-        void arrive_and_wait(std::ptrdiff_t update = 1)
+        ///
+        /// Requires: counter_ >= update and update >= 0.
+        ///
+        /// \note update >= 0 is enforced by HPX_PRE if native C++26 contracts
+        ///       are available; counter_ >= update by HPX_CONTRACT_ASSERT.
+        void arrive_and_wait(std::ptrdiff_t update = 1) HPX_PRE(update >= 0)
         {
             HPX_ASSERT(update >= 0);
 
@@ -152,7 +167,6 @@ namespace hpx {
 
             std::ptrdiff_t const old_count =
                 counter_.fetch_sub(update, std::memory_order_acq_rel);
-            HPX_ASSERT_LOCKED(l, old_count >= update);
 
             // 26110: Caller failing to hold lock 'this->mtx_.data_'
             // 26111: Caller failing to release lock 'this->mtx_.data_'
@@ -175,6 +189,12 @@ namespace hpx {
                 notified_ = true;
                 notify_waiters(HPX_MOVE(l));
             }
+
+            // A violation (old_count < update) always takes the else branch
+            // above, which has released the lock, so a handler that returns
+            // never runs under the spinlock. Only locals are used here as the
+            // latch may already be gone.
+            HPX_CONTRACT_ASSERT(old_count >= update);
         }
 
     private:
