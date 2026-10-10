@@ -7,7 +7,16 @@
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-if(HPX_WITH_CXX26_CONTRACTS)
+if(NOT HPX_WITH_CONTRACTS)
+  # Contracts are disabled: HPX_PRE/HPX_POST expand to nothing and
+  # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, whether or not native C++26
+  # contracts are available. None of the options below apply.
+  if(DEFINED HPX_WITH_CONTRACTS_MODE)
+    hpx_warn(
+      "HPX_WITH_CONTRACTS_MODE is ignored because HPX_WITH_CONTRACTS=OFF, set HPX_WITH_CONTRACTS=ON to enable contract checking"
+    )
+  endif()
+elseif(HPX_WITH_CXX26_CONTRACTS)
   # Map existing HPX_ASSERT to contract_assert
   hpx_option(
     HPX_CONTRACTS_WITH_ASSERTS_AS_CONTRACT_ASSERTS BOOL

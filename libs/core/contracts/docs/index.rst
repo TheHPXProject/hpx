@@ -21,25 +21,34 @@ The module provides three primary macros: :c:macro:`HPX_PRE`,
 :c:macro:`HPX_POST`, and :c:macro:`HPX_CONTRACT_ASSERT`. These macros 
 automatically adapt their behavior based on compiler capabilities:
 
-* When C++26 native contracts are available (``__cpp_contracts`` defined), 
-  they map to standard contract syntax
-* When ``HPX_WITH_CX26_CONTRACTS=OFF``, preconditions and postconditions become 
-  no-ops while contract assertions remain available as enhanced assertions
+* When ``HPX_WITH_CONTRACTS=OFF`` (the default), preconditions and
+  postconditions become no-ops and contract assertions fall back to
+  :c:macro:`HPX_ASSERT`, independently of whether the compiler supports
+  native C++26 contracts
+* When ``HPX_WITH_CONTRACTS=ON`` and C++26 native contracts are available
+  (``__cpp_contracts`` defined), they map to standard contract syntax
+* When ``HPX_WITH_CONTRACTS=ON`` and native contracts are not available,
+  preconditions and postconditions become no-ops while contract assertions
+  are checked according to ``HPX_WITH_CONTRACTS_MODE``
 
 Configuration
 =============
 
 Enable contracts in CMake::
 
-    cmake -DHPX_WITH_CXX26_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26
+    cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26
 
-Enable contract-enhanced assertions (optional)::
+Enable contract-enhanced assertions (optional, native contracts only)::
 
-    cmake -DHPX_WITH_CXX26_CONTRACTS=ON -DHPX_CONTRACTS_WITH_ASSERTS_AS_CONTRACT_ASSERTS=ON
+    cmake -DHPX_WITH_CONTRACTS=ON -DHPX_CONTRACTS_WITH_ASSERTS_AS_CONTRACT_ASSERTS=ON
+
+Select the evaluation mode used when native contracts are not available::
+
+    cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE
 
 Contract assertions work even when contracts are disabled::
 
-    cmake -DHPX_WITH_CXX26_CONTRACTS=OFF  # HPX_CONTRACT_ASSERT still maps to HPX_ASSERT
+    cmake -DHPX_WITH_CONTRACTS=OFF  # HPX_CONTRACT_ASSERT maps to HPX_ASSERT
 
 Advanced Features
 =================
@@ -68,7 +77,7 @@ without requiring changes to assertion code. The transformation occurs in the
 contracts module (``contracts.hpp``) where the ``HPX_ASSERT`` macro is 
 overridden to use ``HPX_CONTRACT_ASSERT`` when ``HPX_WITH_ASSERTS_AS_CONTRACT_ASSERTS=ON``:
 
-* ``HPX_WITH_CXX26_CONTRACTS=ON`` - Contracts module is enabled
+* ``HPX_WITH_CONTRACTS=ON`` and native contracts available - Contracts are enabled
 * ``HPX_CONTRACTS_WITH_ASSERTS_AS_CONTRACT_ASSERTS=ON`` - Assertion enhancement is enabled  
 
 The implementation works by redefining ``HPX_ASSERT`` in ``contracts.hpp`` to 
@@ -104,8 +113,9 @@ Design Philosophy
 =================
 
 **HPX_CONTRACT_ASSERT**: Enhanced assertion mechanism
-    Available even when ``HPX_WITH_CONTRACTS=OFF`` because it provides value 
-    as an enhanced assertion. Maps to :c:macro:`HPX_ASSERT` in all configurations.
+    Available even when ``HPX_WITH_CONTRACTS=OFF`` because it provides value
+    as an enhanced assertion. Maps to :c:macro:`HPX_ASSERT` when contracts are
+    disabled (or ``HPX_WITH_CONTRACTS_MODE=IGNORE``).
 
 **HPX_PRE/HPX_POST**: True contract syntax
     Represent language-level contract semantics. When contracts are enabled but 
