@@ -55,10 +55,13 @@ int hpx_main()
         HPX_TEST_EQ(handler_call_count.load(), 0);
     }
 
-    // invalid call: update (2) exceeds the current count (1)
+    // invalid call: update (2) exceeds the current count (1); the violation
+    // must be reported without holding the lock
     {
         hpx::lcos::local::latch l(1);
+        lock_probe = &l;
         l.count_down(2);
+        lock_probe = nullptr;
 
         HPX_TEST_EQ(handler_call_count.load(), 1);
         HPX_TEST_EQ(last_condition, std::string("old_count >= update"));
@@ -68,7 +71,7 @@ int hpx_main()
         l.reset(0);
     }
 
-    // same for arrive_and_wait, which must report without holding the lock
+    // same for arrive_and_wait
     {
         hpx::lcos::local::latch l(1);
         lock_probe = &l;
