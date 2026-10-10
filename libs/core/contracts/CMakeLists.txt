@@ -7,16 +7,7 @@
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-if(NOT HPX_WITH_CONTRACTS)
-  # Contracts are disabled: HPX_PRE/HPX_POST expand to nothing and
-  # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, whether or not native C++26
-  # contracts are available. None of the options below apply.
-  if(DEFINED HPX_WITH_CONTRACTS_MODE)
-    hpx_warn(
-      "HPX_WITH_CONTRACTS_MODE is ignored because HPX_WITH_CONTRACTS=OFF, set HPX_WITH_CONTRACTS=ON to enable contract checking"
-    )
-  endif()
-elseif(HPX_WITH_CXX26_CONTRACTS)
+if(HPX_WITH_CONTRACTS AND HPX_WITH_CXX26_CONTRACTS)
   # Map existing HPX_ASSERT to contract_assert
   hpx_option(
     HPX_CONTRACTS_WITH_ASSERTS_AS_CONTRACT_ASSERTS BOOL
@@ -31,13 +22,27 @@ elseif(HPX_WITH_CXX26_CONTRACTS)
     )
   endif()
 else()
-  hpx_option(
-    HPX_WITH_CONTRACTS_MODE
-    STRING
-    "Contract evaluation mode for pre-C++26 compilers, options are: ENFORCE, QUICK_ENFORCE, OBSERVE, IGNORE"
-    "ENFORCE"
-    STRINGS "ENFORCE;QUICK_ENFORCE;OBSERVE;IGNORE"
-  )
+  if(HPX_WITH_CONTRACTS)
+    hpx_option(
+      HPX_WITH_CONTRACTS_MODE
+      STRING
+      "Contract evaluation mode for pre-C++26 compilers, options are: ENFORCE, QUICK_ENFORCE, OBSERVE, IGNORE"
+      "ENFORCE"
+      STRINGS "ENFORCE;QUICK_ENFORCE;OBSERVE;IGNORE"
+    )
+    set(contracts_mode ${HPX_WITH_CONTRACTS_MODE})
+  else()
+    # Contracts are disabled: HPX_PRE/HPX_POST expand to nothing and
+    # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, whether or not native C++26
+    # contracts are available. The fallback violation handler API reports the
+    # IGNORE semantic.
+    if(DEFINED HPX_WITH_CONTRACTS_MODE)
+      hpx_warn(
+        "HPX_WITH_CONTRACTS_MODE is ignored because HPX_WITH_CONTRACTS=OFF, set HPX_WITH_CONTRACTS=ON to enable contract checking"
+      )
+    endif()
+    set(contracts_mode "IGNORE")
+  endif()
 
   # Note: values start at 1 because hpx_add_config_define_namespace treats a
   # numeric "0" as falsy and would emit a valueless #define.
@@ -64,25 +69,25 @@ else()
     NAMESPACE CONTRACTS
   )
 
-  if(HPX_WITH_CONTRACTS_MODE STREQUAL "ENFORCE")
+  if(contracts_mode STREQUAL "ENFORCE")
     hpx_add_config_define_namespace(
       DEFINE HPX_HAVE_CONTRACTS_MODE
       VALUE HPX_HAVE_CONTRACTS_MODE_ENFORCE
       NAMESPACE CONTRACTS
     )
-  elseif(HPX_WITH_CONTRACTS_MODE STREQUAL "QUICK_ENFORCE")
+  elseif(contracts_mode STREQUAL "QUICK_ENFORCE")
     hpx_add_config_define_namespace(
       DEFINE HPX_HAVE_CONTRACTS_MODE
       VALUE HPX_HAVE_CONTRACTS_MODE_QUICK_ENFORCE
       NAMESPACE CONTRACTS
     )
-  elseif(HPX_WITH_CONTRACTS_MODE STREQUAL "OBSERVE")
+  elseif(contracts_mode STREQUAL "OBSERVE")
     hpx_add_config_define_namespace(
       DEFINE HPX_HAVE_CONTRACTS_MODE
       VALUE HPX_HAVE_CONTRACTS_MODE_OBSERVE
       NAMESPACE CONTRACTS
     )
-  elseif(HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
+  elseif(contracts_mode STREQUAL "IGNORE")
     hpx_add_config_define_namespace(
       DEFINE HPX_HAVE_CONTRACTS_MODE
       VALUE HPX_HAVE_CONTRACTS_MODE_IGNORE

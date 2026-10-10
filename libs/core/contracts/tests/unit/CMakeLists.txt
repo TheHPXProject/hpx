@@ -9,19 +9,16 @@
 # Declaration contracts tests (C++26 declaration syntax) These run when
 # __cpp_contracts is available
 set(contract_tests
-    declaration_contracts_succeed
-    declaration_contracts_fail_pre
-    declaration_contracts_fail_post
-    declaration_contracts_fail_contract_assert
-    default_handler_aborts
-    fallback_contracts_succeed
+    declaration_contracts_succeed declaration_contracts_fail_pre
+    declaration_contracts_fail_post declaration_contracts_fail_contract_assert
+    default_handler_aborts fallback_contracts_succeed
 )
 
 if(NOT HPX_WITH_CONTRACTS)
   # Contracts are disabled: HPX_PRE / HPX_POST are no-ops (even with native
-  # contracts available) and HPX_CONTRACT_ASSERT falls back to HPX_ASSERT,
-  # which aborts only in Debug. Violation handlers are never called, so the
-  # handler tests are not built.
+  # contracts available) and HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, which
+  # aborts only in Debug. Violation handlers are never called, so the handler
+  # tests are not built.
   set(contract_tests ${contract_tests} disabled_contracts
                      fallback_contracts_fail
   )
