@@ -73,7 +73,7 @@ void set_env_var(std::vector<std::string>& env, std::string const& name,
 {
     std::string const prefix = name + "=";
 
-    env.erase(std::remove_if(env.begin(), env.end(),
+    env.erase(std::ranges::remove_if(env,
                   [&prefix](std::string const& entry) {
 #if defined(HPX_WINDOWS)
                       return entry.size() >= prefix.size() &&
@@ -83,12 +83,36 @@ void set_env_var(std::vector<std::string>& env, std::string const& name,
                                   return std::tolower(lhs) == std::tolower(rhs);
                               });
 #else
-                      return entry.starts_with(prefix);
+                return entry.starts_with(prefix);
 #endif
-                  }),
+                  })
+                  .begin(),
         env.end());
 
     env.push_back(prefix + value);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Upper bound for every step of this test that blocks on another locality.
+//
+// None of those waits has a timeout of its own, so if the launched locality
+// never connects, never reaches the latch or never exits, the test would
+// block until ctest kills it (25 minutes on CI) without reporting anything.
+// Every step normally completes in well under a second, so this is only a
+// safety net: it is generous enough for a heavily loaded debug runner and
+// still leaves the whole test far below the ctest timeout.
+constexpr std::chrono::seconds step_timeout(120);
+
+// Wait (bounded) for the given future. Reports a test failure naming the step
+// that did not complete and returns false if the timeout expires.
+template <typename Future>
+bool wait_for_step(Future& f, char const* step)
+{
+    if (f.wait_for(step_timeout) == hpx::future_status::ready)
+        return true;
+
+    HPX_TEST_MSG(false, step);
+    return false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -114,11 +138,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
     // set up command line for the launched executable
     std::vector<std::string> args;
     args.push_back(hpx::filesystem::to_string(exe));
-    args.push_back("--hpx:ignore-batch-env");
-    args.push_back("--hpx:threads=1");
+    args.emplace_back("--hpx:ignore-batch-env");
+    args.emplace_back("--hpx:threads=1");
     // Force use of the TCP parcelport
-    args.push_back("--hpx:ini=hpx.parcel.tcp.priority=1000");
-    args.push_back("--hpx:ini=hpx.parcel.bootstrap=tcp");
+    args.emplace_back("--hpx:ini=hpx.parcel.tcp.priority=1000");
+    args.emplace_back("--hpx:ini=hpx.parcel.bootstrap=tcp");
 
     // set up environment for the launched executable
     std::vector<std::string> env = get_environment();    // current environment
@@ -155,7 +179,14 @@ int hpx_main(hpx::program_options::variables_map& vm)
         process::wait_on_latch("departed_locality_7384"));    // same as above!
 
     // wait for the new locality to be up and running
-    c.wait();
+    hpx::shared_future<hpx::id_type> started = c.share();
+    if (!wait_for_step(
+            started, "timed out waiting for the launched locality to connect"))
+    {
+        c.terminate().wait_for(std::chrono::seconds(10));
+        c.wait_for_exit().wait_for(std::chrono::seconds(10));
+        return hpx::finalize();
+    }
     HPX_TEST(c);
 
     // capture the id of the connected locality while it is still alive
@@ -186,9 +217,23 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     // let the launched locality proceed to its graceful hpx::disconnect and
     // wait for the process to exit cleanly
-    sync.arrive_and_wait();
+    //
+    // Only count down here instead of arrive_and_wait(): the launched
+    // locality blocks on the latch until both sides have arrived, so waiting
+    // for the process to exit below already covers it, and that wait is
+    // bounded.
+    sync.count_down(1);
 
-    int const exit_code = c.wait_for_exit(hpx::launch::sync);
+    hpx::future<int> exit_f = c.wait_for_exit();
+    if (!wait_for_step(
+            exit_f, "timed out waiting for the launched locality to exit"))
+    {
+        // do not leave the stuck process behind
+        c.terminate().wait_for(std::chrono::seconds(10));
+        return hpx::finalize();
+    }
+
+    int const exit_code = exit_f.get();
     HPX_TEST_EQ(exit_code, 0);
 
     // the departed locality may not be a member anymore (bounded wait, the
@@ -251,8 +296,13 @@ int hpx_main(hpx::program_options::variables_map& vm)
     {
         hpx::future<void> f =
             hpx::async(departed_locality_ping_action(), departed);
-        f.get();
-        no_error = true;
+        if (wait_for_step(f,
+                "timed out waiting for the action sent to the departed "
+                "locality to complete"))
+        {
+            f.get();
+            no_error = true;
+        }
     }
     catch (hpx::exception const& e)
     {
@@ -295,4 +345,5 @@ int main(int argc, char* argv[])
 
     return hpx::util::report_errors();
 }
+
 #endif
