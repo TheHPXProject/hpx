@@ -203,7 +203,7 @@ The :hpx:class:`hpx::resource::partitioner` is now created during |hpx| runtime
 initialization without explicit action needed from the user. To specify some of
 the initialization parameters you can use the :hpx:struct:`hpx::init_params`.
 
-.. literalinclude:: ../../libs/full/resource_partitioner/examples/simplest_resource_partitioner_1.cpp
+.. literalinclude:: ../../libs/core/resource_partitioner/examples/simplest_resource_partitioner_1.cpp
    :start-after: //[body
    :end-before: //body]
 
@@ -227,7 +227,7 @@ pool. Below is an example of adding all processing units from the first NUMA
 domain to a custom thread pool, unless there is only one NUMA domain in which
 case we leave the first processing unit for the default thread pool:
 
-.. literalinclude:: ../../libs/full/resource_partitioner/examples/simplest_resource_partitioner_2.cpp
+.. literalinclude:: ../../libs/core/resource_partitioner/examples/simplest_resource_partitioner_2.cpp
    :start-after: //[body
    :end-before: //body]
 
