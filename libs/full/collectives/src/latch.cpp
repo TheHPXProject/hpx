@@ -10,6 +10,7 @@
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
 #include <hpx/modules/components.hpp>
+#include <hpx/modules/contracts.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/performance_counters.hpp>
 #include <hpx/modules/runtime_components.hpp>
@@ -28,8 +29,19 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::distributed {
 
+    namespace {
+
+        // Check the precondition before the latch component is created
+        std::ptrdiff_t checked_count(std::ptrdiff_t count)
+        {
+            HPX_CONTRACT_ASSERT(count >= 0);
+            return count;
+        }
+    }    // namespace
+
     latch::latch(std::ptrdiff_t count)
-      : base_type(hpx::new_<lcos::server::latch>(hpx::find_here(), count))
+      : base_type(hpx::new_<lcos::server::latch>(
+            hpx::find_here(), checked_count(count)))
     {
     }
 
@@ -47,6 +59,8 @@ namespace hpx::distributed {
     hpx::future<void> latch::count_down_async(std::ptrdiff_t n)
     {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
+        HPX_CONTRACT_ASSERT(n >= 0);
+
         lcos::server::latch::set_value_action act;
         return hpx::async(act, get_id(), HPX_MOVE(n));
 #else
