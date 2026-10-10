@@ -214,7 +214,13 @@ namespace hpx::execution::experimental::detail {
         continues_on_operation_state& operator=(
             continues_on_operation_state const&) = delete;
 
+#if defined(__NVCC__)
+        // NVCC can diagnose a defaulted destructor as undefined when Receiver
+        // contains a local lambda type.
+        ~continues_on_operation_state() {}
+#else
         ~continues_on_operation_state() = default;
+#endif
 
         void start() & noexcept
         {
