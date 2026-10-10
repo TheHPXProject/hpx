@@ -13,8 +13,8 @@
 // - hpx::distributed::latch requires count >= 0 and n >= 0
 //
 // A custom violation handler must be called exactly once per violating call
-// and never for a valid one. Not registered in IGNORE mode, where the checks
-// compile out.
+// and never for a valid one. Only registered with HPX_WITH_CONTRACTS=ON and not
+// in IGNORE mode, otherwise the checks fall back to HPX_ASSERT.
 
 #include <hpx/config.hpp>
 

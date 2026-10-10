@@ -108,10 +108,12 @@ foreach(test ${tests})
 endforeach()
 
 # Precondition checks (HPX_CONTRACT_ASSERT) need a custom violation handler,
-# which is available in fallback mode only. The checks compile out in IGNORE
-# mode.
-if(NOT HPX_WITH_CXX26_CONTRACTS AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL
-                                    "IGNORE"
+# which is called in fallback mode only. With HPX_WITH_CONTRACTS=OFF or in
+# IGNORE mode the checks fall back to HPX_ASSERT and the handler is never
+# called.
+if(HPX_WITH_CONTRACTS
+   AND NOT HPX_WITH_CXX26_CONTRACTS
+   AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE"
 )
   set(test contracts_fallback_handler)
 
