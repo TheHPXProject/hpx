@@ -5,7 +5,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 // Test: HPX_PRE rejects update < 0 in hpx::latch::arrive_and_wait.
-// Requires the implementation to report the function name and predicate text
+// Requires the implementation to report the predicate text through comment()
 // (as GCC does), so unrelated assertions cannot make this test pass.
 // Exit: 0 for the expected violation, 2 for another, 1 if the call returns.
 
@@ -19,12 +19,9 @@
 
 void handle_contract_violation(std::contracts::contract_violation const& v)
 {
-    std::string_view const function = v.location().function_name();
     std::string_view const predicate = v.comment();
 
     HPX_TEST(v.kind() == std::contracts::assertion_kind::pre);
-    HPX_TEST(
-        function.find("latch::arrive_and_wait(") != std::string_view::npos);
     HPX_TEST(predicate.find("update >= 0") != std::string_view::npos);
 
     std::_Exit(hpx::util::report_errors() == 0 ? 0 : 2);

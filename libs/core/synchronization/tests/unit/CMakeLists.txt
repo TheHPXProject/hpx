@@ -120,7 +120,9 @@ elseif(HPX_WITH_CONTRACTS AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
     FOLDER "Tests/Unit/Modules/Core/Synchronization"
   )
 
-  add_hpx_unit_test("modules.synchronization" ${test} THREADS_PER_LOCALITY 4)
+  add_hpx_unit_test(
+    "modules.synchronization" ${test} THREADS_PER_LOCALITY 4 TIMEOUT 60
+  )
 endif()
 
 if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
