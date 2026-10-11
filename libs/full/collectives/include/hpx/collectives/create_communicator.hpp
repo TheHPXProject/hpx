@@ -46,8 +46,7 @@ namespace hpx { namespace collectives {
         /// for this communicator instance.
         ///
         /// \pre valid(): the communicator refers to a shared state. Checked
-        ///      with HPX_CONTRACT_ASSERT. If the handler returns, default
-        ///      constructed values are returned.
+        ///      with HPX_CONTRACT_ASSERT.
         [[nodiscard]] std::pair<num_sites_arg, this_site_arg>
         get_info() const noexcept;
 
@@ -55,8 +54,7 @@ namespace hpx { namespace collectives {
         /// of the communication operation.
         ///
         /// \pre valid(): the communicator refers to a shared state. Checked
-        ///      with HPX_CONTRACT_ASSERT. If the handler returns, false is
-        ///      returned.
+        ///      with HPX_CONTRACT_ASSERT.
         [[nodiscard]] bool is_root() const;
     };
 
@@ -320,10 +318,6 @@ namespace hpx::collectives {
         [[nodiscard]] bool is_root() const
         {
             HPX_CONTRACT_ASSERT(valid());
-            if (!valid())
-            {
-                return false;
-            }
 
             auto const* client_data =
                 this->try_get_extra_data<detail::communicator_data>();

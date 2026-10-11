@@ -115,17 +115,19 @@ if(HPX_WITH_CONTRACTS
    AND NOT HPX_WITH_CXX26_CONTRACTS
    AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE"
 )
-  set(test contracts_fallback_handler)
+  set(contract_tests contracts_fallback_handler contracts_invalid_communicator)
 
-  source_group("Source Files" FILES ${test}.cpp)
+  foreach(test ${contract_tests})
+    source_group("Source Files" FILES ${test}.cpp)
 
-  add_hpx_executable(
-    ${test}_test INTERNAL_FLAGS
-    SOURCES ${test}.cpp
-    EXCLUDE_FROM_ALL
-    HPX_PREFIX ${HPX_BUILD_PREFIX}
-    FOLDER "Tests/Unit/Modules/Full/Collectives"
-  )
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${test}.cpp
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Tests/Unit/Modules/Full/Collectives"
+    )
 
-  add_hpx_unit_test("modules.collectives" ${test})
+    add_hpx_unit_test("modules.collectives" ${test})
+  endforeach()
 endif()

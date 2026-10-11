@@ -7,14 +7,17 @@
 // Test: HPX_CONTRACT_ASSERT preconditions in the collectives module (fallback
 // mode only)
 //
-// - collective operations on an invalid communicator report a violation and
-//   then fail with no_state instead of dereferencing a missing shared state
+// - communicator::is_root() requires a valid communicator
 // - hierarchical_communicator element access requires idx < size()
 // - hpx::distributed::latch requires count >= 0 and n >= 0
 //
 // A custom violation handler must be called exactly once per violating call
-// and never for a valid one. Only registered with HPX_WITH_CONTRACTS=ON and not
-// in IGNORE mode, otherwise the checks fall back to HPX_ASSERT.
+// and never for a valid one. The handler throws, so nothing runs past a
+// violated precondition. The noexcept accessors (get_info() and friends) are
+// covered by contracts_invalid_communicator instead.
+//
+// Only registered with HPX_WITH_CONTRACTS=ON and not in IGNORE mode, otherwise
+// the checks fall back to HPX_ASSERT and the handler is never called.
 
 #include <hpx/config.hpp>
 
@@ -23,12 +26,10 @@
 #include <hpx/include/lcos.hpp>
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/contracts.hpp>
-#include <hpx/modules/errors.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <atomic>
 #include <cstddef>
-#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,47 +41,15 @@ namespace {
     std::atomic<int> handler_call_count = 0;
     std::string last_condition;
 
-    // returns, so the caller continues after the violation
-    void recording_handler(hpx::contracts::contract_violation const& info)
-    {
-        ++handler_call_count;
-        last_condition = info.condition();
-    }
-
     struct contract_violation_error
     {
     };
 
-    // throws, for checks that have no safe way to continue
     void throwing_handler(hpx::contracts::contract_violation const& info)
     {
         ++handler_call_count;
         last_condition = info.condition();
         throw contract_violation_error{};
-    }
-
-    // Run a collective operation on an invalid communicator. It must report
-    // exactly one violation and then fail with no_state.
-    template <typename F>
-    void test_invalid_communicator(F&& f)
-    {
-        int const count = handler_call_count.load();
-
-        bool caught = false;
-        try
-        {
-            communicator c;
-            HPX_FORWARD(F, f)(HPX_MOVE(c)).get();
-        }
-        catch (hpx::exception const& e)
-        {
-            caught = true;
-            HPX_TEST_EQ(e.get_error(), hpx::error::no_state);
-        }
-
-        HPX_TEST(caught);
-        HPX_TEST_EQ(handler_call_count.load(), count + 1);
-        HPX_TEST_EQ(last_condition, std::string("valid()"));
     }
 
     template <typename F>
@@ -106,7 +75,7 @@ namespace {
 
 void test_communicator()
 {
-    hpx::contracts::set_violation_handler(recording_handler);
+    hpx::contracts::set_violation_handler(throwing_handler);
 
     // valid communicator: no violation
     {
@@ -126,42 +95,11 @@ void test_communicator()
         HPX_TEST_EQ(handler_call_count.load(), 0);
     }
 
-    // direct use of an invalid communicator
+    // invalid (default constructed) communicator
     {
         communicator c;
-
-        auto const [num_sites, this_site] = c.get_info();
-        HPX_TEST(num_sites.is_default());
-        HPX_TEST(this_site.is_default());
-        HPX_TEST_EQ(handler_call_count.load(), 1);
-
-        HPX_TEST(!c.is_root());
-        HPX_TEST_EQ(handler_call_count.load(), 2);
-
-        c.set_info(num_sites_arg(1), this_site_arg(0));
-        HPX_TEST_EQ(handler_call_count.load(), 3);
-        HPX_TEST_EQ(last_condition, std::string("valid()"));
+        test_throwing_violation([&] { (void) c.is_root(); }, "valid()");
     }
-
-    // collective operations on an invalid communicator
-    test_invalid_communicator([](communicator&& c) {
-        return all_gather(HPX_MOVE(c), 42, this_site_arg(0), generation_arg(1));
-    });
-    test_invalid_communicator([](communicator&& c) {
-        return all_reduce(HPX_MOVE(c), 42, std::plus<int>{}, this_site_arg(0),
-            generation_arg(1));
-    });
-    test_invalid_communicator([](communicator&& c) {
-        return barrier(HPX_MOVE(c), this_site_arg(0), generation_arg(1));
-    });
-    test_invalid_communicator([](communicator&& c) {
-        return broadcast_to(
-            HPX_MOVE(c), 42, this_site_arg(0), generation_arg(1));
-    });
-    test_invalid_communicator([](communicator&& c) {
-        return gather_here(
-            HPX_MOVE(c), 42, this_site_arg(0), generation_arg(1));
-    });
 
     hpx::contracts::set_violation_handler(nullptr);
 }

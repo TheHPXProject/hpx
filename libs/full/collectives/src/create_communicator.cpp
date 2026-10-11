@@ -170,12 +170,7 @@ namespace hpx::collectives {
     void communicator::set_info(num_sites_arg num_sites,
         this_site_arg this_site, root_site_arg root_site) noexcept
     {
-        // An invalid communicator has no shared state to store the data in.
         HPX_CONTRACT_ASSERT(valid());
-        if (!valid())
-        {
-            return;
-        }
 
         auto& [num_sites_, this_site_, root_site_] =
             get_extra_data<detail::communicator_data>();
@@ -188,16 +183,10 @@ namespace hpx::collectives {
     std::pair<num_sites_arg, this_site_arg> communicator::get_info()
         const noexcept
     {
-        // Most collective operations taking a communicator call this first.
-        // Report an invalid (default constructed or moved from) communicator
-        // here instead of dereferencing its missing shared state. If the
-        // violation handler returns, the defaults below make the operation
-        // fail with no_state.
+        // Most collective operations taking a communicator call this first,
+        // so an invalid (default constructed or moved from) communicator is
+        // reported here.
         HPX_CONTRACT_ASSERT(valid());
-        if (!valid())
-        {
-            return std::make_pair(num_sites_arg{}, this_site_arg{});
-        }
 
         auto const* client_data =
             try_get_extra_data<detail::communicator_data>();
@@ -215,11 +204,6 @@ namespace hpx::collectives {
     communicator::get_info_ex() const noexcept
     {
         HPX_CONTRACT_ASSERT(valid());
-        if (!valid())
-        {
-            return std::make_tuple(
-                num_sites_arg{}, this_site_arg{}, root_site_arg());
-        }
 
         auto const* client_data =
             try_get_extra_data<detail::communicator_data>();
