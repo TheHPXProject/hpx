@@ -23,8 +23,7 @@ automatically adapt their behavior based on compiler capabilities:
 
 * When ``HPX_WITH_CONTRACTS=OFF`` (the default), preconditions and
   postconditions become no-ops and contract assertions fall back to
-  :c:macro:`HPX_ASSERT`, independently of whether the compiler supports
-  native C++26 contracts
+  :c:macro:`HPX_ASSERT`, even if native C++26 contracts are available
 * When ``HPX_WITH_CONTRACTS=ON`` and C++26 native contracts are available
   (``__cpp_contracts`` defined), they map to standard contract syntax
 * When ``HPX_WITH_CONTRACTS=ON`` and native contracts are not available,

@@ -15,10 +15,8 @@ set(contract_tests
 )
 
 if(NOT HPX_WITH_CONTRACTS)
-  # Contracts are disabled: HPX_PRE / HPX_POST are no-ops (even with native
-  # contracts available) and HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, which
-  # aborts only in Debug. Violation handlers are never called, so the handler
-  # tests are not built.
+  # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT (aborts only in Debug) and
+  # violation handlers are never called, so the handler tests are not built
   set(contract_tests ${contract_tests} disabled_contracts
                      fallback_contracts_fail
   )

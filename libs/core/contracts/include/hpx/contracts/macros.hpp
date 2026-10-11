@@ -22,9 +22,7 @@
 ///   contracts are disabled)
 ///
 /// ## Configuration:
-/// Contracts are disabled by default (HPX_WITH_CONTRACTS=OFF). In that case
-/// HPX_PRE/HPX_POST expand to nothing and HPX_CONTRACT_ASSERT falls back to
-/// HPX_ASSERT, independently of whether native C++26 contracts are available.
+/// Contracts are disabled by default (HPX_WITH_CONTRACTS=OFF).
 /// Enable native contracts with:
 ///     `cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26`
 /// Set fallback mode with:
@@ -42,9 +40,7 @@
 
 #if !defined(HPX_HAVE_CONTRACTS)
 
-// Contracts are disabled (HPX_WITH_CONTRACTS=OFF): preconditions and
-// postconditions disappear and contract assertions fall back to HPX_ASSERT,
-// whether or not native contracts are available.
+// Contracts disabled, even if native contracts are available
 #define HPX_PRE(x)
 #define HPX_POST(x)
 #define HPX_CONTRACT_ASSERT(x) HPX_ASSERT(x)

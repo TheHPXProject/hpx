@@ -32,14 +32,9 @@ else()
     )
     set(contracts_mode ${HPX_WITH_CONTRACTS_MODE})
   else()
-    # Contracts are disabled: HPX_PRE/HPX_POST expand to nothing and
-    # HPX_CONTRACT_ASSERT falls back to HPX_ASSERT, whether or not native C++26
-    # contracts are available. The fallback violation handler API reports the
-    # IGNORE semantic.
+    # The violation handler still needs a mode, report IGNORE
     if(DEFINED HPX_WITH_CONTRACTS_MODE)
-      hpx_warn(
-        "HPX_WITH_CONTRACTS_MODE is ignored because HPX_WITH_CONTRACTS=OFF, set HPX_WITH_CONTRACTS=ON to enable contract checking"
-      )
+      hpx_warn("HPX_WITH_CONTRACTS_MODE is ignored if HPX_WITH_CONTRACTS=OFF")
     endif()
     set(contracts_mode "IGNORE")
   endif()
