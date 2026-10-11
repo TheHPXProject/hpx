@@ -90,7 +90,10 @@ namespace hpx::threads::detail {
 
         // don't directly run any threads that have started running 'normally'
         // and were suspended afterward
-        if (thrdptr->runs_as_child())
+        //
+        // Stackless coroutines have no direct execution path, so a stackless
+        // child stays in its queue and runs on a worker instead.
+        if (thrdptr->runs_as_child() && !thrdptr->is_stackless())
         {
             LTM_(error).format(
                 "execute_thread: attempting to directly execute thread({}), "
