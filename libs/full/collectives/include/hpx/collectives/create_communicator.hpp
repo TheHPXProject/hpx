@@ -37,24 +37,21 @@ namespace hpx { namespace collectives {
         /// \param this_site    The sequence number of this site (usually
         ///                     the locality id).
         ///
-        /// \pre valid(): the communicator refers to a shared state. Checked
-        ///      with HPX_CONTRACT_ASSERT.
+        /// \pre valid()
         void set_info(
             num_sites_arg num_sites, this_site_arg this_site) noexcept;
 
         /// Retrieve the number of used sites and the index of the current site
         /// for this communicator instance.
         ///
-        /// \pre valid(): the communicator refers to a shared state. Checked
-        ///      with HPX_CONTRACT_ASSERT.
+        /// \pre valid()
         [[nodiscard]] std::pair<num_sites_arg, this_site_arg>
         get_info() const noexcept;
 
         /// Return whether this communicator instance represents the root site
         /// of the communication operation.
         ///
-        /// \pre valid(): the communicator refers to a shared state. Checked
-        ///      with HPX_CONTRACT_ASSERT.
+        /// \pre valid()
         [[nodiscard]] bool is_root() const;
     };
 
@@ -421,9 +418,6 @@ namespace hpx::collectives {
             flat_fallback_threshold_arg threshold);
 
     public:
-        // The element accessors below require idx < size(), and back() and
-        // last_site() require !empty(). Both are checked with
-        // HPX_CONTRACT_ASSERT.
         hpx::tuple<communicator, this_site_arg>& operator[](std::size_t idx)
         {
             HPX_CONTRACT_ASSERT(idx < communicators.size());

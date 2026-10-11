@@ -183,9 +183,6 @@ namespace hpx::collectives {
     std::pair<num_sites_arg, this_site_arg> communicator::get_info()
         const noexcept
     {
-        // Most collective operations taking a communicator call this first,
-        // so an invalid (default constructed or moved from) communicator is
-        // reported here.
         HPX_CONTRACT_ASSERT(valid());
 
         auto const* client_data =

@@ -31,8 +31,8 @@ namespace hpx::distributed {
 
     namespace {
 
-        // Check the precondition before the latch component is created
-        std::ptrdiff_t checked_count(std::ptrdiff_t count)
+        // checked before the latch component is created
+        std::ptrdiff_t checked_count(std::ptrdiff_t const count)
         {
             HPX_CONTRACT_ASSERT(count >= 0);
             return count;
