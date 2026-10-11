@@ -85,17 +85,15 @@ foreach(test ${tests})
 
 endforeach()
 
-# Contract tests for hpx::latch: HPX_PRE needs native C++26 contracts, while
-# HPX_CONTRACT_ASSERT is tested in fallback mode (it compiles out in IGNORE).
-if(HPX_WITH_CXX26_CONTRACTS)
+# HPX_PRE is a no-op when HPX_WITH_CONTRACTS=OFF or native contracts are absent.
+# Fallback IGNORE uses HPX_ASSERT, which does not call the contract handler.
+if(HPX_WITH_CONTRACTS AND HPX_WITH_CXX26_CONTRACTS)
   set(latch_contract_violation_tests
       latch_ctor_contract_violation latch_count_down_contract_violation
       latch_arrive_and_wait_contract_violation
   )
 
   foreach(test ${latch_contract_violation_tests})
-    set(${test}_PARAMETERS FAILURE_EXPECTED)
-
     source_group("Source Files" FILES ${test}.cpp)
 
     add_hpx_executable(
@@ -106,9 +104,10 @@ if(HPX_WITH_CXX26_CONTRACTS)
       FOLDER "Tests/Unit/Modules/Core/Synchronization"
     )
 
-    add_hpx_unit_test("modules.synchronization" ${test} ${${test}_PARAMETERS})
+    # without the precondition arrive_and_wait would block forever
+    add_hpx_unit_test("modules.synchronization" ${test} TIMEOUT 60)
   endforeach()
-elseif(NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
+elseif(HPX_WITH_CONTRACTS AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
   set(test latch_fallback_handler)
 
   source_group("Source Files" FILES ${test}.cpp)

@@ -4,21 +4,37 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Test: HPX_PRE violation for hpx::latch::arrive_and_wait
-//
-// A negative n violates n >= 0. Only built with native C++26 contracts
-// (HPX_WITH_CXX26_CONTRACTS), as HPX_PRE is a no-op otherwise.
+// Test: HPX_PRE rejects update < 0 in hpx::latch::arrive_and_wait.
+// Requires the implementation to report the function name and predicate text
+// (as GCC does), so unrelated assertions cannot make this test pass.
+// Exit: 0 for the expected violation, 2 for another, 1 if the call returns.
 
 #include <hpx/latch.hpp>
+#include <hpx/modules/testing.hpp>
 
+#include <contracts>
 #include <cstddef>
+#include <cstdlib>
+#include <string_view>
+
+void handle_contract_violation(std::contracts::contract_violation const& v)
+{
+    std::string_view const function = v.location().function_name();
+    std::string_view const predicate = v.comment();
+
+    HPX_TEST(v.kind() == std::contracts::assertion_kind::pre);
+    HPX_TEST(
+        function.find("latch::arrive_and_wait(") != std::string_view::npos);
+    HPX_TEST(predicate.find("update >= 0") != std::string_view::npos);
+
+    std::_Exit(hpx::util::report_errors() == 0 ? 0 : 2);
+}
 
 int main()
 {
     hpx::latch l(2);
 
-    // n is negative -- violates n >= 0
     l.arrive_and_wait(std::ptrdiff_t(-1));
 
-    return 0;
+    return 1;
 }

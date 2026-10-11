@@ -4,19 +4,34 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Test: HPX_PRE violation for the hpx::latch constructor
-//
-// A negative count violates count >= 0. Only built with native C++26
-// contracts (HPX_WITH_CXX26_CONTRACTS), as HPX_PRE is a no-op otherwise.
+// Test: HPX_PRE rejects count < 0 in the hpx::latch constructor.
+// Requires the implementation to report the function name and predicate text
+// (as GCC does), so unrelated assertions cannot make this test pass.
+// Exit: 0 for the expected violation, 2 for another, 1 if the call returns.
 
 #include <hpx/latch.hpp>
+#include <hpx/modules/testing.hpp>
 
+#include <contracts>
 #include <cstddef>
+#include <cstdlib>
+#include <string_view>
+
+void handle_contract_violation(std::contracts::contract_violation const& v)
+{
+    std::string_view const function = v.location().function_name();
+    std::string_view const predicate = v.comment();
+
+    HPX_TEST(v.kind() == std::contracts::assertion_kind::pre);
+    HPX_TEST(function.find("latch::latch(") != std::string_view::npos);
+    HPX_TEST(predicate.find("count >= 0") != std::string_view::npos);
+
+    std::_Exit(hpx::util::report_errors() == 0 ? 0 : 2);
+}
 
 int main()
 {
-    // count is negative -- violates count >= 0
     hpx::latch l(std::ptrdiff_t(-1));
 
-    return 0;
+    return 1;
 }

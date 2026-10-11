@@ -111,7 +111,7 @@ namespace hpx {
             }
             else
             {
-                // report a violation outside of the lock, using only locals
+                // The handler may re-enter the latch.
                 l.unlock();
                 HPX_CONTRACT_ASSERT(old_count >= update);
             }
@@ -190,10 +190,9 @@ namespace hpx {
                 notify_waiters(HPX_MOVE(l));
             }
 
-            // A violation (old_count < update) always takes the else branch
-            // above, which has released the lock, so a handler that returns
-            // never runs under the spinlock. Only locals are used here as the
-            // latch may already be gone.
+            // Violations (old_count < update) take the else branch and release
+            // the lock before calling the handler. Only locals are safe here:
+            // notifying waiters may destroy the latch.
             HPX_CONTRACT_ASSERT(old_count >= update);
         }
 

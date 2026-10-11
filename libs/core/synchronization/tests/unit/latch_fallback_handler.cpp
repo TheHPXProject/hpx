@@ -4,12 +4,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Test: count_down(n) and arrive_and_wait(n) with n larger than the current
-// count (HPX_CONTRACT_ASSERT, fallback mode only)
-//
-// A non-aborting violation handler must be called exactly once per violating
-// call and never for a valid one. Not registered in IGNORE mode, where the
-// check compiles out.
+// Resetting the same latch from the handler detects reporting under its lock.
 
 #include <hpx/contracts.hpp>
 #include <hpx/init.hpp>
@@ -24,7 +19,6 @@ namespace {
     std::atomic<int> handler_call_count = 0;
     std::string last_condition;
 
-    // if set, the handler takes the latch's spinlock through reset()
     hpx::lcos::local::latch* lock_probe = nullptr;
 
     void recording_handler(hpx::contracts::contract_violation const& info)
@@ -37,8 +31,6 @@ namespace {
         {
             lock_probe->reset(0);
         }
-
-        // deliberately does not abort so the test can continue
     }
 }    // namespace
 
@@ -46,7 +38,6 @@ int hpx_main()
 {
     hpx::contracts::set_violation_handler(recording_handler);
 
-    // valid call: no violation
     {
         hpx::lcos::local::latch l(2);
         l.count_down(1);
@@ -55,8 +46,6 @@ int hpx_main()
         HPX_TEST_EQ(handler_call_count.load(), 0);
     }
 
-    // invalid call: update (2) exceeds the current count (1); the violation
-    // must be reported without holding the lock
     {
         hpx::lcos::local::latch l(1);
         lock_probe = &l;
@@ -65,13 +54,8 @@ int hpx_main()
 
         HPX_TEST_EQ(handler_call_count.load(), 1);
         HPX_TEST_EQ(last_condition, std::string("old_count >= update"));
-
-        // the counter is now negative; restore it so the debug-mode check in
-        // the destructor (counter_ == 0) does not fire
-        l.reset(0);
     }
 
-    // same for arrive_and_wait
     {
         hpx::lcos::local::latch l(1);
         lock_probe = &l;
@@ -80,8 +64,6 @@ int hpx_main()
 
         HPX_TEST_EQ(handler_call_count.load(), 2);
         HPX_TEST_EQ(last_condition, std::string("old_count >= update"));
-
-        l.reset(0);
     }
 
     hpx::contracts::set_violation_handler(nullptr);
