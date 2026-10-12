@@ -498,18 +498,22 @@ namespace hpx::execution::experimental {
             {
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        // Register stop callback bridge before backend
-                        // dispatch when adaptation is needed.
-                        // Note: we do NOT early-return when stop is already
-                        // requested -- the paper says the backend should
-                        // always be called.
+                        // P2079R10 4.1: if stop_token is stopped, complete
+                        // with set_stopped as soon as is practical.
+                        auto stop_token = get_stop_token(get_env(receiver_));
+                        if (stop_token.stop_requested())
+                        {
+                            set_stopped(HPX_MOVE(receiver_));
+                            return;
+                        }
+
+                        // P3804R2 Section 3.3: Register the stop callback
                         if constexpr (!native_is_inplace)
                         {
-                            auto tok = get_stop_token(get_env(receiver_));
-                            if (tok.stop_possible())
+                            if (stop_token.stop_possible())
                             {
-                                stop_callback_.emplace(
-                                    tok, forward_stop_request{stop_source_});
+                                stop_callback_.emplace(stop_token,
+                                    forward_stop_request{stop_source_});
                             }
                         }
 
