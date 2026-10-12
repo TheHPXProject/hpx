@@ -24,6 +24,9 @@
 #if defined(HPX_HAVE_MODULE_GASNET_BASE)
 #include <hpx/modules/gasnet_base.hpp>
 #endif
+#if defined(HPX_HAVE_MODULE_OPENSHMEM_BASE)
+#include <hpx/modules/openshmem_base.hpp>
+#endif
 #include <hpx/modules/program_options.hpp>
 #include <hpx/modules/runtime_configuration.hpp>
 #include <hpx/modules/topology.hpp>
@@ -993,6 +996,16 @@ namespace hpx::util {
             reconfigure(cfgmap, prevm);
         }
 
+#if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_OPENSHMEM)
+        // getting localities from OpenSHMEM environment (support oshrun)
+        if (util::openshmem_environment::check_openshmem_environment(rtcfg_))
+        {
+            util::openshmem_environment::init(&argc, &argv, rtcfg_);
+            num_localities_ =
+                static_cast<std::size_t>(util::openshmem_environment::size());
+            node_ = static_cast<std::size_t>(util::openshmem_environment::rank());
+        }
+#endif
 #if (defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_MPI)) ||      \
     defined(HPX_HAVE_MODULE_MPI_BASE)
         // getting localities from MPI environment (support mpirun)
