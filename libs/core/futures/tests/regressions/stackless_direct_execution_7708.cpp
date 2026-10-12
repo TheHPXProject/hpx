@@ -12,6 +12,8 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
+#include <hpx/runtime.hpp>
 #include <hpx/thread.hpp>
 
 int hpx_main()
@@ -24,16 +26,35 @@ int hpx_main()
             hpx::threads::thread_stacksize::nostack),
         hint);
 
+    hpx::threads::thread_id_type const parent = hpx::threads::get_self_id();
+
     int sum = 0;
+    int inlined = 0;
     for (int i = 0; i != 100; ++i)
     {
-        sum += hpx::async(exec, [] { return 1; }).get();
+        sum += hpx::async(exec, [&] {
+            // With one worker, a parent waiting in get() would be suspended,
+            // so an active parent means the task runs on the parent's stack.
+            if (hpx::threads::get_thread_state(parent).state() ==
+                hpx::threads::thread_schedule_state::active)
+            {
+                ++inlined;
+            }
+            return 1;
+        }).get();
 
         // Running the child directly used to clear hpx_main's HPX thread
         // context, which yield needs.
         hpx::this_thread::yield();
     }
     HPX_TEST_EQ(sum, 100);
+
+    // With one worker nothing else can pick the task up before the parent
+    // waits on it, so every one of them has to run directly.
+    if (hpx::get_os_thread_count() == 1)
+    {
+        HPX_TEST_EQ(inlined, 100);
+    }
 
     return hpx::local::finalize();
 }
