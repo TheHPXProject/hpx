@@ -22,9 +22,7 @@ if(HPX_WITH_FETCH_STDEXEC)
   )
 
   # The nvcc workarounds only matter when nvcc itself compiles the HPX execution
-  # headers; clang-CUDA and every non-CUDA build parse stdexec fine without
-  # them. Report that below so a patch that no longer applies fails the builds
-  # it breaks instead of every build that fetches stdexec.
+  # headers; clang-CUDA and every non-CUDA build parse stdexec without them.
   set(_hpx_stdexec_nvcc_patch_required OFF)
   if(HPX_WITH_CUDA AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
     set(_hpx_stdexec_nvcc_patch_required ON)

@@ -44,7 +44,6 @@ if(NOT GIT_EXECUTABLE)
   message(${_hpx_stdexec_patch_severity}
           "git not found, cannot apply stdexec patch: ${HPX_STDEXEC_PATCH_FILE}"
   )
-  return()
 endif()
 
 # Already applied (a reconfigure re-runs the patch command)?
