@@ -60,7 +60,7 @@ index 848b9f4b..4d05b46d 100644
 -    sender auto join() noexcept
 +    STDEXEC_JOIN_SENDER_AUTO join() noexcept
 diff --git a/include/stdexec/__detail/__env.hpp b/include/stdexec/__detail/__env.hpp
-index 45671c79..17e0f763 100644
+index 45671c79..aa4b584f 100644
 --- a/include/stdexec/__detail/__env.hpp
 +++ b/include/stdexec/__detail/__env.hpp
 @@ -164,0 +165,28 @@ namespace STDEXEC
@@ -69,14 +69,14 @@ index 45671c79..17e0f763 100644
 +    // __join_env_t alias (a call through an `auto const&` NTTP) in an
 +    // unevaluated context. Spell the result type out structurally instead;
 +    // it mirrors __join_fn's branches for a by-value environment exactly.
-+    template <class _Env>
++    template <class _Env, bool = __same_as<std::remove_cvref_t<_Env>, env<>>>
 +    struct __as_root_env_result
 +    {
 +      using __t = env<__root_env, __if_c<__is_fwd_env<_Env>, _Env, __fwd<_Env>>>;
 +    };
 +
-+    template <>
-+    struct __as_root_env_result<env<>>
++    template <class _Env>
++    struct __as_root_env_result<_Env, true>
 +    {
 +      using __t = __root_env;
 +    };
