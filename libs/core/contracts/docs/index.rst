@@ -35,7 +35,7 @@ Configuration
 
 Enable contracts in CMake::
 
-    cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26
+    cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CXX_STANDARD=26
 
 Enable contract-enhanced assertions (optional, native contracts only)::
 

@@ -24,7 +24,7 @@
 /// ## Configuration:
 /// Contracts are disabled by default (HPX_WITH_CONTRACTS=OFF).
 /// Enable native contracts with:
-///     `cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26`
+///     `cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CXX_STANDARD=26`
 /// Set fallback mode with:
 ///     `cmake -DHPX_WITH_CONTRACTS=ON
 ///         -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE`
