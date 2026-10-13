@@ -155,10 +155,9 @@ namespace hpx::threads::detail {
 
                 auto prev_state = thrd_stat.get_previous();
                 auto on_exit = hpx::experimental::scope_exit([&] {
-                    // a stackless child run directly to its end reports
-                    // deleted instead of terminated
-                    if (prev_state == thread_schedule_state::terminated ||
-                        prev_state == thread_schedule_state::deleted)
+                    // call_directly reports a child that ran to its end as
+                    // deleted, not as terminated
+                    if (prev_state == thread_schedule_state::deleted)
                     {
                         hpx::tracing::task_completed(thrdptr);
                     }
