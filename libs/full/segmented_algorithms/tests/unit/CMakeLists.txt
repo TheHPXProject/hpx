@@ -84,16 +84,19 @@ if(HPX_WITH_PARCELPORT_LCI)
   endforeach()
 endif()
 
+# These merge tests require multiple localities.
+if(NOT HPX_WITH_NETWORKING)
+  list(REMOVE_ITEM tests partitioned_vector_merge
+       partitioned_vector_merge_extended partitioned_vector_merge_regressions
+  )
+endif()
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  if(test STREQUAL "partitioned_vector_merge")
-    set(test_localities 3)
-  elseif(test STREQUAL "partitioned_vector_merge_extended")
+  if(test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$")
     set(test_localities 4)
-  elseif(test STREQUAL "partitioned_vector_merge_regressions")
-    set(test_localities 3)
   else()
     set(test_localities 2)
   endif()
