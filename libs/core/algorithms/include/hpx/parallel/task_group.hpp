@@ -163,6 +163,11 @@ namespace hpx::experimental {
                 has_arrived_.store(false, std::memory_order_release);
             }
 
+            // Create the guard outside to ensure it triggers on setup
+            // failure or cancellation
+            auto on_exit =
+                hpx::experimental::scope_exit([this] { latch_.count_down(1); });
+
             // capture callable and arguments in a shared_ptr<tuple> so
             // they survive the lifetime of the run() call
             auto args = std::make_shared<
@@ -170,9 +175,10 @@ namespace hpx::experimental {
                 HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...);
 
             auto sender = ex::schedule(HPX_FORWARD(Scheduler, sched)) |
-                ex::then([this, args = HPX_MOVE(args)]() mutable {
-                    auto on_exit = hpx::experimental::scope_exit(
-                        [this] { latch_.count_down(1); });
+                ex::then([this, on_exit = HPX_MOVE(on_exit),
+                             args = HPX_MOVE(args)]() mutable {
+                    // Keep the guard alive for the duration of the callback
+                    auto _(HPX_MOVE(on_exit));
 
                     hpx::detail::try_catch_exception_ptr(
                         [&]() {
