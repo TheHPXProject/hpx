@@ -81,6 +81,46 @@ foreach(test ${tests})
 
 endforeach()
 
+# HPX_PRE is a no-op when HPX_WITH_CONTRACTS=OFF or native contracts are absent.
+# Fallback IGNORE uses HPX_ASSERT, which does not call the contract handler.
+if(HPX_WITH_CONTRACTS AND HPX_WITH_CXX26_CONTRACTS)
+  set(latch_contract_violation_tests
+      latch_ctor_contract_violation latch_count_down_contract_violation
+      latch_arrive_and_wait_contract_violation
+  )
+
+  foreach(test ${latch_contract_violation_tests})
+    source_group("Source Files" FILES ${test}.cpp)
+
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${test}.cpp
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Tests/Unit/Modules/Core/Synchronization"
+    )
+
+    # without the precondition arrive_and_wait would block forever
+    add_hpx_unit_test("modules.synchronization" ${test} TIMEOUT 60)
+  endforeach()
+elseif(HPX_WITH_CONTRACTS AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE")
+  set(test latch_fallback_handler)
+
+  source_group("Source Files" FILES ${test}.cpp)
+
+  add_hpx_executable(
+    ${test}_test INTERNAL_FLAGS
+    SOURCES ${test}.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Core/Synchronization"
+  )
+
+  add_hpx_unit_test(
+    "modules.synchronization" ${test} THREADS_PER_LOCALITY 4 TIMEOUT 60
+  )
+endif()
+
 if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
   # Clang (last tested version is v22) fails compiling the following tests when
   # C++ module support is enabled.
