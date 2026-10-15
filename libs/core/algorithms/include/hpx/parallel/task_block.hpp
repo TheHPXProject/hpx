@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -15,6 +15,7 @@
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/parallel/task_group.hpp>
@@ -223,6 +224,8 @@ namespace hpx::experimental {
         ///        exceptions that were caught while executing the tasks.
         ///
         template <typename Executor, typename F, typename... Ts>
+            requires(!hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<Executor>>)
         void run(Executor&& exec, F&& f, Ts&&... ts)
         {
             // The proposal requires that the task_block should be
@@ -234,6 +237,40 @@ namespace hpx::experimental {
             }
 
             tasks_.run(HPX_FORWARD(Executor, exec), HPX_FORWARD(F, f),
+                HPX_FORWARD(Ts, ts)...);
+        }
+
+        /// Causes the expression f() to be invoked asynchronously using the
+        /// given P2300 scheduler. The invocation of f is permitted to run
+        /// on an unspecified thread associated with the given scheduler.
+        ///
+        /// The call to \a run synchronizes with the invocation of f. The
+        /// completion of f() synchronizes with the next invocation of wait on
+        /// the same task_block or completion of the nearest enclosing task
+        /// block.
+        ///
+        /// Requires: Scheduler shall be a type satisfying the P2300 scheduler
+        ///           concept. F shall be MoveConstructible. The expression,
+        ///           (void)f(), shall be well-formed.
+        ///
+        /// Precondition: this shall be the active task_block.
+        ///
+        /// \throw task_canceled_exception, as described in Exception Handling.
+        ///
+        template <typename Scheduler, typename F, typename... Ts>
+            requires(hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<Scheduler>>)
+        void run(Scheduler&& sched, F&& f, Ts&&... ts)
+        {
+            // The proposal requires that the task_block should be
+            // 'active' to be usable.
+            if (id_ != threads::get_self_id())
+            {
+                HPX_THROW_EXCEPTION(hpx::error::task_block_not_active,
+                    "task_block::run", "the task_block is not active");
+            }
+
+            tasks_.run(HPX_FORWARD(Scheduler, sched), HPX_FORWARD(F, f),
                 HPX_FORWARD(Ts, ts)...);
         }
 
@@ -307,11 +344,9 @@ namespace hpx::experimental {
         HPX_CXX_CORE_EXPORT struct define_task_block_impl
         {
             template <typename ExPolicy, typename F>
+                requires(hpx::is_execution_policy_v<std::decay_t<ExPolicy>>)
             void operator()(ExPolicy&& policy, F&& f) const
             {
-                static_assert(hpx::is_execution_policy_v<ExPolicy>,
-                    "hpx::is_execution_policy_v<ExPolicy>");
-
                 using policy_type = std::decay_t<ExPolicy>;
                 task_block<policy_type> trh(HPX_FORWARD(ExPolicy, policy));
 
@@ -321,8 +356,28 @@ namespace hpx::experimental {
                         trh.add_exception(HPX_MOVE(e));
                     });
 
-                // regardless of whether f(trh) has thrown an exception we need
-                // to obey the contract and wait for all tasks to join
+                // regardless of whether f(trh) has thrown an exception we
+                // need to obey the contract and wait for all tasks to join
+                trh.wait_for_completion();
+            }
+
+            template <typename Scheduler, typename F>
+                requires(hpx::execution::experimental::is_scheduler_v<
+                    std::decay_t<Scheduler>>)
+            void operator()(Scheduler&& sched, F&& f) const
+            {
+                // Use a default parallel_policy task_block; users pass
+                // the scheduler to tr.run(sched, callable) inside f.
+                using policy_type = hpx::execution::parallel_policy;
+                task_block<policy_type> trh;
+
+                // invoke the user supplied function
+                hpx::detail::try_catch_exception_ptr([&]() { f(trh, sched); },
+                    [&](std::exception_ptr e) {
+                        trh.add_exception(HPX_MOVE(e));
+                    });
+
+                // wait for all tasks to join
                 trh.wait_for_completion();
             }
         };
@@ -358,7 +413,9 @@ namespace hpx::experimental {
     ///       indirectly) call tr.run(_callable_object_).
     ///
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
-        requires(hpx::is_execution_policy_v<std::decay_t<ExPolicy>>)
+        requires(hpx::is_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<ExPolicy>>)
     decltype(auto) define_task_block(ExPolicy&& policy, F&& f)
     {
         if constexpr (hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
@@ -371,6 +428,36 @@ namespace hpx::experimental {
             detail::define_task_block(
                 HPX_FORWARD(ExPolicy, policy), HPX_FORWARD(F, f));
         }
+    }
+
+    /// Constructs a \a task_block, tr, and invokes the expression
+    /// \a f(tr, sched) on the user-provided object, \a f, using the given
+    /// P2300 scheduler \a sched. This version uses the P2300 scheduler
+    /// for task scheduling within the block.
+    ///
+    /// \tparam Scheduler The type of the P2300 scheduler to use (deduced).
+    /// \tparam F   The type of the user defined function to invoke inside the
+    ///             define_task_block (deduced). \a F shall be
+    ///             MoveConstructible.
+    ///
+    /// \param sched The P2300 scheduler to use for the scheduling of
+    ///              the iterations.
+    /// \param f     The user defined function to invoke inside the task block.
+    ///              Given an lvalue \a tr of type \a task_block and the
+    ///              scheduler \a sched, the expression, (void)f(tr, sched),
+    ///              shall be well-formed.
+    ///
+    /// Postcondition: All tasks spawned from \a f have finished execution.
+    ///
+    /// \throws exception_list, as specified in Exception Handling.
+    ///
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F>
+        requires(hpx::execution::experimental::is_scheduler_v<
+            std::decay_t<Scheduler>>)
+    void define_task_block(Scheduler&& sched, F&& f)
+    {
+        detail::define_task_block(
+            HPX_FORWARD(Scheduler, sched), HPX_FORWARD(F, f));
     }
 
     /// Constructs a \a task_block, tr, and invokes the expression
@@ -439,6 +526,37 @@ namespace hpx::experimental {
     }
 
     /// Constructs a \a task_block, tr, and invokes the expression
+    /// \a f(tr, sched) on the user-provided object, \a f, using the given
+    /// P2300 scheduler. This version always returns on the same thread.
+    ///
+    /// \tparam Scheduler The type of the P2300 scheduler to use (deduced).
+    /// \tparam F   The type of the user defined function to invoke inside the
+    ///             define_task_block (deduced). \a F shall be
+    ///             MoveConstructible.
+    ///
+    /// \param sched The P2300 scheduler to use for the scheduling of
+    ///              the iterations.
+    /// \param f     The user defined function to invoke inside the
+    ///              define_task_block.
+    ///
+    /// \throws exception_list, as specified in Exception Handling.
+    ///
+    /// Postcondition: All tasks spawned from \a f have finished execution.
+    ///                A call to \a define_task_block_restore_thread always
+    ///                returns on the same thread as that on which it was
+    ///                called.
+    ///
+    HPX_CXX_CORE_EXPORT template <typename Scheduler, typename F>
+        requires(hpx::execution::experimental::is_scheduler_v<
+            std::decay_t<Scheduler>>)
+    void define_task_block_restore_thread(Scheduler&& sched, F&& f)
+    {
+        // By design, we always return on the same (HPX-) thread as we started
+        // executing define_task_block_restore_thread.
+        define_task_block(HPX_FORWARD(Scheduler, sched), HPX_FORWARD(F, f));
+    }
+
+    /// Constructs a \a task_block, tr, and invokes the expression
     /// \a f(tr) on the user-provided object, \a f. This version uses
     /// \a parallel_policy for task scheduling.
     ///
@@ -494,7 +612,9 @@ namespace hpx::parallel {
         hpx::experimental::task_block<ExPolicy>;
 
     template <typename ExPolicy, typename F>
-        requires(hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+        requires(hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<ExPolicy>>)
     HPX_DEPRECATED_V(1, 9,
         "hpx::parallel:v2::define_task_block is deprecated, use "
         "hpx::experimental::define_task_block instead")
@@ -504,7 +624,9 @@ namespace hpx::parallel {
     }
 
     template <typename ExPolicy, typename F>
-        requires(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>>)
+        requires(!hpx::is_async_execution_policy_v<std::decay_t<ExPolicy>> &&
+            !hpx::execution::experimental::is_scheduler_v<
+                std::decay_t<ExPolicy>>)
     HPX_DEPRECATED_V(1, 9,
         "hpx::parallel:v2::define_task_block is deprecated, use "
         "hpx::experimental::define_task_block instead")
