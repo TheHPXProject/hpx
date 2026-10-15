@@ -59,6 +59,14 @@ for TOOL in gh jq; do
         exit 1
     fi
 done
+
+# The Windows builds of jq end their output lines with CRLF. The carriage
+# returns would end up in the PR numbers and commit hashes read below, so that
+# no merge commit is found and every PR is silently omitted. Strip them.
+jq() {
+    command jq "$@" | tr -d '\r'
+}
+
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
