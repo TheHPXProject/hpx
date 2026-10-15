@@ -317,6 +317,16 @@ namespace hpx::threads::detail {
                         [[maybe_unused]] auto oldstate =
                             thrdptr->set_state(thread_schedule_state::pending);
 
+                        // A bound thread has to resume on this worker thread,
+                        // it may hold locks that are tied to the OS thread.
+                        // Boosting its priority would move it to a queue
+                        // other worker threads steal from.
+                        bool const is_bound = thrdptr->get_priority() ==
+                            threads::thread_priority::bound;
+                        auto const boosted_priority = is_bound ?
+                            threads::thread_priority::bound :
+                            thread_priority::boost;
+
                         if (HPX_LIKELY(!next_thrd))
                         {
                             // reschedule this thread right away if the
@@ -339,7 +349,7 @@ namespace hpx::threads::detail {
                                     HPX_MOVE(thrd),
                                     threads::thread_schedule_hint(
                                         static_cast<std::int16_t>(num_thread)),
-                                    true, thread_priority::boost);
+                                    !is_bound, boosted_priority);
 
                                 scheduler.SchedulingPolicy::do_some_work(
                                     num_thread);
@@ -353,7 +363,7 @@ namespace hpx::threads::detail {
                                 HPX_MOVE(thrd),
                                 threads::thread_schedule_hint(
                                     static_cast<std::int16_t>(num_thread)),
-                                true, thread_priority::boost);
+                                !is_bound, boosted_priority);
 
                             scheduler.SchedulingPolicy::do_some_work(
                                 num_thread);
