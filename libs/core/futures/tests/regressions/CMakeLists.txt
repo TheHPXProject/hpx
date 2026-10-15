@@ -15,6 +15,7 @@ set(tests
     set_hpx_limit_798
     shared_future_continuation_order
     shared_future_then_2166
+    stackless_direct_execution_7708
     wait_for_1751
 )
 

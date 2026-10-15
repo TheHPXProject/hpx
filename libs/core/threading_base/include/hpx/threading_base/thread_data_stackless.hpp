@@ -64,6 +64,19 @@ namespace hpx::threads {
                 thread_restart_state::signaled));
         }
 
+        HPX_FORCEINLINE stackless_coroutine_type::result_type call_directly()
+        {
+            stackless_coroutine_type::result_type result = call();
+
+            if (result.first == thread_schedule_state::terminated &&
+                runs_as_child(std::memory_order_relaxed))
+            {
+                result.first = thread_schedule_state::deleted;
+            }
+
+            return result;
+        }
+
 #if defined(HPX_DEBUG)
         thread_id_type get_thread_id() const override
         {
