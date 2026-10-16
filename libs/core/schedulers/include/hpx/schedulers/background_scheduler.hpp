@@ -69,8 +69,8 @@ namespace hpx::threads::policies {
                 mode & ~scheduler_mode::enable_stealing);
             mode = static_cast<scheduler_mode>(
                 mode & ~scheduler_mode::enable_stealing_numa);
-            mode = mode | ~scheduler_mode::do_background_work;
-            mode = mode | ~scheduler_mode::do_background_work_only;
+            mode = mode | scheduler_mode::do_background_work;
+            mode = mode | scheduler_mode::do_background_work_only;
             scheduler_base::set_scheduler_mode(mode, mask);
         }
 
