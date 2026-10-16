@@ -1,0 +1,71 @@
+Work around nested sender deduction guides unsupported by GCC 11.
+
+Current stdexec uses deduction guides for class templates nested in sender
+customization point types. GCC 11 rejects those guides because it requires them
+at namespace scope. Spell the sender template arguments explicitly instead; this
+preserves the deduced, decayed types without relying on the unsupported syntax.
+
+SPDX-License-Identifier: BSL-1.0
+
+diff --git a/include/stdexec/__detail/__just.hpp b/include/stdexec/__detail/__just.hpp
+index f0c3ab8e..c6a4adf1 100644
+--- a/include/stdexec/__detail/__just.hpp
++++ b/include/stdexec/__detail/__just.hpp
+@@ -165,3 +164,0 @@ namespace STDEXEC
+-    template <class... _Ts>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(just_t, __tuple<_Ts...>) -> __sender<_Ts...>;
+-
+@@ -196 +193,2 @@ namespace STDEXEC
+-    return just_t::__sender{just_t(), __tuple{static_cast<_Ts&&>(__ts)...}};
++    return just_t::__sender<std::decay_t<_Ts>...>{
++      just_t(), __tuple{static_cast<_Ts&&>(__ts)...}};
+@@ -247,3 +244,0 @@ namespace STDEXEC
+-    template <class _Error>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(just_error_t, __tuple<_Error>) -> __sender<_Error>;
+-
+@@ -276 +271,2 @@ namespace STDEXEC
+-    return just_error_t::__sender{just_error_t(), __tuple{static_cast<_Error&&>(__err)}};
++    return just_error_t::__sender<std::decay_t<_Error>>{
++      just_error_t(), __tuple{static_cast<_Error&&>(__err)}};
+diff --git a/include/stdexec/__detail/__then.hpp b/include/stdexec/__detail/__then.hpp
+index 1a86eece..e006657a 100644
+--- a/include/stdexec/__detail/__then.hpp
++++ b/include/stdexec/__detail/__then.hpp
+@@ -195,3 +194,0 @@ namespace STDEXEC
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE __sender(then_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+@@ -261 +258,2 @@ namespace STDEXEC
+-    return then_t::__sender{then_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
++    return then_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      then_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
+diff --git a/include/stdexec/__detail/__upon_error.hpp b/include/stdexec/__detail/__upon_error.hpp
+index 2a50a022..3bb14c03 100644
+--- a/include/stdexec/__detail/__upon_error.hpp
++++ b/include/stdexec/__detail/__upon_error.hpp
+@@ -195,4 +194,0 @@ namespace STDEXEC
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE
+-      __sender(upon_error_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+@@ -261,3 +257,2 @@ namespace STDEXEC
+-    return upon_error_t::__sender{upon_error_t(),
+-                                  static_cast<_Fun&&>(__fun),
+-                                  static_cast<_Sender&&>(__sndr)};
++    return upon_error_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      upon_error_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};
+diff --git a/include/stdexec/__detail/__upon_stopped.hpp b/include/stdexec/__detail/__upon_stopped.hpp
+index 82f9cab4..d1daab30 100644
+--- a/include/stdexec/__detail/__upon_stopped.hpp
++++ b/include/stdexec/__detail/__upon_stopped.hpp
+@@ -164,4 +163,0 @@ namespace STDEXEC
+-    template <class _Fun, class _Sender>
+-    STDEXEC_HOST_DEVICE_DEDUCTION_GUIDE
+-      __sender(upon_stopped_t, _Fun, _Sender) -> __sender<_Fun, _Sender>;
+-
+@@ -230,3 +226,2 @@ namespace STDEXEC
+-    return upon_stopped_t::__sender{upon_stopped_t(),
+-                                    static_cast<_Fun&&>(__fun),
+-                                    static_cast<_Sender&&>(__sndr)};
++    return upon_stopped_t::__sender<std::decay_t<_Fun>, std::decay_t<_Sender>>{
++      upon_stopped_t(), static_cast<_Fun&&>(__fun), static_cast<_Sender&&>(__sndr)};

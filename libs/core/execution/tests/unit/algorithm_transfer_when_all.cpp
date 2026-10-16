@@ -30,6 +30,9 @@
 #if defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 
 namespace ex = hpx::execution::experimental;
@@ -138,6 +141,8 @@ int main()
 
 #if defined(HPX_CLANG_VERSION)
 #pragma clang diagnostic pop
+#elif defined(HPX_GCC_VERSION)
+#pragma GCC diagnostic pop
 #endif
 #else
 int main()

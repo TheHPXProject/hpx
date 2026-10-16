@@ -252,6 +252,7 @@ namespace test {
     struct count_instances_v
     {
         count_instances_v()
+          : value_()
         {
             ++instance_count;
             ++max_instance_count;

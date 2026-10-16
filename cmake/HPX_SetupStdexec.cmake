@@ -22,18 +22,16 @@ if(HPX_WITH_FETCH_STDEXEC)
   )
 
   # The nvcc workarounds only matter when nvcc itself compiles the HPX execution
-  # headers; clang-CUDA and every non-CUDA build parse stdexec fine without
-  # them. Report that below so a patch that no longer applies fails the builds
-  # it breaks instead of every build that fetches stdexec.
+  # headers; clang-CUDA and every non-CUDA build parse stdexec without them.
   set(_hpx_stdexec_nvcc_patch_required OFF)
   if(HPX_WITH_CUDA AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
     set(_hpx_stdexec_nvcc_patch_required ON)
   endif()
-  set(_hpx_stdexec_inline_nvcc_patch
-      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecInlineSchedulerNvcc.patch"
-  )
   set(_hpx_stdexec_async_scope_nvcc_patch
       "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecAsyncScopeNvcc.patch"
+  )
+  set(_hpx_stdexec_nested_sender_ctad_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNestedSenderCtad.patch"
   )
 
   include(FetchContent)
@@ -52,11 +50,12 @@ if(HPX_WITH_FETCH_STDEXEC)
       "-DHPX_STDEXEC_SPIN_LOOP_PAUSE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__spin_loop_pause.hpp"
       -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecSpinLoopPause.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
-      "-DHPX_STDEXEC_NVCC_PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccWorkarounds.patch"
-      "-DHPX_STDEXEC_NVCC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}"
-      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_nested_sender_ctad_patch}"
+      "-DHPX_STDEXEC_PATCH_PROBE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__just.hpp"
+      "-DHPX_STDEXEC_PATCH_PROBE_STRING=__sender(just_t, __tuple" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_ApplyStdexecPatch.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
-      "-DHPX_STDEXEC_NVCC_PATCH_FILE=${_hpx_stdexec_inline_nvcc_patch}"
+      "-DHPX_STDEXEC_NVCC_PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccWorkarounds.patch"
       "-DHPX_STDEXEC_NVCC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}"
       -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
       ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
