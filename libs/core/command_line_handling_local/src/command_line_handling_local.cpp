@@ -121,7 +121,7 @@ namespace hpx::local::detail {
         {
             std::string queuing = vm["hpx:queuing"].as<std::string>();
             if (!queuing.empty() && queuing[0] == '!')
-                queuing.erase(0);
+                queuing.erase(0, 1);
             return queuing;
         }
 

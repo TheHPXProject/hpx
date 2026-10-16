@@ -6,6 +6,9 @@
 
 set(tests create_background_thread stop_background_thread)
 
+# needs a second worker to create a background thread for
+set(create_background_thread_PARAMETERS THREADS_PER_LOCALITY 2)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
