@@ -12,6 +12,8 @@ set(tests
     future_uncompleted_7490
     future_unwrap_878
     future_unwrap_1182
+    run_as_child_hint_7724
+    runs_child_race_7724
     set_hpx_limit_798
     shared_future_continuation_order
     shared_future_then_2166
@@ -20,6 +22,8 @@ set(tests
 
 set(exception_from_continuation_1613_PARAMETERS THREADS_PER_LOCALITY 2)
 set(wait_for_1751_PARAMETERS THREADS_PER_LOCALITY 4)
+set(run_as_child_hint_7724_PARAMETERS THREADS_PER_LOCALITY 4)
+set(runs_child_race_7724_PARAMETERS THREADS_PER_LOCALITY 8)
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
