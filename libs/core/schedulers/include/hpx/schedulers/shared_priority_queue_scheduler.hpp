@@ -140,7 +140,11 @@ namespace hpx::threads::policies {
 
         explicit shared_priority_queue_scheduler(init_parameter const& init)
           : scheduler_base(init.num_worker_threads_, init.description_,
-                init.thread_queue_init_)
+                init.thread_queue_init_,
+                scheduler_mode::assign_work_round_robin |
+                    scheduler_mode::steal_high_priority_first |
+                    scheduler_mode::enable_stealing |
+                    scheduler_mode::enable_stealing_numa)
 #if !defined(HPX_HAVE_MAX_CPU_COUNT)
           , d_lookup_(hpx::threads::hardware_concurrency())
           , q_lookup_(hpx::threads::hardware_concurrency())
@@ -175,25 +179,6 @@ namespace hpx::threads::policies {
         static std::string_view get_scheduler_name()
         {
             return "shared_priority_queue_scheduler";
-        }
-
-        // get/set scheduler mode
-        void set_scheduler_mode(scheduler_mode mode,
-            hpx::threads::mask_cref_type pu_mask) noexcept override
-        {
-            // clang-format off
-            scheduler_base::set_scheduler_mode(mode, pu_mask);
-            round_robin_ = mode & policies::scheduler_mode::assign_work_round_robin;
-            steal_hp_first_ =
-                mode & policies::scheduler_mode::steal_high_priority_first;
-            core_stealing_ = mode & policies::scheduler_mode::enable_stealing;
-            numa_stealing_ = mode & policies::scheduler_mode::enable_stealing_numa;
-            spq_deb.debug(debug::str<>("scheduler_mode")
-                , round_robin_ ? "round_robin" : "thread parent", ','
-                , steal_hp_first_ ? "steal_hp_first" : "steal after local", ','
-                , core_stealing_ ? "stealing" : "no stealing", ','
-                , numa_stealing_ ? "numa stealing" : "no numa stealing");
-            // clang-format on
         }
 
         // ------------------------------------------------------------
@@ -330,7 +315,9 @@ namespace hpx::threads::policies {
                     thread_num = numa_holder_[0].thread_queue(0)->worker_next(
                         static_cast<std::size_t>(num_workers_));
                 }
-                else if (!round_robin_) /* thread parent */
+                else if (!has_scheduler_mode(
+                             scheduler_mode::assign_work_round_robin,
+                             thread_num)) /* thread parent */
                 {
                     if constexpr (spq_deb.is_enabled())
                     {
@@ -459,8 +446,8 @@ namespace hpx::threads::policies {
 
         template <typename T>
         bool steal_by_function(std::size_t domain, std::size_t q_index,
-            bool steal_numa, bool steal_core, thread_holder_type* origin,
-            T& var, char const* prefix,
+            bool steal_numa, bool steal_core, bool steal_hp_first,
+            thread_holder_type* origin, T& var, char const* prefix,
             hpx::function<bool(
                 std::size_t, std::size_t, thread_holder_type*, T&, bool, bool)>
                 operation_HP,
@@ -487,7 +474,7 @@ namespace hpx::threads::policies {
                 }
             }
             // High priority tasks first
-            else if (steal_hp_first_)
+            else if (steal_hp_first)
             {
                 for (std::size_t d = 0; d < num_domains_; ++d)
                 {
@@ -638,9 +625,16 @@ namespace hpx::threads::policies {
 
             if (bool const result =
                     steal_by_function<threads::thread_id_ref_type>(domain,
-                        q_index, numa_stealing_, core_stealing_, nullptr, thrd,
-                        "SBF-get_next_thread", get_next_thread_function_HP,
-                        get_next_thread_function))
+                        q_index,
+                        has_scheduler_mode(
+                            scheduler_mode::enable_stealing_numa, this_thread),
+                        has_scheduler_mode(
+                            scheduler_mode::enable_stealing, this_thread),
+                        has_scheduler_mode(
+                            scheduler_mode::steal_high_priority_first,
+                            this_thread),
+                        nullptr, thrd, "SBF-get_next_thread",
+                        get_next_thread_function_HP, get_next_thread_function))
             {
                 return result;
             }
@@ -693,13 +687,20 @@ namespace hpx::threads::policies {
 
             thread_holder_type* receiver =
                 numa_holder_[domain].queues_[q_index];
+            bool const numa_stealing = has_scheduler_mode(
+                scheduler_mode::enable_stealing_numa, this_thread);
+            bool const core_stealing = has_scheduler_mode(
+                scheduler_mode::enable_stealing, this_thread);
             spq_deb.timed(w_or_add_n, "thread_num", this_thread, "q_index",
-                q_index, "numa_stealing ", numa_stealing_, "core_stealing ",
-                core_stealing_);
+                q_index, "numa_stealing ", numa_stealing, "core_stealing ",
+                core_stealing);
 
             bool const added_tasks = steal_by_function<std::size_t>(domain,
-                q_index, numa_stealing_, core_stealing_, receiver, added,
-                "wait_or_add_new", add_new_function_HP, add_new_function);
+                q_index, numa_stealing, core_stealing,
+                has_scheduler_mode(
+                    scheduler_mode::steal_high_priority_first, this_thread),
+                receiver, added, "wait_or_add_new", add_new_function_HP,
+                add_new_function);
 
             return !added_tasks;
         }
@@ -749,7 +750,9 @@ namespace hpx::threads::policies {
                         debug::threadinfo<threads::thread_id_ref_type*>(&thrd));
                     // clang-format on
                 }
-                else if (!round_robin_) /*assign_parent*/
+                else if (!has_scheduler_mode(
+                             scheduler_mode::assign_work_round_robin,
+                             thread_num)) /*assign_parent*/
                 {
                     domain_num = d_lookup_[thread_num];
                     q_index = q_lookup_[thread_num];
@@ -1393,20 +1396,6 @@ namespace hpx::threads::policies {
 
         // number of cores per queue for HP, NP, LP queues
         core_ratios cores_per_queue_;
-
-        // when true, new tasks are added round robing to thread queues
-        bool round_robin_ = true;
-
-        // when true, tasks are
-        bool steal_hp_first_ = true;
-
-        // when true, numa_stealing permits stealing across numa domains,
-        // when false, no stealing takes place across numa domains,
-        bool numa_stealing_ = true;
-
-        // when true, core_stealing permits stealing between cores(queues),
-        // when false, no stealing takes place between any cores(queues)
-        bool core_stealing_ = true;
 
         // number of worker threads assigned to this pool
         std::size_t num_workers_;

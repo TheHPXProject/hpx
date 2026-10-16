@@ -138,11 +138,17 @@ namespace hpx::threads::policies {
                        mode) != 0;
         }
 
+        // adjust mode flags before they are stored
+        // This hook is invoked by all mode modifying functions below so that
+        // flags may be overridden by schedulers that do not support certain
+        // operations/modes, or that need to react to changed flags.
+        virtual scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept
+        {
+            return mode;
+        }
+
         // set mode flags that control scheduler behaviour
-        // This set function is virtual so that flags may be overridden
-        // by schedulers that do not support certain operations/modes.
-        // All other mode set functions should call this one to ensure
-        // that flags are always consistent
         virtual void set_scheduler_mode(
             scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept;
 

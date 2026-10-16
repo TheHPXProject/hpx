@@ -1990,15 +1990,13 @@ namespace hpx::threads::policies {
             curr_queue_.store(0, std::memory_order_release);
         }
 
-        void set_scheduler_mode(scheduler_mode mode,
-            hpx::threads::mask_cref_type pu_mask) noexcept override
+        scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept override
         {
             // we should not disable stealing for this scheduler, this would
             // possibly lead to deadlocks
-            scheduler_base::set_scheduler_mode(mode |
-                    policies::scheduler_mode::enable_stealing |
-                    policies::scheduler_mode::enable_stealing_numa,
-                pu_mask);
+            return mode | policies::scheduler_mode::enable_stealing |
+                policies::scheduler_mode::enable_stealing_numa;
         }
 
     protected:
