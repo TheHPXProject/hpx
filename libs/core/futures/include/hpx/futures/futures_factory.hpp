@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <mutex>
 #include <type_traits>
 #include <utility>
 
@@ -138,9 +139,16 @@ namespace hpx::lcos::local {
                     {
                         HPX_ASSERT(
                             this->runs_child_ == threads::invalid_thread_id);
-                        threads::register_thread(
-                            data, pool, this->runs_child_, ec);
-                        return this->runs_child_;
+
+                        // a thread waiting on the future may read runs_child_
+                        // in execute_thread, so publish it under the lock
+                        threads::thread_id_ref_type tid;
+                        threads::register_thread(data, pool, tid, ec);
+                        {
+                            std::unique_lock l(this->mtx_);
+                            this->runs_child_ = tid;
+                        }
+                        return tid;
                     }
 
                     return threads::register_thread(data, pool, ec);
@@ -158,12 +166,16 @@ namespace hpx::lcos::local {
                         threads::thread_schedule_state::suspended, true);
 
                     HPX_ASSERT(this->runs_child_ == threads::invalid_thread_id);
-                    threads::register_thread(data, pool, this->runs_child_, ec);
 
-                    // once the thread is pending, another worker may run it to
-                    // its end and reset runs_child_ in set_value, so take the
-                    // id before that
-                    threads::thread_id_ref_type tid = this->runs_child_;
+                    // publish runs_child_ under the lock as above; once the
+                    // thread is pending, another worker may run it to its end
+                    // and reset runs_child_ in set_value, so keep using tid
+                    threads::thread_id_ref_type tid;
+                    threads::register_thread(data, pool, tid, ec);
+                    {
+                        std::unique_lock l(this->mtx_);
+                        this->runs_child_ = tid;
+                    }
 
                     // now run the thread, queued on the worker the scheduler
                     // picked when creating it
