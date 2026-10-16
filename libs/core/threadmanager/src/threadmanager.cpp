@@ -765,27 +765,28 @@ namespace hpx::threads {
         policies::thread_queue_init_parameters const thread_queue_init =
             get_init_parameters();
 
-        std::size_t max_background_threads =
-            hpx::util::get_entry_as<std::size_t>(rtcfg_,
-                "hpx.max_background_threads",
-                (std::numeric_limits<std::size_t>::max)());
+        std::size_t const base_max_background_threads = [&]() {
+            std::size_t max_background_threads =
+                hpx::util::get_entry_as<std::size_t>(rtcfg_,
+                    "hpx.max_background_threads",
+                    (std::numeric_limits<std::size_t>::max)());
 
-        // The distributed runtime's background callback also performs
-        // non-network work, such as AGAS garbage collection. Keep one worker
-        // eligible when the callback is nonempty and the configured maximum
-        // is nonzero.
-        if (!rtcfg_.enable_networking())
-        {
-            if (network_background_callback_.empty() ||
-                max_background_threads == 0)
+            // The distributed runtime's background callback also performs
+            // non-network work, such as AGAS garbage collection. Keep one worker
+            // eligible when the callback is nonempty and the configured maximum
+            // is nonzero.
+            if (!rtcfg_.enable_networking())
             {
-                max_background_threads = 0;
+                if (network_background_callback_.empty() ||
+                    max_background_threads == 0)
+                {
+                    return std::size_t(0);
+                }
+                return std::size_t(1);
             }
-            else
-            {
-                max_background_threads = 1;
-            }
-        }
+
+            return max_background_threads;
+        }();
 
         // instantiate the pools
         for (size_t i = 0; i != num_pools; i++)
@@ -798,6 +799,9 @@ namespace hpx::threads {
                 rp.get_scheduler_mode(i);
             resource::background_work_function background_work =
                 rp.get_background_work(i);
+
+            std::size_t pool_max_background_threads =
+                base_max_background_threads;
 
             // make sure the first thread-pool that gets instantiated is the
             // default one
@@ -853,8 +857,8 @@ namespace hpx::threads {
 #endif
                 }
 
-                max_background_threads =
-                    (std::max) (num_threads_in_pool, max_background_threads);
+                pool_max_background_threads = (std::max) (num_threads_in_pool,
+                    pool_max_background_threads);
             }
             else
             {
@@ -864,7 +868,7 @@ namespace hpx::threads {
             thread_pool_init_parameters thread_pool_init(name, i,
                 scheduler_mode, num_threads_in_pool, thread_offset, notifier_,
                 rp.get_affinity_data(), overall_background_work,
-                max_background_threads, max_idle_loop_count,
+                pool_max_background_threads, max_idle_loop_count,
                 max_busy_loop_count);
 
             switch (sched_type)
