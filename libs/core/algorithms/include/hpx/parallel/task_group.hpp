@@ -210,12 +210,7 @@ namespace hpx::experimental {
         // clang-format off
             requires (
                 !hpx::traits::is_executor_any_v<std::decay_t<F>> &&
-<<<<<<< HEAD
                 !hpx::execution::experimental::is_scheduler_v<std::decay_t<F>>
-=======
-                !hpx::execution::experimental::is_scheduler_v<
-                    std::decay_t<F>>
->>>>>>> 053d5470d0 (Algorithms: Modernize task_block and task_group for P2300 schedulers)
             )
         // clang-format on
         void run(F&& f, Ts&&... ts)
