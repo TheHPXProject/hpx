@@ -34,24 +34,46 @@ namespace hpx::parcelset::policies::mpi {
         using connection_ptr = std::shared_ptr<connection_type>;
         using connection_list = std::deque<connection_ptr>;
 
-        explicit constexpr receiver(Parcelport& pp) noexcept
+        explicit receiver(Parcelport& pp) noexcept
           : pp_(pp)
-          , hdr_request_(0)
-          , header_buffer_(pp.get_zero_copy_serialization_threshold())
         {
         }
 
         void run() noexcept
         {
+            std::size_t num_slots = pp_.get_max_header_receives();
+            if (num_slots == 0)
+            {
+                std::size_t const env_size = util::mpi_environment::size() > 0 ?
+                    static_cast<std::size_t>(util::mpi_environment::size()) :
+                    1;
+                num_slots = (std::min) (static_cast<std::size_t>(64),
+                    (std::max) (static_cast<std::size_t>(16), env_size * 2));
+            }
+
+            std::size_t const buf_size =
+                pp_.get_zero_copy_serialization_threshold();
+
+            hdr_requests_.assign(num_slots, MPI_REQUEST_NULL);
+            header_buffers_.resize(num_slots);
+            for (auto& buf : header_buffers_)
+            {
+                buf.resize(buf_size);
+            }
+
             util::mpi_environment::scoped_lock l;
-            post_new_header(l);
+            for (std::size_t i = 0; i < num_slots; ++i)
+            {
+                post_header(l, i);
+            }
+            hdr_posted_ = true;
         }
 
         void stop() noexcept
         {
-            // Cancel the permanently re-posted wildcard header receive.
-            // Leaving it pending would let MPI_Finalize run with an active
-            // request on the communicator, which the MPI standard does not
+            // Cancel the permanently re-posted wildcard header receives.
+            // Leaving them pending would let MPI_Finalize run with active
+            // requests on the communicator, which the MPI standard does not
             // allow and which leaves live receive state for the MPI library
             // to trip over during teardown. Errors are ignored: this runs
             // directly before MPI is finalized anyway.
@@ -65,7 +87,7 @@ namespace hpx::parcelset::policies::mpi {
             // Serialize against any late header polling. accept_locked()
             // and its re-post of the header receive run under headers_mtx_,
             // so holding it here gives stop() exclusive ownership of
-            // hdr_request_ and hdr_posted_ in all MPI threading modes (the
+            // hdr_requests_ and hdr_posted_ in all MPI threading modes (the
             // mpi_environment lock alone is a no-op for multithreaded MPI).
             // Lock order matches accept(): headers_mtx_ first, then the
             // MPI serialization lock.
@@ -75,8 +97,15 @@ namespace hpx::parcelset::policies::mpi {
             if (hdr_posted_)
             {
                 hdr_posted_ = false;
-                MPI_Cancel(&hdr_request_);
-                MPI_Wait(&hdr_request_, MPI_STATUS_IGNORE);
+                for (auto& req : hdr_requests_)
+                {
+                    if (req != MPI_REQUEST_NULL)
+                    {
+                        MPI_Cancel(&req);
+                        MPI_Wait(&req, MPI_STATUS_IGNORE);
+                        req = MPI_REQUEST_NULL;
+                    }
+                }
             }
         }
 
@@ -130,6 +159,11 @@ namespace hpx::parcelset::policies::mpi {
         {
             HPX_ASSERT_OWNS_LOCK(header_lock);
 
+            if (hdr_requests_.empty())
+            {
+                return {};
+            }
+
             util::mpi_environment::scoped_try_lock l;
 
             // Caller failing to hold lock 'header_lock' before calling function
@@ -140,19 +174,34 @@ namespace hpx::parcelset::policies::mpi {
 
             if (l.locked)
             {
+                int index = MPI_UNDEFINED;
+                int completed = 0;
                 MPI_Status status;
-                if (request_done_locked(l, hdr_request_, &status))
+                // Multiple wildcard receives may complete out-of-order with
+                // respect to their sending order when polled via MPI_Testany.
+                // HPX parcels are independent, asynchronous messages that do
+                // not require per-sender FIFO delivery at the parcelport layer;
+                // each header carries a distinct sender-allocated tag and
+                // self-contained metadata to create its receiver_connection.
+                int const ret =
+                    MPI_Testany(static_cast<int>(hdr_requests_.size()),
+                        hdr_requests_.data(), &index, &completed, &status);
+                util::mpi_environment::check_mpi_error(
+                    l, HPX_CURRENT_SOURCE_LOCATION(), ret);
+
+                if (completed && index != MPI_UNDEFINED)
                 {
                     int recv_size = 0;
-                    int const ret =
+                    int const count_ret =
                         MPI_Get_count(&status, MPI_CHAR, &recv_size);
                     util::mpi_environment::check_mpi_error(
-                        l, HPX_CURRENT_SOURCE_LOCATION(), ret);
+                        l, HPX_CURRENT_SOURCE_LOCATION(), count_ret);
 
-                    std::vector<char> recv_header(header_buffer_.begin(),
-                        header_buffer_.begin() + recv_size);
+                    std::vector<char> recv_header(
+                        header_buffers_[index].begin(),
+                        header_buffers_[index].begin() + recv_size);
 
-                    post_new_header(l);
+                    post_header(l, static_cast<std::size_t>(index));
 
                     l.unlock();
                     header_lock.unlock();
@@ -170,41 +219,27 @@ namespace hpx::parcelset::policies::mpi {
         }
 
         template <typename Lock>
-        void post_new_header([[maybe_unused]] Lock& l) noexcept
+        void post_header([[maybe_unused]] Lock& l, std::size_t idx) noexcept
         {
             HPX_ASSERT_OWNS_LOCK(l);
-            int const ret = MPI_Irecv(header_buffer_.data(),
-                static_cast<int>(header_buffer_.size()), MPI_BYTE,
+            HPX_ASSERT(idx < hdr_requests_.size());
+            int const ret = MPI_Irecv(header_buffers_[idx].data(),
+                static_cast<int>(header_buffers_[idx].size()), MPI_BYTE,
                 MPI_ANY_SOURCE, 0, util::mpi_environment::communicator(),
-                &hdr_request_);
+                &hdr_requests_[idx]);
             util::mpi_environment::check_mpi_error(
                 l, HPX_CURRENT_SOURCE_LOCATION(), ret);
-            hdr_posted_ = true;
         }
 
         Parcelport& pp_;
 
         hpx::spinlock headers_mtx_;
-        MPI_Request hdr_request_;
+        std::vector<MPI_Request> hdr_requests_;
         bool hdr_posted_ = false;
-        std::vector<char> header_buffer_;
+        std::vector<std::vector<char>> header_buffers_;
 
         hpx::spinlock connections_mtx_;
         connection_list connections_;
-
-        template <typename Lock>
-        static bool request_done_locked(
-            Lock& l, MPI_Request& r, MPI_Status* status) noexcept
-        {
-            HPX_ASSERT_OWNS_LOCK(l);
-
-            int completed = 0;
-            int const ret = MPI_Test(&r, &completed, status);
-            util::mpi_environment::check_mpi_error(
-                l, HPX_CURRENT_SOURCE_LOCATION(), ret);
-
-            return completed ? true : false;
-        }
     };
 }    // namespace hpx::parcelset::policies::mpi
 
