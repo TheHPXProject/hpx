@@ -18,6 +18,7 @@
 #include <hpx/thread_pools/detail/scheduling_counters.hpp>
 #include <hpx/thread_pools/detail/scheduling_log.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -117,6 +118,13 @@ namespace hpx::threads::detail {
             context_storage =
                 hpx::execution_base::this_thread::detail::get_agent_storage();
 
+        // number of empty loop iterations after which staged threads are
+        // stolen if fast idle mode is off (max_idle_loop_count / 2, unless the
+        // scheduler starts earlier, see get_steal_staged_threshold)
+        std::int64_t const steal_staged_threshold =
+            (std::min) (scheduler.get_steal_staged_threshold(),
+                params.max_idle_loop_count_ / 2);
+
         auto added = static_cast<std::size_t>(-1);
         thread_id_ref_type next_thrd;
         while (true)
@@ -141,14 +149,14 @@ namespace hpx::threads::detail {
             // stealing staged threads is enabled if:
             // - fast idle mode is on: same as normal stealing
             // - fast idle mode off: only after normal stealing has failed for
-            //                       a while
+            //                       a while (see steal_staged_threshold)
             bool enable_stealing_staged = enable_stealing;
             if (enable_stealing_staged &&
                 !scheduler.has_scheduler_mode(
                     policies::scheduler_mode::fast_idle_mode, num_thread))
             {
-                enable_stealing_staged = !may_exit &&
-                    idle_loop_count > params.max_idle_loop_count_ / 2;
+                enable_stealing_staged =
+                    !may_exit && idle_loop_count > steal_staged_threshold;
             }
 
             if (HPX_LIKELY(thrd ||
@@ -160,6 +168,9 @@ namespace hpx::threads::detail {
 
                 idle_loop_count = 0;
                 ++busy_loop_count;
+
+                // stop do_some_work from notifying this (now busy) worker
+                scheduler.reset_idle_backoff(num_thread);
 
                 may_exit = false;
 

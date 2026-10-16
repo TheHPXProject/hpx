@@ -126,6 +126,13 @@ namespace hpx::threads::policies {
           , victims_(num_queues_)
           , thread_numa_domain_(num_queues_, 0)
         {
+            // Start stealing staged tasks soon after a worker ran out of work
+            // (see wait_or_add_new). This takes load off the pending queue of
+            // a busy worker, which all idle workers would otherwise pop from
+            // concurrently.
+            set_steal_staged_threshold(
+                thread_queue_init_.idle_loop_count_steal_staged_);
+
             if (!deferred_initialization)
             {
                 HPX_ASSERT(num_queues_ != 0);
@@ -1430,7 +1437,7 @@ namespace hpx::threads::policies {
 
         bool attempt_stealing(std::size_t num_thread, std::size_t& added,
             thread_queue_type* this_high_priority_queue,
-            thread_queue_type* this_queue)
+            thread_queue_type* this_queue, std::int64_t const min_tasks)
         {
             constexpr auto increment_counters =
                 []([[maybe_unused]] thread_queue_type* from_q,
@@ -1457,7 +1464,9 @@ namespace hpx::threads::policies {
                 (void) num_thread;
 
                 thread_queue_type* q = queues_[idx].data_;
-                result = this_queue->wait_or_add_new(true, added, q) && result;
+                result = this_queue->wait_or_add_new(
+                             true, added, q, false, min_tasks) &&
+                    result;
 
                 if (0 != added)
                 {
@@ -1482,7 +1491,7 @@ namespace hpx::threads::policies {
                 {
                     thread_queue_type* q = high_priority_queues_[idx].data_;
                     result = this_high_priority_queue->wait_or_add_new(
-                                 true, added, q) &&
+                                 true, added, q, false, min_tasks) &&
                         result;
 
                     if (0 != added)
@@ -1564,9 +1573,8 @@ namespace hpx::threads::policies {
         // scheduler. Returns true if the OS thread calling this function has to
         // be terminated (i.e. no more work has to be done).
         bool wait_or_add_new(std::size_t num_thread, bool running,
-            [[maybe_unused]] std::int64_t& idle_loop_count,
-            bool const enable_stealing, std::size_t& added,
-            thread_id_ref_type* = nullptr)
+            std::int64_t& idle_loop_count, bool const enable_stealing,
+            std::size_t& added, thread_id_ref_type* = nullptr)
         {
             added = 0;
 
@@ -1603,8 +1611,22 @@ namespace hpx::threads::policies {
 
             if (enable_stealing)
             {
+                // Staged stealing starts early (see the constructor). Until the
+                // worker has been idle for max_idle_loop_count / 2 iterations,
+                // only steal from workers that have more staged tasks than they
+                // will convert soon themselves, leaving the others where they
+                // were placed.
+                std::int64_t min_tasks = 0;
+                if (idle_loop_count <= get_max_idle_loop_count() / 2 &&
+                    !has_scheduler_mode(
+                        policies::scheduler_mode::fast_idle_mode, num_thread))
+                {
+                    min_tasks =
+                        thread_queue_init_.min_tasks_to_steal_staged_early_;
+                }
+
                 result = attempt_stealing(num_thread, added,
-                             this_high_priority_queue, this_queue) &&
+                             this_high_priority_queue, this_queue, min_tasks) &&
                     result;
                 if (0 != added)
                     return result;
@@ -1836,7 +1858,10 @@ namespace hpx::threads::policies {
         }
 
     protected:
-        std::atomic<std::size_t> curr_queue_;
+        // Round-robin counter for threads created without a placement hint.
+        // It is written by every spawning thread; keep it on its own cache
+        // line, away from the read-mostly members below.
+        util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
 

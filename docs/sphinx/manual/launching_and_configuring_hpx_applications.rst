@@ -418,6 +418,8 @@ The ``hpx.thread_queue`` configuration section
    [hpx.thread_queue]
    min_tasks_to_steal_pending = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING:0}
    min_tasks_to_steal_staged = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:0}
+   min_tasks_to_steal_staged_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:10}
+   idle_loop_count_steal_staged = ${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:30}
    min_add_new_count = ${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:10}
    max_add_new_count = ${HPX_THREAD_QUEUE_MAX_ADD_NEW_COUNT:10}
    max_delete_count = ${HPX_THREAD_QUEUE_MAX_DELETE_COUNT:1000}
@@ -436,6 +438,22 @@ The ``hpx.thread_queue`` configuration section
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before neighboring cores are allowed to steal work.
        The default is to allow stealing always.
+   * * ``hpx.thread_queue.idle_loop_count_steal_staged``
+     * The value of this property defines the number of consecutive empty
+       scheduling loop iterations after which a core starts stealing staged
+       |hpx| tasks from other cores (local priority queue scheduler only, other
+       schedulers start after ``hpx.max_idle_loop_count / 2`` iterations). It
+       has no effect if fast idle mode is on, which steals staged tasks right
+       away.
+   * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
+     * The value of this property defines the number of staged |hpx| tasks that
+       need to be available before neighboring cores are allowed to steal work
+       shortly after running out of work, i.e. after
+       ``hpx.thread_queue.idle_loop_count_steal_staged`` iterations (local
+       priority queue scheduler only). Cores that have been idle for
+       ``hpx.max_idle_loop_count / 2`` iterations steal staged tasks
+       regardless. Leaving a few staged tasks to the core they were placed on
+       keeps them close to the data in that core's caches.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of tasks to be
        converted into |hpx| threads whenever the thread queues for a core have

@@ -1314,7 +1314,8 @@ namespace hpx::threads::policies {
         }
 
         inline bool wait_or_add_new(bool const running, std::size_t& added,
-            thread_queue* add_from, bool const steal = false) HPX_HOT
+            thread_queue* add_from, bool const steal = false,
+            std::int64_t const min_tasks_to_steal = 0) HPX_HOT
         {
             // try to generate new threads from task lists, but only if our own
             // list of threads is empty
@@ -1329,7 +1330,8 @@ namespace hpx::threads::policies {
                         std::memory_order_relaxed);
 
                 bool const enough_threads = new_tasks_count != 0 &&
-                    new_tasks_count >= parameters_.min_tasks_to_steal_staged_;
+                    new_tasks_count >= parameters_.min_tasks_to_steal_staged_ &&
+                    new_tasks_count >= min_tasks_to_steal;
 
                 if (running && !enough_threads)
                 {

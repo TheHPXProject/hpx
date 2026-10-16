@@ -2005,7 +2005,10 @@ namespace hpx::threads::policies {
         std::vector<util::cache_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
-        std::atomic<std::size_t> curr_queue_;
+        // Round-robin counter for threads created without a placement hint.
+        // It is written by every spawning thread; keep it on its own cache
+        // line, away from the read-mostly members below.
+        util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
         std::size_t const num_queues_;

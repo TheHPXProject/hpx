@@ -118,29 +118,45 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         HPX_TRACING_MARK_EVENT("do_some_work");
 
+        // Only touch the wait data of threads that are actually backing off.
+        // Unconditionally writing wait_count would pull the cache line of
+        // every (busy) worker into the calling core on each new work item. A
+        // thread that is about to start backing off (wait_count == 0) is not
+        // notified; its first backoff period is one microsecond.
+        //
+        // As before, the notification is sent without holding wait_mtx: if it
+        // arrives while idle_callback is between incrementing wait_count and
+        // waiting, it is lost and that thread sleeps for the period it has
+        // already computed (at most max_idle_backoff_time).
+        auto const wake_up = [this](std::size_t i) noexcept {
+            // read first: most workers are not backing off, keep their cache
+            // lines shared in that case
+            auto& data = wait_count_data_[i].data_;
+            if (data.wait_count.load(std::memory_order_relaxed) != 0 &&
+                data.wait_count.exchange(0, std::memory_order_relaxed) != 0)
+            {
+                data.wait_cond.notify_one();
+            }
+        };
+
+        auto const size = wait_count_data_.size();
         if (static_cast<std::size_t>(-1) == num_thread)
         {
-            auto const size = wait_count_data_.size();
             for (std::size_t i = 0; i != size; ++i)
             {
                 if (modes_[i].data_.load(std::memory_order_relaxed) &
                     policies::scheduler_mode::enable_idle_backoff)
                 {
-                    wait_count_data_[i].data_.wait_count.store(
-                        0, std::memory_order_relaxed);
-                    wait_count_data_[i].data_.wait_cond.notify_one();
+                    wake_up(i);
                 }
             }
         }
         else if (modes_[num_thread].data_.load(std::memory_order_relaxed) &
             policies::scheduler_mode::enable_idle_backoff)
         {
-            auto const size = wait_count_data_.size();
             for (std::size_t i = 0; i != size; ++i)
             {
-                wait_count_data_[i].data_.wait_count.store(
-                    0, std::memory_order_relaxed);
-                wait_count_data_[i].data_.wait_cond.notify_one();
+                wake_up(i);
             }
         }
 #endif

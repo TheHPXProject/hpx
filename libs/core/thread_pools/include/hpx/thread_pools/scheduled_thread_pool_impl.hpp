@@ -86,6 +86,7 @@ namespace hpx::threads::detail {
       , shutdown_check_count_(init.shutdown_check_count_)
     {
         sched_->set_parent_pool(this);
+        sched_->set_max_idle_loop_count(max_idle_loop_count_);
     }
 
     template <typename Scheduler>

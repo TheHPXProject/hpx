@@ -30,6 +30,14 @@ General changes
   tasks, even if there are fewer of them than the configured minimum; before,
   such tasks were never run, so any non-zero setting could hang applications.
   The default (``0``) is not affected.
+- **Scheduler contention**: the local priority queue scheduler starts stealing
+  staged tasks after 30 empty scheduling loop iterations instead of
+  ``hpx.max_idle_loop_count / 2`` (100000 by default), but until the latter
+  only from workers holding at least 10 staged tasks. Both can be changed with
+  the new settings ``hpx.thread_queue.idle_loop_count_steal_staged`` and
+  ``hpx.thread_queue.min_tasks_to_steal_staged_early``. New work items now
+  only wake workers that are backing off, and a worker that finds work resets
+  its own idle backoff.
 
 Breaking changes
 ================

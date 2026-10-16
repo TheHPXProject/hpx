@@ -10,6 +10,7 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/modules/affinity.hpp>
+#include <hpx/modules/concurrency.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/logging.hpp>
@@ -928,7 +929,10 @@ namespace hpx::threads::policies {
 
     protected:
         std::vector<thread_queue_type*> queues_;
-        std::atomic<std::size_t> curr_queue_;
+        // Round-robin counter for threads created without a placement hint.
+        // It is written by every spawning thread; keep it on its own cache
+        // line, away from the read-mostly members below.
+        util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
 

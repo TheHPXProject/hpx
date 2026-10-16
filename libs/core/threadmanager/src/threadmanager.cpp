@@ -135,6 +135,14 @@ namespace hpx::threads {
                 HPX_THREAD_QUEUE_CACHED_THREADS_COUNT);
         double const max_idle_backoff_time = hpx::util::get_entry_as<double>(
             rtcfg_, "hpx.max_idle_backoff_time", HPX_IDLE_BACKOFF_TIME_MAX);
+        std::int64_t const min_tasks_to_steal_staged_early =
+            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
+                "hpx.thread_queue.min_tasks_to_steal_staged_early",
+                HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY);
+        std::int64_t const idle_loop_count_steal_staged =
+            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
+                "hpx.thread_queue.idle_loop_count_steal_staged",
+                HPX_IDLE_LOOP_COUNT_STEAL_STAGED);
 
         std::ptrdiff_t const small_stacksize =
             rtcfg_.get_stack_size(thread_stacksize::small_);
@@ -150,7 +158,8 @@ namespace hpx::threads {
             min_add_new_count, max_add_new_count, min_delete_count,
             max_delete_count, max_terminated_threads, init_threads_count,
             cached_threads_count, max_idle_backoff_time, small_stacksize,
-            medium_stacksize, large_stacksize, huge_stacksize);
+            medium_stacksize, large_stacksize, huge_stacksize,
+            min_tasks_to_steal_staged_early, idle_loop_count_steal_staged);
     }
 
     void threadmanager::create_scheduler_user_defined(
