@@ -160,13 +160,19 @@ namespace hpx::lcos::local {
                     HPX_ASSERT(this->runs_child_ == threads::invalid_thread_id);
                     threads::register_thread(data, pool, this->runs_child_, ec);
 
-                    // now run the thread
-                    threads::set_thread_state(this->runs_child_.noref(),
+                    // once the thread is pending, another worker may run it to
+                    // its end and reset runs_child_ in set_value, so take the
+                    // id before that
+                    threads::thread_id_ref_type tid = this->runs_child_;
+
+                    // now run the thread, queued on the worker the scheduler
+                    // picked when creating it
+                    threads::detail::set_thread_state(tid.noref(),
                         threads::thread_schedule_state::pending,
                         threads::thread_restart_state::signaled,
-                        policy.priority(), true, ec);
+                        policy.priority(), data.schedulehint, true, ec);
 
-                    return this->runs_child_;
+                    return tid;
                 }
 
                 threads::thread_init_data data(
