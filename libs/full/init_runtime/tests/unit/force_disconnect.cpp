@@ -411,6 +411,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     HPX_TEST(!ec);
 
     bool outcome_is_acceptable = false;
+    std::string error_message;
     try
     {
         [[maybe_unused]] std::uint32_t const r = f.get();
@@ -418,6 +419,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     }
     catch (hpx::exception const& e)
     {
+        error_message = e.what();
         outcome_is_acceptable =
             (e.get_error() == hpx::error::locality_was_disconnected);
     }
@@ -425,7 +427,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     {
         HPX_TEST(false);
     }
-    HPX_TEST(outcome_is_acceptable);
+    HPX_TEST_MSG(outcome_is_acceptable, error_message);
 }
 
 // Repeatedly launching and force-disconnecting distinct worker localities

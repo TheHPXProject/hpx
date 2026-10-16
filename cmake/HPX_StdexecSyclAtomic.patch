@@ -1,0 +1,32 @@
+Allow SYCL builds to opt out of stdexec's automatic CUDA atomic selection.
+
+CUDA 12.9 and Intel LLVM v6.0.1 declare __assert_fail with incompatible
+exception specifications. When CUDA headers are visible to a SYCL compiler,
+including cuda/std/atomic can report "exception specification in declaration
+does not match previous declaration" for __assert_fail.
+
+HPX exports STDEXEC_NO_CUDA_STD_ATOMIC to all translation units and consumers
+of a SYCL build so that they use the same atomic types. Other configurations
+retain stdexec's original selection. A failed patch is fatal only when SYCL
+is enabled; an unrelated stdexec revision must not break non-SYCL builds.
+
+This applies to stdexec 04de75de5807e73a229acf047c6976575e313359.
+NVIDIA/stdexec#2042 discusses automatic CUDA atomic selection; it does not
+track the SYCL declaration conflict. Retest that conflict before dropping
+this workaround when updating the pin.
+
+Copyright (c) 2026 Dominic Marcello
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+--- a/include/stdexec/__detail/__atomic.hpp
++++ b/include/stdexec/__detail/__atomic.hpp
+@@ -28,5 +28,5 @@
+ #  if !STDEXEC_USE_MODULES()
+-#    if __has_include(<cuda/std/atomic>)
++#    if !defined(STDEXEC_NO_CUDA_STD_ATOMIC) && __has_include(<cuda/std/atomic>)
+ #      include <cuda/std/atomic>
+ #      define STDEXEC_HAS_CUDA_STD_ATOMIC() 1
+ #    else
