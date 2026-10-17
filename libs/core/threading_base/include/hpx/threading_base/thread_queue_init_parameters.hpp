@@ -48,7 +48,9 @@ namespace hpx::threads::policies {
           : max_thread_count_(max_thread_count)
           , min_tasks_to_steal_pending_(min_tasks_to_steal_pending)
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
-          , min_add_new_count_(min_add_new_count)
+          , min_add_new_count_(min_add_new_count < max_add_new_count ?
+                    min_add_new_count :
+                    max_add_new_count)
           , max_add_new_count_(max_add_new_count)
           , min_delete_count_(min_delete_count < max_delete_count ?
                     min_delete_count :

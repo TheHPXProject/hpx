@@ -269,7 +269,7 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_DELETE_COUNT)) "}",
             "max_delete_count = "
             "${HPX_THREAD_QUEUE_MAX_DELETE_COUNT:" HPX_PP_STRINGIZE(
-                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_THREAD_COUNT)) "}",
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_DELETE_COUNT)) "}",
             "max_terminated_threads = "
             "${HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS)) "}",
