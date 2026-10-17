@@ -191,21 +191,20 @@ namespace hpx::local::detail {
     std::size_t handle_numa_sensitive(util::manage_config const& cfgmap,
         hpx::program_options::variables_map const& vm, std::size_t default_)
     {
+        std::size_t numa_sensitive =
+            cfgmap.get_value<std::size_t>("hpx.numa_sensitive", default_);
         if (vm.count("hpx:numa-sensitive") != 0)
         {
-            std::size_t const numa_sensitive =
-                vm["hpx:numa-sensitive"].as<std::size_t>();
-            if (numa_sensitive > 2)
-            {
-                throw hpx::detail::command_line_error(
-                    "Invalid argument value for --hpx:numa-sensitive. Allowed "
-                    "values are 0, 1, or 2");
-            }
-            return numa_sensitive;
+            numa_sensitive = vm["hpx:numa-sensitive"].as<std::size_t>();
         }
 
-        // use either cfgmap value or default
-        return cfgmap.get_value<std::size_t>("hpx.numa_sensitive", default_);
+        if (numa_sensitive > 2)
+        {
+            throw hpx::detail::command_line_error(
+                "Invalid argument value for --hpx:numa-sensitive. Allowed "
+                "values are 0, 1, or 2");
+        }
+        return numa_sensitive;
     }
 
     ///////////////////////////////////////////////////////////////////////

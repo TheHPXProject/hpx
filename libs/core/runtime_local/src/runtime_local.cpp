@@ -1032,13 +1032,15 @@ namespace hpx {
 
     bool is_scheduler_numa_sensitive()
     {
-        if (get_runtime_ptr() != nullptr)
+        runtime const* rt = get_runtime_ptr();
+        if (rt == nullptr || rt->get_state() < hpx::state::initialized)
         {
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                 "hpx::is_scheduler_numa_sensitive",
                 "the runtime system has not been initialized yet");
         }
-        return static_cast<std::size_t>(-1) != get_worker_thread_num();
+        return hpx::util::get_entry_as<std::size_t>(
+                   rt->get_config(), "hpx.numa_sensitive", 0) != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////
