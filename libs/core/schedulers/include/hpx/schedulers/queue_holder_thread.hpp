@@ -956,7 +956,7 @@ namespace hpx::threads::policies {
             if (!xthread && (count > parameters_.max_terminated_threads_))
             {
                 // clean up all terminated threads
-                cleanup_terminated(thread_num, false);
+                cleanup_terminated(thread_num, true);
             }
             else if (!xthread && (count > parameters_.min_delete_count_))
             {
