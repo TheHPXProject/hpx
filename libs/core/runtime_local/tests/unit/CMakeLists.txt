@@ -35,6 +35,12 @@ add_hpx_unit_test(
   ARGS --hpx:numa-sensitive=0
 )
 add_hpx_unit_test(
+  "modules.runtime_local" numa_sensitive_implicit
+  EXECUTABLE numa_sensitive
+  PSEUDO_DEPS_NAME numa_sensitive
+  ARGS --hpx:numa-sensitive
+)
+add_hpx_unit_test(
   "modules.runtime_local" numa_sensitive_enabled
   EXECUTABLE numa_sensitive
   PSEUDO_DEPS_NAME numa_sensitive
