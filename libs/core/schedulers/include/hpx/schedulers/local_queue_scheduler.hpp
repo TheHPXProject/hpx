@@ -66,11 +66,13 @@ namespace hpx::threads::policies {
                 detail::affinity_data const& affinity_data,
                 thread_queue_init_parameters const& thread_queue_init =
                     thread_queue_init_parameters{},
-                char const* description = "local_queue_scheduler")
+                char const* description = "local_queue_scheduler",
+                std::size_t numa_sensitive = 0)
               : num_queues_(num_queues)
               , thread_queue_init_(thread_queue_init)
               , affinity_data_(affinity_data)
               , description_(description)
+              , numa_sensitive_(numa_sensitive)
             {
             }
 
@@ -80,6 +82,7 @@ namespace hpx::threads::policies {
               : num_queues_(num_queues)
               , affinity_data_(affinity_data)
               , description_(description)
+              , numa_sensitive_(0)
             {
             }
 
@@ -87,6 +90,7 @@ namespace hpx::threads::policies {
             thread_queue_init_parameters thread_queue_init_;
             detail::affinity_data const& affinity_data_;
             char const* description_;
+            std::size_t numa_sensitive_;
         };
         using init_parameter_type = init_parameter;
 
@@ -97,6 +101,7 @@ namespace hpx::threads::policies {
           , queues_(init.num_queues_)
           , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
+          , numa_sensitive_(init.numa_sensitive_)
           , numa_domain_masks_(
                 init.num_queues_, create_topology().get_machine_affinity_mask())
           , outside_numa_domain_masks_(
@@ -353,7 +358,7 @@ namespace hpx::threads::policies {
 
             bool const numa_stealing = has_scheduler_mode(
                 policies::scheduler_mode::enable_stealing_numa, num_thread);
-            if (!numa_stealing)
+            if (!numa_stealing || numa_sensitive_ != 0)
             {
                 // steal work items: first try to steal from other cores in
                 // the same NUMA node
@@ -398,7 +403,8 @@ namespace hpx::threads::policies {
                 // we know that the MIC has one NUMA domain only)
 #if !defined(HPX_NATIVE_MIC)
                 // if nothing found, ask everybody else
-                if (test(steals_outside_numa_domain_,
+                if (numa_stealing && numa_sensitive_ != 2 &&
+                    test(steals_outside_numa_domain_,
                         pu_number))    //-V600 //-V111
                 {
                     mask_cref_type numa_domain =
@@ -728,8 +734,9 @@ namespace hpx::threads::policies {
             }
 
             // limited or no stealing across domains
-            if (!has_scheduler_mode(
-                    policies::scheduler_mode::enable_stealing_numa, num_thread))
+            bool const numa_stealing = has_scheduler_mode(
+                policies::scheduler_mode::enable_stealing_numa, num_thread);
+            if (!numa_stealing || numa_sensitive_ != 0)
             {
                 // steal work items: first try to steal from other cores in the
                 // same NUMA node
@@ -772,7 +779,8 @@ namespace hpx::threads::policies {
                 // we know that the MIC has one NUMA domain only)
 #if !defined(HPX_NATIVE_MIC)
                 // if nothing found, ask everybody else
-                if (test(steals_outside_numa_domain_,
+                if (numa_stealing && numa_sensitive_ != 2 &&
+                    test(steals_outside_numa_domain_,
                         pu_number))    //-V600 //-V111
                 {
                     mask_cref_type numa_domain_mask =
@@ -896,7 +904,8 @@ namespace hpx::threads::policies {
             else
                 first_mask = core_mask;
 
-            if (has_scheduler_mode(
+            if (numa_sensitive_ != 2 &&
+                has_scheduler_mode(
                     policies::scheduler_mode::enable_stealing_numa,
                     num_thread) &&
                 any(first_mask & core_mask))
@@ -931,6 +940,7 @@ namespace hpx::threads::policies {
         std::atomic<std::size_t> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
+        std::size_t const numa_sensitive_;
 
 #if !defined(HPX_NATIVE_MIC)    // we know that the MIC has one NUMA domain only
         mask_type steals_in_numa_domain_ = mask_type();
