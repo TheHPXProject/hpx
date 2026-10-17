@@ -1033,7 +1033,7 @@ namespace hpx {
     bool is_scheduler_numa_sensitive()
     {
         runtime const* rt = get_runtime_ptr();
-        if (rt == nullptr)
+        if (rt == nullptr || rt->get_state() < hpx::state::initialized)
         {
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                 "hpx::is_scheduler_numa_sensitive",
