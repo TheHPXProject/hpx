@@ -10,7 +10,7 @@ set(tests lockfree_fifo_double_backend min_tasks_to_steal_staged schedule_last
 
 if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
   list(APPEND tests workrequesting_random_victim workrequesting_steal
-       workrequesting_suspend_resume
+       workrequesting_scheduler_mode workrequesting_suspend_resume
   )
 endif()
 
