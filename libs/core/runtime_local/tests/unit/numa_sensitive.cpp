@@ -6,6 +6,7 @@
 
 #include <hpx/init.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/format.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/util.hpp>
 #include <hpx/runtime.hpp>
