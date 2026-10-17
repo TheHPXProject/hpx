@@ -1632,9 +1632,10 @@ The predefined command line options for any application using
 .. option:: --hpx:queuing arg
 
    The queue scheduling policy to use. Options are ``local``,
-   ``local-priority-fifo``, ``local-priority-lifo``, ``static``,
-   ``static-priority``, ``abp-priority-fifo``,
-   ``local-workrequesting-fifo``, ``local-workrequesting-lifo``
+   ``local-priority-fifo``, ``local-priority-fifo-double``,
+   ``local-priority-lifo``, ``static``, ``static-priority``,
+   ``abp-priority-fifo``,
+   ``local-workrequesting-fifo``, ``local-workrequesting-lifo``,
    ``local-workrequesting-mc``, and ``abp-priority-lifo``
    (default: ``local-priority-fifo``).
 
@@ -1642,8 +1643,14 @@ The predefined command line options for any application using
 
    The number of operating system threads maintaining a high priority queue
    (default: number of OS threads), valid for :option:`--hpx:queuing`\
-   ``=abp-priority``, :option:`--hpx:queuing`\ ``static-priority`` and
-   :option:`--hpx:queuing`\ ``local-priority`` only.
+   ``=local-priority-fifo``, :option:`--hpx:queuing`\
+   ``=local-priority-fifo-double``, :option:`--hpx:queuing`\
+   ``=local-priority-lifo``, :option:`--hpx:queuing`\ ``=static-priority``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-fifo``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-lifo``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-mc``,
+   :option:`--hpx:queuing`\ ``=abp-priority-fifo``, and
+   :option:`--hpx:queuing`\ ``=abp-priority-lifo`` only.
 
 .. option:: --hpx:numa-sensitive
 

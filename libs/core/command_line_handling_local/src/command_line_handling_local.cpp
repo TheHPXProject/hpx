@@ -30,6 +30,7 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -121,12 +122,46 @@ namespace hpx::local::detail {
         {
             std::string queuing = vm["hpx:queuing"].as<std::string>();
             if (!queuing.empty() && queuing[0] == '!')
-                queuing.erase(0);
+                queuing.erase(0, 1);
             return queuing;
         }
 
         // use either cfgmap value or default
         return cfgmap.get_value<std::string>("hpx.scheduler", default_);
+    }
+
+    bool scheduler_supports_high_priority_queues(std::string_view scheduler)
+    {
+        auto const matches = [&scheduler](char const* name) {
+            return std::string_view(name).starts_with(scheduler);
+        };
+
+        // These checks mirror the prefix matching order used by the resource
+        // partitioner. In particular, "local" and "static" select the
+        // non-priority schedulers even though they are also prefixes of
+        // priority scheduler names.
+        if (matches("local"))
+        {
+            return false;
+        }
+
+        if (matches("local-priority-fifo") ||
+            matches("local-priority-fifo-double") ||
+            matches("local-priority-lifo") ||
+            matches("local-workrequesting-fifo") ||
+            matches("local-workrequesting-lifo") ||
+            matches("local-workrequesting-mc"))
+        {
+            return true;
+        }
+
+        if (matches("static"))
+        {
+            return false;
+        }
+
+        return matches("static-priority") || matches("abp-priority-fifo") ||
+            matches("abp-priority-lifo");
     }
 
     std::string handle_affinity(util::manage_config const& cfgmap,
@@ -479,16 +514,19 @@ namespace hpx::local::detail {
                     "larger than number of threads (--hpx:threads)");
             }
 
-            if (!(queuing_ == "local-priority" || queuing_ == "abp-priority" ||
-                    queuing_.find("local-workrequesting") != 0))
+            if (!scheduler_supports_high_priority_queues(queuing_))
             {
                 throw hpx::detail::command_line_error(
                     "Invalid command line option --hpx:high-priority-threads, "
-                    "valid for --hpx:queuing=local-priority, "
+                    "valid for --hpx:queuing=local-priority-fifo, "
+                    "--hpx:queuing=local-priority-fifo-double, "
+                    "--hpx:queuing=local-priority-lifo, "
+                    "--hpx:queuing=static-priority, "
                     "--hpx:queuing=local-workrequesting-fifo, "
                     "--hpx:queuing=local-workrequesting-lifo, "
                     "--hpx:queuing=local-workrequesting-mc, "
-                    "and --hpx:queuing=abp-priority only");
+                    "--hpx:queuing=abp-priority-fifo, and "
+                    "--hpx:queuing=abp-priority-lifo only");
             }
 
             ini_config.emplace_back("hpx.thread_queue.high_priority_queues!=" +

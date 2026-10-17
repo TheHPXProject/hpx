@@ -578,18 +578,22 @@ namespace hpx::local::detail {
                 "'local', 'local-priority-fifo', 'local-priority-fifo-double', "
                 "'local-priority-lifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
-                "'static-priority', 'local-workrequesting-fifo',"
+                "'static-priority', 'local-workrequesting-fifo', "
                 "'local-workrequesting-lifo', and 'local-workrequesting-mc' "
-                "(default: 'local-priority'; all option values can be "
+                "(default: 'local-priority-fifo'; all option values can be "
                 "abbreviated)")
             ("hpx:high-priority-threads", value<std::size_t>(),
                 "the number of operating system threads maintaining a high "
                 "priority queue (default: number of OS threads), valid for "
-                "--hpx:queuing=local-priority,--hpx:queuing=static-priority, "
+                "--hpx:queuing=local-priority-fifo, "
+                "--hpx:queuing=local-priority-fifo-double, "
+                "--hpx:queuing=local-priority-lifo, "
+                "--hpx:queuing=static-priority, "
                 "--hpx:queuing=local-workrequesting-fifo, "
                 "--hpx:queuing=local-workrequesting-lifo, "
                 "--hpx:queuing=local-workrequesting-mc, "
-                " and --hpx:queuing=abp-priority only)")
+                "--hpx:queuing=abp-priority-fifo, and "
+                "--hpx:queuing=abp-priority-lifo only)")
             ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(0),
                 "makes the local-priority scheduler NUMA sensitive ("
                 "allowed values: 0 - no NUMA sensitivity, 1 - allow only for "
