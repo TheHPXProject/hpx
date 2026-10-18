@@ -1104,6 +1104,16 @@ namespace hpx::threads::policies {
 
             auto& d = data_[num_thread].data_;
 
+            // A steal response may have arrived after local work made this
+            // worker busy again. Place the received tasks in their proper
+            // queue before selecting the next task so that stolen
+            // high-priority work retains its priority.
+            if (!d.tasks_->is_empty())
+            {
+                std::size_t added = 0;
+                try_receiving_tasks(d, added, nullptr);
+            }
+
             if ((num_thread < num_high_priority_queues_ &&
                     get_thread(d.high_priority_queue_, thrd)) ||
                 get_thread(d.bound_queue_, thrd) || get_thread(d.queue_, thrd))
