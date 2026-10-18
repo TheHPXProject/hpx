@@ -23,18 +23,33 @@ void test_numa_worker_selection()
 {
     std::vector<std::size_t> const domains{0, 0, 1, 1, 2, 2};
 
-    HPX_TEST_EQ(
-        hpx::threads::policies::detail::select_numa_worker(domains, 1, 0),
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    domains, domains.size(), 1, 0),
         std::size_t(2));
-    HPX_TEST_EQ(
-        hpx::threads::policies::detail::select_numa_worker(domains, 1, 3),
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    domains, domains.size(), 1, 3),
         std::size_t(3));
-    HPX_TEST_EQ(
-        hpx::threads::policies::detail::select_numa_worker(domains, 0, 4),
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    domains, domains.size(), 0, 4),
         std::size_t(0));
-    HPX_TEST_EQ(
-        hpx::threads::policies::detail::select_numa_worker(domains, 3, 0),
-        static_cast<std::size_t>(-1));
+
+    // If the requested domain has no eligible worker, keep the one
+    // round-robin position that was already selected for the lookup.
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    domains, domains.size(), 3, 4),
+        std::size_t(4));
+
+    // Only the first two workers have high-priority queues. Worker 3 is on
+    // the requested domain, but is not eligible for high-priority work.
+    std::vector<std::size_t> const restricted_domains{0, 1, 1, 0};
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    restricted_domains, 2, 0, 1),
+        std::size_t(0));
+
+    std::vector<std::size_t> const ineligible_domain{0, 0, 1, 1};
+    HPX_TEST_EQ(hpx::threads::policies::detail::select_numa_worker(
+                    ineligible_domain, 2, 1, 1),
+        std::size_t(1));
 }
 
 int hpx_main()
