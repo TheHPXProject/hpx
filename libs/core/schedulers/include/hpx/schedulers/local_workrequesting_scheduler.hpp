@@ -150,14 +150,16 @@ namespace hpx::threads::policies {
         struct workrequesting_task_data
         {
             explicit workrequesting_task_data(
-                std::uint16_t num_thread = static_cast<std::uint16_t>(
-                    -1)) noexcept
+                std::uint16_t num_thread = static_cast<std::uint16_t>(-1),
+                bool high_priority = false) noexcept
               : num_thread_(num_thread)
+              , high_priority_(high_priority)
             {
             }
 
             // core number this task data originated from
             std::uint16_t num_thread_;
+            bool high_priority_;
             hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
         };
 
@@ -179,13 +181,15 @@ namespace hpx::threads::policies {
 
             workrequesting_steal_request(std::size_t const num_thread,
                 workrequesting_task_channel* channel, mask_cref_type victims,
-                bool idle, bool const stealhalf)
+                bool idle, bool const stealhalf,
+                bool const steal_high_priority = false)
               : channel_(channel)
               , victims_(victims)
               , num_thread_(static_cast<std::uint16_t>(num_thread))
               , attempt_(static_cast<std::uint16_t>(count(victims) - 1))
               , state_(idle ? state::idle : state::working)
               , stealhalf_(stealhalf)
+              , steal_high_priority_(steal_high_priority)
             {
             }
 
@@ -196,6 +200,7 @@ namespace hpx::threads::policies {
             state state_ = state::failed;
             // true ? attempt steal-half : attempt steal-one
             bool stealhalf_ = true;
+            bool steal_high_priority_ = false;
         };
 
         using workrequesting_steal_request_channel =
@@ -883,12 +888,23 @@ namespace hpx::threads::policies {
                 return false;
             }
 
-            // Send tasks from our queue to the requesting core, depending on
-            // what's requested, either one task or half of the available tasks.
+            // A worker with a high-priority queue asks for high-priority work
+            // first. Fall back to normal-priority work if the victim has none.
+            thread_queue_type* queue = d.queue_;
+            bool high_priority = false;
+            if (req.steal_high_priority_ &&
+                d.num_thread_ < num_high_priority_queues_ &&
+                d.high_priority_queue_->get_pending_queue_length(
+                    std::memory_order_relaxed) != 0)
+            {
+                queue = d.high_priority_queue_;
+                high_priority = true;
+            }
+
             // As with the other schedulers, nothing is stolen while there are
             // fewer pending tasks than min_tasks_to_steal_pending.
             std::int64_t const pending_count =
-                d.queue_->get_pending_queue_length(std::memory_order_relaxed);
+                queue->get_pending_queue_length(std::memory_order_relaxed);
 
             std::size_t max_num_to_steal = 0;
             if (pending_count >= thread_queue_init_.min_tasks_to_steal_pending_)
@@ -897,6 +913,10 @@ namespace hpx::threads::policies {
                 max_num_to_steal = req.stealhalf_ ?
                     static_cast<std::size_t>(pending_count / 2) :
                     1;
+                if (high_priority && max_num_to_steal == 0)
+                {
+                    max_num_to_steal = 1;
+                }
             }
 
             // The requesting core may be stopping or suspended, in which case
@@ -919,21 +939,21 @@ namespace hpx::threads::policies {
 
             if (max_num_to_steal != 0)
             {
-                task_data thrds(d.num_thread_);
+                task_data thrds(d.num_thread_, high_priority);
                 thrds.tasks_.reserve(max_num_to_steal);
 
 #ifdef HPX_HAVE_THREAD_STEALING_COUNTS
                 thread_id_ref_type thrd;
                 while (max_num_to_steal-- != 0 &&
-                    d.queue_->get_next_thread(thrd, false, true))
+                    queue->get_next_thread(thrd, false, true))
                 {
-                    d.queue_->increment_num_stolen_from_pending();
+                    queue->increment_num_stolen_from_pending();
                     thrds.tasks_.push_back(HPX_MOVE(thrd));
                     thrd = thread_id_ref_type{};
                 }
 #else
                 // append the stolen threads to the reserved vector
-                d.queue_->get_next_threads(std::back_inserter(thrds.tasks_),
+                queue->get_next_threads(std::back_inserter(thrds.tasks_),
                     max_num_to_steal, false, true);
 #endif
 
@@ -1084,14 +1104,9 @@ namespace hpx::threads::policies {
 
             auto& d = data_[num_thread].data_;
 
-            if (num_thread < num_high_priority_queues_ &&
-                get_thread(d.high_priority_queue_, thrd))
-            {
-                ++d.num_recent_tasks_executed_;
-                return true;
-            }
-
-            if (get_thread(d.bound_queue_, thrd) || get_thread(d.queue_, thrd))
+            if ((num_thread < num_high_priority_queues_ &&
+                    get_thread(d.high_priority_queue_, thrd)) ||
+                get_thread(d.bound_queue_, thrd) || get_thread(d.queue_, thrd))
             {
                 // We found a task to run, however before running it we handle
                 // steal requests (assuming that there is more work left that
@@ -1740,8 +1755,8 @@ namespace hpx::threads::policies {
                     }
                 }
 
-                steal_request req(
-                    d.num_thread_, d.tasks_, d.victims_, idle, d.stealhalf_);
+                steal_request req(d.num_thread_, d.tasks_, d.victims_, idle,
+                    d.stealhalf_, d.num_thread_ < num_high_priority_queues_);
                 std::size_t victim = next_victim(d, req);
 
                 ++d.requested_;
@@ -1845,17 +1860,21 @@ namespace hpx::threads::policies {
                 // if at least one thrd was received
                 if (!thrds.tasks_.empty())
                 {
+                    thread_queue_type* queue = thrds.high_priority_ ?
+                        d.high_priority_queue_ :
+                        d.queue_;
+                    HPX_ASSERT(queue != nullptr);
+
                     // Schedule all but the first received task in reverse order
                     // to maintain the sequence of tasks as pulled from the
                     // victims queue.
                     for (std::size_t i = thrds.tasks_.size() - 1; i != 0; --i)
                     {
                         HPX_ASSERT(thrds.tasks_[i]);
-                        d.queue_->schedule_thread(
-                            HPX_MOVE(thrds.tasks_[i]), true);
+                        queue->schedule_thread(HPX_MOVE(thrds.tasks_[i]), true);
 
 #ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                        d.queue_->increment_num_stolen_to_pending();
+                        queue->increment_num_stolen_to_pending();
 #endif
                         ++added;
                     }
@@ -1877,11 +1896,11 @@ namespace hpx::threads::policies {
                     }
                     else
                     {
-                        d.queue_->schedule_thread(
+                        queue->schedule_thread(
                             HPX_MOVE(thrds.tasks_.front()), true);
 
 #ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                        d.queue_->increment_num_stolen_to_pending();
+                        queue->increment_num_stolen_to_pending();
 #endif
                         ++added;
                     }
