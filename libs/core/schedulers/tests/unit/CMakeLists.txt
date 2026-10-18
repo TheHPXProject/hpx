@@ -27,8 +27,10 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
     workrequesting_run_as_child
     workrequesting_steal
     workrequesting_scheduler_mode
+    workrequesting_staged_stealing
     workrequesting_suspend_resume
   )
+  set(workrequesting_staged_stealing_PARAMETERS THREADS_PER_LOCALITY 4)
 endif()
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
