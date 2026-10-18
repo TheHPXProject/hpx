@@ -233,9 +233,11 @@ namespace hpx::threads::policies {
         {
             explicit workrequesting_task_data(
                 std::uint16_t num_thread = static_cast<std::uint16_t>(-1),
-                bool const from_high_priority_queue = false) noexcept
+                bool const from_high_priority_queue = false,
+                std::size_t staged_tasks = 0) noexcept
               : num_thread_(num_thread)
               , from_high_priority_queue_(from_high_priority_queue)
+              , staged_tasks_(staged_tasks)
             {
             }
 
@@ -243,6 +245,8 @@ namespace hpx::threads::policies {
             std::uint16_t num_thread_;
             // preserve queue precedence when stored priority differs
             bool from_high_priority_queue_;
+            // number of staged tasks converted directly into the thief's queue
+            std::size_t staged_tasks_;
             hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
         };
 
@@ -284,7 +288,9 @@ namespace hpx::threads::policies {
             mask_type victims_ = mask_type();
             std::uint16_t num_thread_ = static_cast<std::uint16_t>(-1);
             std::uint16_t attempt_ = 0;
-            // A negative value disables staged stealing for this request.
+            // A negative value disables staged stealing for this request. The
+            // value is fixed when the thief creates the request and remains
+            // unchanged while the request visits possible victims.
             std::int64_t min_tasks_to_steal_staged_ = -1;
             state state_ = state::failed;
             // true ? attempt steal-half : attempt steal-one
@@ -992,7 +998,8 @@ namespace hpx::threads::policies {
 
         // Handle a steal request by sending tasks in return or passing it on to
         // another worker. Returns true if the request was satisfied.
-        bool handle_steal_request(scheduler_data& d, steal_request& req)
+        bool handle_steal_request(
+            scheduler_data& d, steal_request& req) noexcept
         {
 #if defined(HPX_HAVE_WORKREQUESTING_STEAL_STATISTICS)
             ++d.steal_requests_received_;
@@ -1114,17 +1121,8 @@ namespace hpx::threads::policies {
                 std::size_t added = 0;
                 thread_queue_type* thief_queue =
                     data_[req.num_thread_].data_.queue_;
-                try
-                {
-                    thief_queue->wait_or_add_new(true, added, d.queue_, true,
-                        req.min_tasks_to_steal_staged_);
-                }
-                catch (...)
-                {
-                    thief_state.store(
-                        channel_state::accepting, std::memory_order_release);
-                    throw;
-                }
+                thief_queue->wait_or_add_new(true, added, d.queue_, true,
+                    req.min_tasks_to_steal_staged_);
                 if (added != 0)
                 {
 #ifdef HPX_HAVE_THREAD_STEALING_COUNTS
@@ -1133,7 +1131,7 @@ namespace hpx::threads::policies {
 #endif
                     // Acknowledge the request. The converted tasks are already
                     // queued at the requesting worker.
-                    req.channel_->set(task_data(d.num_thread_));
+                    req.channel_->set(task_data(d.num_thread_, false, added));
                     thief_state.store(
                         channel_state::accepting, std::memory_order_release);
                     do_some_work(req.num_thread_);
@@ -2043,12 +2041,6 @@ namespace hpx::threads::policies {
                         ++added;
                     }
 
-#if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
-                    // store the originating core for the next stealing
-                    // operation
-                    d.last_victim_ = thrds.num_thread_;
-                    HPX_ASSERT(d.last_victim_ != d.num_thread_);
-#endif
                     // the last of the received tasks will be either directly
                     // executed or normally scheduled
                     if (next_thrd != nullptr)
@@ -2068,7 +2060,17 @@ namespace hpx::threads::policies {
 #endif
                         ++added;
                     }
+                }
 
+                added += thrds.staged_tasks_;
+                if (!thrds.tasks_.empty() || thrds.staged_tasks_ != 0)
+                {
+#if defined(HPX_HAVE_WORKREQUESTING_LAST_VICTIM)
+                    // store the originating core for the next stealing
+                    // operation
+                    d.last_victim_ = thrds.num_thread_;
+                    HPX_ASSERT(d.last_victim_ != d.num_thread_);
+#endif
                     ++d.num_recent_steals_;
                     return true;
                 }
