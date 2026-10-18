@@ -104,6 +104,23 @@ namespace hpx::threads::policies {
     namespace detail {
 
         ////////////////////////////////////////////////////////////////////////
+        inline std::size_t select_numa_worker(
+            std::vector<std::size_t> const& thread_numa_domain,
+            std::size_t requested_domain, std::size_t start) noexcept
+        {
+            std::size_t const num_queues = thread_numa_domain.size();
+            for (std::size_t i = 0; i != num_queues; ++i)
+            {
+                std::size_t const idx = (start + i) % num_queues;
+                if (thread_numa_domain[idx] == requested_domain)
+                {
+                    return idx;
+                }
+            }
+            return static_cast<std::size_t>(-1);
+        }
+
+        ////////////////////////////////////////////////////////////////////////
         inline unsigned int random_seed() noexcept
         {
             std::random_device rd;
@@ -767,10 +784,7 @@ namespace hpx::threads::policies {
         void create_thread(thread_init_data& data, thread_id_ref_type* id,
             error_code& ec) override
         {
-            std::size_t num_thread =
-                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
-                data.schedulehint.hint :
-                static_cast<std::size_t>(-1);
+            std::size_t num_thread = select_worker(data.schedulehint);
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
@@ -1249,12 +1263,9 @@ namespace hpx::threads::policies {
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
-            auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
-            {
-                num_thread = schedulehint.hint;
-            }
-            else
+            std::size_t num_thread = select_worker(schedulehint);
+            if (schedulehint.mode() != thread_schedule_hint_mode::thread &&
+                schedulehint.mode() != thread_schedule_hint_mode::numa)
             {
                 allow_fallback = false;
             }
@@ -1319,12 +1330,9 @@ namespace hpx::threads::policies {
             bool allow_fallback = false,
             thread_priority priority = thread_priority::default_) override
         {
-            auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
-            {
-                num_thread = schedulehint.hint;
-            }
-            else
+            std::size_t num_thread = select_worker(schedulehint);
+            if (schedulehint.mode() != thread_schedule_hint_mode::thread &&
+                schedulehint.mode() != thread_schedule_hint_mode::numa)
             {
                 allow_fallback = false;
             }
@@ -2268,6 +2276,35 @@ namespace hpx::threads::policies {
         }
 
     protected:
+        std::size_t select_worker(
+            threads::thread_schedule_hint const& schedulehint)
+        {
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
+            {
+                HPX_ASSERT(schedulehint.hint >= 0);
+                return static_cast<std::size_t>(schedulehint.hint);
+            }
+
+            if (schedulehint.mode() == thread_schedule_hint_mode::numa)
+            {
+                HPX_ASSERT(schedulehint.hint >= 0);
+                auto const& topo = create_topology();
+                std::size_t num_nodes = topo.get_number_of_numa_nodes();
+                if (num_nodes == 0)
+                {
+                    num_nodes = 1;
+                }
+
+                std::size_t const requested_domain =
+                    static_cast<std::size_t>(schedulehint.hint) % num_nodes;
+                std::size_t const start = curr_queue_++ % num_queues_;
+                return detail::select_numa_worker(
+                    thread_numa_domain_, requested_domain, start);
+            }
+
+            return static_cast<std::size_t>(-1);
+        }
+
         std::vector<util::aligned_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
