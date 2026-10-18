@@ -2094,7 +2094,7 @@ namespace hpx::threads::policies {
             // threads as these threads are never created 'staged'.
 
             bool handled_request = false;
-            if (running && !d.requests_->is_empty())
+            if (running && allow_stealing && !d.requests_->is_empty())
             {
                 steal_request req;
                 while (try_receiving_steal_request(d, req))
