@@ -145,7 +145,20 @@ void test_scheduler(char* argv0, hpx::resource::scheduling_policy scheduler)
 int main(int, char* argv[])
 {
     using hpx::threads::policies::detail::
+        get_workrequesting_pending_steal_count;
+    using hpx::threads::policies::detail::
         get_workrequesting_staged_steal_minimum;
+
+    HPX_TEST_EQ(
+        get_workrequesting_pending_steal_count(0, 0, false), std::size_t(0));
+    HPX_TEST_EQ(
+        get_workrequesting_pending_steal_count(1, 0, false), std::size_t(1));
+    HPX_TEST_EQ(
+        get_workrequesting_pending_steal_count(1, 0, true), std::size_t(0));
+    HPX_TEST_EQ(
+        get_workrequesting_pending_steal_count(4, 2, true), std::size_t(2));
+    HPX_TEST_EQ(
+        get_workrequesting_pending_steal_count(1, 2, false), std::size_t(0));
 
     HPX_TEST_EQ(get_workrequesting_staged_steal_minimum(100, 1000, 100, 10),
         std::int64_t(-1));
