@@ -23,6 +23,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
   list(
     APPEND
     tests
+    workrequesting_numa
     workrequesting_random_victim
     workrequesting_run_as_child
     workrequesting_steal

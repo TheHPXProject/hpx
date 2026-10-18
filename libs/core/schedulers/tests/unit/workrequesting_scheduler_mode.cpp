@@ -1,4 +1,4 @@
-//  Copyright (c) 2026 Pratyksh Gupta
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -27,13 +27,25 @@ int main()
         hpx::threads::set(workers, worker);
     }
 
-    // The thread manager replaces the constructor's mode with the pool mode.
-    scheduler.set_scheduler_mode(policies::scheduler_mode::default_, workers);
+    // The work-requesting scheduler retains required modes without restoring
+    // NUMA stealing after the thread manager has disabled it.
+    scheduler.set_scheduler_mode(
+        policies::scheduler_mode::nothing_special, workers);
 
     for (std::size_t worker = 0; worker != num_workers; ++worker)
     {
         HPX_TEST(scheduler.has_scheduler_mode(
             policies::scheduler_mode::fast_idle_mode, worker));
+        HPX_TEST(!scheduler.has_scheduler_mode(
+            policies::scheduler_mode::enable_stealing_numa, worker));
+    }
+
+    scheduler.set_scheduler_mode(policies::scheduler_mode::default_, workers);
+
+    for (std::size_t worker = 0; worker != num_workers; ++worker)
+    {
+        HPX_TEST(scheduler.has_scheduler_mode(
+            policies::scheduler_mode::enable_stealing_numa, worker));
     }
 
     return hpx::util::report_errors();
