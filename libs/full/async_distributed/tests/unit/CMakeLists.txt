@@ -40,6 +40,12 @@ if(HPX_WITH_CXX26_REFLECTION)
   set(tests ${tests} async_remote_reflect)
   set(async_remote_reflect_PARAMETERS LOCALITIES 2)
 endif()
+
+# lambda actions are not registered explicitly
+if(HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION)
+  set(tests ${tests} async_remote_lambda)
+  set(async_remote_lambda_PARAMETERS LOCALITIES 2)
+endif()
 set(async_remote_client_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_client_PARAMETERS LOCALITIES 2)
