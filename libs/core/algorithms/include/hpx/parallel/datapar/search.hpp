@@ -27,6 +27,55 @@
 namespace hpx::parallel::detail {
 
     ///////////////////////////////////////////////////////////////////////////
+    // Only the haystack is loaded as SIMD packs; the needle is read element by
+    // element. The pack type is named only once the haystack is known to be
+    // datapar compatible.
+    HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2, typename Pred,
+        typename Proj1, typename Proj2>
+    constexpr bool search_datapar_compatible() noexcept
+    {
+        if constexpr (!hpx::parallel::util::detail::
+                          iterator_datapar_compatible_v<Iter1>)
+        {
+            return false;
+        }
+        else
+        {
+            using value_type = typename std::iterator_traits<Iter1>::value_type;
+            using pack_type =
+                hpx::parallel::traits::vector_pack_type_t<value_type>;
+
+            return requires(pack_type& pack, Pred& pred, Proj1& pack_proj,
+                Proj2& scalar_proj, Iter2 needle) {
+                HPX_INVOKE(pred, HPX_INVOKE(pack_proj, pack),
+                    HPX_INVOKE(scalar_proj, *needle));
+            };
+        }
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename Iter, typename V, typename Pred,
+        typename Proj>
+    constexpr bool search_n_datapar_compatible() noexcept
+    {
+        if constexpr (!hpx::parallel::util::detail::
+                          iterator_datapar_compatible_v<Iter>)
+        {
+            return false;
+        }
+        else
+        {
+            using value_type = typename std::iterator_traits<Iter>::value_type;
+            using pack_type =
+                hpx::parallel::traits::vector_pack_type_t<value_type>;
+
+            return requires(pack_type& pack, Pred& predicate, Proj& pack_proj,
+                V const& value) {
+                HPX_INVOKE(predicate, HPX_INVOKE(pack_proj, pack), value);
+            };
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter1,
         typename Iter2, typename Token, typename Pred, typename Proj1,
         typename Proj2>
@@ -36,8 +85,8 @@ namespace hpx::parallel::detail {
         std::size_t base_idx, std::size_t part_size, std::size_t diff,
         std::size_t count, Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
     {
-        if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          hpx::util::zip_iterator<Iter1, Iter2>>::value)
+        if constexpr (search_datapar_compatible<Iter1, Iter2, Pred, Proj1,
+                          Proj2>())
         {
             using value_type = typename std::iterator_traits<Iter1>::value_type;
             using pack_type =
@@ -47,9 +96,10 @@ namespace hpx::parallel::detail {
 
             // First-element broadcast: SIMD-scan haystack for matches of
             // needle[0]; only candidates pay the scalar full-needle verify.
-            auto const needle0 = HPX_INVOKE(proj2, *s_first);
+            // needle[0] is re-projected at each use rather than copied, so
+            // projections returning references or non-copyable types work.
 
-            auto verify = [&](std::size_t off) -> bool {
+            auto verify_match = [&](std::size_t off) -> bool {
                 Iter1 hay = it;
                 std::advance(hay, off);
                 Iter2 nee = s_first;
@@ -74,13 +124,15 @@ namespace hpx::parallel::detail {
                 pack_type v(hpx::parallel::traits::vector_pack_load<pack_type,
                     value_type>::unaligned(curr));
 
-                auto mask = HPX_INVOKE(op, HPX_INVOKE(proj1, v), needle0);
+                auto mask = HPX_INVOKE(
+                    op, HPX_INVOKE(proj1, v), HPX_INVOKE(proj2, *s_first));
 
-                if (!hpx::parallel::traits::none_of(mask))
+                if (hpx::parallel::traits::any_of(mask))
                 {
-                    for (std::size_t j = 0; j < pack_size; ++j)
+                    Iter1 candidate = curr;
+                    for (std::size_t j = 0; j < pack_size; ++j, ++candidate)
                     {
-                        if (mask[j] && verify(i + j))
+                        if (verify_match(i + j))
                         {
                             tok.cancel(base_idx + i + j);
                             return;
@@ -97,8 +149,7 @@ namespace hpx::parallel::detail {
                 if (tok.was_cancelled(base_idx + i))
                     return;
 
-                if (HPX_INVOKE(op, HPX_INVOKE(proj1, *curr), needle0) &&
-                    verify(i))
+                if (verify_match(i))
                 {
                     tok.cancel(base_idx + i);
                     return;
@@ -125,8 +176,7 @@ namespace hpx::parallel::detail {
         std::size_t part_size, std::ptrdiff_t max_start, Size count,
         V const& value_proj, Token& tok, Pred&& pred, Proj&& proj)
     {
-        if constexpr (hpx::parallel::util::detail::iterator_datapar_compatible<
-                          Iter>::value)
+        if constexpr (search_n_datapar_compatible<Iter, V, Pred, Proj>())
         {
             using value_type = typename std::iterator_traits<Iter>::value_type;
             using pack_type =
@@ -136,7 +186,7 @@ namespace hpx::parallel::detail {
 
             // Sliding-window scan: load pack_size elements at a time and track
             // the carry (consecutive matches before the current position).
-            // none_of fast-path skips packs with no match in O(1).
+            // The no-match fast path skips packs in O(1).
             std::ptrdiff_t carry = 0;
             Iter curr = it;
 
@@ -165,7 +215,7 @@ namespace hpx::parallel::detail {
 
                 auto mask = HPX_INVOKE(pred, HPX_INVOKE(proj, v), value_proj);
 
-                if (hpx::parallel::traits::none_of(mask))
+                if (!hpx::parallel::traits::any_of(mask))
                 {
                     // Fast path: no element in this pack matches; wipe carry.
                     carry = 0;
@@ -194,7 +244,7 @@ namespace hpx::parallel::detail {
                 // Mixed: process lane by lane to maintain exact carry.
                 for (std::size_t j = 0; j < pack_size; ++j, ++curr)
                 {
-                    if (mask[j])
+                    if (HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))
                     {
                         if (++carry >= static_cast<std::ptrdiff_t>(count))
                         {

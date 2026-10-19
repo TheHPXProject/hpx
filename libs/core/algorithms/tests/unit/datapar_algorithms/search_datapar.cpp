@@ -10,11 +10,13 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <functional>
 #include <iostream>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "../algorithms/test_utils.hpp"
@@ -283,12 +285,68 @@ void test_search_boundaries(ExPolicy policy)
     }
 }
 
+// Contiguous arithmetic ranges must actually take the SIMD path.
+void test_search_uses_simd_path()
+{
+    std::atomic<int> pack_calls(0);
+    auto pred = [&pack_calls](auto const& a, auto const& b) {
+        if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            ++pack_calls;
+        return a == b;
+    };
+
+    std::vector<int> haystack(1000, 9);
+    std::vector<int> const needle{1, 2};
+    haystack[700] = needle[0];
+    haystack[701] = needle[1];
+    check_search_result(hpx::execution::par_simd, haystack, needle, pred);
+
+    HPX_TEST(pack_calls > 0);
+}
+
+struct non_copyable
+{
+    explicit non_copyable(int v)
+      : value(v)
+    {
+    }
+
+    non_copyable(non_copyable const&) = delete;
+    non_copyable& operator=(non_copyable const&) = delete;
+
+    int value;
+};
+
+// The projected needle element is used in place and never copied.
+void test_search_non_copyable_projection()
+{
+    static non_copyable const table[] = {
+        non_copyable(0), non_copyable(1), non_copyable(2), non_copyable(3)};
+
+    auto pred = [](auto const& a, non_copyable const& b) {
+        return a == b.value;
+    };
+    auto proj2 = [](int i) -> non_copyable const& { return table[i]; };
+
+    std::vector<int> haystack(1000, 0);
+    std::vector<int> const needle{1, 2, 3};
+    std::copy(needle.begin(), needle.end(), haystack.begin() + 600);
+
+    auto const result = hpx::ranges::search(hpx::execution::par_simd,
+        haystack.begin(), haystack.end(), needle.begin(), needle.end(), pred,
+        hpx::identity{}, proj2);
+
+    HPX_TEST(result == haystack.begin() + 600);
+}
+
 void search_boundary_tests()
 {
     using namespace hpx::execution;
 
     test_search_boundaries(simd);
     test_search_boundaries(par_simd);
+    test_search_uses_simd_path();
+    test_search_non_copyable_projection();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
