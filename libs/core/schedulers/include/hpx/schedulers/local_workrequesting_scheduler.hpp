@@ -938,22 +938,52 @@ namespace hpx::threads::policies {
                 thrds.tasks_.reserve(
                     (std::max) (max_high_priority, max_normal));
 
-                auto const take_tasks = [&thrds](thread_queue_type* queue,
+                auto const take_tasks = [&req, &thrds](thread_queue_type* queue,
                                             std::size_t count) {
-
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                    thread_id_ref_type thrd;
-                    while (count-- != 0 &&
-                        queue->get_next_thread(thrd, false, true))
-                    {
-                        queue->increment_num_stolen_from_pending();
-                        thrds.tasks_.push_back(HPX_MOVE(thrd));
-                        thrd = thread_id_ref_type{};
-                    }
-#else
-                    // append the stolen threads to the reserved vector
+                    std::size_t const old_size = thrds.tasks_.size();
                     queue->get_next_threads(
                         std::back_inserter(thrds.tasks_), count, false, true);
+
+                    if (!req.steal_high_priority_)
+                    {
+                        std::size_t accepted = old_size;
+                        for (std::size_t i = old_size; i != thrds.tasks_.size();
+                            ++i)
+                        {
+                            thread_id_ref_type& thrd = thrds.tasks_[i];
+                            thread_priority const priority =
+                                get_thread_id_data(thrd)->get_priority();
+                            bool const is_high_priority =
+                                priority == thread_priority::high_recursive ||
+                                priority == thread_priority::high ||
+                                priority == thread_priority::boost;
+                            if (is_high_priority)
+                            {
+                                // This thief has no high-priority queue.
+                                // Keep the task on the victim without
+                                // changing its stored priority.
+                                queue->schedule_thread(HPX_MOVE(thrd), true);
+                            }
+                            else
+                            {
+                                if (accepted != i)
+                                {
+                                    thrds.tasks_[accepted] = HPX_MOVE(thrd);
+                                }
+                                ++accepted;
+                            }
+                        }
+                        thrds.tasks_.resize(accepted);
+                    }
+
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
+                    for (std::size_t i = old_size; i != thrds.tasks_.size();
+                        ++i)
+                    {
+                        queue->increment_num_stolen_from_pending();
+                    }
+#else
+                    HPX_UNUSED(old_size);
 #endif
                 };
 
