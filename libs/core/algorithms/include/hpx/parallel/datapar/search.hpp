@@ -146,10 +146,18 @@ namespace hpx::parallel::detail {
                 part_size + static_cast<std::size_t>(count) - 1;
             std::size_t i = 0;
 
+            // Cancellation is checked against the earliest start of the run
+            // in progress, not the scan position: the scan reads up to
+            // count - 1 elements past the last start, and those positions can
+            // be >= max_start (which the token treats as cancelled).
+            auto const run_start = [&]() {
+                return static_cast<std::ptrdiff_t>(base_idx + i) - carry;
+            };
+
             // SIMD bulk pass
             for (; i + pack_size <= scan_count; i += pack_size)
             {
-                if (tok.was_cancelled(base_idx + i))
+                if (tok.was_cancelled(run_start()))
                     return;
 
                 pack_type v(hpx::parallel::traits::vector_pack_load<pack_type,
@@ -208,7 +216,7 @@ namespace hpx::parallel::detail {
             // Scalar tail (< pack_size elements remaining)
             for (; i < scan_count; ++i, ++curr)
             {
-                if (tok.was_cancelled(base_idx + i))
+                if (tok.was_cancelled(run_start()))
                     return;
 
                 if (HPX_INVOKE(pred, HPX_INVOKE(proj, *curr), value_proj))

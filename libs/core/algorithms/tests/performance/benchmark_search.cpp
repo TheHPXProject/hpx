@@ -131,6 +131,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::cerr << "test_count and needle_count must be >= 1, and "
                      "vector_size / 4 must be greater than needle_count"
                   << std::endl;
+        HPX_TEST(false);
         return hpx::local::finalize();
     }
 

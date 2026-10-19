@@ -34,8 +34,7 @@ double run_search_n_benchmark(
         // Place needle in the last quarter, varying slightly each run
         std::size_t pos = (n * 3 / 4) +
             (static_cast<std::size_t>(i) * 1000003) % (n / 4 - needle_count);
-        c[pos] = 2;
-        for (int j = 1; j < needle_count; ++j)
+        for (int j = 0; j < needle_count; ++j)
             c[pos + j] = 2;
 
         std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
@@ -66,8 +65,7 @@ double run_search_n_benchmark_std(
     {
         std::size_t pos = (n * 3 / 4) +
             (static_cast<std::size_t>(i) * 1000003) % (n / 4 - needle_count);
-        c[pos] = 2;
-        for (int j = 1; j < needle_count; ++j)
+        for (int j = 0; j < needle_count; ++j)
             c[pos + j] = 2;
 
         std::uint64_t elapsed = hpx::chrono::high_resolution_clock::now();
@@ -130,6 +128,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         std::cerr << "vector_size must be at least 4 * needle_count + 1 "
                      "and needle_count must be >= 1"
                   << std::endl;
+        HPX_TEST(false);
         return hpx::local::finalize();
     }
 

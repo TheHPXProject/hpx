@@ -195,6 +195,76 @@ void search_n_test3()
     test_search_n3<std::forward_iterator_tag>();
 }
 
+template <typename ExPolicy>
+void check_search_n_result(ExPolicy policy, std::vector<int> const& haystack,
+    std::size_t count, int value)
+{
+    auto const result =
+        hpx::search_n(policy, haystack.begin(), haystack.end(), count, value);
+    auto const expected =
+        std::search_n(haystack.begin(), haystack.end(), count, value);
+
+    HPX_TEST(result == expected);
+}
+
+template <typename ExPolicy>
+void test_search_n_boundaries(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    std::size_t const counts[] = {
+        1, 2, 3, pack_size, pack_size + 1, 2 * pack_size + 3};
+    for (std::size_t const count : counts)
+    {
+        std::size_t const size = pack_size * 4 + count + 1;
+
+        // The run ends exactly at the last element.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // The run begins in the last lane of a pack and spans into the next.
+        {
+            std::vector<int> haystack(size, 9);
+            auto const first =
+                haystack.begin() + static_cast<std::ptrdiff_t>(pack_size - 1);
+            std::fill(first, first + static_cast<std::ptrdiff_t>(count), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // A run that is one element too short precedes the real match.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.begin(),
+                haystack.begin() + static_cast<std::ptrdiff_t>(count - 1), 1);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // The run is cut off by the end of the range: no match.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count - 1),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+    }
+}
+
+void search_n_boundary_tests()
+{
+    using namespace hpx::execution;
+
+    test_search_n_boundaries(simd);
+    test_search_n_boundaries(par_simd);
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -205,6 +275,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     search_n_test1();
     search_n_test2();
     search_n_test3();
+    search_n_boundary_tests();
     return hpx::local::finalize();
 }
 
