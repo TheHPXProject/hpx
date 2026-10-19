@@ -886,25 +886,24 @@ namespace hpx::threads::policies {
                 return false;
             }
 
-            auto const max_num_to_steal =
-                [this, &req](thread_queue_type* queue) {
-                    std::int64_t const pending_count =
-                        queue->get_pending_queue_length(
-                            std::memory_order_relaxed);
-                    if (pending_count <
-                        thread_queue_init_.min_tasks_to_steal_pending_)
-                    {
-                        return std::size_t(0);
-                    }
+            auto const max_num_to_steal = [this, &req](
+                                              thread_queue_type* queue) {
+                std::int64_t const pending_count =
+                    queue->get_pending_queue_length(std::memory_order_relaxed);
+                if (pending_count <
+                    thread_queue_init_.min_tasks_to_steal_pending_)
+                {
+                    return std::size_t(0);
+                }
 
-                    if (!req.stealhalf_)
-                    {
-                        return std::size_t(1);
-                    }
+                if (!req.stealhalf_)
+                {
+                    return std::size_t(1);
+                }
 
                 // the pending queue length is never negative
-                    return static_cast<std::size_t>(pending_count / 2);
-                };
+                return static_cast<std::size_t>(pending_count / 2);
+            };
 
             thread_queue_type* high_priority_queue = req.steal_high_priority_ &&
                     d.num_thread_ < num_high_priority_queues_ ?
@@ -940,51 +939,63 @@ namespace hpx::threads::policies {
 
                 auto const take_tasks = [&req, &thrds](thread_queue_type* queue,
                                             std::size_t count) {
-                    std::size_t const old_size = thrds.tasks_.size();
-                    queue->get_next_threads(
-                        std::back_inserter(thrds.tasks_), count, false, true);
-
-                    if (!req.steal_high_priority_)
+                    if (req.steal_high_priority_)
                     {
-                        std::size_t accepted = old_size;
+                        std::size_t const old_size = thrds.tasks_.size();
+                        queue->get_next_threads(
+                            std::back_inserter(thrds.tasks_), count, false,
+                            true);
+
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
                         for (std::size_t i = old_size; i != thrds.tasks_.size();
                             ++i)
                         {
-                            thread_id_ref_type& thrd = thrds.tasks_[i];
-                            thread_priority const priority =
-                                get_thread_id_data(thrd)->get_priority();
-                            bool const is_high_priority =
-                                priority == thread_priority::high_recursive ||
-                                priority == thread_priority::high ||
-                                priority == thread_priority::boost;
-                            if (is_high_priority)
-                            {
-                                // This thief has no high-priority queue.
-                                // Keep the task on the victim without
-                                // changing its stored priority.
-                                queue->schedule_thread(HPX_MOVE(thrd), true);
-                            }
-                            else
-                            {
-                                if (accepted != i)
-                                {
-                                    thrds.tasks_[accepted] = HPX_MOVE(thrd);
-                                }
-                                ++accepted;
-                            }
+                            queue->increment_num_stolen_from_pending();
                         }
-                        thrds.tasks_.resize(accepted);
+#else
+                        HPX_UNUSED(old_size);
+#endif
+                        return;
                     }
 
-#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
-                    for (std::size_t i = old_size; i != thrds.tasks_.size();
-                        ++i)
+                    // A high-priority task can retain its stored priority even
+                    // when explicitly placed on a normal queue. Keep such
+                    // tasks aside while looking for work this thief can run,
+                    // then restore them without changing their priority.
+                    hpx::detail::small_vector<thread_id_ref_type, 1>
+                        high_priority_tasks;
+                    std::size_t accepted = 0;
+                    thread_id_ref_type thrd;
+                    while (accepted != count &&
+                        queue->get_next_thread(thrd, false, true))
                     {
-                        queue->increment_num_stolen_from_pending();
-                    }
-#else
-                    HPX_UNUSED(old_size);
+                        thread_priority const priority =
+                            get_thread_id_data(thrd)->get_priority();
+                        bool const is_high_priority =
+                            priority == thread_priority::high_recursive ||
+                            priority == thread_priority::high ||
+                            priority == thread_priority::boost;
+                        if (is_high_priority)
+                        {
+                            high_priority_tasks.push_back(HPX_MOVE(thrd));
+                        }
+                        else
+                        {
+                            thrds.tasks_.push_back(HPX_MOVE(thrd));
+                            ++accepted;
+#ifdef HPX_HAVE_THREAD_STEALING_COUNTS
+                            queue->increment_num_stolen_from_pending();
 #endif
+                        }
+                        thrd = thread_id_ref_type{};
+                    }
+
+                    for (thread_id_ref_type& high_priority_task :
+                        high_priority_tasks)
+                    {
+                        queue->schedule_thread(
+                            HPX_MOVE(high_priority_task), true);
+                    }
                 };
 
                 if (max_high_priority != 0)
