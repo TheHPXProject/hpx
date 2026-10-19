@@ -159,6 +159,24 @@ The shown code defines an action type ``some_global_action`` inside the namespac
    to comprise a globally unique C++ identifier representing the action. This is
    used for serialization purposes.
 
+A global function can also be invoked without defining an action type for it
+by passing a pointer to the function as the template argument of ``hpx::async``::
+
+    namespace app
+    {
+        double square(double d)
+        {
+            return d * d;
+        }
+    }
+
+    hpx::future<double> f = hpx::async<&app::square>(target, 2.0);
+
+This creates the action for ``app::square`` internally. It relies on the action
+being registered automatically, which is the default. If |hpx| was configured
+with ``HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION=OFF``, use
+:c:macro:`HPX_PLAIN_ACTION` instead.
+
 For member functions of objects which have been registered with AGAS
 (e.g., 'components'), a different registration macro
 :c:macro:`HPX_DEFINE_COMPONENT_ACTION` has to be utilized. Any component needs
