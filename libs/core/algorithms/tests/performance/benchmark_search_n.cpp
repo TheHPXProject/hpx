@@ -16,7 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
-#include <numeric>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -122,11 +122,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
     int test_count = vm["test_count"].as<int>();
     int needle_count = vm["needle_count"].as<int>();
 
-    if (needle_count < 1 ||
-        vector_size < 4 * static_cast<std::size_t>(needle_count) + 1)
+    if (test_count < 1 || needle_count < 1 ||
+        vector_size / 4 <= static_cast<std::size_t>(needle_count))
     {
-        std::cerr << "vector_size must be at least 4 * needle_count + 1 "
-                     "and needle_count must be >= 1"
+        std::cerr << "test_count and needle_count must be >= 1, and "
+                     "vector_size / 4 must be greater than needle_count"
                   << std::endl;
         HPX_TEST(false);
         return hpx::local::finalize();
