@@ -47,10 +47,8 @@ namespace hpx::actions {
             static ReturnType invoke(naming::address::address_type /*lva*/,
                 naming::address::component_type /*comptype*/, Ts&&... vs)
             {
-                // yes, this looks like this code was dereferencing a nullptr...
-                int* dummy = nullptr;
-                return reinterpret_cast<F const&>(*dummy)(    // -V522
-                    HPX_FORWARD(Ts, vs)...);
+                // lambdas without captures are default constructible
+                return F{}(HPX_FORWARD(Ts, vs)...);
             }
         };
 
@@ -86,7 +84,8 @@ namespace hpx::actions {
             template <typename F>
             constexpr action_from_lambda_t<F> operator+=(F*) const noexcept
             {
-                static_assert(std::is_empty_v<F>,
+                static_assert(
+                    std::is_empty_v<F> && std::is_default_constructible_v<F>,
                     "lambda_to_action() needs and only needs a lambda with "
                     "empty capture list");
 
