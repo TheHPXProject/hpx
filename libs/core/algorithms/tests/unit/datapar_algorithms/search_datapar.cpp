@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <random>
@@ -339,6 +340,37 @@ void test_search_non_copyable_projection()
     HPX_TEST(result == haystack.begin() + 600);
 }
 
+// Random-access but non-contiguous ranges must not take the SIMD path.
+void test_search_non_contiguous()
+{
+    std::atomic<int> pack_calls(0);
+    auto pred = [&pack_calls](auto const& a, auto const& b) {
+        if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            ++pack_calls;
+        return a == b;
+    };
+
+    std::deque<int> haystack(10007, 9);
+    std::vector<int> const needle{1, 2, 3};
+    for (std::size_t pos :
+        {std::size_t(127), std::size_t(5000), haystack.size() - needle.size()})
+    {
+        std::fill(haystack.begin(), haystack.end(), 9);
+        std::copy(needle.begin(), needle.end(),
+            haystack.begin() + static_cast<std::ptrdiff_t>(pos));
+
+        auto const result =
+            hpx::search(hpx::execution::par_simd, haystack.begin(),
+                haystack.end(), needle.begin(), needle.end(), pred);
+        auto const expected = std::search(
+            haystack.begin(), haystack.end(), needle.begin(), needle.end());
+
+        HPX_TEST(result == expected);
+    }
+
+    HPX_TEST_EQ(pack_calls.load(), 0);
+}
+
 void search_boundary_tests()
 {
     using namespace hpx::execution;
@@ -347,6 +379,7 @@ void search_boundary_tests()
     test_search_boundaries(par_simd);
     test_search_uses_simd_path();
     test_search_non_copyable_projection();
+    test_search_non_contiguous();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)

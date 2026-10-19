@@ -27,15 +27,15 @@
 namespace hpx::parallel::detail {
 
     ///////////////////////////////////////////////////////////////////////////
-    // Only the haystack is loaded as SIMD packs; the needle is read element by
-    // element. The pack type is named only once the haystack is known to be
-    // datapar compatible.
+    // Only the haystack is loaded as SIMD packs (straight from memory, so it
+    // must be contiguous); the needle is read element by element. The pack
+    // type is named only once the haystack is known to be datapar compatible.
     HPX_CXX_CORE_EXPORT template <typename Iter1, typename Iter2, typename Pred,
         typename Proj1, typename Proj2>
     constexpr bool search_datapar_compatible() noexcept
     {
-        if constexpr (!hpx::parallel::util::detail::
-                          iterator_datapar_compatible_v<Iter1>)
+        if constexpr (!hpx::traits::is_contiguous_iterator_v<Iter1> ||
+            !hpx::parallel::util::detail::iterator_datapar_compatible_v<Iter1>)
         {
             return false;
         }
@@ -57,8 +57,8 @@ namespace hpx::parallel::detail {
         typename Proj>
     constexpr bool search_n_datapar_compatible() noexcept
     {
-        if constexpr (!hpx::parallel::util::detail::
-                          iterator_datapar_compatible_v<Iter>)
+        if constexpr (!hpx::traits::is_contiguous_iterator_v<Iter> ||
+            !hpx::parallel::util::detail::iterator_datapar_compatible_v<Iter>)
         {
             return false;
         }

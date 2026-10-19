@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <deque>
 #include <iostream>
 #include <random>
 #include <string>
@@ -279,6 +280,35 @@ void test_search_n_uses_simd_path()
     HPX_TEST(pack_calls > 0);
 }
 
+// Random-access but non-contiguous ranges must not take the SIMD path.
+void test_search_n_non_contiguous()
+{
+    std::atomic<int> pack_calls(0);
+    auto pred = [&pack_calls](auto const& a, auto const& b) {
+        if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            ++pack_calls;
+        return a == b;
+    };
+
+    std::deque<int> haystack(10007, 9);
+    for (std::size_t pos :
+        {std::size_t(126), std::size_t(5000), haystack.size() - 3})
+    {
+        std::fill(haystack.begin(), haystack.end(), 9);
+        std::fill(haystack.begin() + static_cast<std::ptrdiff_t>(pos),
+            haystack.begin() + static_cast<std::ptrdiff_t>(pos + 3), 1);
+
+        auto const result = hpx::search_n(hpx::execution::par_simd,
+            haystack.begin(), haystack.end(), 3, 1, pred);
+        auto const expected =
+            std::search_n(haystack.begin(), haystack.end(), 3, 1);
+
+        HPX_TEST(result == expected);
+    }
+
+    HPX_TEST_EQ(pack_calls.load(), 0);
+}
+
 void search_n_boundary_tests()
 {
     using namespace hpx::execution;
@@ -286,6 +316,7 @@ void search_n_boundary_tests()
     test_search_n_boundaries(simd);
     test_search_n_boundaries(par_simd);
     test_search_n_uses_simd_path();
+    test_search_n_non_contiguous();
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
