@@ -5,9 +5,12 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 # Built only for the ITT backend, when one of the event classes it checks is
-# compiled in.
-if(NOT HPX_WITH_ITTNOTIFY OR NOT (HPX_WITH_TRACING_LIFECYCLE_EVENTS
-                                  OR HPX_WITH_TRACING_WORK_STEALING_EVENTS)
+# compiled in. The parcelset ITT test uses the same collector.
+if(NOT HPX_WITH_ITTNOTIFY
+   OR NOT
+      (HPX_WITH_TRACING_LIFECYCLE_EVENTS
+       OR HPX_WITH_TRACING_WORK_STEALING_EVENTS
+       OR HPX_WITH_PARCEL_PROFILING)
 )
   return()
 endif()
