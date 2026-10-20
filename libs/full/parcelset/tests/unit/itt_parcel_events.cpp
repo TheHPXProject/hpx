@@ -56,17 +56,23 @@ namespace {
         if (!copy)
             return {};
 
-        // Other threads may still be recording, so retry if the list grew.
+        // Other threads may still be recording, so retry if the list grew,
+        // a bounded number of times.
         std::vector<hpx_itt_test::event> ev(copy.get()(nullptr, 0));
-        while (copy.get()(ev.data(), ev.size()) > ev.size())
+        for (int attempt = 0; attempt != 100; ++attempt)
+        {
+            if (copy.get()(ev.data(), ev.size()) <= ev.size())
+                return ev;
             ev.resize(copy.get()(nullptr, 0));
-        return ev;
+        }
+        HPX_TEST_MSG(
+            false, "the collector's event list kept outgrowing the copy");
+        return {};
     }
 
     struct parcel_marker
     {
         std::string name;
-        bool created = false;
         bool destroyed = false;
         std::map<std::string, std::uint64_t> metadata;
     };
@@ -79,7 +85,6 @@ namespace {
     {
         std::vector<parcel_marker> result;
         std::map<std::pair<std::uint64_t, std::uint64_t>, std::size_t> open;
-        std::set<std::pair<std::uint64_t, std::uint64_t>> created;
 
         for (auto const& e : events())
         {
@@ -91,15 +96,11 @@ namespace {
                 if (collector_used && std::strcmp(e.name, "hpx") == 0)
                     *collector_used = true;
                 break;
-            case hpx_itt_test::event_kind::id_create:
-                created.insert(id);
-                break;
             case hpx_itt_test::event_kind::marker:
                 if (std::strncmp(e.name, "parcel_", 7) == 0)
                 {
                     open[id] = result.size();
                     result.emplace_back().name = e.name;
-                    result.back().created = created.count(id) != 0;
                 }
                 break;
             case hpx_itt_test::event_kind::metadata:
@@ -112,7 +113,6 @@ namespace {
                     result[it->second].destroyed = true;
                     open.erase(it);
                 }
-                created.erase(id);
                 break;
             default:
                 break;
@@ -191,8 +191,8 @@ std::string check_markers()
     std::string errors;
     for (auto const& m : markers)
     {
-        if (!m.created || !m.destroyed)
-            errors += m.name + ": id not created and destroyed\n";
+        if (!m.destroyed)
+            errors += m.name + ": id not destroyed\n";
         if (m.metadata.count("parcel_id_msb") == 0 ||
             m.metadata.count("parcel_id_lsb") == 0)
             errors += m.name + ": parcel id missing\n";
@@ -298,12 +298,16 @@ int main(int argc, char* argv[])
     }
     collector_path = vm["collector"].as<std::string>();
 
+    // The collector keeps only markers, since a slow start-up would otherwise
+    // record millions of background-work calls.
 #if defined(_WIN32)
     _putenv_s("INTEL_LIBITTNOTIFY64", collector_path.c_str());
     _putenv_s("INTEL_ITTNOTIFY_GROUPS", "structure");
+    _putenv_s("HPX_ITT_TEST_RECORD", "markers");
 #else
     ::setenv("INTEL_LIBITTNOTIFY64", collector_path.c_str(), 1);
     ::setenv("INTEL_ITTNOTIFY_GROUPS", "structure", 1);
+    ::setenv("HPX_ITT_TEST_RECORD", "markers", 1);
 #endif
 
     hpx::init_params params;
