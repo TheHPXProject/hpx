@@ -150,14 +150,17 @@ namespace hpx::threads::policies {
         struct workrequesting_task_data
         {
             explicit workrequesting_task_data(
-                std::uint16_t num_thread = static_cast<std::uint16_t>(
-                    -1)) noexcept
+                std::uint16_t num_thread = static_cast<std::uint16_t>(-1),
+                bool const from_high_priority_queue = false) noexcept
               : num_thread_(num_thread)
+              , from_high_priority_queue_(from_high_priority_queue)
             {
             }
 
             // core number this task data originated from
             std::uint16_t num_thread_;
+            // preserve queue precedence when stored priority differs
+            bool from_high_priority_queue_;
             hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
         };
 
@@ -1001,6 +1004,7 @@ namespace hpx::threads::policies {
                 if (max_high_priority != 0)
                 {
                     take_tasks(high_priority_queue, max_high_priority);
+                    thrds.from_high_priority_queue_ = !thrds.tasks_.empty();
                 }
                 if (thrds.tasks_.empty() && max_normal != 0)
                 {
@@ -1921,7 +1925,13 @@ namespace hpx::threads::policies {
                 if (!thrds.tasks_.empty())
                 {
                     auto const task_queue =
-                        [&d](thread_id_ref_type const& thrd) {
+                        [&d, &thrds](thread_id_ref_type const& thrd) {
+                            if (thrds.from_high_priority_queue_)
+                            {
+                                HPX_ASSERT(d.high_priority_queue_ != nullptr);
+                                return d.high_priority_queue_;
+                            }
+
                             thread_priority const priority =
                                 get_thread_id_data(thrd)->get_priority();
                             return priority ==

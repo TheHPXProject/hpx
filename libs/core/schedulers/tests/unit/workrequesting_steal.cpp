@@ -30,6 +30,8 @@ constexpr std::uint64_t task_duration_ns = 20000;
 std::atomic<std::size_t> num_stolen(0);
 hpx::threads::thread_priority task_priority =
     hpx::threads::thread_priority::normal;
+hpx::threads::thread_priority expected_task_priority =
+    hpx::threads::thread_priority::normal;
 
 // the worker hpx_main runs on, which isn't necessarily worker 0, as another
 // worker may have stolen hpx_main before it started
@@ -37,7 +39,7 @@ std::size_t home_worker = 0;
 
 void busy_task()
 {
-    HPX_TEST_EQ(hpx::this_thread::get_priority(), task_priority);
+    HPX_TEST_EQ(hpx::this_thread::get_priority(), expected_task_priority);
 
     auto const start = hpx::chrono::high_resolution_clock::now();
     while (hpx::chrono::high_resolution_clock::now() - start < task_duration_ns)
@@ -54,9 +56,8 @@ int hpx_main()
 {
     home_worker = hpx::get_worker_thread_num();
     auto const exec = hpx::execution::experimental::with_priority(
-        hpx::execution::parallel_executor(
-            hpx::threads::thread_schedule_hint(
-                static_cast<std::int16_t>(home_worker))),
+        hpx::execution::parallel_executor(hpx::threads::thread_schedule_hint(
+            static_cast<std::int16_t>(home_worker))),
         task_priority);
 
     std::vector<hpx::future<void>> futures;
@@ -77,9 +78,14 @@ int main(int, char* argv[])
 {
     for (hpx::threads::thread_priority const priority :
         {hpx::threads::thread_priority::normal,
-            hpx::threads::thread_priority::high})
+            hpx::threads::thread_priority::high,
+            hpx::threads::thread_priority::boost})
     {
         task_priority = priority;
+        expected_task_priority =
+            priority == hpx::threads::thread_priority::boost ?
+            hpx::threads::thread_priority::normal :
+            priority;
         for (char const* scheduler :
             {"local-workrequesting-fifo", "local-workrequesting-mc"})
         {
