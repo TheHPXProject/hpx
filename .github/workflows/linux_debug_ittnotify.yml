@@ -48,13 +48,15 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
-              -DHPX_WITH_ITTNOTIFY=ON
+              -DHPX_WITH_ITTNOTIFY=ON \
+              -DHPX_WITH_PARCEL_PROFILING=ON
     - name: Build
       shell: bash
       run: |
           cmake --build build --target all
           cmake --build build --target examples
           cmake --build build --target tests.unit.modules.tracing
+          cmake --build build --target tests.unit.modules.parcelset.itt_parcel_events
     - name: Test
       shell: bash
       run: |
@@ -66,7 +68,7 @@ jobs:
           cd build
           ctest \
             --output-on-failure \
-            --tests-regex "tests.examples.itt_notify|tests.unit.modules.tracing" \
+            --tests-regex "tests.examples.itt_notify|tests.unit.modules.tracing|tests.unit.modules.parcelset.distributed.tcp.itt_parcel_events" \
             -j1
     - name: Verify ITT API usage
       shell: bash
