@@ -10,6 +10,7 @@ module load llvm/19
 module load cuda/12
 module load boost/1.87.0-${build_type,,}
 module load hwloc
+module load openmpi
 
 export CXX_STD="20"
 
