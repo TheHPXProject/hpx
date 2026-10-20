@@ -45,6 +45,7 @@ namespace hpx::parallel::detail {
     {
         using policy_type = std::decay_t<ExPolicy>;
 
+        ready.wait();
         if (ready.has_exception())
         {
             std::exception_ptr const exception = ready.get_exception_ptr();
@@ -426,6 +427,74 @@ namespace hpx::parallel::detail {
 
         return hpx::async(
             act, hpx::colocated(routing_partition_id), HPX_MOVE(ranges));
+    }
+
+    HPX_CXX_EXPORT template <typename Algo>
+    // handle the case of different localities
+    struct captured_comparison
+      : algorithm<captured_comparison<Algo>, typename Algo::result_type>
+    {
+        constexpr captured_comparison() noexcept
+          : algorithm<captured_comparison, typename Algo::result_type>(
+                "captured_comparison")
+        {
+        }
+        template <typename ExPolicy, typename Iterator, typename Values,
+            typename Pred>
+
+        /// Compare the local range with the captured values sequentially.
+        /// Complete the comparison before returning so the captured values
+        /// are alive until all comparisons complete
+        static typename Algo::result_type sequential(ExPolicy policy,
+            Algo algo, Iterator first, Iterator last, Values values, Pred pred)
+        {
+            return algo.call2(policy(hpx::execution::non_task),
+                std::true_type(), first, last, values.begin(), pred);
+        }
+
+        template <typename ExPolicy, typename Iterator, typename Values,
+            typename Pred>
+        static typename Algo::result_type parallel(ExPolicy policy, Algo algo,
+            Iterator first, Iterator last, Values values, Pred pred)
+        {
+            return algo.call2(policy(hpx::execution::non_task),
+                std::false_type(), first, last, values.begin(), pred);
+        }
+    };
+
+    HPX_CXX_EXPORT template <typename Algo, typename ExPolicy, typename IsSeq,
+        typename Iterator1, typename Iterator2, typename Pred>
+    hpx::future<typename Algo::result_type> dispatch_comparison_async(
+        hpx::id_type const& id1, hpx::id_type const& id2, Algo algo,
+        ExPolicy policy, IsSeq is_seq, Iterator1 first1, Iterator1 last1,
+        Iterator2 first2, Pred pred)
+    {
+        // same locality
+        if (get_partition_locality(id1) == get_partition_locality(id2))
+        {
+            return dispatch_async(id1, HPX_MOVE(algo), HPX_MOVE(policy),
+                is_seq, first1, last1, first2, HPX_MOVE(pred));
+        }
+
+        // different localities
+        using value_type = typename std::iterator_traits<Iterator2>::value_type;
+        std::vector<indexed_partition_range<Iterator2>> ranges = {
+            {0, {id2, first2,
+                    std::next(first2, std::distance(first1, last1))}}};
+
+        auto values = capture_async<value_type>(id2, HPX_MOVE(ranges));
+        return HPX_MOVE(values).then(
+            [id1, algo = HPX_MOVE(algo), policy = HPX_MOVE(policy), is_seq,
+                first1, last1, pred = HPX_MOVE(pred)](
+                hpx::future<collected_partition_values<value_type>>
+                    ready) mutable {
+                auto captured = get_capture_result<ExPolicy>(HPX_MOVE(ready));
+
+                // compare A's chunk with captured values
+                return dispatch_async(id1, captured_comparison<Algo>(),
+                    HPX_MOVE(policy), is_seq, HPX_MOVE(algo), first1, last1,
+                    HPX_MOVE(captured.values), HPX_MOVE(pred));
+            });
     }
 
     HPX_CXX_EXPORT template <typename Key, typename LocalIterator,

@@ -11,7 +11,7 @@
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 
-#include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -109,45 +109,30 @@ namespace hpx::parallel::detail {
 
         mismatch_distance_algo<std::decay_t<Pred>> algo;
 
-        if (sit1 == send1)
-        {
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        auto remaining = detail::distance(first1, last1);
 
-            if (beg1 != end1)
+        while (remaining != 0)
+        {
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = traits2::end(sit2);
+            auto const count1 = std::distance(beg1, end1);
+            auto const count2 = std::distance(beg2, end2);
+            auto const count = count1 < count2 ? count1 : count2;
+            auto chunk_end1 = std::next(beg1, count);
+
+            if (count != 0)
             {
                 std::pair<std::size_t, std::size_t> local_dist =
-                    dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, pred);
-
-                local_iterator_type1 res1 = beg1;
-                std::advance(res1, local_dist.first);
-                local_iterator_type2 res2 = beg2;
-                std::advance(res2, local_dist.second);
-
-                return result::get(std::make_pair(traits1::compose(sit1, res1),
-                    traits2::compose(sit2, res2)));
-            }
-        }
-        else
-        {
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-
-            if (beg1 != end1)
-            {
-                std::pair<std::size_t, std::size_t> local_dist =
-                    dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, pred);
-
-                local_iterator_type1 res1 = beg1;
-                std::advance(res1, local_dist.first);
-                local_iterator_type2 res2 = beg2;
-                std::advance(res2, local_dist.second);
-
-                if (res1 != end1)
+                    get_capture_result<ExPolicy>(dispatch_comparison_async(
+                        traits1::get_id(sit1), traits2::get_id(sit2), algo,
+                        policy, std::true_type(), beg1, chunk_end1, beg2,
+                        pred));
+                auto res1 = std::next(beg1, local_dist.first);
+                auto res2 = std::next(beg2, local_dist.second);
+                if (res1 != chunk_end1)
                 {
                     return result::get(
                         std::make_pair(traits1::compose(sit1, res1),
@@ -155,53 +140,23 @@ namespace hpx::parallel::detail {
                 }
             }
 
-            for (++sit1, ++sit2; sit1 != send1; ++sit1, ++sit2)
+            beg1 = chunk_end1;
+            std::advance(beg2, count);
+            remaining -= count;
+            if (remaining == 0)
             {
+                break;
+            }
+
+            if (beg1 == end1)
+            {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
-                beg2 = traits2::begin(sit2);
-
-                if (beg1 != end1)
-                {
-                    std::pair<std::size_t, std::size_t> local_dist =
-                        dispatch(traits1::get_id(sit1), algo, policy,
-                            std::true_type(), beg1, end1, beg2, pred);
-
-                    local_iterator_type1 res1 = beg1;
-                    std::advance(res1, local_dist.first);
-                    local_iterator_type2 res2 = beg2;
-                    std::advance(res2, local_dist.second);
-
-                    if (res1 != end1)
-                    {
-                        return result::get(
-                            std::make_pair(traits1::compose(sit1, res1),
-                                traits2::compose(sit2, res2)));
-                    }
-                }
             }
-
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-
-            if (beg1 != end1)
+            if (beg2 == end2)
             {
-                std::pair<std::size_t, std::size_t> local_dist =
-                    dispatch(traits1::get_id(sit1), algo, policy,
-                        std::true_type(), beg1, end1, beg2, pred);
-
-                local_iterator_type1 res1 = beg1;
-                std::advance(res1, local_dist.first);
-                local_iterator_type2 res2 = beg2;
-                std::advance(res2, local_dist.second);
-
-                if (res1 != end1)
-                {
-                    return result::get(
-                        std::make_pair(traits1::compose(sit1, res1),
-                            traits2::compose(sit2, res2)));
-                }
+                ++sit2;
+                beg2 = traits2::begin(sit2);
             }
         }
 
@@ -246,55 +201,45 @@ namespace hpx::parallel::detail {
 
         mismatch_distance_algo<std::decay_t<Pred>> algo;
 
-        if (sit1 == send1)
-        {
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        auto remaining = detail::distance(first1, last1);
 
-            if (beg1 != end1)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, pred));
-                seg_data.emplace_back(sit1, sit2, beg1, beg2, end1);
-            }
-        }
-        else
+        while (remaining != 0)
         {
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = traits2::end(sit2);
+            auto const count1 = std::distance(beg1, end1);
+            auto const count2 = std::distance(beg2, end2);
+            auto const count = count1 < count2 ? count1 : count2;
+            auto chunk_end1 = std::next(beg1, count);
 
-            if (beg1 != end1)
+            if (count != 0)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, pred));
-                seg_data.emplace_back(sit1, sit2, beg1, beg2, end1);
+                segments.push_back(dispatch_comparison_async(
+                    traits1::get_id(sit1), traits2::get_id(sit2), algo,
+                    policy, forced_seq(), beg1, chunk_end1, beg2, pred));
+                seg_data.emplace_back(sit1, sit2, beg1, beg2, chunk_end1);
             }
 
-            for (++sit1, ++sit2; sit1 != send1; ++sit1, ++sit2)
+            beg1 = chunk_end1;
+            std::advance(beg2, count);
+            remaining -= count;
+            if (remaining == 0)
             {
+                break;
+            }
+
+            if (beg1 == end1)
+            {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
-                beg2 = traits2::begin(sit2);
-
-                if (beg1 != end1)
-                {
-                    segments.push_back(dispatch_async(traits1::get_id(sit1),
-                        algo, policy, forced_seq(), beg1, end1, beg2, pred));
-                    seg_data.emplace_back(sit1, sit2, beg1, beg2, end1);
-                }
             }
-
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-
-            if (beg1 != end1)
+            if (beg2 == end2)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, pred));
-                seg_data.emplace_back(sit1, sit2, beg1, beg2, end1);
+                ++sit2;
+                beg2 = traits2::begin(sit2);
             }
         }
 
