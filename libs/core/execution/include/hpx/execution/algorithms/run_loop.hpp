@@ -288,6 +288,7 @@ namespace hpx::execution::experimental {
 
     private:
         bool stop = false;
+        bool is_running = false;
 
         void push_back(run_loop_opstate_base* t)
         {
@@ -339,7 +340,10 @@ namespace hpx::execution::experimental {
         // Otherwise, has no effects.
         ~run_loop()
         {
-            if (head.next != &head || !stop)
+            auto const local_mtx = mtx;    // keep alive
+            std::unique_lock l(local_mtx->mtx_);
+
+            if (head.next != &head || is_running)
             {
                 std::terminate();
             }
@@ -355,6 +359,23 @@ namespace hpx::execution::experimental {
         {
             // Precondition: state is starting.
             //HPX_ASSERT(head.next != &head || !stop);
+            {
+                auto const local_mtx = mtx;
+                std::unique_lock l(local_mtx->mtx_);
+                is_running = true;
+            }
+
+            struct runner_guard
+            {
+                run_loop* self;
+                ~runner_guard()
+                {
+                    auto const local_mtx = self->mtx;
+                    std::unique_lock l(local_mtx->mtx_);
+                    self->is_running = false;
+                }
+            } guard{this};
+
             for (run_loop_opstate_base* t; (t = pop_front()) != &head; /**/)
             {
                 t->execute();
