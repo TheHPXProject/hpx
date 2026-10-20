@@ -226,6 +226,16 @@ The most important macro invocation is the :c:macro:`HPX_DEFINE_COMPONENT_ACTION
 as this defines the action type we need to invoke the member function. For a
 complete example of a simple component action see :download:`component_in_executable.cpp <../../examples/quickstart/component_in_executable.cpp>`.
 
+Member functions of components can also be invoked without defining an action
+type for them, the same way as global functions::
+
+    hpx::future<int> f =
+        hpx::async<&app::some_component::some_member_function>(
+            component_id, std::string("42"));
+
+The component itself still has to be registered using
+:c:macro:`HPX_REGISTER_COMPONENT`, only the action macros are not needed.
+
 .. _reflection_based_component_actions:
 
 Reflection-based component actions (experimental)
