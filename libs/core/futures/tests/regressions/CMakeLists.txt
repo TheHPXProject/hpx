@@ -6,6 +6,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
+    continuation_launch_policy_7799
     exception_from_continuation_1613
     future_2667
     future_790
@@ -27,6 +28,7 @@ if(HPX_WITH_THREAD_CUMULATIVE_COUNTS)
 endif()
 
 set(exception_from_continuation_1613_PARAMETERS THREADS_PER_LOCALITY 2)
+set(continuation_launch_policy_7799_PARAMETERS THREADS_PER_LOCALITY 2)
 set(wait_for_1751_PARAMETERS THREADS_PER_LOCALITY 4)
 set(run_as_child_hint_7724_PARAMETERS THREADS_PER_LOCALITY 4)
 set(runs_child_race_7724_PARAMETERS THREADS_PER_LOCALITY 8)
