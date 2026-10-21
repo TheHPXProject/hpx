@@ -54,17 +54,28 @@ void nothing()
 // the component still has to be registered, its actions don't
 struct counter_server : hpx::components::managed_component_base<counter_server>
 {
+    // non-const
     std::int32_t add(std::int32_t i)
     {
         value_ += i;
         return value_;
     }
 
+    // non-const noexcept
+    std::int32_t reset() noexcept
+    {
+        std::int32_t const old_value = value_;
+        value_ = 0;
+        return old_value;
+    }
+
+    // const
     std::int32_t get() const
     {
         return value_;
     }
 
+    // const noexcept
     hpx::id_type where() const noexcept
     {
         return hpx::find_here();
@@ -122,6 +133,11 @@ void test_async_member_function_pointer(hpx::id_type const& target)
         HPX_TEST_EQ(
             hpx::async<&counter_server::get>(counter).get(), std::int32_t(5));
         HPX_TEST_EQ(hpx::async<&counter_server::where>(counter).get(), target);
+
+        HPX_TEST_EQ(
+            hpx::async<&counter_server::reset>(counter).get(), std::int32_t(5));
+        HPX_TEST_EQ(
+            hpx::async<&counter_server::get>(counter).get(), std::int32_t(0));
     }
 
     // client of the component
@@ -134,6 +150,11 @@ void test_async_member_function_pointer(hpx::id_type const& target)
         HPX_TEST_EQ(
             hpx::async<&counter_server::get>(counter).get(), std::int32_t(7));
         HPX_TEST_EQ(hpx::async<&counter_server::where>(counter).get(), target);
+
+        HPX_TEST_EQ(
+            hpx::async<&counter_server::reset>(counter).get(), std::int32_t(7));
+        HPX_TEST_EQ(
+            hpx::async<&counter_server::get>(counter).get(), std::int32_t(0));
     }
 }
 
