@@ -151,24 +151,57 @@ namespace hpx::lcos::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct post_policy_spawner
     {
-        // The hint of the executor the continuation was given to, if any. The
-        // task size comes from the continuation only.
+        // The hint of the executor the continuation was given to, if any.
+        // The task size comes from the continuation only.
         threads::thread_schedule_hint hint;
 
-        template <typename F>
-        void operator()(F&& f, hpx::threads::thread_description desc,
-            threads::thread_id_ref_type& id, threads::task_size size) const
+        template <typename Policy>
+        threads::thread_schedule_hint effective_hint(
+            Policy const& policy, threads::task_size size) const
         {
-            auto task_hint = hint;
+            auto task_hint =
+                hint == threads::thread_schedule_hint{} ? policy.hint() : hint;
             task_hint.task_size(size);
+            return task_hint;
+        }
 
+        template <typename F, typename Policy>
+        bool operator()(F&& f, hpx::threads::thread_description desc,
+            threads::thread_id_ref_type& id, Policy const& policy,
+            threads::task_size size) const
+        {
+            auto hint = effective_hint(policy, size);
+            threads::thread_pool_base* const pool =
+                threads::detail::get_self_or_default_pool();
+
+            if (hint.runs_as_child_mode() ==
+                    threads::thread_execution_hint::run_as_child &&
+                !pool->get_scheduler()->supports_direct_execution())
+            {
+                hint.runs_as_child_mode(threads::thread_execution_hint::none);
+            }
+
+            bool const runs_as_child = hint.runs_as_child_mode() ==
+                threads::thread_execution_hint::run_as_child;
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(HPX_FORWARD(F, f)),
-                HPX_MOVE(desc), threads::thread_priority::default_, task_hint,
-                threads::thread_stacksize::default_,
-                threads::thread_schedule_state::pending);
+                HPX_MOVE(desc), policy.priority(), hint, policy.stacksize(),
+                runs_as_child ? threads::thread_schedule_state::suspended :
+                                threads::thread_schedule_state::pending,
+                runs_as_child);
 
-            threads::register_thread(data, id);
+            threads::register_thread(data, pool, id);
+            return runs_as_child;
+        }
+
+        template <typename Policy>
+        void start(threads::thread_id_ref_type const& id, Policy const& policy,
+            threads::task_size size) const
+        {
+            threads::detail::set_thread_state(id.noref(),
+                threads::thread_schedule_state::pending,
+                threads::thread_restart_state::signaled, policy.priority(),
+                effective_hint(policy, size), true);
         }
     };
 
@@ -177,12 +210,20 @@ namespace hpx::lcos::detail {
     {
         Executor exec;
 
-        template <typename F>
-        void operator()(F&& f, hpx::threads::thread_description,
-            threads::thread_id_ref_type& id, threads::task_size) const
+        template <typename F, typename Policy>
+        bool operator()(F&& f, hpx::threads::thread_description,
+            threads::thread_id_ref_type& id, Policy const&,
+            threads::task_size) const
         {
             id = threads::invalid_thread_id;
             hpx::parallel::execution::post(exec, HPX_FORWARD(F, f));
+            return false;
+        }
+
+        template <typename Policy>
+        void start(threads::thread_id_ref_type const&, Policy const&,
+            threads::task_size) const
+        {
         }
     };
 

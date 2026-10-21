@@ -232,9 +232,9 @@ namespace hpx::lcos::detail {
             run_impl<Unwrap>(HPX_MOVE(f));
         }
 
-        template <bool Unwrap, typename Spawner>
+        template <bool Unwrap, typename Spawner, typename Policy>
         void async(traits::detail::shared_state_ptr_for_t<Future>&& f,
-            Spawner&& spawner)
+            Spawner&& spawner, Policy const& policy)
         {
             ensure_started();
 
@@ -242,15 +242,25 @@ namespace hpx::lcos::detail {
 
             hpx::intrusive_ptr<continuation> this_(this);
             hpx::threads::thread_description desc(f_, "async");
-
-            // The thread runs a lambda around f_, which hides the size of f_,
-            // so pass that size along with the description.
-            spawner(
+            threads::task_size const size =
+                traits::get_task_size<std::decay_t<F>>::call(f_);
+            threads::thread_id_ref_type id;
+            bool const runs_as_child = spawner(
                 [this_ = HPX_MOVE(this_), f = HPX_MOVE(f)]() mutable -> void {
                     this_->template run_impl<Unwrap>(HPX_MOVE(f));
                 },
-                desc, this->runs_child_,
-                traits::get_task_size<std::decay_t<F>>::call(f_));
+                desc, id, policy, size);
+
+            if (runs_as_child)
+            {
+                // Publish the child before making it pending. Once pending,
+                // another worker may run it to completion and reset the id.
+                {
+                    std::lock_guard<mutex_type> l(mtx_);
+                    this->runs_child_ = id;
+                }
+                spawner.start(id, policy, size);
+            }
         }
 
     public:
@@ -339,14 +349,39 @@ namespace hpx::lcos::detail {
                     spawner = HPX_FORWARD(Spawner, spawner)]() mutable -> void {
                     if (hpx::has_async_policy(policy))
                     {
-                        this_->template async<Unwrap>(
-                            HPX_MOVE(state), HPX_FORWARD(Spawner, spawner));
+                        this_->template async<Unwrap>(HPX_MOVE(state),
+                            HPX_FORWARD(Spawner, spawner), policy);
                     }
                     else
                     {
                         this_->template run<Unwrap>(HPX_MOVE(state));
                     }
                 });
+        }
+
+        void execute_deferred(error_code& /*ec*/ = throws) override
+        {
+            this->execute_thread();
+        }
+
+        util::unused_type* get_result_void(error_code& ec = throws) override
+        {
+            this->execute_thread();
+            return base_type::get_result_void(ec);
+        }
+
+        typename base_type::state wait(error_code& ec = throws) override
+        {
+            this->execute_thread();
+            return base_type::wait(ec);
+        }
+
+        hpx::future_status wait_until(
+            std::chrono::steady_clock::time_point const& abs_time,
+            error_code& ec = throws) override
+        {
+            this->execute_thread();
+            return base_type::wait_until(abs_time, ec);
         }
 
     protected:
