@@ -660,6 +660,7 @@ namespace hpx::threads::policies {
         {
             new_tasks_count_.data_ = 0;
             work_items_count_.data_ = 0;
+            has_pending_.data_.store(false, std::memory_order_relaxed);
         }
 
         static void deallocate(threads::thread_data* p) noexcept
@@ -935,7 +936,7 @@ namespace hpx::threads::policies {
             thread_description_ptr trd;
             while (src->work_items_.pop(trd, true))
             {
-                --src->work_items_count_.data_;
+                src->pending_removed(--src->work_items_count_.data_);
 
 #ifdef HPX_HAVE_THREAD_QUEUE_WAITTIME
                 if (get_maintain_queue_wait_times_enabled())
@@ -948,8 +949,10 @@ namespace hpx::threads::policies {
                 }
 #endif
 
-                bool const finished = (++work_items_count_.data_ ==
-                    static_cast<std::uint64_t>(count));
+                std::uint64_t const now = ++work_items_count_.data_;
+                pending_added(now - 1);
+                bool const finished =
+                    (now == static_cast<std::uint64_t>(count));
                 work_items_.push(trd);
                 if (finished)
                     break;
@@ -996,6 +999,14 @@ namespace hpx::threads::policies {
             bool allow_stealing = false, bool steal = false,
             std::int64_t const min_tasks_to_steal = 0) HPX_HOT
         {
+            // Thieves look at the flag first, it changes much less often than
+            // the counter
+            if (allow_stealing &&
+                !has_pending_.data_.load(std::memory_order_relaxed))
+            {
+                return false;
+            }
+
             std::int64_t const work_items_count = static_cast<std::int64_t>(
                 work_items_count_.data_.load(std::memory_order_relaxed));
 
@@ -1015,7 +1026,7 @@ namespace hpx::threads::policies {
             thread_description_ptr task_desc;
             if (work_items_.pop(task_desc, steal))
             {
-                --work_items_count_.data_;
+                pending_removed(--work_items_count_.data_);
 
                 if (get_maintain_queue_wait_times_enabled())
                 {
@@ -1035,7 +1046,7 @@ namespace hpx::threads::policies {
             if (work_items_.pop(next_thrd, steal))
             {
                 thrd.reset(next_thrd, false);    // do not addref!
-                --work_items_count_.data_;
+                pending_removed(--work_items_count_.data_);
                 return true;
             }
 #endif
@@ -1088,7 +1099,9 @@ namespace hpx::threads::policies {
                 delete task_desc;
 
                 --max_items;
-                if (--work_items_count_.data_ == 0)
+                std::uint64_t const now = --work_items_count_.data_;
+                pending_removed(now);
+                if (now == 0)
                 {
                     break;
                 }
@@ -1121,7 +1134,7 @@ namespace hpx::threads::policies {
                     dequeued += n;
                 }
 
-                work_items_count_.data_ -= dequeued;
+                pending_removed(work_items_count_.data_ -= dequeued);
                 return dequeued;
             }
             else
@@ -1135,7 +1148,9 @@ namespace hpx::threads::policies {
                         threads::thread_id_addref::no);    // do not addref!
 
                     --max_items;
-                    if (--work_items_count_.data_ == 0)
+                    std::uint64_t const now = --work_items_count_.data_;
+                    pending_removed(now);
+                    if (now == 0)
                     {
                         break;
                     }
@@ -1150,7 +1165,7 @@ namespace hpx::threads::policies {
         void schedule_thread(
             threads::thread_id_ref_type thrd, bool other_end = false)
         {
-            ++work_items_count_.data_;
+            pending_added(++work_items_count_.data_ - 1);
 
 #ifdef HPX_HAVE_THREAD_QUEUE_WAITTIME
             work_items_.push(new thread_description{HPX_MOVE(thrd),
@@ -1475,6 +1490,16 @@ namespace hpx::threads::policies {
         // count of active work items
         util::cache_line_data<std::atomic<std::uint64_t>> work_items_count_;
 
+        // true while the pending queue may hold threads. It changes only on
+        // empty <-> non-empty transitions, so thieves that look for work can
+        // keep it in their caches while the queue's counter keeps changing.
+        // It must never stay false while there are pending threads: whoever
+        // empties the queue clears it and then re-reads the counter (store
+        // then load of different variables, so seq_cst; a push racing with
+        // this either is seen by the re-read, or sets the flag after it). A
+        // flag left true while the queue is empty is harmless.
+        util::cache_line_data<std::atomic<bool>> has_pending_{false};
+
         thread_queue_init_parameters parameters_;
 
         // mutex protecting the members, on a destructive interference region
@@ -1537,6 +1562,27 @@ namespace hpx::threads::policies {
         // count of new_tasks stolen to this queue from other queues
         std::atomic<std::int64_t> stolen_to_staged_;
 #endif
+
+        void pending_added(std::uint64_t const previous) noexcept
+        {
+            if (previous == 0)
+            {
+                has_pending_.data_.store(true, std::memory_order_seq_cst);
+            }
+        }
+
+        void pending_removed(std::uint64_t const now) noexcept
+        {
+            if (now == 0)
+            {
+                has_pending_.data_.store(false, std::memory_order_seq_cst);
+                if (work_items_count_.data_.load(std::memory_order_seq_cst) !=
+                    0)
+                {
+                    has_pending_.data_.store(true, std::memory_order_seq_cst);
+                }
+            }
+        }
     };
 
 }    // namespace hpx::threads::policies
