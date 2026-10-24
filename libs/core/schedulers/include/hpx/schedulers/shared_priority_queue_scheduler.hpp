@@ -882,8 +882,6 @@ namespace hpx::threads::policies {
             spq_deb.debug(debug::str<>("get_queue_length"), "thread_num ",
                 debug::dec<>(thread_num));
 
-            HPX_ASSERT(thread_num != static_cast<std::size_t>(-1));
-
             std::int64_t count = 0;
             if (thread_num != static_cast<std::size_t>(-1))
             {
@@ -895,7 +893,10 @@ namespace hpx::threads::policies {
             }
             else
             {
-                throw std::runtime_error("unhandled get_queue_length with -1");
+                for (std::size_t d = 0; d < num_domains_; ++d)
+                {
+                    count += numa_holder_[d].get_queue_length();
+                }
             }
             return count;
         }
