@@ -1,4 +1,4 @@
-//  Copyright (c) 2019-2024 Hartmut Kaiser
+//  Copyright (c) 2019-2026 Hartmut Kaiser
 //  Copyright (c) 2019 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -162,6 +162,35 @@ namespace hpx::util {
     // cache line
     HPX_CXX_CORE_EXPORT template <typename Data>
     using cache_line_data = cache_aligned_data<Data>;
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Holds data aligned to the cache line size. Unlike cache_line_data, which
+    // only pads, this makes every element of a std::vector start on its own
+    // cache line, so neighboring elements never share one (false sharing).
+    // Over-aligned types need the aligned allocation path, so use this only
+    // for data that is rarely allocated, e.g. the per-worker data of a
+    // scheduler, which is allocated only when the scheduler is created.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    struct alignas(threads::get_cache_line_size()) aligned_line_data
+    {
+        // We have an explicit (default) constructor here to avoid for the
+        // entire cache-line to be initialized by the compiler.
+        constexpr aligned_line_data() noexcept(
+            std::is_nothrow_default_constructible_v<T>)
+          : data_()
+        {
+        }
+
+        template <typename... Ts,
+            typename = std::enable_if_t<std::is_constructible_v<T, Ts&&...>>>
+        aligned_line_data(Ts&&... ts) noexcept(
+            std::is_nothrow_constructible_v<T, Ts&&...>)
+          : data_(HPX_FORWARD(Ts, ts)...)
+        {
+        }
+
+        T data_;
+    };
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <typename T>

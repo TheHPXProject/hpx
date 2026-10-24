@@ -249,6 +249,7 @@ namespace hpx::threads::detail {
 #if defined(HPX_HAVE_THREAD_CUMULATIVE_COUNTS)
         std::int64_t get_executed_threads(std::size_t, bool) override;
         std::int64_t get_executed_thread_phases(std::size_t, bool) override;
+        void add_directly_executed_thread(std::size_t) override;
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)
         std::int64_t get_thread_phase_duration(std::size_t, bool) override;
         std::int64_t get_thread_duration(std::size_t, bool) override;

@@ -60,6 +60,23 @@ function(cache_line_size output_var)
     set(CACHE_LINE_SIZE ${HPX_INTERNAL_CACHE_LINE_SIZE_DETECT})
   endif()
 
+  # the cache line size is used as an alignment (alignas), so it has to be a
+  # power of two, written as a decimal number without leading zeros (C++ would
+  # read 064 as an octal number)
+  if(NOT CACHE_LINE_SIZE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "The cache line size is not a positive decimal number: ${CACHE_LINE_SIZE}"
+    )
+  endif()
+  math(EXPR cache_line_size_mask
+       "${CACHE_LINE_SIZE} & (${CACHE_LINE_SIZE} - 1)"
+  )
+  if(NOT cache_line_size_mask EQUAL 0)
+    hpx_error(
+      "The cache line size is not a power of two: ${CACHE_LINE_SIZE} (set by HPX_INTERNAL_CACHE_LINE_SIZE_DETECT)"
+    )
+  endif()
+
   set(${output_var}
       "${CACHE_LINE_SIZE}"
       PARENT_SCOPE

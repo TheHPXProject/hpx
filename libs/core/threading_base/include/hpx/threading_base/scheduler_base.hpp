@@ -341,7 +341,8 @@ namespace hpx::threads::policies {
         }
 
         // the scheduler mode, protected from false sharing
-        std::vector<util::cache_line_data<std::atomic<scheduler_mode>>> modes_;
+        std::vector<util::aligned_line_data<std::atomic<scheduler_mode>>>
+            modes_;
 
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         // support for suspension on idle queues
@@ -352,7 +353,8 @@ namespace hpx::threads::policies {
             std::condition_variable wait_cond;
             std::atomic<std::uint32_t> wait_count{0};
         };
-        std::vector<util::cache_line_data<idle_backoff_data>> wait_count_data_;
+        std::vector<util::aligned_line_data<idle_backoff_data>>
+            wait_count_data_;
 #endif
 
         // support for suspension of pus
@@ -361,7 +363,7 @@ namespace hpx::threads::policies {
 
         std::vector<pu_mutex_type> pu_mtxs_;
 
-        std::vector<util::cache_line_data<std::atomic<hpx::state>>> states_;
+        std::vector<util::aligned_line_data<std::atomic<hpx::state>>> states_;
         char const* description_;
 
         thread_queue_init_parameters thread_queue_init_;

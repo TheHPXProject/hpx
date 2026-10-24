@@ -1984,7 +1984,7 @@ namespace hpx::threads::policies {
         }
 
     protected:
-        std::vector<util::cache_line_data<scheduler_data>> data_;
+        std::vector<util::aligned_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
         // Round-robin counter for threads created without a placement hint.

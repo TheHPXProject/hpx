@@ -181,12 +181,10 @@ namespace hpx::lcos::local::detail {
 
         if (!queue.empty())
         {
-            // update reference to queue for all queue entries
-            for (queue_entry* qe = queue_.front(); qe != nullptr; qe = qe->next)
-            {
-                qe->q_ = &queue;    //-V506
-            }
-
+            // Do not update qe->q_ to &queue here. The lock is held for the
+            // entire loop, so no waiter can run ~reset_queue_entry while its
+            // entry is in the local queue. Updating it would create a dangling
+            // pointer on the prepend_entries path.
             do
             {
                 auto* front = queue.front();
@@ -303,7 +301,7 @@ namespace hpx::lcos::local::detail {
             queue.swap(queue_);
 
             // update reference to queue for all queue entries
-            for (queue_entry* qe = queue_.front(); qe != nullptr; qe = qe->next)
+            for (queue_entry* qe = queue.front(); qe != nullptr; qe = qe->next)
             {
                 qe->q_ = &queue;    //-V506
             }

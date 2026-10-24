@@ -15,6 +15,7 @@ set(tests
     channel_spsc_fib
     channel_spsc_shift
     condition_variable
+    condition_variable_abort_stress
     counting_semaphore
     counting_semaphore_cpp20
     in_place_stop_token
@@ -42,6 +43,7 @@ set(channel_mpsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpsc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_spsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_spsc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
+set(condition_variable_abort_stress_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(counting_semaphore_PARAMETERS THREADS_PER_LOCALITY 4)
 set(counting_semaphore_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)

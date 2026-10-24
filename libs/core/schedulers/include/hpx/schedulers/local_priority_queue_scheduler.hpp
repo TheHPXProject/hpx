@@ -1860,16 +1860,16 @@ namespace hpx::threads::policies {
 
         thread_queue_type low_priority_queue_;
 
-        std::vector<util::cache_line_data<thread_queue_type*>> bound_queues_;
-        std::vector<util::cache_line_data<thread_queue_type*>> queues_;
-        std::vector<util::cache_line_data<thread_queue_type*>>
+        std::vector<util::aligned_line_data<thread_queue_type*>> bound_queues_;
+        std::vector<util::aligned_line_data<thread_queue_type*>> queues_;
+        std::vector<util::aligned_line_data<thread_queue_type*>>
             high_priority_queues_;
         struct victims
         {
             std::vector<std::size_t> victim_threads_;
             std::size_t victim_offset_ = 0;
         };
-        std::vector<util::cache_line_data<victims>> victims_;
+        std::vector<util::aligned_line_data<victims>> victims_;
 
         // NUMA domain index for each worker thread, indexed by thread number.
         // Populated during on_start_thread(); used for NUMA-hint routing in
