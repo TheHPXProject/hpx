@@ -224,10 +224,10 @@ namespace hpx::parallel {
             std::ptrdiff_t size_right = detail::distance(new_first, last);
 
             // get number of cores currently used
-            std::size_t const cores =
+            std::size_t const cores = (std::max) (static_cast<std::size_t>(1),
                 hpx::execution::experimental::processing_units_count(
                     policy.parameters(), policy.executor(),
-                    hpx::chrono::null_duration, size_left + size_right);
+                    hpx::chrono::null_duration, size_left + size_right));
 
             // get currently used first core
             std::size_t first_core =
@@ -249,8 +249,8 @@ namespace hpx::parallel {
             }
 
             // cores_right should be at least 1.
-            std::size_t cores_right =
-                (std::max) (static_cast<std::size_t>(1), cores - cores_left);
+            std::size_t cores_right = (std::max) (static_cast<std::size_t>(1),
+                cores > cores_left ? cores - cores_left : 1);
 
             // invoke the reverse operations on the left and right sections
             // concurrently
@@ -262,7 +262,9 @@ namespace hpx::parallel {
                     hpx::execution::experimental::num_cores(cores_left));
             auto left_policy =
                 hpx::execution::experimental::create_rebound_policy(
-                    p, rebound_left_params);
+                    hpx::execution::experimental::with_processing_units_count(
+                        p, cores_left),
+                    rebound_left_params);
 
             auto rebound_right_params =
                 hpx::execution::experimental::rebind_executor_parameters(
@@ -270,8 +272,10 @@ namespace hpx::parallel {
                     hpx::execution::experimental::num_cores(cores_right));
             auto right_policy =
                 hpx::execution::experimental::create_rebound_policy(
-                    hpx::execution::experimental::with_first_core(
-                        p, cores == 1 ? first_core : first_core + cores_left),
+                    hpx::execution::experimental::with_processing_units_count(
+                        hpx::execution::experimental::with_first_core(p,
+                            cores == 1 ? first_core : first_core + cores_left),
+                        cores_right),
                     rebound_right_params);
 
             detail::reverse<FwdIter> r;
