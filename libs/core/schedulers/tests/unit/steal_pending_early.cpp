@@ -4,18 +4,16 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// During their first hpx.thread_queue.idle_loop_count_steal_pending empty
-// scheduling loop iterations, idle workers of the local priority queue
-// scheduler steal pending tasks only from workers that hold at least
-// hpx.thread_queue.min_tasks_to_steal_pending_early of them. Afterwards, and
-// in fast idle mode, they steal any pending task.
+// Idle workers of the local priority queue scheduler steal pending tasks only
+// from workers that hold at least
+// hpx.thread_queue.min_tasks_to_steal_pending_early of them. A thief that finds
+// a worker's queue short but not empty often enough in a row (its owner
+// doesn't get to the tasks) ignores the minimum for that worker. In fast idle
+// mode, the minimum doesn't apply.
 //
 // Worker 0 is kept busy while tasks are put into its pending queue, the test
-// checks whether other workers steal them in the meantime:
-//   --mode=early: idle_loop_count_steal_pending is huge, a few tasks must stay
-//                 put, many tasks must be stolen
-//   --mode=late:  default settings, a few tasks must be stolen quickly
-//   --mode=fast-idle: fast idle mode on, a few tasks must be stolen
+// checks that other workers steal them in the meantime, a few of them as well
+// as many (--mode=default or --mode=fast-idle).
 
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
@@ -83,8 +81,7 @@ std::ptrdiff_t run_case_impl(std::ptrdiff_t num_tasks,
     });
     // Until worker 0 is released, the waits in this function block the OS
     // thread instead of suspending the HPX thread: a resumed thread can be
-    // placed on worker 0, and in the early phase nobody would steal it from
-    // there.
+    // placed on worker 0, behind the busy thread.
     while (!state->busy_started.load())
         std::this_thread::yield();
 
@@ -132,30 +129,21 @@ std::ptrdiff_t run_case(std::ptrdiff_t num_tasks,
     }).get();
 }
 
-void test(std::string const& mode)
+void test()
 {
-    if (mode == "early")
-    {
-        // too few tasks, they are not stolen before worker 0 is released
-        HPX_TEST_EQ(
-            run_case(few_tasks, few_tasks, std::chrono::milliseconds(200)),
-            std::ptrdiff_t(0));
+    // fewer tasks than the minimum: they are stolen anyway, as worker 0
+    // doesn't get to them, and quickly (well before worker 0 would be released
+    // after the timeout)
+    auto const start = std::chrono::steady_clock::now();
+    HPX_TEST_EQ(
+        run_case(few_tasks, few_tasks, std::chrono::milliseconds(timeout)),
+        few_tasks);
+    HPX_TEST(std::chrono::steady_clock::now() - start < timeout / 2);
 
-        // enough tasks, all but the last few are stolen
-        HPX_TEST_LTE(many_tasks - min_tasks + 1,
-            run_case(many_tasks, many_tasks - min_tasks + 1,
-                std::chrono::milliseconds(timeout)));
-    }
-    else
-    {
-        // late phase or fast idle mode: everything is stolen, and quickly
-        // (well before worker 0 would be released after the timeout)
-        auto const start = std::chrono::steady_clock::now();
-        HPX_TEST_EQ(
-            run_case(few_tasks, few_tasks, std::chrono::milliseconds(timeout)),
-            few_tasks);
-        HPX_TEST(std::chrono::steady_clock::now() - start < timeout / 2);
-    }
+    // enough tasks: all of them are stolen
+    HPX_TEST_EQ(
+        run_case(many_tasks, many_tasks, std::chrono::milliseconds(timeout)),
+        many_tasks);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
@@ -167,7 +155,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
             hpx::threads::policies::scheduler_mode::fast_idle_mode);
     }
 
-    test(mode);
+    test();
 
     return hpx::local::finalize();
 }
@@ -177,8 +165,8 @@ int main(int argc, char* argv[])
     hpx::program_options::options_description desc(
         "Usage: " HPX_APPLICATION_STRING " [options]");
     desc.add_options()("mode",
-        hpx::program_options::value<std::string>()->default_value("early"),
-        "early | late | fast-idle");
+        hpx::program_options::value<std::string>()->default_value("default"),
+        "default | fast-idle");
 
     hpx::local::init_params init_args;
     init_args.desc_cmdline = desc;

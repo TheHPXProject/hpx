@@ -763,7 +763,8 @@ namespace hpx::threads::policies {
                 (void) num_thread;
 
                 if (thread_queue_type* q = queues_[idx].queue_;
-                    q->get_next_thread(thrd, true, true, min_tasks))
+                    q->get_next_thread(thrd, true, true,
+                        victim_min_tasks(num_thread, idx, q, min_tasks, false)))
                 {
                     increment_counters(q, this_queue);
                     hpx::tracing::work_stolen(num_thread, idx, thrd);
@@ -817,18 +818,92 @@ namespace hpx::threads::policies {
         bool get_next_thread(std::size_t num_thread, bool const running,
             threads::thread_id_ref_type& thrd, bool enable_stealing)
         {
-            // count how often in a row this worker has found nothing to do
-            std::int64_t& idle_count = victims_[num_thread].data_.idle_count_;
             bool const found = get_next_thread_impl(
-                num_thread, running, thrd, enable_stealing, idle_count);
-            idle_count = found ? 0 : idle_count + 1;
+                num_thread, running, thrd, enable_stealing);
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            if (found)
+                this->clear_free_pass(num_thread);
+#endif
             return found;
+        }
+
+        // may this worker ignore the early stealing minima (once after it
+        // was woken by a notification)?
+        bool has_free_pass(
+            [[maybe_unused]] std::size_t num_thread) const noexcept
+        {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+            return this->scheduler_base::has_free_pass(num_thread);
+#else
+            return false;
+#endif
+        }
+
+        // Number of consecutive looks at a short, non-empty queue of a victim
+        // after which the early minimum for that victim is ignored.
+        static constexpr std::uint32_t steal_looks = 16;
+
+        // The early minimum for one victim, lifted once its queue was seen
+        // short but not empty often enough in a row (seeing it empty starts
+        // over), i.e. its owner doesn't get to it:
+        // - pending tasks: steal_looks looks by this thief
+        // - staged tasks: the looks of all thieves are counted on the victim,
+        //   steal_looks / queue length are needed, and only the one thief
+        //   that resets the count may ignore the minimum
+        std::int64_t victim_min_tasks(std::size_t num_thread, std::size_t idx,
+            thread_queue_type* q, std::int64_t const min_tasks,
+            bool const staged)
+        {
+            if (min_tasks <= 1)
+                return min_tasks;
+
+            if (staged)
+            {
+                std::int64_t const len =
+                    q->get_staged_queue_length(std::memory_order_relaxed);
+                auto& c = q->get_staged_looks();
+                if (len == 0)
+                {
+                    // write the shared counter only if it is not zero yet
+                    if (c.load(std::memory_order_relaxed) != 0)
+                        c.store(0, std::memory_order_relaxed);
+                    return min_tasks;
+                }
+                if (len >= min_tasks)
+                    return min_tasks;
+
+                auto const n = static_cast<std::uint64_t>(len);
+                std::uint64_t const needed = (steal_looks + n - 1) / n;
+                std::uint64_t seen =
+                    c.fetch_add(1, std::memory_order_relaxed) + 1;
+                if (seen > needed &&
+                    c.compare_exchange_strong(
+                        seen, 0, std::memory_order_relaxed))
+                {
+                    return 0;
+                }
+                return min_tasks;
+            }
+
+            std::int64_t const len =
+                q->get_pending_queue_length(std::memory_order_relaxed);
+            std::uint32_t& looks = victims_[num_thread].data_.looks_[idx];
+            if (len == 0)
+            {
+                looks = 0;
+                return min_tasks;
+            }
+            if (len >= min_tasks)
+                return min_tasks;
+
+            if (looks <= steal_looks)
+                ++looks;
+            return looks > steal_looks ? 0 : min_tasks;
         }
 
     private:
         bool get_next_thread_impl(std::size_t num_thread, bool const running,
-            threads::thread_id_ref_type& thrd, bool enable_stealing,
-            std::int64_t const idle_count)
+            threads::thread_id_ref_type& thrd, bool enable_stealing)
         {
             // tri-state result for trying a queue:
             // - nothing: no work found, no staged items
@@ -923,14 +998,15 @@ namespace hpx::threads::policies {
             // true (thread obtained).
             if (enable_stealing)
             {
-                // Right after running out of work, only steal pending tasks
-                // from workers that have a few of them. Otherwise all idle
-                // workers pop the tasks a worker has just converted one by one,
-                // and go idle again together. Keep this short, the tasks of a
-                // worker that is busy running a long task have to be stolen.
+                // Only steal pending tasks from workers that have a few of
+                // them. Otherwise all idle workers pop the tasks a worker has
+                // just converted one by one, and go idle again together. The
+                // tasks of a worker that is busy running a long task still
+                // have to be stolen: the minimum is lifted per victim (see
+                // victim_min_tasks), and for a worker that was just woken up
+                // (free pass).
                 std::int64_t min_tasks = 0;
-                if (idle_count <=
-                        thread_queue_init_.idle_loop_count_steal_pending_ &&
+                if (!has_free_pass(num_thread) &&
                     !has_scheduler_mode(
                         policies::scheduler_mode::fast_idle_mode, num_thread))
                 {
@@ -1520,8 +1596,13 @@ namespace hpx::threads::policies {
                 (void) num_thread;
 
                 thread_queue_type* q = queues_[idx].queue_;
-                result = this_queue->wait_or_add_new(
-                             true, added, q, false, min_tasks) &&
+                std::int64_t const victim_min =
+                    victim_min_tasks(num_thread, idx, q, min_tasks, true);
+
+                // a steal that ignores the minimum takes a single task, the
+                // others stay with the victim
+                result = this_queue->wait_or_add_new(true, added, q, false,
+                             victim_min, victim_min < min_tasks ? 1 : -1) &&
                     result;
 
                 if (0 != added)
@@ -1629,8 +1710,9 @@ namespace hpx::threads::policies {
         // scheduler. Returns true if the OS thread calling this function has to
         // be terminated (i.e. no more work has to be done).
         bool wait_or_add_new(std::size_t num_thread, bool running,
-            std::int64_t& idle_loop_count, bool const enable_stealing,
-            std::size_t& added, thread_id_ref_type* = nullptr)
+            [[maybe_unused]] std::int64_t& idle_loop_count,
+            bool const enable_stealing, std::size_t& added,
+            thread_id_ref_type* = nullptr)
         {
             added = 0;
 
@@ -1667,13 +1749,14 @@ namespace hpx::threads::policies {
 
             if (enable_stealing)
             {
-                // Staged stealing starts early (see the constructor). Until the
-                // worker has been idle for max_idle_loop_count / 2 iterations,
-                // only steal from workers that have more staged tasks than they
-                // will convert soon themselves, leaving the others where they
-                // were placed.
+                // Staged stealing starts early (see the constructor). Only
+                // steal from workers that have more staged tasks than they will
+                // convert soon themselves, leaving the others where they were
+                // placed. The minimum is lifted per victim (see
+                // victim_min_tasks), and for a worker that was just woken up
+                // (free pass).
                 std::int64_t min_tasks = 0;
-                if (idle_loop_count <= get_max_idle_loop_count() / 2 &&
+                if (!has_free_pass(num_thread) &&
                     !has_scheduler_mode(
                         policies::scheduler_mode::fast_idle_mode, num_thread))
                 {
@@ -1685,7 +1768,12 @@ namespace hpx::threads::policies {
                              this_high_priority_queue, this_queue, min_tasks) &&
                     result;
                 if (0 != added)
+                {
+#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
+                    this->clear_free_pass(num_thread);
+#endif
                     return result;
+                }
             }
 
 #ifdef HPX_HAVE_THREAD_MINIMAL_DEADLOCK_DETECTION
@@ -1845,6 +1933,7 @@ namespace hpx::threads::policies {
             std::vector<std::size_t>& victim_threads =
                 victims_[num_thread].data_.victim_threads_;
             victim_threads.reserve(num_threads);
+            victims_[num_thread].data_.looks_.assign(num_threads, 0);
 
             // Record this thread's NUMA domain for use in create_thread().
             thread_numa_domain_[num_thread] =
@@ -2025,8 +2114,9 @@ namespace hpx::threads::policies {
             std::vector<std::size_t> victim_threads_;
             std::size_t victim_offset_ = 0;
 
-            // number of consecutive get_next_thread calls that found nothing
-            std::int64_t idle_count_ = 0;
+            // consecutive looks at a short pending queue of each victim, see
+            // victim_min_tasks
+            std::vector<std::uint32_t> looks_;
         };
         std::vector<util::aligned_line_data<victims>> victims_;
 

@@ -306,7 +306,8 @@ namespace hpx::threads::policies {
 
         ///////////////////////////////////////////////////////////////////////
         bool add_new_always(std::size_t& added, thread_queue* addfrom,
-            std::unique_lock<mutex_type>& lk, bool const steal = false)
+            std::unique_lock<mutex_type>& lk, bool const steal = false,
+            std::int64_t const max_count = -1)
         {
             HPX_ASSERT_OWNS_LOCK(lk);
 
@@ -358,6 +359,10 @@ namespace hpx::threads::policies {
                     return false;
                 }
             }
+
+            // a steal that ignored the minimum takes at most max_count tasks
+            if (max_count > 0 && (add_count < 0 || add_count > max_count))
+                add_count = max_count;
 
             std::size_t const added_new =
                 add_new(add_count, addfrom, lk, steal);
@@ -1336,7 +1341,8 @@ namespace hpx::threads::policies {
 
         inline bool wait_or_add_new(bool const running, std::size_t& added,
             thread_queue* add_from, bool const steal = false,
-            std::int64_t const min_tasks_to_steal = 0) HPX_HOT
+            std::int64_t const min_tasks_to_steal = 0,
+            std::int64_t const max_count = -1) HPX_HOT
         {
             // try to generate new threads from task lists, but only if our own
             // list of threads is empty
@@ -1386,7 +1392,7 @@ namespace hpx::threads::policies {
 
                 // stop running after all HPX threads have been terminated
                 bool const added_new =
-                    add_new_always(added, add_from, lk, steal);
+                    add_new_always(added, add_from, lk, steal, max_count);
                 if (!added_new)
                 {
                     // Before exiting each of the OS threads deletes the
@@ -1500,6 +1506,10 @@ namespace hpx::threads::policies {
         // flag left true while the queue is empty is harmless.
         util::cache_line_data<std::atomic<bool>> has_pending_{false};
 
+        // looks of all thieves at this queue's staged tasks while there are
+        // only a few of them (only thieves touch it)
+        util::cache_line_data<std::atomic<std::uint64_t>> staged_looks_{0};
+
         thread_queue_init_parameters parameters_;
 
         // mutex protecting the members, on a destructive interference region
@@ -1571,6 +1581,13 @@ namespace hpx::threads::policies {
             }
         }
 
+    public:
+        std::atomic<std::uint64_t>& get_staged_looks() noexcept
+        {
+            return staged_looks_.data_;
+        }
+
+    private:
         void pending_removed(std::uint64_t const now) noexcept
         {
             if (now == 0)

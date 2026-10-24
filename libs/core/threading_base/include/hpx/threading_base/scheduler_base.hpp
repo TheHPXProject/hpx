@@ -364,9 +364,35 @@ namespace hpx::threads::policies {
             pu_mutex_type wait_mtx;
             std::condition_variable wait_cond;
             std::atomic<std::uint32_t> wait_count{0};
+            // set when this worker was woken by a notification: it may steal
+            // once without the early minima (only the worker itself reads and
+            // writes it)
+            bool free_pass = false;
         };
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
+
+        // one bit per worker that announced it is going to sleep
+        std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
+            sleep_mask_;
+        std::atomic<std::size_t> wake_start_{0};
+
+        void notify_worker(std::size_t i);
+        void wake_one(std::size_t hint);
+        bool has_visible_work(std::size_t num_thread) const;
+
+        // may this worker ignore the early stealing minima once?
+        bool has_free_pass(std::size_t num_thread) const noexcept
+        {
+            return wait_count_data_[num_thread].data_.free_pass;
+        }
+        void clear_free_pass(std::size_t num_thread) noexcept
+        {
+            // write only if set: other workers read this cache line
+            bool& free_pass = wait_count_data_[num_thread].data_.free_pass;
+            if (free_pass)
+                free_pass = false;
+        }
 #endif
 
         // support for suspension of pus

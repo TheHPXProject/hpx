@@ -147,10 +147,6 @@ namespace hpx::threads {
             hpx::util::get_entry_as<std::int64_t>(rtcfg_,
                 "hpx.thread_queue.min_tasks_to_steal_pending_early",
                 HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY);
-        std::int64_t const idle_loop_count_steal_pending =
-            hpx::util::get_entry_as<std::int64_t>(rtcfg_,
-                "hpx.thread_queue.idle_loop_count_steal_pending",
-                HPX_IDLE_LOOP_COUNT_STEAL_PENDING);
 
         std::ptrdiff_t const small_stacksize =
             rtcfg_.get_stack_size(thread_stacksize::small_);
@@ -168,7 +164,7 @@ namespace hpx::threads {
             cached_threads_count, max_idle_backoff_time, small_stacksize,
             medium_stacksize, large_stacksize, huge_stacksize,
             min_tasks_to_steal_staged_early, idle_loop_count_steal_staged,
-            min_tasks_to_steal_pending_early, idle_loop_count_steal_pending);
+            min_tasks_to_steal_pending_early);
     }
 
     void threadmanager::create_scheduler_user_defined(
