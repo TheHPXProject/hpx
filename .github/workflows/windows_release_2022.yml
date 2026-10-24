@@ -21,13 +21,9 @@ jobs:
     - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
-      run: |
-        md C:\projects
-        $client = new-object System.Net.WebClient
-        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z","C:\projects\vcpkg-export-hpx-dependencies.7z")
-        7z x C:\projects\vcpkg-export-hpx-dependencies.7z -y -oC:\projects\vcpkg
-    # this job builds HPX with mimalloc, which the prebuilt dependencies do not
-    # provide, use the runner's vcpkg for it
+      uses: ./.github/actions/setup-vcpkg
+    # this job builds HPX with mimalloc, which .github/vcpkg/vcpkg.json does
+    # not list, use the runner's vcpkg for it
     - name: Install mimalloc
       run: |
         & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install mimalloc:x64-windows
