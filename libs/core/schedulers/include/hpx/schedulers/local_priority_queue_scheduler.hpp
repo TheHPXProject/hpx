@@ -885,8 +885,11 @@ namespace hpx::threads::policies {
                 return min_tasks;
             }
 
-            std::int64_t const len =
-                q->get_pending_queue_length(std::memory_order_relaxed);
+            // check the flag first, it changes much less often than the
+            // pending counter
+            std::int64_t const len = q->may_have_pending() ?
+                q->get_pending_queue_length(std::memory_order_relaxed) :
+                0;
             std::uint32_t& looks = victims_[num_thread].data_.looks_[idx];
             if (len == 0)
             {
@@ -1627,8 +1630,11 @@ namespace hpx::threads::policies {
                 if (idx < num_high)
                 {
                     thread_queue_type* q = queues_[idx].high_priority_queue_;
-                    result = this_high_priority_queue->wait_or_add_new(
-                                 true, added, q, false, min_tasks) &&
+                    std::int64_t const victim_min =
+                        victim_min_tasks(num_thread, idx, q, min_tasks, true);
+                    result = this_high_priority_queue->wait_or_add_new(true,
+                                 added, q, false, victim_min,
+                                 victim_min < min_tasks ? 1 : -1) &&
                         result;
 
                     if (0 != added)

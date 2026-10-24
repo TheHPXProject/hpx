@@ -1587,6 +1587,12 @@ namespace hpx::threads::policies {
             return staged_looks_.data_;
         }
 
+        // false only while the pending queue is empty, see pending_removed
+        bool may_have_pending() const noexcept
+        {
+            return has_pending_.data_.load(std::memory_order_relaxed);
+        }
+
     private:
         void pending_removed(std::uint64_t const now) noexcept
         {
