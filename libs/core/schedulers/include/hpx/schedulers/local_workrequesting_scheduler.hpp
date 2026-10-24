@@ -940,6 +940,16 @@ namespace hpx::threads::policies {
                 // we are ready to send at least one task
                 if (!thrds.tasks_.empty())
                 {
+                    // A thread waiting for one of these tasks would otherwise
+                    // run it directly (run_as_child) before the requesting
+                    // core gets to it. Tasks that are already running (or ran)
+                    // directly are not pending and will be dropped by the
+                    // requesting core.
+                    for (auto const& task : thrds.tasks_)
+                    {
+                        get_thread_id_data(task)->stop_running_as_child();
+                    }
+
                     hpx::tracing::work_stolen_range(
                         req.num_thread_, d.num_thread_, thrds.tasks_);
 
@@ -1010,6 +1020,36 @@ namespace hpx::threads::policies {
                 {
                     std::this_thread::yield();
                 }
+            }
+        }
+
+        // A thread running on this core that runs other tasks directly
+        // (run_as_child) keeps the core from getting back to its scheduling
+        // loop, so it calls this before each of those tasks to answer the
+        // steal requests of the other cores (see #7789).
+        void handle_steal_requests(std::size_t num_thread) noexcept override
+        {
+            HPX_ASSERT(num_thread < num_queues_);
+
+            auto& d = data_[num_thread].data_;
+            if (d.requests_->is_empty())
+            {
+                return;
+            }
+
+            if (has_scheduler_mode(
+                    policies::scheduler_mode::enable_stealing, num_thread))
+            {
+                steal_request req;
+                while (try_receiving_steal_request(d, req))
+                {
+                    if (!handle_steal_request(d, req))
+                        break;
+                }
+            }
+            else
+            {
+                decline_or_forward_one_steal_requests(d);
             }
         }
 
