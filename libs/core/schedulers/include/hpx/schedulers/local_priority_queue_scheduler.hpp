@@ -736,7 +736,8 @@ namespace hpx::threads::policies {
         bool attempt_stealing_pending(std::size_t num_thread,
             threads::thread_id_ref_type& thrd,
             [[maybe_unused]] thread_queue_type* this_high_priority_queue,
-            [[maybe_unused]] thread_queue_type* this_queue)
+            [[maybe_unused]] thread_queue_type* this_queue,
+            std::int64_t const min_tasks)
         {
             // Helper to increment steal counters only when enabled.
             constexpr auto increment_counters =
@@ -762,7 +763,7 @@ namespace hpx::threads::policies {
                 (void) num_thread;
 
                 if (thread_queue_type* q = queues_[idx].queue_;
-                    q->get_next_thread(thrd, true, true))
+                    q->get_next_thread(thrd, true, true, min_tasks))
                 {
                     increment_counters(q, this_queue);
                     hpx::tracing::work_stolen(num_thread, idx, thrd);
@@ -815,6 +816,19 @@ namespace hpx::threads::policies {
         // available
         bool get_next_thread(std::size_t num_thread, bool const running,
             threads::thread_id_ref_type& thrd, bool enable_stealing)
+        {
+            // count how often in a row this worker has found nothing to do
+            std::int64_t& idle_count = victims_[num_thread].data_.idle_count_;
+            bool const found = get_next_thread_impl(
+                num_thread, running, thrd, enable_stealing, idle_count);
+            idle_count = found ? 0 : idle_count + 1;
+            return found;
+        }
+
+    private:
+        bool get_next_thread_impl(std::size_t num_thread, bool const running,
+            threads::thread_id_ref_type& thrd, bool enable_stealing,
+            std::int64_t const idle_count)
         {
             // tri-state result for trying a queue:
             // - nothing: no work found, no staged items
@@ -907,17 +921,35 @@ namespace hpx::threads::policies {
             // Attempt stealing from other queues if enabled. If stealing
             // succeeds, attempt_stealing_pending returns true, and we return
             // true (thread obtained).
-            if (enable_stealing &&
-                attempt_stealing_pending(
-                    num_thread, thrd, this_high_priority_queue, this_queue))
+            if (enable_stealing)
             {
-                return true;
+                // Right after running out of work, only steal pending tasks
+                // from workers that have a few of them. Otherwise all idle
+                // workers pop the tasks a worker has just converted one by one,
+                // and go idle again together. Keep this short, the tasks of a
+                // worker that is busy running a long task have to be stolen.
+                std::int64_t min_tasks = 0;
+                if (idle_count <=
+                        thread_queue_init_.idle_loop_count_steal_pending_ &&
+                    !has_scheduler_mode(
+                        policies::scheduler_mode::fast_idle_mode, num_thread))
+                {
+                    min_tasks =
+                        thread_queue_init_.min_tasks_to_steal_pending_early_;
+                }
+
+                if (attempt_stealing_pending(num_thread, thrd,
+                        this_high_priority_queue, this_queue, min_tasks))
+                {
+                    return true;
+                }
             }
 
             // Final fallback: try the global low-priority queue
             return low_priority_queue_.get_next_thread(thrd);
         }
 
+    public:
         // Schedule the passed thread
         void schedule_thread(threads::thread_id_ref_type thrd,
             threads::thread_schedule_hint const schedulehint,
@@ -1992,6 +2024,9 @@ namespace hpx::threads::policies {
         {
             std::vector<std::size_t> victim_threads_;
             std::size_t victim_offset_ = 0;
+
+            // number of consecutive get_next_thread calls that found nothing
+            std::int64_t idle_count_ = 0;
         };
         std::vector<util::aligned_line_data<victims>> victims_;
 

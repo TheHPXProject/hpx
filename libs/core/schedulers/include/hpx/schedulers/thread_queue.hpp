@@ -993,7 +993,8 @@ namespace hpx::threads::policies {
         // Return the next thread to be executed, return false if none is
         // available
         bool get_next_thread(threads::thread_id_ref_type& thrd,
-            bool allow_stealing = false, bool steal = false) HPX_HOT
+            bool allow_stealing = false, bool steal = false,
+            std::int64_t const min_tasks_to_steal = 0) HPX_HOT
         {
             std::int64_t const work_items_count = static_cast<std::int64_t>(
                 work_items_count_.data_.load(std::memory_order_relaxed));
@@ -1004,7 +1005,8 @@ namespace hpx::threads::policies {
             }
 
             if (allow_stealing &&
-                parameters_.min_tasks_to_steal_pending_ > work_items_count)
+                (parameters_.min_tasks_to_steal_pending_ > work_items_count ||
+                    min_tasks_to_steal > work_items_count))
             {
                 return false;
             }

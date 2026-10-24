@@ -395,6 +395,29 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+// Minimum number of pending tasks a worker must have for other workers of the
+// local priority queue scheduler to steal pending tasks from it, until they
+// have been idle for HPX_IDLE_LOOP_COUNT_STEAL_PENDING scheduling loop
+// iterations (not used in fast idle mode). Otherwise, all idle workers pop the
+// few tasks a worker has just converted one by one, contending on its queue,
+// and then go idle together again. Can be changed at runtime with
+// hpx.thread_queue.min_tasks_to_steal_pending_early.
+#if !defined(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)
+#  define HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY 4
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Number of consecutive empty scheduling loop iterations after which a worker
+// of the local priority queue scheduler steals pending tasks from any other
+// worker again (see HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY). This
+// has to be short: the few tasks queued behind a long running task can only be
+// stolen afterwards. Can be changed at runtime with
+// hpx.thread_queue.idle_loop_count_steal_pending.
+#if !defined(HPX_IDLE_LOOP_COUNT_STEAL_PENDING)
+#  define HPX_IDLE_LOOP_COUNT_STEAL_PENDING 100
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
 // Minimum number of staged tasks to add to work items queue.
 #if !defined(HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT)
 #  define HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT 10

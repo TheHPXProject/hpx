@@ -81,7 +81,8 @@ In each iteration of its scheduling loop, a worker thread tries, in this order:
 #. the pending queues of other workers (stealing pending threads), if stealing
    is enabled (see :ref:`thread_scheduler_pending_steal`). Workers that have a
    high priority queue try each victim's high priority queue before its normal
-   queue.
+   queue. Shortly after running out of work, a worker only steals normal
+   priority threads from workers that have several of them.
 #. the low priority queue (shared by all worker threads of the pool).
 
 If none of these yields an |hpx| thread, the iteration is empty: the idle loop
@@ -100,11 +101,14 @@ phases (default values in parentheses):
    * * Empty iterations
      * What the worker thread does
    * * from the first one
-     * Steals pending threads from any worker that has at least
-       ``hpx.thread_queue.min_tasks_to_steal_pending`` (0) of them.
+     * Steals pending threads, but only from workers that have at least
+       ``hpx.thread_queue.min_tasks_to_steal_pending_early`` (4) of them.
    * * after ``hpx.thread_queue.idle_loop_count_steal_staged`` (30)
      * Also steals staged tasks, but only from workers that have at least
        ``hpx.thread_queue.min_tasks_to_steal_staged_early`` (10) of them.
+   * * after ``hpx.thread_queue.idle_loop_count_steal_pending`` (100)
+     * Steals pending threads from any worker that has at least
+       ``hpx.thread_queue.min_tasks_to_steal_pending`` (0) of them.
    * * after ``hpx.max_idle_loop_count / 2`` (100000)
      * Steals staged tasks from any worker that has at least
        ``hpx.thread_queue.min_tasks_to_steal_staged`` (0) of them.
@@ -130,13 +134,32 @@ idle, a worker thread also does background work, such as polling the network
 Stealing pending threads
 ========================
 
-Settings: ``hpx.thread_queue.min_tasks_to_steal_pending``.
+Settings: ``hpx.thread_queue.min_tasks_to_steal_pending``,
+``hpx.thread_queue.min_tasks_to_steal_pending_early``,
+``hpx.thread_queue.idle_loop_count_steal_pending``.
 
 A worker steals one pending thread at a time from another worker's queue.
 ``hpx.thread_queue.min_tasks_to_steal_pending`` is the minimum number of
 pending threads a victim must have; the default (``0``) allows stealing from
 any worker that has a pending thread. The work-requesting schedulers apply the
 same minimum when they answer a steal request.
+
+When a worker converts a batch of staged tasks, all workers that are idle at
+that moment find the new pending threads and pop them one by one from the same
+queue. This contention can slow all of them down so much that they go idle
+together again, convert the next batch together, and so on, in lock step. With
+the local priority queue scheduler, a worker therefore steals pending threads
+during its first ``hpx.thread_queue.idle_loop_count_steal_pending`` (100)
+empty iterations only from workers that have at least
+``hpx.thread_queue.min_tasks_to_steal_pending_early`` (4) of them. This only
+applies to the normal queues, not to high priority threads, and not in fast
+idle mode. Set ``hpx.thread_queue.min_tasks_to_steal_pending_early=0`` to turn
+this off.
+
+Keep ``hpx.thread_queue.idle_loop_count_steal_pending`` short: the threads
+queued behind a long running |hpx| thread can only be stolen afterwards. Too
+small values (30 or less) bring the lock step behavior back, much larger
+values delay the threads that are left behind a busy worker.
 
 .. note::
 
@@ -380,6 +403,12 @@ Which scheduler uses which setting
      * yes
      * no (no stealing)
      * no
+   * * ``min_tasks_to_steal_pending_early``, ``idle_loop_count_steal_pending``
+     * yes
+     * no
+     * no
+     * no
+     * no
    * * ``min_tasks_to_steal_staged``
      * yes
      * yes
@@ -434,6 +463,12 @@ Dependencies between settings
   ``hpx.thread_queue.min_tasks_to_steal_staged`` both apply until
   ``hpx.max_idle_loop_count / 2`` empty iterations; the larger of the two
   counts. Afterwards only ``min_tasks_to_steal_staged`` applies.
+* Likewise, ``hpx.thread_queue.min_tasks_to_steal_pending_early`` and
+  ``hpx.thread_queue.min_tasks_to_steal_pending`` both apply during the first
+  ``hpx.thread_queue.idle_loop_count_steal_pending`` empty iterations.
+* ``hpx.thread_queue.idle_loop_count_steal_pending`` counts empty iterations
+  since the worker last found work; unlike the idle loop count it is not reset
+  when the worker wakes up from idle backoff or does background work.
 * Fast idle mode lifts all the early stealing restrictions and makes workers
   reach ``hpx.max_idle_loop_count`` (and go to sleep) after about 1024 empty
   iterations.
@@ -462,7 +497,9 @@ was built with ``HPX_WITH_THREAD_STEALING_COUNTS=ON``,
      * Settings to look at
    * * Many short tasks created on a few worker threads, the other workers are
        idle or the throughput varies a lot between runs.
-     * ``idle_loop_count_steal_staged``, ``max_add_new_count`` (larger
+     * ``min_tasks_to_steal_pending_early`` and
+       ``idle_loop_count_steal_pending`` (contention on the creating worker's
+       queue), ``idle_loop_count_steal_staged``, ``max_add_new_count`` (larger
        batches per steal).
    * * Work placed on specific worker threads (for instance with an executor
        that uses thread placement hints) ends up on other workers, cache
@@ -470,7 +507,8 @@ was built with ``HPX_WITH_THREAD_STEALING_COUNTS=ON``,
      * ``min_tasks_to_steal_staged_early`` (raise it),
        ``idle_loop_count_steal_staged`` (raise it).
    * * Threads woken up while one worker runs a long task are delayed.
-     * ``min_tasks_to_steal_pending`` (keep it at 0).
+     * ``idle_loop_count_steal_pending`` (lower it),
+       ``min_tasks_to_steal_pending`` (keep it at 0).
    * * Idle worker threads use too much CPU time.
      * ``hpx.max_idle_loop_count`` (lower it), ``hpx.max_idle_backoff_time``
        (raise it), fast idle mode.
