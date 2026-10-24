@@ -406,6 +406,14 @@ namespace hpx::threads::policies {
     protected:
         std::shared_ptr<coroutines::detail::tss_storage> thread_data_;
 #endif
+
+    private:
+        bool worker_matches_pu_mask(std::size_t worker_idx,
+            hpx::threads::mask_cref_type pu_mask) const noexcept;
+
+        template <typename F>
+        void apply_to_matching_modes(
+            hpx::threads::mask_cref_type pu_mask, F&& f) noexcept;
     };
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT std::ostream& operator<<(
