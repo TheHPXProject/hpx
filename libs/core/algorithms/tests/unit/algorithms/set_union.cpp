@@ -8,6 +8,7 @@
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <iterator>
@@ -522,6 +523,22 @@ void set_union_bad_alloc_test()
     test_set_union_bad_alloc<std::forward_iterator_tag>();
 }
 
+void test_set_union_first_chunk_shifted()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> const c1 = {1, 1, 2};
+        std::vector<int> const c2 = {0};
+        std::vector<int> d1(4, -1);
+        std::vector<int> d2(4, -1);
+        auto const r = hpx::set_union(hpx::execution::par, c1.begin(), c1.end(),
+            c2.begin(), c2.end(), d1.begin());
+        std::set_union(c1.begin(), c1.end(), c2.begin(), c2.end(), d2.begin());
+        HPX_TEST(r == d1.end());
+        HPX_TEST(d1 == d2);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -534,6 +551,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     set_union_test1();
     set_union_test2();
+    test_set_union_first_chunk_shifted();
     set_union_exception_test();
     set_union_bad_alloc_test();
     return hpx::local::finalize();

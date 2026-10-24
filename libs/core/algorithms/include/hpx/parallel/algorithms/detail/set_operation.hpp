@@ -136,7 +136,6 @@ namespace hpx::parallel::detail {
                 return;
             }
 
-            bool const first_partition = start1 == 0;
             bool const last_partition = end1 == static_cast<std::size_t>(len1);
 
             auto start_value = HPX_INVOKE(proj1, first1[start1]);
@@ -185,7 +184,7 @@ namespace hpx::parallel::detail {
 
             // find start and end in sequence 2
             std::size_t start2 = 0;
-            if (!first_partition)
+            if (start1 != 0)
             {
                 start2 = detail::lower_bound(
                              first2, first2 + len2, start_value, f, proj2) -
