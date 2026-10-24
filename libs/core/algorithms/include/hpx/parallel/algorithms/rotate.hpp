@@ -192,6 +192,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/properties.hpp>
 #include <hpx/parallel/algorithms/copy.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/rotate.hpp>
@@ -262,7 +263,8 @@ namespace hpx::parallel {
                     hpx::execution::experimental::num_cores(cores_left));
             auto left_policy =
                 hpx::execution::experimental::create_rebound_policy(
-                    hpx::execution::experimental::with_processing_units_count(
+                    hpx::experimental::prefer(hpx::execution::experimental::
+                                                  with_processing_units_count,
                         p, cores_left),
                     rebound_left_params);
 
@@ -272,8 +274,10 @@ namespace hpx::parallel {
                     hpx::execution::experimental::num_cores(cores_right));
             auto right_policy =
                 hpx::execution::experimental::create_rebound_policy(
-                    hpx::execution::experimental::with_processing_units_count(
-                        hpx::execution::experimental::with_first_core(p,
+                    hpx::experimental::prefer(hpx::execution::experimental::
+                                                  with_processing_units_count,
+                        hpx::experimental::prefer(
+                            hpx::execution::experimental::with_first_core, p,
                             cores == 1 ? first_core : first_core + cores_left),
                         cores_right),
                     rebound_right_params);
