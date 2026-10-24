@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <thread>
 
 namespace hpx::detail {
 
@@ -204,7 +205,22 @@ namespace hpx::detail {
 
         // Callback has either already executed or is executing concurrently
         // on another thread.
-        if (signalling_thread_ == hpx::threads::get_self_id())
+        auto const self = hpx::threads::get_self_id();
+        bool is_signalling_thread = false;
+        if (self == hpx::threads::invalid_thread_id)
+        {
+            // Not an HPX thread. signalling_os_thread_id_ is only set if the
+            // signalling thread is not an HPX thread either, otherwise it
+            // never compares equal to this thread's id.
+            is_signalling_thread =
+                std::this_thread::get_id() == signalling_os_thread_id_;
+        }
+        else
+        {
+            // An HPX thread.
+            is_signalling_thread = self == signalling_thread_;
+        }
+        if (is_signalling_thread)
         {
             // Callback executed on this thread or is still currently executing
             // and is unregistering itself from within the callback.
@@ -278,6 +294,8 @@ namespace hpx::detail {
             l, stop_requested(state_.load(std::memory_order_acquire)));
 
         signalling_thread_ = hpx::threads::get_self_id();
+        if (signalling_thread_ == hpx::threads::invalid_thread_id)
+            signalling_os_thread_id_ = std::this_thread::get_id();
 
         // invoke registered callbacks
         while (callbacks_ != nullptr)
