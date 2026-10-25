@@ -243,10 +243,16 @@ namespace hpx::parallel {
                     static_cast<double>(size_left) /
                     static_cast<double>(size_left + size_right);
 
-                // avoid cores_left == 0 after integer rounding
-                cores_left = (std::max) (static_cast<std::size_t>(1),
-                    static_cast<std::size_t>(
-                        partition_size_ratio * static_cast<double>(cores)));
+                // avoid cores_left == 0 after integer rounding, and ensure
+                // cores_left leaves at least one core for the right section
+                // when multiple cores are available
+                std::size_t const max_cores_left =
+                    cores > 1 ? cores - 1 : static_cast<std::size_t>(1);
+
+                cores_left = (std::clamp) (static_cast<std::size_t>(
+                                               partition_size_ratio *
+                                               static_cast<double>(cores)),
+                    static_cast<std::size_t>(1), max_cores_left);
             }
 
             // cores_right should be at least 1.
