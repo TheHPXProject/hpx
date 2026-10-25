@@ -92,15 +92,45 @@ hpx_slurm_seconds()
     echo "${value}"
 }
 
+# Prints how long the job has been pending or running (in minutes since the
+# given time), from hpx_slurm_wait
+hpx_slurm_progress()
+{
+    local job_id="$1" status="$2" since="$3"
+    echo "Slurm job ${job_id:-submission}: ${status} for" \
+        "$(( (SECONDS - since) / 60 )) min" >&2
+}
+
+# The entry scripts trace their commands, which would print several lines a
+# second while waiting for the job. Don't trace the wait, it reports its
+# progress instead.
+hpx_slurm_wait()
+{
+    local result=0
+    if [[ $- == *x* ]]; then
+        set +x
+        hpx_slurm_wait_untraced "$@" || result=$?
+        set -x
+    else
+        hpx_slurm_wait_untraced "$@" || result=$?
+    fi
+    return "${result}"
+}
+
 # sbatch --wait preserves the batch exit code. Watch only this submission while
 # it is pending, then give it a separate execution budget. Polling stops once
 # resources are allocated; sbatch --time still enforces the actual runtime.
-hpx_slurm_wait()
+# Reports the state of the job whenever it changes and every progress_seconds
+# while the job is pending or running.
+hpx_slurm_wait_untraced()
 {
     local submission_file="$1" submission_pid="$2"
     local queue_seconds="$3" runtime_seconds="$4" poll_seconds="$5"
+    local progress_seconds="$6"
     local deadline=$((SECONDS + queue_seconds)) next_poll=${SECONDS}
     local started=0 job_id="" cluster="" extra="" state remaining result
+    local reason="" nodes="" status="" last_status="" since=${SECONDS}
+    local next_progress=$((SECONDS + progress_seconds))
 
     while kill -0 "${submission_pid}" 2>/dev/null; do
         # Check once more at the queue deadline: a job may have started since
@@ -118,13 +148,25 @@ hpx_slurm_wait()
             (( remaining <= 30 )) || remaining=30
             if state=$(timeout --foreground --kill-after=5s "${remaining}s" \
                 squeue ${cluster:+"--clusters=${cluster}"} --jobs="${job_id}" \
-                    --noheader --format=%T); then
+                    --noheader --format='%T|%r|%N'); then
+                IFS='|' read -r state reason nodes <<< "${state}" || true
                 # An empty response means the job has already left the queue;
                 # allow sbatch's next completion poll to return its exit code.
                 if [[ "${state}" != "PENDING" ]]; then
                     started=1
                     deadline=$((SECONDS + runtime_seconds))
-                    echo "Slurm job ${job_id}: execution wait started" >&2
+                    since=${SECONDS}
+                    next_progress=$((SECONDS + progress_seconds))
+                    echo "Slurm job ${job_id}: execution wait" \
+                        "started${nodes:+ on ${nodes}}" >&2
+                else
+                    status="pending${reason:+ (${reason})}"
+                    if [[ "${status}" != "${last_status}" ]] ||
+                        (( SECONDS >= next_progress )); then
+                        hpx_slurm_progress "${job_id}" "${status}" "${since}"
+                        last_status="${status}"
+                        next_progress=$((SECONDS + progress_seconds))
+                    fi
                 fi
             else
                 result=$?
@@ -136,6 +178,11 @@ hpx_slurm_wait()
             next_poll=$((SECONDS + poll_seconds))
         fi
         kill -0 "${submission_pid}" 2>/dev/null || break
+        if (( started && SECONDS >= next_progress )); then
+            hpx_slurm_progress "${job_id}" "running${nodes:+ on ${nodes}}" \
+                "${since}"
+            next_progress=$((SECONDS + progress_seconds))
+        fi
         if (( SECONDS >= deadline )); then
             if (( started )); then
                 echo "Slurm execution wait timed out: ${job_id}" >&2
@@ -160,12 +207,17 @@ hpx_slurm_run()
 {
     local limit="$1" runtime_seconds queue_seconds
     local poll_seconds="${HPX_SLURM_POLL_INTERVAL:-30}"
+    local progress_seconds="${HPX_SLURM_PROGRESS_INTERVAL:-600}"
     shift
     runtime_seconds=$(hpx_slurm_seconds "${limit}") || return "$?"
     queue_seconds=$(hpx_slurm_seconds \
         "${HPX_SLURM_QUEUE_TIMEOUT:-24h}") || return "$?"
     if [[ ! "${poll_seconds}" =~ ^[1-9][0-9]{0,6}$ ]]; then
         echo "Slurm poll interval must be a positive integer in seconds" >&2
+        return 2
+    fi
+    if [[ ! "${progress_seconds}" =~ ^[1-9][0-9]{0,6}$ ]]; then
+        echo "Slurm progress interval must be a positive integer in seconds" >&2
         return 2
     fi
     local submission_file submission_pid cleanup_trap result abort_status=0
@@ -196,7 +248,8 @@ hpx_slurm_run()
     trap 'exit 143' TERM
     (( abort_status == 0 )) || exit "${abort_status}"
     if hpx_slurm_wait "${submission_file}" "${submission_pid}" \
-        "${queue_seconds}" "${runtime_seconds}" "${poll_seconds}"; then
+        "${queue_seconds}" "${runtime_seconds}" "${poll_seconds}" \
+        "${progress_seconds}"; then
         result=0
     else
         result=$?

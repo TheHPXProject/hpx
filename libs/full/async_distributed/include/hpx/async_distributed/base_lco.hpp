@@ -43,7 +43,12 @@ namespace hpx::lcos {
         typedef components::managed_component<base_lco> wrapping_type;
         typedef base_lco base_type_holder;
 
+        /// \brief Returns the component type associated with this LCO.
         static components::component_type get_component_type() noexcept;
+
+        /// \brief Sets the component type associated with this LCO.
+        ///
+        /// \param type The component type to associate with this LCO.
         static void set_component_type(components::component_type type);
 
         /// Destructor, needs to be virtual to allow for clean destruction of
@@ -82,6 +87,7 @@ namespace hpx::lcos {
         void disconnect_nonvirt(hpx::id_type const& id);
 
     public:
+        /// \cond NOINTERNAL
         /// Each of the exposed functions needs to be encapsulated into an action
         /// type, allowing to generate all required boilerplate code for threads,
         /// serialization, etc.
@@ -95,9 +101,8 @@ namespace hpx::lcos {
         /// information from the remote site to the LCO instance specified as
         /// a continuation. This action carries 2 parameters:
         ///
-        /// \param std::exception_ptr
-        ///               [in] The exception encapsulating the error to report
-        ///               to this LCO instance.
+        /// The exception parameter is an \c std::exception_ptr encapsulating
+        /// the error to report to this LCO instance.
         HPX_DEFINE_COMPONENT_DIRECT_ACTION(
             base_lco, set_exception_nonvirt, set_exception_action)
 
@@ -108,6 +113,7 @@ namespace hpx::lcos {
         /// The \a set_exception_action may be used to
         HPX_DEFINE_COMPONENT_DIRECT_ACTION(
             base_lco, disconnect_nonvirt, disconnect_action)
+        /// \endcond
     };
 }    // namespace hpx::lcos
 

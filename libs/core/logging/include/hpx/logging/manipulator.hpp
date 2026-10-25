@@ -64,8 +64,8 @@ namespace hpx::util::logging {
     /// @brief Destination is a manipulator. It contains a place where the message,
     /// after being formatted, is to be written to.
     ///
-    /// Some viable destinations are : @ref destination::cout "the console",
-    /// @ref destination::file "a file", a socket, etc.
+    /// Some viable destinations are \c destination::cout (the console),
+    /// \c destination::file (a file), a socket, etc.
     namespace destination {
 
         /// @brief What to use as base class, for your destination classes

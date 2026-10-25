@@ -324,8 +324,8 @@ namespace hpx {
         ///                         hpx#throws the function will throw on error
         ///                         instead.
         ///
-        /// \note The function will compose a thread name of the form
-        ///       '<name>-thread#<num>' which is used to register the thread. It
+        /// \note The function will compose a thread name from \c name and
+        ///       \c num which is used to register the thread. It
         ///       is the user's responsibility to ensure that each (composed)
         ///       thread name is unique. HPX internally uses the following names
         ///       for the threads it creates, do not reuse those:

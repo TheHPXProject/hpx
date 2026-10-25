@@ -374,7 +374,8 @@ namespace hpx::threads::policies {
         {
             if (hpx::threads::test(pu_mask, i))
             {
-                modes_[j++].data_.store(mode, std::memory_order_release);
+                modes_[j++].data_.store(
+                    adjust_scheduler_mode(mode), std::memory_order_release);
             }
         }
         do_some_work(static_cast<std::size_t>(-1));
@@ -393,8 +394,8 @@ namespace hpx::threads::policies {
             {
                 auto const old_mode =
                     modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(
-                    old_mode | mode, std::memory_order_release);
+                modes_[j++].data_.store(adjust_scheduler_mode(old_mode | mode),
+                    std::memory_order_release);
             }
         }
     }
@@ -412,7 +413,8 @@ namespace hpx::threads::policies {
                 auto const old_mode =
                     modes_[j].data_.load(std::memory_order::relaxed);
                 modes_[j++].data_.store(
-                    static_cast<scheduler_mode>(old_mode & ~mode),
+                    adjust_scheduler_mode(
+                        static_cast<scheduler_mode>(old_mode & ~mode)),
                     std::memory_order_release);
             }
         }
@@ -432,8 +434,8 @@ namespace hpx::threads::policies {
                 auto const old_mode =
                     modes_[j].data_.load(std::memory_order::relaxed);
                 modes_[j++].data_.store(
-                    static_cast<scheduler_mode>(
-                        (old_mode | to_add_mode) & ~to_remove_mode),
+                    adjust_scheduler_mode(static_cast<scheduler_mode>(
+                        (old_mode | to_add_mode) & ~to_remove_mode)),
                     std::memory_order_release);
             }
         }

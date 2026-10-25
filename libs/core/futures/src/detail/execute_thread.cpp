@@ -155,13 +155,24 @@ namespace hpx::threads::detail {
 
                 auto prev_state = thrd_stat.get_previous();
                 auto on_exit = hpx::experimental::scope_exit([&] {
-                    // A stackful child run directly comes back as unknown
-                    // once its function has returned, since the coroutine
-                    // resets its result on exit; a stackless one as
-                    // terminated.
-                    if (prev_state == thread_schedule_state::terminated ||
-                        prev_state == thread_schedule_state::unknown)
+                    // A child that ran comes back terminated, stackful or
+                    // stackless; pending means it hit the recursion limit
+                    // and was not run here.
+                    if (prev_state == thread_schedule_state::terminated)
                     {
+#if defined(HPX_HAVE_THREAD_CUMULATIVE_COUNTS)
+                        // Counted on the worker running now: a child that
+                        // suspended may have resumed on another worker. A
+                        // future waited on outside any HPX thread has no
+                        // worker to count it on.
+                        if (auto* self = get_self_id_data())
+                        {
+                            self->get_scheduler_base()
+                                ->get_parent_pool()
+                                ->add_directly_executed_thread(
+                                    get_local_thread_num_tss());
+                        }
+#endif
                         hpx::tracing::task_completed(thrdptr);
                     }
                 });
@@ -218,7 +229,6 @@ namespace hpx::threads::detail {
                     hint.hint);
         }
 
-        HPX_ASSERT(state_val != thread_schedule_state::terminated);
-        return state_val == thread_schedule_state::deleted;
+        return state_val == thread_schedule_state::terminated;
     }
 }    // namespace hpx::threads::detail

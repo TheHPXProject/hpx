@@ -69,7 +69,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         // initialize data
         hpx::generate(hpx::execution::par, v.begin(), v.end(), random_fill());
 
-        hpx::util::perftests_init(vm);
+        hpx::util::perftests_init(vm, "minmax_element_performance");
 
         // run benchmark
         hpx::util::perftests_report("hpx::minmax", "par", test_count, [&] {

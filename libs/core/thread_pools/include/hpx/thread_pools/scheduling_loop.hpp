@@ -405,10 +405,15 @@ namespace hpx::threads::detail {
                 if (HPX_LIKELY(state_val == thread_schedule_state::deleted ||
                         state_val == thread_schedule_state::terminated))
                 {
+                    // A thread still marked as a child here was run directly
+                    // by its parent while it sat in the queue. Only its queue
+                    // entry is left, so it is released without being counted.
 #ifdef HPX_HAVE_THREAD_CUMULATIVE_COUNTS
-                    ++counters.executed_threads_;
+                    if (!thrdptr->runs_as_child())
+                    {
+                        ++counters.executed_threads_;
+                    }
 #endif
-                    HPX_ASSERT(!thrdptr->runs_as_child());
                     thrd = thread_id_type();
                 }
             }

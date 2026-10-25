@@ -19,6 +19,7 @@
 #include <hpx/modules/tracing.hpp>
 #include <hpx/schedulers/deadlock_detection.hpp>
 #include <hpx/schedulers/lockfree_queue_backends.hpp>
+#include <hpx/schedulers/queue_helpers.hpp>
 #include <hpx/schedulers/thread_queue.hpp>
 
 #include <atomic>
@@ -26,7 +27,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <limits>
 #include <mutex>
 #include <string_view>
 #include <type_traits>
@@ -80,8 +80,9 @@ namespace hpx::threads::policies {
                     static_cast<std::size_t>(-1),
                 thread_queue_init_parameters const& thread_queue_init =
                     thread_queue_init_parameters{},
-                char const* description =
-                    "local_priority_queue_scheduler") noexcept
+                char const* description = "local_priority_queue_scheduler",
+                numa_sensitive_mode numa_sensitive =
+                    numa_sensitive_mode::boundary) noexcept
               : num_queues_(num_queues)
               , num_high_priority_queues_(
                     num_high_priority_queues == static_cast<std::size_t>(-1) ?
@@ -90,6 +91,7 @@ namespace hpx::threads::policies {
               , thread_queue_init_(thread_queue_init)
               , affinity_data_(affinity_data)
               , description_(description)
+              , numa_sensitive_(numa_sensitive)
             {
             }
 
@@ -100,6 +102,7 @@ namespace hpx::threads::policies {
               , num_high_priority_queues_(num_queues)
               , affinity_data_(affinity_data)
               , description_(description)
+              , numa_sensitive_(numa_sensitive_mode::boundary)
             {
             }
 
@@ -108,6 +111,7 @@ namespace hpx::threads::policies {
             thread_queue_init_parameters thread_queue_init_;
             detail::affinity_data const& affinity_data_;
             char const* description_;
+            numa_sensitive_mode numa_sensitive_;
         };
         using init_parameter_type = init_parameter;
 
@@ -117,6 +121,7 @@ namespace hpx::threads::policies {
                 init.num_queues_, init.description_, init.thread_queue_init_)
           , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
+          , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
           , low_priority_queue_(thread_queue_init_)
@@ -1773,45 +1778,29 @@ namespace hpx::threads::policies {
                     any(numa_mask & numa_masks[other_num_thread]);
             });
 
-            // check for the rest and if we are NUMA aware
+            // Check other NUMA domains in increasing distance order. Depending
+            // on the configured sensitivity this includes all workers, only
+            // boundary workers and their nearest domains, or no remote workers.
             if (has_scheduler_mode(
-                    policies::scheduler_mode::enable_stealing_numa,
-                    num_thread) &&
-                any(first_mask & pu_mask))
+                    policies::scheduler_mode::enable_stealing_numa, num_thread))
             {
-                // Build a list of (hardware_latency_distance, domain_id)
-                // for all NUMA domains other than our own, then sweep them
-                // in ascending distance order so that the victim list
-                // prefers closer domains over farther ones.
                 std::size_t const my_domain =
                     static_cast<std::size_t>(numa_domains[num_thread]);
                 std::size_t num_nodes = topo.get_number_of_numa_nodes();
                 if (num_nodes == 0)
                     num_nodes = 1;
 
-                // Only steal from directly neighboring NUMA domains
-                // (minimum distance) to limit cross-NUMA traffic.
-                std::size_t min_dist =
-                    (std::numeric_limits<std::size_t>::max)();
-                for (std::size_t n = 0; n < num_nodes; ++n)
+                auto const remote_domains =
+                    detail::get_numa_stealing_domains(numa_sensitive_,
+                        my_domain, num_nodes, any(first_mask & pu_mask),
+                        [&topo](std::size_t from, std::size_t to) {
+                            return topo.get_numa_distance(from, to);
+                        });
+                for (std::size_t domain : remote_domains)
                 {
-                    if (n != my_domain)
-                    {
-                        std::size_t const d =
-                            topo.get_numa_distance(my_domain, n);
-                        if (d < min_dist)
-                            min_dist = d;
-                    }
-                }
-                for (std::size_t n = 0; n < num_nodes; ++n)
-                {
-                    if (n == my_domain)
-                        continue;
-                    if (topo.get_numa_distance(my_domain, n) != min_dist)
-                        continue;
                     iterate([&](std::size_t const other_num_thread) {
                         return static_cast<std::size_t>(
-                                   numa_domains[other_num_thread]) == n;
+                                   numa_domains[other_num_thread]) == domain;
                     });
                 }
             }
@@ -1864,26 +1853,27 @@ namespace hpx::threads::policies {
         util::cache_aligned_data_derived<std::atomic<std::size_t>> curr_queue_;
 
         detail::affinity_data const& affinity_data_;
+        numa_sensitive_mode const numa_sensitive_;
 
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;
 
         thread_queue_type low_priority_queue_;
 
-        std::vector<util::cache_line_data<thread_queue_type*>> bound_queues_;
-        std::vector<util::cache_line_data<thread_queue_type*>> queues_;
-        std::vector<util::cache_line_data<thread_queue_type*>>
+        std::vector<util::aligned_line_data<thread_queue_type*>> bound_queues_;
+        std::vector<util::aligned_line_data<thread_queue_type*>> queues_;
+        std::vector<util::aligned_line_data<thread_queue_type*>>
             high_priority_queues_;
         struct victims
         {
             std::vector<std::size_t> victim_threads_;
             std::size_t victim_offset_ = 0;
         };
-        std::vector<util::cache_line_data<victims>> victims_;
+        std::vector<util::aligned_line_data<victims>> victims_;
 
         // NUMA domain index for each worker thread, indexed by thread number.
         // Populated during on_start_thread(); used for NUMA-hint routing in
-        // create_thread() and for distance-ordered victim list construction.
+        // create_thread().
         std::vector<std::size_t> thread_numa_domain_;
     };    // namespace hpx::threads::policies
 }    // namespace hpx::threads::policies

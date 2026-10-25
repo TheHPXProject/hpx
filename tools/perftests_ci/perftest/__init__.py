@@ -18,13 +18,13 @@ from pyutils import default_vars as var, env, log, runtools
 
 
 def _git_commit():
-    from pyutils import buildinfo
+    import buildinfo
     return runtools.run(['git', 'rev-parse', 'HEAD'],
                         cwd=buildinfo.source_dir).strip()
 
 
 def _git_datetime():
-    from pyutils import buildinfo
+    import buildinfo
     posixtime = runtools.run(
         ['git', 'show', '-s', '--format=%ct',
          _git_commit()],
@@ -36,31 +36,36 @@ def _now():
     return datetime.now(timezone.utc).astimezone().isoformat()
 
 
-def run(local, targets_and_opts, n_executions):
-    from pyutils import buildinfo
+def run(local, targets_and_opts, n_executions, timeout=None):
+    import buildinfo
 
     def join_results(result_list):
-        # This should work, as long as the format of the result files stays consistent
+        # This should work, as long as the format of the result files stays consistent.
+        # The timings of one execution depend on each other (the memory layout,
+        # the placement of the threads), so "executions" keeps how many of the
+        # joined timings each execution added, the comparison uses them
         joined_results = result_list[0]
+        for output in joined_results["outputs"]:
+            output["executions"] = [len(output["series"])]
         for result in result_list[1:]:
               for i in range(len(joined_results["outputs"])):
-                joined_results["outputs"][i]["series"].extend(result["outputs"][i]["series"])
+                series = result["outputs"][i]["series"]
+                joined_results["outputs"][i]["series"].extend(series)
+                joined_results["outputs"][i]["executions"].append(len(series))
         return joined_results
 
-    binary_dir = buildinfo.binary_dir
     command = []
     if targets_and_opts:
-        run_command = os.path.join(binary_dir, targets_and_opts)
-        command += run_command.split()
+        command += targets_and_opts.split()
 
 
     result_list = []
 
     for _ in range(n_executions):
         if local:
-            output = runtools.run(command)
+            output = runtools.run(command, timeout=timeout)
         else:
-            output = runtools.srun(command)
+            output = runtools.srun(command, timeout=timeout)
             
         result_list.append(json.loads(output))
   

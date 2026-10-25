@@ -12,6 +12,8 @@
 
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <utility>
 #include <vector>
 
 void test_semaphore_release_acquire()
@@ -268,6 +270,55 @@ void test_try_acquire_until_multiple_waiters_all_succeed()
     HPX_TEST_EQ(success_count.load(), N);
 }
 
+void test_wait_until_timeout_does_not_lose_signal()
+{
+    int exercised = 0;
+    for (int attempt = 0; exercised != 8 && attempt != 1000; ++attempt)
+    {
+        hpx::lcos::local::detail::counting_semaphore sem(0);
+        hpx::spinlock mtx;
+        std::atomic<int> state{0};
+
+        auto const deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(10);
+
+        hpx::thread waiter([&] {
+            std::unique_lock<hpx::spinlock> l(mtx);
+            state = 1;
+            bool const acquired = sem.wait_until(l, deadline, 1);
+            state = acquired ? 3 : 2;
+        });
+
+        while (state.load() == 0)
+        {
+            hpx::this_thread::yield();
+        }
+
+        std::unique_lock<hpx::spinlock> l(mtx);
+        bool const before_deadline =
+            std::chrono::steady_clock::now() < deadline;
+        while (before_deadline &&
+            std::chrono::steady_clock::now() <
+                deadline + std::chrono::milliseconds(100))
+        {
+        }
+        sem.signal(std::move(l), 1);
+
+        waiter.join();
+
+        std::unique_lock<hpx::spinlock> l2(mtx);
+        bool const left_over = sem.try_acquire(l2);
+        if (!before_deadline)
+        {
+            continue;
+        }
+        HPX_TEST_EQ(state.load(), 3);
+        HPX_TEST(!left_over);
+        ++exercised;
+    }
+    HPX_TEST_NEQ(exercised, 0);
+}
+
 int hpx_main()
 {
     test_semaphore_release_acquire();
@@ -279,6 +330,7 @@ int hpx_main()
     test_semaphore_try_acquire_for_until();
     test_try_acquire_until_returns_true_when_signaled_before_deadline();
     test_try_acquire_until_multiple_waiters_all_succeed();
+    test_wait_until_timeout_does_not_lose_signal();
 
     hpx::local::finalize();
     return hpx::util::report_errors();

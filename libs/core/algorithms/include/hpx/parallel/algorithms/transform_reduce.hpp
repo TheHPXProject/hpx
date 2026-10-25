@@ -370,6 +370,7 @@ namespace hpx {
     ///                     transform the elements of the input sequence before
     ///                     invoking the reduce function.
     ///
+    /// \param policy       The execution policy to use for the algorithm.
     /// \param first1       Refers to the beginning of the first sequence of
     ///                     elements the result will be calculated with.
     /// \param last1        Refers to the end of the first sequence of elements

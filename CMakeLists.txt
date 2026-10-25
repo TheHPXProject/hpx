@@ -472,6 +472,13 @@ hpx_option(
   HPX_WITH_TESTS_BENCHMARKS BOOL "Build HPX benchmark tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
 )
+if(HPX_WITH_TESTS_BENCHMARKS)
+  hpx_option(
+    HPX_WITH_TESTS_RUN_BENCHMARKS BOOL
+    "Run the built HPX benchmark tests (default: OFF)" OFF ADVANCED
+    CATEGORY "Build Targets"
+  )
+endif()
 hpx_option(
   HPX_WITH_TESTS_REGRESSIONS BOOL "Build HPX regression tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
@@ -1125,6 +1132,10 @@ hpx_option(
   CATEGORY "Build Targets"
   ADVANCED
 )
+if(HPX_WITH_NANOBENCH)
+  hpx_add_config_define(HPX_HAVE_NANOBENCH)
+  include(HPX_SetupNanobench)
+endif()
 
 # cmake-format: off
 # LibCDS option
@@ -1483,10 +1494,6 @@ if(HPX_WITH_NETWORKING)
   )
   if(HPX_WITH_PARCELPORT_ACTION_COUNTERS)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
-  endif()
-  if(HPX_WITH_NANOBENCH)
-    hpx_add_config_define(HPX_HAVE_NANOBENCH)
-    include(HPX_SetupNanobench)
   endif()
 else(HPX_WITH_NETWORKING)
   # if networking is off,  then allow the option of using our asynchronous MPI
@@ -2808,6 +2815,11 @@ endif()
 if(HPX_WITH_TOOLS OR HPX_WITH_TESTS_BENCHMARKS)
   add_hpx_pseudo_target(tools)
   add_subdirectory(tools)
+endif()
+
+# All performance reports are known now, add the target that plots them
+if(HPX_WITH_TESTS AND HPX_WITH_TESTS_RUN_BENCHMARKS)
+  hpx_add_perftests_plot_target()
 endif()
 
 # Configure hpxrun.py

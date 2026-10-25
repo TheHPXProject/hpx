@@ -130,11 +130,18 @@ namespace hpx::threads {
         bound = 6,          /*!< Task goes onto a special
             high priority queue and will never be stolen by another thread
             after initial assignment. This should be used for thread placement
-            tasks such as OpenMP type for loops. */
+            tasks such as OpenMP type for loops. Schedulers that ignore thread
+            priorities (e.g. the local queue scheduler selected with
+            \a --hpx:queuing=local) do not provide this guarantee: for those,
+            this value only affects the initial placement, and the thread may
+            be stolen by, or resumed on, another worker thread. */
         initially_bound = 7,          /*!< Task initially goes onto a special
             high priority queue and will never be stolen by another thread
             after initial assignment. If the thread is rescheduled later, it
-            will use normal priority. */
+            will use normal priority. Schedulers that ignore thread priorities
+            (e.g. the local queue scheduler selected with
+            \a --hpx:queuing=local) do not provide this guarantee: for those,
+            this value only affects the initial placement. */
 
         /// \cond NOINTERNAL
         // obsolete, kept for compatibility only

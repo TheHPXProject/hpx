@@ -1,4 +1,4 @@
-//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com )
+//  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com)
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,12 +7,14 @@
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/testing.hpp>
 
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <iterator>
 #include <random>
 #include <string>
 #include <vector>
@@ -21,15 +23,18 @@
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
 
-// Compare the speed with the implementation of the compiler
-void function01(void)
+int hpx_main(hpx::program_options::variables_map& vm)
 {
+    if (vm.count("seed"))
+        seed = vm["seed"].as<unsigned int>();
+
+    unsigned int test_count = vm["test_count"].as<unsigned int>();
+
+    hpx::util::perftests_init(vm, "benchmark_partial_sort");
+
     typedef std::less<std::uint64_t> compare_t;
-#if defined(HPX_DEBUG)
-    constexpr std::uint32_t NELEM = 100;
-#else
-    constexpr std::uint32_t NELEM = 10000;
-#endif
+
+    std::uint32_t NELEM = 1000;
 
     std::vector<uint64_t> A, B;
     A.reserve(NELEM);
@@ -41,42 +46,22 @@ void function01(void)
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    for (std::uint64_t i = 0; i <= NELEM; ++i)
-    {
-        B = A;
-        hpx::partial_sort(B.begin(), B.begin() + static_cast<std::ptrdiff_t>(i),
-            B.end(), compare_t());
-    }
+    std::uniform_int_distribution<std::int64_t> i_dist(0, NELEM - 1);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime1 = end - start;
-    std::cout << "hpx::partial_sort :" << (nanotime1.count() / 1000000)
-              << std::endl;
+    hpx::util::perftests_report(
+        "hpx::partial_sort, size: " + std::to_string(NELEM) +
+            ", step: " + std::to_string(1),
+        "seq", test_count,
+        [&] {
+            hpx::partial_sort(B.begin(), std::next(B.begin(), i_dist(gen)),
+                B.end(), compare_t());
+        },
+        [&] { B = A; });
 
-    start = std::chrono::high_resolution_clock::now();
-    for (std::uint64_t i = 0; i <= NELEM; ++i)
-    {
-        B = A;
-        std::partial_sort(B.begin(), B.begin() + static_cast<std::ptrdiff_t>(i),
-            B.end(), compare_t());
-    }
-    end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime2 = end - start;
-    std::cout << "std::partial_sort           :"
-              << (nanotime2.count() / 1000000) << std::endl;
-}
+    NELEM = 100000;
 
-void function02(void)
-{
-#if defined(HPX_DEBUG)
-    constexpr std::uint32_t NELEM = 100000;
-#else
-    constexpr std::uint32_t NELEM = 10000000;
-#endif
-
-    std::less<std::uint64_t> comp;
-    std::vector<std::uint64_t> A, B;
+    A.clear();
+    B.clear();
     A.reserve(NELEM);
     B.reserve(NELEM);
 
@@ -86,56 +71,20 @@ void function02(void)
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    // std::sort
-    B = A;
-    auto start = std::chrono::high_resolution_clock::now();
-    std::sort(B.begin(), B.end(), comp);
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime1 = end - start;
-    std::cout << "std::sort                    :"
-              << (nanotime1.count() / 1000000) << std::endl;
+    std::uint32_t const STEP = NELEM / 20;
 
-    // heap sort
-    B = A;
-    start = std::chrono::high_resolution_clock::now();
-    std::make_heap(B.begin(), B.end(), comp);
-    std::sort_heap(B.begin(), B.end(), comp);
-    end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime2 = end - start;
-    std::cout << "std::heap_sort               :"
-              << (nanotime2.count() / 1000000) << std::endl;
+    std::uniform_int_distribution<std::int64_t> i_dist2(0, NELEM - 1);
 
-    // hpx::partial_sort
-    B = A;
-    start = std::chrono::high_resolution_clock::now();
-    hpx::partial_sort(B.begin(), B.end(), B.end(), comp);
-    end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime4 = end - start;
-    std::cout << "hpx::partial_sort  :" << (nanotime4.count() / 1000000)
-              << std::endl;
+    hpx::util::perftests_report(
+        "hpx::partial_sort, size: " + std::to_string(NELEM), "seq",
+        (std::max) (test_count / STEP, 1u),
+        [&] {
+            hpx::partial_sort(B.begin(), std::next(B.begin(), i_dist2(gen)),
+                B.end(), compare_t());
+        },
+        [&] { B = A; });
 
-    // std::partial_sort
-    B = A;
-    start = std::chrono::high_resolution_clock::now();
-    std::partial_sort(B.begin(), B.end(), B.end(), comp);
-    end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<long unsigned, std::nano> nanotime5 = end - start;
-    std::cout << "std::partial_sort            :"
-              << (nanotime5.count() / 1000000) << std::endl;
-
-    std::cout << "\n";
-}
-
-int hpx_main(hpx::program_options::variables_map& vm)
-{
-    if (vm.count("seed"))
-        seed = vm["seed"].as<unsigned int>();
-
-    std::cout << "using seed: " << seed << std::endl;
-    gen.seed(seed);
-
-    function01();
-    function02();
+    hpx::util::perftests_print_times();
 
     return hpx::local::finalize();
 }
@@ -147,11 +96,19 @@ int main(int argc, char* argv[])
     options_description desc_commandline(
         "Usage: " HPX_APPLICATION_STRING " [options]");
 
-    desc_commandline.add_options()("seed,s", value<unsigned int>(),
-        "the random number generator seed to use for this run");
+    // clang-format off
+    desc_commandline.add_options()
+        ("seed,s", value<unsigned int>(),
+            "the random number generator seed to use for this run")
+        ("test_count", value<unsigned int>()->default_value(100),
+            "number of tests to be averaged (default: 100)")
+        ;
+    // clang-format on
 
     // By default this test should run on all available cores
     std::vector<std::string> const cfg = {"hpx.os_threads=all"};
+
+    hpx::util::perftests_cfg(desc_commandline);
 
     // Initialize and run HPX
     hpx::local::init_params init_args;

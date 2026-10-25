@@ -127,7 +127,9 @@ namespace hpx::threads::coroutines::detail {
 
         auto status = context_exit_status::not_exited;
 
-        result_type const result_last(
+        // The function's result is kept here rather than in m_result, which
+        // reset() clears below, so the caller sees how the function ended.
+        result_type result_last(
             thread_schedule_state::unknown, invalid_thread_id);
 
         this->m_state = context_state::running;
@@ -143,9 +145,9 @@ namespace hpx::threads::coroutines::detail {
 
             try
             {
-                this->m_result = this->m_fun(arg);
+                result_last = this->m_fun(arg);
                 HPX_ASSERT(
-                    this->m_result.first == thread_schedule_state::terminated);
+                    result_last.first == thread_schedule_state::terminated);
                 status = context_exit_status::exited_return;
             }
             catch (...)

@@ -1,5 +1,6 @@
 //  Copyright (c) 2016 Thomas Heller
 //  Copyright (c) 2026 The STE||AR-Group
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -270,9 +271,9 @@ namespace hpx::collectives {
             this_site = agas::get_locality_id();
         }
 
-        if (auto const error =
-                detail::validate_hierarchical_root_site(root_site,
-                    "hpx::collectives::barrier (hierarchical)", "barrier"))
+        if (auto const error = detail::validate_hierarchical_root_site(
+                communicators, root_site,
+                "hpx::collectives::barrier (hierarchical)", "barrier"))
         {
             return hpx::make_exceptional_future<void>(error);
         }

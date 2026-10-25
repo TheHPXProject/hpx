@@ -473,6 +473,37 @@ void test_jthread_api()
     HPX_TEST(stoken.stop_requested());
 }
 
+void test_jthread_move_assign_to_running()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::atomic<bool> started{false};
+        std::atomic<bool> finished{false};
+        hpx::stop_token interrupt_token;
+        hpx::jthread t([&](hpx::stop_token stoken) {
+            interrupt_token = stoken;
+            started = true;
+            while (!stoken.stop_requested())
+            {
+                hpx::this_thread::yield();
+            }
+            finished = true;
+        });
+
+        while (!started.load())
+        {
+            hpx::this_thread::yield();
+        }
+
+        t = hpx::jthread();
+
+        HPX_TEST(finished.load());
+        HPX_TEST(interrupt_token.stop_requested());
+        HPX_TEST(!t.joinable());
+        HPX_TEST(!t.get_stop_token().stop_possible());
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -485,6 +516,7 @@ int hpx_main()
     test_hpx_thread();
     test_temporarily_disable_token();
     test_jthread_api();
+    test_jthread_move_assign_to_running();
 
     return hpx::local::finalize();
 }

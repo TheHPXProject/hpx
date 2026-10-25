@@ -1,5 +1,6 @@
 //  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -567,9 +568,10 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<std::decay_t<T>>(error);
             }
 
-            if (auto const error = validate_hierarchical_root_caller(this_site,
-                    "hpx::collectives::broadcast_to (hierarchical)",
-                    "broadcast_to"))
+            if (auto const error =
+                    validate_hierarchical_root_caller(communicators, this_site,
+                        "hpx::collectives::broadcast_to (hierarchical)",
+                        "broadcast_to"))
             {
                 return hpx::make_exceptional_future<std::decay_t<T>>(error);
             }
@@ -596,12 +598,12 @@ namespace hpx::collectives {
             for (std::size_t i = 0; i < communicators.size() - 1; ++i)
             {
                 result = broadcast_to(communicators.get(i), HPX_MOVE(result),
-                    this_site_arg(0), run_gen, run_step)
+                    communicators.site(i), run_gen, run_step)
                              .get();
             }
 
             return broadcast_to(communicators.back(), HPX_MOVE(result),
-                this_site_arg(0), run_gen, run_step);
+                communicators.last_site(), run_gen, run_step);
         }
     }    // namespace detail
 
@@ -753,10 +755,10 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<T>(error);
             }
 
-            if (auto const error =
-                    validate_hierarchical_non_root_caller(this_site,
-                        "hpx::collectives::broadcast_from (hierarchical)",
-                        "broadcast_to"))
+            if (auto const error = validate_hierarchical_non_root_caller(
+                    communicators, this_site,
+                    "hpx::collectives::broadcast_from (hierarchical)",
+                    "broadcast_to"))
             {
                 return hpx::make_exceptional_future<T>(error);
             }
@@ -783,13 +785,14 @@ namespace hpx::collectives {
 
                 for (std::size_t i = 1; i < communicators.size() - 1; ++i)
                 {
-                    result = broadcast_to(communicators.get(i),
-                        HPX_MOVE(result), this_site_arg(0), run_gen, run_step)
-                                 .get();
+                    result =
+                        broadcast_to(communicators.get(i), HPX_MOVE(result),
+                            communicators.site(i), run_gen, run_step)
+                            .get();
                 }
 
                 return broadcast_to(communicators.back(), HPX_MOVE(result),
-                    this_site_arg(0), run_gen, run_step);
+                    communicators.last_site(), run_gen, run_step);
             }
 
             return broadcast_from<T>(communicators.back(),

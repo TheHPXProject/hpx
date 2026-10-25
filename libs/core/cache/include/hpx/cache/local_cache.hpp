@@ -764,10 +764,12 @@ namespace hpx::util::cache {
                     {
                         // if we're at the top of the list, just pop the item
                         // this doesn't disturb the heap property of the heap
-                        ++it;
                         std::pop_heap(entry_heap_.begin(), entry_heap_.end(),
                             update_policy_);
                         entry_heap_.pop_back();
+                        // pop_heap moved the next candidate to the front,
+                        // so look at it next
+                        it = entry_heap_.begin();
                     }
                     else
                     {

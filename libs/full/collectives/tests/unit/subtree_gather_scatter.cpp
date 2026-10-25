@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -51,7 +52,7 @@ void test_round_trip(std::uint32_t num_sites, int arity)
 
             auto [ns, ts] = comms.get_info();
             bool const is_rep =
-                detail::is_top_level_rep(ts, ns, comms.get_arity());
+                detail::is_top_level_rep(ts, ns, comms.get_arity(), 0);
 
             for (int iter = 0; iter != ITERATIONS; ++iter)
             {
@@ -139,7 +140,7 @@ void test_vector_payload(std::uint32_t num_sites, int arity)
 
             auto [ns, ts] = comms.get_info();
             bool const is_rep =
-                detail::is_top_level_rep(ts, ns, comms.get_arity());
+                detail::is_top_level_rep(ts, ns, comms.get_arity(), 0);
 
             std::vector<std::uint32_t> my_data = {
                 site * 10, site * 10 + 1, site * 10 + 2};

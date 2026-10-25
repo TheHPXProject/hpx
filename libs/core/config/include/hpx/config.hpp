@@ -356,8 +356,8 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Count number of busy thread manager loop executions before forcefully
-// cleaning up terminated thread objects
+// Number of HPX threads a worker thread runs before it does background work
+// in between. Can be changed at runtime with hpx.max_busy_loop_count.
 #if !defined(HPX_BUSY_LOOP_COUNT_MAX)
 #  define HPX_BUSY_LOOP_COUNT_MAX 2000
 #endif
@@ -438,8 +438,9 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Maximum sleep time for idle backoff in milliseconds (used only if
-// HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is defined).
+// Maximum sleep time for idle backoff in microseconds (used only if
+// HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is defined). Can be changed at runtime
+// with hpx.max_idle_backoff_time.
 #if !defined(HPX_IDLE_BACKOFF_TIME_MAX)
 #  define HPX_IDLE_BACKOFF_TIME_MAX 1000
 #endif

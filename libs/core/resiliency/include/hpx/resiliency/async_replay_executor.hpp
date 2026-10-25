@@ -219,7 +219,7 @@ namespace hpx::resiliency::experimental {
     /// \a pred. Repeats on error up to \a n times (aborts on
     /// abort_replay_exception).
     ///
-    /// \param tag   CPO tag (async_replay_validate_t).
+    /// The CPO tag is \c async_replay_validate_t.
     /// \param exec  Executor to run \a f on.
     /// \param n     Maximum number of retry attempts.
     /// \param pred  Predicate validating each invocation result.
@@ -247,7 +247,7 @@ namespace hpx::resiliency::experimental {
     /// Asynchronously launches \a f on \a exec, repeating on error up to
     /// \a n times (aborts on abort_replay_exception).
     ///
-    /// \param tag   CPO tag (async_replay_t).
+    /// The CPO tag is \c async_replay_t.
     /// \param exec  Executor to run \a f on.
     /// \param n     Maximum number of retry attempts.
     /// \param f     Callable to invoke asynchronously.

@@ -164,7 +164,7 @@ namespace hpx::util {
             "affinity = core",
             "pu_step = 1",
             "pu_offset = 0",
-            "numa_sensitive = 0",
+            "numa_sensitive = 1",
             "loopback_network = 0",
             "max_background_threads = "
             "${HPX_MAX_BACKGROUND_THREADS:$[hpx.os_threads]}",

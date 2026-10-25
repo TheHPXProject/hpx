@@ -1,5 +1,6 @@
 //  Copyright (c) 2019-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -509,8 +510,8 @@ namespace hpx::collectives {
         std::size_t const arity_val = communicators.get_arity();
 
         if (auto const error = detail::validate_hierarchical_root_site(
-                root_site, "hpx::collectives::all_reduce (hierarchical)",
-                "all_reduce"))
+                communicators, root_site,
+                "hpx::collectives::all_reduce (hierarchical)", "all_reduce"))
         {
             return hpx::make_exceptional_future<arg_type>(error);
         }
@@ -535,7 +536,7 @@ namespace hpx::collectives {
                 detail::generation_mode::double_step);
         }
 
-        if (this_site == root_site)
+        if (this_site == communicators.get_root_site())
         {
             // reduce phase advances each communicator by one (the broadcast
             // phase consumes 2k), so pass single_step.

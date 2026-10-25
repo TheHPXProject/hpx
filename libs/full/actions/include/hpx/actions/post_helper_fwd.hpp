@@ -12,6 +12,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/threading_base.hpp>
 
+/// \cond NOINTERNAL
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -43,3 +44,4 @@ namespace hpx::detail {
         bool DirectExecute = Action::direct_execution::value>
     struct post_helper;
 }    // namespace hpx::detail
+/// \endcond

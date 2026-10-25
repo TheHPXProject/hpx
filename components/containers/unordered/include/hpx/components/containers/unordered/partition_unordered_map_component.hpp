@@ -190,13 +190,13 @@ namespace hpx { namespace server {
         // Element access API's
         ///////////////////////////////////////////////////////////////////////
 
-        /// Return the element at the position \a pos in the partition_unordered_map
+        /// Return the element with key \a key in the partition_unordered_map
         /// container.
         ///
-        /// \param pos Position of the element in the partition_unordered_map
+        /// \param key Key of the element in the partition_unordered_map.
+        /// \param erase Whether to erase the element after retrieving it.
         ///
-        /// \return Return the value of the element at position represented
-        ///         by \a pos.
+        /// \return The value of the element with key \a key.
         ///
         T get_value(Key const& key, bool erase)
         {
@@ -219,13 +219,12 @@ namespace hpx { namespace server {
             return it->second;
         }
 
-        /// Return the element at the position \a pos in the partition_unordered_map
+        /// Return the elements with the given keys in the partition_unordered_map
         /// container.
         ///
-        /// \param pos Positions of the elements in the partition_unordered_map
+        /// \param keys Keys of the elements in the partition_unordered_map.
         ///
-        /// \return Return the values of the elements at position represented
-        ///         by \a pos.
+        /// \return The values of the elements with the given keys.
         ///
         std::vector<T> get_values(std::vector<Key> const& keys)
         {
@@ -253,10 +252,10 @@ namespace hpx { namespace server {
         // Modifiers API's in server class
         ///////////////////////////////////////////////////////////////////////
 
-        /// Copy the value of \a val in the element at position \a pos in the
+        /// Copy \a val into the element with key \a pos in the
         /// partition_unordered_map container.
         ///
-        /// \param pos   Position of the element in the partition_unordered_map
+        /// \param pos   Key of the element in the partition_unordered_map.
         ///
         /// \param val   The value to be copied
         ///
@@ -265,10 +264,10 @@ namespace hpx { namespace server {
             partition_unordered_map_[pos] = val;
         }
 
-        /// Copy the value of \a val for the elements at positions \a pos in
+        /// Copy the values in \a val for the elements with the given keys in
         /// the partition_unordered_map container.
         ///
-        /// \param pos   Positions of the elements in the partition_unordered_map
+        /// \param keys  Keys of the elements in the partition_unordered_map.
         ///
         /// \param val   The value to be copied
         ///
@@ -505,23 +504,24 @@ namespace hpx {
 
         //  Element Access API's in Client class
 
-        /// Returns the value at position \a pos in the partition_unordered_map
+        /// Returns the value with key \a pos in the partition_unordered_map
         /// component.
         ///
-        /// \param pos  Position of the element in the partition_unordered_map
+        /// \param pos Key of the element in the partition_unordered_map.
+        /// \param erase Whether to erase the element after retrieving it.
         ///
-        /// \return Returns the value of the element at position represented
-        ///         by \a pos
+        /// \return The value of the element with key \a pos.
         ///
         T get_value(launch::sync_policy, Key const& pos, bool erase) const
         {
             return get_value(pos, erase).get();
         }
 
-        /// Return the element at the position \a pos in the
+        /// Return the element with key \a pos in the
         /// partition_unordered_map container.
         ///
-        /// \param pos Position of the element in the partition_unordered_map
+        /// \param pos Key of the element in the partition_unordered_map.
+        /// \param erase Whether to erase the element after retrieving it.
         ///
         /// \return This returns the value as the hpx::future
         ///
@@ -539,13 +539,12 @@ namespace hpx {
 #endif
         }
 
-        /// Returns the value at position \a pos in the partition_unordered_map
+        /// Returns the values with the given keys in the partition_unordered_map
         /// component.
         ///
-        /// \param pos  Position of the element in the partition_unordered_map
+        /// \param keys Keys of the elements in the partition_unordered_map.
         ///
-        /// \return Returns the value of the element at position represented
-        ///         by \a pos
+        /// \return The values of the elements with the given keys.
         ///
         std::vector<T> get_values(
             launch::sync_policy, std::vector<Key> const& keys) const
@@ -553,10 +552,10 @@ namespace hpx {
             return get_values(keys).get();
         }
 
-        /// Return the element at the position \a pos in the
+        /// Return the elements with the given keys in the
         /// partition_unordered_map container.
         ///
-        /// \param pos Position of the element in the partition_unordered_map
+        /// \param keys Keys of the elements in the partition_unordered_map.
         ///
         /// \return This returns the value as the hpx::future
         ///
@@ -567,10 +566,10 @@ namespace hpx {
                 this->get_id(), keys);
         }
 
-        /// Copy the value of \a val in the element at position
-        /// \a pos in the partition_unordered_map container.
+        /// Copy \a val into the element with key \a pos in the
+        /// partition_unordered_map container.
         ///
-        /// \param pos   Position of the element in the partition_unordered_map
+        /// \param pos   Key of the element in the partition_unordered_map.
         /// \param val   The value to be copied
         ///
         template <typename T_>
@@ -579,10 +578,10 @@ namespace hpx {
             set_value(pos, HPX_FORWARD(T_, val)).get();
         }
 
-        /// Copy the value of \a val in the element at position
-        /// \a pos in the partition_unordered_map component.
+        /// Copy \a val into the element with key \a pos in the
+        /// partition_unordered_map component.
         ///
-        /// \param pos  Position of the element in the partition_unordered_map
+        /// \param pos  Key of the element in the partition_unordered_map.
         /// \param val  Value to be copied
         ///
         /// \return This returns the hpx::future of type void
@@ -602,11 +601,11 @@ namespace hpx {
 #endif
         }
 
-        /// Copy the value of \a val in the element at position
-        /// \a pos in the partition_unordered_map container.
+        /// Copy the values in \a vals into the elements with the given keys in
+        /// the partition_unordered_map container.
         ///
-        /// \param pos   Position of the element in the partition_unordered_map
-        /// \param val   The value to be copied
+        /// \param keys  Keys of the elements in the partition_unordered_map.
+        /// \param vals  The values to be copied
         ///
         void set_values(launch::sync_policy, std::vector<Key> const& keys,
             std::vector<T> const& vals)
@@ -614,11 +613,11 @@ namespace hpx {
             set_values(keys, vals).get();
         }
 
-        /// Copy the value of \a val in the element at position
-        /// \a pos in the partition_unordered_map component.
+        /// Copy the values in \a vals into the elements with the given keys in
+        /// the partition_unordered_map component.
         ///
-        /// \param pos  Position of the element in the partition_unordered_map
-        /// \param val  Value to be copied
+        /// \param keys Keys of the elements in the partition_unordered_map.
+        /// \param vals Values to be copied
         ///
         /// \return This returns the hpx::future of type void
         ///

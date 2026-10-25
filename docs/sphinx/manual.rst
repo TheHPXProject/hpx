@@ -35,6 +35,7 @@ information on how to build and use |hpx| in different scenarios.
    manual/using_the_lci_parcelport
    manual/using_the_lcw_parcelport
    manual/hpx_runtime_and_resources
+   manual/thread_scheduler_configuration
    manual/executors
    manual/error_handling
    manual/iostreams

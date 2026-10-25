@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +13,10 @@
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include "hierarchical_roots.hpp"
+
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -32,7 +37,8 @@ constexpr int ITERATIONS = 50;
 // Uniform payload: each site fills all slots with the same value.
 // values[j] = site + iteration for all j. After exchange:
 // result[s] = s + iteration.
-void test_uniform_payload(std::uint32_t num_sites, int arity)
+void test_uniform_payload(
+    std::uint32_t num_sites, int arity, std::uint32_t root = 0)
 {
     std::vector<hpx::future<void>> sites;
     sites.reserve(num_sites);
@@ -46,7 +52,7 @@ void test_uniform_payload(std::uint32_t num_sites, int arity)
 
             auto const comms = create_hierarchical_communicator(
                 basename.c_str(), num_sites_arg(num_sites), this_site_arg(site),
-                arity_arg(arity), generation_arg(), root_site_arg(),
+                arity_arg(arity), generation_arg(), root_site_arg(root),
                 flat_fallback_threshold_arg(0));
 
             for (int i = 0; i != ITERATIONS; ++i)
@@ -75,7 +81,8 @@ void test_uniform_payload(std::uint32_t num_sites, int arity)
 // After exchange: result[s] = s * num_sites + this_site + i.
 // This tests that each (source, destination) pair carries a unique value
 // through the hierarchical tree.
-void test_distinct_payload(std::uint32_t num_sites, int arity)
+void test_distinct_payload(
+    std::uint32_t num_sites, int arity, std::uint32_t root = 0)
 {
     std::vector<hpx::future<void>> sites;
     sites.reserve(num_sites);
@@ -89,7 +96,7 @@ void test_distinct_payload(std::uint32_t num_sites, int arity)
 
             auto const comms = create_hierarchical_communicator(
                 basename.c_str(), num_sites_arg(num_sites), this_site_arg(site),
-                arity_arg(arity), generation_arg(), root_site_arg(),
+                arity_arg(arity), generation_arg(), root_site_arg(root),
                 flat_fallback_threshold_arg(0));
 
             for (int i = 0; i != ITERATIONS; ++i)
@@ -117,8 +124,47 @@ void test_distinct_payload(std::uint32_t num_sites, int arity)
     hpx::wait_all(std::move(sites));
 }
 
+// Runs across all localities (real network), one site per locality.
+void test_distributed(int arity, std::uint32_t root)
+{
+    std::uint32_t const this_locality = hpx::get_locality_id();
+    std::uint32_t const num_localities =
+        hpx::get_num_localities(hpx::launch::sync);
+
+    std::string basename(all_to_all_hierarchical_basename);
+    basename += "distributed_" + std::to_string(arity) + "/";
+
+    auto const comms = create_hierarchical_communicator(basename.c_str(),
+        num_sites_arg(num_localities), this_site_arg(this_locality),
+        arity_arg(arity), generation_arg(), root_site_arg(root),
+        flat_fallback_threshold_arg(0));
+
+    for (int i = 0; i != ITERATIONS; ++i)
+    {
+        std::vector<std::uint32_t> values(num_localities);
+        std::fill(values.begin(), values.end(), this_locality + i);
+
+        auto result = all_to_all(hpx::launch::sync, comms, std::move(values),
+            this_site_arg(this_locality), generation_arg(i + 1));
+
+        HPX_TEST_EQ(result.size(), static_cast<std::size_t>(num_localities));
+        for (std::size_t j = 0; j != result.size(); ++j)
+        {
+            HPX_TEST_EQ(result[j], static_cast<std::uint32_t>(j + i));
+        }
+    }
+}
+
 int hpx_main()
 {
+#if defined(HPX_HAVE_NETWORKING)
+    if (hpx::get_num_localities(hpx::launch::sync) > 1)
+    {
+        for_each_distributed_root(
+            [](std::uint32_t root) { test_distributed(2, root); });
+    }
+#endif
+
     if (hpx::get_locality_id() == 0)
     {
         // Balanced cases
@@ -140,6 +186,12 @@ int hpx_main()
                 test_distinct_payload(n, arity);
             }
         }
+
+        // non-zero root sites
+        for_each_local_root([](std::uint32_t n, int arity, std::uint32_t root) {
+            test_uniform_payload(n, arity, root);
+            test_distinct_payload(n, arity, root);
+        });
     }
 
     return hpx::finalize();

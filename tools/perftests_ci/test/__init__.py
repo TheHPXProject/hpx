@@ -11,8 +11,8 @@ test - A package to compile and run test and examples
 
 import os
 
-from pyutils import buildinfo, env, log, runtools
-
+from pyutils import env, log, runtools
+import buildinfo
 
 def _ctest(only=None, exclude=None, verbose=False):
     command = ['ctest', '--output-on-failure']

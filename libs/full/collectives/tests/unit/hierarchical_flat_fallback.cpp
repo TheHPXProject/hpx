@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +13,8 @@
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include "hierarchical_roots.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -23,7 +26,7 @@ using namespace hpx::collectives;
 // Distributed test (multi-locality): verifies that the fallback path produces
 // size() == 1 and correct collective results, and that threshold == 0 forces
 // the tree path with the same results.
-void test_distributed_fallback()
+void test_distributed_fallback(std::uint32_t root = 0)
 {
     std::uint32_t const this_locality = hpx::get_locality_id();
     std::uint32_t const num_localities =
@@ -34,7 +37,7 @@ void test_distributed_fallback()
     auto const fb_clients = create_hierarchical_communicator(
         "/test/hflback_dist_fb/", num_sites_arg(num_localities),
         this_site_arg(this_locality), arity_arg(2), generation_arg(),
-        root_site_arg(0), flat_fallback_threshold_arg(1024));
+        root_site_arg(root), flat_fallback_threshold_arg(1024));
 
     HPX_TEST_EQ(fb_clients.size(), static_cast<std::size_t>(1));
 
@@ -59,7 +62,7 @@ void test_distributed_fallback()
         auto const tree_clients = create_hierarchical_communicator(
             "/test/hflback_dist_tree/", num_sites_arg(num_localities),
             this_site_arg(this_locality), arity_arg(2), generation_arg(),
-            root_site_arg(0), flat_fallback_threshold_arg(0));
+            root_site_arg(root), flat_fallback_threshold_arg(0));
 
         // Assert the dispatch predicate so the comparison can never
         // silently degenerate to flat-vs-flat.
@@ -314,7 +317,8 @@ int hpx_main()
 #if defined(HPX_HAVE_NETWORKING)
     if (hpx::get_num_localities(hpx::launch::sync) > 1)
     {
-        test_distributed_fallback();
+        for_each_distributed_root(
+            [](std::uint32_t root) { test_distributed_fallback(root); });
         test_distributed_fallback_all_to_all();
     }
 #endif

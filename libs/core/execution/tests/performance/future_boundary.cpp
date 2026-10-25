@@ -101,7 +101,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 {
     iterations = vm["iterations"].as<std::uint64_t>();
     repetitions = vm["repetitions"].as<std::uint64_t>();
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "future_boundary");
 
     if (iterations == 0 || repetitions == 0)
     {

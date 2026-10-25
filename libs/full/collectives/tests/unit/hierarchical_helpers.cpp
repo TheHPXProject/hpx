@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,8 +14,10 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <limits>
+#include <numeric>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -273,21 +276,21 @@ void test_matches_recursive_fill()
 void test_is_top_level_rep_basic()
 {
     // N=8, arity=2 -> groups [0,3] and [4,7]. Reps are 0 and 4.
-    HPX_TEST(is_top_level_rep(0, 8, 2));
-    HPX_TEST(!is_top_level_rep(1, 8, 2));
-    HPX_TEST(!is_top_level_rep(3, 8, 2));
-    HPX_TEST(is_top_level_rep(4, 8, 2));
-    HPX_TEST(!is_top_level_rep(5, 8, 2));
-    HPX_TEST(!is_top_level_rep(7, 8, 2));
+    HPX_TEST(is_top_level_rep(0, 8, 2, 0));
+    HPX_TEST(!is_top_level_rep(1, 8, 2, 0));
+    HPX_TEST(!is_top_level_rep(3, 8, 2, 0));
+    HPX_TEST(is_top_level_rep(4, 8, 2, 0));
+    HPX_TEST(!is_top_level_rep(5, 8, 2, 0));
+    HPX_TEST(!is_top_level_rep(7, 8, 2, 0));
 
     // N=11, arity=4 -> groups [0,2], [3,5], [6,8], [9,10]. Reps: 0,3,6,9.
-    HPX_TEST(is_top_level_rep(0, 11, 4));
-    HPX_TEST(!is_top_level_rep(1, 11, 4));
-    HPX_TEST(!is_top_level_rep(2, 11, 4));
-    HPX_TEST(is_top_level_rep(3, 11, 4));
-    HPX_TEST(is_top_level_rep(6, 11, 4));
-    HPX_TEST(is_top_level_rep(9, 11, 4));
-    HPX_TEST(!is_top_level_rep(10, 11, 4));
+    HPX_TEST(is_top_level_rep(0, 11, 4, 0));
+    HPX_TEST(!is_top_level_rep(1, 11, 4, 0));
+    HPX_TEST(!is_top_level_rep(2, 11, 4, 0));
+    HPX_TEST(is_top_level_rep(3, 11, 4, 0));
+    HPX_TEST(is_top_level_rep(6, 11, 4, 0));
+    HPX_TEST(is_top_level_rep(9, 11, 4, 0));
+    HPX_TEST(!is_top_level_rep(10, 11, 4, 0));
 }
 
 void test_is_top_level_rep_exhaustive()
@@ -307,7 +310,134 @@ void test_is_top_level_rep_exhaustive()
                         expected_group_left(
                             static_cast<std::size_t>(group), n, arity);
 
-                HPX_TEST_EQ(is_top_level_rep(site, n, arity), expected);
+                HPX_TEST_EQ(is_top_level_rep(site, n, arity, 0), expected);
+            }
+        }
+    }
+}
+
+// Number of communicators every site holds in a tree with the given root.
+std::vector<std::size_t> chain_sizes(
+    std::size_t n, std::size_t arity, std::size_t root)
+{
+    std::string const basename = "/test/hierarchical_helpers/chain/" +
+        std::to_string(n) + "/" + std::to_string(arity) + "/" +
+        std::to_string(root) + "/";
+
+    std::vector<hpx::future<std::size_t>> sizes;
+    for (std::size_t site = 0; site != n; ++site)
+    {
+        sizes.push_back(hpx::async([=]() {
+            auto const comms =
+                hpx::collectives::create_hierarchical_communicator(
+                    basename.c_str(), hpx::collectives::num_sites_arg(n),
+                    hpx::collectives::this_site_arg(site),
+                    hpx::collectives::arity_arg(arity),
+                    hpx::collectives::generation_arg(),
+                    hpx::collectives::root_site_arg(root),
+                    hpx::collectives::flat_fallback_threshold_arg(0));
+            HPX_TEST_EQ(comms.get_root_site(), root);
+            // the root is the top-level representative of its group
+            if (site == root)
+            {
+                HPX_TEST_EQ(comms.site(0),
+                    static_cast<std::size_t>(
+                        expected_classification(root, n, arity)));
+            }
+            return comms.size();
+        }));
+    }
+
+    std::vector<std::size_t> result;
+    for (auto& f : sizes)
+    {
+        result.push_back(f.get());
+    }
+    return result;
+}
+
+// A site holds one communicator for every range of the tree it leads (plus its
+// leaf). Every range has one leader, so the total is the same for any root. The
+// root leads all ranges containing it; the other sites can only lose ranges
+// compared to the tree rooted at 0. A composite collective whose result
+// doesn't depend on the root (barrier, all_gather, ...) would only hang with a
+// wrong root, so check the structure directly.
+void test_root_leads_its_ranges()
+{
+    for (std::size_t n = 3; n <= 12; ++n)
+    {
+        for (std::size_t arity = 2; arity <= 4; ++arity)
+        {
+            if (arity >= n)
+            {
+                continue;
+            }
+            auto const base = chain_sizes(n, arity, 0);
+            std::size_t const base_total =
+                std::accumulate(base.begin(), base.end(), std::size_t(0));
+
+            for (std::size_t root = 1; root != n; ++root)
+            {
+                auto const sizes = chain_sizes(n, arity, root);
+                HPX_TEST_EQ(
+                    std::accumulate(sizes.begin(), sizes.end(), std::size_t(0)),
+                    base_total);
+                for (std::size_t site = 0; site != n; ++site)
+                {
+                    if (site == root)
+                    {
+                        HPX_TEST_LTE(base[site], sizes[site]);
+                    }
+                    else
+                    {
+                        HPX_TEST_LTE(sizes[site], base[site]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void test_is_top_level_rep_with_root()
+{
+    // The representative of a group is the root if the group contains it and
+    // its leftmost site otherwise; every group has exactly one.
+    for (std::size_t n = 1; n <= 32; ++n)
+    {
+        for (std::size_t arity = 2; arity <= 8; ++arity)
+        {
+            for (std::size_t root = 0; root != n; ++root)
+            {
+                std::size_t const groups = get_top_level_group_count(n, arity);
+                std::vector<std::size_t> reps(groups, 0);
+
+                for (std::size_t site = 0; site != n; ++site)
+                {
+                    std::ptrdiff_t const group =
+                        expected_classification(site, n, arity);
+                    HPX_TEST_NEQ(group, std::ptrdiff_t(-1));
+
+                    bool const root_in_group =
+                        expected_classification(root, n, arity) == group;
+                    bool const expected = site ==
+                        (root_in_group ?
+                                root :
+                                expected_group_left(
+                                    static_cast<std::size_t>(group), n, arity));
+
+                    bool const is_rep = is_top_level_rep(site, n, arity, root);
+                    HPX_TEST_EQ(is_rep, expected);
+                    if (is_rep)
+                    {
+                        ++reps[static_cast<std::size_t>(group)];
+                    }
+                }
+
+                for (std::size_t group = 0; group != groups; ++group)
+                {
+                    HPX_TEST_EQ(reps[group], std::size_t(1));
+                }
+                HPX_TEST(is_top_level_rep(root, n, arity, root));
             }
         }
     }
@@ -743,6 +873,8 @@ int hpx_main()
     test_matches_recursive_fill();
     test_is_top_level_rep_basic();
     test_is_top_level_rep_exhaustive();
+    test_is_top_level_rep_with_root();
+    test_root_leads_its_ranges();
     test_is_ragged_rows_trait();
     test_is_uniform_rows_trait();
     test_ragged_rows_extract_columns();

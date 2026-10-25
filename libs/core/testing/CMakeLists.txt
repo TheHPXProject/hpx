@@ -51,3 +51,9 @@ add_hpx_module(
   MODULE_DEPENDENCIES ${module_deps}
   CMAKE_SUBDIRS examples tests
 )
+
+# performance.cpp includes nanobench.h after HPX headers that include windows.h,
+# whose min and max macros break nanobench.h
+if(MSVC AND HPX_WITH_NANOBENCH)
+  target_compile_definitions(hpx_testing PRIVATE NOMINMAX)
+endif()
