@@ -425,28 +425,55 @@ namespace hpx::parallel {
                     }
                 }
 
-                using single_element = reduce_single_element<FwdIterB>;
-                using part_result = std::variant<T, single_element>;
+                using iter_value_type =
+                    typename std::iterator_traits<FwdIterB>::value_type;
 
-                auto f1 = [r](FwdIterB part_begin,
-                              std::size_t part_size) -> part_result {
-                    if (part_size == 1)
-                    {
-                        return single_element{part_begin};
-                    }
+                if constexpr (std::is_convertible_v<iter_value_type, T>)
+                {
+                    auto f1 = [r](FwdIterB part_begin,
+                                  std::size_t part_size) mutable -> T {
+                        T val = *part_begin;
+                        return detail::sequential_reduce<ExPolicy>(
+                            ++part_begin, --part_size, HPX_MOVE(val), r);
+                    };
 
-                    T val = HPX_INVOKE(r, *part_begin, *std::next(part_begin));
-                    return detail::sequential_reduce<ExPolicy>(
-                        std::next(part_begin, 2), part_size - 2, HPX_MOVE(val),
-                        r);
-                };
+                    return util::partitioner<ExPolicy, T>::call(
+                        HPX_FORWARD(ExPolicy, policy), first,
+                        detail::distance(first, last), HPX_MOVE(f1),
+                        hpx::unwrapping([init = HPX_FORWARD(T_, init),
+                                            r = HPX_FORWARD(Reduce, r)](
+                                            auto&& results) mutable -> T {
+                            return detail::sequential_reduce<ExPolicy>(
+                                hpx::util::begin(results),
+                                hpx::util::size(results), init, r);
+                        }));
+                }
+                else
+                {
+                    using single_element = reduce_single_element<FwdIterB>;
+                    using part_result = std::variant<T, single_element>;
 
-                return util::partitioner<ExPolicy, T, part_result>::call(
-                    HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
-                    hpx::unwrapping(
-                        [init = HPX_FORWARD(T_, init),
-                            r = HPX_FORWARD(Reduce, r)](auto&& results) -> T {
+                    auto f1 =
+                        [r](FwdIterB part_begin,
+                            std::size_t part_size) mutable -> part_result {
+                        if (part_size == 1)
+                        {
+                            return single_element{part_begin};
+                        }
+
+                        T val =
+                            HPX_INVOKE(r, *part_begin, *std::next(part_begin));
+                        return detail::sequential_reduce<ExPolicy>(
+                            std::next(part_begin, 2), part_size - 2,
+                            HPX_MOVE(val), r);
+                    };
+
+                    return util::partitioner<ExPolicy, T, part_result>::call(
+                        HPX_FORWARD(ExPolicy, policy), first,
+                        detail::distance(first, last), HPX_MOVE(f1),
+                        hpx::unwrapping([init = HPX_FORWARD(T_, init),
+                                            r = HPX_FORWARD(Reduce, r)](
+                                            auto&& results) mutable -> T {
                             T acc = init;
                             auto const end = hpx::util::end(results);
                             for (auto it = hpx::util::begin(results); it != end;
@@ -454,17 +481,17 @@ namespace hpx::parallel {
                             {
                                 if (std::holds_alternative<T>(*it))
                                 {
-                                    acc = HPX_INVOKE(r, HPX_MOVE(acc),
-                                        std::get<T>(HPX_MOVE(*it)));
+                                    acc = HPX_INVOKE(r, acc, std::get<T>(*it));
                                 }
                                 else
                                 {
-                                    acc = HPX_INVOKE(r, HPX_MOVE(acc),
+                                    acc = HPX_INVOKE(r, acc,
                                         *std::get<single_element>(*it).it);
                                 }
                             }
                             return acc;
                         }));
+                }
             }
         };
         /// \endcond

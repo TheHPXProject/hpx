@@ -168,6 +168,41 @@ void test_reduce_minmax_not_convertible_to_T()
     }
 }
 
+void test_reduce_init_wider_than_value_type()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> c(4, INT_MAX);
+        auto const r =
+            hpx::reduce(hpx::execution::par, c.begin(), c.end(), 0LL);
+        HPX_TEST_EQ(r, 4LL * INT_MAX);
+
+        std::vector<int> big(64, INT_MAX);
+        auto const s =
+            hpx::reduce(hpx::execution::par, big.begin(), big.end(), 0LL);
+        HPX_TEST_EQ(s, 64LL * INT_MAX);
+    }
+}
+
+struct reduce_non_const_op
+{
+    int operator()(int lhs, int rhs)
+    {
+        return lhs + rhs;
+    }
+};
+
+void test_reduce_non_const_op()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> c{1, 2, 3, 4};
+        auto const r = hpx::reduce(
+            hpx::execution::par, c.begin(), c.end(), 0, reduce_non_const_op{});
+        HPX_TEST_EQ(r, 10);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -182,6 +217,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     reduce_test2();
     reduce_test3();
     test_reduce_minmax_not_convertible_to_T();
+    test_reduce_init_wider_than_value_type();
+    test_reduce_non_const_op();
 
     reduce_exception_test();
     reduce_bad_alloc_test();
