@@ -27,6 +27,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -148,6 +149,14 @@ void test()
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
+    // worker 0 is kept busy and worker 1 blocks while it waits, the tasks can
+    // be stolen only by a third worker
+    if (hpx::get_os_thread_count() < 3)
+    {
+        std::cerr << "[SKIP] test requires >= 3 threads\n";
+        return hpx::local::finalize();
+    }
+
     std::string const mode = vm["mode"].as<std::string>();
     if (mode == "fast-idle")
     {
