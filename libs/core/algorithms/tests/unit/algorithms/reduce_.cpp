@@ -203,6 +203,52 @@ void test_reduce_non_const_op()
     }
 }
 
+struct reduce_non_assignable_acc
+{
+    int value;
+
+    reduce_non_assignable_acc(int v)
+      : value(v)
+    {
+    }
+    reduce_non_assignable_acc(reduce_non_assignable_acc&&) noexcept = default;
+    reduce_non_assignable_acc(reduce_non_assignable_acc const&) = delete;
+    reduce_non_assignable_acc& operator=(reduce_non_assignable_acc&&) = delete;
+    reduce_non_assignable_acc& operator=(
+        reduce_non_assignable_acc const&) = delete;
+};
+
+struct reduce_non_assignable_op
+{
+    reduce_non_assignable_acc operator()(reduce_non_assignable_acc const& lhs,
+        reduce_non_assignable_acc const& rhs) const
+    {
+        return reduce_non_assignable_acc{lhs.value + rhs.value};
+    }
+};
+
+void test_reduce_non_assignable_T()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> c{1, 2, 3, 4};
+        auto const r = hpx::reduce(hpx::execution::seq, c.begin(), c.end(),
+            reduce_non_assignable_acc{10}, reduce_non_assignable_op{});
+        HPX_TEST_EQ(r.value, 20);
+
+        std::vector<int> one{5};
+        auto const s = hpx::reduce(hpx::execution::seq, one.begin(), one.end(),
+            reduce_non_assignable_acc{10}, reduce_non_assignable_op{});
+        HPX_TEST_EQ(s.value, 15);
+
+        std::vector<int> empty;
+        auto const e =
+            hpx::reduce(hpx::execution::seq, empty.begin(), empty.end(),
+                reduce_non_assignable_acc{7}, reduce_non_assignable_op{});
+        HPX_TEST_EQ(e.value, 7);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -219,6 +265,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_reduce_minmax_not_convertible_to_T();
     test_reduce_init_wider_than_value_type();
     test_reduce_non_const_op();
+    test_reduce_non_assignable_T();
 
     reduce_exception_test();
     reduce_bad_alloc_test();

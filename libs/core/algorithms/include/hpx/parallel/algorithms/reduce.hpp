@@ -373,6 +373,7 @@ namespace hpx {
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -400,12 +401,15 @@ namespace hpx::parallel {
 
             template <typename ExPolicy, typename InIterB, typename InIterE,
                 typename T_, typename Reduce>
-            static constexpr T sequential(ExPolicy&& policy, InIterB first,
-                InIterE last, T_&& init, Reduce&& r)
+            static constexpr T sequential(
+                ExPolicy&&, InIterB first, InIterE last, T_&& init, Reduce&& r)
             {
-                return detail::sequential_reduce<ExPolicy>(
-                    HPX_FORWARD(ExPolicy, policy), first, last,
-                    HPX_FORWARD(T_, init), HPX_FORWARD(Reduce, r));
+                std::optional<T> acc(HPX_FORWARD(T_, init));
+                util::loop_ind<ExPolicy>(
+                    first, last, [&acc, &r](auto const& v) mutable {
+                        acc.emplace(HPX_INVOKE(r, *acc, v));
+                    });
+                return HPX_MOVE(*acc);
             }
 
             template <typename ExPolicy, typename FwdIterB, typename FwdIterE,
@@ -443,9 +447,14 @@ namespace hpx::parallel {
                         hpx::unwrapping([init = HPX_FORWARD(T_, init),
                                             r = HPX_FORWARD(Reduce, r)](
                                             auto&& results) mutable -> T {
-                            return detail::sequential_reduce<ExPolicy>(
-                                hpx::util::begin(results),
-                                hpx::util::size(results), HPX_MOVE(init), r);
+                            std::optional<T> acc(HPX_MOVE(init));
+                            auto const end = hpx::util::end(results);
+                            for (auto it = hpx::util::begin(results); it != end;
+                                ++it)
+                            {
+                                acc.emplace(HPX_INVOKE(r, *acc, *it));
+                            }
+                            return HPX_MOVE(*acc);
                         }));
                 }
                 else
@@ -474,22 +483,23 @@ namespace hpx::parallel {
                         hpx::unwrapping([init = HPX_FORWARD(T_, init),
                                             r = HPX_FORWARD(Reduce, r)](
                                             auto&& results) mutable -> T {
-                            T acc = HPX_MOVE(init);
+                            std::optional<T> acc(HPX_MOVE(init));
                             auto const end = hpx::util::end(results);
                             for (auto it = hpx::util::begin(results); it != end;
                                 ++it)
                             {
                                 if (std::holds_alternative<T>(*it))
                                 {
-                                    acc = HPX_INVOKE(r, acc, std::get<T>(*it));
+                                    acc.emplace(
+                                        HPX_INVOKE(r, *acc, std::get<T>(*it)));
                                 }
                                 else
                                 {
-                                    acc = HPX_INVOKE(r, acc,
-                                        *std::get<single_element>(*it).it);
+                                    acc.emplace(HPX_INVOKE(r, *acc,
+                                        *std::get<single_element>(*it).it));
                                 }
                             }
-                            return acc;
+                            return HPX_MOVE(*acc);
                         }));
                 }
             }
