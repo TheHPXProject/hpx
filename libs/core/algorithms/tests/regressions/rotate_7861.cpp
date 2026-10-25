@@ -19,7 +19,7 @@
 #include <numeric>
 #include <vector>
 
-void test_rotate_sender(std::size_t mid_pos)
+void test_rotate_sender(std::ptrdiff_t mid_pos)
 {
     namespace ex = hpx::execution::experimental;
     namespace tt = hpx::this_thread::experimental;
@@ -54,7 +54,7 @@ int hpx_main()
 {
     // Reproduce seed from issue #7861
     std::srand(1792861068);
-    std::size_t const mid_pos_seed = std::rand() % 10007;
+    auto const mid_pos_seed = static_cast<std::ptrdiff_t>(std::rand() % 10007);
 
     test_rotate_sender(mid_pos_seed);
     test_rotate_sender(1);

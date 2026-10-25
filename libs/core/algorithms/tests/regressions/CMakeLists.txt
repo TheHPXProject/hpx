@@ -50,10 +50,16 @@ if(HPX_WITH_DATAPAR)
   list(APPEND tests counting_iterator_datapar for_each_datapar)
 endif()
 
+set(rotate_7861_PARAMETERS THREADS_PER_LOCALITY 2 ARGS
+                           --hpx:queuing=local-workrequesting-fifo
+)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  if(NOT DEFINED ${test}_PARAMETERS)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 
