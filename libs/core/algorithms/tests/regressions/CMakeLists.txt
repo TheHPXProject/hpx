@@ -16,6 +16,7 @@ set(tests
     for_loop_2281
     for_loop_5735
     for_loop_with_auto_chunk_size
+    includes_chunk_boundary
     includes_empty_ranges
     is_sorted_until_chunk_boundary
     minimal_findend
