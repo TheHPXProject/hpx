@@ -4,11 +4,14 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+#include <hpx/algorithm.hpp>
 #include <hpx/init.hpp>
 
+#include <climits>
 #include <cstddef>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "reduce_tests.hpp"
@@ -117,6 +120,54 @@ void reduce_bad_alloc_test()
     test_reduce_bad_alloc<std::forward_iterator_tag>();
 }
 
+struct reduce_minmax_6647
+{
+    std::pair<int, int> operator()(
+        std::pair<int, int> lhs, std::pair<int, int> rhs) const
+    {
+        return {lhs.first < rhs.first ? lhs.first : rhs.first,
+            lhs.second < rhs.second ? rhs.second : lhs.second};
+    }
+    std::pair<int, int> operator()(std::pair<int, int> lhs, int rhs) const
+    {
+        return (*this)(lhs, std::pair<int, int>{rhs, rhs});
+    }
+    std::pair<int, int> operator()(int lhs, std::pair<int, int> rhs) const
+    {
+        return (*this)(std::pair<int, int>{lhs, lhs}, rhs);
+    }
+    std::pair<int, int> operator()(int lhs, int rhs) const
+    {
+        return (*this)(
+            std::pair<int, int>{lhs, lhs}, std::pair<int, int>{rhs, rhs});
+    }
+};
+
+void test_reduce_minmax_not_convertible_to_T()
+{
+    for (int i = 0; i != 4; ++i)
+    {
+        std::vector<int> c{3, 1, 4, 1, 5, 9, 2, 6};
+        auto const r = hpx::reduce(hpx::execution::par, c.begin(), c.end(),
+            std::pair<int, int>{INT_MAX, INT_MIN}, reduce_minmax_6647{});
+        HPX_TEST_EQ(r.first, 1);
+        HPX_TEST_EQ(r.second, 9);
+
+        std::vector<int> one{7};
+        auto const s = hpx::reduce(hpx::execution::par, one.begin(), one.end(),
+            std::pair<int, int>{INT_MAX, INT_MIN}, reduce_minmax_6647{});
+        HPX_TEST_EQ(s.first, 7);
+        HPX_TEST_EQ(s.second, 7);
+
+        std::vector<int> empty;
+        auto const e =
+            hpx::reduce(hpx::execution::par, empty.begin(), empty.end(),
+                std::pair<int, int>{INT_MAX, INT_MIN}, reduce_minmax_6647{});
+        HPX_TEST_EQ(e.first, INT_MAX);
+        HPX_TEST_EQ(e.second, INT_MIN);
+    }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
@@ -130,6 +181,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     reduce_test1();
     reduce_test2();
     reduce_test3();
+    test_reduce_minmax_not_convertible_to_T();
 
     reduce_exception_test();
     reduce_bad_alloc_test();
