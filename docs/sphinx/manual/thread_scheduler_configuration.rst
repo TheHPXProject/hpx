@@ -242,10 +242,8 @@ since it last found work or was woken up by new work, and never longer than ``hp
 again. This requires ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF=ON`` (the default)
 and the ``enable_idle_backoff`` scheduler mode (on by default).
 
-Creating new work wakes one sleeping worker thread: the one the work was placed
-on if it sleeps, otherwise another one. A worker thread announces that it is
-going to sleep and then checks for work once more, so a notification is never
-lost. The woken worker thread may steal once without the early minima (see
+Creating new work wakes the sleeping worker threads. A worker thread woken this
+way may steal once without the early minima (see
 :ref:`thread_scheduler_pending_steal` and :ref:`thread_scheduler_staged_steal`),
 so that it finds the new work even if it was placed on a worker that has a few
 tasks only.

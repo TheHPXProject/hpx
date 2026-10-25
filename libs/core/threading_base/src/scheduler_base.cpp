@@ -20,7 +20,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <bit>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -68,84 +67,7 @@ namespace hpx::threads::policies {
             states_[i].data_.store(
                 hpx::state::initialized, std::memory_order::relaxed);
         }
-
-#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-        sleep_mask_ =
-            std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>(
-                (num_threads + 63) / 64);
-#endif
     }
-
-#if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
-    // is there work this worker could run (its own queues, or any queue if it
-    // may steal)? Called only right before going to sleep.
-    bool scheduler_base::has_visible_work(std::size_t num_thread) const
-    {
-        if (get_queue_length(num_thread) != 0)
-            return true;
-        return (modes_[num_thread].data_.load(std::memory_order_relaxed) &
-                   policies::scheduler_mode::enable_stealing) &&
-            get_queue_length(static_cast<std::size_t>(-1)) != 0;
-    }
-
-    // wake a worker that announced itself as sleeping. Taking the mutex makes
-    // sure the sleeper is already waiting (it holds the mutex from its
-    // announcement until wait_for releases it).
-    void scheduler_base::notify_worker(std::size_t i)
-    {
-        auto& data = wait_count_data_[i].data_;
-        {
-            std::lock_guard<pu_mutex_type> l(data.wait_mtx);
-            data.wait_count.store(0, std::memory_order_relaxed);
-        }
-        data.wait_cond.notify_one();
-    }
-
-    // claim and wake one sleeping worker, the hinted one if it sleeps,
-    // otherwise the next one after it
-    void scheduler_base::wake_one(std::size_t hint)
-    {
-        std::size_t const size = wait_count_data_.size();
-        if (hint >= size)
-        {
-            hint = wake_start_.fetch_add(1, std::memory_order_relaxed) % size;
-        }
-
-        // pairs with the fence in idle_callback: either the sleeper sees the
-        // new work in its last check, or this sees its announcement
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-
-        // start at the hint's word, prefer the hint's bit, then the lowest
-        // set bit
-        std::size_t const words = sleep_mask_.size();
-        for (std::size_t k = 0; k != words; ++k)
-        {
-            std::size_t const w = (hint / 64 + k) % words;
-            auto& word = sleep_mask_[w].data_;
-            std::uint64_t bits = word.load(std::memory_order_relaxed);
-            while (bits != 0)
-            {
-                std::uint64_t bit = bits & (~bits + 1);
-                if (k == 0)
-                {
-                    std::uint64_t const hint_bit = std::uint64_t(1)
-                        << (hint % 64);
-                    if (bits & hint_bit)
-                        bit = hint_bit;
-                }
-                std::uint64_t const old =
-                    word.fetch_and(~bit, std::memory_order_seq_cst);
-                if (old & bit)
-                {
-                    notify_worker(w * 64 +
-                        static_cast<std::size_t>(std::countr_zero(bit)));
-                    return;
-                }
-                bits = old & ~bit;
-            }
-        }
-    }
-#endif
 
     bool scheduler_base::idle_callback([[maybe_unused]] std::size_t num_thread)
     {
@@ -179,23 +101,13 @@ namespace hpx::threads::policies {
             std::chrono::microseconds const period(std::lround(
                 (std::min) (max_idle_backoff_time_, std::pow(2.0, exponent))));
 
-            // announce, then check for work once more
-            std::uint64_t const bit = std::uint64_t(1) << (num_thread % 64);
-            auto& word = sleep_mask_[num_thread / 64].data_;
-            word.fetch_or(bit, std::memory_order_seq_cst);
-            std::atomic_thread_fence(std::memory_order_seq_cst);
-
-            if (!has_visible_work(num_thread) &&
-                data.wait_cond.wait_for(l, period) ==    //-V1089
-                    std::cv_status::no_timeout)
+            if (data.wait_cond.wait_for(l, period) ==    //-V1089
+                std::cv_status::no_timeout)
             {
                 // reset counter if thread was woken up
                 data.wait_count.store(0, std::memory_order_relaxed);
                 data.free_pass = true;
             }
-
-            // withdraw the announcement if nobody claimed it
-            word.fetch_and(~bit, std::memory_order_relaxed);
             return true;
         }
 #endif
@@ -210,10 +122,47 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         HPX_TRACING_MARK_EVENT("do_some_work");
 
-        // Wake a single sleeping worker, preferably the one the new work was
-        // scheduled on. Sleepers announce themselves in sleep_mask_ and check
-        // for work once more afterwards, so no notification gets lost.
-        wake_one(num_thread);
+        // Only touch the wait data of threads that are actually backing off.
+        // Unconditionally writing wait_count would pull the cache line of
+        // every (busy) worker into the calling core on each new work item. A
+        // thread that is about to start backing off (wait_count == 0) is not
+        // notified; its first backoff period is one microsecond.
+        //
+        // As before, the notification is sent without holding wait_mtx: if it
+        // arrives while idle_callback is between incrementing wait_count and
+        // waiting, it is lost and that thread sleeps for the period it has
+        // already computed (at most max_idle_backoff_time).
+        auto const wake_up = [this](std::size_t i) noexcept {
+            // read first: most workers are not backing off, keep their cache
+            // lines shared in that case
+            auto& data = wait_count_data_[i].data_;
+            if (data.wait_count.load(std::memory_order_relaxed) != 0 &&
+                data.wait_count.exchange(0, std::memory_order_relaxed) != 0)
+            {
+                data.wait_cond.notify_one();
+            }
+        };
+
+        auto const size = wait_count_data_.size();
+        if (static_cast<std::size_t>(-1) == num_thread)
+        {
+            for (std::size_t i = 0; i != size; ++i)
+            {
+                if (modes_[i].data_.load(std::memory_order_relaxed) &
+                    policies::scheduler_mode::enable_idle_backoff)
+                {
+                    wake_up(i);
+                }
+            }
+        }
+        else if (modes_[num_thread].data_.load(std::memory_order_relaxed) &
+            policies::scheduler_mode::enable_idle_backoff)
+        {
+            for (std::size_t i = 0; i != size; ++i)
+            {
+                wake_up(i);
+            }
+        }
 #endif
     }
 

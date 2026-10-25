@@ -372,15 +372,6 @@ namespace hpx::threads::policies {
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
 
-        // one bit per worker that announced it is going to sleep
-        std::vector<util::aligned_line_data<std::atomic<std::uint64_t>>>
-            sleep_mask_;
-        std::atomic<std::size_t> wake_start_{0};
-
-        void notify_worker(std::size_t i);
-        void wake_one(std::size_t hint);
-        bool has_visible_work(std::size_t num_thread) const;
-
         // may this worker ignore the early stealing minima once?
         bool has_free_pass(std::size_t num_thread) const noexcept
         {
