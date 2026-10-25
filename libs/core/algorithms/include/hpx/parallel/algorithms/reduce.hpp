@@ -445,7 +445,7 @@ namespace hpx::parallel {
                                             auto&& results) mutable -> T {
                             return detail::sequential_reduce<ExPolicy>(
                                 hpx::util::begin(results),
-                                hpx::util::size(results), init, r);
+                                hpx::util::size(results), HPX_MOVE(init), r);
                         }));
                 }
                 else
@@ -474,7 +474,7 @@ namespace hpx::parallel {
                         hpx::unwrapping([init = HPX_FORWARD(T_, init),
                                             r = HPX_FORWARD(Reduce, r)](
                                             auto&& results) mutable -> T {
-                            T acc = init;
+                            T acc = HPX_MOVE(init);
                             auto const end = hpx::util::end(results);
                             for (auto it = hpx::util::begin(results); it != end;
                                 ++it)
