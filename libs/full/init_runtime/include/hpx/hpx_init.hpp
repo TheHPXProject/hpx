@@ -20,7 +20,6 @@
 #include <hpx/hpx_finalize.hpp>
 #include <hpx/hpx_init_params.hpp>
 #include <hpx/hpx_suspend.hpp>
-#include <hpx/hpx_user_main_config.hpp>
 
 #include <cstddef>
 #include <functional>
