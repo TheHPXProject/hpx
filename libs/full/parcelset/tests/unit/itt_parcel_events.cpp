@@ -250,10 +250,12 @@ int hpx_main()
     HPX_TEST_EQ(received_set.size() * 2, received.size());
     HPX_TEST_LTE(num_pings + num_bulk, received_set.size());
 
-    // Parcels this large are received with zero-copy by default, which
-    // defers scheduling their actions, so each one gets a scheduled marker.
-    HPX_TEST_LTE(num_bulk * 2, scheduled.size());
-    for (auto const& id : to_set(scheduled))
+    // The test's registration pins zero-copy on, so these large parcels are
+    // received with zero-copy, which defers scheduling their actions: each one
+    // gets a scheduled marker.
+    id_set const scheduled_set = to_set(scheduled);
+    HPX_TEST_LTE(num_bulk, scheduled_set.size());
+    for (auto const& id : scheduled_set)
         HPX_TEST_EQ(received_set.count(id), std::size_t(1));
 
     // A send marker is emitted from the write handler, which may run after
