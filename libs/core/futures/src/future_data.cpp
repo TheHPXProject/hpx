@@ -346,7 +346,7 @@ namespace hpx::lcos::detail {
             return;
 
         hpx::intrusive_ptr<future_data_base> this_(this);    // keep alive
-        if (is_ready(std::memory_order_relaxed))
+        if (is_ready(std::memory_order_acquire))
         {
             // invoke the callback (continuation) function right away
             handle_on_completed_impl(HPX_MOVE(data_sink));
