@@ -573,10 +573,6 @@ namespace hpx::tracing {
 #if defined(HPX_HAVE_PARCEL_PROFILING)
     namespace {
 
-        // Mirror of naming::invalid_locality_id, which core cannot include. A
-        // locality with this value is unknown and is left out of the metadata.
-        constexpr std::uint64_t invalid_locality = 0xFFFFFFFFULL;
-
         // A send and its receive happen in different processes, so each
         // parcel event is a marker on a fresh id, as for a steal, and carries
         // the parcel id as metadata for pairing the two afterwards.
@@ -600,7 +596,7 @@ namespace hpx::tracing {
             util::itt::string_handle const& key,
             std::uint64_t locality) noexcept
         {
-            if (locality != invalid_locality)
+            if (locality != detail::invalid_locality)
             {
                 ::itt_metadata_add(get_itt_globals().domain.domain_, &id,
                     key.handle_, locality);
