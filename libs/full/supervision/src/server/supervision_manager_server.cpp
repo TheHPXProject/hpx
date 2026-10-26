@@ -563,7 +563,8 @@ namespace hpx::supervision::server {
 
         {
             std::unique_lock<hpx::spinlock> l(mtx_);
-            if (--callbacks_in_flight_ == 0 && shutting_down_)
+            if (--callbacks_in_flight_ == 0 &&
+                (shutting_down_ || waiters_closed_))
             {
                 shutdown_cv_.notify_all(HPX_MOVE(l));
             }
@@ -1650,6 +1651,22 @@ namespace hpx::supervision::server {
                         target, previous_epoch, epoch)));
         }
 
+        if (waiters_closed_)
+        {
+            // cancel_all_waiters() already drained waiters_ for shutdown, a
+            // waiter registered now would never be resolved before the
+            // destructor runs
+            l.unlock();
+
+            return hpx::make_exceptional_future<lifecycle_state>(
+                HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                    "supervision_manager::await_terminal",
+                    hpx::util::format(
+                        "invoking await_terminal() for target {} is invalid: "
+                        "the runtime is shutting down",
+                        target)));
+        }
+
         // std::chrono::steady_clock::duration::max() (the default) defers to
         // the live default_await_terminal_timeout_ms; any other value overrides
         // the deadline for this call only.
@@ -1768,5 +1785,60 @@ namespace hpx::supervision::server {
 
         std::ranges::for_each(targets,
             [&](hpx::id_type const& target) { remove_target(target); });
+    }
+
+    // Drains every waiter still pending in waiters_ (all targets, all epochs)
+    // under mtx_ and closes waiters_ for good, then invalidates the drained
+    // promises after releasing the lock. tidy() is not sufficient for this, as
+    // it only reaches targets present in states_ or observers_. Registered as
+    // a pre-shutdown function (see pre_main()): a waiter left in waiters_
+    // until the destructor runs would have its promise broken at a point
+    // where the runtime is no longer active, and any continuation attached
+    // with hpx::launch::async would fail to register its thread.
+    //
+    // Other paths extracting waiters under mtx_ and resolving them after
+    // releasing it (publish_event(), record_error(), remove_target() and the
+    // opportunistic sweeps) are not waited for here: they all run on HPX
+    // threads, and the runtime stops only after all HPX threads have finished,
+    // so whatever they extracted is resolved while registering a thread still
+    // works. sweep_timer_callback() is waited for anyway (see below), which
+    // keeps "no waiter is pending once this returns" true.
+    void supervision_manager::cancel_all_waiters()
+    {
+        std::map<waiter_key, waiters_t> waiters;
+
+        {
+            std::unique_lock<hpx::spinlock> l(mtx_);
+
+            waiters_closed_ = true;
+            waiters = HPX_MOVE(waiters_);
+            waiters_.clear();
+            earliest_deadline_ =
+                (std::chrono::steady_clock::time_point::max) ();
+
+            // A sweep_timer_callback() invocation already in flight may have
+            // drained expired waiters before they could be moved out above,
+            // and resolves them only after releasing mtx_. Wait for it, so
+            // that no waiter is still pending once this function returns.
+            while (callbacks_in_flight_ > 0)
+            {
+                shutdown_cv_.wait(l);
+            }
+        }
+
+        for (auto& [key, entries] : waiters)
+        {
+            auto exception = HPX_GET_EXCEPTION(hpx::error::invalid_status,
+                "supervision_manager::cancel_all_waiters",
+                hpx::util::format(
+                    "await_terminal() waiter for target {} at epoch {} was "
+                    "invalidated: the runtime is shutting down",
+                    key.target, key.epoch));
+
+            for (auto& [promise, _] : entries)
+            {
+                promise.set_exception(exception);
+            }
+        }
     }
 }    // namespace hpx::supervision::server

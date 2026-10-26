@@ -768,7 +768,12 @@ namespace hpx::supervision {
     ///                 reaching a terminal event under it. It also becomes
     ///                 exceptional with a \a hpx::error::future_cancelled
     ///                 exception if neither of the above happens before
-    ///                 \a timeout elapses (see \note below).
+    ///                 \a timeout elapses (see \note below), and with a
+    ///                 \a hpx::error::invalid_status exception if the runtime
+    ///                 on \a locality starts shutting down first: all of its
+    ///                 pending waiters are invalidated as a pre-shutdown step,
+    ///                 and any call made afterwards that would have to wait is
+    ///                 rejected the same way.
     ///
     /// \note           \a locality bounds the lifetime of every waiter it
     ///                 registers on behalf of an outstanding call, so dropping
@@ -821,10 +826,13 @@ namespace hpx::supervision {
     ///                 reaching a terminal event under it. Also throws (or sets
     ///                 \a ec to) a \a hpx::error::future_cancelled
     ///                 exception if neither of the above happens before
-    ///                 \a timeout elapses.
+    ///                 \a timeout elapses, or a \a hpx::error::invalid_status
+    ///                 exception if the runtime on \a locality starts shutting
+    ///                 down first (see the asynchronous overload).
     ///
     /// \note           This call blocks until \a target reaches a terminal
-    ///                 event, its epoch is superseded, or \a timeout elapses.
+    ///                 event, its epoch is superseded, \a timeout elapses, or
+    ///                 the runtime on \a locality starts shutting down.
     HPX_CXX_EXPORT HPX_EXPORT lifecycle_state await_terminal(
         hpx::launch::sync_policy, hpx::id_type const& locality,
         hpx::id_type const& target, std::uint64_t epoch = 0,
@@ -853,9 +861,10 @@ namespace hpx::supervision {
     ///
     /// \note         As for the remote overloads, the returned future becomes
     ///               exceptional with \a hpx::error::stale_state if \a epoch is
-    ///               superseded, or with
-    ///               \a hpx::error::future_cancelled if \a timeout elapses
-    ///               first.
+    ///               superseded, with \a hpx::error::future_cancelled if
+    ///               \a timeout elapses first, or with
+    ///               \a hpx::error::invalid_status if the local runtime starts
+    ///               shutting down first.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<lifecycle_state> await_terminal(
         hpx::id_type const& target, std::uint64_t epoch = 0,
         std::optional<std::chrono::steady_clock::duration> timeout =
@@ -884,7 +893,9 @@ namespace hpx::supervision {
     ///                \c hpx::error::bad_parameter is reported. If the
     ///                wait is cancelled due to \p timeout elapsing without a
     ///                terminal state being reached, \c
-    ///                hpx::error::future_cancelled is reported.
+    ///                hpx::error::future_cancelled is reported, and if the
+    ///                local runtime starts shutting down first, \c
+    ///                hpx::error::invalid_status is reported.
     ///
     /// \returns The terminal \c lifecycle_state observed for \p target, or a
     ///          default-constructed \c lifecycle_state if an error occurred and

@@ -119,6 +119,24 @@ namespace hpx::supervision {
         /// \param ec Error code receiving the operation result.
         void tidy(hpx::error_code& ec = throws) const;
 
+        /// \brief Invalidates every pending await_terminal() waiter.
+        ///
+        /// Sets each waiter still registered with this locality's
+        /// supervision manager to an hpx::error::invalid_status exception,
+        /// whether or not its target is tracked, and makes later
+        /// await_terminal() calls that would register a new waiter fail with
+        /// the same error. Run as a pre-shutdown function, so the waiters'
+        /// continuations execute while the runtime is still active.
+        /// Local-only, not exposed as a remote action.
+        ///
+        /// \note This is meant for runtime shutdown only: it is registered as
+        ///       a pre-shutdown function by the runtime itself, and must not
+        ///       be called by applications, as it permanently closes
+        ///       await_terminal() on this locality.
+        ///
+        /// \param ec Error code receiving the operation result.
+        void cancel_all_waiters(hpx::error_code& ec = throws) const;
+
         hpx::future<lifecycle_state> await_terminal(hpx::id_type const& target,
             std::uint64_t epoch = 0,
             std::chrono::steady_clock::duration timeout =

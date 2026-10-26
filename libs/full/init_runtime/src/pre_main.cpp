@@ -42,6 +42,23 @@ namespace hpx::detail {
         return ::hpx::agas::garbage_collect();
     }
 
+#if defined(HPX_HAVE_SUPERVISION)
+    // get_supervision_manager() only returns a reference to the runtime's own
+    // member, and with no pending waiters this merely acquires a lock, so this
+    // is cheap even if supervision is never used.
+    static void cancel_supervision_waiters()
+    {
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::supervision::get_supervision_manager().cancel_all_waiters(ec);
+        if (ec)
+        {
+            LRT_(warning).format("pre-shutdown: failed to cancel pending "
+                                 "supervision waiters: {}",
+                ec.get_message());
+        }
+    }
+#endif
+
     ///////////////////////////////////////////////////////////////////////////
     // Install performance counter startup functions for core subsystems.
     static void register_counter_types()
@@ -99,6 +116,12 @@ namespace hpx::detail {
         // reference counting operations.
         register_pre_shutdown_function(&garbage_collect_non_blocking);
         register_shutdown_function(&garbage_collect);
+
+#if defined(HPX_HAVE_SUPERVISION)
+        // Invalidate any still pending await_terminal() waiters while the
+        // runtime is active, their continuations may need to spawn threads.
+        register_pre_shutdown_function(&cancel_supervision_waiters);
+#endif
 
         using components::stubs::runtime_support;
 

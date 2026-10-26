@@ -142,9 +142,12 @@ Waiting for terminal events
     reaches neither of these outcomes is bounded by ``timeout`` (or a
     built-in default if ``timeout`` is left at its sentinel value
     ``std::chrono::steady_clock::duration::max()``), after which it is
-    swept and invalidated. Dispatch is routed locally when ``target``'s
-    supervision manager lives on the calling locality, and remotely (via a
-    registered distributed action) otherwise.
+    swept and invalidated. Waiters still pending when the runtime starts
+    shutting down are invalidated with ``hpx::error::invalid_status`` as a
+    pre-shutdown step, while the runtime is still active, and any later call
+    that would have to wait is rejected the same way. Dispatch is routed
+    locally when ``target``'s supervision manager lives on the calling
+    locality, and remotely (via a registered distributed action) otherwise.
 
 .. _supervision_check_admission:
 
