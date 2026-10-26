@@ -157,11 +157,16 @@ std::vector<std::uint64_t> parcel_ids(
     std::vector<std::uint64_t> ids;
     for (auto const& m : parcel_markers())
     {
+        // check_markers reports a marker without a parcel id, so skip it here
+        // instead of throwing inside the action
         auto const it = m.metadata.find(key);
-        if (m.name == name && it != m.metadata.end() && it->second == peer)
+        auto const msb = m.metadata.find("parcel_id_msb");
+        auto const lsb = m.metadata.find("parcel_id_lsb");
+        if (m.name == name && it != m.metadata.end() && it->second == peer &&
+            msb != m.metadata.end() && lsb != m.metadata.end())
         {
-            ids.push_back(m.metadata.at("parcel_id_msb"));
-            ids.push_back(m.metadata.at("parcel_id_lsb"));
+            ids.push_back(msb->second);
+            ids.push_back(lsb->second);
         }
     }
     return ids;
