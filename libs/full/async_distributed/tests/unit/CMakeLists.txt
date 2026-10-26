@@ -40,6 +40,12 @@ if(HPX_WITH_CXX26_REFLECTION)
   set(tests ${tests} async_remote_reflect)
   set(async_remote_reflect_PARAMETERS LOCALITIES 2)
 endif()
+
+# hpx::async<&func> relies on the actions being registered automatically
+if(HPX_WITH_AUTOMATIC_SERIALIZATION_REGISTRATION)
+  set(tests ${tests} async_remote_function_pointer)
+  set(async_remote_function_pointer_PARAMETERS LOCALITIES 2)
+endif()
 set(async_remote_client_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_PARAMETERS LOCALITIES 2)
 set(async_cb_remote_client_PARAMETERS LOCALITIES 2)
