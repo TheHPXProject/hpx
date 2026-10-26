@@ -11,6 +11,7 @@
 #include <hpx/preprocessor/cat.hpp>
 #include <hpx/tracing/macros.hpp>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 
 #if defined(DOXYGEN)
@@ -73,6 +74,15 @@ namespace hpx::util::external_timer {
 
     HPX_CXX_CORE_EXPORT struct task_wrapper;
 }    // namespace hpx::util::external_timer
+
+namespace hpx::tracing::detail {
+
+    // naming::invalid_locality_id, which core can't include: a locality the
+    // caller doesn't know. If that constant ever changes, change this too, or
+    // the backends record unknown localities as 4294967295.
+    HPX_CXX_CORE_EXPORT inline constexpr std::uint64_t invalid_locality =
+        0xFFFFFFFFULL;
+}    // namespace hpx::tracing::detail
 
 #if defined(HPX_HAVE_TRACY)
 #include <hpx/tracing/backends/tracy.hpp>
