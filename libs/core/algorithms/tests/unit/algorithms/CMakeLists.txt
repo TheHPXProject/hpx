@@ -283,12 +283,12 @@ endif()
 # make_heap, sort_by_key). Each of these deliberately calls the algorithm with
 # an out-of-order iterator argument that violates its HPX_PRE precondition.
 # Under native C++26 contracts the precondition check aborts before the
-# (otherwise unsafe) algorithm body runs; without native contracts HPX_PRE is a
-# no-op and the call would fall through into undefined behavior unrelated to
-# contracts. These tests are therefore only built and run when native contracts
-# are available, mirroring the gating used by
-# libs/core/contracts/tests/unit/CMakeLists.txt.
-if(HPX_WITH_CXX26_CONTRACTS)
+# (otherwise unsafe) algorithm body runs; without native contracts (or with
+# HPX_WITH_CONTRACTS=OFF) HPX_PRE is a no-op and the call would fall through
+# into undefined behavior unrelated to contracts. These tests are therefore only
+# built and run when contracts are enabled and native contracts are available,
+# mirroring the gating used by libs/core/contracts/tests/unit/CMakeLists.txt.
+if(HPX_WITH_CONTRACTS AND HPX_WITH_CXX26_CONTRACTS)
   set(contract_violation_tests
       nth_element_contract_violation
       partial_sort_contract_violation
