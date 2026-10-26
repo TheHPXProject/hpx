@@ -53,10 +53,11 @@ void test_condition_variable_abort_stress()
                 }
                 catch (hpx::exception const& e)
                 {
-                    if (e.get_error() != hpx::error::yield_aborted)
+                    if (e.get_error() == hpx::error::yield_aborted)
                     {
-                        throw;
+                        return;
                     }
+                    throw;
                 }
                 hpx::this_thread::yield();
             }
@@ -87,7 +88,10 @@ void test_condition_variable_abort_stress()
 
     for (auto& t : threads)
     {
-        t.join();
+        if (t.joinable())
+        {
+            t.join();
+        }
     }
 }
 
