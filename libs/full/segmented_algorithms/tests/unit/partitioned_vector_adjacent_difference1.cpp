@@ -141,8 +141,8 @@ void adjacent_difference_tests(std::vector<hpx::id_type>& localities)
 
     {
         constexpr std::size_t length = 12;
-        std::vector<std::size_t> const src_sizes{3, 4, 5};
-        std::vector<std::size_t> const out_sizes{5, 7};
+        std::vector<std::size_t> const src_sizes{3, 0, 4, 0, 5};
+        std::vector<std::size_t> const out_sizes{5, 0, 7};
         std::vector<hpx::id_type> src_localities;
         std::vector<hpx::id_type> out_localities;
         src_localities.reserve(src_sizes.size());
