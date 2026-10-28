@@ -36,16 +36,22 @@ namespace hpx { namespace collectives {
         ///                     localities).
         /// \param this_site    The sequence number of this site (usually
         ///                     the locality id).
+        ///
+        /// \pre valid()
         void set_info(
             num_sites_arg num_sites, this_site_arg this_site) noexcept;
 
         /// Retrieve the number of used sites and the index of the current site
         /// for this communicator instance.
+        ///
+        /// \pre valid()
         [[nodiscard]] std::pair<num_sites_arg, this_site_arg>
         get_info() const noexcept;
 
         /// Return whether this communicator instance represents the root site
         /// of the communication operation.
+        ///
+        /// \pre valid()
         [[nodiscard]] bool is_root() const;
     };
 
@@ -221,6 +227,7 @@ namespace hpx { namespace collectives {
 
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/components.hpp>
+#include <hpx/modules/contracts.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -307,6 +314,8 @@ namespace hpx::collectives {
 
         [[nodiscard]] bool is_root() const
         {
+            HPX_CONTRACT_ASSERT(valid());
+
             auto const* client_data =
                 this->try_get_extra_data<detail::communicator_data>();
             return client_data != nullptr &&
@@ -411,25 +420,30 @@ namespace hpx::collectives {
     public:
         hpx::tuple<communicator, this_site_arg>& operator[](std::size_t idx)
         {
+            HPX_CONTRACT_ASSERT(idx < communicators.size());
             return communicators[idx];
         }
         hpx::tuple<communicator, this_site_arg> const& operator[](
             std::size_t idx) const
         {
+            HPX_CONTRACT_ASSERT(idx < communicators.size());
             return communicators[idx];
         }
 
         communicator& get(std::size_t idx)
         {
+            HPX_CONTRACT_ASSERT(idx < communicators.size());
             return hpx::get<0>(communicators[idx]);
         }
         communicator const& get(std::size_t idx) const
         {
+            HPX_CONTRACT_ASSERT(idx < communicators.size());
             return hpx::get<0>(communicators[idx]);
         }
 
         [[nodiscard]] this_site_arg site(std::size_t idx) const
         {
+            HPX_CONTRACT_ASSERT(idx < communicators.size());
             return hpx::get<1>(communicators[idx]);
         }
 
@@ -442,11 +456,13 @@ namespace hpx::collectives {
 
         communicator const& back() const
         {
+            HPX_CONTRACT_ASSERT(!communicators.empty());
             return hpx::get<0>(communicators.back());
         }
 
         [[nodiscard]] this_site_arg last_site() const
         {
+            HPX_CONTRACT_ASSERT(!communicators.empty());
             return hpx::get<1>(communicators.back());
         }
 
