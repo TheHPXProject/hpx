@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -122,6 +122,13 @@ namespace hpx::threads::policies {
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         HPX_TRACING_MARK_EVENT("do_some_work");
 
+        // The vectors don't change while the scheduler runs. Indexing them in
+        // the loops reloads their begin and end on every step (the exchange
+        // below may change any memory), from a line of the scheduler that the
+        // calling core often has to fetch again.
+        auto* const wait_data = wait_count_data_.data();
+        auto const* const modes = modes_.data();
+
         // Only touch the wait data of threads that are actually backing off.
         // Unconditionally writing wait_count would pull the cache line of
         // every (busy) worker into the calling core on each new work item. A
@@ -132,10 +139,10 @@ namespace hpx::threads::policies {
         // arrives while idle_callback is between incrementing wait_count and
         // waiting, it is lost and that thread sleeps for the period it has
         // already computed (at most max_idle_backoff_time).
-        auto const wake_up = [this](std::size_t i) noexcept {
+        auto const wake_up = [wait_data](std::size_t i) noexcept {
             // read first: most workers are not backing off, keep their cache
             // lines shared in that case
-            auto& data = wait_count_data_[i].data_;
+            auto& data = wait_data[i].data_;
             if (data.wait_count.load(std::memory_order_relaxed) != 0 &&
                 data.wait_count.exchange(0, std::memory_order_relaxed) != 0)
             {
@@ -144,11 +151,12 @@ namespace hpx::threads::policies {
         };
 
         auto const size = wait_count_data_.size();
+        HPX_ASSERT(modes_.size() >= size);
         if (static_cast<std::size_t>(-1) == num_thread)
         {
             for (std::size_t i = 0; i != size; ++i)
             {
-                if (modes_[i].data_.load(std::memory_order_relaxed) &
+                if (modes[i].data_.load(std::memory_order_relaxed) &
                     policies::scheduler_mode::enable_idle_backoff)
                 {
                     wake_up(i);

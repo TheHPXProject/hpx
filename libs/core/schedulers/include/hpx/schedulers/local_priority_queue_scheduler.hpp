@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2011      Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -119,7 +119,6 @@ namespace hpx::threads::policies {
             bool const deferred_initialization = true)
           : scheduler_base(
                 init.num_queues_, init.description_, init.thread_queue_init_)
-          , curr_queue_(0)
           , affinity_data_(init.affinity_data_)
           , numa_sensitive_(init.numa_sensitive_)
           , num_queues_(init.num_queues_)
@@ -128,6 +127,7 @@ namespace hpx::threads::policies {
           , thread_numa_domain_(num_queues_, 0)
           , victims_(num_queues_)
           , low_priority_queue_(thread_queue_init_)
+          , curr_queue_(0)
         {
             // Start stealing staged tasks soon after a worker ran out of work
             // (see wait_or_add_new). This takes load off the pending queue of
@@ -2086,11 +2086,6 @@ namespace hpx::threads::policies {
         // other spawn and steal benchmarks within 4% (2 x 20 core Xeon,
         // clang 18, median over 16 heap layouts).
 
-        // Round-robin counter for threads created without a placement hint.
-        // It is written by every spawning thread; keep it apart from the
-        // read-mostly members below.
-        util::aligned_line_data<std::atomic<std::size_t>> curr_queue_;
-
         // Not written once the workers have started, read by all workers.
         detail::affinity_data const& affinity_data_;
         numa_sensitive_mode const numa_sensitive_;
@@ -2128,6 +2123,16 @@ namespace hpx::threads::policies {
 
         // Aligned to the destructive interference size (see thread_queue).
         thread_queue_type low_priority_queue_;
+
+        // Round-robin counter for threads created without a placement hint.
+        // It is written by every spawning thread. It starts at least one page
+        // (4 KB) after the beginning of the object, so that it is never on
+        // the page of the scheduler's first cache line, which all workers
+        // read all the time: frequent writes to a line make other lines of
+        // the same page miss more often (probably through the L2 streamer,
+        // which works within a page).
+        char curr_queue_page_offset_[4096];
+        util::aligned_line_data<std::atomic<std::size_t>> curr_queue_;
     };    // namespace hpx::threads::policies
 }    // namespace hpx::threads::policies
 
