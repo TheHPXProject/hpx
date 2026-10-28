@@ -54,6 +54,43 @@ namespace hpx::experimental {
             async_rw_mutex_shared_state& operator=(
                 async_rw_mutex_shared_state const&) = delete;
 
+            void release() noexcept
+            {
+                if (HPX_LIKELY(next_state))
+                {
+                    // The current state has now finished all accesses to the
+                    // wrapped value, so we move the value to the next state.
+                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
+                    try
+                    {
+                        next_state->set_value(HPX_MOVE(value.value()));
+                    }
+                    catch (...)
+                    {
+                        next_state->set_error(std::current_exception());
+                        continuations.clear();
+                        next_state.reset();
+                        return;
+                    }
+
+                    for (auto& continuation : continuations)
+                    {
+                        try
+                        {
+                            continuation(next_state);
+                        }
+                        catch (...)
+                        {
+                            // Exceptions must not escape the noexcept destructor path
+                            // and must not stop later continuations from running.
+                            // NOLINTNEXTLINE(bugprone-empty-catch)
+                        }
+                    }
+                    continuations.clear();
+                    next_state.reset();
+                }
+            }
+
             ~async_rw_mutex_shared_state()
             {
                 // The last state does not have a next state. If this state has
@@ -66,18 +103,14 @@ namespace hpx::experimental {
                 // with this state.
                 HPX_ASSERT(value);
 
-                if (HPX_LIKELY(next_state))
-                {
-                    // The current state has now finished all accesses to the
-                    // wrapped value, so we move the value to the next state.
-                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                    next_state->set_value(HPX_MOVE(value.value()));
+                release();
+            }
 
-                    for (auto& continuation : continuations)
-                    {
-                        continuation(next_state);
-                    }
-                }
+            std::exception_ptr exception;
+
+            void set_error(std::exception_ptr ep) noexcept
+            {
+                exception = HPX_MOVE(ep);
             }
 
             template <typename U>
@@ -126,6 +159,32 @@ namespace hpx::experimental {
             async_rw_mutex_shared_state& operator=(
                 async_rw_mutex_shared_state const&) = delete;
 
+            std::exception_ptr exception;
+
+            void set_error(std::exception_ptr ep) noexcept
+            {
+                exception = HPX_MOVE(ep);
+            }
+
+            void release() noexcept
+            {
+                for (auto& continuation : continuations)
+                {
+                    try
+                    {
+                        continuation(next_state);
+                    }
+                    catch (...)
+                    {
+                        // Exceptions must not escape the noexcept destructor path
+                        // and must not stop later continuations from running.
+                        // NOLINTNEXTLINE(bugprone-empty-catch)
+                    }
+                }
+                continuations.clear();
+                next_state.reset();
+            }
+
             ~async_rw_mutex_shared_state()
             {
                 // The last state does not have a next state. If this state has
@@ -133,10 +192,7 @@ namespace hpx::experimental {
                 HPX_ASSERT((continuations.empty() && !next_state) ||
                     (!continuations.empty() && next_state));
 
-                for (auto& continuation : continuations)
-                {
-                    continuation(next_state);
-                }
+                release();
             }
 
             void set_next_state(
