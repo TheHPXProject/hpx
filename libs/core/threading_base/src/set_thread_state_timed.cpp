@@ -99,6 +99,13 @@ namespace hpx::threads::detail {
 
         thread_id_ref_type wake_id = invalid_thread_id;
         create_thread(scheduler, data, wake_id);
+        thread_id_type const wake = wake_id.noref();
+
+        // Whoever flips this first resumes the wake_timer thread, either the
+        // timer handler below or this thread if it was aborted before the
+        // timer fired.
+        std::shared_ptr<std::atomic<bool>> wake_scheduled(
+            std::make_shared<std::atomic<bool>>(false));
 
         // create timer firing in correspondence with given time
         using deadline_timer =
@@ -107,8 +114,13 @@ namespace hpx::threads::detail {
         deadline_timer t(get_default_timer_service(), abs_time);
 
         // let the timer invoke the set_state on the new (suspended) thread
-        t.async_wait([wake_id = HPX_MOVE(wake_id), priority, retry_on_active](
-                         std::error_code const& ec) {
+        t.async_wait([wake_id = HPX_MOVE(wake_id), wake_scheduled, priority,
+                         retry_on_active](std::error_code const& ec) {
+            if (wake_scheduled->exchange(true))
+            {
+                return;
+            }
+
             if (ec == std::make_error_code(std::errc::operation_canceled))
             {
                 set_thread_state(wake_id.noref(),
@@ -159,6 +171,18 @@ namespace hpx::threads::detail {
         if (thread_restart_state::timeout != statex)    //-V601
         {
             triggered->store(true);
+
+            // Resume the wake_timer thread from here instead of leaving it to
+            // the timer's cancel handler. That handler runs later on the timer
+            // thread, and during shutdown possibly after all worker threads
+            // have exited, leaving the wake_timer thread pending forever.
+            if (!wake_scheduled->exchange(true))
+            {
+                error_code ec(throwmode::lightweight);    // do not throw
+                set_thread_state(wake, thread_schedule_state::pending,
+                    thread_restart_state::abort, priority,
+                    thread_schedule_hint(), retry_on_active, ec);
+            }
 
             // wake_timer_thread has not been executed yet, cancel timer
             t.cancel();
