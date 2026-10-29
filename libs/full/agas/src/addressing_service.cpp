@@ -2240,18 +2240,28 @@ namespace hpx::agas {
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
     namespace {
 
+        // pre_shutdown is set on the runtime only, the thread pools keep
+        // running until they are stopped
+        bool shutdown_has_started() noexcept
+        {
+            runtime const* rt = get_runtime_ptr();
+            return hpx::is_stopped_or_shutting_down() ||
+                (rt != nullptr && rt->get_state() >= hpx::state::pre_shutdown);
+        }
+
         // A locality removed from AGAS (e.g. by force_disconnect()) can't be
         // resolved anymore, nobody is left to take its credits. Once shutdown
         // has started (including pre-shutdown), resolving the target may time
-        // out as well.
+        // out as well. Only errors thrown while sending are passed here, an
+        // error returned by the target (e.g. an invalid credit count) is a
+        // real bug and is not filtered.
         bool ignore_decrement_credit_error(hpx::exception const& e) noexcept
         {
             auto const err = hpx::get_error(e);
             return err == hpx::error::locality_was_disconnected ||
                 err == hpx::error::bad_parameter ||
                 (err == hpx::error::future_wait_timed_out &&
-                    threads::threadmanager_is_at_least(
-                        hpx::state::pre_shutdown));
+                    shutdown_has_started());
         }
     }    // namespace
 #endif
