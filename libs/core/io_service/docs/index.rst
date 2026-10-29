@@ -27,7 +27,7 @@ cancellation through the receiver's stop token produces ``set_stopped``, and
 other timer errors produce ``set_error``. The I/O context must be run until the
 operation completes.
 
-The following example waits asynchronously for one second::
+The following example creates a sender that completes after one second::
 
   asio::io_context context;
   auto sender = hpx::io::experimental::schedule_after(
