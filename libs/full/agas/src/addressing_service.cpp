@@ -365,9 +365,28 @@ namespace hpx::agas {
             endpoints = locality_ns_->resolve_locality(gid);
             if (endpoints.empty())
             {
-                HPX_THROWS_IF(ec, hpx::error::bad_parameter,
-                    "addressing_service::resolve_locality",
-                    "couldn't resolve the given target locality ({})", gid);
+#if defined(HPX_HAVE_NETWORKING)
+                // A locality removed from AGAS is already recorded as
+                // disconnected on every locality, report that instead of a
+                // generic error.
+                bool const was_disconnected =
+                    parcelset::locality_was_disconnected(
+                        naming::get_locality_id_from_gid(gid));
+#else
+                bool const was_disconnected = false;
+#endif
+                if (was_disconnected)
+                {
+                    HPX_THROWS_IF(ec, hpx::error::locality_was_disconnected,
+                        "addressing_service::resolve_locality",
+                        "the given target locality ({}) was disconnected", gid);
+                }
+                else
+                {
+                    HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                        "addressing_service::resolve_locality",
+                        "couldn't resolve the given target locality ({})", gid);
+                }
 
                 static parcelset::endpoints_type const empty_endpoints;
                 return empty_endpoints;
