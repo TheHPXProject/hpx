@@ -9,18 +9,18 @@
 
 #pragma once
 
-#include <hpx/config.hpp>
-#include <hpx/modules/functional.hpp>
-#include <hpx/modules/program_options.hpp>
-#include <hpx/modules/runtime_configuration.hpp>
-#include <hpx/modules/runtime_local.hpp>
+#include <cstddef>
+#include <functional>
 
+#include <hpx/config.hpp>
 #include <hpx/hpx_finalize.hpp>
 #include <hpx/hpx_init_params.hpp>
 #include <hpx/hpx_suspend.hpp>
-
-#include <cstddef>
-#include <functional>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/init_runtime.hpp>
+#include <hpx/modules/program_options.hpp>
+#include <hpx/modules/runtime_configuration.hpp>
+#include <hpx/modules/runtime_local.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
 /// \namespace hpx
