@@ -19,6 +19,7 @@
 
 #include <hpx/supervision_dispatch/server/registry.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
