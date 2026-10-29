@@ -643,14 +643,18 @@ The size reaches the scheduler with the thread that runs the function:
 store it in the ``thread_schedule_hint`` of the thread they create for the
 function.
 
-Bulk operations generally don't pass sizes on: their tasks run the function
-many times, so the size of one call says little about how long such a task
-runs. The exception is hierarchical spawning
-(``hpx::execution::parallel_executor_spawn_hierarchically``), which creates a
-task for each element: these tasks carry the function's size, and the tasks
-that only spawn them are small. The parallel algorithms pass the size of
-their loop body on to the function they give to the executor, so with
-hierarchical spawning it reaches the tasks running parts of the loop.
+The tasks of bulk operations run the function many times, so their size is
+derived from the function's size with ``hpx::bulk_task_size``:
+``hpx::execution::parallel_executor`` and the bulk operations of
+``hpx::execution::experimental::thread_pool_scheduler`` (which the scheduler
+executors use as well) give each of their worker tasks the size of the share
+of the elements it runs. Hierarchical spawning
+(``hpx::execution::parallel_executor_spawn_hierarchically``) creates a task
+for each element instead: these tasks carry the function's size, and the
+tasks that only spawn them are small. The parallel algorithms run their loop
+body in chunks, and the function they give to the executor has the size of
+a chunk, derived from the size of the loop body and the number of iterations
+in a chunk. A loop body without a size gives tasks without a size.
 
 A size given to an executor, a launch policy or a scheduler through their
 ``thread_schedule_hint`` has no effect: the hint of a thread created for a
