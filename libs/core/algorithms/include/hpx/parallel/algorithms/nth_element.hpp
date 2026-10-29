@@ -218,8 +218,8 @@ namespace hpx::parallel {
 
             if (level == 0)
             {
-                std::make_heap(first, end, wrapped_comp_type(comp, proj));
-                std::sort_heap(first, nth, wrapped_comp_type(comp, proj));
+                std::nth_element(
+                    first, nth, end, wrapped_comp_type(comp, proj));
                 return;
             }
 

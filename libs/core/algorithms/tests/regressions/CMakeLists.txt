@@ -29,6 +29,7 @@ set(tests
     search_larger_2nd_range
     search_zerolength
     set_operations_3442
+    sort_depth_limit_fallback
     stable_merge_2964
     static_chunker_2282
     transform_inclusive_scan_4786

@@ -298,8 +298,7 @@ namespace hpx::parallel {
 
             if (level == 0)
             {
-                std::make_heap(first, end, comp);
-                std::sort_heap(first, middle, comp);
+                std::partial_sort(first, middle, end, comp);
                 return;
             }
 
