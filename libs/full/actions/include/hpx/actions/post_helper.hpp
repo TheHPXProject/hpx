@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -49,6 +49,9 @@ namespace hpx::detail {
                 std::chrono::milliseconds(HPX_NETWORK_RETRIES_SLEEP));
         }
 
+        // the thread has the size of the function the action runs
+        data.schedulehint.task_size(actions::action_task_size<Action>());
+
         traits::action_schedule_thread<Action>::call(lva, comptype, data);
     }
 
@@ -71,6 +74,9 @@ namespace hpx::detail {
             std::this_thread::sleep_for(
                 std::chrono::milliseconds(HPX_NETWORK_RETRIES_SLEEP));
         }
+
+        // the thread has the size of the function the action runs
+        data.schedulehint.task_size(actions::action_task_size<Action>());
 
         traits::action_schedule_thread<Action>::call(lva, comptype, data);
     }

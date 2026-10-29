@@ -25,6 +25,7 @@
 #include <hpx/actions_base/traits/action_priority.hpp>
 #include <hpx/actions_base/traits/action_remote_result.hpp>
 #include <hpx/actions_base/traits/action_stacksize.hpp>
+#include <hpx/actions_base/traits/action_task_size.hpp>
 #include <hpx/actions_base/traits/action_trigger_continuation_fwd.hpp>
 #include <hpx/actions_base/traits/is_distribution_policy.hpp>
 #include <hpx/modules/async_base.hpp>
@@ -40,6 +41,7 @@
 #include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/preprocessor.hpp>
 #include <hpx/modules/runtime_local.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/modules/util.hpp>
 
@@ -488,6 +490,30 @@ namespace hpx::actions {
         static constexpr actions::action_flavor get_action_type() noexcept
         {
             return actions::action_flavor::direct_action;
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // A function given a size with hpx::threads::with_task_size (or one of its
+    // shorthands) can be bound to an action as well, for instance:
+    //
+    //     struct f_action
+    //       : hpx::actions::make_action_t<decltype(hpx::small_task(&f)),
+    //             hpx::small_task(&f), f_action>
+    //     {
+    //     };
+    //
+    // The action runs the wrapped function and has the size of the wrapper.
+    template <typename TF, threads::task_size Size,
+        threads::sized_function<TF, Size> F, typename Derived>
+    struct action<threads::sized_function<TF, Size>, F, Derived>
+      : action<TF, F.f,
+            detail::action_type_t<
+                action<threads::sized_function<TF, Size>, F, Derived>, Derived>>
+    {
+        static constexpr threads::task_size function_task_size() noexcept
+        {
+            return Size;
         }
     };
 
