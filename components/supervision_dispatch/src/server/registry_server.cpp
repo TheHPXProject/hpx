@@ -33,6 +33,8 @@ HPX_REGISTER_ACTION(hpx::supervision::server::registry::snapshot_peers_action,
     supervision_dispatch_registry_snapshot_peers_action)
 HPX_REGISTER_ACTION(hpx::supervision::server::registry::leave_action,
     supervision_dispatch_registry_leave_action)
+HPX_REGISTER_ACTION(hpx::supervision::server::registry::evict_fenced_action,
+    supervision_dispatch_registry_evict_fenced_action)
 
 namespace {
 
@@ -500,6 +502,15 @@ namespace hpx::supervision::server {
         // than leave a tombstone behind (contrast with the terminal-
         // notification call site in register_observers(), which passes true).
         evict_peer(peer_locality, join_epoch, hpx::invalid_id, false);
+    }
+
+    void registry::evict_fenced(
+        hpx::id_type const& peer_locality, std::uint64_t const join_epoch)
+    {
+        // The peer never reported its terminal event, the fence exists only
+        // locally, so keep it as a tombstone, same as for a terminal event the
+        // peer did report (see register_observers()).
+        evict_peer(peer_locality, join_epoch, hpx::invalid_id, true);
     }
 
     void registry::evict_peer(hpx::id_type const& peer_locality,

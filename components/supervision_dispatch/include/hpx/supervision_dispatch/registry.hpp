@@ -116,6 +116,19 @@ namespace hpx::supervision {
         void leave(hpx::id_type const& peer_locality,
             hpx::future<joined_peer>&& f) const;
 
+        /// Removes a joined peer whose local supervision state has latched a
+        /// terminal event without the peer reporting one, i.e. one that
+        /// failure detection fenced, keeping that state so the peer stays
+        /// fenced. Fire-and-forget: the removal unregisters this registry's
+        /// observers on the peer's locality, which may no longer be
+        /// reachable, so the caller does not wait for it.
+        ///
+        /// \param peer_locality The peer locality to remove.
+        /// \param join_epoch The join epoch of the entry to remove; a no-op if
+        ///        \p peer_locality has since been re-joined or evicted.
+        void evict_fenced(
+            hpx::id_type const& peer_locality, std::uint64_t join_epoch) const;
+
         /// Register this registry's id with AGAS under a name pinned to the
         /// locality that actually hosts its underlying server component
         /// (derived from the component's own id via

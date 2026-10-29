@@ -148,6 +148,27 @@ namespace hpx::supervision::server {
         };
         /// \endcond
 
+        /// Removes a joined peer whose local supervision state has latched a
+        /// terminal event without the peer itself reporting one, i.e. one
+        /// that failure detection fenced. The terminal state is left in place
+        /// as a tombstone (see cleanup_peer()), so the peer stays fenced.
+        ///
+        /// \param peer_locality The peer locality to remove.
+        /// \param join_epoch Must match the join epoch currently recorded for
+        ///        \p peer_locality. If \p peer_locality has since been
+        ///        re-joined (fresh epoch) or already evicted, this call is a
+        ///        no-op.
+        void evict_fenced(
+            hpx::id_type const& peer_locality, std::uint64_t join_epoch);
+
+        /// \cond NOINTERNAL
+        struct evict_fenced_action
+          : hpx::actions::make_action_t<decltype(&registry::evict_fenced),
+                &registry::evict_fenced, evict_fenced_action>
+        {
+        };
+        /// \endcond
+
     protected:
         // Returns {stored_peer_locality, stored_join_epoch, true} if
         // peer_locality is already fully joined (stored_peer_locality being
@@ -175,8 +196,9 @@ namespace hpx::supervision::server {
         // racing terminal notification, this is a no-op.
         //
         // `preserve_terminal_state` is true for terminal-notification-driven
-        // evictions (leaving the peer's last published event in place as a
-        // tombstone, see cleanup_peer()) and false for an explicit leave().
+        // evictions and evict_fenced() (leaving the peer's last terminal event
+        // in place as a tombstone, see cleanup_peer()) and false for an
+        // explicit leave().
         void evict_peer(hpx::id_type const& peer_locality,
             std::uint64_t join_epoch, hpx::id_type keep_alive,
             bool preserve_terminal_state);
@@ -282,5 +304,8 @@ HPX_REGISTER_ACTION_DECLARATION(
 HPX_REGISTER_ACTION_DECLARATION(
     hpx::supervision::server::registry::leave_action,
     supervision_dispatch_registry_leave_action)
+HPX_REGISTER_ACTION_DECLARATION(
+    hpx::supervision::server::registry::evict_fenced_action,
+    supervision_dispatch_registry_evict_fenced_action)
 
 #include <hpx/config/warnings_suffix.hpp>
