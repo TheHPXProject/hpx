@@ -156,8 +156,8 @@ namespace hpx::supervision::server {
         /// \param peer_locality The peer locality to remove.
         /// \param join_epoch Must match the join epoch currently recorded for
         ///        \p peer_locality. If \p peer_locality has since been
-        ///        re-joined (fresh epoch) or already evicted, this call is a
-        ///        no-op.
+        ///        re-joined or already evicted, or its local supervision state
+        ///        is no longer terminal, this call is a no-op.
         void evict_fenced(
             hpx::id_type const& peer_locality, std::uint64_t join_epoch);
 

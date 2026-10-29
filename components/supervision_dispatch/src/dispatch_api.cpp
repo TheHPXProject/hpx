@@ -528,6 +528,23 @@ namespace {
                     continue;
                 }
 
+                // A local state that already latched a terminal event means an
+                // earlier sweep fenced the peer (a peer that reports its own
+                // terminal event is evicted by the registry right away), so
+                // there is nothing left to detect. Evict it, keeping the fence
+                // in place, so snapshot_peers() stops listing it. This is done
+                // here rather than by the probe that fenced it, since only
+                // this loop may touch registry_ (see above). Checked before
+                // state.ec, which is also set if recording the failure
+                // reported an error.
+                if (hpx::supervision::is_terminal(state.last_event))
+                {
+                    ds.registry_.evict_fenced(
+                        peer.peer_locality, peer.join_epoch);
+                    query_failures.erase(peer.peer_locality);
+                    continue;
+                }
+
                 if (state.ec)
                 {
                     // The peer's own supervision manager is alive and reachable
@@ -545,21 +562,6 @@ namespace {
                 // update failure tracking
                 last_lifecycle_epoch = state.epoch;
                 failures = 0;
-
-                // A local state that already latched a terminal event means an
-                // earlier sweep fenced the peer (a peer that reports its own
-                // terminal event is evicted by the registry right away), so
-                // there is nothing left to detect. Evict it, keeping the fence
-                // in place, so snapshot_peers() stops listing it. This is done
-                // here rather than by the probe that fenced it, since only
-                // this loop may touch registry_ (see above).
-                if (hpx::supervision::is_terminal(state.last_event))
-                {
-                    ds.registry_.evict_fenced(
-                        peer.peer_locality, peer.join_epoch);
-                    query_failures.erase(peer.peer_locality);
-                    continue;
-                }
 
                 constexpr auto publish_failed_event =
                     [](hpx::id_type const& peer_locality,

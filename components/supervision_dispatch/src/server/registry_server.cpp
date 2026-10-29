@@ -507,6 +507,18 @@ namespace hpx::supervision::server {
     void registry::evict_fenced(
         hpx::id_type const& peer_locality, std::uint64_t const join_epoch)
     {
+        // join_epoch alone doesn't identify the entry this was requested for:
+        // after a leave(), a new join() of the same peer can get the same
+        // join_epoch. Its local state is no longer terminal though (leave()
+        // removes it and join() seeds it with started), so only evict while
+        // it still is.
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        auto const state = hpx::supervision::query_state(peer_locality, ec);
+        if (ec || !hpx::supervision::is_terminal(state.last_event))
+        {
+            return;
+        }
+
         // The peer never reported its terminal event, the fence exists only
         // locally, so keep it as a tombstone, same as for a terminal event the
         // peer did report (see register_observers()).
