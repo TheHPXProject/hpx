@@ -93,9 +93,9 @@ namespace hpx::lcos::detail {
         [[nodiscard]] constexpr threads::task_size get_task_size()
             const noexcept
         {
-            return traits::get_task_size<
-                std::decay_t<typename Frame::function_type>,
-                Size>::call(this_->func_);
+            using function_type = std::decay_t<typename Frame::function_type>;
+            return traits::get_task_size<function_type, Size>::call(
+                this_->func_);
         }
 
         // keep the dataflow frame alive with this pointer reference
