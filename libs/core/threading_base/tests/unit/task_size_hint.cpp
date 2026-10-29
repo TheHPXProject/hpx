@@ -16,9 +16,11 @@
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
+#include <hpx/thread.hpp>
 
 #include <array>
 #include <atomic>
@@ -192,6 +194,45 @@ void test_function_sizes()
                 42);
         },
         1, 0, 0);
+
+    // a type erased function has the size of the function stored in it
+    check_sizes(
+        [] {
+            hpx::move_only_function<int()> f = hpx::large_task(&answer);
+            HPX_TEST_EQ(hpx::async(std::move(f)).get(), 42);
+        },
+        0, 0, 1);
+    check_sizes(
+        [] {
+            hpx::function<int(int)> const f =
+                hpx::small_task([](int i) { return i; });
+            HPX_TEST_EQ(hpx::async(f, 1).get(), 1);
+        },
+        1, 0, 0);
+
+    // hpx::thread
+    check_sizes(
+        [] {
+            hpx::thread t(hpx::medium_task([] {}));
+            t.join();
+        },
+        0, 1, 0);
+    check_sizes(
+        [] {
+            hpx::thread t([] {});
+            t.join();
+        },
+        0, 0, 0);
+
+    // run_as_hpx_thread, which has to be called from an OS thread
+    check_sizes(
+        [] {
+            HPX_TEST_EQ(hpx::run_as_os_thread([] {
+                return hpx::run_as_hpx_thread(hpx::large_task(&answer));
+            }).get(),
+                42);
+        },
+        0, 0, 1);
 
     // a function without a size creates its thread without one
     check_sizes([] { HPX_TEST_EQ(hpx::async(&answer).get(), 42); }, 0, 0, 0);

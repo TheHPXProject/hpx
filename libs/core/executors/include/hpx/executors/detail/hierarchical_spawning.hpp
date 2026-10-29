@@ -185,9 +185,8 @@ namespace hpx::parallel::execution::detail {
                                 // each of these tasks runs f once
                                 hpx::detail::post_policy_dispatch<Launch>::call(
                                     inner_post_policy, desc, pool,
-                                    hpx::threads::with_task_size<hpx::traits::
-                                            get_task_size_v<std::decay_t<F>>>(
-                                        wrapped),
+                                    hpx::threads::detail::with_task_size_of(
+                                        f, wrapped),
                                     *iter, ts...);
                             }
 

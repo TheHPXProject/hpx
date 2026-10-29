@@ -99,12 +99,24 @@ namespace hpx::traits {
     // By default, we don't know how long the function runs. Size stays
     // unknown for callers; it is an extension point for specializations,
     // which pass it on to the function they wrap.
+    //
+    // value is the size known from the type of F. call(f) returns the size of
+    // the function object f, which can be known only at run time, for
+    // instance for a function stored in an hpx::function. Specializations for
+    // wrappers forward call to the function they wrap, the same way as the
+    // ones of get_function_annotation do.
     HPX_CXX_CORE_EXPORT template <typename F,
         threads::task_size Size = threads::task_size::unknown,
         typename Enable = void>
     struct get_task_size
     {
         static constexpr threads::task_size value = Size;
+
+        [[nodiscard]] static constexpr threads::task_size call(
+            F const& /*f*/) noexcept
+        {
+            return Size;
+        }
     };
 
     HPX_CXX_CORE_EXPORT template <typename F,

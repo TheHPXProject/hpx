@@ -864,6 +864,12 @@ struct hpx::traits::get_task_size<
     hpx::parallel::detail::transform_iteration<ExPolicy, F, Proj>, Size>
   : get_task_size<std::decay_t<F>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::detail::transform_iteration<ExPolicy, F, Proj> const&
+            f) noexcept
+    {
+        return get_task_size<std::decay_t<F>, Size>::call(f.f_);
+    }
 };
 
 template <typename ExPolicy, typename F, typename Proj1, typename Proj2,
@@ -873,6 +879,12 @@ struct hpx::traits::get_task_size<
         Proj2>,
     Size> : get_task_size<std::decay_t<F>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1,
+            Proj2> const& f) noexcept
+    {
+        return get_task_size<std::decay_t<F>, Size>::call(f.f_);
+    }
 };
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)

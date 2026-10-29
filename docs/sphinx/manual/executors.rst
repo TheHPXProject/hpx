@@ -599,8 +599,11 @@ property of the function a task runs, so it is attached to the function:
 ``hpx::with_task_size<Size>(f)`` and its shorthands ``hpx::nano_task(f)``,
 ``hpx::small_task(f)``, ``hpx::medium_task(f)`` and ``hpx::large_task(f)``
 return a function that carries one of the sizes of
-``hpx::task_size``. ``hpx::traits::get_task_size_v<F>`` reads it,
-and is ``task_size::unknown`` for a function without a size.
+``hpx::task_size``. ``hpx::traits::get_task_size_v<F>`` reads it from
+the type of a function, and is ``task_size::unknown`` for a function without a
+size. ``hpx::traits::get_task_size<F>::call(f)`` reads it from the function
+object ``f``, which also finds the size of a function stored in an
+``hpx::function`` or an ``hpx::move_only_function``, known at run time only.
 
 .. note::
 
@@ -633,7 +636,8 @@ and is ``task_size::unknown`` for a function without a size.
    auto next = r.then(hpx::small_task([](auto&& r) { return r.get() * 2; }));
 
 The size reaches the scheduler with the thread that runs the function:
-``hpx::post``, ``hpx::async``, ``.then()``, dataflow and the ``post``,
+``hpx::post``, ``hpx::async``, ``.then()``, dataflow, ``hpx::thread``,
+``hpx::run_as_hpx_thread`` and the ``post``,
 ``sync_execute``, ``async_execute`` and ``then_execute`` of
 ``hpx::execution::parallel_executor`` (and of the executors built on it)
 store it in the ``thread_schedule_hint`` of the thread they create for the
@@ -663,7 +667,8 @@ Wrappers forward the size of the function they wrap. The ones |hpx| provides
 the parallel algorithms create around their loop bodies, for instance) do. A
 wrapper of your own can do the same by specializing
 ``hpx::traits::get_task_size``, the same way wrappers forward annotations with
-``hpx::traits::get_function_annotation``:
+``hpx::traits::get_function_annotation``. It derives from the specialization
+for the wrapped function, which gives it ``value``, and forwards ``call``:
 
 .. code-block:: c++
 
@@ -683,6 +688,11 @@ wrapper of your own can do the same by specializing
    struct hpx::traits::get_task_size<my_wrapper<F>, Size>
      : hpx::traits::get_task_size<F, Size>
    {
+       static constexpr hpx::task_size call(
+           my_wrapper<F> const& w) noexcept
+       {
+           return hpx::traits::get_task_size<F, Size>::call(w.f);
+       }
    };
 
 .. _parallel_scheduler:

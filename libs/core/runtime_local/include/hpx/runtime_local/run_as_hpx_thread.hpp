@@ -1,4 +1,4 @@
-//  Copyright (c) 2016-2025 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -48,6 +48,10 @@ namespace hpx {
             hpx::optional<result_type> result;
             std::exception_ptr exception;
 
+            // the thread has the size of the function it runs
+            auto hint = policy.get_hint();
+            hpx::threads::detail::set_task_size(hint, f);
+
             // Create the HPX thread
             hpx::threads::thread_init_data data(
                 hpx::threads::make_thread_function_nullary([&, cond]() {
@@ -73,8 +77,8 @@ namespace hpx {
 
                     cond->notify_all();
                 }),
-                "run_as_hpx_thread (non-void)", policy.get_priority(),
-                policy.get_hint(), policy.get_stacksize());
+                "run_as_hpx_thread (non-void)", policy.get_priority(), hint,
+                policy.get_stacksize());
 
             hpx::threads::register_work(data);
 
@@ -109,6 +113,10 @@ namespace hpx {
 
             std::exception_ptr exception;
 
+            // the thread has the size of the function it runs
+            auto hint = policy.get_hint();
+            hpx::threads::detail::set_task_size(hint, f);
+
             // Create an HPX thread
             hpx::threads::thread_init_data data(
                 hpx::threads::make_thread_function_nullary([&, cond]() {
@@ -132,8 +140,8 @@ namespace hpx {
 
                     cond->notify_all();
                 }),
-                "run_as_hpx_thread (void)", policy.get_priority(),
-                policy.get_hint(), policy.get_stacksize());
+                "run_as_hpx_thread (void)", policy.get_priority(), hint,
+                policy.get_stacksize());
 
             hpx::threads::register_work(data);
 

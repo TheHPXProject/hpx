@@ -110,20 +110,70 @@ struct hpx::traits::get_task_size<hpx::threads::sized_function<F, Size>,
     Default>
 {
     static constexpr threads::task_size value = Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::threads::sized_function<F, Size> const&) noexcept
+    {
+        return Size;
+    }
 };
 
 namespace hpx::threads::detail {
 
-    // Store the size of F in the hint of the thread that runs it. Task sizes
+    // A function that has the size of another function, which may be known
+    // at run time only. A task that runs that other function once can be
+    // given its size this way.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct size_of_function
+    {
+        F f;
+        task_size size;
+
+        template <typename... Ts>
+        decltype(auto) operator()(Ts&&... ts)
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <typename... Ts>
+        decltype(auto) operator()(Ts&&... ts) const
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
+        }
+    };
+
+    // Returns f with the size of sized.
+    HPX_CXX_CORE_EXPORT template <typename Sized, typename F>
+    constexpr size_of_function<std::decay_t<F>> with_task_size_of(
+        Sized const& sized, F&& f)
+    {
+        return {HPX_FORWARD(F, f), traits::get_task_size<Sized>::call(sized)};
+    }
+
+    // Store the size of f in the hint of the thread that runs it. Task sizes
     // come from functions only: a size the hint got from elsewhere, for
     // instance from an executor or a launch policy, is replaced, and the size
-    // is unknown if F has none.
+    // is unknown if f has none.
     HPX_CXX_CORE_EXPORT template <typename F>
-    constexpr void set_task_size(thread_schedule_hint& hint) noexcept
+    constexpr void set_task_size(
+        thread_schedule_hint& hint, F const& f) noexcept
     {
-        hint.task_size(traits::get_task_size_v<F>);
+        hint.task_size(traits::get_task_size<F>::call(f));
     }
 }    // namespace hpx::threads::detail
+
+template <typename F, hpx::threads::task_size Default>
+struct hpx::traits::get_task_size<hpx::threads::detail::size_of_function<F>,
+    Default>
+{
+    static constexpr threads::task_size value = Default;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return f.size != threads::task_size::unknown ? f.size : Default;
+    }
+};
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 // The wrapped function keeps its address and annotation.

@@ -106,6 +106,12 @@ struct hpx::traits::get_task_size<
     hpx::parallel::util::detail::partitioner_iteration<Result, F>, Size>
   : get_task_size<std::decay_t<F>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::util::detail::partitioner_iteration<Result, F> const&
+            f) noexcept
+    {
+        return get_task_size<std::decay_t<F>, Size>::call(f.f_);
+    }
 };
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
