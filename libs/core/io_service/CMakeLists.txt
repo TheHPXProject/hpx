@@ -8,7 +8,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 set(io_service_headers
     hpx/io_service/io_service_pool.hpp hpx/io_service/io_service_pool_fwd.hpp
-    hpx/io_service/io_service_thread_pool.hpp
+    hpx/io_service/schedule_timer.hpp hpx/io_service/io_service_thread_pool.hpp
 )
 
 # cmake-format: off
@@ -17,7 +17,9 @@ set(io_service_compat_headers
 )
 # cmake-format: on
 
-set(io_service_sources io_service_pool.cpp io_service_thread_pool.cpp)
+set(io_service_sources io_service_pool.cpp io_service_thread_pool.cpp
+                       schedule_timer.cpp
+)
 
 include(HPX_AddModule)
 add_hpx_module(
@@ -35,6 +37,7 @@ add_hpx_module(
     hpx_concurrency
     hpx_config
     hpx_errors
+    hpx_execution_base
     hpx_functional
     hpx_logging
     hpx_threading_base
