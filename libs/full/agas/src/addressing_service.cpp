@@ -2237,6 +2237,25 @@ namespace hpx::agas {
     }
 #endif
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+    namespace {
+
+        // A locality removed from AGAS (e.g. by force_disconnect()) can't be
+        // resolved anymore, nobody is left to take its credits. Once shutdown
+        // has started (including pre-shutdown), resolving the target may time
+        // out as well.
+        bool ignore_decrement_credit_error(hpx::exception const& e) noexcept
+        {
+            auto const err = hpx::get_error(e);
+            return err == hpx::error::locality_was_disconnected ||
+                err == hpx::error::bad_parameter ||
+                (err == hpx::error::future_wait_timed_out &&
+                    threads::threadmanager_is_at_least(
+                        hpx::state::pre_shutdown));
+        }
+    }    // namespace
+#endif
+
     // 26110: Caller failing to hold lock 'l' before calling function
 #if defined(HPX_MSVC)
 #pragma warning(push)
@@ -2305,19 +2324,10 @@ namespace hpx::agas {
                         hpx::post(action, it->first, HPX_MOVE(it->second));
                     },
                     [&](hpx::exception const& e) {
-                        // A locality removed from AGAS (e.g. by
-                        // force_disconnect()) can't be resolved anymore,
-                        // nobody is left to take its credits. While shutting
-                        // down, resolving the target may time out as well.
-                        auto const err = hpx::get_error(e);
-                        if (err == hpx::error::locality_was_disconnected ||
-                            err == hpx::error::bad_parameter ||
-                            (err == hpx::error::future_wait_timed_out &&
-                                hpx::is_stopped_or_shutting_down()))
+                        if (!ignore_decrement_credit_error(e))
                         {
-                            return;
+                            throw e;
                         }
-                        throw e;
                     },
                     [&](std::exception_ptr const& ep) {
                         std::rethrow_exception(ep);
@@ -2398,8 +2408,7 @@ namespace hpx::agas {
                     f = hpx::async(action, it->first, HPX_MOVE(it->second));
                 },
                 [&](hpx::exception const& e) {
-                    if (auto const err = hpx::get_error(e);
-                        err != hpx::error::locality_was_disconnected)
+                    if (!ignore_decrement_credit_error(e))
                     {
                         throw e;
                     }
