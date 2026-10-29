@@ -13,6 +13,7 @@
 #include <asio/steady_timer.hpp>
 
 #include <chrono>
+#include <exception>
 #include <functional>
 #include <memory>
 #include <system_error>
@@ -47,9 +48,17 @@ namespace hpx::io::experimental::detail {
                 std::error_code const& error) { callback(error); });
     }
 
-    void timer_operation::cancel(std::error_code& error) noexcept
+    std::exception_ptr timer_operation::cancel() noexcept
     {
-        impl_->timer.cancel(error);
+        try
+        {
+            impl_->timer.cancel();
+            return {};
+        }
+        catch (...)
+        {
+            return std::current_exception();
+        }
     }
 
     bool timer_operation::is_operation_aborted(

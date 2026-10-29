@@ -40,7 +40,7 @@ namespace hpx::io::experimental {
 
             void async_wait(std::chrono::steady_clock::time_point time_point,
                 callback_type callback);
-            void cancel(std::error_code& error) noexcept;
+            [[nodiscard]] std::exception_ptr cancel() noexcept;
 
             [[nodiscard]] static bool is_operation_aborted(
                 std::error_code const& error) noexcept;
@@ -124,11 +124,10 @@ namespace hpx::io::experimental {
                     return;
                 }
 
-                std::error_code error;
-                timer_.cancel(error);
+                std::exception_ptr error = timer_.cancel();
                 if (error)
                 {
-                    cancellation_error_ = make_exception(error);
+                    cancellation_error_ = HPX_MOVE(error);
                 }
             }
 
