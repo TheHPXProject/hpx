@@ -128,6 +128,12 @@ namespace hpx::threads::detail {
         // let the timer invoke the set_state on the new (suspended) thread
         t.async_wait([wake_id = HPX_MOVE(wake_id), state, priority,
                          retry_on_active](std::error_code const& ec) {
+            if (ec == std::make_error_code(std::errc::operation_canceled))
+            {
+                // at_timer cancels only once it has resumed wake_timer itself.
+                return;
+            }
+
             wake_state expected = wake_state::unclaimed;
             if (!state->wake.compare_exchange_strong(
                     expected, wake_state::claimed))
@@ -135,19 +141,10 @@ namespace hpx::threads::detail {
                 return;
             }
 
-            if (ec == std::make_error_code(std::errc::operation_canceled))
-            {
-                set_thread_state(wake_id.noref(),
-                    thread_schedule_state::pending, thread_restart_state::abort,
-                    priority, thread_schedule_hint(), retry_on_active, throws);
-            }
-            else
-            {
-                set_thread_state(wake_id.noref(),
-                    thread_schedule_state::pending,
-                    thread_restart_state::timeout, priority,
-                    thread_schedule_hint(), retry_on_active, throws);
-            }
+            error_code ec2(throwmode::lightweight);    // do not throw
+            set_thread_state(wake_id.noref(), thread_schedule_state::pending,
+                thread_restart_state::timeout, priority, thread_schedule_hint(),
+                retry_on_active, ec2);
 
             state->wake.store(wake_state::scheduled);
         });
