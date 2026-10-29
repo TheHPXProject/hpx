@@ -294,7 +294,6 @@ namespace hpx::execution::experimental {
             auto const local_mtx = mtx;    // keep alive
             std::unique_lock l(local_mtx->mtx_);
 
-            stop = false;
             t->next = &head;
             head.tail = head.tail->next = t;
             cond_var.notify_one(HPX_MOVE(l));
