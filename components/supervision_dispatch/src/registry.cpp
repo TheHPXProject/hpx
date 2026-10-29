@@ -89,12 +89,12 @@ namespace hpx::supervision {
     }
 
     void registry::evict_fenced(
-        hpx::id_type const& peer_locality, std::uint64_t const join_epoch) const
+        hpx::id_type const& peer_locality, std::uint64_t const generation) const
     {
-        // Fire-and-forget, like leave(): evict_fenced_action (via
-        // evict_peer()) is safe to invoke redundantly/late.
+        // Fire-and-forget, like leave(): evict_fenced_action is safe to invoke
+        // redundantly/late.
         using action_type = server::registry::evict_fenced_action;
-        hpx::post(action_type(), get_id(), peer_locality, join_epoch);
+        hpx::post(action_type(), get_id(), peer_locality, generation);
     }
 
     hpx::id_type registry::get_locality() const

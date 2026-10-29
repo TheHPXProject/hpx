@@ -271,6 +271,7 @@ namespace hpx::supervision::server {
                 peers_.try_emplace(peer_locality, peer_locality);
             if (inserted)
             {
+                it->second.generation = ++next_generation_;
                 break;
             }
 
@@ -488,7 +489,8 @@ namespace hpx::supervision::server {
             if (entry.ready && !entry.evict_pending)
             {
                 result.push_back(peer_snapshot{.peer_locality = peer_locality,
-                    .join_epoch = entry.join_epoch});
+                    .join_epoch = entry.join_epoch,
+                    .generation = entry.generation});
             }
         }
         return result;
@@ -505,13 +507,11 @@ namespace hpx::supervision::server {
     }
 
     void registry::evict_fenced(
-        hpx::id_type const& peer_locality, std::uint64_t const join_epoch)
+        hpx::id_type const& peer_locality, std::uint64_t const generation)
     {
-        // join_epoch alone doesn't identify the entry this was requested for:
-        // after a leave(), a new join() of the same peer can get the same
-        // join_epoch. Its local state is no longer terminal though (leave()
-        // removes it and join() seeds it with started), so only evict while
-        // it still is.
+        // A peer that came back with a new epoch since the caller saw it
+        // fenced is no longer terminal, don't evict it. This narrows, but
+        // doesn't close, the window for that (see #7924).
         hpx::error_code ec(hpx::throwmode::lightweight);
         auto const state = hpx::supervision::query_state(peer_locality, ec);
         if (ec || !hpx::supervision::is_terminal(state.last_event))
@@ -519,10 +519,36 @@ namespace hpx::supervision::server {
             return;
         }
 
+        hpx::id_type lifecycle_observer;
+        hpx::id_type activity_observer;
+
+        {
+            std::unique_lock l(mtx_);
+
+            // generation identifies the entry the caller saw. A peer that was
+            // left and joined again since then has a new entry, even if its
+            // join_epoch is the same. The entry the caller saw was ready, and
+            // an entry never stops being ready, so there's no join in progress
+            // to defer to (unlike in evict_peer()).
+            auto const it = peers_.find(peer_locality);
+            if (it == peers_.end() || it->second.generation != generation)
+            {
+                return;
+            }
+
+            lifecycle_observer = it->second.lifecycle_observer;
+            activity_observer = it->second.activity_observer;
+
+            peers_.erase(it);
+
+            cond_.notify_all(HPX_MOVE(l));
+        }
+
         // The peer never reported its terminal event, the fence exists only
         // locally, so keep it as a tombstone, same as for a terminal event the
         // peer did report (see register_observers()).
-        evict_peer(peer_locality, join_epoch, hpx::invalid_id, true);
+        cleanup_peer(
+            peer_locality, lifecycle_observer, activity_observer, true);
     }
 
     void registry::evict_peer(hpx::id_type const& peer_locality,

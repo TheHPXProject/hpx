@@ -275,8 +275,10 @@ Registry client
 
 .. cpp:struct:: hpx::supervision::server::peer_snapshot
 
-    Plain-data view of a single joined peer: ``peer_locality`` and
-    ``join_epoch``.
+    Plain-data view of a single joined peer: ``peer_locality``,
+    ``join_epoch`` and ``generation``. ``generation`` identifies the registry
+    entry itself, a peer that is left and joined again gets a new one even if
+    its ``join_epoch`` is the same.
 
 .. _supervision_dispatch_fenced_dispatch:
 

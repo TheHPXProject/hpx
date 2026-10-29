@@ -125,10 +125,11 @@ namespace hpx::supervision {
         /// reachable, so the caller does not wait for it.
         ///
         /// \param peer_locality The peer locality to remove.
-        /// \param join_epoch The join epoch of the entry to remove; a no-op if
-        ///        \p peer_locality has since been re-joined or evicted.
+        /// \param generation The server::peer_snapshot::generation of the
+        ///        entry to remove; a no-op if \p peer_locality has since been
+        ///        evicted, or left and joined again.
         void evict_fenced(
-            hpx::id_type const& peer_locality, std::uint64_t join_epoch) const;
+            hpx::id_type const& peer_locality, std::uint64_t generation) const;
 
         /// Register this registry's id with AGAS under a name pinned to the
         /// locality that actually hosts its underlying server component

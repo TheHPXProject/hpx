@@ -540,7 +540,7 @@ namespace {
                 if (hpx::supervision::is_terminal(state.last_event))
                 {
                     ds.registry_.evict_fenced(
-                        peer.peer_locality, peer.join_epoch);
+                        peer.peer_locality, peer.generation);
                     query_failures.erase(peer.peer_locality);
                     continue;
                 }
