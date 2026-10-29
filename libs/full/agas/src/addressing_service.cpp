@@ -2268,17 +2268,16 @@ namespace hpx::agas {
                 (rt != nullptr && rt->get_state() >= hpx::state::pre_shutdown);
         }
 
-        // A locality removed from AGAS (e.g. by force_disconnect()) can't be
-        // resolved anymore, nobody is left to take its credits. Once shutdown
-        // has started (including pre-shutdown), resolving the target may time
-        // out as well. Only errors thrown while sending are passed here, an
-        // error returned by the target (e.g. an invalid credit count) is a
-        // real bug and is not filtered.
+        // A locality removed from AGAS (e.g. by force_disconnect()) is
+        // reported as locality_was_disconnected by resolve_locality(), nobody
+        // is left to take its credits. On a locality other than the console
+        // the same resolution asks the console and waits at most the AGAS RPC
+        // timeout, so once shutdown has started (including pre-shutdown) a
+        // future_wait_timed_out is dropped as well.
         bool ignore_decrement_credit_error(hpx::exception const& e) noexcept
         {
             auto const err = hpx::get_error(e);
             return err == hpx::error::locality_was_disconnected ||
-                err == hpx::error::bad_parameter ||
                 (err == hpx::error::future_wait_timed_out &&
                     shutdown_has_started());
         }
@@ -2483,8 +2482,12 @@ namespace hpx::agas {
                 hpx::detail::try_catch_exception_ptr<hpx::exception>(
                     [&]() { result.get(); },
                     [&](hpx::exception const& e) {
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+                        if (!ignore_decrement_credit_error(e))
+#else
                         if (hpx::get_error(e) !=
                             hpx::error::locality_was_disconnected)
+#endif
                         {
                             HPX_RETHROWS_IF(ec, e,
                                 "addressing_service::send_refcnt_requests_"
