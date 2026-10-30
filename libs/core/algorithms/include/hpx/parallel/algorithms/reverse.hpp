@@ -294,12 +294,13 @@ namespace hpx::parallel {
         constexpr util::in_out_result<BidirIt, OutIter> sequential_reverse_copy(
             BidirIt first, Sent last, OutIter dest)
         {
-            auto iter{hpx::ranges::next(first, last)};
+            auto const end{hpx::ranges::next(first, last)};
+            auto iter = end;
             while (first != iter)
             {
                 *dest++ = *--iter;
             }
-            return util::in_out_result<BidirIt, OutIter>{iter, dest};
+            return util::in_out_result<BidirIt, OutIter>{end, dest};
         }
 
         template <typename IterPair>
@@ -330,10 +331,10 @@ namespace hpx::parallel {
                     detail::copy<util::in_out_result<iterator, FwdIter>>().call(
                         HPX_FORWARD(ExPolicy, policy), iterator(last2),
                         iterator(first), dest_first),
-                    [](util::in_out_result<iterator, FwdIter> const& p)
+                    [last2](util::in_out_result<iterator, FwdIter> const& p)
                         -> util::in_out_result<BidirIter, FwdIter> {
                         return util::in_out_result<BidirIter, FwdIter>{
-                            p.in.base(), p.out};
+                            last2, p.out};
                     });
             }
         };

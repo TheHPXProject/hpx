@@ -401,8 +401,17 @@ namespace hpx::parallel {
                                   hpx::future<copy_return_type>&& result)
                                   -> hpx::future<copy_return_type> {
                     copy_return_type p1 = result.get();
-                    return detail::copy<copy_return_type>().call2(
-                        p, non_seq(), first, new_first, p1.out);
+
+                    // the first copy ended at last, which is the input
+                    // iterator to return
+                    return detail::copy<copy_return_type>()
+                        .call2(p, non_seq(), first, new_first, p1.out)
+                        .then([last = HPX_MOVE(p1.in)](
+                                  hpx::future<copy_return_type>&& p2) mutable
+                                  -> copy_return_type {
+                            return copy_return_type{
+                                HPX_MOVE(last), p2.get().out};
+                        });
                 });
             }
             else
@@ -412,7 +421,12 @@ namespace hpx::parallel {
                     hpx::execution::experimental::let_value(
                         [policy, first, new_first](copy_return_type& result) {
                             return detail::copy<copy_return_type>().call(
-                                policy, first, new_first, result.out);
+                                       policy, first, new_first, result.out) |
+                                hpx::execution::experimental::then(
+                                    [last = result.in](copy_return_type p2) {
+                                        return copy_return_type{
+                                            last, HPX_MOVE(p2.out)};
+                                    });
                         });
             }
         }
