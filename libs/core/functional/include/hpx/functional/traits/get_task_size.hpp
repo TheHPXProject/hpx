@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <type_traits>
 
 namespace hpx::threads {
 
@@ -117,6 +118,13 @@ namespace hpx::traits {
         {
             return Size;
         }
+    };
+
+    // A qualified function has the size of the unqualified one.
+    template <typename F, threads::task_size Size>
+        requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
+    struct get_task_size<F, Size> : get_task_size<std::remove_cvref_t<F>, Size>
+    {
     };
 
     HPX_CXX_CORE_EXPORT template <typename F,

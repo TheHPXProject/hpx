@@ -138,6 +138,18 @@ void test_trait()
         decltype(with_task_size<task_size::large>(&plain_function))>);
     static_assert(size_of<decltype(small_task(lambda))> == task_size::small_);
 
+    // a qualified function has the size of the unqualified one
+    using large_type = decltype(large);
+    static_assert(size_of<large_type const> == task_size::large);
+    static_assert(size_of<large_type&> == task_size::large);
+    static_assert(size_of<large_type const&> == task_size::large);
+    static_assert(size_of<large_type&&> == task_size::large);
+    static_assert(
+        hpx::traits::get_task_size_v<large_type const&, task_size::small_> ==
+        task_size::large);
+    HPX_TEST(hpx::traits::get_task_size<large_type const>::call(large) ==
+        task_size::large);
+
     // the size is a template argument, so the wrapper is as big as f
     static_assert(sizeof(large) == sizeof(lambda));
 
