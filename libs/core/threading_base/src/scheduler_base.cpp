@@ -379,83 +379,94 @@ namespace hpx::threads::policies {
         return result;
     }
 
+    bool scheduler_base::worker_matches_pu_mask(std::size_t worker_idx,
+        hpx::threads::mask_cref_type pu_mask) const noexcept
+    {
+        HPX_ASSERT(parent_pool_ != nullptr);
+        auto const worker_mask =
+            parent_pool_->get_used_processing_unit(worker_idx);
+        return threads::bit_and(worker_mask, pu_mask);
+    }
+
+    template <typename F>
+    void scheduler_base::apply_to_matching_modes(
+        hpx::threads::mask_cref_type pu_mask, F&& f) noexcept
+    {
+        if (parent_pool_ != nullptr)
+        {
+            for (std::size_t j = 0; j != modes_.size(); ++j)
+            {
+                if (worker_matches_pu_mask(j, pu_mask))
+                {
+                    f(modes_[j].data_);
+                }
+            }
+        }
+        else
+        {
+            std::size_t const size = hpx::threads::mask_size(pu_mask);
+            for (std::size_t i = 0, j = 0; i != size && j < modes_.size(); ++i)
+            {
+                if (hpx::threads::test(pu_mask, i))
+                {
+                    f(modes_[j++].data_);
+                }
+            }
+        }
+    }
+
     // get/set scheduler mode
     void scheduler_base::set_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        // distribute the same value across all cores
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
-            {
-                modes_[j++].data_.store(
-                    adjust_scheduler_mode(mode), std::memory_order_release);
-            }
-        }
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            mode_atomic.store(
+                adjust_scheduler_mode(mode), std::memory_order_release);
+        });
         do_some_work(static_cast<std::size_t>(-1));
     }
 
     void scheduler_base::add_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        // distribute the same value across all cores
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+            while (!mode_atomic.compare_exchange_weak(old_mode,
+                adjust_scheduler_mode(old_mode | mode),
+                std::memory_order_release, std::memory_order_relaxed))
             {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(adjust_scheduler_mode(old_mode | mode),
-                    std::memory_order_release);
             }
-        }
+        });
     }
 
     void scheduler_base::remove_scheduler_mode(
         scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
+        apply_to_matching_modes(pu_mask, [this, mode](auto& mode_atomic) {
+            auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+            while (!mode_atomic.compare_exchange_weak(old_mode,
+                adjust_scheduler_mode(
+                    static_cast<scheduler_mode>(old_mode & ~mode)),
+                std::memory_order_release, std::memory_order_relaxed))
             {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(
-                    adjust_scheduler_mode(
-                        static_cast<scheduler_mode>(old_mode & ~mode)),
-                    std::memory_order_release);
             }
-        }
+        });
     }
 
     void scheduler_base::add_remove_scheduler_mode(scheduler_mode to_add_mode,
         scheduler_mode to_remove_mode,
         hpx::threads::mask_cref_type pu_mask) noexcept
     {
-        HPX_ASSERT(hpx::threads::count(pu_mask) <= modes_.size());
-
-        std::size_t const size = hpx::threads::mask_size(pu_mask);
-        for (std::size_t i = 0, j = 0; i != size; ++i)
-        {
-            if (hpx::threads::test(pu_mask, i))
-            {
-                auto const old_mode =
-                    modes_[j].data_.load(std::memory_order::relaxed);
-                modes_[j++].data_.store(
+        apply_to_matching_modes(
+            pu_mask, [this, to_add_mode, to_remove_mode](auto& mode_atomic) {
+                auto old_mode = mode_atomic.load(std::memory_order_relaxed);
+                while (!mode_atomic.compare_exchange_weak(old_mode,
                     adjust_scheduler_mode(static_cast<scheduler_mode>(
                         (old_mode | to_add_mode) & ~to_remove_mode)),
-                    std::memory_order_release);
-            }
-        }
+                    std::memory_order_release, std::memory_order_relaxed))
+                {
+                }
+            });
     }
 
     void scheduler_base::update_scheduler_mode(scheduler_mode mode, bool set,
