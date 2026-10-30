@@ -49,13 +49,19 @@ jobs:
       - name: Cancel Workflow Runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.context.outputs.pr_number }}
           CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
+          set -euo pipefail
           echo "Cancelling runs for PR #$PR_NUMBER..."
 
-          # Get all runs for the PR that are NOT completed, excluding this current run
-          RUN_IDS=$(gh run list --pr "$PR_NUMBER" --limit 200 --json databaseId,status --jq '.[] | select(.status != "completed" and .databaseId != (env.CURRENT_RUN_ID | tonumber)) | .databaseId')
+          # The runs API leaves pull_requests[] empty for PRs from forks, so
+          # select the runs by the head commit of the PR instead.
+          HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)
+          RUN_IDS=$(gh api --paginate \
+            "/repos/$GH_REPO/actions/runs?head_sha=$HEAD_SHA&per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed" and .id != (env.CURRENT_RUN_ID | tonumber)) | .id')
 
           if [ -z "$RUN_IDS" ]; then
             echo "No active runs found to cancel."

@@ -298,7 +298,7 @@ namespace hpx::threads::policies {
             error_code& ec) override
         {
             std::size_t num_thread =
-                data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 data.schedulehint.hint :
                 static_cast<std::size_t>(-1);
 
@@ -444,7 +444,7 @@ namespace hpx::threads::policies {
         {
             // NOTE: This scheduler ignores NUMA hints.
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode ==
+            if (schedulehint.mode() ==
                 thread_schedule_hint_mode::thread)    //-V1051
             {
                 num_thread = schedulehint.hint;
@@ -487,7 +487,7 @@ namespace hpx::threads::policies {
         {
             // NOTE: This scheduler ignores NUMA hints.
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode ==
+            if (schedulehint.mode() ==
                 thread_schedule_hint_mode::thread)    //-V1051
             {
                 num_thread = schedulehint.hint;
@@ -814,6 +814,44 @@ namespace hpx::threads::policies {
 #endif
 
             return result;
+        }
+
+        // Called by the scheduling loop of the last worker to leave during
+        // shutdown while it takes over the work left (see scheduling_loop).
+        // Stealing may not reach the workers of other NUMA domains: move the
+        // work left on the queues of workers that have left their scheduling
+        // loop to the queue of this worker. This returns true if any work was
+        // moved.
+        bool take_over_work(std::size_t num_thread)
+        {
+            HPX_ASSERT(num_thread < queues_.size());
+
+            std::size_t added = 0;
+            thread_queue_type* this_queue = queues_[num_thread];
+            for (std::size_t i = 0; i != queues_.size(); ++i)
+            {
+                if (i == num_thread ||
+                    this->get_state(i).load(std::memory_order_relaxed) !=
+                        hpx::state::stopped)
+                {
+                    continue;
+                }
+
+                // staged threads (running == false skips the minimum)
+                thread_queue_type* q = queues_[i];
+                this_queue->wait_or_add_new(false, added, q, true);
+
+                // pending threads
+                while (true)
+                {
+                    thread_id_ref_type thrd;
+                    if (!q->get_next_thread(thrd, false, true))
+                        break;
+                    this_queue->schedule_thread(HPX_MOVE(thrd), true);
+                    ++added;
+                }
+            }
+            return added != 0;
         }
 
         ///////////////////////////////////////////////////////////////////////

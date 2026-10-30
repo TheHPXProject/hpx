@@ -248,6 +248,10 @@ namespace hpx::threads {
         {
             return 0;
         }
+
+        // A thread run directly by a waiting parent never passes through the
+        // scheduling loop, so the worker that ran it counts it here instead.
+        virtual void add_directly_executed_thread(std::size_t /*thread_num*/) {}
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)
         virtual std::int64_t get_thread_phase_duration(
             std::size_t /*thread_num*/, bool /*reset*/)

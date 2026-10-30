@@ -399,7 +399,7 @@ namespace hpx::parcelset {
                 threads::thread_stacksize::default_, state, true);
 
             auto id = hpx::threads::register_thread(data, ec);
-            if (!ec)
+            if (ec)
                 return false;
 
             if (state == threads::thread_schedule_state::suspended)
@@ -418,20 +418,19 @@ namespace hpx::parcelset {
         // Cache specific functionality
         void remove_from_connection_cache_delayed(locality const& loc)
         {
-            if (operations_in_flight_ != 0)
+            // Connections to this locality may still be checked out of the
+            // cache by sends in flight. Try again later in that case (if no
+            // thread can be created anymore, the entry goes away with the
+            // cache).
+            if (!connection_cache_.try_clear(loc))
             {
-                if (!connection_handler().reschedule_on_thread(
-                        util::deferred_call(
-                            &parcelport_impl::remove_from_connection_cache,
-                            this, loc),
-                        threads::thread_schedule_state::pending,
-                        "remove_from_connection_cache_delayed"))
-                {
-                    return;
-                }
+                connection_handler().reschedule_on_thread(
+                    util::deferred_call(
+                        &parcelport_impl::remove_from_connection_cache, this,
+                        loc),
+                    threads::thread_schedule_state::pending,
+                    "remove_from_connection_cache_delayed");
             }
-
-            connection_cache_.clear(loc);
         }
 
         void remove_from_connection_cache(locality const& loc) override

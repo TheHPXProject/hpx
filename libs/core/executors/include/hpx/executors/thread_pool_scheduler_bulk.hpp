@@ -461,7 +461,7 @@ namespace hpx::execution::experimental::detail {
 
             auto hint =
                 hpx::execution::experimental::get_hint(op_state->scheduler);
-            if (hint.mode == hpx::threads::thread_schedule_hint_mode::none &&
+            if (hint.mode() == hpx::threads::thread_schedule_hint_mode::none &&
                 hint.hint == -1)
             {
                 // apply hint if none was given
