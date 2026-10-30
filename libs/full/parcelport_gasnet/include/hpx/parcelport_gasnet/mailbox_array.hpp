@@ -16,9 +16,15 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#if defined(__x86_64__)
+#include <immintrin.h>
+#endif
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -118,32 +124,195 @@ namespace hpx::parcelset::policies::gasnet {
         // to cover the header itself — which keeps the sender and receiver
         // able to recompute it over a single contiguous byte range (the
         // transferred payload region).
-        constexpr std::array<std::uint32_t, 256> make_crc32_table()
+        //
+        // CRC-32C (Castagnoli, reflected polynomial 0x82F63B78) page checksum.
+        // The checksum covers every transferred byte on both sender and
+        // receiver, so on a hub rank it was the dominant per-byte cost.  The
+        // x86 CRC32 instruction computes exactly this polynomial at several
+        // GB/s; a slicing-by-8 table version gives identical values on CPUs
+        // without it (and is used by the hardware path for the tail).
+        constexpr std::array<std::array<std::uint32_t, 256>, 8>
+        make_crc32c_tables()
         {
-            std::array<std::uint32_t, 256> table{};
-            for (std::size_t i = 0; i < table.size(); ++i)
+            std::array<std::array<std::uint32_t, 256>, 8> t{};
+            for (std::size_t i = 0; i < 256; ++i)
             {
                 std::uint32_t c = static_cast<std::uint32_t>(i);
                 for (int k = 0; k < 8; ++k)
                 {
-                    c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+                    c = (c & 1u) ? (0x82F63B78u ^ (c >> 1)) : (c >> 1);
                 }
-                table[i] = c;
+                t[0][i] = c;
             }
-            return table;
+
+            for (std::size_t k = 1; k < 8; ++k)
+            {
+                for (std::size_t i = 0; i < 256; ++i)
+                {
+                    std::uint32_t const prev = t[k - 1][i];
+                    t[k][i] = (prev >> 8) ^ t[0][prev & 0xFFu];
+                }
+            }
+            return t;
         }
+
+        inline std::uint32_t crc32c_sw(std::uint32_t crc,
+            unsigned char const* data, std::size_t size) noexcept
+        {
+            static constexpr auto t = make_crc32c_tables();
+            if constexpr (std::endian::native == std::endian::little)
+            {
+                while (size >= 8)
+                {
+                    std::uint32_t lo;
+                    std::uint32_t hi;
+                    std::memcpy(&lo, data, 4);
+                    std::memcpy(&hi, data + 4, 4);
+                    lo ^= crc;
+                    crc = t[7][lo & 0xFFu] ^ t[6][(lo >> 8) & 0xFFu] ^
+                        t[5][(lo >> 16) & 0xFFu] ^ t[4][lo >> 24] ^
+                        t[3][hi & 0xFFu] ^ t[2][(hi >> 8) & 0xFFu] ^
+                        t[1][(hi >> 16) & 0xFFu] ^ t[0][hi >> 24];
+                    data += 8;
+                    size -= 8;
+                }
+            }
+
+            for (std::size_t i = 0; i < size; ++i)
+            {
+                crc = t[0][(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
+            }
+            return crc;
+        }
+
+        // One 8-byte step of CRC-32C (the same update the x86 CRC32
+        // instruction performs), table version.
+        inline std::uint32_t crc32c_word_sw(
+            std::uint32_t crc, std::uint64_t w) noexcept
+        {
+            static constexpr auto t = make_crc32c_tables();
+            std::uint32_t lo = static_cast<std::uint32_t>(w) ^ crc;
+            std::uint32_t hi = static_cast<std::uint32_t>(w >> 32);
+            return t[7][lo & 0xFFu] ^ t[6][(lo >> 8) & 0xFFu] ^
+                t[5][(lo >> 16) & 0xFFu] ^ t[4][lo >> 24] ^ t[3][hi & 0xFFu] ^
+                t[2][(hi >> 8) & 0xFFu] ^ t[1][(hi >> 16) & 0xFFu] ^
+                t[0][hi >> 24];
+        }
+
+        constexpr std::uint32_t rotl32(std::uint32_t v, int r) noexcept
+        {
+            return (v << r) | (v >> (32 - r));
+        }
+
+        // Page checksum.  Three independent CRC-32C streams over every third
+        // 8-byte word (so the CRC instruction's 3-cycle latency is hidden and
+        // it runs at ~1 word/cycle), combined as a ^ rotl(b, 11) ^ rotl(c, 22);
+        // trailing words/bytes feed stream a.  This is an integrity tripwire,
+        // not the standard CRC-32C of the byte string; sender and receiver
+        // compute exactly the same function on every CPU (the table path
+        // below gives bit-identical results to the instruction path).
+        template <bool Hw, typename Step>
+        inline std::uint32_t crc_pages_impl(unsigned char const* data,
+            std::size_t size, Step step, std::uint32_t (*byte_step)(
+                                              std::uint32_t, unsigned char))
+        {
+            std::uint32_t a = 0xFFFFFFFFu, b = 0xFFFFFFFFu, c = 0xFFFFFFFFu;
+            while (size >= 24)
+            {
+                std::uint64_t wa, wb, wc;
+                std::memcpy(&wa, data, 8);
+                std::memcpy(&wb, data + 8, 8);
+                std::memcpy(&wc, data + 16, 8);
+                a = step(a, wa);
+                b = step(b, wb);
+                c = step(c, wc);
+                data += 24;
+                size -= 24;
+            }
+            while (size >= 8)
+            {
+                std::uint64_t w;
+                std::memcpy(&w, data, 8);
+                a = step(a, w);
+                data += 8;
+                size -= 8;
+            }
+            while (size > 0)
+            {
+                a = byte_step(a, *data);
+                ++data;
+                --size;
+            }
+            return (a ^ rotl32(b, 11) ^ rotl32(c, 22)) ^ 0xFFFFFFFFu;
+        }
+
+        inline std::uint32_t crc32c_byte_sw(
+            std::uint32_t crc, unsigned char byte) noexcept
+        {
+            static constexpr auto t = make_crc32c_tables();
+            return t[0][(crc ^ byte) & 0xFFu] ^ (crc >> 8);
+        }
+
+        inline std::uint32_t page_checksum_sw(
+            unsigned char const* data, std::size_t size) noexcept
+        {
+            return crc_pages_impl<false>(
+                data, size,
+                [](std::uint32_t crc, std::uint64_t w) {
+                    return crc32c_word_sw(crc, w);
+                },
+                &crc32c_byte_sw);
+        }
+
+#if defined(__x86_64__) && defined(__GNUC__)
+        __attribute__((target("sse4.2"))) inline std::uint32_t page_checksum_hw(
+            unsigned char const* data, std::size_t size) noexcept
+        {
+            std::uint64_t a = 0xFFFFFFFFu, b = 0xFFFFFFFFu, c = 0xFFFFFFFFu;
+            while (size >= 24)
+            {
+                std::uint64_t wa, wb, wc;
+                std::memcpy(&wa, data, 8);
+                std::memcpy(&wb, data + 8, 8);
+                std::memcpy(&wc, data + 16, 8);
+                a = _mm_crc32_u64(a, wa);
+                b = _mm_crc32_u64(b, wb);
+                c = _mm_crc32_u64(c, wc);
+                data += 24;
+                size -= 24;
+            }
+            while (size >= 8)
+            {
+                std::uint64_t w;
+                std::memcpy(&w, data, 8);
+                a = _mm_crc32_u64(a, w);
+                data += 8;
+                size -= 8;
+            }
+            std::uint32_t a32 = static_cast<std::uint32_t>(a);
+            while (size > 0)
+            {
+                a32 = _mm_crc32_u8(a32, *data);
+                ++data;
+                --size;
+            }
+            return (a32 ^ rotl32(static_cast<std::uint32_t>(b), 11) ^
+                       rotl32(static_cast<std::uint32_t>(c), 22)) ^
+                0xFFFFFFFFu;
+        }
+#endif
 
         inline std::uint32_t crc32(
             unsigned char const* data, std::size_t size) noexcept
         {
-            static constexpr std::array<std::uint32_t, 256> table =
-                make_crc32_table();
-            std::uint32_t crc = 0xFFFFFFFFu;
-            for (std::size_t i = 0; i < size; ++i)
+#if defined(__x86_64__) && defined(__GNUC__)
+            static bool const has_hw = __builtin_cpu_supports("sse4.2");
+            if (has_hw)
             {
-                crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
+                return page_checksum_hw(data, size);
             }
-            return crc ^ 0xFFFFFFFFu;
+#endif
+            return page_checksum_sw(data, size);
         }
 
         inline std::uint64_t message_total_size(message_header const& h) noexcept
@@ -377,6 +546,9 @@ namespace hpx::parcelset::policies::gasnet {
             // after try_send()/try_receive_() return), and the stall
             // tripwire counters.
             send_events_.assign(num_pes_, GEX_EVENT_INVALID);
+            credit_put_events_.assign(num_pes_, GEX_EVENT_INVALID);
+            credit_put_raddr_.assign(num_pes_, nullptr);
+            credit_pending_.assign(num_pes_, 0);
             credit_events_.assign(num_pes_, GEX_EVENT_INVALID);
             send_credit_src_.assign(num_pes_, 0u);
             recv_credit_src_.assign(num_pes_, 0u);
@@ -386,6 +558,7 @@ namespace hpx::parcelset::policies::gasnet {
 
         ~mailbox_array()
         {
+            stat_dump();
             delete[] produced_locals_;
             delete[] consumed_locals_;
             delete[] scan_rotate_;
@@ -416,6 +589,9 @@ namespace hpx::parcelset::policies::gasnet {
           , checksum_(other.checksum_)
           , probe_window_(other.probe_window_)
           , send_events_(std::move(other.send_events_))
+          , credit_put_events_(std::move(other.credit_put_events_))
+          , credit_put_raddr_(std::move(other.credit_put_raddr_))
+          , credit_pending_(std::move(other.credit_pending_))
           , credit_events_(std::move(other.credit_events_))
           , send_credit_src_(std::move(other.send_credit_src_))
           , recv_credit_src_(std::move(other.recv_credit_src_))
@@ -465,6 +641,9 @@ namespace hpx::parcelset::policies::gasnet {
                 checksum_ = other.checksum_;
                 probe_window_ = other.probe_window_;
                 send_events_ = std::move(other.send_events_);
+                credit_put_events_ = std::move(other.credit_put_events_);
+                credit_put_raddr_ = std::move(other.credit_put_raddr_);
+                credit_pending_ = std::move(other.credit_pending_);
                 credit_events_ = std::move(other.credit_events_);
                 send_credit_src_ = std::move(other.send_credit_src_);
                 recv_credit_src_ = std::move(other.recv_credit_src_);
@@ -665,6 +844,37 @@ namespace hpx::parcelset::policies::gasnet {
         // slots_per_dst_ == 1, where every chunk restages the same page).
         bool send_ready(std::size_t const dst_pe) noexcept
         {
+#if defined(GASNET_CONDUIT_IBV)
+            // Two-step publish: the credit word may only be put once the
+            // data has completed remotely, and the next batch may only be
+            // staged once the credit word (read by the put engine) is out.
+            gex_Event_t& cev = credit_put_events_[dst_pe];
+            if (cev != GEX_EVENT_INVALID)
+            {
+                if (!hpx::util::gasnet_environment::poll_event(cev))
+                {
+                    return false;
+                }
+                cev = GEX_EVENT_INVALID;
+                stat_to(dst_pe, 0);
+            }
+            if (credit_pending_[dst_pe])
+            {
+                gex_Event_t& dev = send_events_[dst_pe];
+                if (dev != GEX_EVENT_INVALID &&
+                    !hpx::util::gasnet_environment::poll_event(dev))
+                {
+                    return false;
+                }
+                dev = GEX_EVENT_INVALID;
+                credit_pending_[dst_pe] = 0;
+                cev = hpx::util::gasnet_environment::put_uint32_nb(
+                    static_cast<int>(dst_pe), credit_put_raddr_[dst_pe],
+                    &send_credit_src_[dst_pe]);
+                stat_to(dst_pe, 2);
+                return false;
+            }
+#endif
             gex_Event_t& ev = send_events_[dst_pe];
             if (ev == GEX_EVENT_INVALID)
             {
@@ -701,6 +911,114 @@ namespace hpx::parcelset::policies::gasnet {
             }
             ev = GEX_EVENT_INVALID;
             return true;
+        }
+
+        // ---- batched send -------------------------------------------------
+        // Maximum pages per batch (stack arrays in send_batch()).
+        static constexpr std::size_t max_batch = 64;
+
+        // Pages that can be sent to dst_pe right now: 0 if the previous
+        // access region to dst has not completed locally yet (tx pages and
+        // the credit word are still being read) or the credit window is
+        // full.  A batch of k <= send_credits() pages is staged into the k
+        // consecutive tx slots after the current 'produced' (tx_page_at) and
+        // issued with one access region (send_batch): k data puts plus one
+        // credit word.
+        std::size_t send_credits(std::size_t const dst_pe) noexcept
+        {
+            if (!send_ready(dst_pe))
+            {
+                note_send_stall(dst_pe);
+                return 0;
+            }
+            std::size_t const w = my_pe_ * num_pes_ + dst_pe;
+            std::uint32_t const produced =
+                produced_locals_[dst_pe].load(std::memory_order_relaxed);
+            std::uint32_t const consumed = (dst_pe == my_pe_) ?
+                consumed_locals_[dst_pe].load(std::memory_order_acquire) :
+                std::atomic_ref<std::uint32_t>(consumed_beg_[w])
+                    .load(std::memory_order_acquire);
+            int const in_flight = static_cast<int>(produced - consumed);
+            if (in_flight >= static_cast<int>(slots_per_dst_))
+            {
+                note_send_stall(dst_pe);
+                stat_to(dst_pe, 3);
+                return 0;
+            }
+            return (std::min)(
+                slots_per_dst_ - static_cast<std::size_t>(in_flight),
+                max_batch);
+        }
+
+        unsigned char* tx_page_at(
+            std::size_t const dst_pe, std::size_t const k) const noexcept
+        {
+            std::size_t const slot =
+                (produced_locals_[dst_pe].load(std::memory_order_relaxed) + k) %
+                slots_per_dst_;
+            return tx_beg_ + (dst_pe * slots_per_dst_ + slot) * mtu_;
+        }
+
+        // Issue the n pages previously staged with tx_page_at(); counts[k] is
+        // the number of bytes of page k.
+        void send_batch(std::size_t const dst_pe, std::size_t const n,
+            std::size_t const* counts) noexcept
+        {
+            HPX_ASSERT(n >= 1 && n <= max_batch);
+            std::size_t const w = my_pe_ * num_pes_ + dst_pe;
+            std::uint32_t const produced =
+                produced_locals_[dst_pe].load(std::memory_order_relaxed);
+            std::uint32_t const new_produced =
+                produced + static_cast<std::uint32_t>(n);
+
+            if (dst_pe == my_pe_)
+            {
+                // Self-send: local copies and a local release-store of the
+                // counter (no GASNet traffic, no region event).
+                for (std::size_t k = 0; k < n; ++k)
+                {
+                    std::size_t const slot = (produced + k) % slots_per_dst_;
+                    std::memcpy(rx_beg_ + (my_pe_ * slots_per_dst_ + slot) * mtu_,
+                        tx_page_at(dst_pe, k), counts[k]);
+                }
+                std::atomic_ref<std::uint32_t>(produced_beg_[w])
+                    .store(new_produced, std::memory_order_release);
+                produced_locals_[dst_pe].store(
+                    new_produced, std::memory_order_release);
+                return;
+            }
+
+            void* raddr[max_batch];
+            void const* laddr[max_batch];
+            for (std::size_t k = 0; k < n; ++k)
+            {
+                std::size_t const slot = (produced + k) % slots_per_dst_;
+                raddr[k] = remote_ptr(
+                    dst_pe, rx_beg_ + (my_pe_ * slots_per_dst_ + slot) * mtu_);
+                laddr[k] = tx_page_at(dst_pe, k);
+            }
+            void* const rcredit = remote_ptr(dst_pe, &produced_beg_[w]);
+            // staging writes must be visible before the put engine reads them
+            std::atomic_thread_fence(std::memory_order_release);
+            send_credit_src_[dst_pe] = new_produced;
+#if defined(GASNET_CONDUIT_IBV)
+            send_events_[dst_pe] = hpx::util::gasnet_environment::put_batch_nb(
+                static_cast<int>(dst_pe), n, raddr, laddr, counts);
+            credit_put_raddr_[dst_pe] = rcredit;
+            credit_pending_[dst_pe] = 1;
+            {
+                std::size_t tot = 0;
+                for (std::size_t k = 0; k < n; ++k) tot += counts[k];
+                stat_to(dst_pe, 1, tot);
+            }
+#else
+            send_events_[dst_pe] =
+                hpx::util::gasnet_environment::put_batch_and_credit_nb(
+                    static_cast<int>(dst_pe), n, raddr, laddr, counts, rcredit,
+                    &send_credit_src_[dst_pe]);
+#endif
+            produced_locals_[dst_pe].store(
+                new_produced, std::memory_order_relaxed);
         }
 
         // Non-blocking send of one mtu-sized page (chunk) to dst_pe.
@@ -800,10 +1118,23 @@ namespace hpx::parcelset::policies::gasnet {
             // reads that source buffer (weak-memory hosts).
             std::atomic_thread_fence(std::memory_order_release);
             send_credit_src_[dst_pe] = produced;
+#if defined(GASNET_CONDUIT_IBV)
+            {
+                void* const ra[1] = {raddr};
+                void const* const la[1] = {tx_beg_ + stage_slot};
+                std::size_t const nb[1] = {count};
+                send_events_[dst_pe] =
+                    hpx::util::gasnet_environment::put_batch_nb(
+                        static_cast<int>(dst_pe), 1, ra, la, nb);
+                credit_put_raddr_[dst_pe] = rcredit;
+                credit_pending_[dst_pe] = 1;
+            }
+#else
             send_events_[dst_pe] =
                 hpx::util::gasnet_environment::put_data_and_credit_nb(
                     static_cast<int>(dst_pe), raddr, tx_beg_ + stage_slot,
                     count, rcredit, &send_credit_src_[dst_pe]);
+#endif
             produced_locals_[dst_pe].store(
                 produced, std::memory_order_relaxed);    // update our mirror
 
@@ -897,6 +1228,110 @@ namespace hpx::parcelset::policies::gasnet {
                 consumed + 1, std::memory_order_release);    // update mirror
 
             return true;
+        }
+
+        // True while src has published a page that we have not drained yet.
+        // Only meaningful (stable) for a caller that holds the per-source
+        // receive reservation, since draining is what advances 'consumed'.
+        bool page_ready(std::size_t const src) const noexcept
+        {
+            std::uint32_t const produced =
+                std::atomic_ref<std::uint32_t>(
+                    produced_beg_[src * num_pes_ + my_pe_])
+                    .load(std::memory_order_acquire);
+            std::uint32_t const consumed =
+                consumed_locals_[src].load(std::memory_order_relaxed);
+            return produced != consumed;
+        }
+
+        // Diagnostic: print the per-peer page counters and in-flight region
+        // events (used when do_stop() gives up waiting for the transport).
+        void dump_state() const noexcept
+        {
+            for (std::size_t pe = 0; pe < num_pes_; ++pe)
+            {
+                std::uint32_t const out_credit =
+                    std::atomic_ref<std::uint32_t>(
+                        consumed_beg_[my_pe_ * num_pes_ + pe])
+                        .load(std::memory_order_acquire);
+                std::uint32_t const in_produced =
+                    std::atomic_ref<std::uint32_t>(
+                        produced_beg_[pe * num_pes_ + my_pe_])
+                        .load(std::memory_order_acquire);
+                std::fprintf(stderr,
+                    "gasnet: PE %zu peer %zu: sent=%u peer_consumed=%u | "
+                    "peer_produced=%u consumed=%u | send_ev=%d credit_ev=%d\n",
+                    my_pe_, pe, produced_locals_[pe].load(), out_credit,
+                    in_produced, consumed_locals_[pe].load(),
+                    send_events_[pe] != GEX_EVENT_INVALID,
+                    credit_events_[pe] != GEX_EVENT_INVALID);
+            }
+        }
+
+        // Zero-copy receive, step 1: if src has published its next page and
+        // the previous credit-return region to src has completed, return a
+        // pointer to the page in our rx ring (valid until release_page(src)),
+        // else nullptr.  Lets the receiver validate and copy the payload
+        // straight to its final place instead of staging the whole page.
+        unsigned char const* peek_page(std::size_t const src_pe) noexcept
+        {
+            // Single outstanding credit-return region per source: the credit
+            // word returned for a drained page must reach src before we drain
+            // the next one (see try_receive_ history).  No region is in flight
+            // for self-sends.
+            gex_Event_t& cev = credit_events_[src_pe];
+            if (cev != GEX_EVENT_INVALID)
+            {
+                if (!hpx::util::gasnet_environment::poll_event(cev))
+                {
+                    note_recv_stall(src_pe);
+                    return nullptr;
+                }
+                cev = GEX_EVENT_INVALID;
+            }
+
+            std::size_t const w = src_pe * num_pes_ + my_pe_;
+            std::uint32_t const consumed =
+                consumed_locals_[src_pe].load(std::memory_order_relaxed);
+            std::uint32_t const produced =
+                std::atomic_ref<std::uint32_t>(produced_beg_[w])
+                    .load(std::memory_order_acquire);
+            if (produced == consumed)
+            {
+                return nullptr;    // not ready: requeue and retry later
+            }
+            std::size_t const slot = consumed % slots_per_dst_;
+            return rx_beg_ + (src_pe * slots_per_dst_ + slot) * mtu_;
+        }
+
+        // Zero-copy receive, step 2: return the credit for the page returned
+        // by peek_page() so src may reuse the slot.  The page must not be
+        // touched afterwards.
+        void release_page(std::size_t const src_pe) noexcept
+        {
+            std::size_t const w = src_pe * num_pes_ + my_pe_;
+            std::uint32_t const consumed =
+                consumed_locals_[src_pe].load(std::memory_order_relaxed);
+
+            if (src_pe == my_pe_)
+            {
+                std::atomic_ref<std::uint32_t>(consumed_beg_[w])
+                    .store(consumed + 1, std::memory_order_release);
+            }
+            else
+            {
+                // our reads of the landing page must complete before the
+                // credit put frees the slot
+                std::atomic_thread_fence(std::memory_order_release);
+                recv_credit_src_[src_pe] = consumed + 1;
+                credit_events_[src_pe] =
+                    hpx::util::gasnet_environment::put_uint32_nb(
+                        static_cast<int>(src_pe),
+                        remote_ptr(src_pe, &consumed_beg_[w]),
+                        &recv_credit_src_[src_pe]);
+            }
+            consumed_locals_[src_pe].store(
+                consumed + 1, std::memory_order_release);    // update mirror
         }
 
         bool receive(
@@ -999,7 +1434,48 @@ namespace hpx::parcelset::policies::gasnet {
         //                    alive until the region event completes.
         //   send_stall_ / recv_stall_: cumulative back-pressure counters
         //                    feeding the stall tripwire warnings.
+        // ---- diagnostics (GASNET_PP_STATS=1): time per send state --------
+        // 0 idle/ready, 1 data in flight, 2 credit put in flight, 3 window full
+        void stat_to(std::size_t dst, int st, std::size_t bytes = 0) noexcept
+        {
+            if (!stats_on_)
+                return;
+            auto const now = std::chrono::steady_clock::now();
+            auto& e = stats_[dst];
+            if (e.t0.time_since_epoch().count() != 0)
+                e.ns[e.st] += std::chrono::duration_cast<std::chrono::nanoseconds>(now - e.t0).count();
+            e.t0 = now;
+            e.st = st;
+            e.bytes += bytes;
+            if (bytes) ++e.batches;
+        }
+        struct stat_entry
+        {
+            std::chrono::steady_clock::time_point t0{};
+            int st = 0;
+            long long ns[4] = {0, 0, 0, 0};
+            long long bytes = 0, batches = 0;
+        };
+        bool stats_on_ = std::getenv("GASNET_PP_STATS") != nullptr;
+        std::vector<stat_entry> stats_ = std::vector<stat_entry>(stats_on_ ? 4096 : 0);
+        void stat_dump() noexcept
+        {
+            if (!stats_on_) return;
+            for (std::size_t d = 0; d < num_pes_ && d < stats_.size(); ++d)
+            {
+                auto& e = stats_[d];
+                if (!e.bytes) continue;
+                std::fprintf(stderr, "STAT pe=%zu dst=%zu bytes=%lld batches=%lld idle=%.3f data=%.3f cred=%.3f full=%.3f s\n",
+                    my_pe_, d, e.bytes, e.batches, e.ns[0]*1e-9, e.ns[1]*1e-9, e.ns[2]*1e-9, e.ns[3]*1e-9);
+            }
+        }
+
         std::vector<gex_Event_t> send_events_;
+        // ibv-conduit only: the credit word is published in a second step,
+        // after the data event has completed (puts are not ordered)
+        std::vector<gex_Event_t> credit_put_events_;
+        std::vector<void*> credit_put_raddr_;
+        std::vector<unsigned char> credit_pending_;
         std::vector<gex_Event_t> credit_events_;
         std::vector<std::uint32_t> send_credit_src_;
         std::vector<std::uint32_t> recv_credit_src_;

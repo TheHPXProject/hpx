@@ -101,6 +101,24 @@ namespace hpx::util {
             void const* laddr, std::size_t nbytes, void* credit_raddr,
             void const* credit_laddr);
 
+
+        // Same as put_data_and_credit_nb() for a batch of n pages: n data
+        // puts followed by the credit word, all in one access region.  All
+        // 'laddr' pages and 'credit_laddr' must stay untouched until the
+        // returned event completes.
+        // Data-only variant (no credit word): the caller publishes the credit
+        // with put_uint32_nb() once the returned event has completed.  Needed
+        // where the conduit does not order two puts to the same target
+        // (ibv-conduit).
+        static gex_Event_t put_batch_nb(int rank, std::size_t n,
+            void* const* raddr, void const* const* laddr,
+            std::size_t const* nbytes);
+
+        static gex_Event_t put_batch_and_credit_nb(int rank, std::size_t n,
+            void* const* raddr, void const* const* laddr,
+            std::size_t const* nbytes, void* credit_raddr,
+            void const* credit_laddr);
+
         // Non-blocking 4-byte put (the receiver's credit-return path).
         // Returns the put's local-completion event; 'laddr' must keep its
         // value until poll_event() reports the event complete.
@@ -115,6 +133,11 @@ namespace hpx::util {
         // completed (the event is then consumed), false while it is still in
         // flight.  Never blocks.
         static bool poll_event(gex_Event_t ev) noexcept;
+
+        // Drive the conduit's network progress.  Needed on conduits where
+        // remote RMA is serviced by active messages (e.g. mpi-conduit across
+        // nodes): a PE that only scans its local segment must still poll.
+        static void poll() noexcept;
 
         using mutex_type = hpx::spinlock;
         using scoped_lock = std::unique_lock<mutex_type>;

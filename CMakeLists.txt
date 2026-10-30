@@ -1437,7 +1437,7 @@ if(HPX_WITH_NETWORKING)
     hpx_option(
       HPX_WITH_PARCELPORT_GASNET_CONDUIT STRING
       "Define which conduit to use for the gasnet parcelport" "udp"
-      STRINGS "smp;udp;mpi;ofi;ucx"
+      STRINGS "smp;udp;mpi;ofi;ucx;ibv"
     )
   endif()
 

@@ -6,6 +6,7 @@
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 #include <hpx/config.hpp>
+#include <algorithm>
 
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_GASNET)
 #include <hpx/modules/command_line_handling.hpp>
@@ -88,10 +89,36 @@ namespace hpx::parcelset {
                     locality(static_cast<std::int32_t>(my_pe)));
             }
 
-            static std::size_t mtu(util::runtime_configuration const& ini)
+            // Page size.  0 (the default) selects it automatically: as large
+            // as 1 MiB (fewer active messages / region events per byte), but
+            // shrunk as the job grows so that the registered rx+tx rings
+            // (npes * slots * mtu * 2) stay within ~256 MiB.  The result
+            // depends only on npes and slots, so it is identical on every PE,
+            // as the wire protocol requires.  A configured value overrides.
+            static std::size_t mtu(util::runtime_configuration const& ini,
+                std::size_t num_pes, std::size_t slots)
             {
-                return hpx::util::get_entry_as<std::size_t>(
-                    ini, "hpx.parcel.gasnet.mtu", HPX_PARCEL_GASNET_MTU);
+                std::size_t const configured =
+                    hpx::util::get_entry_as<std::size_t>(
+                        ini, "hpx.parcel.gasnet.mtu", 0);
+                if (configured != 0)
+                {
+                    return configured;
+                }
+
+                constexpr std::size_t budget = std::size_t(256) << 20;
+                constexpr std::size_t max_mtu = std::size_t(1) << 20;
+                constexpr std::size_t min_mtu = std::size_t(64) << 10;
+
+                std::size_t const denom =
+                    (std::max)(std::size_t(1), num_pes * slots * 2);
+                std::size_t const m = (std::min)(max_mtu, budget / denom);
+                std::size_t p = min_mtu;
+                while (p * 2 <= m)
+                {
+                    p *= 2;
+                }
+                return p;
             }
 
             // In-flight chunks per (sender,receiver) pair.  Must be
@@ -161,7 +188,7 @@ namespace hpx::parcelset {
                     util::gasnet_environment::size()))
               , my_pe_(static_cast<std::size_t>(
                     util::gasnet_environment::rank()))
-              , mtu_(mtu(ini))
+              , mtu_(mtu(ini, num_pes_, slots(ini)))
               , slots_(slots(ini))
               , stop_timeout_(stop_timeout(ini))
               , mailboxes_(num_pes_, my_pe_, mtu_, slots_, checksum(ini),
@@ -170,6 +197,13 @@ namespace hpx::parcelset {
               , receiver_(*this)
             {
                 here_ = here(my_pe_);
+                receiver_.set_poll_interval(static_cast<std::uint32_t>(
+                    hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.gasnet.progress_interval", 1)));
+                // 0: only the io drivers progress; 1: every worker thread;
+                // N>1: worker threads 0..N-1 only
+                worker_progress_ = hpx::util::get_entry_as<int>(
+                    ini, "hpx.parcel.gasnet.worker_progress", 1);
             }
 
             parcelport(parcelport const&) = delete;
@@ -353,6 +387,9 @@ namespace hpx::parcelset {
                                   << stop_timeout_
                                   << " s; dropping pending transfers and "
                                      "proceeding with shutdown\n";
+                        sender_.dump_state(my_pe_);
+                        receiver_.dump_state(my_pe_);
+                        mailboxes_.dump_state();
                         break;
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -438,6 +475,17 @@ namespace hpx::parcelset {
                     return false;
                 }
 
+                // Only the dedicated io drivers progress the transport by
+                // default.  Letting every HPX worker thread (48 per node on
+                // buran) enter the transport serialises them on the
+                // conduit's global lock and slows everything down.
+                if (worker_progress_ <= 0 ||
+                    (worker_progress_ > 1 &&
+                        num_thread >= static_cast<std::size_t>(worker_progress_)))
+                {
+                    return false;
+                }
+
                 std::size_t const arena_idx =
                     arena_count_ == 0 ? 0 : num_thread % arena_count_;
                 return progress(arena_idx, mode);
@@ -500,6 +548,7 @@ namespace hpx::parcelset {
             util::runtime_configuration const& ini_;
 
             std::atomic<bool> stopped_;
+            int worker_progress_ = 0;
 
             std::size_t num_pes_;
             std::size_t my_pe_;
@@ -529,6 +578,9 @@ struct hpx::traits::plugin_config_data<
     static void init(int* argc, char*** argv, util::command_line_handling& cfg)
     {
         util::gasnet_environment::init(argc, argv, cfg.rtcfg_);
+
+        // Zero-copy chunks travel in the same page stream as the serialized
+        // data (see sender_connection::prepare()).
         cfg.num_localities_ =
             static_cast<std::size_t>(util::gasnet_environment::size());
         cfg.node_ = static_cast<std::size_t>(util::gasnet_environment::rank());
@@ -548,7 +600,7 @@ struct hpx::traits::plugin_config_data<
         // arena (a disjoint range of source PEs) and the base parcelport
         // default io_pool_size applies (no clamp to one driver is needed).
         return "mtu = "
-               "${HPX_HAVE_PARCELPORT_GASNET_MTU:65536}\n"
+               "${HPX_HAVE_PARCELPORT_GASNET_MTU:0}\n"
                // In-flight chunks per (sender,receiver) pair; raises
                // registered tx/rx memory linearly, so keep it small for
                // very large runs and increase it for high-latency links.
@@ -558,6 +610,10 @@ struct hpx::traits::plugin_config_data<
                // An empty that keeps transferring pages waits as long as it
                // needs; only a genuine stall terminates early.
                "stop_timeout = 30\n"
+               // 1 lets every HPX worker thread progress the transport too
+               "worker_progress = 1\n"
+               // AM poll every Nth receive pass (1 = every pass)
+               "progress_interval = 1\n"
                // CRC32 guard over received pages.  Leave on unless profiling
                // shows the pass; setting it to 0 removes the corruption
                // tripwire and must be identical on every PE.
