@@ -12,6 +12,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/assert.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
@@ -129,6 +130,8 @@ namespace hpx::experimental {
         {
             auto cores =
                 hpx::execution::experimental::processing_units_count(sched);
+            HPX_ASSERT(cores <=
+                hpx::parallel::execution::detail::get_os_thread_count());
 
             namespace ex = hpx::execution::experimental;
 
@@ -208,19 +211,25 @@ namespace hpx::experimental {
             HPX_FORWARD(Ts, ts)...);
     }
 
-    /// Run a function on all available worker threads with reduction support
-    /// using the given P2300 scheduler
+    /// Run a function on all available worker threads with reduction
+    /// support using the given P2300 scheduler
     ///
     /// \tparam Scheduler The scheduler type
-    /// \tparam T         The first type in a list of reduction types and the
-    ///                   function type to invoke (last argument)
-    /// \tparam Ts        The list of reduction types and the function type to
-    ///                   invoke (last argument)
-    /// \param sched      The scheduler to use
-    /// \param t          The first in a list of reductions and the function to
-    ///                   invoke (last argument)
-    /// \param ts         The list of reductions and the function to invoke (last
+    /// \tparam T         The first type in a list of reduction types
+    ///                   and the function type to invoke (last
     ///                   argument)
+    /// \tparam Ts        The list of reduction types and the function
+    ///                   type to invoke (last argument)
+    /// \param sched      The scheduler to use
+    /// \param t          The first in a list of reductions and the
+    ///                   function to invoke (last argument)
+    /// \param ts         The list of reductions and the function to
+    ///                   invoke (last argument)
+    ///
+    /// \returns A P2300 sender. Unlike the legacy \c par overload,
+    ///          execution is deferred: nothing runs until the
+    ///          returned sender is connected and started (e.g.
+    ///          via \c sync_wait).
     HPX_CXX_CORE_EXPORT template <typename Scheduler, typename T,
         typename... Ts>
         requires(hpx::execution::experimental::is_scheduler_v<
