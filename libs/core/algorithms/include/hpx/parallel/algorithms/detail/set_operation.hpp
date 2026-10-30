@@ -242,6 +242,17 @@ namespace hpx::parallel::detail {
                 }
             }
 
+            // the loop above does not visit the last chunk, account for it
+            // as well
+            if (chunk->first1 != static_cast<std::size_t>(-1))
+            {
+                first1_pos = (std::max) (first1_pos, chunk->first1);
+            }
+            if (chunk->first2 != static_cast<std::size_t>(-1))
+            {
+                first2_pos = (std::max) (first2_pos, chunk->first2);
+            }
+
             // finally, copy data to destination
             //
             // Scheduler-executor (S/R) policies copy sequentially: the
