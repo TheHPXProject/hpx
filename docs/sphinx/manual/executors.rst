@@ -591,6 +591,8 @@ We then use hpx::for_each with a parallel execution policy and attach our custom
 This pattern is especially useful in larger applications with many tasks, as annotations make it much easier
 to trace and debug the execution of parallel algorithms.
 
+.. _task_sizes:
+
 Task sizes
 ==========
 
@@ -657,6 +659,20 @@ tasks that only spawn them are small. The parallel algorithms run their loop
 body in chunks, and the function they give to the executor has the size of
 a chunk, derived from the size of the loop body and the number of iterations
 in a chunk. A loop body without a size gives tasks without a size.
+
+The size of the loop body can also decide how a parallel algorithm divides
+its iterations: with the executor parameters
+``hpx::execution::experimental::task_size_chunk_size``, the run time of one
+iteration is the one the loop body's size stands for, and the loop runs on as
+many cores, in as many chunks, as that run time is worth. A short loop of
+nano or small iterations then runs as a single chunk on the calling thread
+instead of being spread over all cores:
+
+.. code-block:: c++
+
+   hpx::for_each(hpx::execution::par.with(
+                     hpx::execution::experimental::task_size_chunk_size()),
+       v.begin(), v.end(), hpx::nano_task([](int& i) { ++i; }));
 
 A size given to an executor, a launch policy or a scheduler through their
 ``thread_schedule_hint`` has no effect: the hint of a thread created for a

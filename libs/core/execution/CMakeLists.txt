@@ -50,6 +50,7 @@ set(execution_headers
     hpx/execution/executors/rebind_executor_parameters.hpp
     hpx/execution/executors/rebind_policy.hpp
     hpx/execution/executors/static_chunk_size.hpp
+    hpx/execution/executors/task_size_chunk_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_alignment_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_all_any_none.hpp
     hpx/execution/traits/detail/eve/vector_pack_conditionals.hpp
