@@ -355,7 +355,13 @@ namespace hpx::util {
                         size(C const& c) noexcept(
                             noexcept(detail::size_impl(c, 0L)))
         {
-            return detail::size_impl(c, 0L);
+            // A range reports its length with whatever type its own size() or
+            // its iterator's difference_type uses, which can be wider than
+            // std::size_t. hpx::util::counting_iterator<unsigned int> is one
+            // of those, its difference_type is std::intmax_t so that it can
+            // hold the difference of any two of its values. This function
+            // hands out a count, so convert here rather than at every caller.
+            return static_cast<std::size_t>(detail::size_impl(c, 0L));
         }
 
         HPX_CXX_CORE_EXPORT template <typename C,

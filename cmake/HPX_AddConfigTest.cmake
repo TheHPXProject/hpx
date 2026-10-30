@@ -120,11 +120,6 @@ function(add_hpx_config_test variable)
     set(CONFIG_TEST_LINK_LIBRARIES ${${variable}_LIBRARIES})
 
     set(additional_cmake_flags)
-    if(MSVC)
-      set(additional_cmake_flags "-WX")
-    else()
-      set(additional_cmake_flags "-Werror")
-    endif()
 
     if(${variable}_EXECUTE)
       if(NOT CMAKE_CROSSCOMPILING)

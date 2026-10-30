@@ -140,7 +140,9 @@ namespace hpx::util {
     int mpi_environment::init(
         int*, char***, int const minimal, int const required, int& provided)
     {
-        has_called_init_ = false;
+        // Note: has_called_init_ is deliberately not reset here. It must keep
+        // recording whether MPI was initialized by an earlier call, otherwise
+        // MPI would not be finalized by its owner.
 
         // Check if MPI_Init has been called previously
         int is_initialized = 0;
@@ -313,7 +315,10 @@ namespace hpx::util {
 
     void mpi_environment::finalize() noexcept
     {
-        if (enabled() && has_called_init())
+        // Finalize MPI only if it was initialized here, either for the MPI
+        // parcelport or by hpx::mpi::experimental::init. Note that the
+        // latter does not enable the MPI parcelport.
+        if (has_called_init())
         {
             scoped_lock l;
 

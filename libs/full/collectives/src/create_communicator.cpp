@@ -1,6 +1,7 @@
 //  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -487,17 +488,20 @@ namespace hpx::collectives {
         void recursively_fill_communicators(
             std::vector<hpx::tuple<communicator, this_site_arg>>& communicators,
             std::size_t left, std::size_t right, std::string const& basename,
-            arity_arg arity, this_site_arg this_site, generation_arg generation)
+            arity_arg arity, this_site_arg this_site, generation_arg generation,
+            std::size_t root)
         {
             std::string name(basename);
             name += std::to_string(left) + "-" + std::to_string(right) + "/";
+
+            std::size_t const leader = detail::range_leader(left, right, root);
 
             if (right - left < arity)
             {
                 auto c = create_communicator(name.c_str(),
                     num_sites_arg(right - left + 1),
                     this_site_arg(this_site - left), generation_arg(generation),
-                    root_site_arg(0));
+                    root_site_arg(leader - left));
 
                 communicators.emplace_back(
                     HPX_MOVE(c), this_site_arg(this_site - left));
@@ -508,18 +512,26 @@ namespace hpx::collectives {
             std::size_t const num_groups =
                 detail::get_top_level_group_count(num_sites, arity);
 
+            // the communicator connecting the groups is created by the leader
+            // of this range, which is a member of exactly one of the groups
+            std::size_t const leader_group =
+                detail::classify_site(leader - left, num_sites, arity);
+
             for (std::size_t i = 0; i != num_groups; ++i)
             {
                 std::size_t const current_left = left +
                     detail::get_top_level_group_left(i, num_sites, arity);
                 std::size_t const current_right = current_left +
                     detail::get_top_level_group_size(i, num_sites, arity) - 1;
+                std::size_t const current_leader =
+                    detail::range_leader(current_left, current_right, root);
 
-                if (this_site == current_left)
+                if (this_site == current_leader)
                 {
                     auto c = create_communicator(name.c_str(),
                         num_sites_arg(num_groups), this_site_arg(i),
-                        generation_arg(generation), root_site_arg(0));
+                        generation_arg(generation),
+                        root_site_arg(leader_group));
 
                     communicators.emplace_back(HPX_MOVE(c), this_site_arg(i));
                 }
@@ -527,7 +539,8 @@ namespace hpx::collectives {
                 if (this_site >= current_left && this_site <= current_right)
                 {
                     recursively_fill_communicators(communicators, current_left,
-                        current_right, basename, arity, this_site, generation);
+                        current_right, basename, arity, this_site, generation,
+                        root);
                     break;
                 }
             }
@@ -555,14 +568,6 @@ namespace hpx::collectives {
         {
             root_site = 0;
         }
-        if (root_site != 0)
-        {
-            HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
-                "hpx::collectives::create_hierarchical_communicator",
-                "hierarchical communicators currently support only "
-                "root_site == 0");
-        }
-
         validate_communicator_arguments(num_sites, this_site, root_site,
             "hpx::collectives::create_hierarchical_communicator");
 
@@ -574,6 +579,11 @@ namespace hpx::collectives {
         }
 
         std::string name(basename);
+        if (root_site != 0)
+        {
+            // communicators with different roots must not share names
+            name += "root" + std::to_string(root_site) + "/";
+        }
         if (!generation.is_default())
         {
             name += std::to_string(generation) + "/";
@@ -593,7 +603,7 @@ namespace hpx::collectives {
 
         std::vector<hpx::tuple<communicator, this_site_arg>> communicators;
         recursively_fill_communicators(communicators, 0, num_sites - 1, name,
-            arity, this_site, generation);
+            arity, this_site, generation, root_site);
         return hierarchical_communicator(
             HPX_MOVE(communicators), arity, root_site, num_sites, this_site);
     }

@@ -164,7 +164,7 @@ namespace hpx::util {
             "affinity = core",
             "pu_step = 1",
             "pu_offset = 0",
-            "numa_sensitive = 0",
+            "numa_sensitive = 1",
             "loopback_network = 0",
             "max_background_threads = "
             "${HPX_MAX_BACKGROUND_THREADS:$[hpx.os_threads]}",
@@ -258,6 +258,12 @@ namespace hpx::util {
             "min_tasks_to_steal_staged = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED)) "}",
+            "min_tasks_to_steal_staged_early = "
+            "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)) "}",
+            "idle_loop_count_steal_staged = "
+            "${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_IDLE_LOOP_COUNT_STEAL_STAGED)) "}",
             "min_add_new_count = "
             "${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT)) "}",
@@ -269,7 +275,7 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_DELETE_COUNT)) "}",
             "max_delete_count = "
             "${HPX_THREAD_QUEUE_MAX_DELETE_COUNT:" HPX_PP_STRINGIZE(
-                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_THREAD_COUNT)) "}",
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_DELETE_COUNT)) "}",
             "max_terminated_threads = "
             "${HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS)) "}",

@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -53,8 +54,8 @@ namespace hpx::collectives::detail {
 
         this_site_arg const effective_site = resolve_this_site(this_site);
 
-        if (auto const error =
-                validate_hierarchical_root_site(root_site, operation, "scan"))
+        if (auto const error = validate_hierarchical_root_site(
+                communicators, root_site, operation, "scan"))
         {
             return hpx::make_exceptional_future<Result>(error);
         }
@@ -79,7 +80,7 @@ namespace hpx::collectives::detail {
                 gather_gen);
         }
 
-        if (effective_site == root_site)
+        if (effective_site == communicators.get_root_site())
         {
             std::vector<Result> gathered = detail::gather_here(communicators,
                 HPX_FORWARD(T, local_result), effective_site, gather_gen,

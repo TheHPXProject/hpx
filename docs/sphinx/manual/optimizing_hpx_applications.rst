@@ -3663,9 +3663,11 @@ when only a subset of the timeline is being investigated:
 :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
 one off compiles the wrapper for that class to a no-op, so the runtime
 connection check and the event body do not run (argument evaluation at each
-call site is unchanged). These gates affect the Tracy backend, which is the
-only backend that emits these classes today; the APEX, ITT-Notify and empty
-backends already treat all three as no-ops.
+call site is unchanged). The lifecycle and work-stealing gates affect the
+Tracy and ITT-Notify backends; the causal gate affects the Tracy backend
+only. On ITT-Notify builds these events are only emitted when ITT-Notify is
+enabled at runtime with ``--hpx:ini=hpx.use_itt_notify=1``. The APEX and
+empty backends already treat all three as no-ops.
 
 :option:`HPX_WITH_TRACING_SAMPLE_RATE` sets the initial 1-in-N sampling
 rate for the per-task lifecycle events instead of gating them off

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <string>
+#include <system_error>
 
 #include <asio/io_context.hpp>
 #include <asio/ip/tcp.hpp>
@@ -67,6 +68,17 @@ namespace hpx::util {
     {
         return {};
     }
+
+    /// \brief Opens the given socket for a connection attempt to the given
+    ///        endpoint.
+    ///
+    /// On Windows, a connection attempt to a port nobody listens on is reset
+    /// by the target, but the SYN is retransmitted after the reset (twice by
+    /// default), so connect() reports connection_refused only after about two
+    /// seconds. The socket is configured to not retransmit the SYN, callers
+    /// are expected to retry failed connection attempts themselves.
+    HPX_CORE_EXPORT void open_socket_for_connect(::asio::ip::tcp::socket& s,
+        ::asio::ip::tcp::endpoint const& ep, std::error_code& ec);
 
     [[nodiscard]] HPX_CORE_EXPORT detail::endpoint_iterator_type accept_begin(
         std::string const& address, std::uint16_t port,

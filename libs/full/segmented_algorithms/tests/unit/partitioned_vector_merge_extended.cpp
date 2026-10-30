@@ -1118,13 +1118,13 @@ namespace {
         for (std::size_t search_index = 0; search_index != target_count;
             ++search_index)
         {
-            std::uint8_t const operand =
-                search_index % 2 == 0 ? input_previous : input_current;
+            auto const operand =
+                search_index % 2 == 0 ? input::previous : input::current;
 
             append_probe(batches, lookup, locality_to_batch,
                 partition_position<iterator>{
                     locality, locality, 0, 0, values.begin()},
-                search_index, operand);
+                search_index, static_cast<std::uint8_t>(operand));
         }
 
         HPX_TEST_EQ(batches.size(), std::size_t{1});
@@ -1157,8 +1157,8 @@ namespace {
         {
             HPX_TEST_EQ(request.targets[i].search_index, i);
 
-            std::uint8_t const expected_operand =
-                i % 2 == 0 ? input_previous : input_current;
+            auto const expected_operand =
+                i % 2 == 0 ? input::previous : input::current;
 
             HPX_TEST_EQ(
                 static_cast<unsigned int>(request.targets[i].operand_index),

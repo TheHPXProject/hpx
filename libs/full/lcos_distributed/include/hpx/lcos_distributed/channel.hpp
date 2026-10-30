@@ -204,7 +204,7 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::get_generation_action;
-            return hpx::async(action_type(), this->get_id(), generation);
+            return hpx::async(action_type(), *this, generation);
         }
         hpx::future<T> get(std::size_t generation = default_generation) const
         {
@@ -229,8 +229,7 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::set_generation_action;
-            return hpx::post(
-                action_type(), this->get_id(), HPX_MOVE(val), generation);
+            return hpx::post(action_type(), *this, HPX_MOVE(val), generation);
         }
         template <typename U, typename U2 = T>
         std::enable_if_t<!std::is_void<U2>::value, hpx::future<void>> set(
@@ -239,8 +238,7 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::set_generation_action;
-            return hpx::async(
-                action_type(), this->get_id(), HPX_MOVE(val), generation);
+            return hpx::async(action_type(), *this, HPX_MOVE(val), generation);
         }
         template <typename U, typename U2 = T>
         std::enable_if_t<!std::is_void<U2>::value> set(launch::sync_policy,
@@ -266,7 +264,7 @@ namespace hpx::lcos {
                 typename lcos::server::channel<void>::set_generation_action;
             hpx::util::unused_type unused;
             return hpx::post(
-                action_type(), this->get_id(), HPX_MOVE(unused), generation);
+                action_type(), *this, HPX_MOVE(unused), generation);
         }
         template <typename U = T>
         std::enable_if_t<std::is_void<U>::value, hpx::future<void>> set(
@@ -276,7 +274,7 @@ namespace hpx::lcos {
                 typename lcos::server::channel<void>::set_generation_action;
             hpx::util::unused_type unused;
             return hpx::async(
-                action_type(), this->get_id(), HPX_MOVE(unused), generation);
+                action_type(), *this, HPX_MOVE(unused), generation);
         }
         template <typename U = T>
         std::enable_if_t<std::is_void<U>::value> set(
@@ -298,14 +296,13 @@ namespace hpx::lcos {
         void close(launch::apply_policy, bool force_delete_entries = false)
         {
             using action_type = typename lcos::server::channel<T>::close_action;
-            hpx::post(action_type(), this->get_id(), force_delete_entries);
+            hpx::post(action_type(), *this, force_delete_entries);
         }
         hpx::future<std::size_t> close(
             launch::async_policy, bool force_delete_entries = false)
         {
             using action_type = typename lcos::server::channel<T>::close_action;
-            return hpx::async(
-                action_type(), this->get_id(), force_delete_entries);
+            return hpx::async(action_type(), *this, force_delete_entries);
         }
         std::size_t close(
             launch::sync_policy, bool force_delete_entries = false)
@@ -358,8 +355,10 @@ namespace hpx::lcos {
 
         receive_channel() = default;
 
+        // share the id of the channel, this does not block if the id is
+        // not available yet
         receive_channel(channel<T> const& c)
-          : base_type(c.get_id())
+          : base_type(c.share())
         {
         }
 
@@ -384,7 +383,12 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::get_generation_action;
-            return hpx::async(action_type(), this->get_id(), generation);
+            // Use a channel sharing this client's id. Passing the client
+            // itself defers the invocation until the id is available (and
+            // does not block), but that would also check receive_channel for
+            // being a future range, which instantiates begin()/end() below.
+            return hpx::async(
+                action_type(), channel<T>(this->share()), generation);
         }
         hpx::future<T> get(std::size_t generation = default_generation) const
         {
@@ -441,8 +445,10 @@ namespace hpx::lcos {
 
         send_channel() = default;
 
+        // share the id of the channel, this does not block if the id is
+        // not available yet
         send_channel(channel<T> const& c)
-          : base_type(c.get_id())
+          : base_type(c.share())
         {
         }
 
@@ -469,8 +475,7 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::set_generation_action;
-            return hpx::post(
-                action_type(), this->get_id(), HPX_MOVE(val), generation);
+            return hpx::post(action_type(), *this, HPX_MOVE(val), generation);
         }
         template <typename U, typename U2 = T>
         std::enable_if_t<!std::is_void<U2>::value, hpx::future<void>> set(
@@ -479,8 +484,7 @@ namespace hpx::lcos {
         {
             using action_type =
                 typename lcos::server::channel<T>::set_generation_action;
-            return hpx::async(
-                action_type(), this->get_id(), HPX_MOVE(val), generation);
+            return hpx::async(action_type(), *this, HPX_MOVE(val), generation);
         }
         template <typename U, typename U2 = T>
         std::enable_if_t<!std::is_void<U2>::value> set(launch::sync_policy,
@@ -506,7 +510,7 @@ namespace hpx::lcos {
                 typename lcos::server::channel<void>::set_generation_action;
             hpx::util::unused_type unused;
             return hpx::post(
-                action_type(), this->get_id(), HPX_MOVE(unused), generation);
+                action_type(), *this, HPX_MOVE(unused), generation);
         }
         template <typename U = T>
         std::enable_if_t<std::is_void<U>::value, hpx::future<void>> set(
@@ -516,7 +520,7 @@ namespace hpx::lcos {
                 typename lcos::server::channel<void>::set_generation_action;
             hpx::util::unused_type unused;
             return hpx::async(
-                action_type(), this->get_id(), HPX_MOVE(unused), generation);
+                action_type(), *this, HPX_MOVE(unused), generation);
         }
         template <typename U = T>
         std::enable_if_t<std::is_void<U>::value> set(
@@ -538,14 +542,13 @@ namespace hpx::lcos {
         void close(launch::apply_policy, bool force_delete_entries = false)
         {
             using action_type = typename lcos::server::channel<T>::close_action;
-            hpx::post(action_type(), this->get_id(), force_delete_entries);
+            hpx::post(action_type(), *this, force_delete_entries);
         }
         hpx::future<std::size_t> close(
             launch::async_policy, bool force_delete_entries = false)
         {
             using action_type = typename lcos::server::channel<T>::close_action;
-            return hpx::async(
-                action_type(), this->get_id(), force_delete_entries);
+            return hpx::async(action_type(), *this, force_delete_entries);
         }
         std::size_t close(
             launch::sync_policy, bool force_delete_entries = false)

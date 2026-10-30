@@ -538,7 +538,7 @@ namespace hpx::performance_counters {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    std::size_t performance_counter_set::get_invocation_count() const
+    std::uint64_t performance_counter_set::get_invocation_count() const
     {
         std::unique_lock<mutex_type> l(mtx_);
         return invocation_count_;

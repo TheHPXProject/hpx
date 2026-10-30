@@ -86,6 +86,7 @@ namespace hpx::threads::detail {
       , shutdown_check_count_(init.shutdown_check_count_)
     {
         sched_->set_parent_pool(this);
+        sched_->set_max_idle_loop_count(max_idle_loop_count_);
     }
 
     template <typename Scheduler>
@@ -607,7 +608,7 @@ namespace hpx::threads::detail {
         LTM_(info).format("thread_func: {} thread_num: {}, ending OS thread, "
                           "executed {} HPX threads",
             id_.name(), global_thread_num,
-            counter_data_[global_thread_num].executed_threads_);
+            counter_data_[thread_num].executed_threads_);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -848,6 +849,18 @@ namespace hpx::threads::detail {
         HPX_ASSERT(executed_phases >= reset_executed_phases);
 
         return executed_phases - reset_executed_phases;
+    }
+
+    // Only called on worker num's own OS thread, which is also the only one
+    // the scheduling loop updates these counters from.
+    template <typename Scheduler>
+    void scheduled_thread_pool<Scheduler>::add_directly_executed_thread(
+        std::size_t num)
+    {
+        HPX_ASSERT(num < counter_data_.size());
+
+        ++counter_data_[num].executed_threads_;
+        ++counter_data_[num].executed_thread_phases_;
     }
 
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)

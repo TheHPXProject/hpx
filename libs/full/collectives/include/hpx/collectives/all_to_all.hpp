@@ -1,5 +1,6 @@
 //  Copyright (c) 2019-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -902,8 +903,8 @@ namespace hpx::collectives {
 
         std::ptrdiff_t const gidx =
             detail::classify_site(this_site, num_sites_val, arity_val);
-        bool const is_representative =
-            detail::is_top_level_rep(gidx, this_site, num_sites_val, arity_val);
+        bool const is_representative = detail::is_top_level_rep(gidx, this_site,
+            num_sites_val, arity_val, communicators.get_root_site());
 
         if (is_representative)
         {

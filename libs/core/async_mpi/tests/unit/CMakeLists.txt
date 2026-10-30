@@ -4,7 +4,9 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests mpi_ring_async_executor algorithm_transform_mpi)
+set(tests mpi_ring_async_executor algorithm_transform_mpi mpi_init_ownership
+          mpi_user_init
+)
 
 set(mpi_ring_async_executor_PARAMETERS THREADS_PER_LOCALITY 4 LOCALITIES 2
                                        RUNWRAPPER mpi
@@ -12,6 +14,8 @@ set(mpi_ring_async_executor_PARAMETERS THREADS_PER_LOCALITY 4 LOCALITIES 2
 
 set(algorithm_transform_mpi_PARAMETERS LOCALITIES 2 RUNWRAPPER mpi)
 set(algorithm_transform_mpi_DEPENDENCIES hpx_execution_test_utilities)
+set(mpi_init_ownership_PARAMETERS LOCALITIES 1 RUNWRAPPER mpi)
+set(mpi_user_init_PARAMETERS LOCALITIES 2 RUNWRAPPER mpi)
 
 foreach(test ${tests})
 

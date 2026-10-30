@@ -185,7 +185,11 @@ namespace hpx {
         //
         // Returns: *this.
         /// \brief moves the jthread object
-        jthread& operator=(jthread&&) noexcept = default;
+        jthread& operator=(jthread&& x) noexcept
+        {
+            jthread(HPX_MOVE(x)).swap(*this);
+            return *this;
+        }
 
         // 32.4.3.2, members
 

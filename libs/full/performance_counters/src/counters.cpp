@@ -86,6 +86,18 @@ HPX_DEFINE_GET_COMPONENT_TYPE(
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::performance_counters {
 
+    namespace {
+
+        // counter_path_elements stores its indices as std::int64_t because -1
+        // stands for 'not set'. The resource partitioner addresses its pools
+        // with a std::size_t and rejects an index it does not own, so convert
+        // here and let it do the range check.
+        constexpr std::size_t pool_index(std::int64_t const index) noexcept
+        {
+            return static_cast<std::size_t>(index);
+        }
+    }    // namespace
+
     std::string& ensure_counter_prefix(std::string& name)
     {
         if (name.compare(0, counter_prefix_len, counter_prefix) != 0)
@@ -182,7 +194,8 @@ namespace hpx::performance_counters {
                     if (path.instancename_ == "pool")
                     {
                         result += "#" +
-                            hpx::resource::get_pool_name(path.instanceindex_);
+                            hpx::resource::get_pool_name(
+                                pool_index(path.instanceindex_));
                     }
                     else
                     {
@@ -338,8 +351,9 @@ namespace hpx::performance_counters {
                 }
                 else if (path.instancename_ == "pool")
                 {
-                    result +=
-                        "#" + hpx::resource::get_pool_name(path.instanceindex_);
+                    result += "#" +
+                        hpx::resource::get_pool_name(
+                            pool_index(path.instanceindex_));
                 }
                 else
                 {
@@ -985,7 +999,8 @@ namespace hpx::performance_counters {
                 if (expand_threads)
                 {
                     std::size_t const num_threads =
-                        hpx::resource::get_num_threads(p.instanceindex_);
+                        hpx::resource::get_num_threads(
+                            pool_index(p.instanceindex_));
                     for (std::size_t t = 0; t != num_threads; ++t)
                     {
                         p.subinstanceindex_ = static_cast<std::int64_t>(t);
@@ -1016,7 +1031,7 @@ namespace hpx::performance_counters {
             error_code& ec)
         {
             std::size_t const num_threads =
-                hpx::resource::get_num_threads(p.instanceindex_);
+                hpx::resource::get_num_threads(pool_index(p.instanceindex_));
             for (std::size_t t = 0; t != num_threads; ++t)
             {
                 p.subinstanceindex_ = static_cast<std::int64_t>(t);

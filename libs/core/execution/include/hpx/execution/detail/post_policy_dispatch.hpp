@@ -92,6 +92,7 @@ namespace hpx::detail {
             // run_as_child doesn't make sense if we _post_ a task
             auto hint = policy.hint();
             hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+            threads::detail::set_task_size<std::decay_t<F>>(hint);
 
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(
@@ -121,6 +122,8 @@ namespace hpx::detail {
             threads::thread_pool_base* pool, F&& f, Ts&&... ts)
         {
             auto hint = policy.hint();
+            threads::detail::set_task_size<std::decay_t<F>>(hint);
+
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(
                     HPX_FORWARD(F, f), HPX_FORWARD(Ts, ts)...),
@@ -129,7 +132,7 @@ namespace hpx::detail {
                     static_cast<std::int16_t>(get_worker_thread_num()),
                     hint.placement_mode(),
                     hpx::threads::thread_execution_hint::none,
-                    hint.sharing_mode()),
+                    hint.sharing_mode(), hint.task_size()),
                 policy.stacksize(),
                 threads::thread_schedule_state::pending_do_not_schedule, true);
 

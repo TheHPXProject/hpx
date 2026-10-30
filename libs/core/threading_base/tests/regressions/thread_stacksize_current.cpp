@@ -105,7 +105,9 @@ int main(int argc, char** argv)
 
         hpx::local::init_params iparams;
         iparams.cfg = {"--hpx:queuing=!" + scheduler};
-        hpx::local::init(hpx_main, argc, argv, iparams);
+        // a scheduler that does not come up would otherwise leave this
+        // test passing without having run anything
+        HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, iparams), 0);
     }
 
     return hpx::util::report_errors();

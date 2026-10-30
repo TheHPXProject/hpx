@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -65,14 +66,15 @@ namespace hpx::collectives::detail {
     }
 
     std::exception_ptr validate_hierarchical_root_caller(
+        hierarchical_communicator const& communicators,
         this_site_arg const this_site, char const* operation,
         char const* root_operation)
     {
-        if (this_site != 0)
+        if (this_site != communicators.get_root_site())
         {
             return HPX_GET_EXCEPTION(hpx::error::bad_parameter, operation,
-                hpx::util::format(
-                    "only site 0 may call {} on a hierarchical communicator",
+                hpx::util::format("only the root site may call {} on a "
+                                  "hierarchical communicator",
                     root_operation));
         }
 
@@ -80,14 +82,15 @@ namespace hpx::collectives::detail {
     }
 
     std::exception_ptr validate_hierarchical_non_root_caller(
+        hierarchical_communicator const& communicators,
         this_site_arg const this_site, char const* operation,
         char const* root_operation)
     {
-        if (this_site == 0)
+        if (this_site == communicators.get_root_site())
         {
             return HPX_GET_EXCEPTION(hpx::error::bad_parameter, operation,
                 hpx::util::format(
-                    "site 0 must call {} on a hierarchical communicator",
+                    "the root site must call {} on a hierarchical communicator",
                     root_operation));
         }
 
@@ -95,18 +98,23 @@ namespace hpx::collectives::detail {
     }
 
     std::exception_ptr validate_hierarchical_root_site(
+        hierarchical_communicator const& communicators,
         root_site_arg const root_site, char const* operation,
         char const* operation_name)
     {
-        // The hierarchical helpers hardcode site 0 as the local root at
-        // every tree level, so a non-zero root is not supported.
-        if (root_site != 0)
+        // 0 is accepted so callers that never named a root keep working; it
+        // can't be told from an explicit root_site_arg(0), which is therefore
+        // accepted on a communicator rooted elsewhere as well. Anything else
+        // must be the root the tree was built with.
+        if (!root_site.is_default() &&
+            root_site != communicators.get_root_site())
         {
             return HPX_GET_EXCEPTION(hpx::error::bad_parameter, operation,
                 hpx::util::format(
-                    "hierarchical {} currently supports only root_site == 0 "
-                    "(the tree designates site 0 as the root)",
-                    operation_name));
+                    "hierarchical {} must use the root site the communicator "
+                    "was created with ({})",
+                    operation_name,
+                    static_cast<std::size_t>(communicators.get_root_site())));
         }
 
         return std::exception_ptr();
@@ -169,27 +177,29 @@ namespace hpx::collectives::detail {
         return -1;
     }
 
-    // Return true if this_site is the leftmost site (the representative) of
-    // the given top-level group.
     bool is_top_level_rep(std::ptrdiff_t const group,
         std::size_t const this_site, std::size_t const num_sites,
-        std::size_t const arity)
+        std::size_t const arity, std::size_t const root)
     {
         if (group == -1)
         {
             return false;
         }
 
-        return this_site ==
-            get_top_level_group_left(
-                static_cast<std::size_t>(group), num_sites, arity);
+        std::size_t const left = get_top_level_group_left(
+            static_cast<std::size_t>(group), num_sites, arity);
+        std::size_t const size = get_top_level_group_size(
+            static_cast<std::size_t>(group), num_sites, arity);
+
+        return this_site == range_leader(left, left + size - 1, root);
     }
 
     bool is_top_level_rep(std::size_t const this_site,
-        std::size_t const num_sites, std::size_t const arity)
+        std::size_t const num_sites, std::size_t const arity,
+        std::size_t const root)
     {
         return is_top_level_rep(classify_site(this_site, num_sites, arity),
-            this_site, num_sites, arity);
+            this_site, num_sites, arity, root);
     }
 }    // namespace hpx::collectives::detail
 

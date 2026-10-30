@@ -214,6 +214,9 @@ namespace hpx::parcelset::policies::tcp {
                 {
                     ::asio::ip::tcp::socket& s = sender_connection->socket();
                     s.close();
+                    util::open_socket_for_connect(s, *it, error);
+                    if (error)
+                        continue;
                     // NOLINTNEXTLINE(bugprone-unused-return-value)
                     s.connect(*it, error);
                     if (!error)

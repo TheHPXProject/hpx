@@ -10,6 +10,7 @@
 #include <hpx/modules/actions_base.hpp>
 #include <hpx/modules/naming_base.hpp>
 
+/// \cond NOINTERNAL
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -34,3 +35,4 @@ namespace hpx::detail {
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 }    // namespace hpx::detail
+/// \endcond

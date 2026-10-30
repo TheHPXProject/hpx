@@ -149,15 +149,17 @@ test_mirroring_survives_epoch_rollover(hpx::id_type const& peer_locality)
 
     // Eviction is dispatched asynchronously (via hpx::post(), see
     // register_observers()); poll re-joining via the very same registry `r`
-    // until it returns a different entry, exactly as
-    // test_registry_join_terminal_peer_evicted_from_peers() does.
+    // until it returns a fresh entry. Comparing against peer1 is not enough:
+    // the registry's observer has already moved the old entry's join_epoch
+    // forward to epoch_n, so until the eviction has run join() hands back
+    // that old entry, which differs from peer1 but still has epoch_n.
     hpx::supervision::joined_peer peer2 = peer1;
     auto const rejoin_deadline =
         std::chrono::steady_clock::now() + test_state_deadline;
     while (std::chrono::steady_clock::now() < rejoin_deadline)
     {
         peer2 = r.join(hpx::launch::sync, peer_locality);
-        if (peer2 != peer1)
+        if (peer2.join_epoch > epoch_n)
         {
             break;
         }

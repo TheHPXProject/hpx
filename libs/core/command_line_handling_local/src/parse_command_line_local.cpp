@@ -557,7 +557,7 @@ namespace hpx::local::detail {
                 "the detailed affinity description for the OS threads, see "
                 "the documentation for a detailed description of possible "
                 "values. Do not use with --hpx:pu-step, --hpx:pu-offset, or "
-                "--hpx:affinity options. Implies --hpx:numa-sensitive=1"
+                "--hpx:affinity options "
                 "(--hpx:bind=none disables defining thread affinities).")
             ("hpx:use-process-mask", "use the process mask to restrict "
                 "available hardware resources (implies "
@@ -578,23 +578,32 @@ namespace hpx::local::detail {
                 "'local', 'local-priority-fifo', 'local-priority-fifo-double', "
                 "'local-priority-lifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
-                "'static-priority', 'local-workrequesting-fifo',"
+                "'static-priority', 'local-workrequesting-fifo', "
                 "'local-workrequesting-lifo', and 'local-workrequesting-mc' "
-                "(default: 'local-priority'; all option values can be "
+                "(default: 'local-priority-fifo'; all option values can be "
                 "abbreviated)")
             ("hpx:high-priority-threads", value<std::size_t>(),
                 "the number of operating system threads maintaining a high "
                 "priority queue (default: number of OS threads), valid for "
-                "--hpx:queuing=local-priority,--hpx:queuing=static-priority, "
+                "--hpx:queuing=local-priority-fifo, "
+                "--hpx:queuing=local-priority-fifo-double, "
+                "--hpx:queuing=local-priority-lifo, "
+                "--hpx:queuing=static-priority, "
                 "--hpx:queuing=local-workrequesting-fifo, "
                 "--hpx:queuing=local-workrequesting-lifo, "
                 "--hpx:queuing=local-workrequesting-mc, "
-                " and --hpx:queuing=abp-priority only)")
-            ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(0),
-                "makes the local-priority scheduler NUMA sensitive ("
-                "allowed values: 0 - no NUMA sensitivity, 1 - allow only for "
-                "boundary cores to steal across NUMA domains, 2 - "
-                "no cross boundary stealing is allowed (default value: 0)")
+                "--hpx:queuing=abp-priority-fifo, and "
+                "--hpx:queuing=abp-priority-lifo only)")
+            ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(1),
+                "controls NUMA-sensitive work stealing (for local, "
+                "local-priority, and ABP-priority schedulers: 0 - all workers "
+                "may steal across NUMA domains, 1 - only boundary workers may "
+                "steal from the nearest NUMA domains, 2 - no cross-domain "
+                "stealing; static, static-priority, and shared-priority "
+                "schedulers allow cross-domain stealing for 0 and 1, and "
+                "disable it for 2; work-requesting schedulers currently "
+                "ignore this option; "
+                "default and implicit value: 1)")
         ;
 
         all_options.emplace(options_type::config_options,

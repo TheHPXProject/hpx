@@ -8,6 +8,7 @@
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstddef>
 #include <iterator>
 #include <ranges>
 #include <span>
@@ -157,6 +158,32 @@ void vector_range()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void counting_range()
+{
+    // a counting_iterator reports a difference_type wide enough to hold the
+    // difference of any two of its values, which can be wider than
+    // std::size_t, while hpx::util::size() hands out a count
+    using iterator = hpx::util::counting_iterator<unsigned int>;
+    static_assert(
+        sizeof(std::iter_difference_t<iterator>) >= sizeof(unsigned int));
+
+    hpx::util::counting_shape const r(3u);
+    static_assert(std::is_same_v<decltype(hpx::util::size(r)), std::size_t>);
+
+    HPX_TEST(hpx::util::begin(r) == iterator(0u));
+    HPX_TEST(hpx::util::end(r) == iterator(3u));
+    HPX_TEST_EQ(hpx::util::size(r), 3u);
+    HPX_TEST_EQ(hpx::util::empty(r), false);
+
+    hpx::util::counting_shape const cr(2u, 7u);
+    HPX_TEST_EQ(hpx::util::size(cr), 5u);
+
+    hpx::util::counting_shape const er(0u);
+    HPX_TEST_EQ(hpx::util::size(er), 0u);
+    HPX_TEST_EQ(hpx::util::empty(er), true);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     {
@@ -164,6 +191,7 @@ int main()
         member_range();
         adl_range();
         vector_range();
+        counting_range();
     }
 
     return hpx::util::report_errors();

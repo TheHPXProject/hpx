@@ -242,11 +242,15 @@ namespace hpx::lcos::detail {
 
             hpx::intrusive_ptr<continuation> this_(this);
             hpx::threads::thread_description desc(f_, "async");
+
+            // The thread runs a lambda around f_, which hides the size of f_,
+            // so pass that size along with the description.
             spawner(
                 [this_ = HPX_MOVE(this_), f = HPX_MOVE(f)]() mutable -> void {
                     this_->template run_impl<Unwrap>(HPX_MOVE(f));
                 },
-                desc, this->runs_child_);
+                desc, this->runs_child_,
+                traits::get_task_size_v<std::decay_t<F>>);
         }
 
     public:

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iostream>
 #include <random>
 #include <utility>
 #include <vector>
@@ -48,7 +49,8 @@ void test_unseq_first_n1_dispatch2(std::size_t length, std::size_t first_index)
 
 void test_unseq_first_n1_dispatch1()
 {
-    test_unseq_first_n1_dispatch2<int>(gen() % 10007, gen());
+    // length is used as a modulus, so it must not be 0
+    test_unseq_first_n1_dispatch2<int>(gen() % 10007 + 1, gen());
 }
 
 template <typename T>
@@ -93,11 +95,14 @@ void test_unseq_first_n2_dispatch2(std::size_t length, std::size_t first_index)
 
 void test_unseq_first_n2_dispatch1()
 {
-    test_unseq_first_n2_dispatch2<int>(gen() % 10007, gen());
+    // length is used as a modulus, so it must not be 0
+    test_unseq_first_n2_dispatch2<int>(gen() % 10007 + 1, gen());
 }
 
 int main(int, char*[])
 {
+    std::cout << "using seed: " << seed << std::endl;
+
     test_unseq_first_n1_dispatch1();    //  Predicate takes single argument
     test_unseq_first_n2_dispatch1();    //  Predicate takes two arguments
 

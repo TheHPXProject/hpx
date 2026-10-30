@@ -49,7 +49,7 @@ namespace hpx::parallel::util::detail {
             }
             base_exec.num_cores_ = cores;
             policy = hpx::execution::experimental::create_rebound_policy(
-                policy, HPX_MOVE(exec), policy.parameters());
+                policy, HPX_MOVE(exec));
         }
         else if constexpr (requires {
                                policy.query(hpx::execution::experimental::
@@ -101,8 +101,11 @@ namespace hpx::parallel::util::detail {
     void add_ready_future(
         std::vector<Future>& workitems, F&& f, FwdIter first, std::size_t count)
     {
-        workitems.push_back(
-            hpx::make_ready_future(HPX_FORWARD(F, f)(first, count)));
+        // the future's value type may differ from the result type of f (see
+        // partitioner_result_t)
+        using result_type = hpx::traits::future_traits_t<Future>;
+        workitems.push_back(hpx::make_ready_future(
+            static_cast<result_type>(HPX_FORWARD(F, f)(first, count))));
     }
 
     HPX_CXX_CORE_EXPORT template <typename F, typename FwdIter>
@@ -232,7 +235,7 @@ namespace hpx::parallel::util::detail {
         adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
 
         auto last = next_or_subrange(it_or_r, count, 0);
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         if (stride != 1)
         {
@@ -269,7 +272,7 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         auto test_function = [&](std::size_t test_chunk_size) -> std::size_t {
             if (test_chunk_size == 0)
@@ -357,7 +360,7 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::maximal_number_of_chunks(
                 policy.parameters(), policy.executor(), cores, count);
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)
@@ -430,8 +433,11 @@ namespace hpx::parallel::util::detail {
     void add_ready_future_idx(std::vector<Future>& workitems, F&& f,
         FwdIter first, std::size_t base_idx, std::size_t count)
     {
-        workitems.push_back(
-            hpx::make_ready_future(HPX_FORWARD(F, f)(first, count, base_idx)));
+        // the future's value type may differ from the result type of f (see
+        // partitioner_result_t)
+        using result_type = hpx::traits::future_traits_t<Future>;
+        workitems.push_back(hpx::make_ready_future(static_cast<result_type>(
+            HPX_FORWARD(F, f)(first, count, base_idx))));
     }
 
     HPX_CXX_CORE_EXPORT template <typename F, typename FwdIter>
@@ -476,7 +482,7 @@ namespace hpx::parallel::util::detail {
                 policy.parameters(), policy.executor(), cores, count);
 
         FwdIter last = parallel::detail::next(begin, count);
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
@@ -528,7 +534,7 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         std::size_t base_idx = 0;
         auto test_function = [&](std::size_t test_chunk_size) -> std::size_t {
@@ -621,7 +627,7 @@ namespace hpx::parallel::util::detail {
             hpx::execution::experimental::maximal_number_of_chunks(
                 policy.parameters(), policy.executor(), cores, count);
 
-        Stride stride = parallel::detail::abs(s);
+        Stride stride = s;
 
         // we should not consider more chunks than we have elements
         if (max_chunks != 0)

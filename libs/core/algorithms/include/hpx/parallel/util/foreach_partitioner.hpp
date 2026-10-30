@@ -34,11 +34,13 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::util::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename ExPolicy,
+    HPX_CXX_CORE_EXPORT template <typename ChunkResult, typename ExPolicy,
         typename FwdIter, typename F, typename ReShape>
     auto foreach_partition(ExPolicy policy, FwdIter first, std::size_t count,
         F&& f, ReShape&& reshape)
     {
+        using Result = partitioner_result_t<ChunkResult>;
+
         // estimate a chunk size based on number of cores used
         using parameters_type =
             hpx::execution::experimental::extract_executor_parameters_t<

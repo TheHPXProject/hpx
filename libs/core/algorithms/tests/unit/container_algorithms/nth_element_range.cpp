@@ -29,7 +29,7 @@ struct S
 };
 
 ////////////////////////////////////////////////////////////////////////////
-#define SIZE 10007
+#define TEST_SIZE 10007
 
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
@@ -41,12 +41,12 @@ void test_nth_element_sent(IteratorTag)
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
     using sentinel = test::sentinel_from_iterator<iterator>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::iota(c.begin(), c.end(), 1);
     std::shuffle(c.begin(), c.end(), gen);
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result = hpx::ranges::nth_element(iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index),
@@ -64,7 +64,7 @@ void test_nth_element_sent(IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE - 1; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE - 1; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -80,12 +80,12 @@ void test_nth_element_sent(ExPolicy policy, IteratorTag)
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
     using sentinel = test::sentinel_from_iterator<iterator>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::iota(c.begin(), c.end(), 1);
     std::shuffle(c.begin(), c.end(), gen);
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result = hpx::ranges::nth_element(policy, iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index),
@@ -103,7 +103,7 @@ void test_nth_element_sent(ExPolicy policy, IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE - 1; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE - 1; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -112,12 +112,12 @@ void test_nth_element_sent(ExPolicy policy, IteratorTag)
 template <typename IteratorTag>
 void test_nth_element(IteratorTag)
 {
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result = hpx::ranges::nth_element(c, std::begin(c) + rand_index);
     HPX_TEST(result == std::end(c));
@@ -131,7 +131,7 @@ void test_nth_element(IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -143,12 +143,12 @@ void test_nth_element(ExPolicy policy, IteratorTag)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result =
         hpx::ranges::nth_element(policy, c, std::begin(c) + rand_index);
@@ -163,7 +163,7 @@ void test_nth_element(ExPolicy policy, IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -175,12 +175,12 @@ void test_nth_element_async(ExPolicy policy, IteratorTag)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result =
         hpx::ranges::nth_element(policy, c, std::begin(c) + rand_index);
@@ -197,7 +197,7 @@ void test_nth_element_async(ExPolicy policy, IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -209,11 +209,11 @@ void test_nth_element_projection(ExPolicy policy)
     static_assert(hpx::is_execution_policy<ExPolicy>::value,
         "hpx::is_execution_policy<ExPolicy>::value");
 
-    std::vector<S> c(SIZE);
-    for (std::size_t i = 0; i < SIZE; ++i)
-        c[i].val = SIZE - i;
+    std::vector<S> c(TEST_SIZE);
+    for (std::size_t i = 0; i < TEST_SIZE; ++i)
+        c[i].val = TEST_SIZE - i;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
     auto nth = std::begin(c) + rand_index;
 
     hpx::ranges::nth_element(policy, c, nth, std::less<std::size_t>{}, &S::val);
@@ -223,7 +223,7 @@ void test_nth_element_projection(ExPolicy policy)
         HPX_TEST(c[k].val <= c[rand_index].val);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k].val >= c[rand_index].val);
     }
@@ -239,11 +239,11 @@ void test_nth_element_sent_projection(ExPolicy policy, IteratorTag)
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
     using sentinel = test::sentinel_from_iterator<iterator>;
 
-    std::vector<S> c(SIZE);
-    for (std::size_t i = 0; i < SIZE; ++i)
-        c[i].val = SIZE - i;
+    std::vector<S> c(TEST_SIZE);
+    for (std::size_t i = 0; i < TEST_SIZE; ++i)
+        c[i].val = TEST_SIZE - i;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto result = hpx::ranges::nth_element(policy, iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index),
@@ -256,7 +256,7 @@ void test_nth_element_sent_projection(ExPolicy policy, IteratorTag)
         HPX_TEST(c[k].val <= c[rand_index].val);
     }
 
-    for (int k = rand_index + 1; k < SIZE - 1; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE - 1; k++)
     {
         HPX_TEST(c[k].val >= c[rand_index].val);
     }

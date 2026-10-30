@@ -132,9 +132,9 @@ namespace hpx::parallel::util::detail {
           : data_(it, 0)
           , chunk_size_((std::max) ((std::min) (chunk_size, count),
                 static_cast<std::size_t>(1)))
-          , last_chunk_size_(get_last_chunk_size(count, chunk_size))
+          , last_chunk_size_(get_last_chunk_size(count, chunk_size_))
           , count_(count)
-          , current_(get_current(current, chunk_size))
+          , current_(get_current(current, chunk_size_))
         {
             if (current_ >= count_)
             {
@@ -194,8 +194,8 @@ namespace hpx::parallel::util::detail {
         }
 
     private:
-        static constexpr IterOrR next(IterOrR const& target, std::size_t first,
-            [[maybe_unused]] std::size_t size)
+        static constexpr IterOrR next(IterOrR const& target,
+            std::ptrdiff_t first, [[maybe_unused]] std::size_t size)
         {
             if constexpr (is_iterator || std::is_integral_v<IterOrR>)
             {
@@ -374,9 +374,9 @@ namespace hpx::parallel::util::detail {
           : data_(it, 0, base_idx)
           , chunk_size_((std::max) ((std::min) (chunk_size, count),
                 static_cast<std::size_t>(1)))
-          , last_chunk_size_(get_last_chunk_size(count, chunk_size))
+          , last_chunk_size_(get_last_chunk_size(count, chunk_size_))
           , count_(count)
-          , current_(get_current(current, chunk_size))
+          , current_(get_current(current, chunk_size_))
         {
             if (current_ >= count_)
             {
@@ -447,8 +447,8 @@ namespace hpx::parallel::util::detail {
         }
 
     private:
-        static constexpr IterOrR next(IterOrR const& target, std::size_t first,
-            [[maybe_unused]] std::size_t size)
+        static constexpr IterOrR next(IterOrR const& target,
+            std::ptrdiff_t first, [[maybe_unused]] std::size_t size)
         {
             if constexpr (is_iterator || std::is_integral_v<IterOrR>)
             {

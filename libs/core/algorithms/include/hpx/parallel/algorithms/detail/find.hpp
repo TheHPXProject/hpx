@@ -304,17 +304,25 @@ namespace hpx::parallel::detail {
             std::size_t base_idx, std::size_t part_size, std::size_t diff,
             Token& tok, Pred&& op, Proj1&& proj1, Proj2&& proj2)
         {
+            using reference = typename std::iterator_traits<Iter1>::reference;
+
+            // loop_idx_n passes the element, not an iterator to it, so keep
+            // an iterator in step with it to walk the rest of the candidate
+            // match
+            Iter1 curr = it;
             util::loop_idx_n<ExPolicy>(base_idx, it, part_size, tok,
-                [=, &tok, &op, &proj1, &proj2](auto t, std::size_t i) -> void {
+                [=, &tok, &curr, &op, &proj1, &proj2](
+                    reference t, std::size_t i) -> void {
+                    ++curr;
+
                     // Note: replacing the invoke() with HPX_INVOKE()
                     // below makes gcc generate errors
                     if (hpx::invoke(op, hpx::invoke(proj1, t),
                             hpx::invoke(proj2, *first2)))
                     {
                         std::size_t local_count = 1;
-                        auto mid = t;
+                        Iter1 mid = curr;
                         auto mid2 = first2;
-                        ++mid;
                         ++mid2;
 
                         for (; local_count != diff;
@@ -322,7 +330,7 @@ namespace hpx::parallel::detail {
                         {
                             // Note: replacing the invoke() with HPX_INVOKE()
                             // below makes gcc generate errors
-                            if (!hpx::invoke(op, hpx::invoke(proj1, mid),
+                            if (!hpx::invoke(op, hpx::invoke(proj1, *mid),
                                     hpx::invoke(proj2, *mid2)))
                             {
                                 break;

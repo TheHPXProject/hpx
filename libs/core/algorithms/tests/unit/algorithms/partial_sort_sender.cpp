@@ -22,7 +22,7 @@
 ////////////////////////////////////////////////////////////////////////////
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
-constexpr std::uint64_t SIZE{1007};
+constexpr std::uint64_t num_elements{1007};
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_partial_sort_sender(
@@ -40,16 +40,16 @@ void test_partial_sort_sender(
     using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
 
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(num_elements);
+    B.reserve(num_elements);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < num_elements; ++i)
     {
         A.emplace_back(i);
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    for (std::uint64_t i = 1; i < SIZE; ++i)
+    for (std::uint64_t i = 1; i < num_elements; ++i)
     {
         B = A;
 
