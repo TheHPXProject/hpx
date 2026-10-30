@@ -68,6 +68,11 @@ void test_any_of(ExPolicy&& policy, IteratorTag)
 
         HPX_TEST_EQ(result, expected);
     }
+
+    // no element of an empty range satisfies the predicate
+    std::vector<int> empty;
+    HPX_TEST(!hpx::any_of(policy, iterator(std::begin(empty)),
+        iterator(std::end(empty)), [](auto) { return true; }));
 }
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
@@ -153,6 +158,12 @@ void test_any_of_ranges(ExPolicy&& policy, IteratorTag, Proj proj = Proj())
 
         HPX_TEST_EQ(result, expected);
     }
+
+    // no element of an empty range satisfies the predicate
+    std::vector<int> empty;
+    HPX_TEST(!hpx::ranges::any_of(
+        policy, iterator(std::begin(empty)), iterator(std::end(empty)),
+        [](auto) { return true; }, proj));
 }
 
 template <typename ExPolicy, typename IteratorTag>
@@ -176,6 +187,12 @@ void test_any_of_async(ExPolicy&& p, IteratorTag)
 
         HPX_TEST_EQ(expected, f.get());
     }
+
+    // no element of an empty range satisfies the predicate
+    std::vector<int> empty;
+    hpx::future<bool> f = hpx::any_of(p, iterator(std::begin(empty)),
+        iterator(std::end(empty)), [](auto) { return true; });
+    HPX_TEST(!f.get());
 }
 
 template <typename ExPolicy, typename IteratorTag,
