@@ -187,6 +187,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/type_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/set_operation.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
@@ -250,9 +251,15 @@ namespace hpx::parallel {
             sequential(ExPolicy, Iter1 first1, Sent1 last1, Iter2 first2,
                 Sent2 last2, Iter3 dest, F&& f, Proj1&& proj1, Proj2&& proj2)
             {
-                return sequential_set_intersection(first1, last1, first2, last2,
-                    dest, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
+                auto result = sequential_set_intersection(first1, last1, first2,
+                    last2, dest, HPX_FORWARD(F, f), HPX_FORWARD(Proj1, proj1),
                     HPX_FORWARD(Proj2, proj2));
+
+                // the loop stops as soon as one input is exhausted, but the
+                // returned input iterators must point to the end of both
+                return {detail::advance_to_sentinel(result.in1, last1),
+                    detail::advance_to_sentinel(result.in2, last2),
+                    HPX_MOVE(result.out)};
             }
 
             template <typename ExPolicy, typename Iter1, typename Sent1,
