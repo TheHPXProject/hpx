@@ -851,6 +851,18 @@ namespace hpx::threads::detail {
         return executed_phases - reset_executed_phases;
     }
 
+    // Only called on worker num's own OS thread, which is also the only one
+    // the scheduling loop updates these counters from.
+    template <typename Scheduler>
+    void scheduled_thread_pool<Scheduler>::add_directly_executed_thread(
+        std::size_t num)
+    {
+        HPX_ASSERT(num < counter_data_.size());
+
+        ++counter_data_[num].executed_threads_;
+        ++counter_data_[num].executed_thread_phases_;
+    }
+
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)
     template <typename Scheduler>
     std::int64_t scheduled_thread_pool<Scheduler>::get_thread_phase_duration(

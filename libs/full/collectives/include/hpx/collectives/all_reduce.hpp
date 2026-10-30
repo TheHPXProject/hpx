@@ -42,9 +42,10 @@ namespace hpx { namespace collectives {
     ///                     all_reduce support object. This value is optional
     ///                     and defaults to '0' (zero).
     ///
-    /// \returns    This function returns a future holding a vector with all
-    ///             values send by all participating sites. It will become
-    ///             ready once the all_reduce operation has been completed.
+    /// \returns    This function returns a future holding the result of
+    ///             combining the values sent by all participating sites using
+    ///             \a op. It will become ready once the all_reduce operation
+    ///             has been completed.
     ///
     template <typename T, typename F>
     hpx::future<std::decay_t<T>> all_reduce(char const* basename, T&& result,
@@ -74,9 +75,10 @@ namespace hpx { namespace collectives {
     ///                     The generation number (if given) must be a positive
     ///                     number greater than zero.
     ///
-    /// \returns    This function returns a future holding a vector with all
-    ///             values send by all participating sites. It will become
-    ///             ready once the all_reduce operation has been completed.
+    /// \returns    This function returns a future holding the result of
+    ///             combining the values sent by all participating sites using
+    ///             \a op. It will become ready once the all_reduce operation
+    ///             has been completed.
     ///
     template <typename T, typename F>
     hpx::future<std::decay_t<T>>
@@ -105,9 +107,10 @@ namespace hpx { namespace collectives {
     ///                     the locality id). This value is optional and
     ///                     defaults to whatever hpx::get_locality_id() returns.
     ///
-    /// \returns    This function returns a future holding a vector with all
-    ///             values send by all participating sites. It will become
-    ///             ready once the all_reduce operation has been completed.
+    /// \returns    This function returns a future holding the result of
+    ///             combining the values sent by all participating sites using
+    ///             \a op. It will become ready once the all_reduce operation
+    ///             has been completed.
     ///
     template <typename T, typename F>
     hpx::future<std::decay_t<T>>
@@ -142,9 +145,9 @@ namespace hpx { namespace collectives {
     ///                     all_reduce support object. This value is optional
     ///                     and defaults to '0' (zero).
     ///
-    /// \returns    This function returns a vector with all values send by all
-    ///             participating sites. This function executes synchronously and
-    ///             directly returns the result.
+    /// \returns    This function returns the result of combining the values
+    ///             sent by all participating sites using \a op. This function
+    ///             executes synchronously and directly returns the result.
     ///
     template <typename T, typename F>
     decltype(auto) all_reduce(hpx::launch::sync_policy policy,
@@ -176,9 +179,9 @@ namespace hpx { namespace collectives {
     ///                     The generation number (if given) must be a positive
     ///                     number greater than zero.
     ///
-    /// \returns    This function returns a vector with all values send by all
-    ///             participating sites. This function executes synchronously and
-    ///             directly returns the result.
+    /// \returns    This function returns the result of combining the values
+    ///             sent by all participating sites using \a op. This function
+    ///             executes synchronously and directly returns the result.
     ///
     template <typename T, typename F>
     decltype(auto) all_reduce(hpx::launch::sync_policy policy,
@@ -208,9 +211,9 @@ namespace hpx { namespace collectives {
     ///                     the locality id). This value is optional and
     ///                     defaults to whatever hpx::get_locality_id() returns.
     ///
-    /// \returns    This function returns a vector with all values send by all
-    ///             participating sites. This function executes synchronously and
-    ///             directly returns the result.
+    /// \returns    This function returns the result of combining the values
+    ///             sent by all participating sites using \a op. This function
+    ///             executes synchronously and directly returns the result.
     ///
     template <typename T, typename F>
     decltype(auto) all_reduce(hpx::launch::sync_policy policy,

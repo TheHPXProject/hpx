@@ -70,7 +70,7 @@ namespace hpx::threads {
                 (std::numeric_limits<std::int32_t>::max)() :
                 static_cast<std::int32_t>(stacksize))
       , last_worker_thread_num_(
-            init_data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+            init_data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 init_data.schedulehint.hint :
                 static_cast<std::uint16_t>(-1))
       , priority_(init_data.priority)
@@ -266,7 +266,7 @@ namespace hpx::threads {
             std::memory_order_relaxed);
 
         last_worker_thread_num_ =
-            init_data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+            init_data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
             init_data.schedulehint.hint :
             static_cast<std::uint16_t>(-1);
 

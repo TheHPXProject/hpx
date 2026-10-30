@@ -166,35 +166,52 @@ namespace hpx::threads::policies {
     {
         HPX_ASSERT(num_thread < suspend_conds_.size());
 
-        states_[num_thread].data_.store(hpx::state::sleeping);
         std::unique_lock<pu_mutex_type> l(suspend_mtxs_[num_thread]);
-        suspend_conds_[num_thread].wait(l);    //-V1089
+        hpx::state expected_pre_sleep = hpx::state::pre_sleep;
+        if (states_[num_thread].data_.compare_exchange_strong(
+                expected_pre_sleep, hpx::state::sleeping))
+        {
+            suspend_conds_[num_thread].wait(l, [this, num_thread]() noexcept {
+                return states_[num_thread].data_.load() != hpx::state::sleeping;
+            });
+        }
 
-        // Only set running if still in hpx::state::sleeping. Can be set with
-        // non-blocking/locking functions to stopping or terminating, in which
-        // case the state is left untouched.
-        hpx::state expected = hpx::state::sleeping;
-        states_[num_thread].data_.compare_exchange_strong(
-            expected, hpx::state::running);
-
-        HPX_ASSERT(expected == hpx::state::sleeping ||
-            expected == hpx::state::stopping ||
-            expected == hpx::state::terminating);
+        [[maybe_unused]] hpx::state const current_state =
+            states_[num_thread].data_.load();
+        HPX_ASSERT(current_state == hpx::state::pre_sleep ||
+            current_state == hpx::state::running ||
+            current_state == hpx::state::stopping ||
+            current_state == hpx::state::terminating);
     }
 
     void scheduler_base::resume(std::size_t num_thread)
     {
+        auto resume_pu = [this](std::size_t pu) {
+            std::lock_guard<pu_mutex_type> l(suspend_mtxs_[pu]);
+            hpx::state expected = hpx::state::sleeping;
+            if (!states_[pu].data_.compare_exchange_strong(
+                    expected, hpx::state::running))
+            {
+                expected = hpx::state::pre_sleep;
+                states_[pu].data_.compare_exchange_strong(
+                    expected, hpx::state::running);
+            }
+            // Always notify under the lock. The state may have changed to
+            // stopping or terminating while the worker was waiting.
+            suspend_conds_[pu].notify_one();
+        };
+
         if (num_thread == static_cast<std::size_t>(-1))
         {
-            for (std::condition_variable& c : suspend_conds_)
+            for (std::size_t i = 0; i < suspend_conds_.size(); ++i)
             {
-                c.notify_one();
+                resume_pu(i);
             }
         }
         else
         {
             HPX_ASSERT(num_thread < suspend_conds_.size());
-            suspend_conds_[num_thread].notify_one();
+            resume_pu(num_thread);
         }
     }
 
@@ -458,6 +475,38 @@ namespace hpx::threads::policies {
     std::int64_t scheduler_base::get_background_thread_count() const noexcept
     {
         return background_thread_count_;
+    }
+
+    void scheduler_base::enter_scheduling_loop() noexcept
+    {
+        // publishes nothing, the count only has to cover this worker
+        workers_in_loop_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    bool scheduler_base::leave_scheduling_loop()
+    {
+        // release: makes the work this worker scheduled on other queues
+        // visible to the last worker; acquire: the last worker synchronizes
+        // with all earlier decrements (they form one release sequence), so
+        // the thread counts below include that work
+        if (workers_in_loop_.fetch_sub(1, std::memory_order_acq_rel) != 1)
+            return true;
+
+        // This is the last worker. All others are idle and have left, so no
+        // HPX thread can schedule new work anymore: whatever is left on any
+        // queue now is left there for good unless this worker runs it.
+        if (get_thread_count() <= get_background_thread_count())
+            return true;
+
+        // take the work over, see scheduling_loop
+        workers_in_loop_.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+
+    void scheduler_base::abandon_scheduling_loop() noexcept
+    {
+        // release: as in leave_scheduling_loop
+        workers_in_loop_.fetch_sub(1, std::memory_order_release);
     }
 
     void scheduler_base::increment_background_thread_count() noexcept

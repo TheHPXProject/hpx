@@ -23,17 +23,7 @@ jobs:
     - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
-      run: |
-        md C:\projects
-        $archive = "C:\projects\vcpkg-export-hpx-dependencies.7z"
-        $expected = "1781883DA9EC4C51406EDA9B5B114AADB6185DAD2A7AB3955AC1D019C99F6777"
-        $client = new-object System.Net.WebClient
-        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z", $archive)
-        $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash
-        if ($actual -ne $expected) {
-          throw "vcpkg archive SHA-256 mismatch: expected $expected, got $actual"
-        }
-        7z x $archive -y -oC:\projects\vcpkg
+      uses: ./.github/actions/setup-vcpkg
     - name: Configure
       shell: bash
       run: |

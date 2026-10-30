@@ -4,9 +4,14 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests dijkstra_termination_forwarding thread_mapper_parcel_pools)
+set(tests dijkstra_termination_forwarding)
 
-set(thread_mapper_parcel_pools_PARAMETERS THREADS_PER_LOCALITY 4)
+# thread_mapper_parcel_pools runs a single locality with networking enabled,
+# which needs the TCP parcelport to bootstrap
+if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_TCP)
+  set(tests ${tests} thread_mapper_parcel_pools)
+  set(thread_mapper_parcel_pools_PARAMETERS THREADS_PER_LOCALITY 4)
+endif()
 
 foreach(test ${tests})
   set(sources ${test}.cpp)
