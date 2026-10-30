@@ -1,5 +1,5 @@
 //  Copyright (c) 2021 Srinivas Yadav
-//  Copyright (c) 2016-2022 Hartmut Kaiser
+//  Copyright (c) 2016-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -25,6 +25,10 @@ namespace hpx::parallel::traits {
         template <typename T, std::size_t N, typename Abi>
         struct vector_pack_type
         {
+#if !defined(HPX_HAVE_DATAPAR_SVE)
+            static_assert(N <= datapar::experimental::max_fixed_size<T>);
+#endif
+
             using type = datapar::experimental::fixed_size_simd<T, N>;
         };
 

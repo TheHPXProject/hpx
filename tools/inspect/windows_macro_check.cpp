@@ -18,23 +18,24 @@
 namespace fs = hpx::filesystem;
 
 namespace {
+    // Names the Windows SDK headers (windef.h, minwindef.h, winnt.h,
+    // wingdi.h, rpcndr.h) define as macros or typedefs. Declaring any of them
+    // in HPX code breaks or silently changes the build with MSVC (e.g. a
+    // constant named SIZE collides with the SIZE typedef, error C2377).
+    std::string const windows_names =
+        "\\b(small|near|far|interface|SIZE|POINT|RECT|ERROR|DELETE|IN|OUT|"
+        "OPTIONAL|CONST)\\b";
+
     boost::regex windows_macro_regex(
-        "("
-        "^\\s*#\\s*undef\\s*"    // # undef
-        "\\b(small)\\b"          // followed by windows macro name, whole word
-        ")"
-        "|"    // or (ignored)
-        "("
-        "//[^\\n]*"    // single line comments (//)
-        "|"
-        "/\\*.*?\\*/"    // multi line comments (/**/)
-        "|"
-        "\"(?:\\\\\\\\|\\\\\"|[^\"])*\""    // string literals
-        ")"
-        "|"    // or
-        "("
-        "\\b(small)\\b"    // windows macro name, whole word
-        ")",
+        // # undef followed by a windows macro name
+        "(^\\s*#\\s*undef\\s*" + windows_names +
+            ")"
+            // or (ignored) single line comments (//), multi line comments
+            // (/**/) and string literals
+            "|(//[^\\n]*|/\\*.*?\\*/|\"(?:\\\\\\\\|\\\\\"|[^\"])*\")"
+            // or a windows macro name
+            "|(" +
+            windows_names + ")",
         boost::regex::normal);
 
 }    // unnamed namespace
@@ -90,7 +91,7 @@ namespace boost { namespace inspect {
                 ++errors;
                 error(library_name, full_path,
                     "Windows macro clash: " +
-                        std::string((*cur)[0].first, (*cur)[0].second - 1),
+                        std::string((*cur)[0].first, (*cur)[0].second),
                     line_number);
             }
         }

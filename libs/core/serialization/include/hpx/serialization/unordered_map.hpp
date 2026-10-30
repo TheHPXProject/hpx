@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/serialization/detail/serialize_collection.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/map.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/serialize.hpp>
@@ -27,7 +28,7 @@ namespace hpx::serialization {
         std::uint64_t size;
         ar >> size;
 
-        detail::load_collection(ar, t, size);
+        detail::load_collection(ar, t, detail::to_size(size));
     }
 
     HPX_CXX_CORE_EXPORT template <typename Key, typename Value, typename Hash,
@@ -52,7 +53,7 @@ namespace hpx::serialization {
         std::uint64_t size;
         ar >> size;
 
-        detail::load_collection(ar, t, size);
+        detail::load_collection(ar, t, detail::to_size(size));
     }
 
     HPX_CXX_EXPORT template <typename Key, typename Value, typename Hash,

@@ -1,0 +1,29 @@
+{
+  "name": "hpx-ci-dependencies",
+  "version-string": "0",
+  "description": "Dependencies of the Windows CI workflows, see .github/actions/setup-vcpkg",
+  "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
+  "dependencies": [
+    "boost-accumulators",
+    "boost-array",
+    "boost-bind",
+    "boost-chrono",
+    "boost-config",
+    "boost-context",
+    "boost-exception",
+    "boost-filesystem",
+    "boost-functional",
+    "boost-fusion",
+    "boost-iterator",
+    "boost-multi-array",
+    "boost-optional",
+    "boost-parameter",
+    "boost-phoenix",
+    "boost-smart-ptr",
+    "boost-spirit",
+    "boost-system",
+    "boost-thread",
+    "boost-variant",
+    "hwloc"
+  ]
+}

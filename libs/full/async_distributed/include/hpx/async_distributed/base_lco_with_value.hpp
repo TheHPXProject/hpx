@@ -153,6 +153,7 @@ namespace hpx::lcos {
         }
 
     public:
+        /// \cond NOINTERNAL
         /// The \a set_value_action may be used to trigger any LCO instances
         /// while carrying an additional parameter of any type.
         ///
@@ -162,8 +163,8 @@ namespace hpx::lcos {
         /// would disable the possibility to further move the result to the
         /// designated destination.
         ///
-        /// \param RemoteResult [in] The type of the result to be transferred
-        ///               back to this LCO instance.
+        /// The result type is \a RemoteResult and is transferred back to this
+        /// LCO instance.
         HPX_DEFINE_COMPONENT_DIRECT_ACTION(
             base_lco_with_value, set_value_nonvirt, set_value_action)
 
@@ -171,6 +172,7 @@ namespace hpx::lcos {
         /// instance exposes as its 'result' value.
         HPX_DEFINE_COMPONENT_DIRECT_ACTION(
             base_lco_with_value, get_value_nonvirt, get_value_action)
+        /// \endcond
     };
 
     /// The base_lco<void> specialization is used whenever the set_event action
@@ -196,16 +198,16 @@ namespace hpx::lcos {
             base_lco_with_value>::type;
         using base_type_holder = base_lco_with_value;
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
         // refer to base type for the corresponding implementation
         using set_value_action = base_lco::set_event_action;
-#endif
 
         // dummy action definition
         void get_value() {}
 
+        /// \cond NOINTERNAL
         HPX_DEFINE_COMPONENT_DIRECT_ACTION(
             base_lco_with_value, get_value, get_value_action)
+        /// \endcond
     };
 }    // namespace hpx::lcos
 

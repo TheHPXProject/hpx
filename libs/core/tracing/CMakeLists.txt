@@ -32,4 +32,5 @@ add_hpx_module(
     hpx/tracing/backends/apex.hpp hpx/tracing/backends/empty.hpp
     hpx/tracing/backends/ittnotify.hpp hpx/tracing/backends/tracy.hpp
   MODULE_DEPENDENCIES ${tracing_module_dependencies}
+  CMAKE_SUBDIRS tests
 )

@@ -18,6 +18,7 @@ set(executors_headers
     hpx/executors/detail/index_queue_spawning.hpp
     hpx/executors/detail/index_queue_spawning_result.hpp
     hpx/executors/detail/index_queue_spawning_void.hpp
+    hpx/executors/detail/indexed_shape.hpp
     hpx/executors/execute_on.hpp
     hpx/executors/exception_list.hpp
     hpx/executors/execution_policy_annotation.hpp
@@ -140,11 +141,12 @@ add_hpx_module(
     hpx_resource_partitioner
     hpx_serialization
     hpx_synchronization
-    hpx_timing
+    hpx_thread_support
     hpx_threading
     hpx_threading_base
-    hpx_tracing
+    hpx_timing
     hpx_topology
+    hpx_tracing
     hpx_type_support
     ${additional_dependencies}
   CMAKE_SUBDIRS examples tests

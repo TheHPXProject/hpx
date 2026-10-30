@@ -12,7 +12,7 @@ testing
 =======
 
 The testing module contains useful macros for testing. The results of tests can
-be printed with :cpp:func:`hpx::util::report_errors`. The following macros are
+be printed with :hpx:func:`hpx::util::report_errors`. The following macros are
 provided:
 
 * :c:macro:`HPX_TEST`

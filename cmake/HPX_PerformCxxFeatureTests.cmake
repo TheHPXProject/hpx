@@ -146,4 +146,8 @@ function(hpx_perform_cxx_feature_tests)
     DEFINITIONS HPX_HAVE_BUILTIN_FRAME_ADDRESS
   )
 
+  hpx_check_for_cxx26_filesystem_display_string(
+    DEFINITIONS HPX_HAVE_CXX26_FILESYSTEM_DISPLAY_STRING
+  )
+
 endfunction()

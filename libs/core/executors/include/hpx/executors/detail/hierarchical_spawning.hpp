@@ -68,9 +68,12 @@ namespace hpx::parallel::execution::detail {
             if (hierarchical_threshold != 0 &&
                 part_size > hierarchical_threshold)
             {
+                // the task may run after this iteration has ended, so it
+                // needs its own copy of the policy
                 hpx::detail::post_policy_dispatch<Launch>::call(post_policy,
                     desc, pool,
-                    [&, part_begin, part_end, part_size, f, it]() mutable {
+                    [&, async_policy, part_begin, part_end, part_size, f,
+                        it]() mutable {
                         for (std::size_t part_i = part_begin;
                             part_i != part_end; ++part_i)
                         {
@@ -164,8 +167,10 @@ namespace hpx::parallel::execution::detail {
                     std::size_t const end = ((t + 1) * size) / num_threads;
                     std::size_t const part_size = end - begin;
 
-                    auto&& launcher = [&, wrapped, begin, end, it](
-                                          bool direct) mutable {
+                    // launcher may be posted and run after this iteration
+                    // has ended, so it takes the policy by value
+                    auto&& launcher = [&, inner_post_policy, wrapped, begin,
+                                          end, it](bool direct) mutable {
                         // launch N-1 tasks
                         auto iter = it;
                         for (std::size_t i = begin + direct; i != end;

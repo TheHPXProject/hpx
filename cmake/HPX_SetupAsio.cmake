@@ -25,6 +25,10 @@ if(NOT HPX_WITH_FETCH_ASIO)
       "separately installed versions of Asio."
     )
   endif()
+  # Some package managers (e.g. Conan) provide asio::asio instead of Asio::asio
+  if(NOT TARGET Asio::asio AND TARGET asio::asio)
+    add_library(Asio::asio ALIAS asio::asio)
+  endif()
 elseif(NOT TARGET Asio::asio AND NOT HPX_FIND_PACKAGE)
   if(FETCHCONTENT_SOURCE_DIR_ASIO)
     hpx_info(

@@ -11,6 +11,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/serialization/array.hpp>
 #include <hpx/serialization/detail/serialize_collection.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/serialize.hpp>
 #include <hpx/serialization/traits/is_bitwise_serializable.hpp>
@@ -35,9 +36,11 @@ namespace hpx::serialization {
             return;
         }
 
+        std::size_t const count = detail::to_size(size);
+
         // normal load ... no chance of doing bitwise here ...
-        v.reserve(size);
-        for (std::size_t i = 0; i != size; ++i)
+        v.reserve(count);
+        for (std::size_t i = 0; i != count; ++i)
         {
             bool b = false;
             ar >> b;
@@ -57,6 +60,8 @@ namespace hpx::serialization {
             return;
         }
 
+        std::size_t const count = detail::to_size(size);
+
         using element_type =
             std::remove_const_t<typename std::vector<T, Allocator>::value_type>;
 
@@ -70,7 +75,7 @@ namespace hpx::serialization {
 #if !defined(HPX_SERIALIZATION_HAVE_ALL_TYPES_ARE_BITWISE_SERIALIZABLE)
             if (ar.disable_array_optimization() || ar.endianess_differs())
             {
-                detail::load_collection(ar, v, size);
+                detail::load_collection(ar, v, count);
                 return;
             }
 #else
@@ -78,9 +83,9 @@ namespace hpx::serialization {
                 !(ar.disable_array_optimization() || ar.endianess_differs()));
 #endif
             // bitwise load ...
-            if (v.size() < size)
+            if (v.size() < count)
             {
-                v.resize(size);
+                v.resize(count);
             }
 
             ar >> hpx::serialization::make_array(v.data(), v.size());
@@ -88,7 +93,7 @@ namespace hpx::serialization {
         else
         {
             // normal load ...
-            detail::load_collection(ar, v, size);
+            detail::load_collection(ar, v, count);
         }
     }
 

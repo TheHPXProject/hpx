@@ -9,8 +9,10 @@
 #include <hpx/config.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/naming_base.hpp>
+#include <hpx/modules/synchronization.hpp>
 #include <hpx/performance_counters/counters.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -21,7 +23,7 @@
 namespace hpx::performance_counters {
 
     ///////////////////////////////////////////////////////////////////////////
-    HPX_CXX_EXPORT class registry
+    HPX_CXX_EXPORT class HPX_EXPORT registry
     {
     private:
         struct counter_data
@@ -159,14 +161,45 @@ namespace hpx::performance_counters {
         counter_status get_counter_type(std::string const& name,
             counter_info& info, error_code& ec = throws);
 
-    protected:
+        /// \brief Monotonically increasing counter, bumped every time a
+        ///        counter type is added to or removed from this registry.
+        ///        Callers that repeatedly re-run discovery for the same
+        ///        name pattern (e.g. a periodic re-check for counters
+        ///        registered after startup, see #4627) can cache the
+        ///        last-seen value and skip the actual, more expensive
+        ///        discover_counter_type() call whenever this hasn't
+        ///        changed.
+        std::uint64_t generation() const noexcept
+        {
+            return generation_.load(std::memory_order_acquire);
+        }
+
+    private:
+        // Both overloads read countertypes_ without locking mtx_
+        // themselves; every caller is required to hold mtx_ already.
+        // Private rather than protected since every caller is a registry
+        // member function that already holds mtx_; a derived class would
+        // have no access to mtx_ to satisfy that precondition.
         counter_type_map_type::iterator locate_counter_type(
             std::string const& type_name);
         counter_type_map_type::const_iterator locate_counter_type(
             std::string const& type_name) const;
 
-    private:
+        using mutex_type = hpx::spinlock;
+
+        // Protects countertypes_ against concurrent registration and
+        // discovery, e.g. a provider such as APEX calling
+        // install_counter_type() to lazily register a counter type from
+        // one HPX thread while another thread runs
+        // discover_counter_type() for a wildcard query. Every member
+        // function takes mtx_ only around the direct access to
+        // countertypes_ and releases it before doing anything that could
+        // block or suspend the calling HPX thread, such as constructing a
+        // component, registering a name with AGAS, or invoking a
+        // user-supplied discoverer or creator callback.
+        mutable mutex_type mtx_;
         counter_type_map_type countertypes_;
+        std::atomic<std::uint64_t> generation_{0};
 
     public:
         static registry& instance();

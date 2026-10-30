@@ -90,6 +90,7 @@ Core modules
    /libs/core/timed_execution/docs/index.rst
    /libs/core/timing/docs/index.rst
    /libs/core/topology/docs/index.rst
+   /libs/core/tracing/docs/index.rst
    /libs/core/tracy/docs/index.rst
    /libs/core/type_support/docs/index.rst
    /libs/core/util/docs/index.rst

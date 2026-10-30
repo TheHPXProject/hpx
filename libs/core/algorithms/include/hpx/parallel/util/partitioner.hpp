@@ -37,10 +37,12 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::util::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Result, bool Optimize = true,
+    HPX_CXX_CORE_EXPORT template <typename ChunkResult, bool Optimize = true,
         typename ExPolicy, typename IterOrR, typename F>
     auto partition(ExPolicy policy, IterOrR it_or_r, std::size_t count, F&& f)
     {
+        using Result = partitioner_result_t<ChunkResult>;
+
         // estimate a chunk size based on number of cores used
         using parameters_type =
             hpx::execution::experimental::extract_executor_parameters_t<
@@ -83,7 +85,10 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(shape) == 1)
+                    auto const shape_begin = std::begin(shape);
+                    auto const shape_end = std::end(shape);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
                             partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
@@ -136,11 +141,13 @@ namespace hpx::parallel::util::detail {
         }
     }
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename ExPolicy,
+    HPX_CXX_CORE_EXPORT template <typename ChunkResult, typename ExPolicy,
         typename FwdIter, typename Stride, typename F>
     auto partition_with_index(
         ExPolicy policy, FwdIter first, std::size_t count, Stride stride, F&& f)
     {
+        using Result = partitioner_result_t<ChunkResult>;
+
         // estimate a chunk size based on number of cores used
         using parameters_type =
             hpx::execution::experimental::extract_executor_parameters_t<
@@ -183,7 +190,10 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(shape) == 1)
+                    auto const shape_begin = std::begin(shape);
+                    auto const shape_end = std::end(shape);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
                             partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
@@ -236,13 +246,15 @@ namespace hpx::parallel::util::detail {
         }
     }
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename ExPolicy,
+    HPX_CXX_CORE_EXPORT template <typename ChunkResult, typename ExPolicy,
         typename FwdIter, typename Data, typename F>
     // requires is_container<Data>
-    std::vector<hpx::future<Result>> partition_with_data(ExPolicy&& policy,
-        FwdIter first, std::size_t count,
+    std::vector<hpx::future<partitioner_result_t<ChunkResult>>>
+    partition_with_data(ExPolicy&& policy, FwdIter first, std::size_t count,
         std::vector<std::size_t> const& chunk_sizes, Data&& data, F&& f)
     {
+        using Result = partitioner_result_t<ChunkResult>;
+
         HPX_ASSERT(hpx::util::size(data) >= hpx::util::size(chunk_sizes));
 
         auto data_it = hpx::util::begin(data);

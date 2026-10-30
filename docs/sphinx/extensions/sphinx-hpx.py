@@ -8,6 +8,7 @@
 import json
 import os
 from docutils import nodes
+from sphinx.domains import Domain
 from sphinx.roles import ReferenceRole
 from sphinx import addnodes
 
@@ -85,6 +86,14 @@ class HPXCppRole(ReferenceRole):
 _HPX_CPP_ROLE_KINDS = ('func', 'class', 'struct', 'member', 'type', 'enum', 'concept', 'var')
 
 
+class HPXDomain(Domain):
+    """Domain exposing disambiguation-aware HPX C++ cross-reference roles."""
+
+    name = 'hpx'
+    label = 'HPX'
+    roles = {kind: HPXCppRole(kind) for kind in _HPX_CPP_ROLE_KINDS}
+
+
 def setup(app):
     app.add_role('hpx-issue', autolink('https://github.com/TheHPXProject/hpx/issues/%s', "Issue #"))
     app.add_role('hpx-header', autolink_hpx_file('http://github.com/TheHPXProject/hpx/blob/%s/%s/%s'))
@@ -94,8 +103,7 @@ def setup(app):
     app.add_role('cppreference-memory', autolink('http://en.cppreference.com/w/cpp/memory/%s'))
     app.add_role('cppreference-container', autolink('http://en.cppreference.com/w/cpp/container/%s'))
     app.add_role('cppreference-generic', autolink_generic('http://en.cppreference.com/w/cpp/%s/%s'))
-    for kind in _HPX_CPP_ROLE_KINDS:
-        app.add_role('hpx:' + kind, HPXCppRole(kind))
+    app.add_domain(HPXDomain)
 
 
 def autolink(pattern, prefix=''):

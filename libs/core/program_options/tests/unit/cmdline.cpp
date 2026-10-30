@@ -447,6 +447,41 @@ void test_additional_parser()
     HPX_TEST(caught_exception);
 }
 
+pair<string, string> missing_value_option_parser(string const& s)
+{
+    if (s == "@value")
+        return make_pair(string("value"), string());
+    if (s == "@flag")
+        return make_pair(string("flag"), string());
+
+    return pair<string, string>();
+}
+
+void test_additional_parser_missing_value()
+{
+    options_description desc;
+    desc.add_options()("value", value<string>(), "value")("flag", "flag");
+
+    vector<string> input{"@value", "@flag"};
+
+    cmdline cmd(input);
+    cmd.set_options_description(desc);
+    cmd.set_additional_parser(missing_value_option_parser);
+
+    bool caught = false;
+    try
+    {
+        cmd.run();
+    }
+    catch (invalid_command_line_syntax const& e)
+    {
+        caught = true;
+        HPX_TEST(e.kind() == invalid_command_line_syntax::missing_parameter);
+    }
+
+    HPX_TEST(caught);
+}
+
 vector<option> at_option_parser2(vector<string>& args)
 {
     vector<option> result;
@@ -591,6 +626,7 @@ int main(int /*ac*/, char** /*av*/)
     test_arguments();
     test_prefix();
     test_additional_parser();
+    test_additional_parser_missing_value();
     test_style_parser();
     test_unregistered();
     test_implicit_value();

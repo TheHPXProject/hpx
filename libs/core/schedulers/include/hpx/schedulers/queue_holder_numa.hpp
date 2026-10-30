@@ -209,13 +209,22 @@ namespace hpx::threads::policies {
         }
 
         // ----------------------------------------------------------------
-        inline std::size_t get_thread_count(
+        inline std::int64_t get_thread_count(
             thread_schedule_state state = thread_schedule_state::unknown,
             thread_priority priority = thread_priority::default_) const
         {
-            std::size_t len = 0;
+            std::int64_t len = 0;
             for (auto& q : queues_)
                 len += q->get_thread_count(state, priority);
+            return len;
+        }
+
+        // ----------------------------------------------------------------
+        inline std::int64_t get_queue_length() const
+        {
+            std::int64_t len = 0;
+            for (auto& q : queues_)
+                len += q->get_queue_length();
             return len;
         }
 

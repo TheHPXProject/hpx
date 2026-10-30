@@ -19,7 +19,7 @@ function(add_hpx_test category name)
       NO_PARCELPORT_GASNET
   )
   set(one_value_args EXECUTABLE LOCALITIES THREADS_PER_LOCALITY TIMEOUT
-                     RUNWRAPPER
+                     RUNWRAPPER PSEUDO_DEPS_NAME
   )
   set(multi_value_args ARGS PARCELPORTS)
   cmake_parse_arguments(
@@ -45,7 +45,12 @@ function(add_hpx_test category name)
     set(${name}_EXECUTABLE ${name})
   endif()
 
-  if(TARGET ${${name}_EXECUTABLE}_test)
+  # Example binaries are not named *_test. Prefer that target so a same-named
+  # unit test (e.g. parallel_scheduler_test) does not replace the example
+  # executable in tests.examples.*.
+  if("${category}" MATCHES "tests.examples" AND TARGET ${${name}_EXECUTABLE})
+    set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}>")
+  elseif(TARGET ${${name}_EXECUTABLE}_test)
     set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}_test>")
   elseif(TARGET ${${name}_EXECUTABLE})
     set(_exe "$<TARGET_FILE:${${name}_EXECUTABLE}>")
@@ -105,6 +110,7 @@ function(add_hpx_test category name)
   foreach(arg ${${name}_UNPARSED_ARGUMENTS})
     set(args ${args} "${arg}")
   endforeach()
+  list(APPEND args ${${name}_ARGS})
   set(args "-v" "--" ${args})
   if(${HPX_WITH_TESTS_DEBUG_LOG})
     set(args ${args}
@@ -122,7 +128,10 @@ function(add_hpx_test category name)
      AND NOT "${name}_RUNWRAPPER"
      AND (${name}_LOCALITIES STREQUAL "1" OR NOT ${HPX_WITH_NETWORKING})
   )
-    set(args ${args} "--hpx:bind=none")
+    list(FIND args "--hpx:bind=none" _bind_none_index)
+    if(_bind_none_index EQUAL -1)
+      set(args ${args} "--hpx:bind=none")
+    endif()
   endif()
 
   if(HPX_WITH_INSTALLED_VERSION)
@@ -358,6 +367,188 @@ function(add_hpx_performance_test subcategory name)
     "performance" "${subcategory}" ${name} ${ARGN} RUN_SERIAL
   )
 endfunction(add_hpx_performance_test)
+
+include(${CMAKE_CURRENT_LIST_DIR}/HPX_ConfigureIfChanged.cmake)
+function(add_hpx_performance_report_test subcategory name)
+  set(one_value_args THREADS_PER_LOCALITY LOCALITIES N_EXECUTIONS)
+  cmake_parse_arguments(
+    ${name} "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN}
+  )
+
+  find_package(Python REQUIRED)
+
+  if(${name}_THREADS_PER_LOCALITY)
+    set(command_args --hpx:threads=${${name}_THREADS_PER_LOCALITY})
+  endif()
+  if(${name}_LOCALITIES)
+    set(command_args ${command_args} --hpx:localities=${${name}_LOCALITIES})
+  endif()
+  # All other parameters are passed on to the benchmark
+  set(command_args ${command_args} ${${name}_UNPARSED_ARGUMENTS})
+  # How often the benchmark is run, every run adds its measurements to the
+  # results compared with the reference
+  set(n_executions 30)
+  if(${name}_N_EXECUTIONS)
+    set(n_executions ${${name}_N_EXECUTIONS})
+  endif()
+
+  string(REPLACE "_perftest" "" name ${name})
+
+  set(perftests_dir ${CMAKE_SOURCE_DIR}/tools/perftests_ci)
+  set(target_file $<TARGET_FILE:${name}_test>)
+  set(command_args --hpx:detailed_bench --hpx:print_cdash_img_path
+                   ${command_args}
+  )
+  # Stop a single execution that takes longer than this (in seconds), so that a
+  # hanging benchmark fails its own target only
+  set(execution_timeout 300)
+  set(binary_pyutils_dir ${CMAKE_BINARY_DIR}/tools/perftests_ci)
+
+  # The timings differ between nodes, so the reference results are kept per node
+  # in compressed archives named <node>.tar.gz in
+  # tools/perftests_ci/perftest/references, packed by
+  # tools/perftests_ci/pack_references.sh. Unpack the one of the node that
+  # configures the build (the CI configures on the node that runs the
+  # benchmarks) into the build directory once per configuration, and configure
+  # again whenever the archive changes. Set HPX_PERFTESTS_REFERENCES to use the
+  # references of another node.
+  set(references_dir ${binary_pyutils_dir}/references)
+  get_property(references_name GLOBAL PROPERTY HPX_PERFTEST_REFERENCES_NAME)
+  if(NOT references_name)
+    if(HPX_PERFTESTS_REFERENCES)
+      set(references_name ${HPX_PERFTESTS_REFERENCES})
+    else()
+      cmake_host_system_information(RESULT references_name QUERY HOSTNAME)
+      string(REGEX REPLACE "\\..*$" "" references_name "${references_name}")
+    endif()
+    set(references_archive
+        ${perftests_dir}/perftest/references/${references_name}.tar.gz
+    )
+    file(REMOVE_RECURSE ${references_dir})
+    if(EXISTS ${references_archive})
+      file(ARCHIVE_EXTRACT INPUT ${references_archive} DESTINATION
+           ${references_dir}
+      )
+      set_property(
+        DIRECTORY ${CMAKE_SOURCE_DIR}
+        APPEND
+        PROPERTY CMAKE_CONFIGURE_DEPENDS ${references_archive}
+      )
+    else()
+      hpx_info("No performance test references for ${references_name}")
+    endif()
+    set_property(
+      GLOBAL PROPERTY HPX_PERFTEST_REFERENCES_NAME ${references_name}
+    )
+  endif()
+
+  # Generate pytools/buildinfo.py, if not available
+  if(CMAKE_BUILD_TYPE)
+    set(PYUTILS_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+  else()
+    set(PYUTILS_BUILD_TYPE $<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>)
+  endif()
+  set(PYUTILS_COMPILER ${CMAKE_CXX_COMPILER})
+  set(PYUTILS_ENVFILE)
+  hpx_configure_if_changed(
+    INPUT ${perftests_dir}/pyutils/buildinfo.py.in
+    OUTPUT ${binary_pyutils_dir}/buildinfo.py
+    CONFIGURE_ARGS @ONLY
+  )
+
+  # cmake-format: off
+  add_custom_target(
+    ${name}_perftest
+    COMMAND
+      ${CMAKE_COMMAND}
+          -E env --modify PYTHONPATH=path_list_prepend:${binary_pyutils_dir}/ --
+          ${Python_EXECUTABLE} ${perftests_dir}/driver.py -v
+            -l ${binary_pyutils_dir}/log_perftests_${name}.tmp perftest run
+            --local True
+            --run_output ${binary_pyutils_dir}/results/${name}.json
+            --n_executions ${n_executions}
+            --timeout ${execution_timeout}
+            --targets-and-opts ${target_file} ${command_args}
+    VERBATIM
+    COMMAND_EXPAND_LISTS
+  )
+  # cmake-format: on
+
+  # The results are compared with the references and plotted by the
+  # perftests_plot target, see hpx_add_perftests_plot_target
+  set_property(GLOBAL APPEND PROPERTY HPX_PERFTEST_REPORTS ${name})
+
+  # Create performance-related pseudo targets and dependencies
+  if("${subcategory}" STREQUAL "")
+    add_hpx_pseudo_target("tests.performance.${name}_perftest")
+    add_hpx_pseudo_dependencies(
+      "tests.performance" "tests.performance.${name}_perftest"
+    )
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${name}_perftest" "${name}_perftest"
+    )
+  else()
+    add_hpx_pseudo_target("tests.performance.${subcategory}")
+    add_hpx_pseudo_dependencies(
+      "tests.performance" "tests.performance.${subcategory}"
+    )
+
+    add_hpx_pseudo_target("tests.performance.${subcategory}.${name}_perftest")
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${subcategory}"
+      "tests.performance.${subcategory}.${name}_perftest"
+    )
+
+    add_hpx_pseudo_dependencies(
+      "tests.performance.${subcategory}.${name}_perftest" "${name}_perftest"
+    )
+  endif()
+
+  add_dependencies(${name}_perftest ${name}_test)
+endfunction(add_hpx_performance_report_test)
+
+# Adds the target perftests_plot, which compares the results of all performance
+# reports added by add_hpx_performance_report_test with their references and
+# plots them into tools/perftests_ci/index.html. This is done in one Python
+# process after all benchmarks have been run, as the imports of the plot script
+# take a few seconds and plotting must not disturb the measurements. Reports
+# without results (benchmarks that were not run) are skipped.
+function(hpx_add_perftests_plot_target)
+  get_property(reports GLOBAL PROPERTY HPX_PERFTEST_REPORTS)
+  set(binary_pyutils_dir ${CMAKE_BINARY_DIR}/tools/perftests_ci)
+
+  # The CI (.jenkins/lsu-perftests/ctest.cmake) builds and runs the reports
+  # listed here
+  file(WRITE ${binary_pyutils_dir}/perftests.cmake
+       "set(perftest_reports ${reports})\n"
+  )
+  if(NOT reports)
+    return()
+  endif()
+
+  find_package(Python REQUIRED)
+
+  set(perftests_dir ${CMAKE_SOURCE_DIR}/tools/perftests_ci)
+  get_property(references_name GLOBAL PROPERTY HPX_PERFTEST_REFERENCES_NAME)
+  set(references_dir ${binary_pyutils_dir}/references/${references_name})
+
+  set(plot_args)
+  foreach(name ${reports})
+    list(APPEND plot_args ${binary_pyutils_dir}/results/${name}.json
+         ${references_dir}/${name}.json ${binary_pyutils_dir}/${name}
+    )
+  endforeach()
+
+  add_custom_target(
+    perftests_plot
+    COMMAND
+      ${CMAKE_COMMAND} -E rm -f ${binary_pyutils_dir}/index.html
+      ${binary_pyutils_dir}/changed.txt ${binary_pyutils_dir}/info.html
+      ${binary_pyutils_dir}/no_reference.txt
+    COMMAND ${Python_EXECUTABLE} ${perftests_dir}/perftests_plot.py ${plot_args}
+    VERBATIM
+  )
+endfunction(hpx_add_perftests_plot_target)
 
 function(add_hpx_example_test subcategory name)
   add_test_and_deps_test("examples" "${subcategory}" ${name} ${ARGN})

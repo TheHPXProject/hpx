@@ -36,6 +36,8 @@
 #define HPX_ITT_FRAME_BEGIN(frame, id) itt_frame_begin(frame, id)
 #define HPX_ITT_FRAME_END(frame, id) itt_frame_end(frame, id)
 
+#define HPX_ITT_MARKER(domain, name) itt_marker(domain, name)
+
 #define HPX_ITT_MARK_CREATE(mark, name) mark = itt_mark_create(name)
 #define HPX_ITT_MARK_OFF(mark) itt_mark_off(mark)
 #define HPX_ITT_MARK(mark, parameter) itt_mark(mark, parameter)
@@ -47,12 +49,17 @@
 #define HPX_ITT_TASK_BEGIN_ID(domain, id, name) itt_task_begin(domain, id, name)
 #define HPX_ITT_TASK_END(domain) itt_task_end(domain)
 
+#define HPX_ITT_TASK_BEGIN_OVERLAPPED(domain, id, name)                        \
+    itt_task_begin_overlapped(domain, id, name)
+#define HPX_ITT_TASK_END_OVERLAPPED(domain, id)                                \
+    itt_task_end_overlapped(domain, id)
+
 #define HPX_ITT_DOMAIN_CREATE(name) itt_domain_create(name)
 #define HPX_ITT_STRING_HANDLE_CREATE(name) itt_string_handle_create(name)
 
 #define HPX_ITT_MAKE_ID(addr, extra) itt_make_id(addr, extra)
 #define HPX_ITT_ID_CREATE(domain, id) itt_id_create(domain, id)
-#define HPX_ITT_ID_DESTROY(id) itt_id_destroy(id)
+#define HPX_ITT_ID_DESTROY(domain, id) itt_id_destroy(domain, id)
 
 #define HPX_ITT_HEAP_FUNCTION_CREATE(name, domain)                             \
     itt_heap_function_create(name, domain) /**/

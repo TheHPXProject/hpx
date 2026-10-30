@@ -28,6 +28,8 @@ set(benchmarks
     shared_mutex_overhead
 )
 
+set(perftest_reports future_overhead_report stream_report)
+
 set(timed_task_spawn_SOURCES activate_counters.cpp)
 set(timed_task_spawn_HEADERS activate_counters.hpp)
 
@@ -81,17 +83,6 @@ if(HPX_WITH_EXAMPLES_QTHREADS)
   )
 endif()
 
-if(HPX_WITH_EXAMPLES_TBB)
-  list(APPEND benchmarks tbb_homogeneous_timed_task_spawn)
-
-  set(tbb_homogeneous_timed_task_spawn_FLAGS
-      NOLIBS DEPENDENCIES ${boost_library_dependencies} ${Tbb_LIBRARIES}
-      hpx_core
-  )
-
-  set(tbb_homogeneous_timed_task_spawn_INCLUDE_DIRECTORIES ${Tbb_INCLUDE_DIR})
-endif()
-
 if(HPX_WITH_DISTRIBUTED_RUNTIME)
   list(
     APPEND
@@ -129,7 +120,31 @@ set(partitioned_vector_foreach_FLAGS DEPENDENCIES iostreams_component
 
 set(future_overhead_PARAMETERS THREADS_PER_LOCALITY 4)
 set(future_overhead_report_PARAMETERS THREADS_PER_LOCALITY 4)
+# foreach_report, future_overhead_report and stream_report were the only
+# benchmarks of the earlier performance report, they keep its 50 executions so
+# that their results stay comparable
+# cmake-format: off
+set(future_overhead_report_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    N_EXECUTIONS 50
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --test-all
+    --test_count=40
+    --futures=207270
+)
+# cmake-format: on
 set(stream_report_PARAMETERS THREADS_PER_LOCALITY 2)
+
+# cmake-format: off
+set(stream_report_perftest_PARAMETERS
+    THREADS_PER_LOCALITY 4
+    N_EXECUTIONS 50
+    --hpx:ini=hpx.thread_queue.init_threads_count=100
+    --vector_size=518176
+    --test_count=200
+    --warmup_iterations=20
+)
+# cmake-format: on
 
 # These tests do not run on hpx threads, so we don't want to pass hpx params
 # into them
@@ -175,8 +190,17 @@ foreach(benchmark ${benchmarks})
 
   if(NOT "${${benchmark}_PARAMETERS}" MATCHES NO_HPX_MAIN)
     add_hpx_performance_test("local" ${benchmark} ${${benchmark}_PARAMETERS})
+    if(HPX_WITH_TESTS_RUN_BENCHMARKS AND (${benchmark} IN_LIST perftest_reports
+                                         )
+    )
+      add_hpx_performance_report_test(
+        "local" ${benchmark}_perftest ${${benchmark}_perftest_PARAMETERS}
+      )
+      set_target_properties(
+        ${benchmark}_perftest PROPERTIES FOLDER "Benchmarks/Local/CDashResults"
+      )
+    endif()
   endif()
-
 endforeach()
 
 if(HPX_WITH_LIBCDS)

@@ -62,15 +62,14 @@ namespace hpx::threads::policies {
         {
         }
 
-        void set_scheduler_mode(scheduler_mode mode,
-            hpx::threads::mask_cref_type pu_mask) noexcept override
+        scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept override
         {
             // this scheduler does not support stealing or numa stealing
             mode = static_cast<policies::scheduler_mode>(
                 mode & ~policies::scheduler_mode::enable_stealing);
-            mode = static_cast<policies::scheduler_mode>(
+            return static_cast<policies::scheduler_mode>(
                 mode & ~policies::scheduler_mode::enable_stealing_numa);
-            scheduler_base::set_scheduler_mode(mode, pu_mask);
         }
 
         static std::string_view get_scheduler_name()

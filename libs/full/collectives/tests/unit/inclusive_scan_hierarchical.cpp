@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,6 +12,8 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
+
+#include "hierarchical_roots.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -40,7 +43,7 @@ std::uint32_t expected_inclusive_sum(
     return sum;
 }
 
-void test_distributed_correctness(int arity = 2)
+void test_distributed_correctness(int arity = 2, std::uint32_t root = 0)
 {
     std::uint32_t const this_locality = hpx::get_locality_id();
     std::uint32_t const num_localities =
@@ -50,7 +53,7 @@ void test_distributed_correctness(int arity = 2)
     auto const comms = create_hierarchical_communicator(
         inclusive_scan_direct_basename, num_sites_arg(num_localities),
         this_site_arg(this_locality), arity_arg(arity), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        root_site_arg(root), flat_fallback_threshold_arg(0));
 
     for (std::uint32_t i = 0; i != ITERATIONS; ++i)
     {
@@ -63,8 +66,8 @@ void test_distributed_correctness(int arity = 2)
     }
 }
 
-void test_local_numeric(
-    std::uint32_t num_sites, int arity, std::size_t threshold)
+void test_local_numeric(std::uint32_t num_sites, int arity,
+    std::size_t threshold, std::uint32_t root = 0)
 {
     std::vector<hpx::future<void>> sites;
     sites.reserve(num_sites);
@@ -72,14 +75,13 @@ void test_local_numeric(
     for (std::uint32_t site = 0; site != num_sites; ++site)
     {
         sites.push_back(hpx::async([=]() {
-            std::string const basename =
-                std::string(inclusive_scan_direct_basename) + "local/" +
-                std::to_string(num_sites) + "/" + std::to_string(arity) + "/" +
-                std::to_string(threshold) + "/";
+            std::string basename = std::string(inclusive_scan_direct_basename) +
+                "local/" + std::to_string(num_sites) + "/" +
+                std::to_string(arity) + "/" + std::to_string(threshold) + "/";
 
             auto const comms = create_hierarchical_communicator(
                 basename.c_str(), num_sites_arg(num_sites), this_site_arg(site),
-                arity_arg(arity), generation_arg(), root_site_arg(),
+                arity_arg(arity), generation_arg(), root_site_arg(root),
                 flat_fallback_threshold_arg(threshold));
 
             for (std::uint32_t i = 0; i != ITERATIONS; ++i)
@@ -129,6 +131,13 @@ void test_non_power_of_arity()
     {
         test_local_numeric(num_sites, 3, 0);
     }
+}
+
+void test_local_roots()
+{
+    for_each_local_root([](std::uint32_t n, int arity, std::uint32_t root) {
+        test_local_numeric(n, arity, 0, root);
+    });
 }
 
 void test_flat_fallback_vs_tree()
@@ -365,7 +374,8 @@ int hpx_main()
 #if defined(HPX_HAVE_NETWORKING)
     if (hpx::get_num_localities(hpx::launch::sync) > 1)
     {
-        test_distributed_correctness();
+        for_each_distributed_root(
+            [](std::uint32_t root) { test_distributed_correctness(2, root); });
     }
 #endif
 
@@ -373,6 +383,7 @@ int hpx_main()
     {
         test_local_shapes();
         test_non_power_of_arity();
+        test_local_roots();
         test_flat_fallback_vs_tree();
         test_generation_rejections();
         test_invalid_communicator_rejected();

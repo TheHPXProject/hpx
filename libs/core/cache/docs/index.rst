@@ -13,8 +13,8 @@ cache
 
 This module provides two cache data structures:
 
-* :cpp:class:`hpx::util::cache::local_cache`
-* :cpp:class:`hpx::util::cache::lru_cache`
+* :hpx:class:`hpx::util::cache::local_cache`
+* :hpx:class:`hpx::util::cache::lru_cache`
 
 See the :ref:`API reference <modules_cache_api>` of the module for more
 details.

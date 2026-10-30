@@ -5,6 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
+    agas_background_gc_7358
     bulk_new_3054
     client_base_registration
     create_n_components_2323

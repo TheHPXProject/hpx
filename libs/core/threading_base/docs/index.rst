@@ -12,14 +12,13 @@ threading_base
 ==============
 
 This module contains the base class definition required for threads. The base
-class :cpp:class:`hpx::threads::thread_data` is inherited by two specializations
+class :hpx:class:`hpx::threads::thread_data` is inherited by two specializations
 for stackful and stackless threads:
-:cpp:class:`hpx::threads::thread_data_stackful` and
-:cpp:class:`hpx::threads::thread_data_stackless`. In addition, the module
+:hpx:class:`hpx::threads::thread_data_stackful` and
+:hpx:class:`hpx::threads::thread_data_stackless`. In addition, the module
 defines the base classes for schedulers and thread pools:
-:cpp:class:`hpx::threads::policies::scheduler_base` and
-:cpp:class:`hpx::threads::thread_pool_base`.
+:hpx:class:`hpx::threads::policies::scheduler_base` and
+:hpx:class:`hpx::threads::thread_pool_base`.
 
 See the :ref:`API reference <modules_thread_data_api>` of this module for more
 details.
-

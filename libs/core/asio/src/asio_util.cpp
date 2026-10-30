@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c)      2011 Bryce Lelbach
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -23,6 +23,17 @@
 #include <asio/ip/address_v6.hpp>
 #include <asio/ip/host_name.hpp>
 #include <asio/ip/tcp.hpp>
+
+#if defined(HPX_WINDOWS)
+#include <mstcpip.h>
+// mstcpip.h defines ASSERT if it is not defined, but fails to undefine it
+// again (it checks MSTCPIPDEF_ASSERT_UNDEFINED instead of
+// MSTCPIP_ASSERT_UNDEFINED)
+#if defined(MSTCPIP_ASSERT_UNDEFINED)
+#undef ASSERT
+#undef MSTCPIP_ASSERT_UNDEFINED
+#endif
+#endif
 
 #include <cstdint>
 #include <exception>
@@ -122,18 +133,19 @@ namespace hpx::util {
             tcp::resolver resolver(io_service);
 
 #if ASIO_VERSION >= 103400
-            auto resolver_results = resolver.resolve(
-                ::asio::ip::tcp::v4(), hostname, std::to_string(port));
+            auto const resolver_results = resolver.resolve(hostname,
+                std::to_string(port), tcp::resolver::address_configured);
 
             auto it = resolver_results.begin();
-            auto end = resolver_results.begin();
+            auto const end = resolver_results.end();
 
             // skip ipv6 results, if required
-            if (it == end && !force_ipv4)
+            if (force_ipv4)
             {
-                resolver_results = resolver.resolve(
-                    ::asio::ip::tcp::v6(), hostname, std::to_string(port));
-                it = resolver_results.begin();
+                while (it != end && !it->endpoint().address().is_v4())
+                {
+                    ++it;
+                }
             }
 
             HPX_ASSERT(it != end);
@@ -181,15 +193,9 @@ namespace hpx::util {
             tcp::resolver resolver(io_service);
 
 #if ASIO_VERSION >= 103400
-            auto resolver_results = resolver.resolve(
-                ::asio::ip::tcp::v4(), asio::ip::host_name(), "");
+            auto const resolver_results = resolver.resolve(
+                ::asio::ip::host_name(), "", tcp::resolver::address_configured);
             auto it = resolver_results.begin();
-            if (it == resolver_results.end())
-            {
-                resolver_results = resolver.resolve(
-                    ::asio::ip::tcp::v6(), asio::ip::host_name(), "");
-                it = resolver_results.begin();
-            }
 #else
             tcp::resolver::query query(::asio::ip::host_name(), "");
             tcp::resolver::iterator it = resolver.resolve(query);
@@ -295,17 +301,10 @@ namespace hpx::util {
             tcp::resolver resolver(io_service);
 
 #if ASIO_VERSION >= 103400
-            auto resolver_results = resolver.resolve(::asio::ip::tcp::v4(),
-                !address.empty() ? address : ::asio::ip::host_name(), port_str);
-            auto it = resolver_results.begin();
-            if (it == resolver_results.end())
-            {
-                resolver_results = resolver.resolve(::asio::ip::tcp::v6(),
-                    !address.empty() ? address : ::asio::ip::host_name(),
-                    port_str);
-                it = resolver_results.begin();
-            }
-            return it;
+            return resolver
+                .resolve(!address.empty() ? address : ::asio::ip::host_name(),
+                    port_str, tcp::resolver::address_configured)
+                .begin();
 #else
             tcp::resolver::query query(
                 !address.empty() ? address : ::asio::ip::host_name(), port_str);
@@ -321,6 +320,28 @@ namespace hpx::util {
         HPX_THROW_EXCEPTION(hpx::error::network_error, "connect_begin",
             "{} (while trying to connect to: {}:{})", errors.get_message(),
             address, port);
+    }
+
+    void open_socket_for_connect(::asio::ip::tcp::socket& s,
+        ::asio::ip::tcp::endpoint const& ep, std::error_code& ec)
+    {
+        // NOLINTNEXTLINE(bugprone-unused-return-value)
+        s.open(ep.protocol(), ec);
+#if defined(HPX_WINDOWS)
+        if (!ec)
+        {
+            // Disable the retransmission of the SYN of a connection attempt.
+            // SIO_TCP_INITIAL_RTO is supported by WSAIoctl only (asio's
+            // io_control uses ioctlsocket). This is an optimization only,
+            // ignore failures.
+            TCP_INITIAL_RTO_PARAMETERS params = {
+                TCP_INITIAL_RTO_UNSPECIFIED_RTT,
+                TCP_INITIAL_RTO_NO_SYN_RETRANSMISSIONS};
+            DWORD bytes = 0;
+            WSAIoctl(s.native_handle(), SIO_TCP_INITIAL_RTO, &params,
+                sizeof(params), nullptr, 0, &bytes, nullptr, nullptr);
+        }
+#endif
     }
 
     detail::endpoint_iterator_type accept_begin(std::string const& address,
@@ -360,16 +381,9 @@ namespace hpx::util {
             // resolve the given address
             tcp::resolver resolver(io_service);
 #if ASIO_VERSION >= 103400
-            auto resolver_results =
-                resolver.resolve(::asio::ip::tcp::v4(), address, port_str);
-            auto it = resolver_results.begin();
-            if (it == resolver_results.end())
-            {
-                resolver_results =
-                    resolver.resolve(::asio::ip::tcp::v6(), address, port_str);
-                it = resolver_results.begin();
-            }
-            return it;
+            return resolver
+                .resolve(address, port_str, tcp::resolver::address_configured)
+                .begin();
 #else
             tcp::resolver::query query(address, port_str);
             return {resolver.resolve(query)};
@@ -389,16 +403,10 @@ namespace hpx::util {
             tcp::resolver resolver(io_service);
 
 #if ASIO_VERSION >= 103400
-            auto resolver_results = resolver.resolve(
-                ::asio::ip::tcp::v4(), ::asio::ip::host_name(), port_str);
-            auto it = resolver_results.begin();
-            if (it == resolver_results.end())
-            {
-                resolver_results = resolver.resolve(
-                    ::asio::ip::tcp::v6(), ::asio::ip::host_name(), port_str);
-                it = resolver_results.begin();
-            }
-            return it;
+            return resolver
+                .resolve(::asio::ip::host_name(), port_str,
+                    tcp::resolver::address_configured)
+                .begin();
 #else
             tcp::resolver::query query(::asio::ip::host_name(), port_str);
             return {resolver.resolve(query)};

@@ -52,7 +52,7 @@ if(NOT TARGET hpx_dependencies_allocator)
       )
 
       if(MSVC)
-        target_compile_options(
+        target_link_options(
           hpx_dependencies_allocator INTERFACE /INCLUDE:__tcmalloc
         )
       endif()
@@ -85,7 +85,7 @@ if(NOT TARGET hpx_dependencies_allocator)
       target_link_libraries(hpx_dependencies_allocator INTERFACE mimalloc)
       set(hpx_MALLOC_LIBRARY mimalloc)
       if(MSVC)
-        target_compile_options(
+        target_link_options(
           hpx_dependencies_allocator INTERFACE /INCLUDE:mi_version
         )
       endif()
@@ -100,7 +100,7 @@ if(NOT TARGET hpx_dependencies_allocator)
         hpx_error(${allocator_error})
       endif()
       if(MSVC)
-        target_compile_options(
+        target_link_options(
           hpx_dependencies_allocator INTERFACE /INCLUDE:__TBB_malloc_proxy
         )
       endif()

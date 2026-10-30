@@ -19,6 +19,7 @@
 #include <vector>
 
 using hpx::components::server::detail::dijkstra_forward_token;
+using hpx::components::server::detail::dijkstra_should_reprobe;
 
 namespace {
 
@@ -90,7 +91,11 @@ void test_one_dead_intermediate_locality()
 
 // 3. All intermediates dead down to the initiator -- the walk returns false
 //    once it reaches the initiating locality, leaving the fallback send to the
-//    initiator to the caller.
+//    initiator to the caller. Note that the initiator is the walk's own last
+//    candidate here (the calls end at 0), and this mock fails it like any
+//    other; in production that send is local and succeeds, which is why the
+//    return value alone cannot tell the caller whether the token left this
+//    locality. See test 9.
 void test_all_intermediates_dead_reaches_initiator()
 {
     std::uint32_t locality_id = 4;
@@ -114,17 +119,16 @@ void test_all_intermediates_dead_reaches_initiator()
     HPX_TEST_EQ(fallback_send.calls_[0], initiating_locality_id);
 }
 
-// 4. Fallback target itself unreachable -- characterizes the known gap that
-//    runtime_support::dijkstra_termination discards the return value of its
-//    final fallback send to the initiator, i.e. a total ring failure is never
-//    surfaced anywhere. dijkstra_forward_token itself has already done its job
-//    correctly (it truthfully reports "false: nobody along the ring accepted
-//    it"); the gap lives in the caller ignoring that report for the fallback
-//    call. This test pins down today's (buggy) behavior so that a future fix
-//    that propagates/logs the failure needs to consciously update this test
-//    rather than silently regressing.
+// 4. Fallback target itself unreachable -- the walk truthfully reports that
+//    nobody along the ring accepted the token, and
+//    runtime_support::dijkstra_termination then retries the direct send to the
+//    initiator max_fallback_attempts times before logging that the initiator
+//    will never see this token. Model that retry so the attempt count stays
+//    pinned to the production one.
 void test_fallback_to_initiator_also_unreachable()
 {
+    constexpr int max_fallback_attempts = 3;
+
     std::uint32_t locality_id = 4;
     constexpr std::uint32_t initiating_locality_id = 0;
 
@@ -133,18 +137,23 @@ void test_fallback_to_initiator_also_unreachable()
         dijkstra_forward_token(locality_id, initiating_locality_id, send);
     HPX_TEST(!result);
 
-    // the fallback send to the initiator also fails
+    // the fallback send to the initiator fails on every attempt
     mock_send fallback_send({});
-    bool const fallback_result = fallback_send(initiating_locality_id);
+    bool fallback_sent = false;
+    for (int attempt = 0; !fallback_sent && attempt != max_fallback_attempts;
+        ++attempt)
+    {
+        fallback_sent = fallback_send(initiating_locality_id);
+    }
 
-    HPX_TEST_EQ(fallback_send.calls_.size(), static_cast<std::size_t>(1));
-    HPX_TEST_EQ(fallback_send.calls_[0], initiating_locality_id);
+    HPX_TEST(!fallback_sent);
+    HPX_TEST_EQ(fallback_send.calls_.size(),
+        static_cast<std::size_t>(max_fallback_attempts));
+    for (std::uint32_t const call : fallback_send.calls_)
+    {
+        HPX_TEST_EQ(call, initiating_locality_id);
+    }
     HPX_TEST(fallback_send.succeeded_calls_.empty());
-
-    // Known gap: nothing currently consumes fallback_result on this path in
-    // runtime_support::dijkstra_termination, so a total ring failure is
-    // silently dropped instead of being propagated, logged, or retried.
-    HPX_TEST(!fallback_result);
 }
 
 // 5. Wrap-around when locality_id == 0 is handled by the caller before
@@ -244,6 +253,136 @@ void test_repeated_probe_restarts_cursor()
     }
 }
 
+// 8. Regression for the unbounded retry when the token cannot be handed to any
+//    locality (dijkstra_termination_detection). An undeliverable probe marks
+//    the initiator black again, so before this bound the retry loop reprobed
+//    forever and shutdown burned the whole job wall clock instead of failing
+//    with a diagnostic. dijkstra_should_reprobe is the loop's real exit
+//    condition, so these cases pin it directly.
+void test_undeliverable_probes_are_bounded()
+{
+    constexpr std::size_t max_probes = 3;
+
+    // A white initiator terminates regardless of the count.
+    HPX_TEST(!dijkstra_should_reprobe(false, 0, max_probes));
+    HPX_TEST(!dijkstra_should_reprobe(false, max_probes, max_probes));
+
+    // A black initiator keeps probing while probes are still being delivered.
+    HPX_TEST(dijkstra_should_reprobe(true, 0, max_probes));
+    HPX_TEST(dijkstra_should_reprobe(true, max_probes - 1, max_probes));
+
+    // Once the bound is reached the loop stops even though the initiator is
+    // still black. This is the case that used to spin forever.
+    HPX_TEST(!dijkstra_should_reprobe(true, max_probes, max_probes));
+
+    // Rule 3 repetition stays unbounded: an undeliverable count that never
+    // grows keeps reprobing however many probes have run.
+    for (std::size_t probe = 0; probe != 100; ++probe)
+    {
+        HPX_TEST(dijkstra_should_reprobe(true, 0, max_probes));
+    }
+}
+
+// 9. The loop drives that predicate off a real ring walk. The initiator is the
+//    walk's own last candidate when it is locality 0, because the ring wraps
+//    through it, and that send is local and always succeeds. A broken ring
+//    therefore still reports a successful handoff, so the bound has to count
+//    probes that reached no other locality rather than probes that failed to
+//    send. The bound then only has to fire for a busy initiator, since a
+//    passive one settles termination on the first probe: if nothing else is
+//    reachable, nothing else can still be running. These cases pin that down.
+void test_bound_reached_only_when_nothing_is_reachable()
+{
+    constexpr std::uint32_t initiating_locality_id = 0;
+    constexpr std::uint32_t num_localities = 4;
+    constexpr std::size_t max_probes = 3;
+
+    // Whether the token comes back black is decided by the local thread
+    // manager inside send_dijkstra_termination_token, not by the ring walk, so
+    // it is an input here rather than something inferred from reachability.
+    auto const run_probes = [&](mock_send& send, bool const initiator_busy) {
+        std::size_t undeliverable = 0;
+        std::size_t probes = 0;
+        bool initiator_black = false;
+        do
+        {
+            // The initiator's predecessor, recomputed per probe as the retry
+            // loop does.
+            std::uint32_t target = initiating_locality_id;
+            if (0 == target)
+                target = num_localities;
+
+            bool reached_other_locality = false;
+            bool token_sent =
+                dijkstra_forward_token(target, initiating_locality_id,
+                    [&](std::uint32_t const target_locality_id) {
+                        bool const sent = send(target_locality_id);
+                        reached_other_locality |= sent &&
+                            target_locality_id != initiating_locality_id;
+                        return sent;
+                    });
+
+            if (!token_sent)
+            {
+                token_sent = send(initiating_locality_id);
+            }
+
+            if (reached_other_locality)
+            {
+                undeliverable = 0;
+            }
+            else
+            {
+                ++undeliverable;
+            }
+
+            initiator_black = initiator_busy;
+            ++probes;
+        } while (dijkstra_should_reprobe(
+            initiator_black, undeliverable, max_probes));
+
+        return probes;
+    };
+
+    {
+        mock_send send({});    // nothing reachable at all
+        HPX_TEST_EQ(run_probes(send, true), max_probes);
+        HPX_TEST(send.succeeded_calls_.empty());
+        HPX_TEST(!send.calls_.empty());
+    }
+
+    {
+        // The case that actually happens: the ring is broken, but the walk's
+        // last hop and the fallback both target the initiator, whose own send
+        // is local and cannot fail. Every probe reports a successful handoff
+        // and must still count as undeliverable, or a busy initiator reprobes
+        // forever.
+        mock_send send({initiating_locality_id});
+        HPX_TEST_EQ(run_probes(send, true), max_probes);
+        HPX_TEST(!send.succeeded_calls_.empty());
+        for (std::uint32_t const call : send.succeeded_calls_)
+        {
+            HPX_TEST_EQ(call, initiating_locality_id);
+        }
+    }
+
+    {
+        // Same broken ring, but this locality has gone passive. Nothing else
+        // is reachable, so nothing else can still be running, and the white
+        // token settles termination on the first probe. The bound is not
+        // needed here and must not delay shutdown.
+        mock_send send({initiating_locality_id});
+        HPX_TEST_EQ(run_probes(send, false), static_cast<std::size_t>(1));
+    }
+
+    {
+        mock_send send({num_localities - 1});    // intact ring
+        HPX_TEST_EQ(run_probes(send, false), static_cast<std::size_t>(1));
+        std::vector<std::uint32_t> const expected = {num_localities - 1};
+        HPX_TEST(send.succeeded_calls_ == expected);
+    }
+}
+
 int main()
 {
     test_immediate_neighbor_alive();
@@ -253,6 +392,8 @@ int main()
     test_wrap_around_before_forwarding();
     test_no_forwarding_when_already_at_initiator();
     test_repeated_probe_restarts_cursor();
+    test_undeliverable_probes_are_bounded();
+    test_bound_reached_only_when_nothing_is_reachable();
 
     return hpx::util::report_errors();
 }

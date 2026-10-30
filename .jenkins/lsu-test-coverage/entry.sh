@@ -11,6 +11,8 @@
 # Make undefined variables errors, print each command
 set -eux
 
+source .jenkins/common/slurm.sh
+
 source .jenkins/lsu-test-coverage/slurm-constraint-${configuration_name}.sh
 
 if [[ -z "${CHANGE_ID:-}" ]]; then
@@ -21,8 +23,12 @@ else
     job_name="jenkins-hpx-${CHANGE_ID}-${configuration_name}"
 
     # Cancel currently running builds on the same branch, but only for pull
-    # requests
-    scancel  --verbose --verbose --verbose --verbose --jobname="${job_name}"
+    # requests. Old jobs that are slow to go away must not stop this build,
+    # or the lane ends here without running or reporting anything.
+    if ! hpx_slurm_cancel_previous "${job_name}"; then
+        echo "Warning: could not clear previous Slurm jobs for ${job_name}," \
+            "starting this build anyway" >&2
+    fi
 fi
 
 # delay things for a random amount of time
@@ -41,16 +47,18 @@ fi
 
 # Start the actual build
 set +e
-sbatch \
+hpx_slurm_run "${HPX_SLURM_TIMEOUT:-6h}" \
     --verbose --verbose --verbose --verbose \
     --exclusive \
     --job-name="${job_name}" \
     --nodes="1" \
     --partition="${configuration_slurm_partition}" \
+    ${configuration_slurm_exclude:+"--exclude=${configuration_slurm_exclude}"} \
     --time="05:00:00" \
     --output="jenkins-hpx-${configuration_name}.out" \
     --error="jenkins-hpx-${configuration_name}.err" \
-    --wait .jenkins/lsu-test-coverage/batch.sh
+    .jenkins/lsu-test-coverage/batch.sh
+slurm_status=$?
 
 
 # Print slurm logs
@@ -64,4 +72,7 @@ cat jenkins-hpx-${configuration_name}.err
 status_file="jenkins-hpx-${configuration_name}-ctest-status.txt"
 
 set -e
+if [[ "${slurm_status}" -ne 0 ]]; then
+    exit "${slurm_status}"
+fi
 exit $(cat ${status_file})

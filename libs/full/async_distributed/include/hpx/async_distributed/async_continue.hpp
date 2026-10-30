@@ -98,3 +98,54 @@ namespace hpx {
             HPX_FORWARD(Cont, cont), policy, HPX_FORWARD(Ts, vs)...);
     }
 }    // namespace hpx
+
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+
+namespace hpx {
+
+    /// \brief Reflection-based async_continue overload targeting a gid.
+    ///
+    /// \tparam F        A std::meta::info reflection of a free function.
+    /// \tparam Cont     Continuation type.
+    /// \tparam Ts       Additional arguments forwarded to the action.
+    /// \param cont      The continuation to invoke on completion.
+    /// \param gid       The target locality id.
+    /// \param ts        Additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Cont,
+        typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F))
+    auto async_continue(Cont&& cont,
+        hpx::id_type const& gid, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::async_continue<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Cont, cont), gid, HPX_FORWARD(Ts, ts)...);
+    }
+
+    /// \brief Reflection-based async_continue overload targeting a distribution policy.
+    ///
+    /// \tparam F          A std::meta::info reflection of a free function.
+    /// \tparam Cont       Continuation type.
+    /// \tparam DistPolicy Distribution policy type.
+    /// \tparam Ts         Additional arguments forwarded to the action.
+    /// \param cont        The continuation to invoke on completion.
+    /// \param policy      The distribution policy.
+    /// \param ts          Additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Cont,
+        typename DistPolicy, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            traits::is_distribution_policy_v<DistPolicy>)
+    auto async_continue(
+        Cont&& cont, DistPolicy const& policy, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::async_continue<hpx::actions::reflect_action<F>>(
+            HPX_FORWARD(Cont, cont), policy, HPX_FORWARD(Ts, ts)...);
+    }
+
+}    // namespace hpx
+#endif    // HPX_HAVE_CXX26_REFLECTION

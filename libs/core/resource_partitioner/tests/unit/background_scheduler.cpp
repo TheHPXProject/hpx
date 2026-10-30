@@ -32,6 +32,21 @@ bool background_work(std::size_t)
 
 int hpx_main()
 {
+    // regression test for #7742: background_scheduler::set_scheduler_mode
+    // must add only the background-work flags, not every bit
+    {
+        using hpx::threads::policies::scheduler_mode;
+        hpx::threads::thread_pool_base& pool =
+            hpx::resource::get_thread_pool(background_pool_name);
+        auto const mode = pool.get_scheduler()->get_scheduler_mode(0);
+        HPX_TEST((mode & scheduler_mode::do_background_work) != 0);
+        HPX_TEST((mode & scheduler_mode::do_background_work_only) != 0);
+        HPX_TEST((mode & scheduler_mode::enable_stealing) == 0);
+        HPX_TEST((mode & scheduler_mode::enable_stealing_numa) == 0);
+        HPX_TEST((mode & scheduler_mode::fast_idle_mode) == 0);
+        HPX_TEST((mode & scheduler_mode::enable_elasticity) == 0);
+    }
+
     hpx::this_thread::suspend(std::chrono::seconds(1));
     return hpx::local::finalize();
 }

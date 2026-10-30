@@ -221,7 +221,7 @@ add_custom_target(docs-man)
 
 set(SPHINX_DOCS_HTML_OUTPUT_FILE "index.html")
 set(SPHINX_DOCS_SINGLEHTML_OUTPUT_FILE "index.html")
-set(SPHINX_DOCS_PDF_OUTPUT_FILE "latex/HPX.pdf")
+set(SPHINX_DOCS_LATEXPDF_OUTPUT_FILE "latex/HPX.pdf")
 set(SPHINX_DOCS_MAN_OUTPUT_FILE "hpx.1")
 
 foreach(output_format ${HPX_WITH_DOCUMENTATION_OUTPUT_FORMATS})
@@ -233,15 +233,10 @@ foreach(output_format ${HPX_WITH_DOCUMENTATION_OUTPUT_FORMATS})
       "${SPHINX_DOCS_OUTPUT_DIR}/${SPHINX_DOCS_${output_format_upper_case}_OUTPUT_FILE}"
   )
 
-  # NOTE: The PDF does not build without errors but still produces a reasonable
-  # PDF. If there are real errors this will ignore them. Fixing the errors is at
-  # the moment not worth the effort.
   if(${output_format} STREQUAL "latexpdf")
     set(SPHINX_DOCS_BUILD_COMMAND
         ${Sphinx_EXECUTABLE} -M ${output_format}
-        "${CMAKE_CURRENT_BINARY_DIR}/sphinx" "${SPHINX_DOCS_OUTPUT_DIR}" || (
-                                                                            exit
-                                                                            0)
+        "${CMAKE_CURRENT_BINARY_DIR}/sphinx" "${SPHINX_DOCS_OUTPUT_DIR}"
     )
   else()
     set(SPHINX_DOCS_BUILD_COMMAND

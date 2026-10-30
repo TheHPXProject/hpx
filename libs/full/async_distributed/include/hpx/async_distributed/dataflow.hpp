@@ -142,4 +142,59 @@ namespace hpx {
     }
 }    // namespace hpx
 
+#if defined(HPX_HAVE_CXX26_REFLECTION)
+
+namespace hpx {
+
+    /// \brief Reflection-based dataflow overload.
+    ///
+    /// Allows calling hpx::dataflow<^^func>(target, ts...) directly
+    /// without defining an explicit action type.
+    ///
+    /// \tparam F      A std::meta::info reflection of a free function.
+    /// \tparam Ts     Additional arguments forwarded to the action.
+    /// \param ts      Target and additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Target,
+        typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    // clang-format on
+    decltype(auto) dataflow(Target&& target, Ts&&... ts)
+    {
+        return hpx::dataflow(hpx::actions::reflect_action<F>{},
+            HPX_FORWARD(Target, target), HPX_FORWARD(Ts, ts)...);
+    }
+    /// \brief Reflection-based dataflow overload with launch policy.
+    ///
+    /// \tparam F       A std::meta::info reflection of a free function.
+    /// \tparam Policy  Launch policy type.
+    /// \tparam Target  id_type, client, or distribution policy.
+    /// \tparam Ts      Additional arguments forwarded to the action.
+    /// \param policy   The launch policy.
+    /// \param target   The target where the action should be executed.
+    /// \param ts       Additional arguments forwarded to the action.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Policy,
+        typename Target, typename... Ts>
+        requires(std::meta::is_namespace_member(F) &&
+            std::meta::is_function(F) &&
+            traits::is_launch_policy_v<Policy> &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    // clang-format on
+    decltype(auto) dataflow(Policy&& policy, Target&& target, Ts&&... ts)
+    {
+        return hpx::dataflow(HPX_FORWARD(Policy, policy),
+            hpx::actions::reflect_action<F>{}, HPX_FORWARD(Target, target),
+            HPX_FORWARD(Ts, ts)...);
+    }
+
+}    // namespace hpx
+#endif    // HPX_HAVE_CXX26_REFLECTION
+
 #endif

@@ -38,6 +38,7 @@
 #include <exception>
 #include <iosfwd>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -396,8 +397,7 @@ namespace hpx::execution::experimental {
                     priority_bound = true;
                 }
 
-                // the array of queues is needed only if work-stealing was
-                // enabled
+                // the array of queues is needed for work-stealing (dynamic)
                 if (schedule_ == loop_schedule::dynamic)
                 {
                     queues_.resize(num_threads_);
@@ -504,21 +504,23 @@ namespace hpx::execution::experimental {
                 wait_state_all(thread_state::idle);
             }
 
-            static constexpr void init_local_work_queue(queue_type& queue,
+            static void init_local_work_queue(queue_type& queue,
                 std::size_t const thread_index, std::size_t const num_threads,
-                std::size_t const size) noexcept
+                std::size_t const size)
             {
                 auto const part_begin = (thread_index * size) / num_threads;
                 auto const part_end = ((thread_index + 1) * size) / num_threads;
 
-                // Guard:the static scheduling also uses
-                //  contiguous_index_queue internally.
-
-                HPX_ASSERT_MSG(
-                    size <= static_cast<std::size_t>(
-                                (std::numeric_limits<std::uint32_t>::max)()),
-                    "fork_join_executor: ranges larger than"
-                    " UINT32_MAX are not supported");
+                // Guard: the static scheduling also uses
+                // contiguous_index_queue internally.
+                if (size > static_cast<std::size_t>(
+                               (std::numeric_limits<std::uint32_t>::max)()))
+                {
+                    HPX_THROW_EXCEPTION(error::bad_parameter,
+                        "fork_join_executor::init_local_work_queue",
+                        "fork_join_executor: ranges larger than"
+                        " UINT32_MAX are not supported");
+                }
 
                 queue.reset(static_cast<std::uint32_t>(part_begin),
                     static_cast<std::uint32_t>(part_end));
@@ -902,7 +904,7 @@ namespace hpx::execution::experimental {
             template <typename Result, typename F, typename S, typename Args>
             thread_function_helper_type* set_all_states_and_region_data(
                 void* results, thread_state const state, F& f, S const& shape,
-                Args& argument_pack, hpx::latch* sync_with_main_thread) noexcept
+                Args& argument_pack, hpx::latch* sync_with_main_thread)
             {
                 thread_function_helper_type* func;
                 if (schedule_ == loop_schedule::static_ || num_threads_ == 1)
@@ -1046,6 +1048,10 @@ namespace hpx::execution::experimental {
                         // the main thread must be put to sleep to avoid
                         // over-subscription of the cores
                         sync_with_main_thread->arrive_and_wait();
+                        if (exception_)
+                        {
+                            std::rethrow_exception(HPX_MOVE(exception_));
+                        }
                     }
                 }
                 else
@@ -1068,6 +1074,10 @@ namespace hpx::execution::experimental {
                         // the main thread must be put to sleep to avoid
                         // over-subscription of the cores
                         sync_with_main_thread->arrive_and_wait();
+                        if (exception_)
+                        {
+                            std::rethrow_exception(HPX_MOVE(exception_));
+                        }
                     }
 
                     return results;

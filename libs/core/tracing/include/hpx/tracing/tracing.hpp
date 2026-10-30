@@ -140,6 +140,8 @@ namespace hpx::tracing {
         [[maybe_unused]] void const* parent_task_id = nullptr) noexcept
     {
 #if defined(HPX_HAVE_TRACING)
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         task_created(ThreadData::get_safe_description(
                          thrdptr->get_description(), "thread"),
             thrdptr, parent_task_id);
@@ -150,6 +152,8 @@ namespace hpx::tracing {
     constexpr void task_executing([[maybe_unused]] ThreadData* thrdptr) noexcept
     {
 #if defined(HPX_HAVE_TRACING)
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         task_executing(thrdptr,
             ThreadData::get_safe_description(
                 thrdptr->get_description(), "thread"),
@@ -168,6 +172,8 @@ namespace hpx::tracing {
     {
 #if defined(HPX_HAVE_TRACING)
         auto* thrdptr = get_thread_id_data(id);
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         using thread_data_type = std::remove_pointer_t<decltype(thrdptr)>;
         task_yielded(thrdptr,
             thread_data_type::get_safe_description(
@@ -181,6 +187,8 @@ namespace hpx::tracing {
     {
 #if defined(HPX_HAVE_TRACING)
         auto* thrdptr = get_thread_id_data(id);
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         using thread_data_type = std::remove_pointer_t<decltype(thrdptr)>;
         if constexpr (std::is_convertible_v<String, char const*>)
         {
@@ -205,6 +213,8 @@ namespace hpx::tracing {
     {
 #if defined(HPX_HAVE_TRACING)
         auto* thrdptr = get_thread_id_data(id);
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         using thread_data_type = std::remove_pointer_t<decltype(thrdptr)>;
         if constexpr (std::is_convertible_v<StateX, char const*>)
         {
@@ -227,12 +237,16 @@ namespace hpx::tracing {
     constexpr void task_completed([[maybe_unused]] ThreadData* thrdptr) noexcept
     {
 #if defined(HPX_HAVE_TRACING)
+        if (!thrdptr->should_emit_lifecycle())
+            return;
         task_completed(thrdptr,
             ThreadData::get_safe_description(
                 thrdptr->get_description(), "thread"));
 #endif
     }
 
+    // work_stolen follows the stolen task's own sample bit - it names two
+    // workers, but the flag lives on the task that moved between them.
     template <typename ThreadId>
     constexpr void work_stolen([[maybe_unused]] std::size_t thief_id,
         [[maybe_unused]] std::size_t victim_id,
@@ -241,6 +255,8 @@ namespace hpx::tracing {
 #if defined(HPX_HAVE_TRACING)
         if (auto* thrd_data = get_thread_id_data(thrd))
         {
+            if (!thrd_data->should_emit_lifecycle())
+                return;
             using thread_data_type = std::remove_pointer_t<decltype(thrd_data)>;
             work_stolen(thief_id, victim_id, thrd_data,
                 thread_data_type::get_safe_description(
@@ -261,6 +277,8 @@ namespace hpx::tracing {
             {
                 if (auto* thrd_data = get_thread_id_data(stolen_thrd))
                 {
+                    if (!thrd_data->should_emit_lifecycle())
+                        continue;
                     using thread_data_type =
                         std::remove_pointer_t<decltype(thrd_data)>;
                     work_stolen(thief_id, victim_id, thrd_data,

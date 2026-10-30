@@ -54,40 +54,40 @@ namespace hpx::functional {
         inline constexpr unspecified tag_invoke = unspecified;
     }    // namespace unspecified
 
-    /// `hpx::functional::is_tag_invocable<Tag, Args...>` is std::true_type if
+    /// \c hpx::functional::is_tag_invocable<Tag, Args...> is std::true_type if
     /// an overload of `tag_invoke(tag, args...)` can be found via ADL.
     template <typename Tag, typename... Args>
     struct is_tag_invocable;
 
-    /// `hpx::functional::is_tag_invocable_v<Tag, Args...>` evaluates to
-    /// `hpx::functional::is_tag_invocable<Tag, Args...>::value`
+    /// \c hpx::functional::is_tag_invocable_v<Tag, Args...> evaluates to
+    /// \c hpx::functional::is_tag_invocable<Tag, Args...>::value
     template <typename Tag, typename... Args>
     constexpr bool is_tag_invocable_v = is_tag_invocable<Tag, Args...>::value;
 
-    /// `hpx::functional::is_nothrow_tag_invocable<Tag, Args...>` is
+    /// \c hpx::functional::is_nothrow_tag_invocable<Tag, Args...> is
     /// std::true_type if an overload of `tag_invoke(tag, args...)` can be
     /// found via ADL and is noexcept.
     template <typename Tag, typename... Args>
     struct is_nothrow_tag_invocable;
 
-    /// `hpx::functional::is_tag_invocable_v<Tag, Args...>` evaluates to
-    /// `hpx::functional::is_tag_invocable<Tag, Args...>::value`
+    /// \c hpx::functional::is_tag_invocable_v<Tag, Args...> evaluates to
+    /// \c hpx::functional::is_tag_invocable<Tag, Args...>::value
     template <typename Tag, typename... Args>
     constexpr bool is_nothrow_tag_invocable_v =
         is_nothrow_tag_invocable<Tag, Args...>::value;
 
-    /// `hpx::functional::tag_invoke_result<Tag, Args...>` is the trait
+    /// \c hpx::functional::tag_invoke_result<Tag, Args...> is the trait
     /// returning the result type of the call hpx::functional::tag_invoke. This
     /// can be used in a SFINAE context.
     template <typename Tag, typename... Args>
     using tag_invoke_result = invoke_result<decltype(tag_invoke), Tag, Args...>;
 
-    /// `hpx::functional::tag_invoke_result_t<Tag, Args...>` evaluates to
-    /// `hpx::functional::tag_invoke_result_t<Tag, Args...>::type`
+    /// \c hpx::functional::tag_invoke_result_t<Tag, Args...> evaluates to
+    /// \c hpx::functional::tag_invoke_result_t<Tag, Args...>::type
     template <typename Tag, typename... Args>
     using tag_invoke_result_t = typename tag_invoke_result<Tag, Args...>::type;
 
-    /// `hpx::functional::tag<Tag>` defines a base class that implements
+    /// \c hpx::functional::tag<Tag> defines a base class that implements
     /// the necessary tag dispatching functionality for a given type `Tag`
     template <typename Tag>
     struct tag;

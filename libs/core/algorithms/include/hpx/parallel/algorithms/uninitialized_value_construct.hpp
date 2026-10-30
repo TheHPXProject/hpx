@@ -14,8 +14,8 @@
 namespace hpx {
     // clang-format off
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// by value-initialization. If an exception is thrown during the
     /// initialization, the function has no effects.
     ///
@@ -36,8 +36,8 @@ namespace hpx {
     template <typename FwdIter>
     void uninitialized_value_construct(FwdIter first, FwdIter last);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// by value-initialization. If an exception is thrown during the
     /// initialization, the function has no effects. Executed according
     /// to the policy.
@@ -80,8 +80,8 @@ namespace hpx {
     uninitialized_value_construct(
         ExPolicy&& policy, FwdIter first, FwdIter last);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// [first, first + count) by value-initialization. If an exception
     /// is thrown during the initialization, the function has no effects.
     ///
@@ -108,8 +108,8 @@ namespace hpx {
     template <typename FwdIter, typename Size>
     FwdIter uninitialized_value_construct_n(FwdIter first, Size count);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// [first, first + count) by value-initialization. If an exception
     /// is thrown during the initialization, the function has no effects.
     ///

@@ -5,7 +5,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/components/partitioned_vector/partitioned_vector.hpp
+/// \file partitioned_vector_decl.hpp
 
 #pragma once
 
@@ -980,7 +980,7 @@ namespace hpx {
         }
 
         /// Asynchronously set the element at position \a pos in
-        /// the partition \part to the given value \a val.
+        /// the partition \a part to the given value \a val.
         ///
         /// \param part  Sequence number of the partition
         /// \param pos   Position of the element in the partition
@@ -1005,7 +1005,7 @@ namespace hpx {
         }
 
         /// Copy the values of \a val to the elements at positions \a pos in
-        /// the partition \part of the vector container.
+        /// the partition \a part of the vector container.
         ///
         /// \param part  Sequence number of the partition
         /// \param pos   Position of the element in the vector
@@ -1028,7 +1028,7 @@ namespace hpx {
         }
 
         /// Asynchronously set the element at position \a pos in
-        /// the partition \part to the given value \a val.
+        /// the partition \a part to the given value \a val.
         ///
         /// \param part  Sequence number of the partition
         /// \param pos   Position of the element in the partition

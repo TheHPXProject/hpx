@@ -34,3 +34,10 @@ foreach(test ${tests})
     )
   endif()
 endforeach()
+
+target_link_libraries(papi_counters_active_interface_test PRIVATE Papi::papi)
+set_tests_properties(
+  tests.regressions.components.papi_counters.papi_counters_active_interface
+  PROPERTIES SKIP_REGULAR_EXPRESSION
+             "SKIP: PAPI_SR_INS is unavailable on this machine"
+)

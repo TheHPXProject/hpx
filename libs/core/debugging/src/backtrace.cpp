@@ -55,9 +55,17 @@
 #include <vector>
 
 #if defined(HPX_MSVC)
+#include <hpx/debugging/detail/dbghelp_lock.hpp>
+#include <hpx/debugging/detail/dbghelp_symbol_cache.hpp>
+
 #include <windows.h>
 
 #include <dbghelp.h>
+
+// Name DbgHelp in this object file so that linking against a static
+// hpx_core.lib does not need dbghelp.lib on the link line as well. CMake
+// still adds it through hpx_base_libraries.
+#pragma comment(lib, "dbghelp.lib")
 #endif
 
 namespace hpx::util::stack_trace {
@@ -356,18 +364,35 @@ namespace hpx::util::stack_trace {
 
     namespace {
 
-        HANDLE hProcess = nullptr;
+        HANDLE process_handle = nullptr;
         bool syms_ready = false;
 
         void init()
         {
-            if (hProcess == nullptr)
+            // Serialise the check-then-set and the SymInitialize call
+            // against Tracy's DbgHelp path (see dbghelp_lock.hpp). The
+            // lock also fixes the previous non-atomic init() race.
+            hpx::util::detail::dbghelp_scoped_lock const l;
+            if (process_handle == nullptr)
             {
-                hProcess = GetCurrentProcess();
-                SymSetOptions(SYMOPT_DEFERRED_LOADS);
+                process_handle = GetCurrentProcess();
 
-                if (SymInitialize(hProcess, nullptr, TRUE))
+                // OR our preference in rather than clobbering: if Tracy
+                // (or anything else) initialised the handler first, its
+                // options are already set and we do not want to reset
+                // them here.
+                SymSetOptions(SymGetOptions() | SYMOPT_DEFERRED_LOADS);
+
+                if (SymInitialize(process_handle, nullptr, TRUE))
                 {
+                    syms_ready = true;
+                }
+                else if (GetLastError() == ERROR_INVALID_PARAMETER)
+                {
+                    // Someone else (typically Tracy's SymbolWorker) has
+                    // already initialised DbgHelp for this process. The
+                    // handler is usable; we just do not own its lifetime
+                    // and therefore never call SymCleanup.
                     syms_ready = true;
                 }
             }
@@ -385,25 +410,123 @@ namespace hpx::util::stack_trace {
            << ptr;
         if (syms_ready)
         {
-            DWORD64 dwDisplacement = 0;
-            auto const dwAddress = reinterpret_cast<DWORD64>(ptr);
+            auto const address = reinterpret_cast<DWORD64>(ptr);
 
-            std::vector<char> buffer(sizeof(SYMBOL_INFO) + MAX_SYM_NAME);
-            auto const pSymbol =
-                reinterpret_cast<PSYMBOL_INFO>(&buffer.front());
+            // DbgHelp is single-threaded; serialise with Tracy and with
+            // any concurrent HPX callers on the same process. The lock is
+            // held across both the cache lookup and, on a miss, the
+            // SymFromAddr call below (dbghelp_scoped_lock wraps a
+            // recursive_mutex, so this stays deadlock-free even though
+            // nothing here actually re-enters it).
+            hpx::util::detail::dbghelp_scoped_lock const l;
+            auto& symbol_cache = hpx::util::detail::get_dbghelp_symbol_cache();
 
-            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-            pSymbol->MaxNameLen = MAX_SYM_NAME;
+            auto const query_allocation_base = [](DWORD64 addr) -> DWORD64 {
+                MEMORY_BASIC_INFORMATION mbi;
+                if (VirtualQuery(reinterpret_cast<LPCVOID>(addr), &mbi,
+                        sizeof(mbi)) == 0)
+                {
+                    return 0;
+                }
+                return reinterpret_cast<DWORD64>(mbi.AllocationBase);
+            };
 
-            if (SymFromAddr(hProcess, dwAddress, &dwDisplacement, pSymbol))
+            hpx::util::detail::resolved_symbol_info resolved;
+            bool cache_hit = symbol_cache.try_get(address, resolved);
+
+            // A cached entry is only valid if the memory region it was
+            // resolved in is still the same one. If the module was
+            // unloaded and its address range reused, drop the cache and
+            // resolve again (#7608).
+            bool force_refresh = false;
+            if (cache_hit &&
+                resolved.allocation_base != query_allocation_base(address))
             {
-                ss << ": " << pSymbol->Name << std::hex << " +0x"
-                   << dwDisplacement;
+                symbol_cache.clear();
+                cache_hit = false;
+                force_refresh = true;
             }
-            else
+
+            if (!cache_hit)
             {
-                ss << ": ???";
+                DWORD64 displacement = 0;
+
+                // Reused across calls under dbghelp_scoped_lock; the
+                // SizeOfStruct/MaxNameLen header fields below are
+                // re-initialised on every lookup, so a stale name from a
+                // previous call is always overwritten before use.
+                static std::vector<char> buffer(
+                    sizeof(SYMBOL_INFO) + MAX_SYM_NAME);
+                auto* const symbol =
+                    reinterpret_cast<PSYMBOL_INFO>(buffer.data());
+
+                auto const try_resolve = [&]() -> bool {
+                    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+                    symbol->MaxNameLen = MAX_SYM_NAME;
+                    return SymFromAddr(process_handle, address, &displacement,
+                               symbol) != FALSE;
+                };
+
+                bool resolved_ok = !force_refresh && try_resolve();
+                if (!resolved_ok)
+                {
+                    // SymInitialize(..., TRUE) only snapshots the loaded
+                    // modules once, at startup (#7608). A failed lookup
+                    // may simply mean a module was loaded (or unloaded)
+                    // afterwards and DbgHelp's view of the process is
+                    // stale, so refresh it and retry exactly once.
+                    //
+                    // Throttled to at most once per refresh_interval_ms:
+                    // without this, a stack containing an address that
+                    // will never resolve (JIT-generated code, a
+                    // corrupted frame, garbage past the top of the
+                    // stack) would call the relatively expensive
+                    // SymRefreshModuleList on every single backtrace
+                    // that touches it. The throttle window is updated
+                    // whether or not the refresh call itself succeeds,
+                    // so a persistently failing refresh cannot be
+                    // retried in a tight loop either.
+                    static ULONGLONG last_refresh_tick = 0;
+                    constexpr ULONGLONG refresh_interval_ms = 500;
+
+                    ULONGLONG const now = GetTickCount64();
+                    if (force_refresh || last_refresh_tick == 0 ||
+                        now - last_refresh_tick >= refresh_interval_ms)
+                    {
+                        last_refresh_tick = now;
+
+                        if (SymRefreshModuleList(process_handle))
+                        {
+                            // The set of loaded modules changed shape;
+                            // any address already cached could now
+                            // belong to a different module than when it
+                            // was resolved (or to one that no longer
+                            // exists), so drop everything rather than
+                            // try to reason about which entries are
+                            // still valid.
+                            symbol_cache.clear();
+
+                            resolved_ok = try_resolve();
+                        }
+                    }
+                }
+
+                if (resolved_ok)
+                {
+                    resolved.name.assign(symbol->Name, symbol->NameLen);
+                    resolved.displacement = displacement;
+                    resolved.allocation_base = query_allocation_base(address);
+                    symbol_cache.insert(address, resolved);
+                }
+                else
+                {
+                    ss << ": ???";
+                    return ss.str();
+                }
             }
+
+            ss << ": " << resolved.name << std::hex << " +0x"
+               << resolved.displacement;
         }
         return ss.str();
     }

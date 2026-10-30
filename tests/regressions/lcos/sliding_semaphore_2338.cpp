@@ -46,18 +46,20 @@ int main()
 
     hpx::sliding_semaphore sem(static_cast<std::int64_t>(window_size), 0);
     message_double_action msg;
+    std::vector<hpx::future<void>> pending;
+    pending.reserve((loop * window_size) + skip);
 
     for (std::size_t i = 0; i < (loop * window_size) + skip; ++i)
     {
         // launch a message to the remote node
-        hpx::async(msg, there, 3.5)
-            .then(hpx::launch::sync,
-                // when the message completes, increment our semaphore count
-                // so that N are always in flight
-                [&, parcel_count](hpx::future<double>&&) -> void {
-                    ++signal_count;
-                    sem.signal(static_cast<std::int64_t>(parcel_count));
-                });
+        pending.push_back(hpx::async(msg, there, 3.5)
+                .then(hpx::launch::sync,
+                    // when the message completes, increment our semaphore count
+                    // so that N are always in flight
+                    [&, parcel_count](hpx::future<double>&&) -> void {
+                        ++signal_count;
+                        sem.signal(static_cast<std::int64_t>(parcel_count));
+                    }));
 
         //
         ++parcel_count;
@@ -67,6 +69,10 @@ int main()
     }
 
     sem.wait(static_cast<std::int64_t>(parcel_count + window_size - 1));
+
+    // Signals may arrive out of order, so the semaphore's high-water mark
+    // does not guarantee that every callback has finished using our state.
+    hpx::wait_all(pending);
 
     HPX_TEST_EQ(signal_count, (loop * window_size) + skip);
 

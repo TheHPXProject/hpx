@@ -336,6 +336,7 @@ namespace hpx::local::detail {
         hpx::program_options::options_description const& app_options,
         std::vector<std::string> const& args,
         hpx::program_options::variables_map& vm,
+        hpx::program_options::ext_parser const& parser,
         util::commandline_error_mode error_mode,
         hpx::program_options::options_description* visible,
         std::vector<std::string>* unregistered_options)
@@ -367,8 +368,6 @@ namespace hpx::local::detail {
             pd.add("hpx:positional", -1);
 
             // parse command line, allow for unregistered options this point
-            util::commandline_error_mode const mode =
-                error_mode & util::commandline_error_mode::ignore_aliases;
             util::commandline_error_mode const notmode =
                 error_mode & ~util::commandline_error_mode::ignore_aliases;
 
@@ -377,7 +376,7 @@ namespace hpx::local::detail {
                     .options(all_options[options_type::desc_cmdline])
                     .positional(pd)
                     .style(unix_style)
-                    .extra_parser(option_parser(rtcfg, as_bool(mode))),
+                    .extra_parser(parser),
                 notmode)
                     .run());
 
@@ -398,8 +397,6 @@ namespace hpx::local::detail {
         else
         {
             // parse command line, allow for unregistered options this point
-            util::commandline_error_mode const mode =
-                error_mode & util::commandline_error_mode::ignore_aliases;
             util::commandline_error_mode const notmode =
                 error_mode & ~util::commandline_error_mode::ignore_aliases;
 
@@ -407,7 +404,7 @@ namespace hpx::local::detail {
                 command_line_parser(args)
                     .options(all_options[options_type::desc_cmdline])
                     .style(unix_style)
-                    .extra_parser(option_parser(rtcfg, as_bool(mode))),
+                    .extra_parser(parser),
                 notmode)
                     .run());
 
@@ -444,6 +441,24 @@ namespace hpx::local::detail {
         notify(vm);
 
         return true;
+    }
+
+    bool parse_commandline(util::section const& rtcfg, options_map& all_options,
+        hpx::program_options::options_description const& app_options,
+        std::vector<std::string> const& args,
+        hpx::program_options::variables_map& vm,
+        util::commandline_error_mode error_mode,
+        hpx::program_options::options_description* visible,
+        std::vector<std::string>* unregistered_options)
+    {
+        util::commandline_error_mode const mode =
+            error_mode & util::commandline_error_mode::ignore_aliases;
+
+        hpx::program_options::ext_parser const parser(
+            option_parser(rtcfg, as_bool(mode)));
+
+        return parse_commandline(rtcfg, all_options, app_options, args, vm,
+            parser, error_mode, visible, unregistered_options);
     }
 
     // Special type to be able to enforce an argument value if a parameter
@@ -542,7 +557,7 @@ namespace hpx::local::detail {
                 "the detailed affinity description for the OS threads, see "
                 "the documentation for a detailed description of possible "
                 "values. Do not use with --hpx:pu-step, --hpx:pu-offset, or "
-                "--hpx:affinity options. Implies --hpx:numa-sensitive=1"
+                "--hpx:affinity options "
                 "(--hpx:bind=none disables defining thread affinities).")
             ("hpx:use-process-mask", "use the process mask to restrict "
                 "available hardware resources (implies "
@@ -563,23 +578,32 @@ namespace hpx::local::detail {
                 "'local', 'local-priority-fifo', 'local-priority-fifo-double', "
                 "'local-priority-lifo', "
                 "'abp-priority-fifo', 'abp-priority-lifo', 'static', "
-                "'static-priority', 'local-workrequesting-fifo',"
+                "'static-priority', 'local-workrequesting-fifo', "
                 "'local-workrequesting-lifo', and 'local-workrequesting-mc' "
-                "(default: 'local-priority'; all option values can be "
+                "(default: 'local-priority-fifo'; all option values can be "
                 "abbreviated)")
             ("hpx:high-priority-threads", value<std::size_t>(),
                 "the number of operating system threads maintaining a high "
                 "priority queue (default: number of OS threads), valid for "
-                "--hpx:queuing=local-priority,--hpx:queuing=static-priority, "
+                "--hpx:queuing=local-priority-fifo, "
+                "--hpx:queuing=local-priority-fifo-double, "
+                "--hpx:queuing=local-priority-lifo, "
+                "--hpx:queuing=static-priority, "
                 "--hpx:queuing=local-workrequesting-fifo, "
                 "--hpx:queuing=local-workrequesting-lifo, "
                 "--hpx:queuing=local-workrequesting-mc, "
-                " and --hpx:queuing=abp-priority only)")
-            ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(0),
-                "makes the local-priority scheduler NUMA sensitive ("
-                "allowed values: 0 - no NUMA sensitivity, 1 - allow only for "
-                "boundary cores to steal across NUMA domains, 2 - "
-                "no cross boundary stealing is allowed (default value: 0)")
+                "--hpx:queuing=abp-priority-fifo, and "
+                "--hpx:queuing=abp-priority-lifo only)")
+            ("hpx:numa-sensitive", value<std::size_t>()->implicit_value(1),
+                "controls NUMA-sensitive work stealing (for local, "
+                "local-priority, and ABP-priority schedulers: 0 - all workers "
+                "may steal across NUMA domains, 1 - only boundary workers may "
+                "steal from the nearest NUMA domains, 2 - no cross-domain "
+                "stealing; static, static-priority, and shared-priority "
+                "schedulers allow cross-domain stealing for 0 and 1, and "
+                "disable it for 2; work-requesting schedulers currently "
+                "ignore this option; "
+                "default and implicit value: 1)")
         ;
 
         all_options.emplace(options_type::config_options,
@@ -621,7 +645,20 @@ namespace hpx::local::detail {
         ;
 
         all_options[options_type::hidden_options].add_options()
-            ("hpx:ignore", "this option will be silently ignored")
+            ("hpx:ignore",
+                value<std::vector<std::string> >()->zero_tokens()->composing(),
+                "this option will be silently ignored")
+            ("hpx:ignore-value",
+                value<std::vector<std::string> >()->composing(),
+                "this option and its value will be silently ignored")
+            ("hpx:ignore-optional-value",
+                value<std::vector<std::string> >()
+                    ->implicit_value(std::vector<std::string>{}, "")
+                    ->composing(),
+                "this option and its optional value will be silently ignored")
+            ("hpx:ignore-multitoken",
+                value<std::vector<std::string> >()->multitoken()->composing(),
+                "this option and its values will be silently ignored")
         ;
         // clang-format on
 

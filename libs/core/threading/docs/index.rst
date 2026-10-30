@@ -14,9 +14,8 @@ threading
 This module provides the equivalents of ``std::thread`` and ``std::jthread``
 for lightweight |hpx| threads:
 
-* :cpp:class:`hpx::thread`
-* :cpp:class:`hpx::jthread`
+* :hpx:class:`hpx::thread`
+* :hpx:class:`hpx::jthread`
 
 See the :ref:`API reference <modules_threading_api>` of this module for more
 details.
-

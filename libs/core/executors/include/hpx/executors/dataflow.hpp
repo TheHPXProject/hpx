@@ -59,6 +59,14 @@ struct hpx::traits::get_function_annotation<
 
 #endif
 
+// the finalization runs the function given to dataflow
+template <typename Frame, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::lcos::detail::dataflow_finalization<Frame>, Size>
+  : get_task_size<std::decay_t<typename Frame::function_type>, Size>
+{
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::lcos::detail {
 
