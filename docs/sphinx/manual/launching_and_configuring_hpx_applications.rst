@@ -521,6 +521,33 @@ The ``hpx.thread_queue`` configuration section
      * The value of this property defines the maximal number of cleaned up
        |hpx| thread objects each queue keeps for reuse per stack size.
 
+The ``hpx.task_size_chunk_size`` configuration section
+......................................................
+
+The entries of this section replace the defaults of the executor parameters
+``hpx::execution::experimental::task_size_chunk_size``, see
+:ref:`task_sizes`. They are empty by default, which stands for the defaults
+compiled into |hpx|.
+
+.. code-block:: ini
+
+   [hpx.task_size_chunk_size]
+   min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}
+   chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}
+
+.. _ini_hpx_task_size_chunk_size:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.task_size_chunk_size.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, up to ``1000000`` (one second). The default is ``5``.
+   * * ``hpx.task_size_chunk_size.chunks_per_core``
+     * The value of this property defines the number of chunks each core gets
+       for load balancing, up to ``1024``. The default is ``4``.
+
 The ``hpx.components`` configuration section
 ............................................
 

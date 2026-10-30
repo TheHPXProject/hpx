@@ -674,6 +674,13 @@ instead of being spread over all cores:
                      hpx::execution::experimental::task_size_chunk_size()),
        v.begin(), v.end(), hpx::nano_task([](int& i) { ++i; }));
 
+By default, ``task_size_chunk_size`` makes chunks of at least 5 microseconds
+and gives each core 4 of them. Values given to its constructor replace these
+defaults for one loop, the configuration entries
+``hpx.task_size_chunk_size.min_chunk_time_us`` and
+``hpx.task_size_chunk_size.chunks_per_core`` replace them for all loops (see
+:ref:`ini_hpx_task_size_chunk_size`).
+
 A size given to an executor, a launch policy or a scheduler through their
 ``thread_schedule_hint`` has no effect: the hint of a thread created for a
 function always gets that function's size, which is ``task_size::unknown`` if

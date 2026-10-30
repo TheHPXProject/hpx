@@ -28,6 +28,7 @@ set(execution_headers
     hpx/execution/detail/future_exec.hpp
     hpx/execution/detail/post_policy_dispatch.hpp
     hpx/execution/detail/sync_launch_policy_dispatch.hpp
+    hpx/execution/detail/task_size_chunk_size_defaults.hpp
     hpx/execution/execution.hpp
     hpx/execution/executor_parameters.hpp
     hpx/execution/executors/adaptive_static_chunk_size.hpp
@@ -96,8 +97,9 @@ set(execution_headers
     hpx/synchronization/async_rw_mutex.hpp
 )
 
-set(execution_sources execution_parameter_callbacks.cpp
-                      polymorphic_executor.cpp run_loop.cpp
+set(execution_sources
+    execution_parameter_callbacks.cpp polymorphic_executor.cpp run_loop.cpp
+    task_size_chunk_size_defaults.cpp
 )
 
 # cmake-format: off

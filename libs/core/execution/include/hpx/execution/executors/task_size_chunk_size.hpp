@@ -11,6 +11,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/execution/detail/task_size_chunk_size_defaults.hpp>
 #include <hpx/execution/executors/execution_parameters.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
@@ -21,6 +22,7 @@
 #include <chrono>
 #include <cstddef>
 #include <type_traits>
+#include <utility>
 
 namespace hpx::execution::experimental {
 
@@ -38,21 +40,32 @@ namespace hpx::execution::experimental {
     {
     public:
         /// Construct a \a task_size_chunk_size executor parameters object
+        /// with the default minimal run time of a chunk and the default
+        /// number of chunks per core.
+        ///
+        /// \note The defaults are 5 microseconds as the minimal run time of a
+        ///       chunk and 4 chunks per core. They can be changed at startup
+        ///       with the configuration entries
+        ///       \a hpx.task_size_chunk_size.min_chunk_time_us (in
+        ///       microseconds) and \a hpx.task_size_chunk_size.chunks_per_core.
+        ///       The defaults are read when a loop is chunked, so an object
+        ///       created before the runtime has started (for instance as part
+        ///       of a global execution policy) uses the configured ones.
+        ///
+        constexpr task_size_chunk_size() noexcept = default;
+
+        /// Construct a \a task_size_chunk_size executor parameters object
         ///
         /// \param min_chunk_time  [in] The minimal run time of a chunk.
         /// \param chunks_per_core [in] The number of chunks each core should
-        ///                        get for load balancing.
-        ///
-        /// \note Default constructed \a task_size_chunk_size executor
-        ///       parameters use 5 microseconds as the minimal run time of a
-        ///       chunk and 4 chunks per core.
+        ///                        get for load balancing, 0 stands for the
+        ///                        default number of chunks per core.
         ///
         explicit task_size_chunk_size(
-            hpx::chrono::steady_duration const& min_chunk_time =
-                std::chrono::microseconds(5),
-            std::size_t const chunks_per_core = 4) noexcept
+            hpx::chrono::steady_duration const& min_chunk_time,
+            std::size_t const chunks_per_core = 0) noexcept
           : min_chunk_time_(min_chunk_time.value())
-          , chunks_per_core_(chunks_per_core == 0 ? 1 : chunks_per_core)
+          , chunks_per_core_(chunks_per_core)
         {
         }
 
@@ -95,8 +108,9 @@ namespace hpx::execution::experimental {
 
             // the iterations one core needs, computed without multiplying by
             // count, which could overflow
+            auto const [min_chunk_time, chunks_per_core] = get_values();
             auto const per_core =
-                min_chunk_time_ * static_cast<rep>(chunks_per_core_);
+                min_chunk_time * static_cast<rep>(chunks_per_core);
             auto const iterations_per_core =
                 static_cast<std::size_t>(per_core / per_iteration);
             std::size_t const cores =
@@ -124,14 +138,14 @@ namespace hpx::execution::experimental {
                 return count;
             }
 
+            auto const [min_chunk_time, chunks_per_core] = get_values();
             std::size_t const num_chunks =
-                chunks_per_core_ * (std::max) (cores, std::size_t(1));
+                chunks_per_core * (std::max) (cores, std::size_t(1));
             std::size_t const balanced = (count + num_chunks - 1) / num_chunks;
 
             // iterations that run for at least min_chunk_time, rounding up
             auto const min_iterations = static_cast<std::size_t>(
-                (min_chunk_time_ + per_iteration - duration(1)) /
-                per_iteration);
+                (min_chunk_time + per_iteration - duration(1)) / per_iteration);
 
             return (std::min) (count, (std::max) (balanced, min_iterations));
         }
@@ -141,6 +155,24 @@ namespace hpx::execution::experimental {
         /// \cond NOINTERNAL
         using duration = hpx::chrono::steady_clock::duration;
         using rep = duration::rep;
+
+        // The minimal run time of a chunk and the number of chunks per core,
+        // the current defaults for the ones that were not given.
+        std::pair<duration, std::size_t> get_values() const noexcept
+        {
+            if (min_chunk_time_ >= duration::zero() && chunks_per_core_ != 0)
+            {
+                return {min_chunk_time_, chunks_per_core_};
+            }
+
+            auto const defaults = detail::get_task_size_chunk_size_defaults();
+            return {min_chunk_time_ >= duration::zero() ?
+                    min_chunk_time_ :
+                    hpx::chrono::steady_duration(defaults.min_chunk_time)
+                        .value(),
+                chunks_per_core_ != 0 ? chunks_per_core_ :
+                                        defaults.chunks_per_core};
+        }
 
         friend class hpx::serialization::access;
 
@@ -155,8 +187,10 @@ namespace hpx::execution::experimental {
 
     private:
         /// \cond NOINTERNAL
-        duration min_chunk_time_;
-        std::size_t chunks_per_core_;
+        // a negative minimal run time and 0 chunks per core stand for the
+        // defaults
+        duration min_chunk_time_ = duration(-1);
+        std::size_t chunks_per_core_ = 0;
         /// \endcond
     };
 

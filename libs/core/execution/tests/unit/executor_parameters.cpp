@@ -201,6 +201,29 @@ void test_task_size_chunk_size()
         HPX_TEST_EQ(sum, 100);
     }
 
+    // 10000 small iterations are about 1 ms of work, which runs in several
+    // chunks on several cores (if there are), all through bulk_async_execute
+    {
+        HPX_TEST_EQ(tscs.processing_units_count(exec, 100ns, 10000),
+            (std::min) (std::size_t(2), available));
+
+        std::vector<int> v(10000, 1);
+        int const sum = hpx::transform_reduce(hpx::execution::par.with(tscs),
+            v.begin(), v.end(), 0, std::plus<>(),
+            hpx::small_task([](int i) { return i; }));
+        HPX_TEST_EQ(sum, 10000);
+
+        task_size_chunk_size const defaults;
+        int const reduced = hpx::reduce(hpx::execution::par.with(defaults),
+            v.begin(), v.end(), 0, hpx::small_task(std::plus<>()));
+        HPX_TEST_EQ(reduced, 10000);
+
+        int const transformed = hpx::transform_reduce(
+            hpx::execution::par.with(defaults), v.begin(), v.end(), 0,
+            std::plus<>(), hpx::small_task([](int i) { return i; }));
+        HPX_TEST_EQ(transformed, 10000);
+    }
+
     // by default, a core needs 4 chunks of 5 us: 100 iterations of 100 ns
     // are one chunk on one core
     {
