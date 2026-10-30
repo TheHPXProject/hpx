@@ -31,6 +31,7 @@
 #include <asio/post.hpp>
 #include <asio/version.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -89,10 +90,38 @@ namespace hpx::parcelset {
                     locality(static_cast<std::int32_t>(my_pe)));
             }
 
-            static std::size_t mtu(util::runtime_configuration const& ini)
+            // Page size.  0 (the default) selects it automatically: as large
+            // as 1 MiB (fewer atomics/fences/loop iterations per byte, about
+            // 25% faster on 8 nodes than 64 KiB), but shrunk as the job grows
+            // so that the symmetric rx+tx rings
+            // (npes * slots * mtu * 2) stay within 128 MiB, half of the
+            // default 256 MiB symmetric heap.  The result depends only on npes and slots, so
+            // it is identical on every PE, as the wire protocol requires.
+            static std::size_t mtu(util::runtime_configuration const& ini,
+                std::size_t num_pes, std::size_t slots)
             {
-                return hpx::util::get_entry_as<std::size_t>(
-                    ini, "hpx.parcel.openshmem.mtu", HPX_PARCEL_OPENSHMEM_MTU);
+                std::size_t const configured =
+                    hpx::util::get_entry_as<std::size_t>(
+                        ini, "hpx.parcel.openshmem.mtu", 0);
+                if (configured != 0)
+                {
+                    return configured;
+                }
+
+                constexpr std::size_t budget = std::size_t(128) << 20;
+                constexpr std::size_t max_mtu = std::size_t(1) << 20;
+                constexpr std::size_t min_mtu = std::size_t(64) << 10;
+
+                std::size_t const denom =
+                    (std::max)(std::size_t(1), num_pes * slots * 2);
+                std::size_t m = (std::min)(max_mtu, budget / denom);
+                // round down to a power of two
+                std::size_t p = min_mtu;
+                while (p * 2 <= m)
+                {
+                    p *= 2;
+                }
+                return p;
             }
 
             // In-flight chunks per (sender,receiver) pair.  Must be
@@ -186,7 +215,7 @@ namespace hpx::parcelset {
               , stopped_(false)
               , num_pes_(static_cast<std::size_t>(shmem_n_pes()))
               , my_pe_(static_cast<std::size_t>(shmem_my_pe()))
-              , mtu_(mtu(ini))
+              , mtu_(mtu(ini, num_pes_, slots(ini)))
               , slots_(slots(ini))
               , stop_timeout_(stop_timeout(ini))
               , mailboxes_(num_pes_, my_pe_, mtu_, slots_,
@@ -196,6 +225,23 @@ namespace hpx::parcelset {
               , receiver_(*this)
             {
                 here_ = here(my_pe_);
+                mailboxes_.set_progress_interval(
+                    static_cast<std::uint32_t>(hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.openshmem.progress_interval", 16)));
+                mailboxes_.set_remote_delivery(
+                    hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.openshmem.remote_delivery", 0) != 0);
+                detail::g_io_stats_on.store(
+                    hpx::util::get_entry_as<int>(
+                        ini, "hpx.parcel.openshmem.stats", 0) != 0);
+                worker_progress_ = hpx::util::get_entry_as<int>(
+                                       ini, "hpx.parcel.openshmem.worker_progress", 1) !=
+                    0;
+
+                if (uniform_check(ini))
+                {
+                    publish_protocol_fingerprint();
+                }
             }
 
             parcelport(parcelport const&) = delete;
@@ -221,21 +267,41 @@ namespace hpx::parcelset {
             // because barriers order prior operations, the remote
             // shmem_uint32_atomic_fetch() reads below are guaranteed to observe
             // every completed publish.
-void check_protocol_config_uniformity() const
+            std::uint32_t protocol_fingerprint() const noexcept
             {
-                std::uint32_t const hash =
-                    (static_cast<std::uint32_t>(mtu_) * 31u +
-                        static_cast<std::uint32_t>(slots_)) *
-                        31u +
+                return (static_cast<std::uint32_t>(mtu_) * 31u +
+                           static_cast<std::uint32_t>(slots_)) *
+                    31u +
                     (mailboxes_.checksum_enabled() ? 1u : 0u);
+            }
 
-                // The fingerprint row lives in the mailbox_array's own
-                // symmetric carve rather than a fresh shmem_malloc(), which is
-                // collective: do_run() is not reached by every PE in
-                // lockstep (rank 0 runs in runtime_mode::console, the others in
-                // runtime_mode::worker), so the extra collective deadlocked the
-                // job before main().  The carve is identical on every PE and was
-                // already published behind the constructor's barrier.
+            // Publish this PE's fingerprint into its own word of the
+            // (zero-initialised) symmetric carve.  Done from the constructor
+            // so that no collective/barrier is needed in do_run(): rank 0
+            // (console) reaches do_run() before the workers have finished the
+            // AGAS boot, so a barrier there deadlocks the job.
+            void publish_protocol_fingerprint() const
+            {
+                std::uint32_t* const words = mailboxes_.config_words();
+                if (!words)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::out_of_memory,
+                        "openshmem::parcelport:"
+                        "publish_protocol_fingerprint",
+                        "mailbox_array config fingerprint row is null on PE " +
+                            std::to_string(my_pe_));
+                }
+                words[my_pe_] = protocol_fingerprint();
+            }
+
+
+            // Non-blocking: compare against every peer that has already
+            // published (non-zero word).  The later of any two PEs to reach
+            // do_run() sees the earlier one's word, so a mismatching pair is
+            // detected by at least one side without synchronising.
+            void check_protocol_config_uniformity() const
+            {
+                std::uint32_t const hash = protocol_fingerprint();
                 std::uint32_t* const words = mailboxes_.config_words();
                 if (!words)
                 {
@@ -245,17 +311,6 @@ void check_protocol_config_uniformity() const
                         "mailbox_array config fingerprint row is null on PE " +
                             std::to_string(my_pe_));
                 }
-
-                // Each PE publishes its fingerprint at its own index.  Every
-                // PE then REMOTE-fetches each peer's word: a plain local load
-                // would read OUR OWN element, so the cross-PE comparison has
-                // to be an actual remote atomic read.  The atomic also acts as
-                // the delivery-push that makes the peer's counter visible to
-                // this PE under UCX's OpenSHMEM shim.
-                words[my_pe_] = hash;
-                shmem_fence();
-                shmem_barrier_all();
-
                 bool mismatch = false;
                 for (std::size_t pe = 0; pe < num_pes_; ++pe)
                 {
@@ -264,7 +319,7 @@ void check_protocol_config_uniformity() const
                             words[pe] :
                             shmem_uint32_atomic_fetch(
                                 &words[pe], static_cast<int>(pe));
-                    if (other_hash != hash)
+                    if (other_hash != 0 && other_hash != hash)
                     {
                         mismatch = true;
                     }
@@ -356,6 +411,8 @@ void check_protocol_config_uniformity() const
                 // credit (or never publishes) again.  Transfer activity is
                 // measured via mailbox_array::transfer_count(), which changes
                 // exactly as often as pages move.
+                detail::g_discard_received.store(
+                    true, std::memory_order_release);
                 auto last_change = std::chrono::steady_clock::now();
                 std::uint64_t last_count = mailboxes_.transfer_count();
 
@@ -400,8 +457,35 @@ void check_protocol_config_uniformity() const
                 // Under SHMEM_THREAD_SERIALIZED nothing below may touch
                 // shmem_* until the last driver has left (io_service_work
                 // decrements drivers_running_), so wait for them here.
-                stopped_.store(true, std::memory_order_release);
-                while (drivers_running_.load(std::memory_order_acquire) != 0)
+                if (detail::g_io_stats_on.load())
+                {
+                    auto const& g = detail::g_io_stats;
+                    auto ms = [](std::atomic<std::uint64_t> const& v) {
+                        return static_cast<double>(v.load()) * 1e-6;
+                    };
+                    std::fprintf(stderr,
+                        "oshstats PE %zu: send_step=%.0fms recv_step=%.0fms "
+                        "stage=%.0fms put=%.0fms decode=%.0fms | pages_sent=%llu "
+                        "(%.0f MB) pages_recv=%llu nocredit=%llu | loops=%llu "
+                        "recv_calls=%llu recv_with_work=%llu | recv parts: "
+                        "local_progress=%.0fms crc=%.0fms resize=%.0fms "
+                        "copy=%.0fms release=%.0fms\n",
+                        my_pe_, ms(g.send_ns), ms(g.recv_ns), ms(g.stage_ns),
+                        ms(g.put_ns), ms(g.decode_ns),
+                        static_cast<unsigned long long>(g.pages_sent.load()),
+                        static_cast<double>(g.bytes_sent.load()) * 1e-6,
+                        static_cast<unsigned long long>(g.pages_recv.load()),
+                        static_cast<unsigned long long>(g.nocredit.load()),
+                        static_cast<unsigned long long>(g.send_calls.load()),
+                        static_cast<unsigned long long>(g.recv_calls.load()),
+                        static_cast<unsigned long long>(g.recv_work.load()),
+                        ms(g.prog_ns), ms(g.crc_ns), ms(g.resize_ns),
+                        ms(g.copy_ns), ms(g.rel_ns));
+                }
+
+                stopped_.store(true, std::memory_order_seq_cst);
+                while (drivers_running_.load(std::memory_order_acquire) != 0 ||
+                    workers_in_progress_.load(std::memory_order_seq_cst) != 0)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
@@ -448,15 +532,32 @@ void check_protocol_config_uniformity() const
                 std::size_t arena_idx, parcelport_background_mode mode)
             {
                 bool has_work = false;
+                bool const st =
+                    detail::g_io_stats_on.load(std::memory_order_relaxed);
+                std::uint64_t const t0 = st ? detail::ns_now() : 0;
                 if (mode & parcelport_background_mode::send)
                 {
                     has_work = sender_.background_work();
                 }
+                std::uint64_t const t1 = st ? detail::ns_now() : 0;
                 if (mode & parcelport_background_mode::receive)
                 {
-                    has_work =
-                        receiver_.background_work(arena_idx, arena_count_) ||
-                        has_work;
+                    bool const r =
+                        receiver_.background_work(arena_idx, arena_count_);
+                    if (st)
+                    {
+                        detail::g_io_stats.recv_calls.fetch_add(1, std::memory_order_relaxed);
+                        if (r)
+                            detail::g_io_stats.recv_work.fetch_add(1, std::memory_order_relaxed);
+                    }
+                    has_work = r || has_work;
+                }
+                if (st)
+                {
+                    std::uint64_t const t2 = detail::ns_now();
+                    detail::g_io_stats.send_ns.fetch_add(t1 - t0, std::memory_order_relaxed);
+                    detail::g_io_stats.recv_ns.fetch_add(t2 - t1, std::memory_order_relaxed);
+                    detail::g_io_stats.send_calls.fetch_add(1, std::memory_order_relaxed);
                 }
                 return has_work;
             }
@@ -475,14 +576,45 @@ void check_protocol_config_uniformity() const
                 {
                     return false;
                 }
+
+                // Only the dedicated io drivers progress the transport by
+                // default.  Letting every HPX worker thread (48 per node on
+                // buran) enter the transport serialises them on the
+                // conduit's global lock and slows everything down.
+                if (!worker_progress_)
+                {
+                    return false;
+                }
                 if (!util::openshmem_environment::thread_multiple())
                 {
                     return false;
                 }
 
-                std::size_t const arena_idx =
-                    arena_count_ == 0 ? 0 : num_thread % arena_count_;
-                return progress(arena_idx, mode);
+                // Register as an in-flight caller *before* re-checking
+                // 'stopped_' (seq_cst on both sides pairs with do_stop()):
+                // either we see the stop flag and leave, or do_stop() sees
+                // our count and waits, so no worker can still be inside
+                // shmem_* when the symmetric heap is freed and the runtime
+                // finalized.
+                workers_in_progress_.fetch_add(1, std::memory_order_seq_cst);
+                bool has_work = false;
+                if (!stopped_.load(std::memory_order_seq_cst))
+                {
+                    std::size_t const arena_idx =
+                        arena_count_ == 0 ? 0 : num_thread % arena_count_;
+                    try
+                    {
+                        has_work = progress(arena_idx, mode);
+                    }
+                    catch (...)
+                    {
+                        workers_in_progress_.fetch_sub(
+                            1, std::memory_order_seq_cst);
+                        throw;
+                    }
+                }
+                workers_in_progress_.fetch_sub(1, std::memory_order_seq_cst);
+                return has_work;
             }
 
             constexpr bool can_send_immediate() const noexcept
@@ -558,7 +690,9 @@ void check_protocol_config_uniformity() const
             util::runtime_configuration const& ini_;
 
             std::atomic<bool> stopped_;
+            bool worker_progress_ = false;
             std::atomic<std::size_t> drivers_running_{0};
+            std::atomic<std::size_t> workers_in_progress_{0};
 
             std::size_t num_pes_;
             std::size_t my_pe_;
@@ -588,6 +722,9 @@ struct hpx::traits::plugin_config_data<
     static void init(int* argc, char*** argv, util::command_line_handling& cfg)
     {
         util::openshmem_environment::init(argc, argv, cfg.rtcfg_);
+
+        // Zero-copy chunks travel in the same page stream as the serialized
+        // data (see sender_connection::prepare()).
         cfg.num_localities_ =
             static_cast<std::size_t>(util::openshmem_environment::size());
         cfg.node_ =
@@ -608,14 +745,14 @@ struct hpx::traits::plugin_config_data<
         // PEs).  The value below is only a default; do_run() clamps it to 1
         // when the OpenSHMEM runtime provides only SHMEM_THREAD_SERIALIZED.
         return "mtu = "
-               "${HPX_HAVE_PARCELPORT_OPENSHMEM_MTU:65536}\n"
+               "${HPX_HAVE_PARCELPORT_OPENSHMEM_MTU:0}\n"
                // In-flight chunks per (sender,receiver) pair; raises
                // symmetric tx/rx memory linearly, so keep it small for very
                // large runs and increase it for high-latency links.
                "slots = ${HPX_HAVE_PARCELPORT_OPENSHMEM_SLOTS:8}\n"
                // Expected symmetric data segment size (bytes; see
                // mailbox_array::default_symmetric_memory_size).
-               "symmetric_memory_size = 1073741824\n"
+               "symmetric_memory_size = 268435456\n"
                // Seconds of zero page activity at shutdown before the empty wait
                // aborts and remaining in-flight transfers are dropped.  An
                // empty that keeps transferring pages waits as long as it needs;
@@ -635,9 +772,17 @@ struct hpx::traits::plugin_config_data<
                // Max source PEs probed per receive-scan pass (0 = all).
                // Bounds the per-pass remote round-trip cost at large n.
                "scan_window = 8\n"
+               // 1 lets every HPX worker thread progress the transport too
+               "worker_progress = 1\n"
+               // 1 restores the legacy per-peer remote delivery fetches
+               "remote_delivery = 0\n"
+               // local progress every Nth scan (1 = every scan, 0 = never)
+               "progress_interval = 16\n"
+               // 1 prints io-thread timing/page statistics when stopping
+               "stats = 0\n"
                // Number of io_service threads driving progress.  The base
                // parcelport reads hpx.parcel.<pp>.io_pool_size (default 2).
-               "io_pool_size = 1\n";
+               "io_pool_size = 2\n";
     }
 };
 

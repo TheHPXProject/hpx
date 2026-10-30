@@ -18,6 +18,7 @@
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <deque>
 #include <iterator>
@@ -69,6 +70,7 @@ namespace hpx::parcelset::policies::openshmem {
         // Safe to call from any HPX thread.
         void add(connection_ptr const& ptr)
         {
+            pending_.fetch_add(1, std::memory_order_acq_rel);
             std::unique_lock l(connections_mtx_);
             connections_.push_back(ptr);
         }
@@ -82,8 +84,9 @@ namespace hpx::parcelset::policies::openshmem {
         // contention.
         bool has_pending() noexcept
         {
-            std::unique_lock l(connections_mtx_);
-            return !connections_.empty() || !busy_dsts_.empty();
+            // Lock-free, see receiver::has_pending().  Counts connections that
+            // were added and have not finished yet (queued or in flight).
+            return pending_.load(std::memory_order_acquire) > 0;
         }
 
         // Drive one connection by a single non-blocking step.  Callable from
@@ -141,6 +144,7 @@ namespace hpx::parcelset::policies::openshmem {
                 std::unique_lock l(connections_mtx_);
                 busy_dsts_.erase(connection->dst());
                 connection->reserved_dst_ = false;
+                pending_.fetch_sub(1, std::memory_order_acq_rel);
                 return true;
             }
 
@@ -169,7 +173,7 @@ namespace hpx::parcelset::policies::openshmem {
 
     private:
         void* mailboxes_;
-        hpx::spinlock connections_mtx_;
+        std::mutex connections_mtx_;
 
         // Connections waiting for their transfer to be driven.
         connection_list connections_;
@@ -177,6 +181,7 @@ namespace hpx::parcelset::policies::openshmem {
         // Destinations currently reserved by an in-flight connection (part
         // of the single-flight protocol).  Guarded by connections_mtx_.
         std::set<int> busy_dsts_;
+        std::atomic<int> pending_{0};
     };
 }    // namespace hpx::parcelset::policies::openshmem
 
