@@ -18,6 +18,8 @@
 #include <hpx/parcelset/parcelset_fwd.hpp>
 
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <cstddef>
 #include <deque>
 #include <iterator>
@@ -60,6 +62,7 @@ namespace hpx::parcelset::policies::gasnet {
         // Safe to call from any HPX thread.
         void add(connection_ptr const& ptr)
         {
+            pending_.fetch_add(1, std::memory_order_acq_rel);
             std::unique_lock l(connections_mtx_);
             connections_.push_back(ptr);
         }
@@ -73,8 +76,9 @@ namespace hpx::parcelset::policies::gasnet {
         // contention.
         bool has_pending() noexcept
         {
-            std::unique_lock l(connections_mtx_);
-            return !connections_.empty() || !busy_dsts_.empty();
+            // Lock-free, see receiver::has_pending().  Counts connections that
+            // were added and have not finished yet (queued or in flight).
+            return pending_.load(std::memory_order_acquire) > 0;
         }
 
         // Drive one connection by a single non-blocking step.  Callable from
@@ -127,18 +131,36 @@ namespace hpx::parcelset::policies::gasnet {
             // only one region per destination may be in flight).  A finished
             // connection releases its destination reservation; one that still
             // has chunks in flight is re-queued with the reservation held.
+            in_flight_.fetch_add(1, std::memory_order_relaxed);
             bool const finished = connection->poll_send();
+            in_flight_.fetch_sub(1, std::memory_order_relaxed);
             if (finished)
             {
                 std::unique_lock l(connections_mtx_);
                 busy_dsts_.erase(connection->dst());
                 connection->reserved_dst_ = false;
+                pending_.fetch_sub(1, std::memory_order_acq_rel);
                 return true;
             }
 
             std::unique_lock l(connections_mtx_);
             connections_.push_back(HPX_MOVE(connection));
             return true;
+        }
+
+        void dump_state(std::size_t my_pe) noexcept
+        {
+            std::unique_lock l(connections_mtx_);
+            std::fprintf(stderr,
+                "gasnet: PE %zu sender: queued=%zu in_flight=%d busy_dsts=",
+                my_pe, connections_.size(), in_flight_.load());
+            for (int d : busy_dsts_)
+                std::fprintf(stderr, "%d ", d);
+            std::fprintf(stderr, "\n");
+            for (auto const& c : connections_)
+                std::fprintf(stderr,
+                    "gasnet: PE %zu sender conn dst=%d reserved=%d\n", my_pe,
+                    c->dst(), static_cast<int>(c->reserved_dst_));
         }
 
         using parcel_buffer_type = parcel_buffer<>;
@@ -161,7 +183,7 @@ namespace hpx::parcelset::policies::gasnet {
 
     private:
         void* mailboxes_;
-        hpx::spinlock connections_mtx_;
+        std::mutex connections_mtx_;
 
         // Connections waiting for their transfer to be driven.
         connection_list connections_;
@@ -169,6 +191,8 @@ namespace hpx::parcelset::policies::gasnet {
         // Destinations currently reserved by an in-flight connection (part
         // of the single-flight protocol).  Guarded by connections_mtx_.
         std::set<int> busy_dsts_;
+        std::atomic<int> in_flight_{0};
+        std::atomic<int> pending_{0};
     };
 }    // namespace hpx::parcelset::policies::gasnet
 
