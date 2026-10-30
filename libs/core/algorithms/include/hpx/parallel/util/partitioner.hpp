@@ -61,10 +61,12 @@ namespace hpx::parallel::util::detail {
                 "parameters object should not expose both, "
                 "has_variable_chunk_size and invokes_testing_function");
 
+            // get_bulk_iteration_shape_variable consumes count
+            std::size_t const total = count;
             auto&& shape = detail::get_bulk_iteration_shape_variable(
                 policy, it_or_r, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(total, shape);
 
             return execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},

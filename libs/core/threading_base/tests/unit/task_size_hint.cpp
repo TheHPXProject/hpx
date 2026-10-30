@@ -461,6 +461,17 @@ void test_algorithm_sizes()
         },
         task_size::large);
 
+    // with variable chunk sizes the size is derived from the iterations of a
+    // chunk as well
+    check_only_size(
+        [&] {
+            hpx::reduce(
+                policy.with(hpx::execution::experimental::guided_chunk_size()),
+                v.begin(), v.end(), 0, hpx::medium_task(plus))
+                .get();
+        },
+        task_size::medium);
+
     // without a size, the worker tasks have none
     check_only_size(
         [&] { hpx::reduce(policy, v.begin(), v.end(), 0, plus).get(); },
