@@ -67,10 +67,10 @@ namespace hpx::experimental {
                     }
                     catch (...)
                     {
+                        // Store the exception on the next state so that
+                        // every downstream continuation can forward it
+                        // via set_error rather than silently hanging.
                         next_state->set_error(std::current_exception());
-                        continuations.clear();
-                        next_state.reset();
-                        return;
                     }
 
                     for (auto& continuation : continuations)
@@ -81,9 +81,12 @@ namespace hpx::experimental {
                         }
                         catch (...)
                         {
-                            // Exceptions must not escape the noexcept destructor path
-                            // and must not stop later continuations from running.
-                            // NOLINTNEXTLINE(bugprone-empty-catch)
+                            // Intentionally ignore: exceptions from one
+                            // downstream continuation must not abort the
+                            // runtime or prevent later continuations from
+                            // running.
+                            [[maybe_unused]] std::exception_ptr ignored =
+                                std::current_exception();
                         }
                     }
                     continuations.clear();
@@ -98,10 +101,10 @@ namespace hpx::experimental {
                 HPX_ASSERT((continuations.empty() && !next_state) ||
                     (!continuations.empty() && next_state));
 
-                // This state must always have the value set by the time it is
-                // destructed. If there is no next state the value is destructed
-                // with this state.
-                HPX_ASSERT(value);
+                // This state must always have either a value or an exception
+                // set by the time it is destructed. If there is no next state
+                // the value is destructed with this state.
+                HPX_ASSERT(value || exception);
 
                 release();
             }
@@ -176,9 +179,12 @@ namespace hpx::experimental {
                     }
                     catch (...)
                     {
-                        // Exceptions must not escape the noexcept destructor path
-                        // and must not stop later continuations from running.
-                        // NOLINTNEXTLINE(bugprone-empty-catch)
+                        // Intentionally ignore: exceptions from one
+                        // downstream continuation must not abort the
+                        // runtime or prevent later continuations from
+                        // running.
+                        [[maybe_unused]] std::exception_ptr ignored =
+                            std::current_exception();
                     }
                 }
                 continuations.clear();
@@ -558,6 +564,16 @@ namespace hpx::experimental {
 
                     auto continuation =
                         [r = HPX_MOVE(r)](shared_state_ptr_type state) mutable {
+                            // If the previous release() failed to move the
+                            // value, it stored an exception on the state.
+                            // Forward it to the receiver instead of trying
+                            // to construct a (valueless) access wrapper.
+                            if (state && state->exception)
+                            {
+                                hpx::execution::experimental::set_error(
+                                    HPX_MOVE(r), HPX_MOVE(state->exception));
+                                return;
+                            }
                             try
                             {
                                 hpx::execution::experimental::set_value(
@@ -775,6 +791,16 @@ namespace hpx::experimental {
 
                     auto continuation =
                         [r = HPX_MOVE(r)](shared_state_ptr_type state) mutable {
+                            // If the previous release() failed to move the
+                            // value, it stored an exception on the state.
+                            // Forward it to the receiver instead of trying
+                            // to construct a (valueless) access wrapper.
+                            if (state && state->exception)
+                            {
+                                hpx::execution::experimental::set_error(
+                                    HPX_MOVE(r), HPX_MOVE(state->exception));
+                                return;
+                            }
                             try
                             {
                                 hpx::execution::experimental::set_value(

@@ -26,6 +26,7 @@ set(tests
     algorithm_when_all
     algorithm_when_all_vector
     algorithm_when_all_vector_allocator
+    async_rw_mutex_exception
     bulk_async
     environment_queries
     executor_parameters
