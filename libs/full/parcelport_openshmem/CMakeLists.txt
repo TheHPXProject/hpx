@@ -39,4 +39,6 @@ set(HPX_STATIC_PARCELPORT_PLUGINS
     CACHE INTERNAL "" FORCE
 )
 
-add_subdirectory(tests)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  add_subdirectory(tests)
+endif()

@@ -91,7 +91,18 @@ namespace hpx::util {
 
     void openshmem_environment::finalize() noexcept
     {
-        scoped_lock l(mtx_);
+        // finalize() also runs from the process exit handlers.  If
+        // shmem_init_thread() fails, OpenSHMEM aborts the process from inside
+        // init(), which still holds mtx_ on this very thread; blocking on the
+        // lock here would hang the rank forever (while its peers wait for it
+        // in the init collective) instead of letting the job abort.  If init
+        // is still in progress there is nothing to finalize.
+        scoped_lock l(mtx_, std::try_to_lock);
+        if (!l.owns_lock())
+        {
+            return;
+        }
+
         if (enabled_ && has_called_init_)
         {
             has_called_init_ = false;

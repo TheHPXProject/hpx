@@ -14,8 +14,10 @@
 #include <hpx/parcelport_openshmem/receiver_connection.hpp>
 
 #include <cstddef>
+#include <atomic>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <set>
 
 #include <shmem.h>
@@ -47,9 +49,12 @@ namespace hpx::parcelset::policies::openshmem {
         // in-progress connection), so both must be checked.
         bool has_pending() noexcept
         {
-            std::unique_lock l1(connections_mtx_);
-            std::unique_lock l2(active_mtx_);
-            return !connections_.empty() || !active_connections_.empty();
+            // Lock-free on purpose: do_stop() polls this every millisecond
+            // from the main thread, and an unfair lock plus an io thread that
+            // backs off on it can starve the io thread for the whole stop
+            // timeout.  Every queued connection is also in the active set,
+            // so the active count covers both.
+            return pending_.load(std::memory_order_acquire) > 0;
         }
 
         bool background_work(std::size_t arena_idx, std::size_t arena_cnt) noexcept
@@ -88,6 +93,7 @@ namespace hpx::parcelset::policies::openshmem {
             {
                 std::unique_lock l(active_mtx_);
                 active_connections_.erase(src);
+                pending_.fetch_sub(1, std::memory_order_acq_rel);
             }
         }
 
@@ -106,6 +112,21 @@ namespace hpx::parcelset::policies::openshmem {
                 if (active_connections_.count(src))
                     return connection_ptr();
                 active_connections_.insert(src);
+                pending_.fetch_add(1, std::memory_order_acq_rel);
+            }
+
+            // The page that triggered the detection may have been drained by
+            // a connection that released this source between the probe and
+            // the reservation above.  Re-check under the reservation (only
+            // the reservation holder drains); otherwise the new connection
+            // would wait for a page that is not coming and has_pending()
+            // would keep do_stop() waiting for it.
+            if (!mailboxes.page_ready(src))
+            {
+                std::unique_lock l(active_mtx_);
+                active_connections_.erase(src);
+                pending_.fetch_sub(1, std::memory_order_acq_rel);
+                return connection_ptr();
             }
 
             return std::make_shared<connection_type>(pe, mailboxes, &pp_);
@@ -113,11 +134,12 @@ namespace hpx::parcelset::policies::openshmem {
 
         Parcelport& pp_;
 
-        hpx::spinlock connections_mtx_;
+        std::mutex connections_mtx_;
         connection_list connections_;
 
-        hpx::spinlock active_mtx_;
+        std::mutex active_mtx_;
         std::set<int> active_connections_;
+        std::atomic<int> pending_{0};
     };
 }    // namespace hpx::parcelset::policies::openshmem
 

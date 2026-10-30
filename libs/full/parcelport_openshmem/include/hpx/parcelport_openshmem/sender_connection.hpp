@@ -94,7 +94,8 @@ namespace hpx::parcelset::policies::openshmem {
 
     private:
         void prepare() noexcept;
-        std::size_t stage_chunk() noexcept;
+        std::size_t stage_chunk(
+            std::uint32_t chunk_idx, unsigned char* buffer) noexcept;
         void finish() noexcept;
 
         friend struct sender;
@@ -107,6 +108,21 @@ namespace hpx::parcelset::policies::openshmem {
 
         handler_type handler_;
         post_handler_type postprocess_handler_;
+
+        // The message is one byte stream: [descriptor][data_][zero-copy
+        // chunk 0][zero-copy chunk 1]...  The descriptor carries the chunk
+        // counts and the transmission chunk table so the receiver can set up
+        // the chunk buffers; the chunk bytes are staged straight from their
+        // owners into the pages (no serialization-time copy).
+        struct segment
+        {
+            unsigned char const* ptr;
+            std::size_t len;
+            std::size_t start;    // offset of this segment in the stream
+        };
+        std::vector<unsigned char> desc_;
+        std::vector<segment> segs_;
+        std::size_t seg_hint_ = 0;
 
         std::uint32_t num_chunks_ = 0;
         std::uint32_t chunk_idx_ = 0;
