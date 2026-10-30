@@ -24,7 +24,7 @@
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
 
-#define SIZE 1007
+#define TEST_SIZE 1007
 
 template <typename IteratorTag>
 void test_partial_sort(IteratorTag)
@@ -32,16 +32,16 @@ void test_partial_sort(IteratorTag)
     using compare_t = std::less<std::uint64_t>;
 
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    for (std::uint64_t i = 1; i < SIZE; ++i)
+    for (std::uint64_t i = 1; i < TEST_SIZE; ++i)
     {
         B = A;
         auto result = hpx::partial_sort(B.begin(),
@@ -63,16 +63,16 @@ void test_partial_sort(ExPolicy policy, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
 
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    for (std::uint64_t i = 1; i < SIZE; ++i)
+    for (std::uint64_t i = 1; i < TEST_SIZE; ++i)
     {
         B = A;
         auto result = hpx::partial_sort(policy, B.begin(),
@@ -94,16 +94,16 @@ void test_partial_sort_async(ExPolicy p, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
 
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
     }
     std::shuffle(A.begin(), A.end(), gen);
 
-    for (std::uint64_t i = 1; i < SIZE; ++i)
+    for (std::uint64_t i = 1; i < TEST_SIZE; ++i)
     {
         B = A;
         auto f = hpx::partial_sort(p, B.begin(),

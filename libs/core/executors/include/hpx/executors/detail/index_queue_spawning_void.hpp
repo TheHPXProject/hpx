@@ -366,11 +366,11 @@ namespace hpx::parallel::execution::detail {
 
             // launch task on new HPX-thread
             auto hint = hpx::execution::experimental::get_hint(policy);
-            if (hint.mode == hpx::threads::thread_schedule_hint_mode::none &&
+            if (hint.mode() == hpx::threads::thread_schedule_hint_mode::none &&
                 hint.hint == -1)
             {
                 // apply hint if none was given
-                hint.mode = hpx::threads::thread_schedule_hint_mode::thread;
+                hint.mode(hpx::threads::thread_schedule_hint_mode::thread);
                 hint.hint = static_cast<std::int16_t>(
                     wrapped_pu_num(worker_thread, needs_wraparound) +
                     first_thread);

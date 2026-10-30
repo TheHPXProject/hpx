@@ -200,6 +200,7 @@ set(sender_tests
     mismatch_binary_sender
     move_sender
     none_of_sender
+    nth_element_sender
     partial_sort_sender
     reduce_sender
     remove_sender

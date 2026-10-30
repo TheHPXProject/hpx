@@ -285,11 +285,10 @@ namespace hpx::parallel {
                 {
                     namespace ex = hpx::execution::experimental;
                     return ex::just(first, nth, last) |
-                        ex::then([policy = HPX_FORWARD(ExPolicy, policy),
-                                     comp = wrapped_comp_type(
-                                         HPX_FORWARD(Pred, pred),
-                                         HPX_FORWARD(Proj, proj))](
-                                     RandomIt begin, RandomIt nth_it,
+                        ex::then([comp = wrapped_comp_type(
+                                      HPX_FORWARD(Pred, pred),
+                                      HPX_FORWARD(Proj, proj))](RandomIt begin,
+                                     RandomIt nth_it,
                                      RandomIt end) mutable -> RandomIt {
                             auto last_iter =
                                 detail::advance_to_sentinel(begin, end);

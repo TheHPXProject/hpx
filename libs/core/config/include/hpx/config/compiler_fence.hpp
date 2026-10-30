@@ -34,8 +34,14 @@ extern "C" void _ReadWriteBarrier();
 
 #define HPX_COMPILER_FENCE _ReadWriteBarrier()
 
+#if defined(_M_ARM64) || defined(_M_ARM64EC) || defined(_M_ARM)
+extern "C" void __yield(void);
+#pragma intrinsic(__yield)
+#define HPX_SMT_PAUSE __yield()
+#else
 extern "C" void _mm_pause();
 #define HPX_SMT_PAUSE _mm_pause()
+#endif
 
 #elif defined(__GNUC__)
 
@@ -46,7 +52,7 @@ extern "C" void _mm_pause();
 #elif defined(__ppc__)
 // According to: https://stackoverflow.com/questions/5425506/equivalent-of-x86-pause-instruction-for-ppc
 #define HPX_SMT_PAUSE __asm__ __volatile__("or 27,27,27")
-#elif defined(__arm__)
+#elif defined(__arm__) || defined(__aarch64__)
 // according to: https://mysqlonarm.github.io/Porting-Optimizing-HPC-for-ARM/
 #define HPX_SMT_PAUSE __asm__ __volatile__("yield" : : : "memory")
 #elif defined(__riscv)

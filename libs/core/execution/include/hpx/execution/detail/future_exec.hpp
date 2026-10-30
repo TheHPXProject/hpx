@@ -151,14 +151,23 @@ namespace hpx::lcos::detail {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT struct post_policy_spawner
     {
+        // The hint of the executor the continuation was given to, if any. As
+        // with the executor's post, a size in it wins over the function's.
+        threads::thread_schedule_hint hint;
+
         template <typename F>
         void operator()(F&& f, hpx::threads::thread_description desc,
-            threads::thread_id_ref_type& id) const
+            threads::thread_id_ref_type& id, threads::task_size size) const
         {
+            auto task_hint = hint;
+            if (task_hint.task_size() == threads::task_size::unknown)
+            {
+                task_hint.task_size(size);
+            }
+
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(HPX_FORWARD(F, f)),
-                HPX_MOVE(desc), threads::thread_priority::default_,
-                threads::thread_schedule_hint(),
+                HPX_MOVE(desc), threads::thread_priority::default_, task_hint,
                 threads::thread_stacksize::default_,
                 threads::thread_schedule_state::pending);
 
@@ -173,7 +182,7 @@ namespace hpx::lcos::detail {
 
         template <typename F>
         void operator()(F&& f, hpx::threads::thread_description,
-            threads::thread_id_ref_type& id) const
+            threads::thread_id_ref_type& id, threads::task_size) const
         {
             id = threads::invalid_thread_id;
             hpx::parallel::execution::post(exec, HPX_FORWARD(F, f));
@@ -278,8 +287,11 @@ namespace hpx::lcos::detail {
         hpx::traits::detail::shared_state_ptr_t<result_type> r(
             p.release(), false);
 
+        // parallel_executor::then_execute passes its own policy here, so its
+        // hint goes with the continuation's thread
         static_cast<shared_state*>(r.get())->template attach<false>(
-            HPX_FORWARD(Future, future), spawner_type{},
+            HPX_FORWARD(Future, future),
+            spawner_type{hpx::execution::experimental::get_hint(policy)},
             HPX_FORWARD(Policy, policy));
 
         return r;

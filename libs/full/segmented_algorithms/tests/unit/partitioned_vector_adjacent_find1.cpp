@@ -18,7 +18,7 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-#define SIZE 64
+#define TEST_SIZE 64
 
 struct pred
 {
@@ -32,11 +32,11 @@ struct pred
 template <typename T>
 void initialize(hpx::partitioned_vector<T>& xvalues)
 {
-    T init_array[SIZE] = {1, 2, 3, 4, 5, 1, 2, 3, 1, 5, 2, 3, 4, 2, 3, 2, 1, 2,
-        3, 4, 5, 6, 5, 6, 1, 2, 3, 4, 2, 1, 2, 3, 3, 5, 4, 3, 2, 1, 1, 2, 3, 4,
-        1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 7, 6, 5, 7, 5, 4, 2, 3, 4, 5, 2};
+    T init_array[TEST_SIZE] = {1, 2, 3, 4, 5, 1, 2, 3, 1, 5, 2, 3, 4, 2, 3, 2,
+        1, 2, 3, 4, 5, 6, 5, 6, 1, 2, 3, 4, 2, 1, 2, 3, 3, 5, 4, 3, 2, 1, 1, 2,
+        3, 4, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 7, 6, 5, 7, 5, 4, 2, 3, 4, 5, 2};
     typename hpx::partitioned_vector<T>::iterator it = xvalues.begin();
-    for (int i = 0; i < SIZE; i++, it++)
+    for (int i = 0; i < TEST_SIZE; i++, it++)
     {
         *it = init_array[i];
     }
@@ -69,7 +69,7 @@ template <typename T>
 void adjacent_find_tests(std::vector<hpx::id_type>& localities)
 {
     hpx::partitioned_vector<T> xvalues(
-        SIZE, T(0), hpx::container_layout(localities));
+        TEST_SIZE, T(0), hpx::container_layout(localities));
     initialize(xvalues);
 
     test_adjacent_find(hpx::execution::seq, xvalues);

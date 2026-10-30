@@ -19,10 +19,10 @@
 #include "test_utils.hpp"
 
 ////////////////////////////////////////////////////////////////////////////
-int seed = std::random_device{}();
+unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
 
-constexpr std::size_t SIZE{10007};
+constexpr std::size_t num_elements{10007};
 
 template <typename LnPolicy, typename ExPolicy, typename IteratorTag>
 void test_nth_element_sender(
@@ -38,30 +38,30 @@ void test_nth_element_sender(
     namespace tt = hpx::this_thread::experimental;
     using scheduler_t = ex::thread_pool_policy_scheduler<LnPolicy>;
 
-    std::vector<std::size_t> c(SIZE);
-    std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+    std::vector<std::size_t> c(num_elements);
+    std::generate(std::begin(c), std::end(c),
+        []() { return std::rand() % num_elements; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % num_elements;
+    auto const nth = static_cast<std::ptrdiff_t>(rand_index);
 
     auto exec = ex::explicit_scheduler_executor(scheduler_t(ln_policy));
 
-    tt::sync_wait(
-        ex::just(iterator(std::begin(c)), iterator(std::begin(c) + rand_index),
-            iterator(std::end(c))) |
+    tt::sync_wait(ex::just(iterator(std::begin(c)),
+                      iterator(std::begin(c) + nth), iterator(std::end(c))) |
         hpx::nth_element(ex_policy.on(exec)));
 
-    std::nth_element(std::begin(d), std::begin(d) + rand_index, std::end(d));
+    std::nth_element(std::begin(d), std::begin(d) + nth, std::end(d));
 
-    HPX_TEST(*(std::begin(c) + rand_index) == *(std::begin(d) + rand_index));
+    HPX_TEST(*(std::begin(c) + nth) == *(std::begin(d) + nth));
 
     for (size_t k = 0; k < rand_index; k++)
     {
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (size_t k = rand_index + 1; k < SIZE; k++)
+    for (size_t k = rand_index + 1; k < num_elements; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }

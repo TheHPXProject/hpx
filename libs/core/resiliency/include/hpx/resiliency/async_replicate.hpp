@@ -101,7 +101,7 @@ namespace hpx::resiliency::experimental {
     /// Asynchronously launches \a f exactly \a n times, validates results
     /// with \a pred, then runs valid results through \a vote.
     ///
-    /// \param tag   CPO tag (async_replicate_vote_validate_t).
+    /// The CPO tag is \c async_replicate_vote_validate_t.
     /// \param n     Number of replicated invocations.
     /// \param vote  Voting function selecting among valid results.
     /// \param pred  Predicate validating each invocation result.
@@ -125,7 +125,7 @@ namespace hpx::resiliency::experimental {
     /// results through \a vote. Validation uses the default exception
     /// check.
     ///
-    /// \param tag   CPO tag (async_replicate_vote_t).
+    /// The CPO tag is \c async_replicate_vote_t.
     /// \param n     Number of replicated invocations.
     /// \param vote  Voting function selecting among valid results.
     /// \param f     Callable to invoke asynchronously.
@@ -147,7 +147,7 @@ namespace hpx::resiliency::experimental {
     /// Asynchronously launches \a f exactly \a n times, validates results
     /// with \a pred. Returns the first valid result.
     ///
-    /// \param tag   CPO tag (async_replicate_validate_t).
+    /// The CPO tag is \c async_replicate_validate_t.
     /// \param n     Number of replicated invocations.
     /// \param pred  Predicate validating each invocation result.
     /// \param f     Callable to invoke asynchronously.
@@ -169,7 +169,7 @@ namespace hpx::resiliency::experimental {
     /// Asynchronously launches \a f exactly \a n times. Validates by
     /// checking for exceptions. Returns the first valid result.
     ///
-    /// \param tag  CPO tag (async_replicate_t).
+    /// The CPO tag is \c async_replicate_t.
     /// \param n    Number of replicated invocations.
     /// \param f    Callable to invoke asynchronously.
     /// \param ts   Arguments forwarded to \a f.

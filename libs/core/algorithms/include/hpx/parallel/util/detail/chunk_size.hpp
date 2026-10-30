@@ -101,8 +101,11 @@ namespace hpx::parallel::util::detail {
     void add_ready_future(
         std::vector<Future>& workitems, F&& f, FwdIter first, std::size_t count)
     {
-        workitems.push_back(
-            hpx::make_ready_future(HPX_FORWARD(F, f)(first, count)));
+        // the future's value type may differ from the result type of f (see
+        // partitioner_result_t)
+        using result_type = hpx::traits::future_traits_t<Future>;
+        workitems.push_back(hpx::make_ready_future(
+            static_cast<result_type>(HPX_FORWARD(F, f)(first, count))));
     }
 
     HPX_CXX_CORE_EXPORT template <typename F, typename FwdIter>
@@ -430,8 +433,11 @@ namespace hpx::parallel::util::detail {
     void add_ready_future_idx(std::vector<Future>& workitems, F&& f,
         FwdIter first, std::size_t base_idx, std::size_t count)
     {
-        workitems.push_back(
-            hpx::make_ready_future(HPX_FORWARD(F, f)(first, count, base_idx)));
+        // the future's value type may differ from the result type of f (see
+        // partitioner_result_t)
+        using result_type = hpx::traits::future_traits_t<Future>;
+        workitems.push_back(hpx::make_ready_future(static_cast<result_type>(
+            HPX_FORWARD(F, f)(first, count, base_idx))));
     }
 
     HPX_CXX_CORE_EXPORT template <typename F, typename FwdIter>

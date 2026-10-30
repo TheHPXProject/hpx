@@ -47,4 +47,4 @@ jobs:
       shell: bash
       run: |
           cd build
-          ./bin/minmax_element_performance_test --detailed_bench
+          ./bin/minmax_element_performance_test --hpx:detailed_bench

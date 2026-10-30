@@ -163,4 +163,10 @@ struct hpx::traits::get_function_annotation<hpx::detail::annotated_function<F>>
     }
 };
 
+template <typename F, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<hpx::detail::annotated_function<F>, Size>
+  : get_task_size<typename hpx::detail::annotated_function<F>::fun_type, Size>
+{
+};
+
 #endif

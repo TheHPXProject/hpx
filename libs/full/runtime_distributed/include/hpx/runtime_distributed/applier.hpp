@@ -94,6 +94,7 @@ namespace hpx::applier {
         ///                 by the function.
         /// \param type     [in] The type of the component which needs to exist
         ///                 on the returned localities.
+        /// \param ec       [in,out] The error code to report failures through.
         ///
         /// \returns The function returns \a true if there is at least one
         ///          remote locality known to the AGAS service

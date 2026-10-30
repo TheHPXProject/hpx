@@ -119,6 +119,7 @@ namespace hpx { namespace collectives {
     ///
     /// \param comm     The channel communicator object to use for the data transfer
     /// \param site     The source site
+    /// \param tag      The (optional) tag identifying the concrete operation
     ///
     /// \returns    This function returns a future<T> that becomes ready once the
     ///             data transfer operation has finished. The future will hold the

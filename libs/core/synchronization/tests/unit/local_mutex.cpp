@@ -15,7 +15,9 @@
 #include <hpx/mutex.hpp>
 #include <hpx/thread.hpp>
 
+#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -291,6 +293,123 @@ void test_timed_mutex()
     test_timedlock<hpx::timed_mutex>()();
 }
 
+void test_timed_mutex_try_lock_until_retries_while_still_owned()
+{
+    for (int iter = 0; iter != 8; ++iter)
+    {
+        hpx::timed_mutex mtx;
+        std::atomic<int> waiter_state{0};
+
+        mtx.lock();
+
+        hpx::thread waiter([&mtx, &waiter_state]() {
+            waiter_state.store(1, std::memory_order_release);
+            bool const acquired = mtx.try_lock_until(
+                std::chrono::steady_clock::now() + std::chrono::seconds(5));
+            waiter_state.store(acquired ? 3 : 2, std::memory_order_release);
+            if (acquired)
+            {
+                mtx.unlock();
+            }
+        });
+
+        hpx::threads::thread_id_type const waiter_id = waiter.native_handle();
+        bool waiter_suspended = false;
+        while (waiter_state.load(std::memory_order_acquire) < 2)
+        {
+            if (waiter_state.load(std::memory_order_acquire) == 1 &&
+                hpx::threads::get_thread_state(waiter_id).state() ==
+                    hpx::threads::thread_schedule_state::suspended)
+            {
+                waiter_suspended = true;
+                break;
+            }
+            hpx::this_thread::yield();
+        }
+
+        // the waiter finished before it was observed waiting, report the
+        // missed checkpoint and clean up instead of polling forever
+        if (!waiter_suspended)
+        {
+            mtx.unlock();
+            waiter.join();
+            HPX_TEST(waiter_suspended);
+            continue;
+        }
+
+        bool owned = true;
+        for (int round = 0;
+            round != 16 && waiter_state.load(std::memory_order_acquire) == 1;
+            ++round)
+        {
+            mtx.unlock();
+            if (!mtx.try_lock())
+            {
+                owned = false;
+                break;
+            }
+            hpx::this_thread::yield();
+        }
+
+        if (owned)
+        {
+            mtx.unlock();
+        }
+        waiter.join();
+        HPX_TEST_EQ(waiter_state.load(std::memory_order_acquire), 3);
+    }
+}
+
+void test_timed_mutex_try_lock_until_succeeds_after_unlock()
+{
+    hpx::timed_mutex mtx;
+    std::atomic<bool> wait_started{false};
+
+    mtx.lock();
+
+    hpx::thread waiter([&mtx, &wait_started]() {
+        wait_started.store(true, std::memory_order_release);
+        HPX_TEST(mtx.try_lock_until(
+            std::chrono::steady_clock::now() + std::chrono::seconds(5)));
+        mtx.unlock();
+    });
+
+    while (!wait_started.load(std::memory_order_acquire))
+    {
+        hpx::this_thread::yield();
+    }
+    hpx::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    mtx.unlock();
+    waiter.join();
+}
+
+void test_timed_mutex_try_lock_until_times_out_while_locked()
+{
+    hpx::timed_mutex mtx;
+    std::atomic<bool> wait_started{false};
+
+    mtx.lock();
+
+    hpx::thread waiter([&mtx, &wait_started]() {
+        wait_started.store(true, std::memory_order_release);
+        auto const start = std::chrono::steady_clock::now();
+        bool const acquired =
+            mtx.try_lock_until(start + std::chrono::milliseconds(200));
+        HPX_TEST(!acquired);
+        HPX_TEST(std::chrono::steady_clock::now() - start >=
+            std::chrono::milliseconds(200) - timeout_resolution);
+    });
+
+    while (!wait_started.load(std::memory_order_acquire))
+    {
+        hpx::this_thread::yield();
+    }
+
+    waiter.join();
+    mtx.unlock();
+}
+
 //void test_recursive_mutex()
 //{
 //    test_lock<hpx::recursive_mutex>()();
@@ -315,6 +434,9 @@ int hpx_main(variables_map&)
     {
         test_mutex();
         test_timed_mutex();
+        test_timed_mutex_try_lock_until_retries_while_still_owned();
+        test_timed_mutex_try_lock_until_succeeds_after_unlock();
+        test_timed_mutex_try_lock_until_times_out_while_locked();
         //~ test_recursive_mutex();
         //~ test_recursive_timed_mutex();
     }
