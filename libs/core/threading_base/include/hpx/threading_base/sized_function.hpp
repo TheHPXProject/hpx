@@ -216,4 +216,37 @@ struct hpx::traits::get_function_annotation_tracing<
         return get_function_annotation_tracing<F>::call(f.f);
     }
 };
+
+template <typename F>
+struct hpx::traits::get_function_address<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static constexpr std::size_t call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_function_address<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_function_annotation<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static constexpr char const* call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_function_annotation<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_function_annotation_tracing<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static hpx::tracing::annotation_handle call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_function_annotation_tracing<F>::call(f.f);
+    }
+};
 #endif

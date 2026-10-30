@@ -472,6 +472,22 @@ void test_algorithm_sizes()
         },
         task_size::medium);
 
+    // The only worker runs all chunks in one task. A chunk of 100 iterations
+    // of a nano function is small and 100 small chunks make a medium task.
+    // Fewer iterations per chunk would make nano chunks and a small task;
+    // counting all 10000 iterations for each chunk would make medium chunks
+    // and a large task.
+    std::vector<int> w(10000, 1);
+    check_only_size(
+        [&] {
+            hpx::reduce(
+                policy.with(
+                    hpx::execution::experimental::static_chunk_size(100)),
+                w.begin(), w.end(), 0, hpx::nano_task(plus))
+                .get();
+        },
+        task_size::medium);
+
     // without a size, the worker tasks have none
     check_only_size(
         [&] { hpx::reduce(policy, v.begin(), v.end(), 0, plus).get(); },

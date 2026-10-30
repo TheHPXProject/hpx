@@ -32,7 +32,7 @@ namespace hpx::threads {
 
     /// The run time a task of the given \p size stands for. Each size stands
     /// for a hundred times the run time of the one below it: nano about 1 ns,
-    /// small up to about 100 ns, medium about 10 us, large about 1 ms or more.
+    /// small about 100 ns, medium about 10 us, large about 1 ms or more.
     /// An unknown size gives a duration of zero. Callers should rely on
     /// std::chrono arithmetic only, not on the unit or the count of the
     /// returned duration, which may change once tasks can carry real run
@@ -75,7 +75,7 @@ namespace hpx::threads {
         auto const max_calls = limit / per_call;
         auto const total = calls > static_cast<std::size_t>(max_calls) ?
             limit :
-            per_call * static_cast<decltype(max_calls)>(calls);
+            per_call * static_cast<std::chrono::nanoseconds::rep>(calls);
 
         for (task_size const s :
             {task_size::large, task_size::medium, task_size::small_})

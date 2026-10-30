@@ -608,7 +608,7 @@ object ``f``, which also finds the size of a function stored in an
 .. note::
 
    As a rule of thumb, a nano task runs for about a nanosecond, a small task
-   for up to about 100 nanoseconds, a medium task for about 10 microseconds,
+   for about 100 nanoseconds, a medium task for about 10 microseconds,
    and a large task for about a millisecond or more: each size stands for a
    hundred times the run time of the one below it, and
    ``hpx::task_size_duration(size)`` returns it as a ``std::chrono``
@@ -648,7 +648,9 @@ derived from the function's size with ``hpx::bulk_task_size``:
 ``hpx::execution::parallel_executor`` and the bulk operations of
 ``hpx::execution::experimental::thread_pool_scheduler`` (which the scheduler
 executors use as well) give each of their worker tasks the size of the share
-of the elements it runs. Hierarchical spawning
+of the elements it runs. For ``bulk_chunked``, which passes a range of
+elements to each call, the function's size is still the size of its work for
+one element, not for a whole range. Hierarchical spawning
 (``hpx::execution::parallel_executor_spawn_hierarchically``) creates a task
 for each element instead: these tasks carry the function's size, and the
 tasks that only spawn them are small. The parallel algorithms run their loop
