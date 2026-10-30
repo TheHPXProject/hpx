@@ -170,7 +170,8 @@ namespace hpx::program_options {
         adding new option (the add_options) method, and facilities to search
         for options by name.
 
-        See @ref a_adding_options "here" for option adding interface discussion.
+        See the program-options documentation for an option-adding interface
+        discussion.
         @sa option_description
     */
     HPX_CXX_CORE_EXPORT class HPX_CORE_EXPORT options_description

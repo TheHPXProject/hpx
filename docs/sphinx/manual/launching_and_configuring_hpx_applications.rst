@@ -178,10 +178,13 @@ The |hpx| configuration section
    minimal_deadlock_detection = <debug>
    spinlock_deadlock_detection = <debug>
    spinlock_deadlock_detection_limit = ${HPX_SPINLOCK_DEADLOCK_DETECTION_LIMIT:1000000}
+   scheduler = local-priority-fifo
+   numa_sensitive = 1
    max_background_threads = ${HPX_MAX_BACKGROUND_THREADS:$[hpx.os_threads]}
    max_idle_loop_count = ${HPX_MAX_IDLE_LOOP_COUNT:<hpx_idle_loop_count_max>}
    max_busy_loop_count = ${HPX_MAX_BUSY_LOOP_COUNT:<hpx_busy_loop_count_max>}
    max_idle_backoff_time = ${HPX_MAX_IDLE_BACKOFF_TIME:<hpx_idle_backoff_time_max>}
+   default_scheduler_mode = ${HPX_DEFAULT_SCHEDULER_MODE}
    exception_verbosity = ${HPX_EXCEPTION_VERBOSITY:2}
    trace_depth = ${HPX_TRACE_DEPTH:20}
    handle_signals = ${HPX_HANDLE_SIGNALS:1}
@@ -193,6 +196,7 @@ The |hpx| configuration section
    large_size = ${HPX_LARGE_STACK_SIZE:<hpx_large_stack_size>}
    huge_size = ${HPX_HUGE_STACK_SIZE:<hpx_huge_stack_size>}
    use_guard_pages = ${HPX_THREAD_GUARD_PAGE:1}
+   unbind_on_reset = ${HPX_STACKS_UNBIND_ON_RESET:1}
 
 .. _ini_hpx:
 
@@ -258,27 +262,48 @@ The |hpx| configuration section
        spinlocks are allowed to perform. This setting is applicable only if
        ``HPX_WITH_SPINLOCK_DEADLOCK_DETECTION`` is set during configuration in
        CMake. By default this is set to ``1000000``.
+   * * ``hpx.scheduler``
+     * This setting defines the thread scheduling policy of the default thread
+       pool, see :ref:`schedulers`. It is set by the command line option
+       :option:`--hpx:queuing`. Defaults to ``local-priority-fifo``.
+   * * ``hpx.numa_sensitive``
+     * This setting controls how idle worker threads steal work across NUMA
+       domains: ``0`` all worker threads may steal from other NUMA domains,
+       ``1`` only the first worker thread of each NUMA domain steals from the
+       nearest other NUMA domains, ``2`` no stealing across NUMA domains, see
+       :ref:`thread_scheduler_numa`. It is set by the command line option
+       :option:`--hpx:numa-sensitive`. Defaults to ``1``.
    * * ``hpx.max_background_threads``
-     * This setting defines the number of threads in the scheduler, which are
-       used to execute background work. By default this is the same as the
-       number of cores used for the scheduler.
+     * This setting defines the number of worker threads in the scheduler that
+       are used to execute background work (the worker threads with the
+       smallest indices in each thread pool), see
+       :ref:`thread_scheduler_background_work`. By default this is the number
+       of worker threads (``hpx.os_threads``).
    * * ``hpx.max_idle_loop_count``
-     * By default this is defined by the preprocessor constant
-       ``HPX_IDLE_LOOP_COUNT_MAX``. This is an internal setting that you should
-       change only if you know exactly what you are doing.
+     * This setting defines the number of consecutive scheduling loop
+       iterations without work after which a worker thread goes to sleep (idle
+       backoff). After half of it, idle worker threads steal staged tasks from
+       any other worker thread. See :ref:`thread_scheduler_configuration`. By
+       default this is defined by the preprocessor constant
+       ``HPX_IDLE_LOOP_COUNT_MAX`` (``200000``).
    * * ``hpx.max_busy_loop_count``
-     * This setting defines the maximum value of the busy-loop counter in the
-       scheduler. By default this is defined by the preprocessor constant
-       ``HPX_BUSY_LOOP_COUNT_MAX``. This is an internal setting that you should
-       change only if you know exactly what you are doing.
+     * This setting defines the number of |hpx| threads a worker thread runs
+       before it does background work in between, see
+       :ref:`thread_scheduler_background_work`. By default this is defined by
+       the preprocessor constant ``HPX_BUSY_LOOP_COUNT_MAX`` (``2000``).
    * * ``hpx.max_idle_backoff_time``
-     * This setting defines the maximum time (in milliseconds) for the scheduler
-       to sleep after being idle for ``hpx.max_idle_loop_count`` iterations.
-       This setting is applicable only if
-       ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set during configuration in
-       |cmake|_. By default this is defined by the preprocessor constant
-       ``HPX_IDLE_BACKOFF_TIME_MAX``. This is an internal setting that you
-       should change only if you know exactly what you are doing.
+     * This setting defines the maximum time (in microseconds) for a worker
+       thread to sleep after being idle for ``hpx.max_idle_loop_count``
+       iterations, see :ref:`thread_scheduler_idle_backoff`. This setting is
+       applicable only if ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF`` is set
+       during configuration in |cmake|_. By default this is defined by the
+       preprocessor constant ``HPX_IDLE_BACKOFF_TIME_MAX`` (``1000``).
+   * * ``hpx.default_scheduler_mode``
+     * This setting defines the scheduler mode of the default thread pool as a
+       number (the bitwise or of the values of
+       :hpx:enum:`hpx::threads::policies::scheduler_mode`), see
+       :ref:`thread_scheduler_modes`. If it is empty (the default),
+       ``scheduler_mode::default_`` is used.
    * * ``hpx.exception_verbosity``
      * This setting defines the verbosity of exceptions. Valid values are
        integers. A setting of ``2`` or higher prints all available information.
@@ -329,6 +354,53 @@ The |hpx| configuration section
        the ``HPX_USE_GENERIC_COROUTINE_CONTEXT`` option is not enabled and the
        ``HPX_WITH_THREAD_GUARD_PAGE`` is set to 1 while configuring the build
        system. It is set by default to ``1``.
+   * * ``hpx.stacks.unbind_on_reset``
+     * Controls how recycled mmap'd coroutine stacks are advised when an HPX
+       thread terminates (Linux/FreeBSD with ``HPX_WITH_THREAD_STACK_MMAP=ON``;
+       not used on Apple Silicon, which allocates stacks via ``calloc``).
+       ``0`` never advises (pages stay resident). ``1`` (default) uses
+       ``MADV_FREE`` when available, otherwise keeps pages resident; this
+       avoids the cross-CPU TLB shootdowns caused by ``MADV_DONTNEED`` on
+       recursive fork-join workloads (see :hpx-issue:`6793`). ``2`` restores
+       the legacy ``MADV_DONTNEED`` behaviour.
+       Modes ``0`` and ``1`` do **not** guarantee that recycled stack pages
+       are zero-filled before reuse: with ``MADV_FREE``, prior contents remain
+       visible until the kernel actually reclaims the page (and mode ``0``
+       never discards them). That can expose leftover stack data from one HPX
+       thread to a later HPX thread that reuses the same stack in the same
+       process. On Linux, ``MADV_DONTNEED`` (mode ``2``) faults in fresh zero
+       pages on next touch. FreeBSD's ``MADV_DONTNEED`` only lowers page
+       priority and does **not** scrub residual stack data; ``MADV_FREE`` is
+       not a substitute for that guarantee either. Even on Linux, mode ``2``
+       does not sanitize the entire stack: the top page is excluded, a clean
+       watermark skips advice, and failed advice leaves old contents in place
+       for reuse. Do not rely on any stack recycling mode to scrub secrets;
+       clear sensitive data explicitly before its lifetime ends.
+
+The ``hpx.tracing`` configuration section
+.........................................
+
+.. code-block:: ini
+
+   [hpx.tracing]
+   sample_rate = ${HPX_TRACING_SAMPLE_RATE:1}
+
+.. _ini_hpx_tracing:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.tracing.sample_rate``
+     * 1-in-N sampling rate for the per-task lifecycle events on Tracy
+       builds. Initialized from the CMake option
+       :option:`HPX_WITH_TRACING_SAMPLE_RATE` (default ``1``, every task
+       sampled). Values below 1 are clamped to 1. Applied at
+       ``init_global_data`` time; can also be updated from user code via
+       ``hpx::threads::set_tracing_sample_rate(int)``, in which case each
+       worker abandons its current countdown and starts a fresh one on
+       the next task creation. Only present on Tracy builds
+       (``HPX_WITH_TRACY=ON``).
 
 The ``hpx.threadpools`` configuration section
 .............................................
@@ -361,18 +433,26 @@ The ``hpx.thread_queue`` configuration section
 
 .. important::
 
-   These are the setting control internal values used by the thread scheduling queues
+   These settings control internal values used by the thread scheduling queues
    in the |hpx| scheduler. You should not modify these settings unless you know
-   exactly what you are doing.
+   exactly what you are doing. :ref:`thread_scheduler_configuration` explains
+   how they work together.
 
 .. code-block:: ini
 
    [hpx.thread_queue]
+   max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:1000}
    min_tasks_to_steal_pending = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING:0}
    min_tasks_to_steal_staged = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:0}
+   min_tasks_to_steal_staged_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:10}
+   idle_loop_count_steal_staged = ${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:30}
    min_add_new_count = ${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:10}
    max_add_new_count = ${HPX_THREAD_QUEUE_MAX_ADD_NEW_COUNT:10}
+   min_delete_count = ${HPX_THREAD_QUEUE_MIN_DELETE_COUNT:10}
    max_delete_count = ${HPX_THREAD_QUEUE_MAX_DELETE_COUNT:1000}
+   max_terminated_threads = ${HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS:100}
+   init_threads_count = ${HPX_THREAD_QUEUE_INIT_THREADS_COUNT:10}
+   cached_threads_count = ${HPX_THREAD_QUEUE_CACHED_THREADS_COUNT:1000}
 
 .. _ini_hpx_thread_queue:
 
@@ -380,25 +460,66 @@ The ``hpx.thread_queue`` configuration section
 
    * * Property
      * Description
+   * * ``hpx.thread_queue.max_thread_count``
+     * The value of this property limits the number of |hpx| threads a queue
+       converts staged tasks into, see :ref:`thread_scheduler_conversion`. A
+       queue without pending threads always converts at least
+       ``hpx.thread_queue.min_add_new_count`` tasks. ``0`` removes the limit.
    * * ``hpx.thread_queue.min_tasks_to_steal_pending``
      * The value of this property defines the number of pending |hpx| threads
-       that have to be available before neighboring cores are allowed to steal
-       work. The default is to allow stealing always.
+       that have to be available before other worker threads are allowed to
+       steal them. The default is to allow stealing always. Values larger than
+       ``1`` can leave threads queued behind a long running |hpx| thread
+       indefinitely, see :ref:`thread_scheduler_pending_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged``
      * The value of this property defines the number of staged |hpx| tasks that
-       need to be available before neighboring cores are allowed to steal work.
-       The default is to allow stealing always.
+       need to be available before other worker threads are allowed to steal
+       them. The default is to allow stealing always. A worker thread always
+       converts its own staged tasks.
+   * * ``hpx.thread_queue.idle_loop_count_steal_staged``
+     * The value of this property defines the number of consecutive empty
+       scheduling loop iterations after which a worker thread starts stealing
+       staged |hpx| tasks from other worker threads (local priority queue
+       scheduler only; values above ``hpx.max_idle_loop_count / 2`` are limited
+       to it. The local and shared priority schedulers steal staged tasks right
+       away, the work-requesting schedulers do not steal staged tasks). It has
+       no effect if fast idle mode is on, which steals staged tasks right away.
+       See :ref:`thread_scheduler_staged_steal`.
+   * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
+     * The value of this property defines the number of staged |hpx| tasks that
+       need to be available before other worker threads are allowed to steal
+       them shortly after running out of work, i.e. after
+       ``hpx.thread_queue.idle_loop_count_steal_staged`` iterations (local
+       priority queue scheduler only). Worker threads that have been idle for
+       ``hpx.max_idle_loop_count / 2`` iterations steal staged tasks
+       regardless. Leaving a few staged tasks to the worker thread they were
+       placed on keeps them close to the data in that core's caches.
    * * ``hpx.thread_queue.min_add_new_count``
-     * The value of this property defines the minimal number of tasks to be
-       converted into |hpx| threads whenever the thread queues for a core have
-       run empty.
+     * The value of this property defines the minimal number of staged tasks
+       converted into |hpx| threads at a time, see
+       :ref:`thread_scheduler_conversion`. It is limited to
+       ``hpx.thread_queue.max_add_new_count``.
    * * ``hpx.thread_queue.max_add_new_count``
-     * The value of this property defines the maximal number of tasks to be
-       converted into |hpx| threads whenever the thread queues for a core have
-       run empty.
+     * The value of this property defines the maximal number of staged tasks
+       converted into |hpx| threads at a time, both when a worker thread
+       converts its own tasks and when it steals staged tasks.
+   * * ``hpx.thread_queue.min_delete_count``
+     * The value of this property defines the minimal number of terminated
+       |hpx| threads to clean up at a time, see
+       :ref:`thread_scheduler_recycling`. It is limited to
+       ``hpx.thread_queue.max_delete_count``.
    * * ``hpx.thread_queue.max_delete_count``
+     * The value of this property defines the maximal number of terminated
+       |hpx| threads to clean up at a time.
+   * * ``hpx.thread_queue.max_terminated_threads``
      * The value of this property defines the number of terminated |hpx|
-       threads to discard during each invocation of the corresponding function.
+       threads in a queue above which all of them are cleaned up.
+   * * ``hpx.thread_queue.init_threads_count``
+     * The value of this property defines the number of |hpx| thread objects
+       each queue creates when its worker thread starts.
+   * * ``hpx.thread_queue.cached_threads_count``
+     * The value of this property defines the maximal number of cleaned up
+       |hpx| thread objects each queue keeps for reuse per stack size.
 
 The ``hpx.components`` configuration section
 ............................................
@@ -652,6 +773,8 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
    max_message_size =  ${HPX_HAVE_PARCEL_MPI_MAX_MESSAGE_SIZE:$[hpx.parcel.max_message_size]}
    max_outbound_message_size =  ${HPX_HAVE_PARCEL_MPI_MAX_OUTBOUND_MESSAGE_SIZE:$[hpx.parcel.max_outbound_message_size]}
    max_background_threads =  ${HPX_PARCEL_MPI_MAX_BACKGROUND_THREADS:$[hpx.parcel.max_background_threads]}
+   ack_handshake = 0
+   max_header_receives = ${HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES:0}
 
 .. _ini_hpx_parcel_mpi:
 
@@ -731,6 +854,16 @@ equivalent CMake variable is ``HPX_WITH_PARCELPORT_MPI`` and has to be set to
    * * ``hpx.parcel.mpi.max_background_threads``
      * This property defines how many cores should be used to perform background
        operations. The default is taken from ``hpx.parcel.max_background_threads``.
+   * * ``hpx.parcel.mpi.ack_handshake``
+     * This property enables acknowledgement handshakes for parcels
+       transmitted via MPI to serialize delivery and avoid race conditions
+       in multithreaded MPI environments. The default is 0 (disabled).
+   * * ``hpx.parcel.mpi.max_header_receives``
+     * This property defines the number of concurrent MPI wildcard receive
+       buffers pre-posted for incoming parcel headers. The default is taken
+       from ``HPX_HAVE_PARCELPORT_MPI_MAX_HEADER_RECEIVES`` (``0`` if not
+       defined). A value of ``0`` automatically sizes the pool based on the
+       communicator size: ``min(64, max(16, 2 * communicator_size))``.
 
 The ``hpx.agas`` configuration section
 ......................................
@@ -746,6 +879,7 @@ The ``hpx.agas`` configuration section
    use_caching = ${HPX_AGAS_USE_CACHING:1}
    use_range_caching = ${HPX_AGAS_USE_RANGE_CACHING:1}
    local_cache_size = ${HPX_AGAS_LOCAL_CACHE_SIZE:<hpx_agas_local_cache_size>}
+   rpc_timeout = ${HPX_AGAS_RPC_TIMEOUT:60000}
 
 .. REVIEW regarding hpx.agas.address and hpx.agas.port: Technically, I believe
    --hpx:agas sets this parameter, this may need to be reworded.
@@ -800,6 +934,12 @@ The ``hpx.agas`` configuration section
        maximum number of ranges stored in the cache, not the number of entries
        spanned by the cache. The default depends on the compile time
        preprocessor constant ``HPX_AGAS_LOCAL_CACHE_SIZE`` (``4096``).
+   * * ``hpx.agas.rpc_timeout``
+     * This property specifies the timeout (in milliseconds) for :term:`AGAS`
+       RPC requests. Defaults to ``60000`` ms. This property can be configured
+       at startup (e.g., ``--hpx:ini=hpx.agas.rpc_timeout=val``), set through
+       the ``HPX_AGAS_RPC_TIMEOUT`` environment variable, or updated at
+       runtime via the atomic setter ``hpx::agas::set_rpc_timeout()``.
 
 The ``hpx.commandline`` configuration section
 .............................................
@@ -1412,7 +1552,7 @@ one of the localities the application runs on.
 ==========================
 
 The predefined command line options for any application using
-:cpp:func:`hpx::init` are described in the following subsections.
+:hpx:func:`hpx::init` are described in the following subsections.
 
 .. todo:: Proofread the options.
 
@@ -1558,11 +1698,11 @@ The predefined command line options for any application using
 
 .. option:: --hpx:bind arg
 
-   he detailed affinity description for the OS threads, see :ref:`details` for
+   The detailed affinity description for the OS threads, see :ref:`details` for
    a detailed description of possible values. Do not use with
    :option:`--hpx:pu-step`, :option:`--hpx:pu-offset` or
-   :option:`--hpx:affinity` options. Implies :option:`--hpx:numa-sensitive`
-   (:option:`--hpx:bind`\ ``=none``) disables defining thread affinities).
+   :option:`--hpx:affinity` options. :option:`--hpx:bind`\ ``=none`` disables
+   defining thread affinities.
 
 .. option:: --hpx:use-process-mask
 
@@ -1577,22 +1717,46 @@ The predefined command line options for any application using
 .. option:: --hpx:queuing arg
 
    The queue scheduling policy to use. Options are ``local``,
-   ``local-priority-fifo``, ``local-priority-lifo``, ``static``,
-   ``static-priority``, ``abp-priority-fifo``,
-   ``local-workrequesting-fifo``, ``local-workrequesting-lifo``
+   ``local-priority-fifo``, ``local-priority-fifo-double``,
+   ``local-priority-lifo``, ``static``, ``static-priority``,
+   ``abp-priority-fifo``,
+   ``local-workrequesting-fifo``, ``local-workrequesting-lifo``,
    ``local-workrequesting-mc``, and ``abp-priority-lifo``
    (default: ``local-priority-fifo``).
+
+   .. note::
+
+      The ``local`` scheduler ignores all thread priorities, including
+      ``thread_priority::bound`` and ``thread_priority::initially_bound``,
+      which then only determine the initial placement of a thread.
 
 .. option:: --hpx:high-priority-threads arg
 
    The number of operating system threads maintaining a high priority queue
    (default: number of OS threads), valid for :option:`--hpx:queuing`\
-   ``=abp-priority``, :option:`--hpx:queuing`\ ``static-priority`` and
-   :option:`--hpx:queuing`\ ``local-priority`` only.
+   ``=local-priority-fifo``, :option:`--hpx:queuing`\
+   ``=local-priority-fifo-double``, :option:`--hpx:queuing`\
+   ``=local-priority-lifo``, :option:`--hpx:queuing`\ ``=static-priority``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-fifo``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-lifo``,
+   :option:`--hpx:queuing`\ ``=local-workrequesting-mc``,
+   :option:`--hpx:queuing`\ ``=abp-priority-fifo``, and
+   :option:`--hpx:queuing`\ ``=abp-priority-lifo`` only.
 
-.. option:: --hpx:numa-sensitive
+.. option:: --hpx:numa-sensitive [arg]
 
-   Makes the scheduler NUMA sensitive.
+   Controls NUMA-sensitive work stealing. The default and the value used when
+   the option is given without an argument are both ``1``. For the local,
+   local-priority, and ABP-priority schedulers the allowed values are:
+
+   * ``0``: all workers may steal across NUMA domains;
+   * ``1``: only boundary workers may steal from the nearest NUMA domains;
+   * ``2``: workers may not steal across NUMA domains.
+
+   The static, static-priority, and shared-priority schedulers do not distinguish
+   boundary workers. They allow cross-domain stealing for levels ``0`` and ``1``
+   and disable it for level ``2``. Work-requesting schedulers currently ignore
+   this option.
 
 
 |hpx| configuration options

@@ -256,6 +256,8 @@ namespace hpx {
         void on_abort(int) noexcept
         {
             exit_called = true;
+            // Avoid re-entering this handler when abort raises SIGABRT again.
+            std::signal(SIGABRT, SIG_DFL);
             std::abort();
         }
     }    // namespace detail
@@ -634,6 +636,14 @@ namespace hpx {
 
         runtime_ = this;
         runtime_uptime() = hpx::chrono::high_resolution_clock::now();
+
+#if defined(HPX_HAVE_TRACY)
+        // Apply the runtime override for the 1-in-N task-sampling rate.
+        // Compile-time HPX_TRACING_SAMPLE_RATE is the default; a value in
+        // hpx.tracing.sample_rate (from the INI or command line) wins.
+        threads::set_tracing_sample_rate(hpx::util::get_entry_as<int>(
+            rtcfg_, "hpx.tracing.sample_rate", HPX_TRACING_SAMPLE_RATE));
+#endif
     }
 
     void runtime::deinit_global_data()
@@ -1022,13 +1032,15 @@ namespace hpx {
 
     bool is_scheduler_numa_sensitive()
     {
-        if (get_runtime_ptr() != nullptr)
+        runtime const* rt = get_runtime_ptr();
+        if (rt == nullptr || rt->get_state() < hpx::state::initialized)
         {
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                 "hpx::is_scheduler_numa_sensitive",
                 "the runtime system has not been initialized yet");
         }
-        return static_cast<std::size_t>(-1) != get_worker_thread_num();
+        return hpx::util::get_entry_as<std::size_t>(
+                   rt->get_config(), "hpx.numa_sensitive", 1) != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1502,8 +1514,10 @@ namespace hpx {
         _isatty(0);
 #endif
 
-        // initialize instrumentation system
-        hpx::tracing::tracing_init(nullptr, 0, nullptr);
+        // initialize instrumentation system; pass build metadata so a
+        // capture can be correlated with the HPX build that produced it
+        auto const version_info = hpx::complete_version();
+        hpx::tracing::tracing_init(nullptr, 0, nullptr, 0, 1, version_info);
 
         LRT_(info).format("cmd_line: {}", get_config().get_cmd_line());
 

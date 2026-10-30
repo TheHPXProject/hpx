@@ -24,7 +24,7 @@
 unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
 
-#define SIZE 10007
+#define TEST_SIZE 10007
 
 template <typename IteratorTag>
 void test_nth_element(IteratorTag)
@@ -32,12 +32,12 @@ void test_nth_element(IteratorTag)
     using base_iterator = std::vector<std::size_t>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     hpx::nth_element(iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index), iterator(std::end(c)));
@@ -51,7 +51,7 @@ void test_nth_element(IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -66,12 +66,12 @@ void test_nth_element(ExPolicy policy, IteratorTag)
     using base_iterator = std::vector<std::size_t>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     hpx::nth_element(policy, iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index), iterator(std::end(c)));
@@ -85,7 +85,7 @@ void test_nth_element(ExPolicy policy, IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -97,12 +97,12 @@ void test_nth_element_async(ExPolicy p, IteratorTag)
     using base_iterator = std::vector<std::size_t>::iterator;
     using iterator = test::test_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
     std::vector<std::size_t> d = c;
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     auto actual = hpx::nth_element(p, iterator(std::begin(c)),
         iterator(std::begin(c) + rand_index), iterator(std::end(c)));
@@ -117,7 +117,7 @@ void test_nth_element_async(ExPolicy p, IteratorTag)
         HPX_TEST(c[k] <= c[rand_index]);
     }
 
-    for (int k = rand_index + 1; k < SIZE; k++)
+    for (int k = rand_index + 1; k < TEST_SIZE; k++)
     {
         HPX_TEST(c[k] >= c[rand_index]);
     }
@@ -152,11 +152,11 @@ void test_nth_element_exception(ExPolicy policy, IteratorTag)
     using decorated_iterator =
         test::decorated_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     bool caught_exception = false;
     try
@@ -190,11 +190,11 @@ void test_nth_element_async_exception(ExPolicy p, IteratorTag)
     using decorated_iterator =
         test::decorated_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     bool caught_exception = false;
     bool returned_from_algorithm = false;
@@ -256,11 +256,11 @@ void test_nth_element_bad_alloc(ExPolicy policy, IteratorTag)
     using decorated_iterator =
         test::decorated_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     bool caught_bad_alloc = false;
     try
@@ -291,11 +291,11 @@ void test_nth_element_async_bad_alloc(ExPolicy p, IteratorTag)
     using decorated_iterator =
         test::decorated_iterator<base_iterator, IteratorTag>;
 
-    std::vector<std::size_t> c(SIZE);
+    std::vector<std::size_t> c(TEST_SIZE);
     std::generate(
-        std::begin(c), std::end(c), []() { return std::rand() % SIZE; });
+        std::begin(c), std::end(c), []() { return std::rand() % TEST_SIZE; });
 
-    auto rand_index = std::rand() % SIZE;
+    auto rand_index = std::rand() % TEST_SIZE;
 
     bool caught_bad_alloc = false;
     bool returned_from_algorithm = false;

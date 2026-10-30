@@ -30,10 +30,6 @@ constexpr int TEST_FAIL = 0;
 constexpr int FAILURE_RATE_PERCENT = 5;
 constexpr int SAMPLES_PER_LOOP = 10;
 constexpr int TEST_LOOPS = 1000;
-//
-std::random_device rseed;
-std::mt19937 gen(rseed());
-std::uniform_int_distribution<int> dist(0, 99);    // interval [0,100)
 
 constexpr bool USE_LAMBDA = true;
 
@@ -54,6 +50,9 @@ int reduce(hpx::future<std::vector<hpx::future<int>>>&& futvec)
 
 int generate_one()
 {
+    thread_local std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<int> dist(0, 99);
+
     // generate roughly x% fails
     int result = TEST_SUCCESS;
     if (dist(gen) >= (100 - FAILURE_RATE_PERCENT))

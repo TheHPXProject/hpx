@@ -20,7 +20,15 @@
 
 using namespace hpx::collectives;
 
+// Keep independently created communicators from aliasing in AGAS while
+// localities transition between test phases.
 constexpr char const* all_gather_direct_basename = "/test/all_gather_direct/";
+constexpr char const* all_gather_direct_multiple_use_basename =
+    "/test/all_gather_direct/multiple_use/";
+constexpr char const* all_gather_direct_explicit_generation_basename =
+    "/test/all_gather_direct/explicit_generation/";
+constexpr char const* all_gather_direct_local_basename =
+    "/test/all_gather_direct/local/";
 #if defined(HPX_DEBUG)
 constexpr int ITERATIONS = 100;
 #else
@@ -60,7 +68,7 @@ void test_multiple_use()
 
     // test functionality based on immediate local result value
     auto const all_gather_direct_client =
-        create_communicator(all_gather_direct_basename,
+        create_communicator(all_gather_direct_multiple_use_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     for (int i = 0; i != ITERATIONS; ++i)
@@ -87,7 +95,7 @@ void test_multiple_use_with_generation()
 
     // test functionality based on immediate local result value
     auto const all_gather_direct_client =
-        create_communicator(all_gather_direct_basename,
+        create_communicator(all_gather_direct_explicit_generation_basename,
             num_sites_arg(num_localities), this_site_arg(here));
 
     hpx::chrono::high_resolution_timer const t;
@@ -123,7 +131,7 @@ void test_local_use(std::uint32_t num_sites)
     {
         sites.push_back(hpx::async([=]() {
             auto const all_gather_direct_client =
-                create_local_communicator(all_gather_direct_basename,
+                create_local_communicator(all_gather_direct_local_basename,
                     num_sites_arg(num_sites), this_site_arg(site));
 
             hpx::chrono::high_resolution_timer const t;

@@ -25,6 +25,7 @@
 #include <hpx/parallel/util/zip_iterator.hpp>
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <ranges>
 #include <type_traits>
@@ -66,8 +67,11 @@ namespace hpx::parallel::detail {
                     hpx::threads::thread_placement_hint::breadth_first);
 
             using policy_type = std::decay_t<decltype(policy)>;
+            using intermediate_result_t = std::uint8_t;
+
             util::cancellation_token<> tok;
-            auto f1 = [val, tok, proj](Iterator first, std::size_t count) {
+            auto f1 = [val, tok, proj](Iterator first,
+                          std::size_t count) -> intermediate_result_t {
                 sequential_contains<policy_type>(first, val, count, tok, proj);
                 return tok.was_cancelled();
             };
@@ -77,9 +81,10 @@ namespace hpx::parallel::detail {
                     hpx::util::end(results), hpx::functional::unwrap{});
             };
 
-            return util::partitioner<policy_type, bool>::call(
-                HPX_FORWARD(decltype(policy), policy), first, count,
-                HPX_MOVE(f1), HPX_MOVE(f2));
+            return util::partitioner<policy_type, bool,
+                intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
+                                                 policy),
+                first, count, HPX_MOVE(f1), HPX_MOVE(f2));
         }
     };
 

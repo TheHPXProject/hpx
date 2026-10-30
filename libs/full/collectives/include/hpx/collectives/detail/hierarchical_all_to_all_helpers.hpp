@@ -1,4 +1,5 @@
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -13,8 +14,6 @@
 #pragma once
 
 #include <hpx/config.hpp>
-
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 
 #include <hpx/assert.hpp>
 #include <hpx/collectives/create_communicator.hpp>
@@ -53,14 +52,14 @@ namespace hpx::collectives::detail {
 
         // Walk bottom-up from leaf (size()-1) to level 1, skipping level 0
         // (the inter-group communicator). At every subtree level this site
-        // is rank 0 (subtree root), so we call gather_here. For a
+        // is the root of the communicator, so we call gather_here. For a
         // single-level subtree (size() == 1, e.g. the arity >= num_sites
         // case) the loop body simply does not execute and the site's own
         // data is returned.
         for (std::size_t i = comms.size() - 1; i != 0; --i)
         {
             result = gather_here_impl<uniform_rows<T>>(comms.get(i),
-                HPX_MOVE(result), this_site_arg(0), generation,
+                HPX_MOVE(result), comms.site(i), generation,
                 generation_mode::single_step)
                          .get();
         }
@@ -94,7 +93,7 @@ namespace hpx::collectives::detail {
         {
             data =
                 gather_here_impl<uniform_rows<T>>(comms.get(i), HPX_MOVE(data),
-                    this_site_arg(0), generation, generation_mode::single_step)
+                    comms.site(i), generation, generation_mode::single_step)
                     .get();
         }
 
@@ -132,19 +131,19 @@ namespace hpx::collectives::detail {
         }
 
         // Walk top-down from level 1 through size()-2, partitioning and
-        // scattering at each level. At each level, this site is rank 0
-        // (subtree root).
+        // scattering at each level. At each level, this site is the root of
+        // the communicator.
         for (std::size_t i = 1; i < comms.size() - 1; ++i)
         {
-            data = scatter_rows_to(comms.get(i), HPX_MOVE(data),
-                this_site_arg(0), generation, generation_mode::single_step)
+            data = scatter_rows_to(comms.get(i), HPX_MOVE(data), comms.site(i),
+                generation, generation_mode::single_step)
                        .get();
         }
 
         // At the leaf level (size()-1), scatter asynchronously and return
         // the future directly.
         return hpx::make_future<std::vector<T>>(
-            scatter_rows_to(comms.back(), HPX_MOVE(data), this_site_arg(0),
+            scatter_rows_to(comms.back(), HPX_MOVE(data), comms.last_site(),
                 generation, generation_mode::single_step),
             [](uniform_rows<T>&& result) {
                 return HPX_MOVE(result).unwrap_row();
@@ -190,15 +189,15 @@ namespace hpx::collectives::detail {
         // Walk down through intermediate levels.
         for (std::size_t i = 1; i < comms.size() - 1; ++i)
         {
-            data = scatter_rows_to(comms.get(i), HPX_MOVE(data),
-                this_site_arg(0), generation, generation_mode::single_step)
+            data = scatter_rows_to(comms.get(i), HPX_MOVE(data), comms.site(i),
+                generation, generation_mode::single_step)
                        .get();
         }
 
         // At the leaf level, scatter asynchronously and return the future
         // directly.
         return hpx::make_future<std::vector<T>>(
-            scatter_rows_to(comms.back(), HPX_MOVE(data), this_site_arg(0),
+            scatter_rows_to(comms.back(), HPX_MOVE(data), comms.last_site(),
                 generation, generation_mode::single_step),
             [](uniform_rows<T>&& result) {
                 return HPX_MOVE(result).unwrap_row();
@@ -206,5 +205,3 @@ namespace hpx::collectives::detail {
     }
 
 }    // namespace hpx::collectives::detail
-
-#endif    // !HPX_COMPUTE_DEVICE_CODE

@@ -477,13 +477,15 @@ namespace hpx::execution::experimental {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
+                // Capture this, not the receiver: the operation state outlives
+                // the task, and the receiver must still be intact if execute()
+                // throws before handing the task off.
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
-                        scheduler.execute(
-                            [receiver = HPX_MOVE(receiver)]() mutable {
-                                hpx::execution::experimental::set_value(
-                                    HPX_MOVE(receiver));
-                            });
+                        scheduler.execute([this]() {
+                            hpx::execution::experimental::set_value(
+                                HPX_MOVE(receiver));
+                        });
                     },
                     [&](std::exception_ptr ep) {
                         hpx::execution::experimental::set_error(

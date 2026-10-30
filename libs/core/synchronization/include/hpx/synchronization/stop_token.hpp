@@ -526,8 +526,8 @@ namespace hpx {
           : callback_(HPX_FORWARD(CB, cb))
           , state_(st.state_)
         {
-            if (state_)
-                state_->add_callback(this);
+            if (state_ && !state_->add_callback(this))
+                state_.reset();
         }
 
         template <typename CB,
@@ -538,8 +538,8 @@ namespace hpx {
           : callback_(HPX_FORWARD(CB, cb))
           , state_(HPX_MOVE(st.state_))
         {
-            if (state_)
-                state_->add_callback(this);
+            if (state_ && !state_->add_callback(this))
+                state_.reset();
         }
 
         // Effects: Unregisters the callback from the owned stop state, if any.

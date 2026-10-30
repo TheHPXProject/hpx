@@ -15,6 +15,8 @@ set(tests
     channel_spsc_fib
     channel_spsc_shift
     condition_variable
+    condition_variable_abort_stress
+    condition_variable_late_wakeup
     counting_semaphore
     counting_semaphore_cpp20
     in_place_stop_token
@@ -22,6 +24,7 @@ set(tests
     latch_cpp20
     latch_notification
     local_latch
+    local_latch_reset
     local_barrier
     local_barrier_count_up
     local_barrier_reset
@@ -41,6 +44,8 @@ set(channel_mpsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_mpsc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_spsc_fib_PARAMETERS THREADS_PER_LOCALITY 4)
 set(channel_spsc_shift_PARAMETERS THREADS_PER_LOCALITY 4)
+set(condition_variable_abort_stress_PARAMETERS THREADS_PER_LOCALITY 4)
+set(condition_variable_late_wakeup_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(counting_semaphore_PARAMETERS THREADS_PER_LOCALITY 4)
 set(counting_semaphore_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -49,6 +54,7 @@ set(latch_cpp20_PARAMETERS THREADS_PER_LOCALITY 4)
 set(latch_notification_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_barrier_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_latch_PARAMETERS THREADS_PER_LOCALITY 4)
+set(local_latch_reset_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_event_PARAMETERS THREADS_PER_LOCALITY 4)
 set(local_mutex_PARAMETERS THREADS_PER_LOCALITY 4)
 
@@ -78,6 +84,17 @@ foreach(test ${tests})
   add_hpx_unit_test("modules.synchronization" ${test} ${${test}_PARAMETERS})
 
 endforeach()
+
+if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
+  # Clang (last tested version is v22) fails compiling the following tests when
+  # C++ module support is enabled.
+  set(failing_clang_tests async_rw_mutex)
+  foreach(test ${failing_clang_tests})
+    target_compile_definitions(
+      ${test}_test PRIVATE HPX_HAVE_FORCE_NO_CXX_MODULES
+    )
+  endforeach()
+endif()
 
 if(HPX_WITH_COMPILE_ONLY_TESTS)
   # add compile time tests

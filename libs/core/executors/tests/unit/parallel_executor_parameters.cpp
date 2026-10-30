@@ -93,7 +93,7 @@ void test_hint()
     executor exec;
 
     auto orghint = hpx::execution::experimental::get_hint(exec);
-    HPX_TEST(orghint.mode == hpx::threads::thread_schedule_hint_mode::none);
+    HPX_TEST(orghint.mode() == hpx::threads::thread_schedule_hint_mode::none);
     HPX_TEST(orghint.hint == static_cast<std::int16_t>(-1));
 
     for (auto const mode : {hpx::threads::thread_schedule_hint_mode::none,
@@ -108,12 +108,12 @@ void test_hint()
                 hpx::execution::experimental::with_hint(exec, newhint));
 
             orghint = hpx::execution::experimental::get_hint(exec);
-            HPX_TEST(
-                orghint.mode == hpx::threads::thread_schedule_hint_mode::none);
+            HPX_TEST(orghint.mode() ==
+                hpx::threads::thread_schedule_hint_mode::none);
             HPX_TEST(orghint.hint == static_cast<std::int16_t>(-1));
 
             newhint = hpx::execution::experimental::get_hint(newexec);
-            HPX_TEST(newhint.mode == mode);
+            HPX_TEST(newhint.mode() == mode);
             HPX_TEST(newhint.hint == hint);
         }
     }

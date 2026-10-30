@@ -17,9 +17,3 @@ foreach(subdir ${subdirs})
   add_subdirectory(${subdir})
   add_hpx_pseudo_dependencies(tools tools.${subdir})
 endforeach()
-
-install(
-  PROGRAMS hpx_stat_viewer.py
-  DESTINATION ${CMAKE_INSTALL_BINDIR}
-  COMPONENT tools
-)

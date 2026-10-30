@@ -107,7 +107,7 @@ namespace hpx {
     /// \param binary_op    Binary \a FunctionObject that will be applied in to
     ///                     the result of \a unary_op, the results of other
     ///                     \a binary_op, and \a init if provided.
-    /// \param unnary_op    Unary \a FunctionObject that will be applied to
+    /// \param unary_op     Unary \a FunctionObject that will be applied to
     ///                     each element of the input range. The return type
     ///                     must be acceptable as input to \a binary_op.
     ///
@@ -180,7 +180,7 @@ namespace hpx {
     /// \param binary_op    Binary \a FunctionObject that will be applied in to
     ///                     the result of \a unary_op, the results of other
     ///                     \a binary_op, and \a init if provided.
-    /// \param unnary_op    Unary \a FunctionObject that will be applied to
+    /// \param unary_op     Unary \a FunctionObject that will be applied to
     ///                     each element of the input range. The return type
     ///                     must be acceptable as input to \a binary_op.
     /// \param init         The initial value for the generalized sum.
@@ -250,7 +250,7 @@ namespace hpx {
     /// \param binary_op    Binary \a FunctionObject that will be applied in to
     ///                     the result of \a unary_op, the results of other
     ///                     \a binary_op, and \a init if provided.
-    /// \param unnary_op    Unary \a FunctionObject that will be applied to
+    /// \param unary_op     Unary \a FunctionObject that will be applied to
     ///                     each element of the input range. The return type
     ///                     must be acceptable as input to \a binary_op.
     /// \param init         The initial value for the generalized sum.

@@ -305,8 +305,18 @@ namespace hpx::agas {
     was_object_migrated(naming::gid_type const& gid,
         hpx::move_only_function<components::pinned_ptr()>&& f);
 
+    /// Check migration and the current local address before invoking \a f.
+    HPX_CXX_EXPORT HPX_EXPORT std::pair<bool, components::pinned_ptr>
+    was_object_migrated(naming::gid_type const& gid, naming::address_type lva,
+        hpx::move_only_function<components::pinned_ptr()>&& f);
+
     HPX_CXX_EXPORT HPX_EXPORT void unmark_as_migrated(
         naming::gid_type const& gid, hpx::move_only_function<void()>&& f);
+
+    /// Record the current local address while completing migration with \a f.
+    HPX_CXX_EXPORT HPX_EXPORT void unmark_as_migrated(
+        naming::gid_type const& gid, naming::address_type lva,
+        hpx::move_only_function<void()>&& f);
 
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<std::map<std::string, hpx::id_type>>
     find_symbols(std::string const& pattern = "*");

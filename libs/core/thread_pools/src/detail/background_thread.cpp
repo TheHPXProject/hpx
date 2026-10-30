@@ -27,11 +27,26 @@ namespace hpx::threads::detail {
         std::shared_ptr<bool>& background_running,
         std::int64_t& idle_loop_count)
     {
+        // The background thread goes to the scheduler directly, so it misses
+        // the reset scheduled_thread_pool::create_thread applies to a
+        // run_as_child hint for schedulers that do not support direct
+        // execution. Nothing ever waits on this thread, so ask for none
+        // explicitly instead of taking the default, which can be run_as_child.
         threads::thread_schedule_hint const schedulehint(
-            static_cast<std::int16_t>(num_thread));
+            static_cast<std::int16_t>(num_thread),
+            threads::thread_placement_hint::none,
+            threads::thread_execution_hint::none);
 
         background_running = std::make_shared<bool>(true);
 
+        // The references captured below point into the scheduling loop of the
+        // worker creating this thread. background_thread is read only by the
+        // first statement of the thread function and idle_loop_count is
+        // written only while *background_running is true. After this thread
+        // was given to the scheduler (see call_and_create_background_thread
+        // and stop_background_thread) it may run on another worker after the
+        // creating scheduling loop has exited, so callbacks has to stay valid
+        // until a background_() call in flight at that point returns.
         thread_init_data background_init(
             [&, background_running, keep_alive = thread_id_ref_type()](
                 thread_restart_state) mutable -> thread_result_type {
@@ -319,5 +334,54 @@ namespace hpx::threads::detail {
             return true;
         }
         return false;
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    void stop_background_thread(thread_id_ref_type& background_thread,
+        thread_id_ref_type& next_thrd,
+        threads::policies::scheduler_base& scheduler_base,
+        std::size_t const num_thread, background_work_exec_time& exec_time,
+        hpx::execution_base::this_thread::detail::agent_storage*
+            context_storage,
+        std::shared_ptr<bool>& running)
+    {
+        HPX_ASSERT(background_thread);
+        HPX_ASSERT(running);
+        *running = false;
+
+        // do background work in parcel layer and in agas
+        bool const has_exited = call_background_thread(background_thread,
+            next_thrd, scheduler_base, num_thread, exec_time, context_storage);
+
+        if (!has_exited)
+        {
+            // The background thread was suspended in the middle of its work.
+            // Whoever resumes it will schedule it as a regular thread and it
+            // will exit after finishing its work, as it now sees the request
+            // to exit. Stop counting it as a background thread, just like
+            // call_and_create_background_thread does.
+            scheduler_base.decrement_background_thread_count();
+        }
+        else if (background_thread &&
+            get_thread_id_data(background_thread)->get_state().state() ==
+                thread_schedule_state::pending)
+        {
+            // The background thread yielded in the middle of its work (for
+            // instance while waiting for a spinlock) and has not seen the
+            // request to exit yet. Dropping it here would leave that work
+            // unfinished for good, so let the scheduler run it to completion
+            // as a regular thread. Reading its state is safe here as the
+            // thread is not in any queue, it was just run directly by this
+            // worker.
+            scheduler_base.decrement_background_thread_count();
+            scheduler_base.schedule_thread(HPX_MOVE(background_thread),
+                threads::thread_schedule_hint(
+                    static_cast<std::int16_t>(num_thread)),
+                true);
+            scheduler_base.do_some_work(num_thread);
+        }
+
+        background_thread = thread_id_type();
+        running.reset();
     }
 }    // namespace hpx::threads::detail

@@ -14,6 +14,7 @@
 
 #include <type_traits>
 
+/// \cond NOINTERNAL
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -49,3 +50,4 @@ namespace hpx::detail {
         hpx::id_type const& id, Ts&&... vs);
 #endif
 }    // namespace hpx::detail
+/// \endcond

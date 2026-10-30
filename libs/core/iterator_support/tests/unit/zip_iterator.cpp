@@ -441,5 +441,134 @@ int main(void)
     HPX_TEST(bBigItIsBidirectionalIterator && !bBigItIsRandomAccessIterator &&
         bAllVectsIsRandomAccessIterator);
 
+    /////////////////////////////////////////////////////////////////////////////
+    //
+    // hpx::get<I> on operator[] of a zip_iterator (operator_brackets_proxy)
+    // Regression test for #7557: projections rely on hpx::get<I> being
+    // applicable to the result of iterator indexing (as done by
+    // libc++'s std::sort implementation).
+    //
+    /////////////////////////////////////////////////////////////////////////////
+
+    std::vector<int> keys = {4, 2, 7, 1};
+    std::vector<char> vals = {'d', 'b', 'g', 'a'};
+
+    auto zip_begin =
+        hpx::util::zip_iterator(hpx::make_tuple(keys.begin(), vals.begin()));
+    [[maybe_unused]] auto zip_end =
+        hpx::util::zip_iterator(hpx::make_tuple(keys.end(), vals.end()));
+
+    // hpx::get<I> through the proxy returned by operator[] (non-const)
+    HPX_TEST(4 == hpx::get<0>(zip_begin[0]));
+    HPX_TEST('d' == hpx::get<1>(zip_begin[0]));
+    HPX_TEST(2 == hpx::get<0>(zip_begin[1]));
+    HPX_TEST('b' == hpx::get<1>(zip_begin[1]));
+
+    // same through a const zip_iterator (const proxy)
+    auto const& zip_begin_const = zip_begin;
+    HPX_TEST(7 == hpx::get<0>(zip_begin_const[2]));
+    HPX_TEST('g' == hpx::get<1>(zip_begin_const[2]));
+
+    // rvalue proxies: the generic hpx::get<I>(Tuple&&) overloads delegate to
+    // the lvalue members and forward the result (which is always a reference
+    // into the underlying sequence, never into the proxy or the temporary it
+    // converts to), so no separate rvalue members are needed
+    auto proxy_key = zip_begin[3];
+    auto proxy_val = zip_begin[3];
+    HPX_TEST(1 == hpx::get<0>(std::move(proxy_key)));
+    HPX_TEST('a' == hpx::get<1>(std::move(proxy_val)));
+
+    // const proxies: the const& member and the generic hpx::get<I>(Tuple
+    // const&&) overload delegate to the const& member
+    auto const& proxy_const = zip_begin[3];
+    HPX_TEST(1 == hpx::get<0>(proxy_const));
+    HPX_TEST(1 == hpx::get<0>(std::move(proxy_const)));
+
+    // writing through the proxy must still work
+    zip_begin[0] = hpx::make_tuple(9, 'z');
+    HPX_TEST(9 == keys[0] && 'z' == vals[0]);
+
+    // and the proxy must still convert to the underlying tuple of references
+    hpx::tuple<int&, char&> t = zip_begin[1];
+    HPX_TEST(2 == hpx::get<0>(t) && 'b' == hpx::get<1>(t));
+
+    // verify that the proxy itself is not tuple-like for non-tuple-like
+    // references (e.g. std::vector<bool>::iterator) - hpx::get must not apply
+    {
+        std::vector<bool> flags = {true, false, true};
+        auto zip_flags = hpx::util::zip_iterator(
+            hpx::make_tuple(flags.begin(), vals.begin()));
+
+        static_assert(
+            !hpx::traits::is_tuple_like_v<std::decay_t<decltype(zip_flags[0])>>,
+            "operator_brackets_proxy should not be tuple-like when the "
+            "underlying reference is not tuple-like");
+
+        // the proxy is transparent to hpx::get<I> only if all elements of
+        // the underlying reference tuple are lvalue references (otherwise
+        // the elements would refer into the temporary the proxy converts
+        // to and would dangle)
+        static_assert(
+            hpx::util::detail::all_lvalue_references_v<hpx::tuple<int&, char&>>,
+            "a tuple of lvalue references is all-lvalue-references");
+        static_assert(!hpx::util::detail::all_lvalue_references_v<
+                          hpx::tuple<std::vector<bool>::reference, char&>>,
+            "a tuple containing a proxy element is not all-lvalue-references");
+
+        // the proxy converts to its reference which is a tuple here since
+        // zip_iterator always exposes a tuple of references; the point of the
+        // test above is that hpx::get works only through that conversion, not
+        // directly on the proxy
+        auto t_flags =
+            static_cast<hpx::tuple<std::vector<bool>::reference, char&>>(
+                zip_flags[0]);
+        HPX_TEST(hpx::get<0>(t_flags) == true);
+        HPX_TEST(
+            hpx::get<1>(t_flags) == 'z');    // vals[0] was set to 'z' above
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // tuple_size: the proxy is genuinely tuple-like when its reference is
+    // (same gate as the tuple_element specialization above)
+    ///////////////////////////////////////////////////////////////////////////
+    static_assert(
+        hpx::traits::is_tuple_like_v<std::decay_t<decltype(zip_begin[0])>>,
+        "operator_brackets_proxy is tuple-like when the underlying reference "
+        "is tuple-like and all of its elements are lvalue references");
+    static_assert(hpx::tuple_size_v<std::decay_t<decltype(zip_begin[0])>> == 2,
+        "the proxy has the same number of elements as its reference");
+
+    // and hpx::get<I> keeps working through it
+    HPX_TEST(9 == hpx::get<0>(zip_begin[0]));
+    HPX_TEST('z' == hpx::get<1>(zip_begin[0]));
+
+    ///////////////////////////////////////////////////////////////////////////
+    // the traits when T is a reference itself: hpx::tuple_size is not defined
+    // for reference types, so a reference is never tuple-like and the proxy
+    // specializations (which require is_tuple_like_v) can never engage for
+    // one. all_lvalue_references still gives the semantically right answer:
+    // the elements reached through a reference to a tuple of lvalue
+    // references are themselves lvalue references.
+    ///////////////////////////////////////////////////////////////////////////
+    static_assert(!hpx::traits::is_tuple_like_v<hpx::tuple<int&, char&>&>,
+        "a reference type is not tuple-like");
+    static_assert(
+        hpx::util::detail::all_lvalue_references_v<hpx::tuple<int&, char&>&>,
+        "elements reached through a reference to a tuple of lvalue references "
+        "are lvalue references");
+    static_assert(hpx::util::detail::all_lvalue_references_v<
+                      hpx::tuple<int&, char&> const&>,
+        "const references to such tuples behave the same");
+
+    // mixed tuples must be detected no matter where the non-reference element
+    // sits (std::conjunction stops instantiating the recursion as soon as one
+    // element fails the check)
+    static_assert(
+        !hpx::util::detail::all_lvalue_references_v<hpx::tuple<int&, char>>,
+        "a tuple with a non-reference element is not all-lvalue-references");
+    static_assert(
+        !hpx::util::detail::all_lvalue_references_v<hpx::tuple<char, int&>>,
+        "the position of the non-reference element does not matter");
+
     return hpx::util::report_errors();
 }

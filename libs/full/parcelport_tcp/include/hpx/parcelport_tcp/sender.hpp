@@ -14,6 +14,7 @@
 #if defined(HPX_HAVE_NETWORKING) && defined(HPX_HAVE_PARCELPORT_TCP)
 #include <hpx/assert.hpp>
 #include <hpx/modules/asio.hpp>
+#include <hpx/modules/errors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/parcelset.hpp>
 #include <hpx/modules/parcelset_base.hpp>
@@ -169,7 +170,7 @@ namespace hpx::parcelset::policies::tcp {
                         c.type_ ==
                             serialization::chunk_type::chunk_type_const_pointer)
                     {
-                        buffers.emplace_back(c.data_.cpos_, c.size_);
+                        buffers.emplace_back(std::as_const(c).data(), c.size_);
                     }
                 }
             }
@@ -216,7 +217,21 @@ namespace hpx::parcelset::policies::tcp {
                     threads::make_thread_function_nullary(
                         &sender::reset_handler, HPX_MOVE(handler)),
                     "sender::reset_handler");
-                threads::register_thread(data);
+
+                try
+                {
+                    threads::register_thread(data);
+                }
+                catch (hpx::exception const&)
+                {
+                    // only a shutdown that started after the check above is
+                    // expected here, anything else is a real error
+                    if (threads::threadmanager_is(hpx::state::running))
+                        throw;
+
+                    // data still owns the handler and destroys it here instead
+                    // of letting the exception terminate the io thread
+                }
             }
             else
             {

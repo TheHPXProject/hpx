@@ -271,11 +271,15 @@ namespace hpx::threads::coroutines {
         result_type result;
 
         {
+            // A stackless coroutine may be run directly by a parent waiting on
+            // it, so the caller's self is put back on exit, not cleared.
+            detail::coroutine_self* old_self =
+                detail::coroutine_self::get_self();
             detail::coroutine_stackless_self self(this);
 
             detail::coroutine_self::set_self(&self);
             auto on_exit = hpx::experimental::scope_exit(
-                [] { detail::coroutine_self::set_self(nullptr); });
+                [old_self] { detail::coroutine_self::set_self(old_self); });
 
             {
                 state_ = context_state::running;

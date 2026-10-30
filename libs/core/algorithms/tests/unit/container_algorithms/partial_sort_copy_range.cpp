@@ -28,9 +28,9 @@ unsigned int seed = std::random_device{}();
 std::mt19937 gen(seed);
 
 #if defined(HPX_DEBUG)
-#define SIZE 111
+#define TEST_SIZE 111
 #else
-#define SIZE 1007
+#define TEST_SIZE 1007
 #endif
 
 template <typename IteratorTag>
@@ -39,10 +39,10 @@ void test_partial_sort_range_sent(IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE + 1);
-    B.reserve(SIZE + 1);
+    A.reserve(TEST_SIZE + 1);
+    B.reserve(TEST_SIZE + 1);
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -51,12 +51,12 @@ void test_partial_sort_range_sent(IteratorTag)
     std::shuffle(A.begin(), A.end() - 1, gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 
         hpx::ranges::partial_sort_copy(lst.begin(),
-            sentinel<std::uint64_t>{SIZE}, A.begin(),
+            sentinel<std::uint64_t>{TEST_SIZE}, A.begin(),
             sentinel<std::uint64_t>{
                 *(A.begin() + static_cast<std::ptrdiff_t>(i))},
             compare_t());
@@ -74,10 +74,10 @@ void test_partial_sort_range_sent(ExPolicy policy, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE + 1);
-    B.reserve(SIZE + 1);
+    A.reserve(TEST_SIZE + 1);
+    B.reserve(TEST_SIZE + 1);
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -86,12 +86,12 @@ void test_partial_sort_range_sent(ExPolicy policy, IteratorTag)
     std::shuffle(A.begin(), A.end() - 1, gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 
         hpx::ranges::partial_sort_copy(policy, lst.begin(),
-            sentinel<std::uint64_t>{SIZE}, A.begin(),
+            sentinel<std::uint64_t>{TEST_SIZE}, A.begin(),
             sentinel<std::uint64_t>{
                 *(A.begin() + static_cast<std::ptrdiff_t>(i))},
             compare_t());
@@ -109,10 +109,10 @@ void test_partial_sort_range_async_sent(ExPolicy p, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE + 1);
-    B.reserve(SIZE + 1);
+    A.reserve(TEST_SIZE + 1);
+    B.reserve(TEST_SIZE + 1);
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -121,12 +121,12 @@ void test_partial_sort_range_async_sent(ExPolicy p, IteratorTag)
     std::shuffle(A.begin(), A.end() - 1, gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 
         auto result = hpx::ranges::partial_sort_copy(p, lst.begin(),
-            sentinel<std::uint64_t>{SIZE}, A.begin(),
+            sentinel<std::uint64_t>{TEST_SIZE}, A.begin(),
             sentinel<std::uint64_t>{
                 *(A.begin() + static_cast<std::ptrdiff_t>(i))},
             compare_t());
@@ -145,10 +145,10 @@ void test_partial_sort_range(IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -157,7 +157,7 @@ void test_partial_sort_range(IteratorTag)
     std::shuffle(A.begin(), A.end(), gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 
@@ -176,10 +176,10 @@ void test_partial_sort_range(ExPolicy policy, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -188,7 +188,7 @@ void test_partial_sort_range(ExPolicy policy, IteratorTag)
     std::shuffle(A.begin(), A.end(), gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 
@@ -207,10 +207,10 @@ void test_partial_sort_range_async(ExPolicy p, IteratorTag)
     using compare_t = std::less<std::uint64_t>;
     std::list<std::uint64_t> lst;
     std::vector<std::uint64_t> A, B;
-    A.reserve(SIZE);
-    B.reserve(SIZE);
+    A.reserve(TEST_SIZE);
+    B.reserve(TEST_SIZE);
 
-    for (std::uint64_t i = 0; i < SIZE; ++i)
+    for (std::uint64_t i = 0; i < TEST_SIZE; ++i)
     {
         A.emplace_back(i);
         B.emplace_back(i);
@@ -219,7 +219,7 @@ void test_partial_sort_range_async(ExPolicy p, IteratorTag)
     std::shuffle(A.begin(), A.end(), gen);
     lst.insert(lst.end(), A.begin(), A.end());
 
-    for (std::uint64_t i = 0; i <= SIZE; ++i)
+    for (std::uint64_t i = 0; i <= TEST_SIZE; ++i)
     {
         A = B;
 

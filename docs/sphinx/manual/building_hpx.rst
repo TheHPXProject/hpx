@@ -109,13 +109,53 @@ used CMake options.
 
    Enable |ittnotify|_ integration. Requires VTune or any other |ittnotify|
    provider; point ``Amplifier_ROOT`` at the install (the name is legacy;
-   it accepts any ITTNotify installation).
+   it accepts any ITTNotify installation). Task lifecycle and work-stealing
+   events are emitted as well, see :option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`
+   and :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`; they are only emitted
+   when ITTNotify is enabled at runtime with
+   ``--hpx:ini=hpx.use_itt_notify=1``.
 
 .. option:: HPX_WITH_PARCEL_PROFILING
 
    Enable per-parcel profiling data. Adds per-parcel identifier and timestamp fields (creation time,
    start time, parcel id) that are carried on the wire and surfaced to whichever tracing backend is
    enabled. Defaults to ``ON`` when :option:`HPX_WITH_APEX` is on, ``OFF`` otherwise.
+
+.. option:: HPX_WITH_TRACING_LIFECYCLE_EVENTS
+
+   Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed,
+   deleted). Defaults to ``ON``. Turn ``OFF`` to compile out the per-task hooks and their runtime
+   connection check when profiling a workload where only causal or work-stealing events matter. The
+   saving applies on Tracy and ITTNotify builds; the other backends already treat these hooks as
+   no-ops. On ITTNotify builds, turning this ``OFF`` restores the earlier behavior of not emitting
+   these events.
+
+.. option:: HPX_WITH_TRACING_CAUSAL_EVENTS
+
+   Emit causal-chain events (``future_fulfilled``, ``future_exception_set``, ``continuation_run``,
+   ``continuation_finished``, ``handle_on_completed_fired``). Defaults to ``ON``. Turning this ``OFF``
+   also elides the active-continuations counter update in ``continuation_run`` /
+   ``continuation_finished``. The saving applies on Tracy builds; the other backends already treat
+   these hooks as no-ops.
+
+.. option:: HPX_WITH_TRACING_WORK_STEALING_EVENTS
+
+   Emit the work-stealing signal when a worker steals a task from another worker. Defaults to ``ON``.
+   Turn ``OFF`` when profiling a workload with heavy work stealing where the signal itself is not
+   being consumed. The saving applies on Tracy and ITTNotify builds; the other backends already
+   treat this hook as a no-op. On ITTNotify builds, turning this ``OFF`` restores the earlier
+   behavior of not emitting this event.
+
+.. option:: HPX_WITH_TRACING_SAMPLE_RATE
+
+   1-in-N sampling rate for the per-task lifecycle events on Tracy builds. Defaults to ``1``
+   (every task sampled). This sets the initial rate; the runtime value can be overridden
+   via the ``hpx.tracing.sample_rate`` INI entry (see :ref:`ini_hpx_tracing`). Must be a
+   positive integer; the CMake configure step rejects non-integer or non-positive values.
+   Only the lifecycle events are sampled - causal events fire unconditionally so the
+   causal-chain view stays intact at any rate. ``task_staged`` is also unconditional
+   because it fires before per-task state exists to consult. The ITTNotify backend ignores
+   the rate and emits every task; the other backends already treat lifecycle hooks as no-ops.
 
 .. option:: HPX_WITH_GENERIC_CONTEXT_COROUTINES
 
@@ -194,6 +234,8 @@ Some of the available presets include:
 
 * ``default``: Standard release build with tests and examples enabled.
 * ``minimal``: Minimal build with only core features (no tests, examples, or tools).
+* ``godbolt-minimal``: Static, local-only build for Compiler Explorer (no
+  distributed runtime, networking, tests, examples, documentation, or tools).
 * ``full``: Full build with all standard features enabled.
 * ``debug``: Debug build with symbols and debug-optimized settings.
 * ``performance``: Build optimized for performance analysis with APEX profiling.

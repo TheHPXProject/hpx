@@ -230,8 +230,8 @@ namespace hpx::parcelset::policies::lci {
             {
                 auto const chunk_size = static_cast<std::size_t>(
                     buffer.transmission_chunks_[i].second);
-                buffer.chunks_[i] =
-                    serialization::create_pointer_chunk(nullptr, chunk_size);
+                buffer.chunks_[i] = serialization::create_pointer_chunk(
+                    static_cast<void*>(nullptr), chunk_size);
             }
 
             parcels_ = decode_parcels_zero_copy(*pp_, buffer);

@@ -116,14 +116,23 @@ namespace hpx::lcos::detail {
     bool future_data_base<traits::detail::future_data_void>::execute_thread()
     {
         // we try to directly execute the thread exactly once
-        threads::thread_id_ref_type runs_child = runs_child_;
-        if (!runs_child)
+        //
+        // a ready future has no child left to run, so return before taking
+        // the lock below
+        auto const state = this->state_.load(std::memory_order_acquire);
+        if (state != future_data_base::empty)
         {
             return false;
         }
 
-        auto const state = this->state_.load(std::memory_order_acquire);
-        if (state != future_data_base::empty)
+        // set_value and set_exception reset runs_child_ under the lock,
+        // possibly on another worker, so copy it under the lock as well
+        threads::thread_id_ref_type runs_child;
+        {
+            std::unique_lock l(mtx_);
+            runs_child = runs_child_;
+        }
+        if (!runs_child)
         {
             return false;
         }
@@ -138,7 +147,10 @@ namespace hpx::lcos::detail {
         if (threads::detail::execute_thread(HPX_MOVE(runs_child)))
         {
             // don't try running this twice
-            runs_child_.reset();
+            {
+                std::unique_lock l(mtx_);
+                runs_child_.reset();
+            }
 
             LTM_(debug).format("task_object::get_result_void: successfully "
                                "directly executed child({}), description({})",
@@ -146,7 +158,7 @@ namespace hpx::lcos::detail {
 
             // thread terminated, mark as being destroyed
             HPX_ASSERT(thrd->get_state().state() ==
-                threads::thread_schedule_state::deleted);
+                threads::thread_schedule_state::terminated);
 
             return true;
         }
@@ -376,7 +388,16 @@ namespace hpx::lcos::detail {
                 }
 
                 // reload the state, it's not empty anymore
-                s = state_.load(std::memory_order_relaxed);
+                //
+                // Use memory_order_acquire (not relaxed) to establish a
+                // happens-before relationship with the memory_order_release
+                // CAS in set_value() / set_exception().  Without an acquire
+                // here, weakly-ordered CPUs (ARM, POWER) are permitted to
+                // reorder the subsequent read of storage_ before the release
+                // store of state_ has been observed, which would silently
+                // return stale (uninitialised) bytes to the caller of
+                // future::get().
+                s = state_.load(std::memory_order_acquire);
             }
         }
 

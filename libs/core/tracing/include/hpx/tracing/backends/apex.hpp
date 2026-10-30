@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace hpx::tracing {
 
@@ -84,6 +85,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         constexpr explicit lock_context(
@@ -108,6 +110,7 @@ namespace hpx::tracing {
 
         constexpr void after_unlock() const noexcept {}
     };
+    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -180,6 +183,7 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void update_task_timer(
         task_timer_data& timer, char const* new_name);
 
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT scoped_task_timer
     {
         explicit scoped_task_timer(task_timer_data data) noexcept;
@@ -209,6 +213,7 @@ namespace hpx::tracing {
         bool stopped_;
         task_timer_data data_;
     };
+    /// \endcond
 
     HPX_CXX_CORE_EXPORT constexpr void task_staged(
         char const*, void const* = nullptr) noexcept
@@ -292,7 +297,8 @@ namespace hpx::tracing {
     HPX_CXX_CORE_EXPORT constexpr void os_thread_sleep(std::size_t) noexcept {}
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_init(char const* name,
-        int argc, char** argv, std::uint32_t rank = 0, std::uint32_t size = 1);
+        int argc, char** argv, std::uint32_t rank = 0, std::uint32_t size = 1,
+        std::string_view version_info = {});
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void tracing_finalize();
 
@@ -305,11 +311,20 @@ namespace hpx::tracing {
         std::string const& name, std::string const& short_name,
         double value) noexcept;
 
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void send_parcel(std::uint64_t tag,
-        std::uint64_t size, std::uint64_t target_locality_id) noexcept;
+    /// \brief Parcel-send signal: parcel handed to parcelport (APEX shim).
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void send_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t size,
+        std::uint64_t target_locality_id) noexcept;
 
-    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void recv_parcel(std::uint64_t tag,
-        std::uint64_t size, std::uint64_t source_locality_id,
+    /// \brief Parcel-receive signal: parcel arrived (APEX shim).
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void recv_parcel(std::uint64_t tag_msb,
+        std::uint64_t tag_lsb, std::uint64_t source_locality_id) noexcept;
+
+    /// \brief Parcel-scheduled signal: action entered local scheduler
+    ///        (no-op stub for APEX).
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void parcel_scheduled(
+        std::uint64_t tag_msb, std::uint64_t tag_lsb,
+        std::uint64_t source_locality_id,
         std::uint64_t source_thread_id) noexcept;
 
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_enable_parent_task_handler(

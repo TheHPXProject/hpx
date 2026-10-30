@@ -7,6 +7,12 @@
 // This test verifies that hpx::threads::detail::create_background_thread()
 // correctly flags the newly created thread as a background thread (see
 // thread_data::is_background()/set_is_background()).
+//
+// It runs under every scheduler and also creates the background thread for a
+// worker other than the one running the test. The background thread is
+// created suspended, and the shared priority scheduler used to send threads
+// meant for another worker down the staged path, which only accepts pending
+// threads (see #6190).
 
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
@@ -16,11 +22,15 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace {
 
-    void test_create_background_thread_sets_is_background()
+    void test_create_background_thread_sets_is_background(
+        std::size_t const num_thread)
     {
         using namespace hpx::threads;
 
@@ -42,7 +52,7 @@ namespace {
 
         thread_id_ref_type background_thread;
         hpx::threads::detail::create_background_thread(background_thread,
-            *scheduler, 0, callbacks, running, idle_loop_count);
+            *scheduler, num_thread, callbacks, running, idle_loop_count);
 
         HPX_TEST(background_thread);
         HPX_TEST(running);
@@ -70,13 +80,61 @@ namespace {
 
 int hpx_main()
 {
-    test_create_background_thread_sets_is_background();
+    std::size_t const num_threads =
+        hpx::this_thread::get_pool()->get_os_thread_count();
+    std::size_t const this_thread = hpx::get_local_worker_thread_num();
+
+    // on the worker running this test
+    test_create_background_thread_sets_is_background(this_thread);
+
+    // and on a different one, so that the scheduler has to place it on a
+    // queue that does not belong to the calling worker
+    if (num_threads > 1)
+    {
+        test_create_background_thread_sets_is_background(
+            (this_thread + 1) % num_threads);
+    }
 
     return hpx::local::finalize();
 }
 
 int main(int argc, char* argv[])
 {
-    hpx::local::init(hpx_main, argc, argv);
+    // clang-format off
+    std::vector<std::string> const schedulers = {
+        "local",
+        "local-priority-fifo",
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+        "local-priority-lifo",
+#endif
+        "static",
+        "static-priority",
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+        "abp-priority-fifo",
+        "abp-priority-lifo",
+#endif
+        "shared-priority",
+
+#if defined(HPX_HAVE_WORK_REQUESTING_SCHEDULERS)
+        "local-workrequesting-fifo",
+#if defined(HPX_HAVE_CXX11_STD_ATOMIC_128BIT)
+        "local-workrequesting-lifo",
+#endif
+        "local-workrequesting-mc",
+#endif
+    };
+    // clang-format on
+
+    for (auto const& scheduler : schedulers)
+    {
+        std::cout << scheduler << std::endl;
+
+        hpx::local::init_params iparams;
+        iparams.cfg = {"--hpx:queuing=!" + scheduler};
+        // a scheduler that does not come up would otherwise leave this
+        // test passing without having run anything
+        HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, iparams), 0);
+    }
+
     return hpx::util::report_errors();
 }

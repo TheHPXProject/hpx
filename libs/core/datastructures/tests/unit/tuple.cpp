@@ -569,6 +569,47 @@ void tuple_structured_binding_test()
 #endif
 }
 
+// ----------------------------------------------------------------------------
+// regression test for #4371: std::get<I> on a type derived from std::pair
+// must keep compiling once HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE injects
+// hpx::get into namespace std
+// ----------------------------------------------------------------------------
+#if defined(HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE)
+namespace test_4371 {
+
+    struct derived_from_pair : std::pair<std::size_t, std::size_t>
+    {
+        explicit derived_from_pair(std::pair<std::size_t, std::size_t> const& p)
+          : std::pair<std::size_t, std::size_t>(p)
+        {
+        }
+
+        std::size_t first_hash() const
+        {
+            return std::get<0>(*this);
+        }
+
+        std::size_t second_hash() const
+        {
+            return std::get<1>(*this);
+        }
+    };
+}    // namespace test_4371
+
+void tuple_derived_from_pair_test()
+{
+    test_4371::derived_from_pair d(
+        std::make_pair(std::size_t(42), std::size_t(43)));
+
+    HPX_TEST_EQ(d.first_hash(), std::size_t(42));
+    HPX_TEST_EQ(d.second_hash(), std::size_t(43));
+
+    // std::get must also keep compiling when called outside the class
+    HPX_TEST_EQ(std::get<0>(d), std::size_t(42));
+    HPX_TEST_EQ(std::get<1>(d), std::size_t(43));
+}
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
@@ -586,6 +627,9 @@ int main()
         tuple_length_test();
         tuple_swap_test();
         tuple_structured_binding_test();
+#if defined(HPX_DATASTRUCTURES_HAVE_ADAPT_STD_TUPLE)
+        tuple_derived_from_pair_test();
+#endif
     }
 
     return hpx::util::report_errors();

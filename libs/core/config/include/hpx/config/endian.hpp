@@ -15,3 +15,4 @@ namespace hpx {
     using std::endian;
 
 }    // namespace hpx
+/// \endcond

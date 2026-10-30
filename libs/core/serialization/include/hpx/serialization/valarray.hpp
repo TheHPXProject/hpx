@@ -8,6 +8,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/serialization_fwd.hpp>
 #include <hpx/serialization/traits/is_bitwise_serializable.hpp>
 
@@ -22,12 +23,14 @@ namespace hpx::serialization {
     {
         std::uint64_t sz = 0;
         ar >> sz;
-        arr.resize(static_cast<std::size_t>(sz));
 
-        if (sz == 0)
+        std::size_t const count = detail::to_size(sz);
+        arr.resize(count);
+
+        if (count == 0)
             return;
 
-        for (std::size_t i = 0; i < sz; ++i)
+        for (std::size_t i = 0; i != count; ++i)
             ar >> arr[i];
     }
 

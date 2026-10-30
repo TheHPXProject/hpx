@@ -42,6 +42,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -156,20 +157,38 @@ namespace hpx {
                 return -1;
             }
 
-            std::unique_ptr<runtime> const rt(
-                get_runtime_ptr());    // take ownership!
-            if (!rt)
+            static std::mutex mtx;
+            static bool is_stopping = false;
+
+            runtime* p = nullptr;
             {
-                HPX_THROWS_IF(ec, hpx::error::invalid_status, "hpx::stop",
-                    "the runtime system is not active (did you already "
-                    "call hpx::stop?)");
-                return -1;
+                std::unique_lock<std::mutex> l(mtx);
+                if (is_stopping || get_runtime_ptr() == nullptr)
+                {
+                    l.unlock();
+                    HPX_THROWS_IF(ec, hpx::error::invalid_status, "hpx::stop",
+                        "the runtime system is not active (did you already "
+                        "call hpx::stop?)");
+                    return -1;
+                }
+                is_stopping = true;
+                p = get_runtime_ptr();
             }
 
-            int const result = rt->wait();
+            std::unique_ptr<runtime> const rt(p);
 
-            rt->stop();
-            rt->rethrow_exception();
+            auto cleanup_state = hpx::experimental::scope_exit([&]() {
+                std::lock_guard<std::mutex> l(mtx);
+                is_stopping = false;
+                if (get_runtime_ptr() == p)
+                {
+                    get_runtime_ptr() = nullptr;
+                }
+            });
+
+            int const result = p->wait();
+            p->stop();
+            p->rethrow_exception();
 
             return result;
         }
@@ -229,6 +248,8 @@ namespace hpx {
     defined(__FreeBSD__)
                 threads::coroutines::detail::posix::use_guard_pages =
                     cmdline.rtcfg_.use_stack_guard_pages();
+                threads::coroutines::detail::posix::unbind_on_reset =
+                    cmdline.rtcfg_.stack_unbind_on_reset();
 #endif
 #ifdef HPX_HAVE_VERIFY_LOCKS
                 if (cmdline.rtcfg_.enable_lock_detection())
@@ -356,6 +377,12 @@ namespace hpx {
                 [[maybe_unused]] hpx::util::runtime_configuration const& cfg)
             {
                 HPX_UNUSED(hpx::filesystem::initial_path());
+
+#if defined(HPX_WINDOWS) && defined(HPX_HAVE_APEX)
+                // artificially force the apex shared library to be loaded by the
+                // application
+                apex::version();
+#endif
 
                 hpx::assertion::set_assertion_handler(
                     &hpx::detail::assertion_handler);

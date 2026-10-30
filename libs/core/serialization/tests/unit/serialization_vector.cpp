@@ -7,6 +7,7 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <numeric>
@@ -230,16 +231,101 @@ void test_long_vector_serialization()
     std::vector<T> os((HPX_ZERO_COPY_SERIALIZATION_THRESHOLD / sizeof(T)) + 1);
     std::iota(os.begin(), os.end(), T());
 
-    std::vector<char> buffer;
-    hpx::serialization::output_archive oarchive(buffer);
-    oarchive << os;
+    // Without a chunk list the payload is still correct, but zero-copy is
+    // impossible -- keep this as a baseline round-trip.
+    {
+        std::vector<char> buffer;
+        hpx::serialization::output_archive oarchive(buffer);
+        oarchive << os;
 
-    std::vector<T> is;
-    hpx::serialization::input_archive iarchive(buffer);
-    iarchive >> is;
-    HPX_TEST_EQ(os.size(), is.size());
-    for (std::size_t i = 0; i < os.size(); ++i)
-        HPX_TEST_EQ(os[i], is[i]);
+        std::vector<T> is;
+        hpx::serialization::input_archive iarchive(buffer);
+        iarchive >> is;
+        HPX_TEST_EQ(os.size(), is.size());
+        for (std::size_t i = 0; i < os.size(); ++i)
+            HPX_TEST_EQ(os[i], is[i]);
+    }
+
+    // #812: bitwise-serializable vector payloads above the threshold must be
+    // recorded as a zero-copy pointer chunk that refers to the original
+    // storage, not copied into the main serialization buffer.
+    {
+        std::vector<char> buffer;
+        std::vector<hpx::serialization::serialization_chunk> chunks;
+        hpx::serialization::output_archive oarchive(buffer, 0, &chunks);
+        oarchive << os;
+
+        std::size_t pointer_chunks = 0;
+        bool saw_original_storage = false;
+        for (auto const& c : chunks)
+        {
+            // Save path must emit const-pointer chunks for vector storage.
+            if (c.type_ ==
+                hpx::serialization::chunk_type::chunk_type_const_pointer)
+            {
+                ++pointer_chunks;
+                if (c.data() == static_cast<void const*>(os.data()) &&
+                    c.size() == os.size() * sizeof(T))
+                {
+                    saw_original_storage = true;
+                }
+            }
+            HPX_TEST(
+                c.type_ != hpx::serialization::chunk_type::chunk_type_pointer);
+        }
+
+        HPX_TEST_EQ(pointer_chunks, std::size_t(1));
+        HPX_TEST(saw_original_storage);
+        // Main buffer must not have grown by the full vector payload.
+        HPX_TEST_LT(buffer.size(), os.size() * sizeof(T));
+
+        std::size_t const size = oarchive.bytes_written();
+        hpx::serialization::input_archive iarchive(buffer, size, &chunks);
+        std::vector<T> is;
+        iarchive >> is;
+        HPX_TEST_EQ(os.size(), is.size());
+        for (std::size_t i = 0; i < os.size(); ++i)
+            HPX_TEST_EQ(os[i], is[i]);
+    }
+
+    // Below the threshold the archive must copy into the main buffer and
+    // must not emit a pointer chunk for the vector payload.
+    {
+        std::vector<T> below_threshold((std::max) (std::size_t(1),
+            HPX_ZERO_COPY_SERIALIZATION_THRESHOLD / sizeof(T) / 2));
+        std::iota(below_threshold.begin(), below_threshold.end(), T());
+
+        std::vector<char> buffer;
+        std::vector<hpx::serialization::serialization_chunk> chunks;
+        hpx::serialization::output_archive oarchive(buffer, 0, &chunks);
+        oarchive << below_threshold;
+
+        for (auto const& c : chunks)
+        {
+            HPX_TEST(
+                c.type_ != hpx::serialization::chunk_type::chunk_type_pointer);
+            HPX_TEST(c.type_ !=
+                hpx::serialization::chunk_type::chunk_type_const_pointer);
+        }
+
+        std::size_t const size = oarchive.bytes_written();
+        hpx::serialization::input_archive iarchive(buffer, size, &chunks);
+        std::vector<T> is;
+        iarchive >> is;
+        HPX_TEST_EQ(below_threshold.size(), is.size());
+        for (std::size_t i = 0; i < below_threshold.size(); ++i)
+            HPX_TEST_EQ(below_threshold[i], is[i]);
+    }
+}
+
+void test_null_pointer_chunk()
+{
+    constexpr auto chunk =
+        hpx::serialization::create_pointer_chunk(nullptr, std::size_t{42});
+    static_assert(
+        chunk.type_ == hpx::serialization::chunk_type::chunk_type_pointer);
+    static_assert(chunk.data_.pos_ == nullptr);
+    static_assert(chunk.size() == 42);
 }
 
 void test_non_default_constructible()
@@ -275,6 +361,7 @@ void test_non_default_constructible()
 
 int main()
 {
+    test_null_pointer_chunk();
     test_bool();
     test<char>(
         (std::numeric_limits<char>::min)(), (std::numeric_limits<char>::max)());

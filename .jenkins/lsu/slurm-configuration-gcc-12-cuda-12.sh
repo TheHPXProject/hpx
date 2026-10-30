@@ -7,3 +7,6 @@
 
 configuration_slurm_partition="jenkins-cuda"
 configuration_slurm_num_nodes="1"
+
+# bahram was taken out of CI testing as a broken node in 2023
+configuration_slurm_exclude="bahram"

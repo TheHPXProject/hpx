@@ -13,8 +13,8 @@
 #if defined(DOXYGEN)
 namespace hpx {
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// by default-initialization. If an exception is thrown during the
     /// initialization, the function has no effects.
     ///
@@ -39,8 +39,8 @@ namespace hpx {
     template <typename FwdIter>
     void uninitialized_default_construct(FwdIter first, FwdIter last);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// by default-initialization. If an exception is thrown during the
     /// initialization, the function has no effects. Executed according
     /// to the policy.
@@ -83,8 +83,8 @@ namespace hpx {
     uninitialized_default_construct(
         ExPolicy&& policy, FwdIter first, FwdIter last);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// [first, first + count) by default-initialization. If an exception
     /// is thrown during the initialization, the function has no effects.
     ///
@@ -111,8 +111,8 @@ namespace hpx {
     template <typename FwdIter, typename Size>
     FwdIter uninitialized_default_construct_n(FwdIter first, Size count);
 
-    /// Constructs objects of type typename iterator_traits<ForwardIt>
-    /// ::value_type in the uninitialized storage designated by the range
+    /// Constructs objects of type \c iterator_traits<ForwardIt>::value_type
+    /// in the uninitialized storage designated by the range
     /// [first, first + count) by default-initialization. If an exception
     /// is thrown during the initialization, the function has no effects.
     /// Executed according to the policy.
