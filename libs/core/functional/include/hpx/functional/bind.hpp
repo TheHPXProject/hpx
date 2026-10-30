@@ -15,6 +15,7 @@
 #include <hpx/functional/invoke.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/functional/traits/get_task_size.hpp>
 #include <hpx/functional/traits/is_action.hpp>
 #include <hpx/functional/traits/is_bind_expression.hpp>
 #include <hpx/functional/traits/is_placeholder.hpp>
@@ -348,6 +349,17 @@ namespace hpx::traits {
     };
 }    // namespace hpx::traits
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+namespace hpx::traits {
+
+    // a bound function runs as long as the function it calls
+    template <threads::task_size Size, typename F, typename... Ts>
+    struct get_task_size<hpx::detail::bound<F, Ts...>, Size>
+      : get_task_size<F, Size>
+    {
+    };
+}    // namespace hpx::traits
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::serialization {

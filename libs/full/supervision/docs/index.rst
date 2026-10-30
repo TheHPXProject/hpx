@@ -89,6 +89,24 @@ Registering observers
     at registration time) whose epoch matches; by default the observer
     receives notifications for every epoch.
 
+    If ``callback`` lives on a locality other than the one tracking
+    ``target``, and sending a notification to it fails with
+    ``hpx::error::locality_was_disconnected`` (for instance, because that
+    locality was killed), the observer is unregistered. Such a failure does
+    not change the lifecycle state recorded for ``target``, and so does not
+    fence dispatch to it. Any other failure to deliver a notification,
+    including an exception thrown by ``callback`` itself, is recorded as
+    ``target`` having failed; the observer stays registered.
+
+    A failed send is told apart from an exception thrown by ``callback`` by
+    the locality the error was raised on: an exception thrown by a remote
+    callback carries the callback's locality. The one case this cannot tell
+    apart is a callback that rethrows a
+    ``hpx::error::locality_was_disconnected`` error raised on the locality
+    tracking ``target`` (for instance, from a call it made back to that
+    locality). That is taken for a failed send, and the observer is
+    unregistered although it is still reachable.
+
 .. _supervision_unregister_observer:
 
 Unregistering observers
@@ -142,9 +160,12 @@ Waiting for terminal events
     reaches neither of these outcomes is bounded by ``timeout`` (or a
     built-in default if ``timeout`` is left at its sentinel value
     ``std::chrono::steady_clock::duration::max()``), after which it is
-    swept and invalidated. Dispatch is routed locally when ``target``'s
-    supervision manager lives on the calling locality, and remotely (via a
-    registered distributed action) otherwise.
+    swept and invalidated. Waiters still pending when the runtime starts
+    shutting down are invalidated with ``hpx::error::invalid_status`` as a
+    pre-shutdown step, while the runtime is still active, and any later call
+    that would have to wait is rejected the same way. Dispatch is routed
+    locally when ``target``'s supervision manager lives on the calling
+    locality, and remotely (via a registered distributed action) otherwise.
 
 .. _supervision_check_admission:
 

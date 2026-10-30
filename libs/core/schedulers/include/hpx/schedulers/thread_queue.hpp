@@ -87,7 +87,7 @@ namespace hpx::threads::policies {
     // };
     HPX_CXX_CORE_EXPORT template <typename Mutex, typename PendingQueuing,
         typename StagedQueuing, typename TerminatedQueuing>
-    class thread_queue
+    class alignas(threads::get_destructive_interference_size()) thread_queue
     {
     private:
         // we use a simple mutex to protect the data members for now
@@ -1462,9 +1462,24 @@ namespace hpx::threads::policies {
         }
 
     private:
+        // The thread_queue is aligned to the cache line size and these
+        // counters are padded to a multiple of it. Declaring them first puts
+        // each of them on its own cache line, so they don't share one with
+        // each other or with the other members (false sharing).
+
+        // count of new tasks to run
+        util::cache_line_data<std::atomic<std::int64_t>> new_tasks_count_;
+
+        // count of active work items
+        util::cache_line_data<std::atomic<std::uint64_t>> work_items_count_;
+
         thread_queue_init_parameters parameters_;
 
-        mutable mutex_type mtx_;    // mutex protecting the members
+        // mutex protecting the members, on a destructive interference region
+        // of its own (+8 to 13% in spawn at 20 and 40 workers on a 2 x 20
+        // core Xeon with clang 18)
+        alignas(threads::get_destructive_interference_size()) mutable mutex_type
+            mtx_;
 
         thread_map_type thread_map_;    // mapping of thread id's to HPX-threads
 
@@ -1520,12 +1535,6 @@ namespace hpx::threads::policies {
         // count of new_tasks stolen to this queue from other queues
         std::atomic<std::int64_t> stolen_to_staged_;
 #endif
-        // count of new tasks to run, separate to new cache line to avoid false
-        // sharing
-        util::cache_line_data<std::atomic<std::int64_t>> new_tasks_count_;
-
-        // count of active work items
-        util::cache_line_data<std::atomic<std::uint64_t>> work_items_count_;
     };
 
 }    // namespace hpx::threads::policies

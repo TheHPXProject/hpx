@@ -1923,9 +1923,9 @@ hpx_option(
 
 # Check if the selected compiler versions are supposed to work with our codebase
 if(CMAKE_COMPILER_IS_GNUCXX AND HPX_WITH_GCC_VERSION_CHECK)
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.0)
     hpx_error(
-      "GCC 7.0 or higher is required. Specify HPX_WITH_GCC_VERSION_CHECK=OFF to ignore this error."
+      "GCC 12.0 or higher is required (found ${CMAKE_CXX_COMPILER_VERSION}). Specify -DHPX_WITH_GCC_VERSION_CHECK=OFF to remove this check at your own risk."
     )
   endif()
 endif()
@@ -2005,6 +2005,18 @@ target_architecture(__target_arch)
 
 include(CacheLineSize)
 cache_line_size(__cache_line_size)
+
+hpx_option(
+  HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE
+  STRING
+  "Minimal distance in bytes between data written by different cores, to avoid false sharing (empty: chosen by the target architecture, 128 on x86-64 and ARM64) (default: \"\")"
+  ""
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+destructive_interference_size(
+  ${__cache_line_size} __destructive_interference_size
+)
 
 # ##############################################################################
 # Set configuration option to use Boost.Context or not. This depends on the
@@ -2499,6 +2511,11 @@ else()
   endif()
 endif()
 hpx_info("Cacheline size detected: ${__cache_line_size}")
+if(__destructive_interference_size)
+  hpx_info(
+    "Destructive interference size set to: ${__destructive_interference_size}"
+  )
+endif()
 
 # store target architecture for later use
 set(HPX_WITH_TARGET_ARCHITECTURE

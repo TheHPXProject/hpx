@@ -118,6 +118,7 @@ namespace hpx::lcos::local {
                         policy.set_hint(hint);
                     }
                 }
+                threads::detail::set_task_size<std::decay_t<F>>(hint);
 
                 hpx::intrusive_ptr<base_type> this_(this);
                 if (policy == launch::fork)
@@ -129,7 +130,9 @@ namespace hpx::lcos::local {
                         policy.priority(),
                         threads::thread_schedule_hint(
                             static_cast<std::int16_t>(get_worker_thread_num()),
-                            hint.placement_mode(), hint.runs_as_child_mode()),
+                            hint.placement_mode(), hint.runs_as_child_mode(),
+                            hpx::threads::thread_sharing_hint::none,
+                            hint.task_size()),
                         policy.stacksize(),
                         threads::thread_schedule_state::pending_do_not_schedule,
                         true);
@@ -162,7 +165,7 @@ namespace hpx::lcos::local {
                         threads::make_thread_function_nullary(
                             &base_type::run_impl, std::move(this_)),
                         threads::thread_description(f_, annotation),
-                        policy.priority(), policy.hint(), policy.stacksize(),
+                        policy.priority(), hint, policy.stacksize(),
                         threads::thread_schedule_state::suspended, true);
 
                     HPX_ASSERT(this->runs_child_ == threads::invalid_thread_id);
@@ -191,7 +194,7 @@ namespace hpx::lcos::local {
                     threads::make_thread_function_nullary(
                         &base_type::run_impl, HPX_MOVE(this_)),
                     threads::thread_description(f_, annotation),
-                    policy.priority(), policy.hint(), policy.stacksize(),
+                    policy.priority(), hint, policy.stacksize(),
                     threads::thread_schedule_state::pending);
 
                 return threads::register_work(data, pool, ec);

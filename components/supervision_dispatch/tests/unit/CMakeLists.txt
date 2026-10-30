@@ -13,6 +13,7 @@ set(tests
     failure_detection_join
     fan_out_join
     fenced_dispatch
+    finalize_with_pending_sweep
     query_publish
     registry_join
     registry_mirroring
@@ -35,6 +36,8 @@ set(fan_out_join_PARAMETERS LOCALITIES 2)
 set(fan_out_join_FLAGS COMPILE_FLAGS -DHPX_HAVE_RUN_MAIN_EVERYWHERE)
 
 set(fenced_dispatch_PARAMETERS LOCALITIES 2)
+
+set(finalize_with_pending_sweep_PARAMETERS LOCALITIES 2)
 
 set(registry_mirroring_PARAMETERS LOCALITIES 2)
 set(registry_mirroring_FLAGS COMPILE_FLAGS -DHPX_HAVE_RUN_MAIN_EVERYWHERE)
