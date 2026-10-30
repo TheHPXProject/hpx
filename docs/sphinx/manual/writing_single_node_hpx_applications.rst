@@ -1347,8 +1347,8 @@ parameter types will naturally specialize all operations for maximum efficiency.
 * :hpx:class:`hpx::execution::experimental::task_size_chunk_size`: The run
   time of one loop iteration is taken from the task size of the loop body
   (see :ref:`task_sizes`), nothing is measured. The loop runs on as many
-  cores as can be given a number of chunks (4 by default) of at least a
-  minimal run time each (5 microseconds by default), at least on one; a
+  cores as can be given a number of chunks (8 by default) of at least a
+  minimal run time each (2.5 microseconds by default), at least on one; a
   loop that ends up as a single chunk on a single core runs on the calling
   thread. A loop body without a size is chunked as with the default executor
   parameters.

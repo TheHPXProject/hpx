@@ -16,12 +16,15 @@ namespace hpx::execution::experimental::detail {
 
     namespace {
 
-        constexpr std::chrono::microseconds default_min_chunk_time(5);
-        constexpr std::size_t default_chunks_per_core = 4;
+        // Chosen with the sweep in
+        // libs/core/algorithms/tests/performance/task_size_chunk_size_sweep.cpp
+        // 2.5 us and 8 chunks per core
+        constexpr std::chrono::nanoseconds default_min_chunk_time(2500);
+        constexpr std::size_t default_chunks_per_core = 8;
 
         // the minimal run time of a chunk in nanoseconds
         std::atomic<std::chrono::nanoseconds::rep> min_chunk_time(
-            std::chrono::nanoseconds(default_min_chunk_time).count());
+            default_min_chunk_time.count());
         std::atomic<std::size_t> chunks_per_core(default_chunks_per_core);
     }    // namespace
 

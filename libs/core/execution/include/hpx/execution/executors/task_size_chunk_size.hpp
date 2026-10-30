@@ -43,8 +43,8 @@ namespace hpx::execution::experimental {
         /// with the default minimal run time of a chunk and the default
         /// number of chunks per core.
         ///
-        /// \note The defaults are 5 microseconds as the minimal run time of a
-        ///       chunk and 4 chunks per core. They can be changed at startup
+        /// \note The defaults are 2.5 microseconds as the minimal run time of
+        ///       a chunk and 8 chunks per core. They can be changed at startup
         ///       with the configuration entries
         ///       \a hpx.task_size_chunk_size.min_chunk_time_us (in
         ///       microseconds) and \a hpx.task_size_chunk_size.chunks_per_core.

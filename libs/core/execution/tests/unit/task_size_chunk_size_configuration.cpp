@@ -57,8 +57,8 @@ int hpx_main_compiled()
     // a runtime started without the configuration entries uses the compiled
     // defaults again
     auto const defaults = ex::detail::get_task_size_chunk_size_defaults();
-    HPX_TEST(defaults.min_chunk_time == 5us);
-    HPX_TEST_EQ(defaults.chunks_per_core, 4u);
+    HPX_TEST(defaults.min_chunk_time == 2500ns);
+    HPX_TEST_EQ(defaults.chunks_per_core, 8u);
 
     return hpx::local::finalize();
 }

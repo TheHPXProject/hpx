@@ -526,8 +526,9 @@ The ``hpx.task_size_chunk_size`` configuration section
 
 The entries of this section replace the defaults of the executor parameters
 ``hpx::execution::experimental::task_size_chunk_size``, see
-:ref:`task_sizes`. They are empty by default, which stands for the defaults
-compiled into |hpx|.
+:ref:`task_sizes`, for instance with the values the benchmark
+``task_size_chunk_size_sweep_test`` prints for a machine. They are empty by
+default, which stands for the defaults compiled into |hpx|.
 
 .. code-block:: ini
 
@@ -543,10 +544,10 @@ compiled into |hpx|.
      * Description
    * * ``hpx.task_size_chunk_size.min_chunk_time_us``
      * The value of this property defines the minimal run time of a chunk, in
-       microseconds, up to ``1000000`` (one second). The default is ``5``.
+       microseconds, up to ``1000000`` (one second). The default is ``2.5``.
    * * ``hpx.task_size_chunk_size.chunks_per_core``
      * The value of this property defines the number of chunks each core gets
-       for load balancing, up to ``1024``. The default is ``4``.
+       for load balancing, up to ``1024``. The default is ``8``.
 
 The ``hpx.components`` configuration section
 ............................................

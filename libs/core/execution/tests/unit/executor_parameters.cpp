@@ -224,7 +224,7 @@ void test_task_size_chunk_size()
         HPX_TEST_EQ(transformed, 10000);
     }
 
-    // by default, a core needs 4 chunks of 5 us: 100 iterations of 100 ns
+    // by default, a core needs 8 chunks of 2.5 us: 100 iterations of 100 ns
     // are one chunk on one core
     {
         task_size_chunk_size const defaults;
