@@ -876,7 +876,7 @@ namespace hpx::threads::policies {
                 std::uint64_t const needed = (steal_looks + n - 1) / n;
                 std::uint64_t seen =
                     c.fetch_add(1, std::memory_order_relaxed) + 1;
-                if (seen > needed &&
+                if (seen >= needed &&
                     c.compare_exchange_strong(
                         seen, 0, std::memory_order_relaxed))
                 {
@@ -899,9 +899,9 @@ namespace hpx::threads::policies {
             if (len >= min_tasks)
                 return min_tasks;
 
-            if (looks <= steal_looks)
+            if (looks < steal_looks)
                 ++looks;
-            return looks > steal_looks ? 0 : min_tasks;
+            return looks == steal_looks ? 0 : min_tasks;
         }
 
     private:
