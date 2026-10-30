@@ -10,10 +10,13 @@
 #include <hpx/modules/testing.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
+#include <deque>
 #include <iostream>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "../algorithms/test_utils.hpp"
@@ -195,6 +198,127 @@ void search_n_test3()
     test_search_n3<std::forward_iterator_tag>();
 }
 
+template <typename ExPolicy>
+void check_search_n_result(ExPolicy policy, std::vector<int> const& haystack,
+    std::size_t count, int value)
+{
+    auto const result =
+        hpx::search_n(policy, haystack.begin(), haystack.end(), count, value);
+    auto const expected =
+        std::search_n(haystack.begin(), haystack.end(), count, value);
+
+    HPX_TEST(result == expected);
+}
+
+template <typename ExPolicy>
+void test_search_n_boundaries(ExPolicy policy)
+{
+    using pack_type = hpx::parallel::traits::vector_pack_type_t<int>;
+    constexpr std::size_t pack_size =
+        hpx::parallel::traits::vector_pack_size_v<pack_type>;
+
+    std::size_t const counts[] = {
+        1, 2, 3, pack_size, pack_size + 1, 2 * pack_size + 3};
+    for (std::size_t const count : counts)
+    {
+        std::size_t const size = pack_size * 4 + count + 1;
+
+        // The run ends exactly at the last element.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // The run begins in the last lane of a pack and spans into the next.
+        {
+            std::vector<int> haystack(size, 9);
+            auto const first =
+                haystack.begin() + static_cast<std::ptrdiff_t>(pack_size - 1);
+            std::fill(first, first + static_cast<std::ptrdiff_t>(count), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // A run that is one element too short precedes the real match.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.begin(),
+                haystack.begin() + static_cast<std::ptrdiff_t>(count - 1), 1);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+
+        // The run is cut off by the end of the range: no match.
+        {
+            std::vector<int> haystack(size, 9);
+            std::fill(haystack.end() - static_cast<std::ptrdiff_t>(count - 1),
+                haystack.end(), 1);
+            check_search_n_result(policy, haystack, count, 1);
+        }
+    }
+}
+
+// Contiguous arithmetic ranges must actually take the SIMD path.
+void test_search_n_uses_simd_path()
+{
+    std::atomic<int> pack_calls(0);
+    auto pred = [&pack_calls](auto const& a, auto const& b) {
+        if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            ++pack_calls;
+        return a == b;
+    };
+
+    std::vector<int> haystack(1000, 9);
+    std::fill(haystack.begin() + 700, haystack.begin() + 703, 1);
+
+    auto const result = hpx::search_n(
+        hpx::execution::par_simd, haystack.begin(), haystack.end(), 3, 1, pred);
+
+    HPX_TEST(result == haystack.begin() + 700);
+    HPX_TEST(pack_calls > 0);
+}
+
+// Random-access but non-contiguous ranges must not take the SIMD path.
+void test_search_n_non_contiguous()
+{
+    std::atomic<int> pack_calls(0);
+    auto pred = [&pack_calls](auto const& a, auto const& b) {
+        if constexpr (!std::is_arithmetic_v<std::decay_t<decltype(a)>>)
+            ++pack_calls;
+        return a == b;
+    };
+
+    std::deque<int> haystack(10007, 9);
+    for (std::size_t pos :
+        {std::size_t(126), std::size_t(5000), haystack.size() - 3})
+    {
+        std::fill(haystack.begin(), haystack.end(), 9);
+        std::fill(haystack.begin() + static_cast<std::ptrdiff_t>(pos),
+            haystack.begin() + static_cast<std::ptrdiff_t>(pos + 3), 1);
+
+        auto const result = hpx::search_n(hpx::execution::par_simd,
+            haystack.begin(), haystack.end(), 3, 1, pred);
+        auto const expected =
+            std::search_n(haystack.begin(), haystack.end(), 3, 1);
+
+        HPX_TEST(result == expected);
+    }
+
+    HPX_TEST_EQ(pack_calls.load(), 0);
+}
+
+void search_n_boundary_tests()
+{
+    using namespace hpx::execution;
+
+    test_search_n_boundaries(simd);
+    test_search_n_boundaries(par_simd);
+    test_search_n_uses_simd_path();
+    test_search_n_non_contiguous();
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     if (vm.count("seed"))
@@ -205,6 +329,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     search_n_test1();
     search_n_test2();
     search_n_test3();
+    search_n_boundary_tests();
     return hpx::local::finalize();
 }
 

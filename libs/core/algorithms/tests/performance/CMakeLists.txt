@@ -30,6 +30,10 @@ set(benchmarks
     transform_reduce_scaling
 )
 
+if(HPX_WITH_DATAPAR)
+  list(APPEND benchmarks benchmark_search benchmark_search_n)
+endif()
+
 set(perftest_reports
     foreach_report
     transform_reduce_scaling
