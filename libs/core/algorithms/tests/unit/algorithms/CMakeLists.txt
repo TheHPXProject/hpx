@@ -97,6 +97,7 @@ set(tests
     partial_sort_copy
     partition
     partition_copy
+    radix_sort
     reduce_
     reduce_by_key
     reduce_deterministic

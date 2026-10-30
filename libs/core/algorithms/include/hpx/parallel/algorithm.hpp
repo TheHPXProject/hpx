@@ -37,6 +37,7 @@
 #include <hpx/parallel/algorithms/partial_sort.hpp>
 #include <hpx/parallel/algorithms/partial_sort_copy.hpp>
 #include <hpx/parallel/algorithms/partition.hpp>
+#include <hpx/parallel/algorithms/radix_sort.hpp>
 #include <hpx/parallel/algorithms/remove.hpp>
 #include <hpx/parallel/algorithms/remove_copy.hpp>
 #include <hpx/parallel/algorithms/replace.hpp>

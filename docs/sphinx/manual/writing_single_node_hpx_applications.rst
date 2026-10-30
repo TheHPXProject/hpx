@@ -1173,6 +1173,9 @@ Parallel algorithms
    * * :hpx:func:`hpx::experimental::sort_by_key`
      * Sorts one range of data using keys supplied in another range.
      *
+   * * :hpx:func:`hpx::radix_sort`
+     * Sorts the elements in a range by integral keys, in place, using radix sort.
+     *
 
 |
 

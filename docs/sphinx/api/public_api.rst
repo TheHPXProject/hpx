@@ -112,6 +112,7 @@ Functions
    :hpx:func:`hpx::shift_right`                       :cppreference-generic:`algorithm,shift,shift_right`
    :hpx:func:`hpx::sort`                              :cppreference-generic:`algorithm,sort`
    :hpx:func:`hpx::experimental::sort_by_key`         `sort_by_key <https://thrust.github.io/doc/group__sorting_gabe038d6107f7c824cf74120500ef45ea.html>`_
+   :hpx:func:`hpx::radix_sort`                        `IPS2Ra <https://arxiv.org/abs/2009.13569>`_
    :hpx:func:`hpx::stable_partition`                  :cppreference-generic:`algorithm,stable_partition`
    :hpx:func:`hpx::stable_sort`                       :cppreference-generic:`algorithm,stable_sort`
    :hpx:func:`hpx::starts_with`                       :cppreference-generic:`algorithm/ranges,starts_with`
@@ -171,6 +172,7 @@ Functions
    :hpx:func:`hpx::ranges::partial_sort_copy`               :cppreference-generic:`algorithm/ranges,partial_sort_copy`
    :hpx:func:`hpx::ranges::partition`                       :cppreference-generic:`algorithm/ranges,partition`
    :hpx:func:`hpx::ranges::partition_copy`                  :cppreference-generic:`algorithm/ranges,partition_copy`
+   :hpx:func:`hpx::ranges::radix_sort`                      `IPS2Ra <https://arxiv.org/abs/2009.13569>`_
    :hpx:func:`hpx::ranges::set_difference`                  :cppreference-generic:`algorithm/ranges,set_difference`
    :hpx:func:`hpx::ranges::set_intersection`                :cppreference-generic:`algorithm/ranges,set_intersection`
    :hpx:func:`hpx::ranges::set_symmetric_difference`        :cppreference-generic:`algorithm/ranges,set_symmetric_difference`

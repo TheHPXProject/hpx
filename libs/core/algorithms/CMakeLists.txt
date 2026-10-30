@@ -33,6 +33,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/indirect.hpp
     hpx/parallel/algorithms/detail/insertion_sort.hpp
     hpx/parallel/algorithms/detail/iota.hpp
+    hpx/parallel/algorithms/detail/ips_distribution.hpp
     hpx/parallel/algorithms/detail/is_sorted.hpp
     hpx/parallel/algorithms/detail/mismatch.hpp
     hpx/parallel/algorithms/detail/parallel_stable_sort.hpp
@@ -84,6 +85,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/partial_sort.hpp
     hpx/parallel/algorithms/partial_sort_copy.hpp
     hpx/parallel/algorithms/partition.hpp
+    hpx/parallel/algorithms/radix_sort.hpp
     hpx/parallel/algorithms/reduce_by_key.hpp
     hpx/parallel/algorithms/reduce.hpp
     hpx/parallel/algorithms/reduce_deterministic.hpp
@@ -149,6 +151,7 @@ set(algorithms_headers
     hpx/parallel/container_algorithms/partial_sort.hpp
     hpx/parallel/container_algorithms/partial_sort_copy.hpp
     hpx/parallel/container_algorithms/partition.hpp
+    hpx/parallel/container_algorithms/radix_sort.hpp
     hpx/parallel/container_algorithms/reduce.hpp
     hpx/parallel/container_algorithms/remove_copy.hpp
     hpx/parallel/container_algorithms/remove.hpp
