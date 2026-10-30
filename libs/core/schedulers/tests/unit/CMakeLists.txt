@@ -8,6 +8,7 @@ set(tests
     lockfree_fifo_double_backend
     min_tasks_to_steal_staged
     numa_stealing_domains
+    queue_length_all_threads
     schedule_last
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
@@ -23,6 +24,7 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
 endif()
 
 set(min_tasks_to_steal_staged_PARAMETERS THREADS_PER_LOCALITY 4)
+set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)
 
 set(steal_staged_early_PARAMETERS
     THREADS_PER_LOCALITY 4 ARGS --mode=early

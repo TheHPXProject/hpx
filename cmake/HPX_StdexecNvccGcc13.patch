@@ -1,0 +1,248 @@
+Additional workarounds for stdexec with nvcc 12.8 and a GCC 13 host compiler.
+
+The original nvcc workarounds allow parsing HPX's execution headers, but sender
+instantiations still fail in nvcc's generated host code. This incremental patch
+addresses callable non-type template parameters, unintended cv/ref qualifiers,
+GCC copy elision, and references to constexpr global function objects from
+host/device functions. A dependent sync_wait alias is spelled through a helper
+to preserve its result type in generated host code.
+
+Use STDEXEC_DEMANGLE_SENDER_NAMES consistently in HPX and its consumers; it
+selects a different sender representation. HPX's Stdexec interface target
+exports this definition for nvcc builds. These workarounds enable host-side
+sender machinery in CUDA translation units, not arbitrary GPU sender execution.
+
+With the complete patch stack, nvcc 12.8.93 and GCC 13.3 crash with
+"Segmentation fault" when compiling this CUDA translation unit without
+STDEXEC_DEMANGLE_SENDER_NAMES:
+
+  #include <stdexec/execution.hpp>
+  #include <tuple>
+  int main() {
+    auto r = stdexec::sync_wait(stdexec::just(42));
+    return r && std::get<0>(*r) == 42 ? 0 : 1;
+  }
+
+Compile with -std=c++20 --expt-relaxed-constexpr --extended-lambda and the
+patched include directory. Adding -DSTDEXEC_DEMANGLE_SENDER_NAMES makes the
+same program compile and run. The macro selects a descriptor object instead
+of a lambda descriptor; it must not differ between C++ and CUDA consumers.
+
+Per-header rationale and diagnostics (with the representation macro enabled):
+
+- __basic_sender.hpp: the original connect object produces "identifier
+  stdexec::connect is undefined in device code". Construct the same stateless
+  callable locally under nvcc.
+- __just.hpp: likewise, __make_sexpr<just_t> is undefined in device code.
+- __receivers.hpp: likewise, __invoke and set_value are undefined in device
+  code. Preserve the original expressions for other compilers.
+- __sender_adaptor_closure.hpp: likewise, __apply is undefined in device code.
+  Only nvcc uses the internal __tup::__apply_t spelling.
+- __meta.hpp: without cv/ref removal, completion_signatures<...> const&
+  "is not a class, struct, or union type" during completion deduction.
+- __sender_concepts.hpp: without cv/ref removal, then reports "deduced return
+  type does not satisfy placeholder constraints", followed by no operator|.
+- __utility.hpp: reference callable template arguments produce "no instance
+  of function template stdexec::connect_t::operator() matches the argument
+  list" in sync_wait, followed by its incompatible-connect static assertion.
+- __sync_wait.hpp: the dependent value_type alias produces generated host
+  errors including "_Error was not declared in this scope". The helper keeps
+  that type lookup dependent.
+- __config.hpp: STDEXEC_GCC() is false under nvcc although GCC compiles the
+  host code, so the existing GCC copy-elision workaround is not enabled there;
+  enable it for nvcc with a GCC host compiler too. See
+  https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995. This hunk was not
+  independently triggered by the bounded just/then/variant regression; retest
+  the wider HPX/Kokkos consumers before removing it.
+
+Tracking: https://github.com/TheHPXProject/hpx/pull/7711. No separate stdexec
+issue is recorded for these additional failures. When updating the pin,
+retest the reproducer and the stdexec_cuda/algorithm_sender_cuda regressions
+with each workaround disabled before removing it. The preceding async_scope
+patch separately tracks NVIDIA/stdexec#2304.
+
+Keep this patch separate so existing FetchContent checkouts with the earlier
+nvcc patches can acquire it. It applies to stdexec commit
+04de75de5807e73a229acf047c6976575e313359, pinned by HPX 2.0.0-rc1.
+
+Copyright (c) 2026 Dominic Marcello
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+--- a/include/stdexec/__detail/__basic_sender.hpp
++++ b/include/stdexec/__detail/__basic_sender.hpp
+@@ -142,7 +142,11 @@
+           -> __tuple<connect_result_t<_Child, __rcvr<_Tag, _State, _Idx>>...>
+       {
+         return __tuple{
++#  if STDEXEC_NVCC()
++          STDEXEC::connect_t{}(static_cast<_Child&&>(__child), __rcvr<_Tag, _State, _Idx>{__state})...};
++#  else
+           STDEXEC::connect(static_cast<_Child&&>(__child), __rcvr<_Tag, _State, _Idx>{__state})...};
++#  endif
+       }
+     };
+ 
+--- a/include/stdexec/__detail/__config.hpp
++++ b/include/stdexec/__detail/__config.hpp
+@@ -581,7 +581,7 @@
+ #  define STDEXEC_IMMOVABLE(_XP) _XP(_XP&&) = delete
+ #endif
+ 
+-#if STDEXEC_GCC()
++#if STDEXEC_GCC() || (STDEXEC_NVCC() && defined(__GNUC__) && !defined(__clang__))
+ // BUG (gcc#98995): copy elision fails when initializing a [[no_unique_address]] field
+ // from a function returning an object of class type by value.
+ // See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98995
+--- a/include/stdexec/__detail/__just.hpp
++++ b/include/stdexec/__detail/__just.hpp
+@@ -171,7 +171,11 @@
+     STDEXEC_ATTRIBUTE(host, device)
+     constexpr auto operator()(_Ts&&... __ts) const noexcept(__nothrow_decay_copyable<_Ts...>)
+     {
++#  if STDEXEC_NVCC()
++      return __detail::__make_sexpr_t<just_t>{}(__tuple{static_cast<_Ts&&>(__ts)...});
++#  else
+       return __make_sexpr<just_t>(__tuple{static_cast<_Ts&&>(__ts)...});
++#  endif
+     }
+   };
+ 
+--- a/include/stdexec/__detail/__meta.hpp
++++ b/include/stdexec/__detail/__meta.hpp
+@@ -57,6 +57,9 @@
+ #  if STDEXEC_GCC() && STDEXEC_GCC_VERSION < 1300
+   template <auto _Value>
+   using __mtypeof = std::remove_const_t<decltype(_Value)>;
++#  elif STDEXEC_NVCC()
++  template <auto _Value>
++  using __mtypeof = std::remove_cvref_t<decltype(_Value)>;
+ #  else
+   template <auto _Value>
+   using __mtypeof = decltype(_Value);
+--- a/include/stdexec/__detail/__receivers.hpp
++++ b/include/stdexec/__detail/__receivers.hpp
+@@ -448,13 +448,23 @@
+     {
+       if constexpr (__std::same_as<void, __invoke_result_t<_Fun, _As...>>)
+       {
++#  if STDEXEC_NVCC()
++        decltype(__invoke){}(static_cast<_Fun &&>(__fun), static_cast<_As &&>(__as)...);
++        STDEXEC::set_value_t{}(static_cast<_Receiver &&>(__rcvr));
++#  else
+         __invoke(static_cast<_Fun &&>(__fun), static_cast<_As &&>(__as)...);
+         STDEXEC::set_value(static_cast<_Receiver &&>(__rcvr));
++#  endif
+       }
+       else
+       {
++#  if STDEXEC_NVCC()
++        STDEXEC::set_value_t{}(static_cast<_Receiver &&>(__rcvr),
++                           decltype(__invoke){}(static_cast<_Fun &&>(__fun), static_cast<_As &&>(__as)...));
++#  else
+         STDEXEC::set_value(static_cast<_Receiver &&>(__rcvr),
+                            __invoke(static_cast<_Fun &&>(__fun), static_cast<_As &&>(__as)...));
++#  endif
+       }
+     }
+     STDEXEC_CATCH_ALL
+--- a/include/stdexec/__detail/__sender_adaptor_closure.hpp
++++ b/include/stdexec/__detail/__sender_adaptor_closure.hpp
+@@ -114,7 +114,11 @@
+     constexpr auto
+     operator()(_Sender&& __sndr) && noexcept(__nothrow_callable<_Fn, _Sender, _As...>)
+     {
++#  if STDEXEC_NVCC()
++      return STDEXEC::__tup::__apply_t{}(static_cast<_Fn&&>(__fn_),
++#  else
+       return STDEXEC::__apply(static_cast<_Fn&&>(__fn_),
++#  endif
+                               static_cast<__tuple<_As...>&&>(__args_),
+                               static_cast<_Sender&&>(__sndr));
+     }
+@@ -125,7 +129,11 @@
+     constexpr auto operator()(_Sender&& __sndr) const & noexcept(
+       __nothrow_callable<_Fn const &, _Sender, _As const &...>)
+     {
++#  if STDEXEC_NVCC()
++      return STDEXEC::__tup::__apply_t{}(__fn_, __args_, static_cast<_Sender&&>(__sndr));
++#  else
+       return STDEXEC::__apply(__fn_, __args_, static_cast<_Sender&&>(__sndr));
++#  endif
+     }
+ 
+    private:
+--- a/include/stdexec/__detail/__sender_concepts.hpp
++++ b/include/stdexec/__detail/__sender_concepts.hpp
+@@ -138,6 +138,10 @@
+   template <auto _Completions>
+   inline constexpr bool __constant_completion_signatures_v =
+     __valid_completion_signatures<std::remove_const_t<decltype(_Completions)>>;
++#  elif STDEXEC_NVCC()
++  template <auto _Completions>
++  inline constexpr bool __constant_completion_signatures_v =
++    __valid_completion_signatures<std::remove_cvref_t<decltype(_Completions)>>;
+ #  else
+   template <auto _Completions>
+   inline constexpr bool __constant_completion_signatures_v =
+--- a/include/stdexec/__detail/__sync_wait.hpp
++++ b/include/stdexec/__detail/__sync_wait.hpp
+@@ -53,6 +53,13 @@
+ 
+ namespace STDEXEC::__sync_wait
+ {
++#  if STDEXEC_NVCC()
++  template <class _Result>
++  struct __value_type_of
++  {
++    using __t = typename _Result::value_type;
++  };
++#  endif
+   /////////////////////////////////////////////////////////////////////////////
+   // [exec.sync.wait]
+   // [exec.sync.wait.var]
+@@ -488,7 +495,11 @@
+                                  sync_wait_with_variant_t,
+                                  _CvSender>;
+       static_assert(STDEXEC::__is_instance_of<__result_t, std::optional>);
++#  if STDEXEC_NVCC()
++      using __variant_t = typename __sync_wait::__value_type_of<__result_t>::__t;
++#  else
+       using __variant_t = __result_t::value_type;
++#  endif
+       static_assert(STDEXEC::__is_instance_of<__variant_t, std::variant>);
+ 
+       using _Domain = STDEXEC::__completion_domain_of_t<STDEXEC::set_value_t,
+--- a/include/stdexec/__detail/__utility.hpp
++++ b/include/stdexec/__detail/__utility.hpp
+@@ -97,7 +97,11 @@
+   using __call_result_or_t = __minvoke_or_q<__call_result_t, _Default, _Fun, _As...>;
+ 
+ // BUGBUG TODO file this bug with nvc++
+-#  if STDEXEC_EDG()
++#  if STDEXEC_NVCC()
++  STDEXEC_MODULE_EXPORT_META
++  template <auto _Fun, class... _As>
++  using __result_of = __call_result_t<decltype(_Fun) const&, _As...>;
++#  elif STDEXEC_EDG()
+   STDEXEC_MODULE_EXPORT_META
+   template <auto const & _Fun, class... _As>
+   using __result_of = __call_result_t<decltype(_Fun), _As...>;
+@@ -107,9 +111,15 @@
+   using __result_of = decltype(_Fun(__declval<_As>()...));
+ #  endif
+ 
++#  if STDEXEC_NVCC()
++  STDEXEC_MODULE_EXPORT_AUTHORING
++  template <auto _Fun, class... _As>
++  inline constexpr bool __noexcept_of = __nothrow_callable<decltype(_Fun) const&, _As...>;
++#  else
+   STDEXEC_MODULE_EXPORT_AUTHORING
+   template <auto const & _Fun, class... _As>
+   inline constexpr bool __noexcept_of = noexcept(_Fun(__declval<_As>()...));
++#  endif
+ 
+   // For emplacing non-movable types into optionals:
+   template <__nothrow_move_constructible _Fn>

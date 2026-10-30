@@ -939,6 +939,26 @@ namespace hpx::threads::policies {
         }
 
         // ------------------------------------------------------------
+        // The bound threads created on this queue holder that have not
+        // terminated yet. The thread map holds the threads of all queues of
+        // the holder, so this has to look at each of them; it is used only
+        // while a worker is about to leave its scheduling loop.
+        std::int64_t get_live_bound_thread_count() const
+        {
+            if (!owns_bp_queue())
+                return 0;
+
+            scoped_lock lk(thread_map_mtx_.data_);
+            return static_cast<std::int64_t>(std::count_if(
+                thread_map_.begin(), thread_map_.end(), [](auto const& tid) {
+                    auto const* thrd = get_thread_id_data(tid);
+                    return thrd->get_priority() == thread_priority::bound &&
+                        thrd->get_state().state() !=
+                        thread_schedule_state::terminated;
+                }));
+        }
+
+        // ------------------------------------------------------------
         /// Destroy the passed thread as it has been terminated
         void destroy_thread(
             threads::thread_data* thrd, std::size_t thread_num, bool xthread)

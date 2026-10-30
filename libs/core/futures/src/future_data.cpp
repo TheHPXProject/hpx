@@ -158,9 +158,7 @@ namespace hpx::lcos::detail {
 
             // thread terminated, mark as being destroyed
             HPX_ASSERT(thrd->get_state().state() ==
-                    threads::thread_schedule_state::terminated ||
-                thrd->get_state().state() ==
-                    threads::thread_schedule_state::deleted);
+                threads::thread_schedule_state::terminated);
 
             return true;
         }

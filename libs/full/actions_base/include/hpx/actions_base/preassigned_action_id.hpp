@@ -40,6 +40,7 @@ namespace hpx::actions {
         console_print_action_id,
         create_performance_counter_action_id,
         dijkstra_termination_action_id,
+        force_disconnect_action_id,
         free_component_action_id,
         garbage_collect_action_id,
         get_config_action_id,

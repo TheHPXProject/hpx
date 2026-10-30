@@ -42,8 +42,11 @@ namespace hpx {
         {
             ar >> policy_;
             ar >> priority_;
-            ar >> hint_.hint >> hint_.mode;
+            ar >> hint_.hint;
             std::uint8_t mode = 0;
+            ar >> mode;
+            hint_.mode(
+                static_cast<hpx::threads::thread_schedule_hint_mode>(mode));
             ar >> mode;
             hint_.placement_mode(
                 static_cast<hpx::threads::thread_placement_hint>(mode));
@@ -53,6 +56,8 @@ namespace hpx {
             ar >> mode;
             hint_.runs_as_child_mode(
                 static_cast<hpx::threads::thread_execution_hint>(mode));
+            ar >> mode;
+            hint_.task_size(static_cast<hpx::threads::task_size>(mode));
         }
 
         void policy_holder_base::save(
@@ -60,10 +65,11 @@ namespace hpx {
         {
             ar << policy_;
             ar << priority_;
-            ar << hint_.hint << hint_.mode
+            ar << hint_.hint << static_cast<std::uint8_t>(hint_.mode())
                << static_cast<std::uint8_t>(hint_.placement_mode())
                << static_cast<std::uint8_t>(hint_.sharing_mode())
-               << static_cast<std::uint8_t>(hint_.runs_as_child_mode());
+               << static_cast<std::uint8_t>(hint_.runs_as_child_mode())
+               << static_cast<std::uint8_t>(hint_.task_size());
         }
     }    // namespace detail
 }    // namespace hpx

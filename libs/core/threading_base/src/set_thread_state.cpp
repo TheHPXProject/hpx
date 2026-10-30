@@ -274,7 +274,7 @@ namespace hpx::threads::detail {
             auto const current_priority = thrd_data->get_priority();
             if (priority == thread_priority::bound)
             {
-                if (schedulehint.mode == thread_schedule_hint_mode::thread &&
+                if (schedulehint.mode() == thread_schedule_hint_mode::thread &&
                     schedulehint.hint != -1)
                 {
                     thrd_data->set_last_worker_thread_num(
@@ -286,7 +286,7 @@ namespace hpx::threads::detail {
             }
             else if (current_priority == thread_priority::bound)
             {
-                schedulehint.mode = thread_schedule_hint_mode::thread;
+                schedulehint.mode(thread_schedule_hint_mode::thread);
                 schedulehint.hint = static_cast<std::int16_t>(
                     thrd_data->get_last_worker_thread_num());
                 scheduler->schedule_thread(
@@ -303,7 +303,7 @@ namespace hpx::threads::detail {
                 scheduler->schedule_thread(thrd, schedulehint, false, p);
             }
 
-            scheduler->do_some_work(schedulehint.mode ==
+            scheduler->do_some_work(schedulehint.mode() ==
                         hpx::threads::thread_schedule_hint_mode::numa ?
                     static_cast<std::size_t>(-1) :
                     schedulehint.hint);

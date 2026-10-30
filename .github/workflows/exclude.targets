@@ -18,3 +18,6 @@ tests.unit.modules.algorithms.container_algorithms.for_loop_range_generator
 tests.unit.modules.algorithms.block.run_on_all
 tests.unit.modules.compute_local.numa_allocator
 tests.unit.modules.resource_partitioner.scheduler_binding_check
+#
+# Performance tests (targets ending in '_perftest') don't need to be run on
+# 'normal' CIs and are excluded explicitly by the script generate_test_matrix.py

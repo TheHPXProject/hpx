@@ -79,7 +79,12 @@ Lifecycle initialization and shutdown
     Performs one-shot, idempotent teardown of the runtime previously started
     by :hpx:func:`init() <hpx::supervision::init>`: publishes ``event::completed`` at the current/unchanged
     epoch, unregisters the registry's symbol name, and releases the
-    registry. A no-op unless the runtime is currently ``active``.
+    registry. A no-op unless the runtime is currently ``active``. It returns
+    promptly even while a failure detection sweep is still waiting on
+    unresponsive peers, and ``hpx::disconnect()`` or ``hpx::stop()`` may
+    follow right away: the sweep's outstanding waits are resolved at the
+    latest during runtime shutdown and do no further work once the
+    supervision runtime has been finalized.
 
 .. cpp:function:: bool hpx::supervision::is_initialized() noexcept
 

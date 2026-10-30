@@ -17,9 +17,14 @@ set(tests
     set_hpx_limit_798
     shared_future_continuation_order
     shared_future_then_2166
+    stackful_direct_execution_7713
     stackless_direct_execution_7708
     wait_for_1751
 )
+
+if(HPX_WITH_THREAD_CUMULATIVE_COUNTS)
+  list(APPEND tests count_direct_children_7830)
+endif()
 
 set(exception_from_continuation_1613_PARAMETERS THREADS_PER_LOCALITY 2)
 set(wait_for_1751_PARAMETERS THREADS_PER_LOCALITY 4)
@@ -50,6 +55,23 @@ add_hpx_regression_test(
   PSEUDO_DEPS_NAME stackless_direct_execution_7708
   THREADS_PER_LOCALITY 4
 )
+
+add_hpx_regression_test(
+  "modules.futures" stackful_direct_execution_7713_4
+  EXECUTABLE stackful_direct_execution_7713
+  PSEUDO_DEPS_NAME stackful_direct_execution_7713
+  THREADS_PER_LOCALITY 4
+)
+
+# every child has to be counted once also when workers can run some of them
+if(HPX_WITH_THREAD_CUMULATIVE_COUNTS)
+  add_hpx_regression_test(
+    "modules.futures" count_direct_children_7830_4
+    EXECUTABLE count_direct_children_7830
+    PSEUDO_DEPS_NAME count_direct_children_7830
+    THREADS_PER_LOCALITY 4
+  )
+endif()
 
 # compile only tests
 if(HPX_WITH_COMPILE_ONLY_TESTS)
