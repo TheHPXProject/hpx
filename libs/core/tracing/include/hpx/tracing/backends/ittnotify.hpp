@@ -135,6 +135,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         explicit lock_context(
@@ -199,6 +200,7 @@ namespace hpx::tracing {
     private:
         void const* addr_ = nullptr;
     };
+    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -265,6 +267,7 @@ namespace hpx::tracing {
     {
     }
 
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] scoped_task_timer
     {
         constexpr explicit scoped_task_timer(task_timer_data) noexcept {}
@@ -281,6 +284,7 @@ namespace hpx::tracing {
             }
         }
     };
+    /// \endcond
 
 #if defined(HPX_HAVE_TRACING_LIFECYCLE_EVENTS)
     // The task-lifecycle signals drive ITT overlapped tasks so VTune can

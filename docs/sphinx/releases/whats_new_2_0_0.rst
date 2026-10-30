@@ -38,6 +38,11 @@ General changes
   ``hpx.thread_queue.min_tasks_to_steal_staged_early``. New work items now
   only wake workers that are backing off, and a worker that finds work resets
   its own idle backoff.
+- ``hpx::force_disconnect`` can now be called on any locality, not only on the
+  console. On another locality it asks the console to remove the given
+  locality and returns the result; before, it failed with
+  ``hpx::error::invalid_status``. Disconnecting the calling locality itself or
+  the console is rejected with ``hpx::error::bad_parameter``.
 
 Breaking changes
 ================

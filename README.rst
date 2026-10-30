@@ -104,9 +104,10 @@ you've found a bug in HPX we very much encourage and appreciate any issue
 reports through the `issue tracker for this Github project
 <https://github.com/TheHPXProject/hpx/issues>`_.
 
-If you have any questions feel free to ask it over at `StackOverflow
-<https://stackoverflow.com>`_ and tag the question with `hpx
-<https://stackoverflow.com/questions/tagged/hpx>`_.
+If you have any questions, the quickest way to reach the developers is the
+#ste||ar channel on our `Discord server <https://discord.gg/Tn9QuzVjvy>`_. You
+can also ask over at `StackOverflow <https://stackoverflow.com>`_ and tag the
+question with `hpx <https://stackoverflow.com/questions/tagged/hpx>`_.
 
 For a full list of support options please see our `Support page
 <https://github.com/TheHPXProject/hpx/blob/master/.github/SUPPORT.md>`_.

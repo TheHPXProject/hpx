@@ -39,6 +39,10 @@ namespace hpx::execution::experimental {
     HPX_CXX_CORE_EXPORT struct HPX_CORE_EXPORT service_executor
       : public parallel::execution::detail::service_executor
     {
+        /// \brief Constructs an executor for the selected service thread pool.
+        ///
+        /// \param t The service thread pool to use.
+        /// \param name_suffix The suffix used to select a named pool.
         explicit service_executor(
             service_executor_type t, char const* name_suffix = "");
     };

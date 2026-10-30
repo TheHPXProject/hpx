@@ -192,7 +192,8 @@ namespace hpx::detail {
             auto s = state.load(std::memory_order_acquire);
             while (true)
             {
-                while (s.data.shared_count != 0 || s.data.exclusive)
+                while (s.data.shared_count != 0 || s.data.exclusive ||
+                    s.data.upgrade)
                 {
                     auto s1 = s;
 
@@ -223,7 +224,7 @@ namespace hpx::detail {
             auto s = state.load(std::memory_order_acquire);
             while (true)
             {
-                if (s.data.shared_count || s.data.exclusive)
+                if (s.data.shared_count || s.data.exclusive || s.data.upgrade)
                 {
                     return false;
                 }

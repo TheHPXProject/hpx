@@ -27,8 +27,15 @@ namespace hpx::threads::detail {
         std::shared_ptr<bool>& background_running,
         std::int64_t& idle_loop_count)
     {
+        // The background thread goes to the scheduler directly, so it misses
+        // the reset scheduled_thread_pool::create_thread applies to a
+        // run_as_child hint for schedulers that do not support direct
+        // execution. Nothing ever waits on this thread, so ask for none
+        // explicitly instead of taking the default, which can be run_as_child.
         threads::thread_schedule_hint const schedulehint(
-            static_cast<std::int16_t>(num_thread));
+            static_cast<std::int16_t>(num_thread),
+            threads::thread_placement_hint::none,
+            threads::thread_execution_hint::none);
 
         background_running = std::make_shared<bool>(true);
 

@@ -41,6 +41,11 @@ if name == "sbatch":
         for suffix in (".out", ".err", "-cdash-submission.txt",
                        "-cdash-build-id.txt", "-ctest-status.txt"):
             Path(prefix + suffix).write_text("0\n")
+    # batch.sh of lsu-perftests records the run of a master commit
+    if os.environ.get("HPX_PERFTESTS_HISTORY"):
+        record = Path(os.environ["configuration_name"] + "-reports/history")
+        record.mkdir(parents=True, exist_ok=True)
+        (record / "path.txt").write_text("2026/test/run\n")
     if os.environ.get("IGNORE_TERM"):
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
     time.sleep(float(os.environ.get("SUBMIT_DELAY", "0")))
@@ -62,8 +67,15 @@ if name == "squeue":
         except (FileNotFoundError, ValueError):
             submitted = time.monotonic()
         pending = float(os.environ.get("PENDING_DELAY", "0"))
-        print("PENDING" if time.monotonic() - submitted < pending else
-              os.environ.get("JOB_STATE", "RUNNING"))
+        state = ("PENDING" if time.monotonic() - submitted < pending else
+                 os.environ.get("JOB_STATE", "RUNNING"))
+        # --format=%T|%r|%N: the state, the reason it is pending, the nodes
+        if state == "PENDING":
+            print(state + "|Resources|")
+        elif state:
+            print(state + "|None|node01")
+        else:
+            print("")
     elif os.environ.get("QUEUE_JOBS"):
         print("12345")
     sys.exit(int(os.environ.get("QUEUE_EXIT", "0")))
@@ -130,14 +142,18 @@ class SlurmLifecycle(unittest.TestCase):
         target = jenkins / lane
         target.mkdir(parents=True, exist_ok=True)
         (jenkins / "common").mkdir(exist_ok=True)
-        for relative in (lane + "/entry.sh", "common/slurm.sh"):
+        scripts = [lane + "/entry.sh", "common/slurm.sh"]
+        if lane == "lsu-perftests":
+            scripts.append(lane + "/report_common.sh")
+        for relative in scripts:
             shutil.copyfile(ROOT / ".jenkins" / relative, jenkins / relative)
         config = ("slurm-configuration-test.sh" if lane == "lsu" else
                   "slurm-constraint-test.sh")
         (target / config).write_text(
             'configuration_slurm_num_nodes=1\n'
             'configuration_slurm_partition=test\n'
-            'configuration_slurm_nodelist=test\n' +
+            'configuration_slurm_nodelist=test\n'
+            'configuration_slurm_nodes=test\n' +
             ('' if exclude is None else
              'configuration_slurm_exclude=' + exclude + '\n'))
         status_script = jenkins / "common/set_github_status.sh"
@@ -148,11 +164,18 @@ class SlurmLifecycle(unittest.TestCase):
         comment_script = target / "comment_github.sh"
         comment_script.write_text("#!/bin/sh\nexit 0\n")
         comment_script.chmod(0o755)
-        # No downloads, unpacking, or randomized entry delays in this fixture.
+        history_script = target / "upload_history.sh"
+        history_script.write_text("#!/bin/sh\nexit 0\n")
+        history_script.chmod(0o755)
+        # No downloads, unpacking, or randomized entry delays in this fixture,
+        # and its only node is idle.
         for command in ("wget", "sha256sum", "tar", "sleep"):
             stub = self.path / command
             stub.write_text("#!/bin/sh\nexit 0\n")
             stub.chmod(0o755)
+        stub = self.path / "sinfo"
+        stub.write_text("#!/bin/sh\necho test\n")
+        stub.chmod(0o755)
         (self.path / "grcov").touch()
         (self.path / "grcov.tar.bz2").touch()
         prefix = "jenkins-hpx-test" + ("-debug" if lane == "lsu" else "")
@@ -204,8 +227,10 @@ class SlurmLifecycle(unittest.TestCase):
                 self.assertEqual(self.calls("scancel"),
                                  [["--user=" + uid, "--name=" + job_name]])
                 self.assertEqual(len(self.calls("sbatch")), 1)
-        # Only the build matrix posts commit statuses from its entry script.
-        self.assertEqual((self.path / "statuses").read_text(), "success\n")
+        # The build matrix and the performance tests post commit statuses
+        # from their entry scripts.
+        self.assertEqual((self.path / "statuses").read_text(),
+                         "success\nsuccess\n")
 
     def test_entries_reject_success_sentinel_after_slurm_failure(self):
         for lane in ("lsu", "lsu-perftests", "lsu-test-coverage"):
@@ -350,14 +375,30 @@ class SlurmLifecycle(unittest.TestCase):
             JOB_ID="12345;rostam", JOB_DELAY="2"))
         self.assertEqual(code, 0, err)
         self.assertEqual(self.calls("squeue"), [[
-            "--clusters=rostam", "--jobs=12345", "--noheader", "--format=%T"]])
+            "--clusters=rostam", "--jobs=12345", "--noheader",
+            "--format=%T|%r|%N"]])
+
+    def test_wait_reports_progress_instead_of_tracing(self):
+        code, _, err = self.finish(self.start(
+            'set -x\nhpx_slurm_run 10s batch.sh\necho after the wait',
+            PENDING_DELAY="2", JOB_DELAY="5", HPX_SLURM_PROGRESS_INTERVAL="1"))
+        self.assertEqual(code, 0, err)
+        self.assertIn("Slurm job 12345: pending (Resources) for 0 min", err)
+        self.assertIn("Slurm job 12345: execution wait started on node01", err)
+        self.assertIn("Slurm job 12345: running on node01 for", err)
+        # The wait itself isn't traced, the commands after it are again
+        self.assertNotIn("+ sleep 1", err)
+        self.assertNotIn("+ kill -0", err)
+        self.assertIn("+ echo after the wait", err)
 
     def test_invalid_queue_bound_or_poll_interval_rejects_submission(self):
         for env in ({"HPX_SLURM_QUEUE_TIMEOUT": "0s"},
                     {"HPX_SLURM_QUEUE_TIMEOUT": "invalid"},
-                    {"HPX_SLURM_POLL_INTERVAL": "0"}):
+                    {"HPX_SLURM_POLL_INTERVAL": "0"},
+                    {"HPX_SLURM_PROGRESS_INTERVAL": "0"}):
             with self.subTest(env=env):
                 self.env.pop("HPX_SLURM_QUEUE_TIMEOUT", None)
+                self.env.pop("HPX_SLURM_PROGRESS_INTERVAL", None)
                 self.env["HPX_SLURM_POLL_INTERVAL"] = "1"
                 code, _, _ = self.finish(self.start(**env))
                 self.assertEqual(code, 2)

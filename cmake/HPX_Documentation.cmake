@@ -40,6 +40,7 @@ if(HPX_WITH_DOCUMENTATION)
         "HPX_FULL_EXPORT="
         "HPX_EXPORT="
         "HPX_ALWAYS_EXPORT="
+        "HPX_DEPRECATED_V(major,minor,x)="
         "extern="
         "HPX_FORCEINLINE="
         "HPX_CONCEPT_REQUIRES_(...)="

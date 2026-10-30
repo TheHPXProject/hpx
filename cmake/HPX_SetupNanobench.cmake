@@ -31,7 +31,7 @@ install(
 )
 
 install(
-  FILES ${NANOBENCH_ROOT}/include/nanobench.h
+  FILES ${Nanobench_ROOT}/src/include/nanobench.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   COMPONENT core
 )

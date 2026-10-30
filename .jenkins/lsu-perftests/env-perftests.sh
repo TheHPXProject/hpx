@@ -1,5 +1,5 @@
 # Copyright (c) 2020 ETH Zurich
-# Copyright (c) 2022 Hartmut Kaiser
+# Copyright (c) 2022-2026 Hartmut Kaiser
 # Copyright (c) 2024 Alireza Kheirkhahan
 
 #
@@ -16,3 +16,8 @@ module load hwloc
 module load openmpi
 
 export CXX_STD="20"
+
+configure_extra_options+=" -DHPX_WITH_CXX_STANDARD=${CXX_STD}"
+configure_extra_options+=" -DHPX_WITH_MALLOC=system"
+configure_extra_options+=" -DHPX_WITH_FETCH_ASIO=ON"
+configure_extra_options+=" -DHPX_WITH_TESTS_RUN_BENCHMARKS=ON"

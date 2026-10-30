@@ -188,7 +188,7 @@ namespace hpx::supervision {
     /// \brief Convenience alias for \c make_fenced_action<Action>::type.
     ///
     /// Yields the fenced_action wrapper type for \p Action directly, avoiding
-    /// the \c typename ...::type boilerplate at call sites.
+    /// nested-type boilerplate at call sites.
     ///
     /// \tparam Action The wrapped HPX action type whose fenced dispatch
     ///                wrapper should be derived.

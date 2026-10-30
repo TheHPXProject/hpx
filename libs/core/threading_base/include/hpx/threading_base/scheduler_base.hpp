@@ -180,11 +180,17 @@ namespace hpx::threads::policies {
                        mode) != 0;
         }
 
+        // adjust mode flags before they are stored
+        // This hook is invoked by all mode modifying functions below so that
+        // flags may be overridden by schedulers that do not support certain
+        // operations/modes, or that need to react to changed flags.
+        virtual scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept
+        {
+            return mode;
+        }
+
         // set mode flags that control scheduler behaviour
-        // This set function is virtual so that flags may be overridden
-        // by schedulers that do not support certain operations/modes.
-        // All other mode set functions should call this one to ensure
-        // that flags are always consistent
         virtual void set_scheduler_mode(
             scheduler_mode mode, hpx::threads::mask_cref_type pu_mask) noexcept;
 
@@ -249,6 +255,18 @@ namespace hpx::threads::policies {
         std::int64_t get_background_thread_count() const noexcept;
         void increment_background_thread_count() noexcept;
         void decrement_background_thread_count() noexcept;
+
+        // Count the workers in the scheduling loop. A worker leaves the loop
+        // once its own queues are empty, but HPX threads running on other
+        // workers can still schedule work on them. The last worker to leave
+        // checks all queues: leave_scheduling_loop returns false if work is
+        // left, and the worker has to take it over.
+        // abandon_scheduling_loop is for a worker that exits the loop without
+        // leaving it (on an error): it is no longer counted and checks
+        // nothing.
+        void enter_scheduling_loop() noexcept;
+        [[nodiscard]] bool leave_scheduling_loop();
+        void abandon_scheduling_loop() noexcept;
 
         // Enumerate all matching threads
         virtual bool enumerate_threads(
@@ -335,7 +353,8 @@ namespace hpx::threads::policies {
         }
 
         // the scheduler mode, protected from false sharing
-        std::vector<util::cache_line_data<std::atomic<scheduler_mode>>> modes_;
+        std::vector<util::aligned_line_data<std::atomic<scheduler_mode>>>
+            modes_;
 
 #if defined(HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF)
         // support for suspension on idle queues
@@ -346,7 +365,8 @@ namespace hpx::threads::policies {
             std::condition_variable wait_cond;
             std::atomic<std::uint32_t> wait_count{0};
         };
-        std::vector<util::cache_line_data<idle_backoff_data>> wait_count_data_;
+        std::vector<util::aligned_line_data<idle_backoff_data>>
+            wait_count_data_;
 #endif
 
         // support for suspension of pus
@@ -355,7 +375,7 @@ namespace hpx::threads::policies {
 
         std::vector<pu_mutex_type> pu_mtxs_;
 
-        std::vector<util::cache_line_data<std::atomic<hpx::state>>> states_;
+        std::vector<util::aligned_line_data<std::atomic<hpx::state>>> states_;
         char const* description_;
 
         thread_queue_init_parameters thread_queue_init_;
@@ -369,6 +389,9 @@ namespace hpx::threads::policies {
         threads::thread_pool_base* parent_pool_;
 
         std::atomic<std::int64_t> background_thread_count_;
+
+        // see leave_scheduling_loop
+        std::atomic<std::int64_t> workers_in_loop_{0};
 
         std::atomic<polling_function_ptr> polling_function_mpi_;
         std::atomic<polling_function_ptr> polling_function_cuda_;
