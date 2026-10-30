@@ -219,6 +219,13 @@ namespace hpx::execution::experimental {
                 return &pu_mask_;
             }
 
+            hpx::execution::experimental::forward_progress_guarantee
+            get_forward_progress_guarantee() const noexcept override
+            {
+                return hpx::execution::experimental::
+                    forward_progress_guarantee::parallel;
+            }
+
         private:
             thread_pool_policy_scheduler<hpx::launch> scheduler_;
             hpx::threads::mask_type pu_mask_;
