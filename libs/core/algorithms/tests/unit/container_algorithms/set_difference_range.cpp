@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iostream>
 #include <iterator>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -527,6 +528,25 @@ void set_difference_bad_alloc_test()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_set_difference_result_iterators()
+{
+    using namespace hpx::execution;
+
+    std::vector<std::size_t> c1(100), c2(100);
+    std::iota(std::begin(c1), std::end(c1), std::size_t(0));
+    std::iota(std::begin(c2), std::end(c2), std::size_t(0));
+
+    std::vector<std::size_t> c3(c1.size());
+
+    auto result = hpx::ranges::set_difference(par, c1, c2, std::begin(c3));
+
+    // the parallel algorithm must report the first input range as fully
+    // consumed, like std::ranges::set_difference does
+    HPX_TEST(result.in == std::end(c1));
+    HPX_TEST(result.out == std::begin(c3));
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -538,6 +558,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     set_difference_test1();
     set_difference_test2();
+    test_set_difference_result_iterators();
     set_difference_exception_test();
     set_difference_bad_alloc_test();
     return hpx::local::finalize();
