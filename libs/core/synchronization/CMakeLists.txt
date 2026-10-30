@@ -80,6 +80,7 @@ add_hpx_module(
     hpx_assertion
     hpx_datastructures
     hpx_concurrency
+    hpx_contracts
     hpx_coroutines
     hpx_errors
     hpx_execution_base
