@@ -24,6 +24,7 @@
 #include <winsock2.h>
 #endif
 #include <asio/basic_waitable_timer.hpp>
+#include <asio/error.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -116,9 +117,11 @@ namespace hpx::threads::detail {
             "wake_timer", priority, thread_schedule_hint(),
             thread_stacksize::small_, thread_schedule_state::suspended, true);
 
+        // at_timer holds its own reference to the wake_timer thread: the
+        // handler's copy below may already be destroyed when the abort path
+        // resumes it.
         thread_id_ref_type wake_id = invalid_thread_id;
         create_thread(scheduler, data, wake_id);
-        thread_id_type const wake = wake_id.noref();
 
         // create timer firing in correspondence with given time
         using deadline_timer =
@@ -127,11 +130,12 @@ namespace hpx::threads::detail {
         deadline_timer t(get_default_timer_service(), abs_time);
 
         // let the timer invoke the set_state on the new (suspended) thread
-        t.async_wait([wake_id = HPX_MOVE(wake_id), state, priority,
-                         retry_on_active](std::error_code const& ec) {
-            if (ec == std::make_error_code(std::errc::operation_canceled))
+        t.async_wait([wake_id, state, priority, retry_on_active](
+                         std::error_code const& ec) {
+            // Cancellation is handled by at_timer, which makes wake_timer
+            // pending itself before canceling the timer below.
+            if (ec == ::asio::error::operation_aborted)
             {
-                // at_timer cancels only once it has resumed wake_timer itself.
                 return;
             }
 
@@ -142,12 +146,15 @@ namespace hpx::threads::detail {
                 return;
             }
 
+            // Release at_timer even if scheduling below throws; wake_timer is
+            // then left suspended, but at_timer does not wait for it forever.
+            auto on_exit = hpx::experimental::scope_exit(
+                [&state] { state->wake.store(wake_state::scheduled); });
+
             error_code ec2(throwmode::lightweight);    // do not throw
             set_thread_state(wake_id.noref(), thread_schedule_state::pending,
                 thread_restart_state::timeout, priority, thread_schedule_hint(),
                 retry_on_active, ec2);
-
-            state->wake.store(wake_state::scheduled);
         });
 
         if (started != nullptr)
@@ -195,10 +202,9 @@ namespace hpx::threads::detail {
                     expected, wake_state::claimed))
             {
                 error_code ec(throwmode::lightweight);    // do not throw
-                set_thread_state(wake, thread_schedule_state::pending,
-                    thread_restart_state::abort, priority,
-                    thread_schedule_hint(), retry_on_active, ec);
-
+                set_thread_state(wake_id.noref(),
+                    thread_schedule_state::pending, thread_restart_state::abort,
+                    priority, thread_schedule_hint(), retry_on_active, ec);
                 state->wake.store(wake_state::scheduled);
             }
             else
@@ -208,7 +214,7 @@ namespace hpx::threads::detail {
                     "at_timer");
             }
 
-            // wake_timer_thread has not been executed yet, cancel timer
+            // wake_timer is pending by now, so the cancel handler is a no-op
             t.cancel();
         }
         else
