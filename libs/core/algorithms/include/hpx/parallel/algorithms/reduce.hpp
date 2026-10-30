@@ -360,6 +360,7 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/accumulate.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
@@ -418,11 +419,13 @@ namespace hpx::parallel {
                     }
                 }
 
-                auto f1 = [r](FwdIterB part_begin, std::size_t part_size) -> T {
-                    T val = *part_begin;
-                    return detail::sequential_reduce<ExPolicy>(
-                        ++part_begin, --part_size, HPX_MOVE(val), r);
-                };
+                // an iteration has the size of the reduction operation
+                auto f1 = hpx::threads::detail::with_task_size_of(
+                    r, [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                        T val = *part_begin;
+                        return detail::sequential_reduce<ExPolicy>(
+                            ++part_begin, --part_size, HPX_MOVE(val), r);
+                    });
 
                 return util::partitioner<ExPolicy, T>::call(
                     HPX_FORWARD(ExPolicy, policy), first,

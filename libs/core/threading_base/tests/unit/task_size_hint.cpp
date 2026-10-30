@@ -10,6 +10,7 @@
 // A scheduler that counts the sizes it is asked to create threads with sees
 // it.
 
+#include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/functional.hpp>
 #include <hpx/future.hpp>
@@ -20,6 +21,7 @@
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
+#include <hpx/numeric.hpp>
 #include <hpx/thread.hpp>
 
 #include <array>
@@ -418,6 +420,60 @@ void test_fork_join_executor()
         task_size::unknown);
 }
 
+// The worker tasks of reduce, transform_reduce and merge have the size of the
+// reduction, the transformation and the comparison. The task policy keeps the
+// partitioners from running the only chunk inline.
+void test_algorithm_sizes()
+{
+    auto const policy = hpx::execution::par(hpx::execution::task);
+    std::vector<int> v(16, 1);
+    std::vector<int> merged(32);
+
+    auto const plus = [](int a, int b) { return a + b; };
+    auto const identity = [](int i) { return i; };
+    auto const less = [](int a, int b) { return a < b; };
+
+    check_only_size(
+        [&] {
+            hpx::reduce(policy, v.begin(), v.end(), 0, hpx::large_task(plus))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::transform_reduce(
+                policy, v.begin(), v.end(), 0, plus, hpx::large_task(identity))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::transform_reduce(policy, v.begin(), v.end(), v.begin(), 0,
+                plus, hpx::large_task(plus))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
+                merged.begin(), hpx::large_task(less))
+                .get();
+        },
+        task_size::large);
+
+    // without a size, the worker tasks have none
+    check_only_size(
+        [&] { hpx::reduce(policy, v.begin(), v.end(), 0, plus).get(); },
+        task_size::unknown);
+    check_only_size(
+        [&] {
+            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
+                merged.begin(), less)
+                .get();
+        },
+        task_size::unknown);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -453,6 +509,7 @@ int hpx_main()
             hpx::execution::experimental::thread_pool_scheduler{}),
         task_size::unknown);
     test_fork_join_executor();
+    test_algorithm_sizes();
 
     return hpx::local::finalize();
 }
