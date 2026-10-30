@@ -13,6 +13,7 @@
 #include <hpx/modules/string_util.hpp>
 #include <hpx/modules/util.hpp>
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -106,6 +107,12 @@ namespace hpx::util {
         // NOT requested: we only need gex_* calls plus the restricted-context
         // helpers gasnet_exit() and gasnet_getMaxLocalSegmentSize(), which
         // are available without it.
+        //
+        // AMMPI's default network depth (4 outstanding messages per peer)
+        // starves the page pipeline; 64 is ~1.7x faster on all-to-all
+        // traffic.  An explicit GASNET_NETWORKDEPTH always wins.
+        ::setenv("GASNET_NETWORKDEPTH", "64", 0);
+
         if (gex_Client_Init(&client_, &ep_, &tm_, "HPX", argc, argv, 0) !=
             GASNET_OK)
         {
@@ -227,7 +234,16 @@ namespace hpx::util {
 
     void gasnet_environment::finalize() noexcept
     {
-        scoped_lock l(mtx_);
+        // finalize() also runs from the process exit handlers; a failing
+        // init() may exit() while still holding mtx_ on this thread, and
+        // blocking on it here would hang the rank instead of letting the job
+        // abort.  If init is still in progress there is nothing to finalize.
+        scoped_lock l(mtx_, std::try_to_lock);
+        if (!l.owns_lock())
+        {
+            return;
+        }
+
         if (enabled_ && has_called_init_)
         {
             has_called_init_ = false;
@@ -236,8 +252,16 @@ namespace hpx::util {
             // gasnet_exit() is the standard (restricted-context) termination
             // call: it tears down the job, joining any progress threads.
             // Only one client per process, and this module owns it.
+#if defined(GASNET_CONDUIT_IBV)
+            // ibv-conduit registers its own at-exit handler, which (when it
+            // runs first, as it does after our atexit registration) takes
+            // the one-shot exit path and returns; a second gasnet_exit()
+            // from here would then spin forever waiting for the first
+            // caller to finish.  The handler performs the coordinated
+            // job shutdown, so there is nothing left to do.
+#else
             gasnet_exit(0);
-
+#endif
             remote_segment_addrs_.clear();
         }
     }
@@ -342,6 +366,41 @@ namespace hpx::util {
             const_cast<void*>(raddr), nbytes, 0);
     }
 
+    gex_Event_t gasnet_environment::put_batch_nb(int rank, std::size_t n,
+        void* const* raddr, void const* const* laddr,
+        std::size_t const* nbytes)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        gex_NBI_BeginAccessRegion(0);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
+                const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
+        }
+        return gex_NBI_EndAccessRegion(0);
+    }
+
+    gex_Event_t gasnet_environment::put_batch_and_credit_nb(int rank,
+        std::size_t n, void* const* raddr, void const* const* laddr,
+        std::size_t const* nbytes, void* credit_raddr,
+        void const* credit_laddr)
+    {
+        HPX_ASSERT(tm_ != GEX_TM_INVALID);
+
+        gex_NBI_BeginAccessRegion(0);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr[i],
+                const_cast<void*>(laddr[i]), nbytes[i], GEX_EVENT_DEFER, 0);
+        }
+        // the credit word goes last, exactly as in put_data_and_credit_nb()
+        gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
+            const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
+
+        return gex_NBI_EndAccessRegion(0);
+    }
+
     gex_Event_t gasnet_environment::put_data_and_credit_nb(int rank, void* raddr,
         void const* laddr, std::size_t nbytes, void* credit_raddr,
         void const* credit_laddr)
@@ -359,9 +418,9 @@ namespace hpx::util {
         // Both destinations live in the target's registered segment, which
         // is exactly what GASNet requires for remote RMA targets.
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr,
-            const_cast<void*>(laddr), nbytes, nullptr, 0);
+            const_cast<void*>(laddr), nbytes, GEX_EVENT_DEFER, 0);
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), credit_raddr,
-            const_cast<void*>(credit_laddr), sizeof(std::uint32_t), nullptr, 0);
+            const_cast<void*>(credit_laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
 
         return gex_NBI_EndAccessRegion(0);
     }
@@ -373,7 +432,7 @@ namespace hpx::util {
 
         gex_NBI_BeginAccessRegion(0);
         gex_RMA_PutNBI(tm_, static_cast<gex_Rank_t>(rank), raddr,
-            const_cast<void*>(laddr), sizeof(std::uint32_t), nullptr, 0);
+            const_cast<void*>(laddr), sizeof(std::uint32_t), GEX_EVENT_DEFER, 0);
         return gex_NBI_EndAccessRegion(0);
     }
 
@@ -393,4 +452,10 @@ namespace hpx::util {
         HPX_ASSERT(ev != nullptr);
         return gex_Event_Test(ev) == GASNET_OK;
     }
+
+    void gasnet_environment::poll() noexcept
+    {
+        gasnet_AMPoll();
+    }
+
 }    // namespace hpx::util
