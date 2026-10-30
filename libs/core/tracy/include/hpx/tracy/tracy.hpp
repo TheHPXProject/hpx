@@ -20,6 +20,13 @@ namespace hpx::tracy {
     HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void set_thread_name(
         char const* name) noexcept;
 
+    // Wrappers so the tracing backend header needs no Tracy headers, and
+    // so these are exported from hpx_core on Windows.
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT bool is_profiler_connected() noexcept;
+
+    HPX_CXX_CORE_EXPORT HPX_CORE_EXPORT void emit_appinfo(
+        char const* text, std::size_t size) noexcept;
+
     namespace detail {
 
         HPX_CORE_EXPORT void enter_fiber(char const* fiber_name,

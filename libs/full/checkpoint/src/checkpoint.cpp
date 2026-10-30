@@ -8,7 +8,9 @@
 #include <hpx/config.hpp>
 
 #include <hpx/checkpoint/checkpoint.hpp>
+#include <hpx/modules/errors.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 
@@ -31,7 +33,29 @@ namespace hpx::util {
         // Read in the size of the next checkpoint
         std::int64_t length = 0;
         ist.read(reinterpret_cast<char*>(&length), sizeof(std::int64_t));
-        ckp.data_.resize(length);
+        if (!ist)
+        {
+            // the stream ran out before a length could be read, a partial
+            // read leaves a length behind that means nothing
+            ckp.data_.clear();
+            return ist;
+        }
+
+        // The length is read off a stream, so a corrupt or truncated file can
+        // hold one that is negative, or one that is larger than this platform
+        // can address. Sizing a buffer from either turns an allocation that
+        // has to fail into one that succeeds at the wrong size.
+        auto const size = static_cast<std::uint64_t>(length);
+        if (length < 0 || static_cast<std::size_t>(size) != size)
+        {
+            HPX_THROW_EXCEPTION(hpx::error::serialization_error,
+                "hpx::util::operator>>(std::istream&, checkpoint&)",
+                "the stream holds a checkpoint of {} bytes, which is not a "
+                "length this platform can use",
+                length);
+        }
+
+        ckp.data_.resize(static_cast<std::size_t>(size));
 
         // Read in the next checkpoint
         ist.read(ckp.data(), length);

@@ -11,6 +11,7 @@
 #include <hpx/components_base/server/wrapper_heap_base.hpp>
 #include <hpx/modules/synchronization.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <list>
 #include <memory>
@@ -89,10 +90,10 @@ namespace hpx::util {
 
     public:
 #if defined(HPX_DEBUG)
-        std::size_t alloc_count_ = 0;
+        std::atomic<std::size_t> alloc_count_{0};
         std::size_t free_count_ = 0;
         std::size_t heap_count_ = 0;
-        std::size_t max_alloc_count_ = 0;
+        std::atomic<std::size_t> max_alloc_count_{0};
 #endif
         std::shared_ptr<util::wrapper_heap_base> (*create_heap_)(
             char const*, std::size_t, heap_parameters) = nullptr;

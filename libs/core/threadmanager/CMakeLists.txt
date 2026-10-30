@@ -29,6 +29,7 @@ add_hpx_module(
   COMPAT_HEADERS ${threadmanager_compat_headers}
   MODULE_DEPENDENCIES
     hpx_async_combinators
+    hpx_concurrency
     hpx_errors
     hpx_execution
     hpx_execution_base

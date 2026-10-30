@@ -14,11 +14,21 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::util::detail {
+
+    // The partitioners collect the results of all chunks in a vector, whose
+    // elements are written concurrently by the tasks running the chunks. As
+    // std::vector<bool> packs its elements into bits, this would be a data
+    // race for chunk results of type bool. Those are passed on as
+    // std::uint8_t instead.
+    HPX_CXX_CORE_EXPORT template <typename Result>
+    using partitioner_result_t =
+        std::conditional_t<std::is_same_v<Result, bool>, std::uint8_t, Result>;
 
     // Hand-crafted function object allowing to replace a more complex
     // bind(hpx::functional::invoke_fused(), f1, _1)

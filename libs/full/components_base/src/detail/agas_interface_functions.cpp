@@ -210,7 +210,15 @@ namespace hpx::agas::detail {
         naming::gid_type const& gid,
         hpx::move_only_function<components::pinned_ptr()>&& f) = nullptr;
 
+    std::pair<bool, components::pinned_ptr> (*was_object_migrated_with_lva)(
+        naming::gid_type const& gid, naming::address_type lva,
+        hpx::move_only_function<components::pinned_ptr()>&& f) = nullptr;
+
     void (*unmark_as_migrated)(naming::gid_type const& gid,
+        hpx::move_only_function<void()>&& f) = nullptr;
+
+    void (*unmark_as_migrated_with_lva)(naming::gid_type const& gid,
+        naming::address_type lva,
         hpx::move_only_function<void()>&& f) = nullptr;
 
     ///////////////////////////////////////////////////////////////////////////

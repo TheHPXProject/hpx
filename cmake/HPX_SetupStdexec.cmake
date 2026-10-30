@@ -21,6 +21,30 @@ if(HPX_WITH_FETCH_STDEXEC)
     "HPX_WITH_FETCH_STDEXEC=${HPX_WITH_FETCH_STDEXEC}, Stdexec will be fetched using CMake's FetchContent and installed alongside HPX (HPX_WITH_STDEXEC_TAG=${HPX_WITH_STDEXEC_TAG})"
   )
 
+  # The nvcc workarounds only matter when nvcc itself compiles the HPX execution
+  # headers; clang-CUDA and every non-CUDA build parse stdexec fine without
+  # them. Report that below so a patch that no longer applies fails the builds
+  # it breaks instead of every build that fetches stdexec.
+  set(_hpx_stdexec_nvcc_patch_required OFF)
+  if(HPX_WITH_CUDA AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+    set(_hpx_stdexec_nvcc_patch_required ON)
+  endif()
+  set(_hpx_stdexec_inline_nvcc_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecInlineSchedulerNvcc.patch"
+  )
+  set(_hpx_stdexec_async_scope_nvcc_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecAsyncScopeNvcc.patch"
+  )
+  set(_hpx_stdexec_gcc13_nvcc_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccGcc13.patch"
+  )
+  set(_hpx_stdexec_diagnostics_nvcc_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccDiagnostics.patch"
+  )
+  set(_hpx_stdexec_cuda_std_atomic_patch
+      "${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecCudaStdAtomic.patch"
+  )
+
   include(FetchContent)
   # We only consume stdexec's headers; HPX wraps them with its own `Stdexec`
   # INTERFACE target below. SOURCE_SUBDIR points at a non-existent path so
@@ -35,7 +59,31 @@ if(HPX_WITH_FETCH_STDEXEC)
     PATCH_COMMAND
       ${CMAKE_COMMAND}
       "-DHPX_STDEXEC_SPIN_LOOP_PAUSE_FILE=<SOURCE_DIR>/include/stdexec/__detail/__spin_loop_pause.hpp"
-      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecSpinLoopPause.cmake
+      -P ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecSpinLoopPause.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/HPX_StdexecNvccWorkarounds.patch"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_inline_nvcc_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_async_scope_nvcc_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_gcc13_nvcc_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_diagnostics_nvcc_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${_hpx_stdexec_nvcc_patch_required}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake COMMAND
+      ${CMAKE_COMMAND} "-DHPX_STDEXEC_SOURCE_DIR=<SOURCE_DIR>"
+      "-DHPX_STDEXEC_PATCH_FILE=${_hpx_stdexec_cuda_std_atomic_patch}"
+      "-DHPX_STDEXEC_PATCH_REQUIRED=${HPX_WITH_SYCL}" -P
+      ${CMAKE_CURRENT_LIST_DIR}/HPX_PatchStdexecNvcc.cmake
   )
 
   fetchcontent_makeavailable(Stdexec)
@@ -46,6 +94,20 @@ if(HPX_WITH_FETCH_STDEXEC)
     Stdexec SYSTEM INTERFACE $<BUILD_INTERFACE:${stdexec_SOURCE_DIR}/include>
                              $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
+  if(_hpx_stdexec_nvcc_patch_required)
+    # Without this, nvcc 12.8/GCC 13 crashes compiling sync_wait(just(42)). See
+    # HPX_StdexecNvccGcc13.patch for the reproducer. This changes the sender
+    # representation, so export it to both C++ and CUDA consumers.
+    target_compile_definitions(Stdexec INTERFACE STDEXEC_DEMANGLE_SENDER_NAMES)
+  endif()
+  if(NOT HPX_WITH_CUDA OR HPX_WITH_SYCL)
+    # stdexec uses cuda::std::atomic whenever <cuda/std/atomic> can be found.
+    # Without CUDA (HIP builds included), an old libcu++ in a default include
+    # directory then breaks the build (#7884); with SYCL, CUDA's atomic headers
+    # conflict with SYCL's __assert_fail declaration. Keep atomic types
+    # consistent across host-only, SYCL and consumer TUs.
+    target_compile_definitions(Stdexec INTERFACE STDEXEC_NO_CUDA_STD_ATOMIC)
+  endif()
 
   install(
     TARGETS Stdexec
@@ -90,4 +152,6 @@ endif()
 
 # stdexec is now unconditionally required; define HPX_HAVE_STDEXEC so that
 # downstream code using #if defined(HPX_HAVE_STDEXEC) continues to work.
-hpx_add_config_define(HPX_HAVE_STDEXEC)
+if(NOT HPX_FIND_PACKAGE)
+  hpx_add_config_define(HPX_HAVE_STDEXEC)
+endif()

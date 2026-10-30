@@ -202,7 +202,11 @@ namespace hpx {
         [[nodiscard]] hpx::tracing::annotation_handle
         get_function_annotation_tracing() const
         {
+#if defined(HPX_HAVE_THREAD_DESCRIPTION)
             return vptr->get_function_annotation_tracing(object);
+#else
+            return {};
+#endif
         }
 
     private:

@@ -60,12 +60,15 @@ namespace hpx::threads::coroutines::detail {
         // yield value once the thread function has finished executing
         result_type result_last;
 
+#if defined(HPX_HAVE_ADDRESS_SANITIZER)
+        // Complete the first switch started by the caller in do_invoke(),
+        // restoring the destination coroutine's saved fake stack.
+        finish_switch_fiber(this->asan_fake_stack, m_caller);
+#endif
+
         // loop as long this coroutine has been rebound
         do
         {
-#if defined(HPX_HAVE_ADDRESS_SANITIZER)
-            finish_switch_fiber(nullptr, m_caller);
-#endif
             {
                 coroutine_self* old_self = coroutine_self::get_self();
                 coroutine_stackful_self self(this, old_self);
@@ -89,13 +92,25 @@ namespace hpx::threads::coroutines::detail {
 
                 // Reset early as the destructors may still yield.
                 this->reset_tss();
-                this->reset(false);
+                this->reset();
 
                 // return value to other side of the fence
                 this->bind_result(result_last);
             }
 
             this->do_return(status);
+
+#if defined(HPX_HAVE_FIBER_BASED_COROUTINES)
+#if defined(HPX_HAVE_ADDRESS_SANITIZER)
+            // Only a rebound Windows fiber resumes after do_return(). Other
+            // backends recreate the context and re-enter operator() above.
+            // Restore the destination coroutine's saved fake stack before
+            // entering the next iteration.
+            finish_switch_fiber(this->asan_fake_stack, m_caller);
+#endif
+#else
+            HPX_ASSERT(false);
+#endif
         } while (this->m_state == context_state::running);
 
         // should not get here, never
@@ -112,7 +127,9 @@ namespace hpx::threads::coroutines::detail {
 
         auto status = context_exit_status::not_exited;
 
-        result_type const result_last(
+        // The function's result is kept here rather than in m_result, which
+        // reset() clears below, so the caller sees how the function ended.
+        result_type result_last(
             thread_schedule_state::unknown, invalid_thread_id);
 
         this->m_state = context_state::running;
@@ -128,9 +145,9 @@ namespace hpx::threads::coroutines::detail {
 
             try
             {
-                this->m_result = this->m_fun(arg);
+                result_last = this->m_fun(arg);
                 HPX_ASSERT(
-                    this->m_result.first == thread_schedule_state::terminated);
+                    result_last.first == thread_schedule_state::terminated);
                 status = context_exit_status::exited_return;
             }
             catch (...)
@@ -140,7 +157,7 @@ namespace hpx::threads::coroutines::detail {
             }
 
             this->reset_tss();
-            this->reset(true);
+            this->reset();
 
             this->bind_result(result_last);
         }

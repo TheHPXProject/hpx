@@ -21,7 +21,7 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-#define SIZE 1007
+#define TEST_SIZE 1007
 
 namespace {
     template <typename T>
@@ -210,19 +210,19 @@ namespace {
     void is_partitioned_tests(std::vector<hpx::id_type>& localities)
     {
         std::size_t const num_localities = localities.size();
-        std::size_t const seg_size = SIZE / num_localities;
+        std::size_t const seg_size = TEST_SIZE / num_localities;
         std::size_t const seg_total = num_localities * seg_size;
 
         hpx::partitioned_vector<T> v_part(
-            SIZE, T(0), hpx::container_layout(localities));
+            TEST_SIZE, T(0), hpx::container_layout(localities));
         hpx::partitioned_vector<T> v_odd(
-            SIZE, T(0), hpx::container_layout(localities));
+            TEST_SIZE, T(0), hpx::container_layout(localities));
         hpx::partitioned_vector<T> v_even(
-            SIZE, T(0), hpx::container_layout(localities));
+            TEST_SIZE, T(0), hpx::container_layout(localities));
         hpx::partitioned_vector<T> v_viol_beg(
-            SIZE, T(0), hpx::container_layout(localities));
+            TEST_SIZE, T(0), hpx::container_layout(localities));
         hpx::partitioned_vector<T> v_viol_end(
-            SIZE, T(0), hpx::container_layout(localities));
+            TEST_SIZE, T(0), hpx::container_layout(localities));
         hpx::partitioned_vector<T> v_seg_valid(
             seg_total, T(0), hpx::container_layout(num_localities));
 
@@ -302,7 +302,7 @@ namespace {
         // Sub-range tests
         {
             hpx::partitioned_vector<T> v_sub(
-                SIZE, T(0), hpx::container_layout(localities));
+                TEST_SIZE, T(0), hpx::container_layout(localities));
             initialize_partitioned(v_sub);
 
             typename hpx::partitioned_vector<T>::iterator mid = v_sub.begin();

@@ -389,10 +389,23 @@ namespace hpx::agas {
         return detail::was_object_migrated(gid, HPX_MOVE(f));
     }
 
+    std::pair<bool, components::pinned_ptr> was_object_migrated(
+        naming::gid_type const& gid, naming::address_type lva,
+        hpx::move_only_function<components::pinned_ptr()>&& f)
+    {
+        return detail::was_object_migrated_with_lva(gid, lva, HPX_MOVE(f));
+    }
+
     void unmark_as_migrated(
         naming::gid_type const& gid, hpx::move_only_function<void()>&& f)
     {
         return detail::unmark_as_migrated(gid, HPX_MOVE(f));
+    }
+
+    void unmark_as_migrated(naming::gid_type const& gid,
+        naming::address_type lva, hpx::move_only_function<void()>&& f)
+    {
+        return detail::unmark_as_migrated_with_lva(gid, lva, HPX_MOVE(f));
     }
 
     hpx::future<std::map<std::string, hpx::id_type>> find_symbols(

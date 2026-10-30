@@ -43,14 +43,23 @@ set(tests
     persistent_executor_parameters
     query_get_allocator
     rebind_executor_parameters
+    rebind_policy
 )
 
 set(future_then_executor_PARAMETERS THREADS_PER_LOCALITY 4)
 
-foreach(test ${tests})
-  set(sources ${test}.cpp)
+if(HPX_WITH_CUDA)
+  list(APPEND tests algorithm_sender_cuda)
+endif()
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+foreach(test ${tests})
+  if(test STREQUAL "algorithm_sender_cuda")
+    set(sources ${test}.cu)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 2)
+  else()
+    set(sources ${test}.cpp)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 
@@ -75,6 +84,7 @@ if(HPX_WITH_CXX_MODULES AND ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"))
   # Clang (last tested version is v22) fails compiling the following tests when
   # C++ module support is enabled.
   set(failing_clang_tests
+      algorithm_continues_on
       algorithm_bulk
       algorithm_ensure_started
       algorithm_just

@@ -199,6 +199,11 @@ standard library header :cppreference-header:`any`.
 
 :hpx:type:`hpx::any` is compatible with ``std::any``.
 
+:hpx:type:`hpx::any_nonser`, :hpx:type:`hpx::unique_any_nonser`, and their
+corresponding factory functions :hpx:func:`hpx::make_any_nonser` and
+:hpx:func:`hpx::make_unique_any_nonser` are |hpx| extensions that do not
+support serialization and have no counterparts in the C++ standard library.
+
 Classes
 -------
 
@@ -288,6 +293,9 @@ Classes
 The header :hpx-header:`libs/full/include/include,hpx/channel.hpp` contains a local and a
 distributed channel implementation. This  functionality is also exposed through the ``hpx::distributed``
 namespace. The name in ``hpx::distributed`` should be preferred.
+
+The channel functionality is specific to |hpx| and has no counterpart in the
+C++ standard library.
 
 Classes
 -------
@@ -1193,6 +1201,9 @@ Functions
 
 The header :hpx-header:`libs/core/version/include,hpx/version.hpp` provides version information
 about |hpx|.
+
+The macros and functions provided by this header are specific to |hpx| and
+have no counterparts in the C++ standard library.
 
 Macros
 ------

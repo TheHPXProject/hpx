@@ -98,6 +98,22 @@ void find_end_test4()
 }
 
 template <typename IteratorTag>
+void test_find_end5()
+{
+    using namespace hpx::execution;
+
+    test_find_end5(seq, IteratorTag());
+    test_find_end5(par, IteratorTag());
+    test_find_end5(par_unseq, IteratorTag());
+}
+
+void find_end_test5()
+{
+    test_find_end5<std::random_access_iterator_tag>();
+    test_find_end5<std::forward_iterator_tag>();
+}
+
+template <typename IteratorTag>
 void test_find_end_exception()
 {
     using namespace hpx::execution;
@@ -153,6 +169,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     find_end_test2();
     find_end_test3();
     find_end_test4();
+    find_end_test5();
     find_end_exception_test();
     find_end_bad_alloc_test();
     return hpx::local::finalize();

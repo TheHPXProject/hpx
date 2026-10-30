@@ -93,6 +93,8 @@ namespace hpx::threads::detail {
         if (data.priority == thread_priority::default_)
             data.priority = thread_priority::normal;
 
+        // task_staged fires before thread_data exists, so there is no
+        // emit_lifecycle bit yet; emitted unconditionally.
 #ifdef HPX_HAVE_THREAD_DESCRIPTION
         hpx::tracing::task_staged(threads::thread_data::get_safe_description(
                                       data.description, "thread"),
@@ -114,7 +116,7 @@ namespace hpx::threads::detail {
 #endif
             ;
 
-        scheduler->do_some_work(data.schedulehint.mode ==
+        scheduler->do_some_work(data.schedulehint.mode() ==
                     hpx::threads::thread_schedule_hint_mode::numa ?
                 static_cast<std::size_t>(-1) :
                 data.schedulehint.hint);

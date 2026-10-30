@@ -22,8 +22,16 @@ if(HPX_WITH_CXX20_COROUTINES)
   set(tests ${tests} coroutine_traits coroutine_utils)
 endif()
 
+if(HPX_WITH_CUDA)
+  set(tests ${tests} stdexec_cuda)
+endif()
+
 foreach(test ${tests})
-  set(sources ${test}.cpp)
+  if(test STREQUAL "stdexec_cuda")
+    set(sources ${test}.cu)
+  else()
+    set(sources ${test}.cpp)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 
@@ -43,3 +51,16 @@ foreach(test ${tests})
   target_compile_definitions(${test}_test PRIVATE -DHPX_MODULE_STATIC_LINKING)
 
 endforeach()
+
+# Built without HPX_MODULE_STATIC_LINKING so that any_sender.hpp is compiled the
+# way a normal consumer of the shared libraries sees it
+add_hpx_executable(
+  any_sender_consumer_test INTERNAL_FLAGS
+  SOURCES any_sender_consumer.cpp
+  NOLIBS
+  DEPENDENCIES hpx_core ${BOOST_UNDERLYING_THREAD_LIBRARY}
+  EXCLUDE_FROM_ALL
+  FOLDER "Tests/Unit/Modules/Core/ExecutionBase"
+)
+
+add_hpx_unit_test("modules.execution_base" any_sender_consumer)

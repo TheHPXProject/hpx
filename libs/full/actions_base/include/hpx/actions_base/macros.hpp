@@ -375,14 +375,6 @@
 /// if the second argument with an appended suffix '_action' resolves to a valid,
 /// unqualified C++ type name.
 ///
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-#define HPX_DEFINE_COMPONENT_ACTION(...)                            /**/
-#define HPX_DEFINE_COMPONENT_ACTION_3(component, func, name)        /**/
-#define HPX_DEFINE_COMPONENT_ACTION_2(component, func)              /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION(...)                     /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_3(component, func, name) /**/
-#define HPX_DEFINE_COMPONENT_DIRECT_ACTION_2(component, func)       /**/
-#else
 #define HPX_DEFINE_COMPONENT_ACTION(...)                                       \
     HPX_DEFINE_COMPONENT_ACTION_(__VA_ARGS__)                                  \
     /**/
@@ -446,8 +438,6 @@
         component, func, HPX_PP_CAT(func, _action))                            \
     /**/
 /// \endcond
-
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // from hpx/actions_base/plain_action.hpp

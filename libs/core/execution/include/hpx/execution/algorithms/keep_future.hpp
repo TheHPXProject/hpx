@@ -171,9 +171,13 @@ namespace hpx::execution::experimental {
             {
                 hpx::detail::try_catch_exception_ptr(
                     [&]() {
+                        // Note: *this must not appear inside HPX_MOVE in
+                        // these lambdas: nvcc mis-transforms decltype(*this)
+                        // in lambda bodies.
+                        auto& self = *this;
                         if (future.is_ready())
                         {
-                            HPX_MOVE(*this).schedule_completion();
+                            HPX_MOVE(self).schedule_completion();
                             return;
                         }
 
@@ -189,7 +193,8 @@ namespace hpx::execution::experimental {
                         }
 
                         state->set_on_completed([this]() mutable {
-                            HPX_MOVE(*this).schedule_completion();
+                            auto& self = *this;
+                            HPX_MOVE(self).schedule_completion();
                         });
                     },
                     [&](std::exception_ptr ep) {

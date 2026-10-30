@@ -16,6 +16,9 @@
 namespace hpx::datapar::experimental {
 
     HPX_CXX_CORE_EXPORT using namespace eve::experimental;
+
+    HPX_CXX_CORE_EXPORT template <typename T>
+    inline constexpr auto max_fixed_size = eve::wide<T>::max_size();
 }    // namespace hpx::datapar::experimental
 
 #endif

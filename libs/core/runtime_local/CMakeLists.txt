@@ -107,6 +107,7 @@ add_hpx_module(
   MODULE_DEPENDENCIES
     hpx_async_base
     hpx_command_line_handling_local
+    hpx_concurrency
     hpx_coroutines
     hpx_debugging
     hpx_errors
@@ -136,6 +137,7 @@ add_hpx_module(
     hpx_tracing
     hpx_type_support
     hpx_util
+    hpx_version
     ${additional_dependencies}
   CMAKE_SUBDIRS examples tests
 )

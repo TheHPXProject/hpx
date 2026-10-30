@@ -63,6 +63,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -185,12 +186,15 @@ namespace hpx::detail {
     static void list_symbolic_name(std::string const&, hpx::id_type const&);
     static void list_component_type(
         std::string const&, components::component_type);
+    static int force_disconnect_on_console(hpx::id_type const&);
 }    // namespace hpx::detail
 
 HPX_PLAIN_ACTION_ID(hpx::detail::console_print, console_print_action,
     hpx::actions::console_print_action_id)
 HPX_PLAIN_ACTION_ID(hpx::detail::list_component_type,
     list_component_type_action, hpx::actions::list_component_type_action_id)
+HPX_PLAIN_ACTION_ID(hpx::detail::force_disconnect_on_console,
+    force_disconnect_action, hpx::actions::force_disconnect_action_id)
 
 using bound_list_component_type_action =
     hpx::detail::bound_action<list_component_type_action,
@@ -366,6 +370,13 @@ namespace hpx::detail {
     }
 
     ///////////////////////////////////////////////////////////////////////////
+    // disconnect a locality on behalf of a non-console locality
+    int force_disconnect_on_console(hpx::id_type const& locality)
+    {
+        return hpx::force_disconnect(locality);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
     static void start_counters(std::shared_ptr<util::query_counters> const& qc)
     {
         try
@@ -416,6 +427,8 @@ namespace hpx {
     defined(__FreeBSD__)
             threads::coroutines::detail::posix::use_guard_pages =
                 cmdline.rtcfg_.use_stack_guard_pages();
+            threads::coroutines::detail::posix::unbind_on_reset =
+                cmdline.rtcfg_.stack_unbind_on_reset();
 #endif
 #ifdef HPX_HAVE_VERIFY_LOCKS
             if (cmdline.rtcfg_.enable_lock_detection())
@@ -1017,10 +1030,16 @@ namespace hpx {
             }
             return default_;
         }
+
+        int finalize_impl(
+            double shutdown_timeout, double localwait, error_code& ec);
+        int disconnect_impl(
+            double shutdown_timeout, double localwait, error_code& ec);
     }    // namespace detail
 
     ///////////////////////////////////////////////////////////////////////////
-    int finalize(double shutdown_timeout, double localwait, error_code& ec)
+    int detail::finalize_impl(
+        double shutdown_timeout, double localwait, error_code& ec)
     {
         if (!threads::get_self_ptr())
         {
@@ -1068,7 +1087,35 @@ namespace hpx {
     }
 
     ///////////////////////////////////////////////////////////////////////////
-    int disconnect([[maybe_unused]] double shutdown_timeout,
+    int finalize(double shutdown_timeout, double localwait, error_code& ec)
+    {
+        return detail::finalize_impl(shutdown_timeout, localwait, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(double shutdown_timeout, error_code& ec)
+    {
+        return detail::finalize_impl(shutdown_timeout, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(error_code& ec)
+    {
+        return detail::finalize_impl(-1.0, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int finalize(hpx::chrono::steady_duration shutdown_timeout, error_code& ec)
+    {
+        // the runtime expects the timeout in seconds
+        auto const shutdown_timeout_s =
+            std::chrono::duration_cast<std::chrono::duration<double>>(
+                shutdown_timeout.value());
+        return detail::finalize_impl(shutdown_timeout_s.count(), -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int detail::disconnect_impl([[maybe_unused]] double shutdown_timeout,
         [[maybe_unused]] double localwait, [[maybe_unused]] error_code& ec)
     {
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
@@ -1126,6 +1173,35 @@ namespace hpx {
         return 0;
     }
 
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(double shutdown_timeout, double localwait, error_code& ec)
+    {
+        return detail::disconnect_impl(shutdown_timeout, localwait, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(double shutdown_timeout, error_code& ec)
+    {
+        return detail::disconnect_impl(shutdown_timeout, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(error_code& ec)
+    {
+        return detail::disconnect_impl(-1.0, -1.0, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////////
+    int disconnect(
+        hpx::chrono::steady_duration shutdown_timeout, error_code& ec)
+    {
+        // the runtime expects the timeout in seconds
+        auto const shutdown_timeout_s =
+            std::chrono::duration_cast<std::chrono::duration<double>>(
+                shutdown_timeout.value());
+        return detail::disconnect_impl(shutdown_timeout_s.count(), -1.0, ec);
+    }
+
 #if defined(HPX_HAVE_DISTRIBUTED_RUNTIME)
     ///////////////////////////////////////////////////////////////////////////
     int force_disconnect(
@@ -1151,11 +1227,26 @@ namespace hpx {
 
         if (!agas::is_console())
         {
-            HPX_THROWS_IF(ec, hpx::error::invalid_status,
-                "hpx::force_disconnect",
-                "hpx::force_disconnect should be called on the console "
-                "locality only.");
-            return -1;
+            if (locality == hpx::find_here())
+            {
+                HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                    "hpx::force_disconnect",
+                    "hpx::force_disconnect cannot be used to disconnect the "
+                    "calling locality itself, use hpx::disconnect instead.");
+                return -1;
+            }
+
+            // only the console can remove a locality, ask it to do so; it
+            // performs all remaining checks
+            hpx::id_type const console = agas::get_console_locality(ec);
+            if (ec)
+            {
+                return -1;
+            }
+
+            int const result =
+                hpx::async<force_disconnect_action>(console, locality).get(ec);
+            return ec ? -1 : result;
         }
 
         if (locality == hpx::find_here())

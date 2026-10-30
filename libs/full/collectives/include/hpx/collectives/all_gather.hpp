@@ -1,5 +1,6 @@
 //  Copyright (c) 2019-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -208,7 +209,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -463,8 +463,8 @@ namespace hpx::collectives {
         std::size_t const arity_val = communicators.get_arity();
 
         if (auto const error = detail::validate_hierarchical_root_site(
-                root_site, "hpx::collectives::all_gather (hierarchical)",
-                "all_gather"))
+                communicators, root_site,
+                "hpx::collectives::all_gather (hierarchical)", "all_gather"))
         {
             return hpx::make_exceptional_future<std::vector<arg_type>>(error);
         }
@@ -488,7 +488,7 @@ namespace hpx::collectives {
                 detail::generation_mode::double_step);
         }
 
-        if (this_site == root_site)
+        if (this_site == communicators.get_root_site())
         {
             // gather phase advances each communicator by one (the broadcast
             // phase consumes 2k), so pass single_step.
@@ -533,5 +533,4 @@ namespace hpx::collectives {
 ////////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_ALLGATHER(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

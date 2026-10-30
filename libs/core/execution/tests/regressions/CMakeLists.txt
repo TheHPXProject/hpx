@@ -5,7 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests annotated_minmax_2593 chunk_size_4118 executor_parameters_num_chunks
-          is_executor_1691 fibonacci_sr
+          fibonacci_sr is_executor_1691 run_loop_execute_7762
 )
 
 if(HPX_WITH_DATAPAR)

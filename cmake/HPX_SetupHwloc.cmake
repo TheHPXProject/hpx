@@ -23,6 +23,11 @@ if(NOT HPX_WITH_FETCH_HWLOC)
       "to download it automatically."
     )
   endif()
+  # Some package managers (e.g. Conan) provide hwloc::hwloc instead of
+  # Hwloc::hwloc
+  if(NOT TARGET Hwloc::hwloc AND TARGET hwloc::hwloc)
+    add_library(Hwloc::hwloc ALIAS hwloc::hwloc)
+  endif()
 else()
   # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24
   if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
@@ -40,10 +45,18 @@ else()
 
   if(UNIX)
     include(FetchContent)
+    # Keep the archive's timestamps: with extraction times, configure.ac looks
+    # newer than aclocal.m4 and hwloc's make reruns automake, which needs the
+    # exact automake version hwloc was packaged with.
+    set(_hwloc_extract_timestamp)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+      set(_hwloc_extract_timestamp DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    endif()
     fetchcontent_declare(
       HWLoc
       URL https://download.open-mpi.org/release/hwloc/v${HPX_WITH_HWLOC_VERSION}/hwloc-${HPX_WITH_HWLOC_RELEASE}.tar.gz
       TLS_VERIFY true
+      ${_hwloc_extract_timestamp}
     )
     if(NOT HWLoc_POPULATED)
       fetchcontent_populate(HWLoc)
@@ -55,7 +68,13 @@ else()
           COMMAND
             sh -c
             "cd ${FETCHCONTENT_BASE_DIR}/hwloc-src && ./configure --prefix=${HPX_HWLOC_BUILD_DIR_INSTALLATION_PATH} && make -j && make install"
+          RESULT_VARIABLE _hwloc_build_result
         )
+        if(NOT _hwloc_build_result EQUAL 0)
+          hpx_error(
+            "Building the fetched hwloc failed (${_hwloc_build_result}), see the hwloc output above"
+          )
+        endif()
         set(Hwloc_BUILD_INSTALLED
             TRUE
             CACHE INTERNAL ""

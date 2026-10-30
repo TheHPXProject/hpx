@@ -13,12 +13,11 @@ io_service
 
 This module provides an abstraction over Boost.ASIO, combining multiple
 ``asio::io_context``\ s into a single pool.
-:cpp:class:`hpx::util::io_service_pool` provides a simple pool of
+:hpx:class:`hpx::util::io_service_pool` provides a simple pool of
 ``asio::io_context``\ s with an API similar to ``asio::io_context``.
-:cpp:class:`hpx::threads::detail::io_service_thread_pool` wraps
-:cpp:class:`hpx::util::io_service_pool` into an interface derived from
-:cpp:class:`hpx::threads::detail::thread_pool_base`.
+:hpx:class:`hpx::threads::detail::io_service_thread_pool` wraps
+:hpx:class:`hpx::util::io_service_pool` into an interface derived from
+:hpx:class:`hpx::threads::detail::thread_pool_base`.
 
 See the :ref:`API reference <modules_io_service_api>` of this module for more
 details.
-

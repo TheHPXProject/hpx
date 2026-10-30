@@ -52,25 +52,25 @@ The only predefined global addresses are assigned to all localities. The
 following |hpx| API functions allow one to retrieve the global addresses of
 localities:
 
-* :cpp:func:`hpx::find_here`: retrieves the global address of the
+* :hpx:func:`hpx::find_here`: retrieves the global address of the
   :term:`locality` this function is called on.
-* :cpp:func:`hpx::find_all_localities()`: retrieves the global addresses of all
+* :hpx:func:`hpx::find_all_localities()`: retrieves the global addresses of all
   localities available to this application (including the :term:`locality` the
   function is being called on).
-* :cpp:func:`hpx::find_remote_localities()`: retrieves the global addresses of
+* :hpx:func:`hpx::find_remote_localities()`: retrieves the global addresses of
   all remote localities available to this application (not including the
   :term:`locality` the function is being called on).
-* :cpp:func:`hpx::get_num_localities()`: retrieves the number of localities
+* :hpx:func:`hpx::get_num_localities()`: retrieves the number of localities
   available to this application.
-* :cpp:func:`hpx::find_locality()`: retrieves the global address of any
+* :hpx:func:`hpx::find_locality()`: retrieves the global address of any
   :term:`locality` supporting the given component type.
-* :cpp:func:`hpx::get_colocation_id()`: retrieves the global address of the
+* :hpx:func:`hpx::get_colocation_id()`: retrieves the global address of the
   :term:`locality` currently hosting the object with the given global address.
 
 Additionally, the global addresses of localities can be used to create new
 instances of components using the following |hpx| API function:
 
-* :cpp:func:`hpx::components::new_()`: Creates a new instance of the given
+* :hpx:func:`hpx::components::new_()`: Creates a new instance of the given
   ``Component`` type on the specified :term:`locality`.
 
 .. note::
@@ -238,8 +238,8 @@ a single macro instead of the three-step process described above::
     }
 
 The resulting ``some_member_action`` type can be used exactly like an action
-type created with :c:macro:`HPX_DEFINE_COMPONENT_ACTION`, with :cpp:func:`hpx::post`,
-:cpp:func:`hpx::async`, and :cpp:func:`hpx::sync`, or by invoking it directly. No
+type created with :c:macro:`HPX_DEFINE_COMPONENT_ACTION`, with :hpx:func:`hpx::post`,
+:hpx:func:`hpx::async`, and :hpx:func:`hpx::sync`, or by invoking it directly. No
 separate registration step is required in the source file.
 
 .. _action_invocation:
@@ -603,7 +603,7 @@ executed::
     HPX_PLAIN_ACTION(app::some_function_with_error, some_error_action);
 
 The use of :c:macro:`HPX_THROW_EXCEPTION` to report the error encapsulates the
-creation of a :cpp:class:`hpx::exception` which is initialized with the error
+creation of a :hpx:class:`hpx::exception` which is initialized with the error
 code ``hpx::error::bad_parameter``. Additionally it carries the passed strings, the
 information about the file name, line number, and call stack of the point the
 exception was thrown from.
@@ -780,7 +780,7 @@ A client side object stores the global id of the component instance it
 represents. This global id is accessible by calling the function
 ``client_base<>::get_id()``. The special constructor which is provided in the
 example allows to create this client side object directly using the API function
-:cpp:func:`hpx::new_`.
+:hpx:func:`hpx::new_`.
 
 .. _create_components:
 
@@ -894,6 +894,73 @@ use them as indicated below::
     }
 
 We can use the component instances with distribution policies the same way.
+
+.. _distributed_channels:
+
+Distributed channels
+====================
+
+The local channels described in :ref:`channel` are also available as
+components. A channel component is created on one :term:`locality` and can be
+sent to another :term:`locality` using an action. This example also
+demonstrates how a channel can be used as a range of values:
+
+.. literalinclude:: ../../examples/quickstart/channel_docs.cpp
+   :language: c++
+   :start-after: //[channel
+   :end-before: //]
+
+.. _register_channel:
+
+Registering channel components
+------------------------------
+
+Before a channel component can be created for a given value type, that type has
+to be registered with the ``HPX_REGISTER_CHANNEL`` macro, as done for
+``double`` in the example above. The macro exists in two forms::
+
+    HPX_REGISTER_CHANNEL(type);
+    HPX_REGISTER_CHANNEL(type, name);
+
+.. important::
+
+   The macro ``HPX_REGISTER_CHANNEL`` has to be placed in global namespace.
+
+The ``name`` argument is used to generate unique C++ identifiers internally, so
+it must be a valid C++ identifier. The one-argument form uses ``type`` as
+``name``, which means it only works for types whose spelling is itself a valid
+identifier. A written out template type such as ``std::vector<int>`` contains
+angle brackets and fails to compile with the one-argument form::
+
+    // This fails to compile
+    HPX_REGISTER_CHANNEL(std::vector<int>);
+
+For such types, use the two-argument form and supply an identifier as
+``name``::
+
+    HPX_REGISTER_CHANNEL(std::vector<int>, vector_int);
+
+Alternatively, define a type alias and use the one-argument form::
+
+    using vector_type = std::vector<int>;
+    HPX_REGISTER_CHANNEL(vector_type);
+
+In a program consisting of multiple translation units, put the corresponding
+declaration in a header::
+
+    HPX_REGISTER_CHANNEL_DECLARATION(vector_type);
+
+Include that header where the registered channel type is used, and place the
+matching ``HPX_REGISTER_CHANNEL`` invocation in exactly one source file. When
+the two-argument forms are used, both invocations must use the same ``type``
+and ``name`` arguments.
+
+.. important::
+
+   The preprocessor splits macro arguments at top-level commas, so a type such
+   as ``std::map<int, double>`` cannot be passed directly, not even to the
+   two-argument form. Define a type alias for such types before registering
+   them.
 
 .. _containers:
 
@@ -1052,8 +1119,8 @@ beginning of the next segment.
 
 It is sometimes useful not only to iterate element by element, but also segment
 by segment, or simply get a local iterator in order to avoid additional
-construction costs at each deferencing operations. To mitigate this need, the
-:cpp:class:`hpx::traits::segmented_iterator_traits` are used.
+construction costs at each dereferencing operations. To mitigate this need, the
+:hpx:struct:`hpx::traits::segmented_iterator_traits` are used.
 
 With ``segmented_iterator_traits`` users can uniformly get the iterators
 which specifically iterates over segments (by providing a segmented iterator

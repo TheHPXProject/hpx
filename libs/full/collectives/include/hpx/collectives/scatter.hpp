@@ -1,5 +1,6 @@
 //  Copyright (c) 2014-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -383,7 +384,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -689,7 +689,8 @@ namespace hpx::collectives {
             }
 
             if (auto const error = validate_hierarchical_non_root_caller(
-                    this_site, "hpx::collectives::scatter_from (hierarchical)",
+                    communicators, this_site,
+                    "hpx::collectives::scatter_from (hierarchical)",
                     "scatter_to"))
             {
                 return hpx::make_exceptional_future<T>(error);
@@ -722,12 +723,12 @@ namespace hpx::collectives {
             for (std::size_t i = 1; i < communicators.size() - 1; ++i)
             {
                 data = scatter_rows_to(communicators.get(i), HPX_MOVE(data),
-                    this_site_arg(0), run_gen, run_step)
+                    communicators.site(i), run_gen, run_step)
                            .get();
             }
 
             return scatter_leaf_to(communicators.back(), HPX_MOVE(data),
-                this_site_arg(0), run_gen, run_step);
+                communicators.last_site(), run_gen, run_step);
         }
     }    // namespace detail
 
@@ -953,9 +954,10 @@ namespace hpx::collectives {
             std::size_t const num_sites_val =
                 hpx::get<0>(communicators.get_info());
 
-            if (auto const error = validate_hierarchical_root_caller(this_site,
-                    "hpx::collectives::scatter_to (hierarchical)",
-                    "scatter_to"))
+            if (auto const error =
+                    validate_hierarchical_root_caller(communicators, this_site,
+                        "hpx::collectives::scatter_to (hierarchical)",
+                        "scatter_to"))
             {
                 return hpx::make_exceptional_future<T>(error);
             }
@@ -994,12 +996,12 @@ namespace hpx::collectives {
             for (std::size_t i = 0; i < communicators.size() - 1; ++i)
             {
                 data = scatter_rows_to(communicators.get(i), HPX_MOVE(data),
-                    this_site_arg(0), run_gen, run_step)
+                    communicators.site(i), run_gen, run_step)
                            .get();
             }
 
             return scatter_leaf_to(communicators.back(), HPX_MOVE(data),
-                this_site_arg(0), run_gen, run_step);
+                communicators.last_site(), run_gen, run_step);
         }
     }    // namespace detail
 
@@ -1080,5 +1082,4 @@ namespace hpx::collectives {
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_SCATTER(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

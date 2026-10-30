@@ -351,11 +351,36 @@ void test_stoken(D duration)
     HPX_TEST(okSteps == 6);
 }
 
+void test_stop_callback_without_stop_source()
+{
+    hpx::stop_token stok;
+    {
+        hpx::stop_source ssrc;
+        stok = ssrc.get_token();
+    }
+    HPX_TEST(!stok.stop_possible());
+
+    bool cb1called{false};
+    auto cb1 = [&] { cb1called = true; };
+    {
+        hpx::stop_callback<decltype(cb1)> scb1(stok, cb1);
+    }
+    HPX_TEST(!cb1called);
+
+    bool cb2called{false};
+    auto cb2 = [&] { cb2called = true; };
+    {
+        hpx::stop_callback<decltype(cb2)> scb2(std::move(stok), cb2);
+    }
+    HPX_TEST(!cb2called);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_stop_token_basic_api();
     test_stop_token_api();
+    test_stop_callback_without_stop_source();
     test_stoken(std::chrono::seconds{0});
     test_stoken(std::chrono::milliseconds{500});
 

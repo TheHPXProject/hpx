@@ -115,3 +115,4 @@ namespace hpx::util {
         return hpx::detail::mem_fn<R (C::*)(Ps...) const>(pm);
     }
 }    // namespace hpx::util
+/// \endcond

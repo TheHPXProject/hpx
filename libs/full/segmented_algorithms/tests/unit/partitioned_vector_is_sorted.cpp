@@ -19,13 +19,13 @@
 #include <vector>
 
 ///////////////////////////////////////////////////////////////////////////////
-#define SIZE 64
+#define TEST_SIZE 64
 
 template <typename T>
 void initialize_sorted(hpx::partitioned_vector<T>& xvalues)
 {
     typename hpx::partitioned_vector<T>::iterator it = xvalues.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
+    for (int i = 0; i < TEST_SIZE; ++i, ++it)
         *it = T(i + 1);
 }
 
@@ -33,7 +33,7 @@ template <typename T>
 void initialize_unsorted(hpx::partitioned_vector<T>& xvalues)
 {
     typename hpx::partitioned_vector<T>::iterator it = xvalues.begin();
-    for (int i = 0; i < SIZE; ++i, ++it)
+    for (int i = 0; i < TEST_SIZE; ++i, ++it)
     {
         *it = T(i + 1);
         if (i == 32)
@@ -135,9 +135,9 @@ template <typename T>
 void is_sorted_tests(std::vector<hpx::id_type>& localities)
 {
     hpx::partitioned_vector<T> sorted_vals(
-        SIZE, T(0), hpx::container_layout(localities));
+        TEST_SIZE, T(0), hpx::container_layout(localities));
     hpx::partitioned_vector<T> unsorted_vals(
-        SIZE, T(0), hpx::container_layout(localities));
+        TEST_SIZE, T(0), hpx::container_layout(localities));
 
     initialize_sorted(sorted_vals);
     initialize_unsorted(unsorted_vals);

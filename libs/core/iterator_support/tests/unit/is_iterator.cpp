@@ -828,6 +828,10 @@ void is_output_iterator_test()
 {
     using hpx::traits::is_output_iterator;
 
+    // Non-iterator types must yield false without a substitution error.
+    static_assert(!hpx::traits::is_output_iterator_v<int>);
+    static_assert(!hpx::traits::is_output_iterator_v<std::vector<int>>);
+
     {
         using iterator = std::ostream_iterator<int>;
         HPX_TEST_MSG((is_output_iterator<iterator>::value), "output iterator");

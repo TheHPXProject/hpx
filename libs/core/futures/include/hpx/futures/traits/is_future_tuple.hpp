@@ -1,4 +1,5 @@
 //  Copyright (c) 2014 Agustin Berge
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -27,3 +28,11 @@ namespace hpx::traits {
     HPX_CXX_CORE_EXPORT template <typename... Ts>
     inline constexpr bool is_future_tuple_v = is_future_tuple<Ts...>::value;
 }    // namespace hpx::traits
+
+namespace hpx {
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// Detect an HPX tuple of futures.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept future_tuple = hpx::traits::is_future_tuple_v<T>;
+}    // namespace hpx

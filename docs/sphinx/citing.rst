@@ -11,7 +11,13 @@
 Citing |hpx|
 ============
 
-Please cite |hpx| whenever you use it for publications. Use our paper in The
-Journal of Open Source Software as the main citation for |HPX|: |hpx_joss|. Use
-the Zenodo entry for referring to the latest version of |hpx|: |hpx_zenodo|.
-Entries for citing specific versions of |hpx| can also be found at |hpx_zenodo|.
+Please cite |hpx| whenever you use it for publications. Use our paper in the
+`Journal of Open Source Software
+<https://joss.theoj.org/papers/022e5917b95517dff20cd3742ab95eca>`_ as the main
+citation for |hpx|. Use the `Zenodo entry
+<https://doi.org/10.5281/zenodo.598202>`_ to cite the latest release or find
+entries for specific versions of |hpx|.
+
+.. only:: html
+
+   |hpx_joss| |hpx_zenodo|

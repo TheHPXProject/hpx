@@ -28,11 +28,25 @@
 template <typename T>
 extern void cuda_trivial_kernel(T, cudaStream_t stream);
 
-// Need to move the call to the saxpy device kernel in .cu, as the symbol change
-// from saxpy to __device_stub__saxpy when moving from Clang 10 to Clang 11
-extern void launch_saxpy_kernel(
-    hpx::cuda::experimental::cuda_executor& cudaexec, unsigned int& blocks,
-    unsigned int& threads, void** args);
+// Need to take the address of the saxpy device kernel in the .cu file, as the
+// symbol changed from saxpy to __device_stub__saxpy when moving from Clang 10
+// to Clang 11. The launch itself happens here: the device compiler cannot
+// digest the HPX execution headers (stdexec does not support nvcc).
+extern void* get_saxpy_kernel_address();
+
+void launch_saxpy_kernel(hpx::cuda::experimental::cuda_executor& cudaexec,
+    unsigned int& blocks, unsigned int& threads, void** args)
+{
+    // Invoking hpx::post with cudaLaunchKernel<void> directly results in an
+    // error for NVCC with gcc configuration
+#ifdef HPX_HAVE_HIP
+    auto launch_kernel = cudaLaunchKernel;
+#else
+    auto launch_kernel = cudaLaunchKernel<void>;
+#endif
+    hpx::post(cudaexec, launch_kernel, get_saxpy_kernel_address(), dim3(blocks),
+        dim3(threads), args, std::size_t(0));
+}
 // -------------------------------------------------------------------------
 int test_saxpy(hpx::cuda::experimental::cuda_executor& cudaexec)
 {

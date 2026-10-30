@@ -127,7 +127,7 @@ namespace hpx::execution::experimental {
                 Receiver_&& receiver) noexcept(noexcept(std::
                     is_nothrow_constructible_v<std::decay_t<Receiver>,
                         Receiver_>))
-              : run_loop_opstate_base(tail)
+              : run_loop_opstate_base(tail, &execute)
               , loop(loop)
               , receiver(HPX_FORWARD(Receiver_, receiver))
             {
@@ -233,7 +233,7 @@ namespace hpx::execution::experimental {
 
         public:
             explicit run_loop_scheduler(run_loop* loop) noexcept
-              : env_t(loop)
+              : env_t{loop}
             {
             }
 

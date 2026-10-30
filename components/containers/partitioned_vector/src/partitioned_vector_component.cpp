@@ -5,7 +5,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file src/components/containers/partitioned_vector/partitioned_vector_component.cpp
+/// \file partitioned_vector_component.cpp
 
 /// This file defines the necessary component boilerplate code which is
 /// required for proper functioning of components in the context of HPX.

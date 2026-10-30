@@ -32,7 +32,6 @@
 #include <hpx/modules/format.hpp>
 
 #include <cstddef>
-#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -68,8 +67,8 @@ double dt = 0.;
 double dx = 0.;
 
 // Command line argument.
-std::uint64_t nt = 0;
-std::uint64_t nx = 0;
+std::size_t nt = 0;
+std::size_t nx = 0;
 
 struct data
 {
@@ -102,7 +101,7 @@ std::vector<std::vector<data>> u;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Forward declaration of the wave function.
-double wave(std::uint64_t t, std::uint64_t x);
+double wave(std::size_t t, std::size_t x);
 
 // Any global function needs to be wrapped into a plain_action if it should be
 // invoked as a HPX-thread.
@@ -125,7 +124,7 @@ double calculate_u_tplus_x_1st(
     return u_tplus_x;
 }
 
-double wave(std::uint64_t t, std::uint64_t x)
+double wave(std::size_t t, std::size_t x)
 {
     {
         std::lock_guard<hpx::mutex> l(u[t][x].mtx);
@@ -191,8 +190,8 @@ int hpx_main(variables_map& vm)
     //    dt = vm["dt-value"].as<double>();
     //    dx = vm["dx-value"].as<double>();
     //    c = vm["c-value"].as<double>();
-    nx = vm["nx-value"].as<std::uint64_t>();
-    nt = vm["nt-value"].as<std::uint64_t>();
+    nx = vm["nx-value"].as<std::size_t>();
+    nt = vm["nt-value"].as<std::size_t>();
 
     c = 1.0;
 
@@ -219,7 +218,7 @@ int hpx_main(variables_map& vm)
         high_resolution_timer t;
 
         std::vector<future<double>> futures;
-        for (std::uint64_t i = 0; i < nx; i++)
+        for (std::size_t i = 0; i < nx; i++)
             futures.push_back(async(&wave, nt - 1, i));
 
         // open file for output
@@ -265,11 +264,11 @@ int main(int argc, char* argv[])
            "c parameter of the wave equation")
 
         ("nx-value",
-           value<std::uint64_t>()->default_value(100),
+           value<std::size_t>()->default_value(100),
            "nx parameter of the wave equation")
 
         ("nt-value",
-           value<std::uint64_t>()->default_value(100),
+           value<std::size_t>()->default_value(100),
            "nt parameter of the wave equation")
     ;
     // clang-format on

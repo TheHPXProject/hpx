@@ -170,6 +170,40 @@ void test_container(std::size_t chunk_size)
     category_test(first, last, *first, category());
 }
 
+// A chunk size that is larger than the number of elements must result in
+// exactly one chunk covering all elements. This used to produce additional,
+// empty chunks and iterators that never reached the end of the range.
+void test_chunk_size_larger_than_count()
+{
+    std::vector<int> data(16, 0);
+
+    for (std::size_t count = 1; count != 9; ++count)
+    {
+        for (std::size_t chunk_size = count + 1; chunk_size != 12; ++chunk_size)
+        {
+            auto first =
+                chunk_size_iterator<int*>(data.data(), chunk_size, count);
+            auto last = chunk_size_iterator<int*>(
+                data.data(), chunk_size, count, count);
+
+            HPX_TEST_EQ(last - first, static_cast<std::ptrdiff_t>(1));
+
+            // walk the range, the loop is bounded so that a missing end can
+            // not hang the test
+            std::size_t chunks = 0;
+            std::size_t covered = 0;
+            for (auto it = first; it != last && chunks != 3; ++it)
+            {
+                ++chunks;
+                covered += hpx::get<1>(*it);
+            }
+
+            HPX_TEST_EQ(chunks, static_cast<std::size_t>(1));
+            HPX_TEST_EQ(covered, count);
+        }
+    }
+}
+
 int main(int, char*[])
 {
     // Test the built-in integer types.
@@ -188,6 +222,8 @@ int main(int, char*[])
 
     test_container<std::vector<unsigned int>>(4);
     test_container<std::list<unsigned int>>(6);
+
+    test_chunk_size_larger_than_count();
 
     return hpx::util::report_errors();
 }

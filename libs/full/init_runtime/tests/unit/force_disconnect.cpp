@@ -4,22 +4,25 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// non-HPX thread, or trying to disconnect the console locality itself, both
-// fail with hpx::error::invalid_status, both through the error_code overload
-// and by throwing), as well as the happy path, where disconnecting a valid
-// remote locality succeeds and actually removes it from AGAS/the connection
-// caches while leaving the remaining localities unaffected. Calling
-// force_disconnect a second time on an already-disconnected locality does not
-// hang. Once a locality has been removed, the parcel layer remembers it as
-// disconnected, so force_disconnect rejects the gid with
-// hpx::error::bad_parameter before it attempts a second removal or blocks.
+// This test checks the error paths of hpx::force_disconnect (calling it from a
+// non-HPX thread fails with hpx::error::invalid_status, and trying to
+// disconnect the console locality itself fails with hpx::error::bad_parameter,
+// both through the error_code overload and by throwing), as well as the happy
+// path, where disconnecting a valid remote locality succeeds and actually
+// removes it from AGAS/the connection caches while leaving the remaining
+// localities unaffected. Calling force_disconnect a second time on an
+// already-disconnected locality does not hang. Once a locality has been
+// removed, the parcel layer remembers it as disconnected, so force_disconnect
+// rejects the gid with hpx::error::bad_parameter before it attempts a second
+// removal or blocks.
 //
 // Beyond that baseline, this test also covers: disconnecting a locality while
 // an action is still in flight to it; repeated connect/disconnect cycles across
 // distinct localities; two concurrent force_disconnect calls racing on the same
-// target; and disconnecting a locality whose process has already been killed
-// outright (rather than one that is cooperatively still running), after
-// checking that parcels sent to it report network_error.
+// target; calling force_disconnect on a worker locality, which asks the console
+// to do the removal; and disconnecting a locality whose process has already
+// been killed outright (rather than one that is cooperatively still running),
+// after checking that parcels sent to it report network_error.
 //
 // The remote localities are spawned as separate worker processes (see
 // force_disconnect_worker.cpp) via process::launch_connecting_locality(), since
@@ -157,6 +160,36 @@ std::uint32_t ping_locality()
 }
 HPX_PLAIN_ACTION(ping_locality, ping_locality_action)
 
+// The launch latch is released before the worker finishes runtime startup.
+// Wait for the running state before testing its disconnection.
+bool worker_is_running()
+{
+    return hpx::is_running();
+}
+HPX_PLAIN_ACTION(worker_is_running, worker_is_running_action)
+
+void wait_for_worker_startup(hpx::id_type const& id)
+{
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    do
+    {
+        hpx::future<bool> ready = hpx::async<worker_is_running_action>(id);
+        if (ready.wait_until(deadline) != hpx::future_status::ready)
+        {
+            break;
+        }
+        if (ready.get())
+        {
+            return;
+        }
+        hpx::this_thread::sleep_for(std::chrono::milliseconds(1));
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    HPX_THROW_EXCEPTION(hpx::error::invalid_status, "wait_for_worker_startup",
+        "worker did not finish runtime startup");
+}
+
 // A long-running action used to simulate a parcel that is still in flight while
 // the target locality is being force-disconnected.
 std::uint32_t sleep_locality(int const ms)
@@ -165,6 +198,20 @@ std::uint32_t sleep_locality(int const ms)
     return hpx::get_locality_id();
 }
 HPX_PLAIN_ACTION(sleep_locality, sleep_locality_action)
+
+// Calls hpx::force_disconnect on the locality this action runs on. Returns the
+// error it reported, or zero if it succeeded.
+int force_disconnect_from_here(hpx::id_type const& locality)
+{
+    hpx::error_code ec(hpx::throwmode::lightweight);
+    int const result = hpx::force_disconnect(locality, ec);
+    if (result != 0 && !ec)
+    {
+        return -1;
+    }
+    return ec.value();
+}
+HPX_PLAIN_ACTION(force_disconnect_from_here, force_disconnect_from_here_action)
 
 // Launches a new connecting-locality worker process and identifies the
 // hpx::id_type it registered as, by diffing the set of known localities before
@@ -194,6 +241,10 @@ std::pair<process::child, hpx::id_type> launch_worker(
         }
     }
     HPX_TEST(new_locality);
+    if (new_locality)
+    {
+        wait_for_worker_startup(new_locality);
+    }
 
     return std::make_pair(HPX_MOVE(worker), new_locality);
 }
@@ -377,6 +428,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     HPX_TEST(!ec);
 
     bool outcome_is_acceptable = false;
+    std::string error_message;
     try
     {
         [[maybe_unused]] std::uint32_t const r = f.get();
@@ -384,6 +436,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     }
     catch (hpx::exception const& e)
     {
+        error_message = e.what();
         outcome_is_acceptable =
             (e.get_error() == hpx::error::locality_was_disconnected);
     }
@@ -391,7 +444,7 @@ void test_disconnect_with_inflight_parcel(hpx::id_type const& target)
     {
         HPX_TEST(false);
     }
-    HPX_TEST(outcome_is_acceptable);
+    HPX_TEST_MSG(outcome_is_acceptable, error_message);
 }
 
 // Repeatedly launching and force-disconnecting distinct worker localities
@@ -490,6 +543,42 @@ void test_concurrent_double_disconnect_race(hpx::id_type const& target)
         HPX_TEST_EQ(r1, -1);
         HPX_TEST_EQ(ec1.value(), static_cast<int>(hpx::error::bad_parameter));
     }
+}
+
+// hpx::force_disconnect called on a locality other than the console asks the
+// console to remove the given locality. Disconnecting the calling locality
+// itself or the console is rejected with hpx::error::bad_parameter, and so is
+// disconnecting a locality that was already removed. The calling locality
+// stays connected.
+void test_disconnect_from_worker(
+    hpx::id_type const& caller, hpx::id_type const& target)
+{
+    if (!caller || !target)
+    {
+        return;
+    }
+
+    constexpr force_disconnect_from_here_action act;
+    int const bad_parameter = static_cast<int>(hpx::error::bad_parameter);
+
+    HPX_TEST_EQ(act(caller, caller), bad_parameter);
+    HPX_TEST_EQ(act(caller, hpx::find_here()), bad_parameter);
+
+    HPX_TEST(hpx::agas::is_connecting(target.get_gid()));
+    HPX_TEST_EQ(act(caller, target), 0);
+
+    // the target was removed from AGAS
+    hpx::error_code resolve_ec(hpx::throwmode::lightweight);
+    hpx::naming::address const addr =
+        hpx::agas::resolve(hpx::launch::sync, target, resolve_ec);
+    HPX_TEST(resolve_ec || !addr);
+
+    // the console remembers it as disconnected
+    HPX_TEST_EQ(act(caller, target), bad_parameter);
+
+    // the calling locality must still respond normally
+    constexpr ping_locality_action ping;
+    HPX_TEST_EQ(ping(caller), hpx::naming::get_locality_id_from_id(caller));
 }
 
 // How long a parcel addressed to a killed locality may take to report its
@@ -691,6 +780,11 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     HPX_TEST_EQ(hpx::find_all_localities().size(), static_cast<std::size_t>(3));
 
+    for (hpx::id_type const& id : hpx::find_remote_localities())
+    {
+        wait_for_worker_startup(id);
+    }
+
     auto const [first, second] = test_force_disconnect_removes_locality();
     test_double_disconnect_should_fail(first);
     test_sequential_disconnects(second);
@@ -721,6 +815,21 @@ int hpx_main(hpx::program_options::variables_map& vm)
         test_concurrent_double_disconnect_race(id6);
         int const exit_code6 = w6.wait_for_exit(hpx::launch::sync);
         HPX_TEST_EQ(exit_code6, 0);
+    }
+
+    std::cout << "Disconnecting a locality from another worker locality.\n";
+    {
+        auto [w8, id8] = launch_worker(exe, 8);
+        auto [w9, id9] = launch_worker(exe, 9);
+        test_disconnect_from_worker(id8, id9);
+        int const exit_code9 = w9.wait_for_exit(hpx::launch::sync);
+        HPX_TEST_EQ(exit_code9, 0);
+
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        HPX_TEST_EQ(hpx::force_disconnect(id8, ec), 0);
+        HPX_TEST(!ec);
+        int const exit_code8 = w8.wait_for_exit(hpx::launch::sync);
+        HPX_TEST_EQ(exit_code8, 0);
     }
 
     std::cout << "Disconnecting a locality whose process is already gone.\n";

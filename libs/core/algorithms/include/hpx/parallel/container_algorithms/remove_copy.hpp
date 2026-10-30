@@ -80,7 +80,7 @@ namespace hpx { namespace ranges {
     ///
     template <typename I, typename Sent, typename O, typename Pred,
         typename Proj = hpx::identity>
-    ranges::remove_copy_if_result<I, O> ranges::remove_copy_if(
+    remove_copy_if_result<I, O> remove_copy_if(
         I first, Sent last, O dest, Pred&& pred, Proj&& proj = Proj());
 
     /////////////////////////////////////////////////////////////////////////////
@@ -146,8 +146,7 @@ namespace hpx { namespace ranges {
     ///
     template <typename Rng, typename O, typename Pred,
         typename Proj = hpx::identity>
-    remove_copy_if_result<std::ranges::iterator_t<Rng>, O>
-    ranges::remove_copy_if(
+    remove_copy_if_result<std::ranges::iterator_t<Rng>, O> remove_copy_if(
         Rng&& rng, O dest, Pred&& pred, Proj&& proj = Proj());
 
     /////////////////////////////////////////////////////////////////////////////
@@ -236,8 +235,8 @@ namespace hpx { namespace ranges {
         typename Pred, typename Proj = hpx::identity>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         remove_copy_if_result<I, O>>::type
-    ranges::remove_copy_if(ExPolicy&& policy, I first, Sent last, O dest,
-        Pred&& pred, Proj&& proj = Proj());
+    remove_copy_if(ExPolicy&& policy, I first, Sent last, O dest, Pred&& pred,
+        Proj&& proj = Proj());
 
     /////////////////////////////////////////////////////////////////////////////
     /// Copies the elements in the range, defined by rng, to another
@@ -323,7 +322,7 @@ namespace hpx { namespace ranges {
         typename Proj = hpx::identity>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         remove_copy_if_result<std::ranges::iterator_t<Rng>, O>>::type
-    ranges::remove_copy_if(ExPolicy&& policy, Rng&& rng, O dest, Pred&& pred,
+    remove_copy_if(ExPolicy&& policy, Rng&& rng, O dest, Pred&& pred,
         Proj&& proj = Proj());
 
     /// Copies the elements in the range, defined by [first, last), to another
@@ -377,7 +376,7 @@ namespace hpx { namespace ranges {
         typename Proj = hpx::identity,
         typename T =
             typename hpx::parallel::traits::projected<I, Proj>::value_type>
-    remove_copy_result<I, O> ranges::remove_copy(
+    remove_copy_result<I, O> remove_copy(
         I first, Sent last, O dest, T const& value, Proj&& proj = Proj());
 
     /// Copies the elements in the range, defined by rng, to another
@@ -427,7 +426,7 @@ namespace hpx { namespace ranges {
     template <typename Rng, typename O, typename Proj = hpx::identity,
         typename T = typename hpx::parallel::traits::projected<
             std::ranges::iterator_t<Rng>, Proj>::value_type>
-    remove_copy_result<std::ranges::iterator_t<Rng>, O> ranges::remove_copy(
+    remove_copy_result<std::ranges::iterator_t<Rng>, O> remove_copy(
         Rng&& rng, O dest, T const& val, Proj&& proj = Proj());
 
     /// Copies the elements in the range, defined by [first, last), to another
@@ -501,8 +500,8 @@ namespace hpx { namespace ranges {
             typename hpx::parallel::traits::projected<I, Proj>::value_type>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         remove_copy_result<I, O>>::type
-    ranges::remove_copy(ExPolicy&& policy, I first, Sent last, O dest,
-        T const& value, Proj&& proj = Proj());
+    remove_copy(ExPolicy&& policy, I first, Sent last, O dest, T const& value,
+        Proj&& proj = Proj());
 
     /// Copies the elements in the range, defined by rng, to another
     /// range beginning at \a dest. Copies only the elements for which the
@@ -571,7 +570,7 @@ namespace hpx { namespace ranges {
         typename Proj = hpx::identity>
     typename parallel::util::detail::algorithm_result<ExPolicy,
         remove_copy_result<std::ranges::iterator_t<Rng>, O>>::type
-    ranges::remove_copy(ExPolicy&& policy, Rng&& rng, O dest, T const& value,
+    remove_copy(ExPolicy&& policy, Rng&& rng, O dest, T const& value,
         Proj&& proj = Proj());
 
 }}    // namespace hpx::ranges

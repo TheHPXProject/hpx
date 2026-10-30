@@ -16,6 +16,7 @@ set(threading_base_headers
     hpx/threading_base/detail/get_default_pool.hpp
     hpx/threading_base/detail/get_default_timer_service.hpp
     hpx/threading_base/detail/switch_status.hpp
+    hpx/threading_base/detail/task_sampling.hpp
     hpx/threading_base/execution_agent.hpp
     hpx/threading_base/external_timer.hpp
     hpx/threading_base/network_background_callback.hpp
@@ -28,6 +29,7 @@ set(threading_base_headers
     hpx/threading_base/set_thread_affinity.hpp
     hpx/threading_base/set_thread_state.hpp
     hpx/threading_base/set_thread_state_timed.hpp
+    hpx/threading_base/sized_function.hpp
     hpx/threading_base/thread_data.hpp
     hpx/threading_base/thread_data_stackful.hpp
     hpx/threading_base/thread_data_stackless.hpp
@@ -39,6 +41,7 @@ set(threading_base_headers
     hpx/threading_base/thread_queue_init_parameters.hpp
     hpx/threading_base/thread_specific_ptr.hpp
     hpx/threading_base/threading_base_fwd.hpp
+    hpx/threading_base/tracing_sample_rate.hpp
 )
 
 if(HPX_WITH_APEX)
@@ -75,6 +78,7 @@ set(threading_base_sources
     create_work.cpp
     detail/reset_backtrace.cpp
     detail/reset_lco_description.cpp
+    detail/task_sampling.cpp
     execution_agent.cpp
     external_timer.cpp
     get_default_pool.cpp

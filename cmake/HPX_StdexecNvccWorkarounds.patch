@@ -1,0 +1,201 @@
+Workarounds for building stdexec with nvcc as the CUDA compiler.
+
+stdexec's own GPU CI covers clang-CUDA and nvc++ only, and current stdexec
+main does not compile under nvcc. These changes make the headers acceptable
+to nvcc 12.9 with a gcc 12 host compiler:
+
+- __connect.hpp: nvcc rejects the constrained redeclarations of the
+  __connect_declfn_v variable template; use the existing MSVC if-constexpr
+  fallback for nvcc as well.
+- __counting_scopes.hpp: the sender constraint on the two join() members
+  fails in the host compiler pass on the cudafe-transformed sexpr; relax the
+  return-type constraint under nvcc (the returned type is unchanged).
+- __env.hpp: nvcc fails to deduce __as_root_env_fn::operator() when the
+  return type goes through the __join_env_t alias (a call through an
+  `auto const&` NTTP) in an unevaluated context; spell the result type out
+  structurally under nvcc.
+- __receiver_adaptor.hpp: nvcc's front end mis-parses the qualified
+  concept-id in the __has_base initializer; parenthesize it.
+- __transform_completion_signatures.hpp: nvcc rejects the pack expansion of
+  the diagnostic function type _WHERE_(_IN_ALGORITHM_, _AlgoTag); form it
+  through an alias template so the function-type syntax stays dependent.
+- __typeinfo.hpp: the pretty-function name extraction is wrong under nvcc
+  (diagnostics-only, skip the assert), and the __type_index NTTP form of
+  __msplice ICEs gcc < 13 as the host compiler behind nvcc, which does not
+  hit the existing STDEXEC_GCC() version check.
+
+SPDX-License-Identifier: BSL-1.0
+
+diff --git a/include/stdexec/__detail/__connect.hpp b/include/stdexec/__detail/__connect.hpp
+index d9b4c5d6..4fede426 100644
+--- a/include/stdexec/__detail/__connect.hpp
++++ b/include/stdexec/__detail/__connect.hpp
+@@ -64,7 +64,7 @@ namespace STDEXEC
+                               || __with_co_await<_Sender, _Receiver>
+                               || __with_legacy_tag_invoke<_Sender, _Receiver>;
+ 
+-#  if !STDEXEC_MSVC()
++#  if !STDEXEC_MSVC() && !STDEXEC_NVCC()
+ 
+ #    define STDEXEC_CONNECT_DECLFN_FOR(_EXPR) __declfn_t<decltype(_EXPR), noexcept(_EXPR)>
+ 
+diff --git a/include/stdexec/__detail/__counting_scopes.hpp b/include/stdexec/__detail/__counting_scopes.hpp
+index dc1651b8..c199c36a 100644
+--- a/include/stdexec/__detail/__counting_scopes.hpp
++++ b/include/stdexec/__detail/__counting_scopes.hpp
+@@ -46,6 +46,15 @@ import stdexec;
+ 
+ #  include "__prologue.hpp"
+ 
++// nvcc's cudafe lambda transformation makes the __scope_join_t sexpr fail the
++// sender constraint in the host compiler pass; relax the return-type
++// constraint there. The returned type is unchanged.
++#if STDEXEC_NVCC()
++#  define STDEXEC_JOIN_SENDER_AUTO auto
++#else
++#  define STDEXEC_JOIN_SENDER_AUTO sender auto
++#endif
++
+ namespace STDEXEC
+ {
+   struct _JOINING_A_COUNTING_SCOPE_NEEDS_A_SCHEDULER_IN_THE_ENVIRONMENT_
+@@ -773,7 +782,7 @@ namespace STDEXEC
+     using __counting_scopes::__base_scope::close;
+ 
+     [[nodiscard]]
+-    sender auto join() noexcept
++    STDEXEC_JOIN_SENDER_AUTO join() noexcept
+     {
+       // [exec.simple.counting.mem] paragraph 4
+       return __make_sexpr<__counting_scopes::__scope_join_t>(this);
+@@ -847,7 +856,7 @@ namespace STDEXEC
+     using __counting_scopes::__base_scope::close;
+ 
+     [[nodiscard]]
+-    sender auto join() noexcept
++    STDEXEC_JOIN_SENDER_AUTO join() noexcept
+     {
+       return __make_sexpr<__counting_scopes::__scope_join_t>(this);
+     }
+diff --git a/include/stdexec/__detail/__env.hpp b/include/stdexec/__detail/__env.hpp
+index a3102eb5..403e202a 100644
+--- a/include/stdexec/__detail/__env.hpp
++++ b/include/stdexec/__detail/__env.hpp
+@@ -159,6 +159,34 @@ namespace STDEXEC
+       }
+     };
+ 
++#if STDEXEC_NVCC()
++    // nvcc fails to deduce operator() when the return type goes through the
++    // __join_env_t alias (a call through an `auto const&` NTTP) in an
++    // unevaluated context. Spell the result type out structurally instead;
++    // it mirrors __join_fn's branches for a by-value environment exactly.
++    template <class _Env>
++    struct __as_root_env_result
++    {
++      using __t = env<__root_env, __if_c<__is_fwd_env<_Env>, _Env, __fwd<_Env>>>;
++    };
++
++    template <>
++    struct __as_root_env_result<env<>>
++    {
++      using __t = __root_env;
++    };
++
++    struct __as_root_env_fn
++    {
++      template <class _Env>
++      STDEXEC_ATTRIBUTE(nodiscard, always_inline, host, device)
++      constexpr auto operator()(_Env __env) const noexcept ->
++        typename __as_root_env_result<std::unwrap_reference_t<_Env>>::__t
++      {
++        return __join(__root_env{}, static_cast<std::unwrap_reference_t<_Env> &&>(__env));
++      }
++    };
++#else
+     struct __as_root_env_fn
+     {
+       template <class _Env>
+@@ -169,6 +197,7 @@ namespace STDEXEC
+         return __join(__root_env{}, static_cast<std::unwrap_reference_t<_Env> &&>(__env));
+       }
+     };
++#endif
+   }  // namespace __env
+ 
+   STDEXEC_MODULE_EXPORT_AUTHORING
+diff --git a/include/stdexec/__detail/__receiver_adaptor.hpp b/include/stdexec/__detail/__receiver_adaptor.hpp
+index b670170f..2a68be62 100644
+--- a/include/stdexec/__detail/__receiver_adaptor.hpp
++++ b/include/stdexec/__detail/__receiver_adaptor.hpp
+@@ -122,7 +122,8 @@ namespace STDEXEC
+     : __adaptors::__adaptor_base<_Base>
+     , receiver_tag
+   {
+-    static constexpr bool __has_base = !__std::derived_from<_Base, __adaptors::__no::__nope>;
++    static constexpr bool __has_base =
++      !(__std::derived_from<_Base, __adaptors::__no::__nope>);
+ 
+     template <class _Self>
+     using __base_from_derived_t = decltype(__declval<_Self>().base());
+diff --git a/include/stdexec/__detail/__transform_completion_signatures.hpp b/include/stdexec/__detail/__transform_completion_signatures.hpp
+index 6d10b781..8c3c6133 100644
+--- a/include/stdexec/__detail/__transform_completion_signatures.hpp
++++ b/include/stdexec/__detail/__transform_completion_signatures.hpp
+@@ -328,6 +328,12 @@ namespace STDEXEC
+     }
+   };
+ 
++  // Build the _WHERE_(_IN_ALGORITHM_, _AlgoTag) diagnostic function type through
++  // an alias template so the function-type syntax stays fully dependent (EDG
++  // otherwise rejects the pack expansion).
++  template <class _AlgoTagT>
++  using __in_algorithm_where_t = _WHERE_(_IN_ALGORITHM_, _AlgoTagT);
++
+   STDEXEC_MODULE_EXPORT_AUTHORING
+   template <class _SetTag, class _Fn, class... _AlgoTag>
+   struct __transform_arguments
+@@ -356,7 +362,7 @@ namespace STDEXEC
+       else
+       {
+         return STDEXEC::__throw_compile_time_error<
+-          _WHERE_(_IN_ALGORITHM_, _AlgoTag)...,
++          __in_algorithm_where_t<_AlgoTag>...,
+           _FUNCTION_IS_NOT_CALLABLE_WITH_THE_GIVEN_ARGUMENTS_,
+           _WITH_METAFUNCTION_(_Fn),
+           _WITH_ARGUMENTS_(_Arg)>();
+@@ -396,7 +402,7 @@ namespace STDEXEC
+       else
+       {
+         return STDEXEC::__throw_compile_time_error<_WHAT_(_TYPE_IS_NOT_DECAY_COPYABLE_),
+-                                                   _WHERE_(_IN_ALGORITHM_, _AlgoTag)...,
++                                                   __in_algorithm_where_t<_AlgoTag>...,
+                                                    _WITH_TYPE_<_Arg>>();
+       }
+     }
+diff --git a/include/stdexec/__detail/__typeinfo.hpp b/include/stdexec/__detail/__typeinfo.hpp
+index 13f83127..05e047e3 100644
+--- a/include/stdexec/__detail/__typeinfo.hpp
++++ b/include/stdexec/__detail/__typeinfo.hpp
+@@ -121,7 +121,11 @@ namespace STDEXEC
+   template <class _Ty>
+   inline constexpr std::string_view __mnameof = __detail::__get_pretty_name<__demangle_t<_Ty>>();
+ 
++#  if !STDEXEC_NVCC()
++  // nvcc's EDG front end formats the pretty function name differently; the
++  // name extraction is diagnostics-only, so skip the check there.
+   static_assert(__mnameof<void> == "void");
++#  endif
+ 
+   //////////////////////////////////////////////////////////////////////////////////////////
+   // __type_info
+@@ -277,7 +281,8 @@ namespace STDEXEC
+ #  if STDEXEC_MSVC()
+   template <__type_index _Id>
+   using __msplice = __detail::__msplice_helper<_Id>::__t;
+-#  elif STDEXEC_GCC() && STDEXEC_GCC_VERSION < 1300
++#  elif (STDEXEC_GCC() && STDEXEC_GCC_VERSION < 1300)                                              \
++    || (STDEXEC_NVCC() && defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 13)
+   template <auto _Id>
+   using __msplice = decltype(__detail::__msplice_v<_Id>)::__t;
+ #  else

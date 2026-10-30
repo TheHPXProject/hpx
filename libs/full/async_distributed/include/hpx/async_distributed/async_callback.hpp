@@ -294,5 +294,31 @@ namespace hpx {
             HPX_FORWARD(Target, target), HPX_FORWARD(Callback, cb),
             HPX_FORWARD(Ts, ts)...);
     }
+    /// \brief Reflection-based async_cb overload with launch policy.
+    ///
+    /// Allows calling hpx::async_cb<^^func>(policy, target, callback, ...)
+    /// without defining an explicit action type.
+    ///
+    /// \tparam F        A std::meta::info reflection of a free function.
+    /// \tparam Policy   Launch policy type.
+    /// \tparam Target   id_type, client, or distribution policy.
+    /// \tparam Callback Callback type invoked on completion.
+    /// \tparam Ts       Additional arguments to pass to the function.
+    // clang-format off
+    HPX_CXX_EXPORT template <std::meta::info F, typename Policy,
+        typename Target, typename Callback, typename... Ts>
+        requires(std::meta::is_namespace_member(F) && std::meta::is_function(F) &&
+            traits::is_launch_policy_v<Policy> &&
+            (std::is_same_v<std::decay_t<Target>, hpx::id_type> ||
+                hpx::traits::is_client_v<std::decay_t<Target>> ||
+                hpx::traits::is_distribution_policy_v<std::decay_t<Target>>))
+    HPX_FORCEINLINE auto async_cb(
+        Policy&& policy, Target&& target, Callback&& cb, Ts&&... ts)
+    // clang-format on
+    {
+        return hpx::async_cb(hpx::actions::reflect_action<F>{},
+            HPX_FORWARD(Policy, policy), HPX_FORWARD(Target, target),
+            HPX_FORWARD(Callback, cb), HPX_FORWARD(Ts, ts)...);
+    }
 #endif    // HPX_HAVE_CXX26_REFLECTION
 }    // namespace hpx

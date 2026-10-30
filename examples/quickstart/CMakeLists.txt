@@ -88,7 +88,9 @@ if(HPX_WITH_DISTRIBUTED_RUNTIME)
   )
 endif()
 if(HPX_WITH_DISTRIBUTED_RUNTIME AND HPX_WITH_CXX26_REFLECTION)
-  set(example_programs ${example_programs} fibonacci_reflection)
+  set(example_programs ${example_programs} factorial_reflection
+                       fibonacci_reflection
+  )
 endif()
 
 # TODO: These examples currently fail. Disabled until they are fixed.

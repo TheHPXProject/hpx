@@ -24,12 +24,8 @@ namespace hpx::detail {
     HPX_CXX_EXPORT template <typename Action, typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
-    async_colocated_cb([[maybe_unused]] hpx::id_type const& id,
-        [[maybe_unused]] Callback&& cb, [[maybe_unused]] Ts&&... vs)
+    async_colocated_cb(hpx::id_type const& id, Callback&& cb, Ts&&... vs)
     {
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-        HPX_ASSERT(false);
-#else
         // Attach the requested action as a continuation to a resolve_async
         // call on the locality responsible for the target gid.
         hpx::id_type service_target(
@@ -46,7 +42,6 @@ namespace hpx::detail {
                 hpx::bind(util::functional::extract_locality(), _2, id),
                 HPX_FORWARD(Ts, vs)...)),
             service_target, HPX_FORWARD(Callback, cb), id.get_gid());
-#endif
     }
 
     HPX_CXX_EXPORT template <typename Component, typename Signature,
@@ -66,13 +61,9 @@ namespace hpx::detail {
         typename Callback, typename... Ts>
     hpx::future<traits::promise_local_result_t<
         typename hpx::traits::extract_action<Action>::remote_result_type>>
-    async_colocated_cb([[maybe_unused]] Continuation&& cont,
-        [[maybe_unused]] hpx::id_type const& id, [[maybe_unused]] Callback&& cb,
-        [[maybe_unused]] Ts&&... vs)
+    async_colocated_cb(
+        Continuation&& cont, hpx::id_type const& id, Callback&& cb, Ts&&... vs)
     {
-#if defined(HPX_COMPUTE_DEVICE_CODE)
-        HPX_ASSERT(false);
-#else
         // Attach the requested action as a continuation to a resolve_async
         // call on the locality responsible for the target gid.
         hpx::id_type service_target(
@@ -91,7 +82,6 @@ namespace hpx::detail {
                     HPX_FORWARD(Ts, vs)...),
                 HPX_FORWARD(Continuation, cont)),
             service_target, HPX_FORWARD(Callback, cb), id.get_gid());
-#endif
     }
 
     HPX_CXX_EXPORT template <typename Continuation, typename Component,

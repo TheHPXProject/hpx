@@ -14,9 +14,9 @@ concurrency
 This module provides concurrency primitives useful for multi-threaded
 programming such as:
 
-* :cpp:class:`hpx::barrier`
-* :cpp:class:`hpx::util::cache_line_data` and
-  :cpp:class:`hpx::util::cache_aligned_data`: wrappers for aligning and padding
+* :hpx:class:`hpx::barrier`
+* :hpx:class:`hpx::util::cache_line_data` and
+  :hpx:class:`hpx::util::cache_aligned_data`: wrappers for aligning and padding
   data to cache lines.
 * various lockfree queue data structures
 
