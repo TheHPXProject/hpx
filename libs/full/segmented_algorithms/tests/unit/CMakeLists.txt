@@ -23,6 +23,9 @@ set(tests
     partitioned_vector_iter
     partitioned_vector_max_element1
     partitioned_vector_max_element2
+    partitioned_vector_merge
+    partitioned_vector_merge_extended
+    partitioned_vector_merge_regressions
     partitioned_vector_min_element1
     partitioned_vector_min_element2
     partitioned_vector_minmax_element1
@@ -81,11 +84,24 @@ if(HPX_WITH_PARCELPORT_LCI)
   endforeach()
 endif()
 
+# These merge tests require multiple localities.
+if(NOT HPX_WITH_NETWORKING)
+  list(REMOVE_ITEM tests partitioned_vector_merge
+       partitioned_vector_merge_extended partitioned_vector_merge_regressions
+  )
+endif()
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
   set(${test}_FLAGS DEPENDENCIES partitioned_vector_component)
-  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES 2
+  if(test MATCHES "^partitioned_vector_merge(_extended|_regressions)?$")
+    set(test_localities 4)
+  else()
+    set(test_localities 2)
+  endif()
+
+  set(${test}_PARAMETERS ${${test}_PARAMETERS} LOCALITIES ${test_localities}
                          THREADS_PER_LOCALITY 4
   )
 

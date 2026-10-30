@@ -13,6 +13,8 @@
 #include <hpx/modules/checkpoint.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -232,6 +234,49 @@ int main()
 
     // Cleanup
     std::remove("test_file_10.txt");
+
+    // Test 11
+    //  a length that cannot be used must not be read as one
+    {
+        std::ofstream test_file_11("test_file_11.txt", std::ios::binary);
+        std::int64_t const bad_length = -1;
+        test_file_11.write(
+            reinterpret_cast<char const*>(&bad_length), sizeof(std::int64_t));
+        test_file_11.close();
+
+        std::ifstream test_file_11_1("test_file_11.txt", std::ios::binary);
+        checkpoint archive11;
+
+        bool caught = false;
+        try
+        {
+            test_file_11_1 >> archive11;
+        }
+        catch (hpx::exception const&)
+        {
+            caught = true;
+        }
+        HPX_TEST(caught);
+        HPX_TEST(archive11.size() == 0);
+
+        std::remove("test_file_11.txt");
+    }
+
+    // reading past the end of a stream is not an error, it just leaves the
+    // stream in a failed state
+    {
+        std::ofstream test_file_12("test_file_12.txt", std::ios::binary);
+        test_file_12.close();
+
+        std::ifstream test_file_12_1("test_file_12.txt", std::ios::binary);
+        checkpoint archive12;
+        test_file_12_1 >> archive12;
+
+        HPX_TEST(!test_file_12_1);
+        HPX_TEST(archive12.size() == 0);
+
+        std::remove("test_file_12.txt");
+    }
 
     // test nullary versions of the API
     {

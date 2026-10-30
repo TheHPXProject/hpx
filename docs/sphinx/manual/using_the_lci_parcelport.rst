@@ -140,6 +140,20 @@ when using the LCI parcelport to get better performance.
    has been observed with better performance on some clusters with 
    prior generation of InfiniBand hardware.
 
+Zero-copy parcel chunks (#812)
+==============================
+
+Bitwise-serializable action arguments such as large ``std::vector<T>`` are
+serialized as a main buffer plus a list of zero-copy pointer chunks when their
+size exceeds ``hpx.parcel.zero_copy_serialization_threshold`` (see
+:hpx-issue:`812`). The LCI parcelport transmits those chunks from the original
+memory without coalescing them into a single contiguous payload, which is the
+current RDMA-oriented path in |hpx| after the historical ibverbs/libfabric
+parcelports were removed. TCP and MPI implement the same chunk list (gather
+write / multi-message send). Enable with
+``hpx.parcel.lci.zero_copy_optimization=1`` (the default when the parcelport is
+active).
+
 Reference
 =========
 

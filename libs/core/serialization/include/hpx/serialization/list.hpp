@@ -9,6 +9,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/serialization/detail/serialize_collection.hpp>
+#include <hpx/serialization/detail/to_size.hpp>
 #include <hpx/serialization/serialize.hpp>
 
 #include <cstdint>
@@ -25,7 +26,7 @@ namespace hpx::serialization {
         if (size == 0)
             return;
 
-        detail::load_collection(ar, ls, size);
+        detail::load_collection(ar, ls, detail::to_size(size));
     }
 
     HPX_CXX_CORE_EXPORT template <typename T, typename Allocator>

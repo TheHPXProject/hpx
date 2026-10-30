@@ -217,7 +217,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/async_base.hpp>
@@ -472,5 +471,4 @@ namespace hpx::collectives {
     }
 }    // namespace hpx::collectives
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

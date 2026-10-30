@@ -299,9 +299,9 @@ int hpx_main(hpx::program_options::variables_map& vm)
     */
 
     // Number of grid points.
-    std::uint64_t nx = vm["nx"].as<std::uint64_t>();
+    std::size_t nx = vm["nx"].as<std::size_t>();
     // Number of steps.
-    std::uint64_t nt = vm["nt"].as<std::uint64_t>();
+    std::size_t nt = vm["nt"].as<std::size_t>();
     // Number of runs (repartition between runs).
     std::uint64_t nr = vm["nr"].as<std::uint64_t>();
 
@@ -422,9 +422,9 @@ int main(int argc, char* argv[])
     // clang-format off
     desc_commandline.add_options()
         ("results", "print generated results (default: false)")
-        ("nx", value<std::uint64_t>()->default_value(10),
+        ("nx", value<std::size_t>()->default_value(10),
          "Local x dimension (of each partition)")
-        ("nt", value<std::uint64_t>()->default_value(45),
+        ("nt", value<std::size_t>()->default_value(45),
          "Number of time steps")
         ("nr", value<std::uint64_t>()->default_value(10),
          "Number of runs")

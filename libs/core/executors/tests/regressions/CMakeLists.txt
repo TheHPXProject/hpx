@@ -8,17 +8,26 @@
 set(tests
     bulk_then_execute_3182
     bulk_sync_wait
+    fork_from_other_context
     fork_join_with_result
     future_then_async_executor
+    hierarchical_spawning_7887
     parallel_executor_1781
     pu_count_6184
     wrapping_executor
 )
 
+# parts must be larger than the hierarchical threshold (7) for the tasks that
+# capture the launch policy to be posted: the 16 elements of the test give parts
+# of 8 on 2 workers, but only parts of 4 on the default 4 workers
+set(hierarchical_spawning_7887_PARAMETERS THREADS_PER_LOCALITY 2)
+
 foreach(test ${tests})
   set(sources ${test}.cpp)
 
-  set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  if(NOT DEFINED ${test}_PARAMETERS)
+    set(${test}_PARAMETERS THREADS_PER_LOCALITY 4)
+  endif()
 
   source_group("Source Files" FILES ${sources})
 

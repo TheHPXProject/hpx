@@ -23,7 +23,6 @@ set(STANDARD_LIBRARY_HEADERS
     "<condition_variable>"
     "<deque>"
     "<exception>"
-    "<execution>"
     "<filesystem>"
     "<format>"
     "<forward_list>"

@@ -596,8 +596,7 @@ namespace hpx::performance_counters {
         if (paths.instancename_ == "total" && paths.instanceindex_ == -1)
         {
             // find the referenced AGAS instance and dispatch the request there
-            std::string service = hpx::util::format(agas::service_name,
-                agas::is_connecting() ? agas::get_locality_id() : 0);
+            std::string service = agas::service_name_prefix();
 
             service += paths.parentinstancename_;
 

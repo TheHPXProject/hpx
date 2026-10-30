@@ -71,8 +71,8 @@ namespace hpx::threads {
         hpx::threads::detail::network_background_callback_type const&
             network_background_callback_;
         std::size_t max_background_threads_;
-        std::size_t max_idle_loop_count_;
-        std::size_t max_busy_loop_count_;
+        std::int64_t max_idle_loop_count_;
+        std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
 
         thread_pool_init_parameters(std::string const& name, std::size_t index,
@@ -84,8 +84,8 @@ namespace hpx::threads {
                 network_background_callback =
                     hpx::threads::detail::network_background_callback_type(),
             std::size_t max_background_threads = static_cast<std::size_t>(-1),
-            std::size_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
-            std::size_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX,
+            std::int64_t max_idle_loop_count = HPX_IDLE_LOOP_COUNT_MAX,
+            std::int64_t max_busy_loop_count = HPX_BUSY_LOOP_COUNT_MAX,
             std::size_t shutdown_check_count = 10)
           : name_(name)
           , index_(index)
@@ -248,6 +248,10 @@ namespace hpx::threads {
         {
             return 0;
         }
+
+        // A thread run directly by a waiting parent never passes through the
+        // scheduling loop, so the worker that ran it counts it here instead.
+        virtual void add_directly_executed_thread(std::size_t /*thread_num*/) {}
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)
         virtual std::int64_t get_thread_phase_duration(
             std::size_t /*thread_num*/, bool /*reset*/)

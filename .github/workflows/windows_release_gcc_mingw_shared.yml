@@ -1,0 +1,78 @@
+# Copyright (c) 2023-2026 The STE||AR-Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+name: Windows CI (Release, gcc/mingw toolset, shared libraries)
+
+on: [pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v7
+    - uses: lukka/get-cmake@v4.4.4
+
+    - name: Install dependencies
+      run: |
+        choco install ninja -y
+        md C:\projects
+        $client = new-object System.Net.WebClient
+        $client.DownloadFile("https://archives.boost.io/release/1.78.0/source/boost_1_78_0.7z","C:\projects\boost_1_78_0.7z")
+        7z x C:\projects\boost_1_78_0.7z -y -oC:\projects\boost
+        cd C:\projects\boost\boost_1_78_0
+        .\bootstrap.bat gcc
+        .\b2.exe `
+            link=shared `
+            variant=release `
+            architecture=x86 `
+            address-model=64 `
+            threading=multi `
+            --with-iostreams `
+            --build-type=complete `
+            install
+        $client.DownloadFile("https://download.open-mpi.org/release/hwloc/v2.8/hwloc-win64-build-2.8.0.zip","C:\projects\hwloc-win64-build-2.8.0.zip")
+        7z x C:\projects\hwloc-win64-build-2.8.0.zip -y -oC:\projects
+    - name: Configure
+      shell: bash
+      run: |
+          cmake . -Bbuild -G'Ninja' \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_CXX_COMPILER=g++ \
+              -DBOOST_ROOT="C:\Boost" \
+              -DHWLOC_ROOT="C:\projects\hwloc-win64-build-2.8.0" \
+              -DHPX_WITH_CXX_STANDARD=23 \
+              -DHPX_WITH_STATIC_LINKING=OFF \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_PKGCONFIG=OFF \
+              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
+              -DHPX_WITH_EXAMPLES=OFF \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_TESTS_UNIT=ON \
+              -DHPX_WITH_DEPRECATION_WARNINGS=OFF
+    - name: Build
+      shell: bash
+      run: |
+          cmake --build build --config Release -- -j 2
+          cmake --build build --config Release \
+              --target any_sender_test \
+              --target any_sender_consumer_test \
+              --target rebind_policy_test \
+              -- -j 2
+    - name: Test
+      shell: pwsh
+      run: |
+        $env:PATH = "$env:GITHUB_WORKSPACE\build\bin;C:\Boost\lib;C:\projects\hwloc-win64-build-2.8.0\bin;$env:PATH"
+        cd build
+        ctest `
+          --output-on-failure `
+          --build-config Release `
+          --tests-regex "tests.unit.modules.execution_base.any_sender|tests.unit.modules.execution.rebind_policy"

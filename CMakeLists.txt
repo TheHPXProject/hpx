@@ -472,6 +472,13 @@ hpx_option(
   HPX_WITH_TESTS_BENCHMARKS BOOL "Build HPX benchmark tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
 )
+if(HPX_WITH_TESTS_BENCHMARKS)
+  hpx_option(
+    HPX_WITH_TESTS_RUN_BENCHMARKS BOOL
+    "Run the built HPX benchmark tests (default: OFF)" OFF ADVANCED
+    CATEGORY "Build Targets"
+  )
+endif()
 hpx_option(
   HPX_WITH_TESTS_REGRESSIONS BOOL "Build HPX regression tests (default: ON)" ON
   ADVANCED CATEGORY "Build Targets"
@@ -658,8 +665,8 @@ hpx_option(
 )
 
 hpx_option(
-  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository tag or branch" "main"
-  CATEGORY "Executor"
+  HPX_WITH_STDEXEC_TAG STRING "STDEXEC repository commit, tag, or branch"
+  "04de75de5807e73a229acf047c6976575e313359" CATEGORY "Executor"
 )
 
 # ##############################################################################
@@ -1125,6 +1132,10 @@ hpx_option(
   CATEGORY "Build Targets"
   ADVANCED
 )
+if(HPX_WITH_NANOBENCH)
+  hpx_add_config_define(HPX_HAVE_NANOBENCH)
+  include(HPX_SetupNanobench)
+endif()
 
 # cmake-format: off
 # LibCDS option
@@ -1190,14 +1201,17 @@ if(HPX_WITH_TRACY)
     HPX_WITH_TRACY_TAG STRING "Tracy repository tag or branch" "v0.14.1"
     CATEGORY "Profiling"
   )
+endif()
 
-  # Per-subsystem tracing gates. Each event class is compiled out when its
-  # option is OFF so that users profiling one subsystem do not pay the cost of
-  # the others. Defaults preserve current behaviour: all three classes on.
+# Per-subsystem tracing gates, compiled out when OFF so a user profiling one
+# subsystem does not pay for the others. Lifecycle and work-stealing are honored
+# by both the Tracy and the ITTNotify backends; causal events remain Tracy-only
+# since ITT has no causal hooks. Defaults keep current behavior: all on.
+if(HPX_WITH_TRACY OR HPX_WITH_ITTNOTIFY)
   hpx_option(
     HPX_WITH_TRACING_LIFECYCLE_EVENTS
     BOOL
-    "Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed, deleted). Default: ON."
+    "Emit per-task lifecycle events (staged, created, executing, yielded, suspended, resumed, completed, deleted). Tracy and ITTNotify backends. Default: ON."
     ON
     CATEGORY "Profiling"
   )
@@ -1206,20 +1220,9 @@ if(HPX_WITH_TRACY)
   endif()
 
   hpx_option(
-    HPX_WITH_TRACING_CAUSAL_EVENTS
-    BOOL
-    "Emit causal chain events (future_fulfilled, future_exception_set, continuation_run, continuation_finished, handle_on_completed_fired). Default: ON."
-    ON
-    CATEGORY "Profiling"
-  )
-  if(HPX_WITH_TRACING_CAUSAL_EVENTS)
-    hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
-  endif()
-
-  hpx_option(
     HPX_WITH_TRACING_WORK_STEALING_EVENTS
     BOOL
-    "Emit work-stealing events when a worker steals a task from another. Default: ON."
+    "Emit work-stealing events when a worker steals a task from another. Tracy and ITTNotify backends. Default: ON."
     ON
     CATEGORY "Profiling"
   )
@@ -1228,13 +1231,35 @@ if(HPX_WITH_TRACY)
   endif()
 endif()
 
-hpx_option(
-  HPX_WITH_FETCH_TRACY
-  BOOL
-  "Use FetchContent to fetch Tracy. By default an installed Tracy will be used. (default: OFF)"
-  OFF
-  CATEGORY "Build Targets"
-)
+if(HPX_WITH_TRACY)
+  hpx_option(
+    HPX_WITH_TRACING_CAUSAL_EVENTS
+    BOOL
+    "Emit causal chain events (future_fulfilled, future_exception_set, continuation_run, continuation_finished, handle_on_completed_fired). Tracy backend only. Default: ON."
+    ON
+    CATEGORY "Profiling"
+  )
+  if(HPX_WITH_TRACING_CAUSAL_EVENTS)
+    hpx_add_config_define(HPX_HAVE_TRACING_CAUSAL_EVENTS)
+  endif()
+
+  # 1-in-N task sampling for the Tracy lifecycle hooks. APEX treats every
+  # lifecycle hook as a constexpr no-op and the ITTNotify backend emits every
+  # task unconditionally, so sampling is meaningful only for Tracy.
+  hpx_option(
+    HPX_WITH_TRACING_SAMPLE_RATE
+    STRING
+    "1-in-N task-lifecycle sampling rate for the Tracy backend; 1 emits every task, higher values emit correspondingly fewer. Ignored by the ITTNotify backend, which emits every task (default: 1)"
+    "1"
+    ADVANCED
+  )
+  if(NOT HPX_WITH_TRACING_SAMPLE_RATE MATCHES "^[1-9][0-9]*$")
+    hpx_error(
+      "HPX_WITH_TRACING_SAMPLE_RATE must be a positive integer, got '${HPX_WITH_TRACING_SAMPLE_RATE}'"
+    )
+  endif()
+  hpx_add_config_define(HPX_TRACING_SAMPLE_RATE ${HPX_WITH_TRACING_SAMPLE_RATE})
+endif()
 
 # Experimental settings
 hpx_option(
@@ -1281,10 +1306,6 @@ hpx_option(
 
 if(HPX_WITH_NETWORKING AND NOT HPX_WITH_DISTRIBUTED_RUNTIME)
   hpx_error("HPX_WITH_NETWORKING=ON requires HPX_WITH_DISTRIBUTED_RUNTIME=ON")
-endif()
-
-if(HPX_WITH_APEX AND NOT HPX_WITH_DISTRIBUTED_RUNTIME)
-  hpx_error("HPX_WITH_DISTRIBUTED_RUNTIME=OFF requires HPX_WITH_APEX=OFF")
 endif()
 
 include(HPX_SetupTracing)
@@ -1474,10 +1495,6 @@ if(HPX_WITH_NETWORKING)
   if(HPX_WITH_PARCELPORT_ACTION_COUNTERS)
     hpx_add_config_define(HPX_HAVE_PARCELPORT_ACTION_COUNTERS)
   endif()
-  if(HPX_WITH_NANOBENCH)
-    hpx_add_config_define(HPX_HAVE_NANOBENCH)
-    include(HPX_SetupNanobench)
-  endif()
 else(HPX_WITH_NETWORKING)
   # if networking is off,  then allow the option of using our asynchronous MPI
   # features
@@ -1597,18 +1614,6 @@ hpx_option(
 )
 if(HPX_WITH_EXAMPLES_OPENMP)
   find_package(OpenMP REQUIRED)
-endif()
-hpx_option(
-  HPX_WITH_EXAMPLES_TBB BOOL
-  "Enable examples requiring TBB support (default: OFF)." OFF
-  CATEGORY "Build Targets"
-  ADVANCED
-)
-if(HPX_WITH_EXAMPLES_TBB)
-  find_package(TBB)
-  if(NOT Tbb_FOUND)
-    set(HPX_WITH_EXAMPLES_TBB OFF)
-  endif()
 endif()
 hpx_option(
   HPX_WITH_EXAMPLES_QTHREADS BOOL
@@ -1918,9 +1923,9 @@ hpx_option(
 
 # Check if the selected compiler versions are supposed to work with our codebase
 if(CMAKE_COMPILER_IS_GNUCXX AND HPX_WITH_GCC_VERSION_CHECK)
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.0)
     hpx_error(
-      "GCC 7.0 or higher is required. Specify HPX_WITH_GCC_VERSION_CHECK=OFF to ignore this error."
+      "GCC 12.0 or higher is required (found ${CMAKE_CXX_COMPILER_VERSION}). Specify -DHPX_WITH_GCC_VERSION_CHECK=OFF to remove this check at your own risk."
     )
   endif()
 endif()
@@ -2000,6 +2005,18 @@ target_architecture(__target_arch)
 
 include(CacheLineSize)
 cache_line_size(__cache_line_size)
+
+hpx_option(
+  HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE
+  STRING
+  "Minimal distance in bytes between data written by different cores, to avoid false sharing (empty: chosen by the target architecture, 128 on x86-64 and ARM64) (default: \"\")"
+  ""
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+destructive_interference_size(
+  ${__cache_line_size} __destructive_interference_size
+)
 
 # ##############################################################################
 # Set configuration option to use Boost.Context or not. This depends on the
@@ -2494,6 +2511,11 @@ else()
   endif()
 endif()
 hpx_info("Cacheline size detected: ${__cache_line_size}")
+if(__destructive_interference_size)
+  hpx_info(
+    "Destructive interference size set to: ${__destructive_interference_size}"
+  )
+endif()
 
 # store target architecture for later use
 set(HPX_WITH_TARGET_ARCHITECTURE
@@ -2737,6 +2759,29 @@ set(HPX_STATIC_PARCELPORT_PLUGINS
     ""
     CACHE INTERNAL "" FORCE
 )
+
+# Locate Python before adding libraries. Module tests and examples are
+# registered from libs/ via add_hpx_test, which prefixes hpxrun.py with
+# Python_EXECUTABLE. On Windows, CTest cannot launch a .py file as the test
+# process (BAD_COMMAND: inappropriate file type or format).
+if(POLICY CMP0148)
+  find_package(Python COMPONENTS Interpreter)
+  if(NOT Python_FOUND)
+    hpx_warn(
+      "A python interpreter could not be found. The test suite can not be run automatically."
+    )
+  endif()
+else()
+  find_package(PythonInterp)
+  if(NOT PYTHONINTERP_FOUND)
+    hpx_warn(
+      "A python interpreter could not be found. The test suite can not be run automatically."
+    )
+  else()
+    set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
+  endif()
+endif()
+
 add_subdirectory(libs)
 
 # ##############################################################################
@@ -2767,25 +2812,6 @@ add_subdirectory(components)
 # ##############################################################################
 # Tests
 # ##############################################################################
-if(POLICY CMP0148)
-  find_package(Python COMPONENTS Interpreter)
-  if(NOT Python_FOUND)
-    hpx_warn(
-      "A python interpreter could not be found. The test suite can not be run automatically."
-    )
-  endif()
-
-else()
-  find_package(PythonInterp)
-  if(NOT PYTHONINTERP_FOUND)
-    hpx_warn(
-      "A python interpreter could not be found. The test suite can not be run automatically."
-    )
-  else()
-    set(Python_EXECUTABLE ${PYTHON_EXECUTABLE})
-  endif()
-endif()
-
 if(HPX_WITH_TESTS)
   # pseudo_target added above
   add_subdirectory(tests)
@@ -2806,6 +2832,11 @@ endif()
 if(HPX_WITH_TOOLS OR HPX_WITH_TESTS_BENCHMARKS)
   add_hpx_pseudo_target(tools)
   add_subdirectory(tools)
+endif()
+
+# All performance reports are known now, add the target that plots them
+if(HPX_WITH_TESTS AND HPX_WITH_TESTS_RUN_BENCHMARKS)
+  hpx_add_perftests_plot_target()
 endif()
 
 # Configure hpxrun.py
@@ -2951,6 +2982,12 @@ if(PYTHONINTERP_FOUND OR Python_FOUND)
       GROUP_EXECUTE
       WORLD_READ
       WORLD_EXECUTE
+  )
+  install(
+    PROGRAMS "${PROJECT_SOURCE_DIR}/tools/hpx-top.py"
+             "${PROJECT_SOURCE_DIR}/tools/hpx_stat_viewer.py"
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT runtime
   )
 endif()
 

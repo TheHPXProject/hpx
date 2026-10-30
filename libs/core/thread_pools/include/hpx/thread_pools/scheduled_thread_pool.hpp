@@ -249,6 +249,7 @@ namespace hpx::threads::detail {
 #if defined(HPX_HAVE_THREAD_CUMULATIVE_COUNTS)
         std::int64_t get_executed_threads(std::size_t, bool) override;
         std::int64_t get_executed_thread_phases(std::size_t, bool) override;
+        void add_directly_executed_thread(std::size_t) override;
 #if defined(HPX_HAVE_THREAD_IDLE_RATES)
         std::int64_t get_thread_phase_duration(std::size_t, bool) override;
         std::int64_t get_thread_duration(std::size_t, bool) override;
@@ -313,8 +314,11 @@ namespace hpx::threads::detail {
 
     private:
         // store data for the various thread-specific counters together to
-        // reduce false sharing
-        struct scheduling_counter_data
+        // reduce false sharing; each worker writes its own element in the
+        // scheduling loop, so the elements are aligned to the destructive
+        // interference size
+        struct alignas(threads::get_destructive_interference_size())
+            scheduling_counter_data
         {
             // count number of executed HPX-threads and thread phases
             // (invocations)
@@ -402,8 +406,8 @@ namespace hpx::threads::detail {
         network_background_callback_type network_background_callback_;
 
         std::size_t max_background_threads_;
-        std::size_t max_idle_loop_count_;
-        std::size_t max_busy_loop_count_;
+        std::int64_t max_idle_loop_count_;
+        std::int64_t max_busy_loop_count_;
         std::size_t shutdown_check_count_;
     };
 }    // namespace hpx::threads::detail

@@ -19,14 +19,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.2
+    - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
-      run: |
-        md C:\projects
-        $client = new-object System.Net.WebClient
-        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z","C:\projects\vcpkg-export-hpx-dependencies.7z")
-        7z x C:\projects\vcpkg-export-hpx-dependencies.7z -y -oC:\projects\vcpkg
+      uses: ./.github/actions/setup-vcpkg
     - name: Configure
       shell: bash
       run: |
@@ -45,8 +41,7 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS=ON \
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=ON \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
-              -DHPX_WITH_TRACY=ON \
-              -DHPX_WITH_FETCH_TRACY=ON
+              -DHPX_WITH_TRACY=ON
     - name: Build
       shell: bash
       run: |

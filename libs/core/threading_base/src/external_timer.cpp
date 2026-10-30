@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 
 namespace hpx::util {
 
@@ -199,7 +200,7 @@ namespace hpx::tracing {
     }
 
     void tracing_init(char const* name, int, char**, std::uint32_t const rank,
-        std::uint32_t const size)
+        std::uint32_t const size, std::string_view)
     {
         util::external_timer::init(name, rank, size);
     }

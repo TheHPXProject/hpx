@@ -8,6 +8,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
+#include <hpx/execution/detail/post_policy_dispatch.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/functional.hpp>
@@ -287,15 +288,9 @@ namespace hpx::detail {
                 p.post(pool, desc.get_description(), policy);
 
             // make sure this thread is executed last
-            threads::thread_id_type const tid_self = threads::get_self_id();
-            if (tid && tid_self &&
-                get_thread_id_data(tid)->get_scheduler_base() ==
-                    get_thread_id_data(tid_self)->get_scheduler_base())
+            if (tid)
             {
-                // yield_to
-                hpx::this_thread::suspend(
-                    threads::thread_schedule_state::pending, tid.noref(),
-                    desc.get_description());
+                run_forked_thread(tid, desc.get_description());
 
                 auto runs_as_child = hint.runs_as_child_mode();
                 if (runs_as_child ==

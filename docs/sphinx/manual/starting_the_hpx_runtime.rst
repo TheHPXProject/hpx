@@ -61,8 +61,10 @@ runtime startup path without needing the header-triggered opt-in.
 
 .. note::
 
-    The use of ``HPX::auto_wrap_main`` is not supported when using the
-    native Windows MSVC toolchain.
+   When using the native Windows MSVC toolchain, ``HPX::auto_wrap_main``
+   force-includes ``hpx/hpx_main.hpp`` into all C++ source files of the
+   executable (using ``/FI``), as MSVC does not support the weak symbols the
+   wrapping relies on elsewhere.
 
 .. note::
 

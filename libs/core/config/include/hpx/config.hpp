@@ -171,6 +171,17 @@
 #  define HPX_AGAS_LOCAL_CACHE_SIZE 4096
 #endif
 
+/// This defines the default AGAS RPC timeout in milliseconds.
+///
+/// This value can be changed at runtime by setting the configuration parameter:
+/// \code
+///   hpx.agas.rpc_timeout = val
+/// \endcode
+/// (or by setting the corresponding environment variable HPX_AGAS_RPC_TIMEOUT)
+#if !defined(HPX_AGAS_RPC_TIMEOUT)
+#  define HPX_AGAS_RPC_TIMEOUT 60000
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 #if !defined(HPX_INITIAL_AGAS_MAX_PENDING_REFCNT_REQUESTS)
 #  define HPX_INITIAL_AGAS_MAX_PENDING_REFCNT_REQUESTS 4096
@@ -330,8 +341,23 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Count number of busy thread manager loop executions before forcefully
-// cleaning up terminated thread objects
+// Default number of consecutive empty thread manager loop executions after
+// which a worker of the local priority queue scheduler starts stealing staged
+// (not yet converted) tasks from other workers (unless fast idle mode is on,
+// in which case staged tasks are stolen right away; other schedulers start at
+// max_idle_loop_count / 2). Stealing staged tasks early takes load off the
+// pending queue of a busy worker, which all idle workers would otherwise pop
+// from concurrently. Until max_idle_loop_count / 2 empty iterations, only
+// workers that have at least HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY
+// staged tasks are stolen from. Can be changed at runtime with
+// hpx.thread_queue.idle_loop_count_steal_staged.
+#if !defined(HPX_IDLE_LOOP_COUNT_STEAL_STAGED)
+#  define HPX_IDLE_LOOP_COUNT_STEAL_STAGED 30
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Number of HPX threads a worker thread runs before it does background work
+// in between. Can be changed at runtime with hpx.max_busy_loop_count.
 #if !defined(HPX_BUSY_LOOP_COUNT_MAX)
 #  define HPX_BUSY_LOOP_COUNT_MAX 2000
 #endif
@@ -354,6 +380,18 @@
 // Minimum number of staged tasks required to steal tasks.
 #if !defined(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED)
 #  define HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED 0
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+// Minimum number of staged tasks a worker must have for other workers to steal
+// staged tasks from it early, i.e. after HPX_IDLE_LOOP_COUNT_STEAL_STAGED
+// instead of max_idle_loop_count / 2 empty loop iterations (used by the local
+// priority queue scheduler). A worker with only a few staged tasks converts
+// them soon itself; stealing those would move them away from the worker they
+// were placed on (and from the data in its caches). Can be changed at runtime
+// with hpx.thread_queue.min_tasks_to_steal_staged_early.
+#if !defined(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)
+#  define HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY 10
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -400,8 +438,9 @@
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
-// Maximum sleep time for idle backoff in milliseconds (used only if
-// HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is defined).
+// Maximum sleep time for idle backoff in microseconds (used only if
+// HPX_HAVE_THREAD_MANAGER_IDLE_BACKOFF is defined). Can be changed at runtime
+// with hpx.max_idle_backoff_time.
 #if !defined(HPX_IDLE_BACKOFF_TIME_MAX)
 #  define HPX_IDLE_BACKOFF_TIME_MAX 1000
 #endif

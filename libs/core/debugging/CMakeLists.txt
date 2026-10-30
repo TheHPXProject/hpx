@@ -9,6 +9,8 @@ set(debugging_headers
     hpx/debugging/backtrace.hpp
     hpx/debugging/backtrace/backtrace.hpp
     hpx/debugging/demangle_helper.hpp
+    hpx/debugging/detail/dbghelp_lock.hpp
+    hpx/debugging/detail/dbghelp_symbol_cache.hpp
     hpx/debugging/environ.hpp
     hpx/debugging/macros.hpp
     hpx/debugging/print.hpp
@@ -24,7 +26,9 @@ set(debugging_compat_headers
 )
 # cmake-format: on
 
-set(debugging_sources attach_debugger.cpp backtrace.cpp print.cpp)
+set(debugging_sources attach_debugger.cpp backtrace.cpp detail/dbghelp_lock.cpp
+                      detail/dbghelp_symbol_cache.cpp print.cpp
+)
 
 include(HPX_AddModule)
 add_hpx_module(
@@ -37,6 +41,6 @@ add_hpx_module(
   COMPAT_HEADERS ${debugging_compat_headers}
   EXCLUDE_FROM_GLOBAL_HEADER "hpx/debugging/backtrace/backtrace.hpp"
   DEPENDENCIES Asio::asio
-  MODULE_DEPENDENCIES hpx_config
+  MODULE_DEPENDENCIES hpx_cache hpx_config
   CMAKE_SUBDIRS examples tests
 )

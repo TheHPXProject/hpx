@@ -1,5 +1,6 @@
 //  Copyright (c) 2020-2025 Hartmut Kaiser
 //  Copyright (c) 2026 Anshuman Agrawal
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -12,6 +13,8 @@
 #include <hpx/hpx_init.hpp>
 #include <hpx/modules/collectives.hpp>
 #include <hpx/modules/testing.hpp>
+
+#include "hierarchical_roots.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -35,7 +38,7 @@ constexpr int ITERATIONS = 50;
 constexpr int ITERATIONS = 500;
 #endif
 
-void test_multiple_use(int arity = 2)
+void test_multiple_use(int arity = 2, std::uint32_t root = 0)
 {
     std::uint32_t const here = hpx::get_locality_id();
     std::uint32_t const num_localities =
@@ -45,14 +48,14 @@ void test_multiple_use(int arity = 2)
     auto const broadcast_clients = create_hierarchical_communicator(
         broadcast_direct_basename, num_sites_arg(num_localities),
         this_site_arg(here), arity_arg(arity), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        root_site_arg(root), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
     // test functionality based on immediate local result value
     for (std::uint32_t i = 0; i != ITERATIONS; ++i)
     {
-        if (here == 0)
+        if (here == root)
         {
             hpx::future<std::uint32_t> result =
                 broadcast_to(broadcast_clients, i + 42);
@@ -70,14 +73,14 @@ void test_multiple_use(int arity = 2)
     }
 
     auto const elapsed = t.elapsed();
-    if (here == 0)
+    if (here == root)
     {
         std::cout << "remote timing: " << elapsed / ITERATIONS << "[s]\n"
                   << std::flush;
     }
 }
 
-void test_multiple_use_with_generation(int arity = 2)
+void test_multiple_use_with_generation(int arity = 2, std::uint32_t root = 0)
 {
     std::uint32_t const here = hpx::get_locality_id();
     std::uint32_t const num_localities =
@@ -87,13 +90,13 @@ void test_multiple_use_with_generation(int arity = 2)
     auto const broadcast_clients = create_hierarchical_communicator(
         broadcast_direct_explicit_generation_basename,
         num_sites_arg(num_localities), this_site_arg(here), arity_arg(arity),
-        generation_arg(), root_site_arg(), flat_fallback_threshold_arg(0));
+        generation_arg(), root_site_arg(root), flat_fallback_threshold_arg(0));
 
     hpx::chrono::high_resolution_timer const t;
 
     for (std::uint32_t i = 0; i != ITERATIONS; ++i)
     {
-        if (here == 0)
+        if (here == root)
         {
             hpx::future<std::uint32_t> result = broadcast_to(broadcast_clients,
                 i + 42, this_site_arg(), generation_arg(i + 1));
@@ -111,7 +114,7 @@ void test_multiple_use_with_generation(int arity = 2)
     }
 
     auto const elapsed = t.elapsed();
-    if (here == 0)
+    if (here == root)
     {
         std::cout << "remote timing (with generation): " << elapsed / ITERATIONS
                   << "[s]\n"
@@ -119,7 +122,7 @@ void test_multiple_use_with_generation(int arity = 2)
     }
 }
 
-void test_local_use(std::uint32_t num_sites, int arity)
+void test_local_use(std::uint32_t num_sites, int arity, std::uint32_t root = 0)
 {
     std::vector<hpx::future<void>> sites;
     sites.reserve(num_sites);
@@ -131,14 +134,14 @@ void test_local_use(std::uint32_t num_sites, int arity)
             auto const broadcast_clients = create_hierarchical_communicator(
                 broadcast_direct_local_basename, num_sites_arg(num_sites),
                 this_site_arg(site), arity_arg(arity), generation_arg(),
-                root_site_arg(), flat_fallback_threshold_arg(0));
+                root_site_arg(root), flat_fallback_threshold_arg(0));
 
             hpx::chrono::high_resolution_timer const t;
 
             for (std::uint32_t i = 0; i != 10 * ITERATIONS; ++i)
             {
                 // test functionality based on immediate local result value
-                if (site == 0)
+                if (site == root)
                 {
                     hpx::future<std::uint32_t> result =
                         broadcast_to(broadcast_clients, 42 + i,
@@ -158,7 +161,7 @@ void test_local_use(std::uint32_t num_sites, int arity)
             }
 
             auto const elapsed = t.elapsed();
-            if (site == 0)
+            if (site == root)
             {
                 std::cout << "local timing (" << num_sites << "/" << arity
                           << "): " << elapsed / (10 * ITERATIONS) << "[s]\n"
@@ -192,30 +195,31 @@ void test_non_power_of_arity()
     }
 }
 
-// The hierarchical tree hardcodes site 0 as the root at every level, so
+// The hierarchical tree is rooted at the communicator's root site, so
 // broadcast_to (root-side) must reject any caller whose this_site matches a
 // non-root communicator, and broadcast_from (non-root-side) must reject
-// site 0. Both rejections happen before any communication.
-void test_hierarchical_role_rejected()
+// the root site. Both rejections happen before any communication.
+void test_hierarchical_role_rejected(std::uint32_t root = 0)
 {
-    constexpr char const* basename =
+    char const* const basename =
         "/test/broadcast_hierarchical/role_rejections/";
+    std::uint32_t const other = 1 - root;
 
     auto const root_comms = create_hierarchical_communicator(basename,
-        num_sites_arg(2), this_site_arg(0), arity_arg(2), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        num_sites_arg(2), this_site_arg(root), arity_arg(2), generation_arg(),
+        root_site_arg(root), flat_fallback_threshold_arg(0));
     (void) root_comms.get(0).get_id();
 
     auto const non_root_comms = create_hierarchical_communicator(basename,
-        num_sites_arg(2), this_site_arg(1), arity_arg(2), generation_arg(),
-        root_site_arg(), flat_fallback_threshold_arg(0));
+        num_sites_arg(2), this_site_arg(other), arity_arg(2), generation_arg(),
+        root_site_arg(root), flat_fallback_threshold_arg(0));
     (void) non_root_comms.get(0).get_id();
 
     bool broadcast_to_rejected = false;
     try
     {
         broadcast_to(hpx::launch::sync, non_root_comms, std::uint32_t(1),
-            this_site_arg(1), generation_arg(1));
+            this_site_arg(other), generation_arg(1));
     }
     catch (hpx::exception const& e)
     {
@@ -227,8 +231,8 @@ void test_hierarchical_role_rejected()
     bool broadcast_from_rejected = false;
     try
     {
-        hpx::collectives::broadcast_from<std::uint32_t>(
-            hpx::launch::sync, root_comms, this_site_arg(0), generation_arg(1));
+        hpx::collectives::broadcast_from<std::uint32_t>(hpx::launch::sync,
+            root_comms, this_site_arg(root), generation_arg(1));
     }
     catch (hpx::exception const& e)
     {
@@ -263,8 +267,10 @@ int hpx_main()
 #if defined(HPX_HAVE_NETWORKING)
     if (hpx::get_num_localities(hpx::launch::sync) > 1)
     {
-        test_multiple_use();
-        test_multiple_use_with_generation();
+        for_each_distributed_root([](std::uint32_t root) {
+            test_multiple_use(2, root);
+            test_multiple_use_with_generation(2, root);
+        });
     }
 #endif
 
@@ -288,7 +294,14 @@ int hpx_main()
         }
 
         test_non_power_of_arity();
+
+        // non-zero roots on balanced and uneven trees
+        for_each_local_root([](std::uint32_t n, int arity, std::uint32_t root) {
+            test_local_use(n, arity, root);
+        });
+
         test_hierarchical_role_rejected();
+        test_hierarchical_role_rejected(1);
         test_flat_basename_site_equals_root_rejected();
     }
 

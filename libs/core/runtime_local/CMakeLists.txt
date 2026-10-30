@@ -137,6 +137,7 @@ add_hpx_module(
     hpx_tracing
     hpx_type_support
     hpx_util
+    hpx_version
     ${additional_dependencies}
   CMAKE_SUBDIRS examples tests
 )

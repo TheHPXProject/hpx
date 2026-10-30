@@ -5,6 +5,7 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
 set(tests
+    chunk_size_larger_than_count
     chunk_size_variable_regression
     count_3646
     fill_executor_5016

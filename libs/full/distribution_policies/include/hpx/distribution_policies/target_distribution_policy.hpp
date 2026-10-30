@@ -39,7 +39,7 @@ namespace hpx::components {
         /// Create a new \a target_distribution_policy representing the given
         /// locality
         ///
-        /// \param loc     [in] The locality the new instance should
+        /// \param id      [in] The locality the new instance should
         ///                 represent
         target_distribution_policy operator()(id_type const& id) const
         {

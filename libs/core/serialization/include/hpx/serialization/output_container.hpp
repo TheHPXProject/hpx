@@ -299,7 +299,8 @@ namespace hpx::serialization {
             }
 
             // add a new serialization_chunk referring to the external buffer
-            chunker_.push_back(create_pointer_chunk(address, count));
+            // (immutable on the save path; see #812)
+            chunker_.push_back(create_const_pointer_chunk(address, count));
 
             // the container did grow only if the type information needed to
             // be stored

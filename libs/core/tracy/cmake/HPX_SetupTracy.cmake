@@ -6,33 +6,14 @@
 
 include(HPX_AddDefinitions)
 
-# compatibility with older CMake versions
-if(TRACY_ROOT AND NOT Tracy_ROOT)
-  set(Tracy_ROOT
-      ${TRACY_ROOT}
-      CACHE PATH "Tracy base directory"
-  )
-  unset(TRACY_ROOT CACHE)
-endif()
-
-if(NOT HPX_WITH_FETCH_TRACY)
-  find_package(Tracy)
-  if(NOT Tracy_FOUND)
-    hpx_error(
-      "Could not find Tracy. Set Tracy_ROOT as a CMake or environment variable to point to the Tracy root install directory. Alternatively, set HPX_WITH_FETCH_TRACY=ON to fetch Tracy using CMake's FetchContent (when using this option Asio will be installed together with HPX, be careful about conflicts with separately installed versions of Tracy)."
-    )
-  endif()
-  if(TARGET Tracy::TracyClient AND NOT TARGET tracy::tracy)
-    add_library(tracy::tracy ALIAS Tracy::TracyClient)
-  endif()
-elseif(NOT TARGET tracy::tracy)
+if(NOT TARGET tracy::tracy)
   if(FETCHCONTENT_SOURCE_DIR_TRACY)
     hpx_info(
-      "HPX_WITH_FETCH_TRACY=${HPX_WITH_FETCH_TRACY}, Tracy will be used through CMake's FetchContent and installed alongside HPX (FETCHCONTENT_SOURCE_DIR_TRACY=${FETCHCONTENT_SOURCE_DIR_TRACY})"
+      "Tracy will be used through CMake's FetchContent from FETCHCONTENT_SOURCE_DIR_TRACY=${FETCHCONTENT_SOURCE_DIR_TRACY}"
     )
   else()
     hpx_info(
-      "HPX_WITH_FETCH_TRACY=${HPX_WITH_FETCH_TRACY}, TRACY will be fetched using CMake's FetchContent and installed alongside HPX (HPX_WITH_TRACY_TAG=${HPX_WITH_TRACY_TAG})"
+      "Tracy will be fetched using CMake's FetchContent (HPX_WITH_TRACY_TAG=${HPX_WITH_TRACY_TAG})"
     )
   endif()
 
@@ -46,7 +27,10 @@ elseif(NOT TARGET tracy::tracy)
 
   # Set the correct build options for Tracy and make it available. 0.14 defaults
   # TRACY_ENABLE OFF; without forcing it on, a HPX build with HPX_WITH_TRACY=ON
-  # compiles, links, and records nothing.
+  # compiles, links, and records nothing. TRACY_STATIC=ON keeps TracyClient a
+  # static library even under BUILD_SHARED_LIBS=ON, so its link step does not
+  # need HpxDbgHelp* to be resolvable outside hpx_tracy (LTO still picks OBJECT
+  # visibility and is unaffected).
   set(TRACY_ENABLE
       ON
       CACHE BOOL "" FORCE
@@ -56,6 +40,10 @@ elseif(NOT TARGET tracy::tracy)
       CACHE BOOL "" FORCE
   )
   set(TRACY_ON_DEMAND
+      ON
+      CACHE BOOL "" FORCE
+  )
+  set(TRACY_STATIC
       ON
       CACHE BOOL "" FORCE
   )
@@ -72,6 +60,12 @@ elseif(NOT TARGET tracy::tracy)
   target_compile_definitions(
     TracyClient PUBLIC $<$<CONFIG:Debug>:TRACY_VERBOSE>
   )
+  # Serialise Tracy's DbgHelp calls against HPX's own via the wrappers in
+  # hpx_debugging (dbghelp_lock.cpp). TracyClient is static (forced above), so
+  # HpxDbgHelp* resolves when hpx_tracy links.
+  if(WIN32)
+    target_compile_definitions(TracyClient PUBLIC TRACY_DBGHELP_LOCK=HpxDbgHelp)
+  endif()
   target_compile_features(TracyClient PRIVATE cxx_std_${HPX_CXX_STANDARD})
 
   # cmake-format: off
@@ -87,24 +81,45 @@ elseif(NOT TARGET tracy::tracy)
     tracy SYSTEM INTERFACE $<BUILD_INTERFACE:${TRACY_ROOT}/public>
                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   )
-  target_link_libraries(tracy INTERFACE TracyClient)
+
+  # Static builds link TracyClient into consumers, so it must ship and be
+  # exported. Shared builds absorb it into hpx_core, so tracy only needs it at
+  # build time and the wrapper alone goes in the export set.
+  set(tracy_targets tracy)
+  if(HPX_WITH_STATIC_LINKING)
+    list(APPEND tracy_targets TracyClient)
+    target_link_libraries(tracy INTERFACE TracyClient)
+  else()
+    target_link_libraries(tracy INTERFACE $<BUILD_INTERFACE:TracyClient>)
+  endif()
 
   install(
-    TARGETS tracy
+    TARGETS ${tracy_targets}
     EXPORT HPXTracyTarget
     COMPONENT core
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   )
 
-  install(
-    DIRECTORY ${TRACY_ROOT}/public/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    COMPONENT core
-    FILES_MATCHING
-    PATTERN "*.hpp"
-  )
+  # Only static builds ship Tracy's headers, next to the exported TracyClient.
+  # libbacktrace is Tracy's bundled internal impl; its headers include a generic
+  # config.h that would collide with any consumer's own build. Tracy's upstream
+  # install(FILES) excludes it for the same reason.
+  if(HPX_WITH_STATIC_LINKING)
+    install(
+      DIRECTORY ${TRACY_ROOT}/public/
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+      COMPONENT core
+      FILES_MATCHING
+      PATTERN "*.hpp"
+      PATTERN "*.h"
+      PATTERN "libbacktrace" EXCLUDE
+    )
+  endif()
 
   export(
-    TARGETS tracy
+    TARGETS ${tracy_targets}
     NAMESPACE tracy::
     FILE "${CMAKE_BINARY_DIR}/lib/cmake/${HPX_PACKAGE_NAME}/HPXTracyTarget.cmake"
   )

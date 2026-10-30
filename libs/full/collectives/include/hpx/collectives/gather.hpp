@@ -1,5 +1,6 @@
 //  Copyright (c) 2014-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -398,7 +399,6 @@ namespace hpx { namespace collectives {
 
 #include <hpx/config.hpp>
 
-#if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/assert.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/async_distributed.hpp>
@@ -591,9 +591,10 @@ namespace hpx::collectives {
                     std::vector<std::decay_t<T>>>(error);
             }
 
-            if (auto const error = validate_hierarchical_root_caller(this_site,
-                    "hpx::collectives::gather_here (hierarchical)",
-                    "gather_here"))
+            if (auto const error =
+                    validate_hierarchical_root_caller(communicators, this_site,
+                        "hpx::collectives::gather_here (hierarchical)",
+                        "gather_here"))
             {
                 return hpx::make_exceptional_future<
                     std::vector<std::decay_t<T>>>(error);
@@ -618,14 +619,14 @@ namespace hpx::collectives {
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 result = gather_here_impl<uniform_rows<value_type>>(
-                    communicators.get(i), HPX_MOVE(result), this_site_arg(0),
-                    run_gen, run_step)
+                    communicators.get(i), HPX_MOVE(result),
+                    communicators.site(i), run_gen, run_step)
                              .get();
             }
 
             return hpx::make_future<std::vector<value_type>>(
                 gather_here_impl<uniform_rows<value_type>>(communicators.get(0),
-                    HPX_MOVE(result), this_site_arg(0), run_gen, run_step),
+                    HPX_MOVE(result), communicators.site(0), run_gen, run_step),
                 [](uniform_rows<value_type>&& data) {
                     return HPX_MOVE(data).unwrap_values();
                 });
@@ -786,7 +787,8 @@ namespace hpx::collectives {
             }
 
             if (auto const error = validate_hierarchical_non_root_caller(
-                    this_site, "hpx::collectives::gather_there (hierarchical)",
+                    communicators, this_site,
+                    "hpx::collectives::gather_there (hierarchical)",
                     "gather_here"))
             {
                 return hpx::make_exceptional_future<void>(error);
@@ -811,7 +813,7 @@ namespace hpx::collectives {
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 data = gather_here_impl<uniform_rows<value_type>>(
-                    communicators.get(i), HPX_MOVE(data), this_site_arg(0),
+                    communicators.get(i), HPX_MOVE(data), communicators.site(i),
                     run_gen, run_step)
                            .get();
             }
@@ -904,5 +906,4 @@ namespace hpx::collectives {
 ///////////////////////////////////////////////////////////////////////////////
 #define HPX_REGISTER_GATHER(...)             /**/
 
-#endif    // !HPX_COMPUTE_DEVICE_CODE
 #endif    // DOXYGEN

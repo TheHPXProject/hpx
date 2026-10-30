@@ -7,6 +7,10 @@
 
 #pragma once
 
+// This header may be force-included into all sources of a target (see
+// HPX::auto_wrap_main on MSVC), so make it a no-op for non-C++ sources.
+#if defined(__cplusplus)
+
 #include <hpx/wrap_main.hpp>
 
 #if defined(HPX_HAVE_RUN_MAIN_EVERYWHERE)
@@ -25,5 +29,7 @@ namespace hpx_startup {
 
     inline register_user_main_config cfg;
 }    // namespace hpx_startup
+
+#endif
 
 #endif

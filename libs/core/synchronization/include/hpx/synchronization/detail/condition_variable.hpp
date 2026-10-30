@@ -167,6 +167,10 @@ namespace hpx::lcos::local::detail {
 
     private:
         queue_type queue_;
+
+        // number of abort_all() calls currently draining the queue, new
+        // waiters are rejected while this is non-zero (protected by the lock)
+        std::size_t aborting_ = 0;
     };
 
     ///////////////////////////////////////////////////////////////////////////

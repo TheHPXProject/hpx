@@ -118,6 +118,7 @@ _DOXYGEN_KIND_TO_DIRECTIVE = {
     'class': 'doxygenclass',
     'struct': 'doxygenstruct',
     'union': 'doxygenclass',
+    'define': 'doxygendefine',
     'variable': 'doxygenvariable',
     'enum': 'doxygenenum',
     'typedef': 'doxygentypedef',
@@ -224,10 +225,15 @@ def _load_doxygen_symbol_kinds():
                 if name_el is None or not name_el.text:
                     continue
                 name = name_el.text.strip()
-                qualname = f'{compoundname}::{name}' if compoundname else name
                 member_directive = _DOXYGEN_KIND_TO_DIRECTIVE.get(
                     memberdef.get('kind'))
                 if member_directive:
+                    # Doxygen records macros as members of their defining
+                    # file, while their documented API names are unqualified.
+                    # Other members are qualified with their enclosing
+                    # namespace/class as above.
+                    qualname = (name if memberdef.get('kind') == 'define'
+                        else f'{compoundname}::{name}' if compoundname else name)
                     kinds[qualname] = member_directive
     _symbol_kinds_by_qualname = kinds
     return kinds

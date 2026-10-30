@@ -1,5 +1,6 @@
 //  Copyright (c) 2007-2022 Hartmut Kaiser
 //  Copyright (c) 2016 Agustin Berge
+//  Copyright (c) 2026 the-ivii
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -79,3 +80,16 @@ namespace hpx::traits {
             is_future_or_future_range<R>::value;
     }    // namespace detail
 }    // namespace hpx::traits
+
+namespace hpx {
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// Detect a range of futures.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept future_range = hpx::traits::is_future_range_v<T>;
+
+    /// Detect a reference wrapper containing a range of futures.
+    HPX_CXX_CORE_EXPORT template <typename T>
+    concept ref_wrapped_future_range =
+        hpx::traits::is_ref_wrapped_future_range_v<T>;
+}    // namespace hpx

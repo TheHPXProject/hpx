@@ -12,6 +12,14 @@
 
 namespace hpx::threads::policies {
 
+    /// This enumeration describes how schedulers steal work across NUMA
+    /// domain boundaries.
+    HPX_CXX_CORE_EXPORT enum class numa_sensitive_mode : std::uint8_t {
+        none = 0,
+        boundary = 1,
+        strict = 2
+    };
+
     /// This enumeration describes the possible modes of a scheduler.
     HPX_CXX_CORE_EXPORT enum class scheduler_mode : std::uint32_t {
         /// As the name suggests, this option can be used to disable all other

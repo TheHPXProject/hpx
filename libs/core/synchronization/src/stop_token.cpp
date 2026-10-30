@@ -221,7 +221,7 @@ namespace hpx::detail {
             // Callback is currently executing on another thread,
             // block until it finishes executing.
             for (std::size_t k = 0; !cb->callback_finished_executing_.load(
-                     std::memory_order_relaxed);
+                     std::memory_order_acquire);
                 ++k)
             {
                 hpx::execution_base::this_thread::yield_k(

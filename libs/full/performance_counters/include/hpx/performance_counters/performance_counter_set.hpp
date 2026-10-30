@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,6 +81,16 @@ namespace hpx::performance_counters {
         std::vector<hpx::future<bool>> start();
         bool start(launch::sync_policy, error_code& ec = throws);
 
+        /// \brief Start only the counters at index \a first and beyond.
+        ///
+        /// Used to start just the counters that were most
+        /// recently discovered (see refresh_counters()),
+        /// instead of restarting counters that are already
+        /// running.
+        std::vector<hpx::future<bool>> start(std::size_t first);
+        bool start(
+            launch::sync_policy, std::size_t first, error_code& ec = throws);
+
         /// Stop all counters in this set
         std::vector<hpx::future<bool>> stop();
         bool stop(launch::sync_policy, error_code& ec = throws);
@@ -108,7 +119,7 @@ namespace hpx::performance_counters {
             return get_values<T>(reset).get(ec);
         }
 
-        std::size_t get_invocation_count() const;
+        std::uint64_t get_invocation_count() const;
 
     protected:
         bool find_counter(counter_info const& info, bool reset, error_code& ec);
@@ -130,6 +141,12 @@ namespace hpx::performance_counters {
         std::vector<counter_info> infos_;    // counter instance names
         std::vector<hpx::id_type> ids_;      // global ids of counter instances
         std::vector<std::uint8_t> reset_;    // != 0 if counter should be reset
+
+        // fullnames already in infos_ mapped to their index in infos_/ids_/
+        // reset_, kept in sync for O(log N) duplicate detection and so a
+        // later discovery requesting reset() for an already-known counter
+        // can promote its reset_ entry in place.
+        std::map<std::string, std::size_t> known_names_;
 
         mutable std::uint64_t invocation_count_;
         bool print_counters_locally_;    // handle only local counters

@@ -780,7 +780,7 @@ namespace hpx {
         }
 
         /// \copybrief hpx::future::then(F&& f, error_code& ec = throws)
-        /// \copydetail hpx::future::then(F&& f, error_code& ec = throws)
+        /// \copydetails hpx::future::then(F&& f, error_code& ec = throws)
         ///
         /// \tparam T0          The type of executor or launch policy.
         /// \tparam F           The type of the function/function object to use
@@ -1082,7 +1082,9 @@ namespace hpx {
         //   - shared_future<void>::get() returns nothing.
         // Throws: the stored exception, if an exception was stored in the
         //         shared state.
-        // Postcondition: valid() == false.
+        // Postcondition: valid() is unchanged. Unlike future::get(), the
+        //                shared state is not released, so get() can be called
+        //                again and refers to the same stored value.
         hpx::traits::future_traits<shared_future>::result_type get()
             const    //-V659
             HPX_PRE(this->valid())
@@ -1328,7 +1330,10 @@ namespace hpx {
     }
     ///////////////////////////////////////////////////////////////////////////
     // extension: create a pre-initialized future object, with allocator
-    /// \copydoc make_ready_future_alloc(Allocator const& a, Ts&&... ts)
+    /// \brief Creates a pre-initialized future object with an allocator.
+    ///
+    /// \param a The allocator used to create the future's shared state.
+    /// \param init The value used to initialize the future.
     HPX_CXX_CORE_EXPORT template <int DeductionGuard = 0, typename Allocator,
         typename T>
     future<hpx::util::decay_unwrap_t<T>> make_ready_future_alloc(
@@ -1418,7 +1423,9 @@ namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
     // extension: create a pre-initialized future object, with allocator
-    /// \copydoc make_ready_future_alloc(Allocator const& a, Ts&&... ts)
+    /// \brief Creates a pre-initialized void future object with an allocator.
+    ///
+    /// \param a The allocator used to create the future's shared state.
     HPX_CXX_CORE_EXPORT template <typename Allocator>
     inline future<void> make_ready_future_alloc(Allocator const& a)
     {
@@ -1435,7 +1442,7 @@ namespace hpx {
     }
 
     // Extension (see wg21.link/P0319)
-    /// \copydoc make_ready_future(T&& init)
+    /// \brief Creates a pre-initialized void future object.
     HPX_CXX_CORE_EXPORT template <typename T>
     HPX_FORCEINLINE std::enable_if_t<std::is_void_v<T>, future<void>>
     make_ready_future()
@@ -1460,7 +1467,10 @@ namespace hpx {
         return hpx::traits::future_access<future<void>>::create(HPX_MOVE(p));
     }
 
-    /// \copydoc make_ready_future_at(hpx::chrono::steady_time_point const& abs_time, T&& init)
+    /// \brief Creates a pre-initialized void future object that becomes ready
+    ///        at the given time.
+    ///
+    /// \param abs_time The time at which the future becomes ready.
     HPX_CXX_CORE_EXPORT template <typename T>
     std::enable_if_t<std::is_void_v<T>, future<void>> make_ready_future_at(
         hpx::chrono::steady_time_point const& abs_time)
@@ -1476,7 +1486,10 @@ namespace hpx {
         return hpx::make_ready_future_at(rel_time.from_now());
     }
 
-    /// \copydoc make_ready_future_after(hpx::chrono::steady_duration const& rel_time, T&& init)
+    /// \brief Creates a pre-initialized void future object that becomes ready
+    ///        after the given duration.
+    ///
+    /// \param rel_time The duration after which the future becomes ready.
     HPX_CXX_CORE_EXPORT template <typename T>
     std::enable_if_t<std::is_void_v<T>, future<void>> make_ready_future_after(
         hpx::chrono::steady_duration const& rel_time)

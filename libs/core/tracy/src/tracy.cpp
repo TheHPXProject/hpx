@@ -26,6 +26,16 @@ namespace hpx::tracy {
         ::tracy::SetThreadName(name);
     }
 
+    bool is_profiler_connected() noexcept
+    {
+        return ___tracy_connected() != 0;
+    }
+
+    void emit_appinfo(char const* text, std::size_t size) noexcept
+    {
+        TracyCAppInfo(text, size);
+    }
+
     namespace detail {
 
         // Expose Tracy fibers support

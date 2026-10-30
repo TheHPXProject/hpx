@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2026 Sai Charan Arvapally
 //  Copyright (c) 2016 Marcin Copik
 //
@@ -6,7 +6,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/execution/execution_policy.hpp
+/// \file execution_policy.hpp
 /// \page hpx::execution::seq, hpx::execution::par, hpx::execution::par_unseq, hpx::execution::task, hpx::execution::sequenced_policy, hpx::execution::parallel_policy, hpx::execution::parallel_unsequenced_policy, hpx::execution::sequenced_task_policy, hpx::execution::parallel_task_policy
 /// \headerfile hpx/execution.hpp
 
@@ -190,8 +190,9 @@ namespace hpx::execution {
                     hpx::traits::is_executor_any_v<std::decay_t<Executor_>>,
                     "hpx::traits::is_executor_any_v<Executor>");
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_FORWARD(Executor_, exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(
+                        derived(), HPX_FORWARD(Executor_, exec));
             }
 
             // Create a new execution policy from the given execution parameters
@@ -211,10 +212,10 @@ namespace hpx::execution {
             template <typename... Parameters_>
             constexpr decltype(auto) with(Parameters_&&... params) const
             {
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), executor(),
-                    hpx::execution::experimental::join_executor_parameters(
-                        HPX_FORWARD(Parameters_, params)...));
+                return hpx::execution::experimental::
+                    create_rebound_policy_parameters(derived(),
+                        hpx::execution::experimental::join_executor_parameters(
+                            HPX_FORWARD(Parameters_, params)...));
             }
 
         public:
@@ -244,7 +245,8 @@ namespace hpx::execution {
             }
 
             // Scheduling property query implementations forward to the
-            // embedded executor and rebound through create_rebound_policy.
+            // embedded executor and rebound through
+            // create_rebound_policy_executor.
             template <scheduling_property Tag, typename Property>
                 requires(!std::is_same_v<Tag,
                              hpx::execution::experimental::
@@ -252,9 +254,9 @@ namespace hpx::execution {
                     std::invocable<Tag, executor_type, Property>)
             [[nodiscard]] auto query(Tag tag, Property&& prop) const
             {
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), tag(executor(), HPX_FORWARD(Property, prop)),
-                    parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(),
+                        tag(executor(), HPX_FORWARD(Property, prop)));
             }
 
             template <scheduling_property Tag>
@@ -275,8 +277,8 @@ namespace hpx::execution {
                 auto exec = hpx::execution::experimental::with_annotation(
                     executor(), annotation);
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
             [[nodiscard]] auto query(
@@ -289,8 +291,8 @@ namespace hpx::execution {
                 auto exec = hpx::execution::experimental::with_annotation(
                     executor(), HPX_MOVE(annotation));
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
             [[nodiscard]] decltype(auto) query(
@@ -320,8 +322,9 @@ namespace hpx::execution {
                     auto exec = hpx::execution::experimental::
                         with_processing_units_count(executor(), num_cores);
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
                 else if constexpr (requires(exec_type e) {
                                        e.num_cores_;
@@ -335,16 +338,18 @@ namespace hpx::execution {
                     }
                     exec.num_cores_ = num_cores;
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
                 else
                 {
                     auto exec = hpx::execution::experimental::
                         with_processing_units_count(executor(), num_cores);
 
-                    return hpx::execution::experimental::create_rebound_policy(
-                        derived(), HPX_MOVE(exec), parameters());
+                    return hpx::execution::experimental::
+                        create_rebound_policy_executor(
+                            derived(), HPX_MOVE(exec));
                 }
             }
 
@@ -367,12 +372,11 @@ namespace hpx::execution {
                             HPX_FORWARD(Params, params), executor(),
                             hpx::chrono::null_duration, 0));
 
-                return hpx::execution::experimental::create_rebound_policy(
-                    derived(), HPX_MOVE(exec), parameters());
+                return hpx::execution::experimental::
+                    create_rebound_policy_executor(derived(), HPX_MOVE(exec));
             }
 
         private:
-            friend struct hpx::execution::experimental::create_rebound_policy_t;
             friend class hpx::serialization::access;
 
             template <typename Archive>
@@ -407,6 +411,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr sequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~sequenced_task_policy_shim() {}
@@ -485,6 +494,10 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+
             constexpr sequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~sequenced_policy_shim() {}
@@ -564,6 +577,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_async = true;
+
             constexpr parallel_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_task_policy_shim() {}
@@ -640,6 +658,10 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+
             constexpr parallel_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_policy_shim() {}
@@ -740,6 +762,12 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_unsequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr parallel_unsequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_unsequenced_task_policy_shim() {}
@@ -814,6 +842,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_parallel = true;
+            static constexpr bool is_unsequenced = true;
+
             constexpr parallel_unsequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~parallel_unsequenced_policy_shim() {}
@@ -897,6 +930,12 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_unsequenced = true;
+            static constexpr bool is_async = true;
+
             constexpr unsequenced_task_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~unsequenced_task_policy_shim() {}
@@ -967,6 +1006,11 @@ namespace hpx::execution {
 
         public:
             /// \cond NOINTERNAL
+            static constexpr bool is_policy = true;
+            static constexpr bool is_rebound = true;
+            static constexpr bool is_sequenced = true;
+            static constexpr bool is_unsequenced = true;
+
             constexpr unsequenced_policy_shim() = default;
 #if defined(__NVCC__) || defined(__CUDACC__)
             constexpr ~unsequenced_policy_shim() {}
@@ -1290,6 +1334,7 @@ namespace hpx::execution {
         }
 
         ///////////////////////////////////////////////////////////////////////
+        /// \cond NOINTERNAL
         template <template <class, class> typename Derived, typename Executor,
             typename Parameters, typename Category>
         template <typename Tag, typename Enable>
@@ -1299,249 +1344,9 @@ namespace hpx::execution {
         {
             return tag(derived());
         }
+        /// \endcond
     }    // namespace detail
 }    // namespace hpx::execution
-
-namespace hpx::detail {
-
-    ///////////////////////////////////////////////////////////////////////////
-    // Allow to detect execution policies which were created as a result of a
-    // rebind operation. This information can be used to inhibit the
-    // construction of a generic execution_policy from any of the rebound
-    // policies.
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<
-        hpx::execution::detail::sequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<hpx::execution::detail::
-            sequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<
-        hpx::execution::detail::parallel_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<
-        hpx::execution::detail::parallel_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<
-        hpx::execution::detail::unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<hpx::execution::detail::
-            unsequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_rebound_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    ////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<
-        hpx::execution::detail::parallel_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<
-        hpx::execution::detail::unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<
-        hpx::execution::detail::sequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    // extension
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<hpx::execution::detail::
-            sequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<
-        hpx::execution::detail::parallel_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<hpx::execution::detail::
-            unsequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<
-        hpx::execution::detail::parallel_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<
-        hpx::execution::detail::parallel_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_parallel_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<hpx::execution::detail::
-            sequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<
-        hpx::execution::detail::sequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<
-        hpx::execution::detail::unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_sequenced_execution_policy<hpx::execution::detail::
-            unsequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<hpx::execution::detail::
-            sequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<
-        hpx::execution::detail::parallel_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<hpx::execution::detail::
-            unsequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_async_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    ///////////////////////////////////////////////////////////////////////////
-    /// \cond NOINTERNAL
-    template <typename Executor, typename Parameters>
-    struct is_unsequenced_execution_policy<
-        hpx::execution::detail::unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_unsequenced_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_unsequenced_execution_policy<hpx::execution::detail::
-            unsequenced_task_policy_shim<Executor, Parameters>> : std::true_type
-    {
-    };
-
-    template <typename Executor, typename Parameters>
-    struct is_unsequenced_execution_policy<hpx::execution::detail::
-            parallel_unsequenced_task_policy_shim<Executor, Parameters>>
-      : std::true_type
-    {
-    };
-    /// \endcond
-
-    /// \endcond
-}    // namespace hpx::detail
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::execution::experimental {
