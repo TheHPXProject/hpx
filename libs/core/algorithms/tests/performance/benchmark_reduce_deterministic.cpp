@@ -64,7 +64,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     auto test_count = vm["test_count"].as<int>();
     std::size_t vector_size = vm["vector-size"].as<std::size_t>();
 
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "benchmark_reduce_deterministic");
 
     // verify that input is within domain of program
     if (test_count == 0 || test_count < 0)
@@ -204,7 +204,7 @@ int main(int argc, char* argv[])
     // clang-format off
     cmdline.add_options()
         ("test_count", value<int>()->default_value(100),
-            "number of tests to be averaged")
+            "number of tests to be averaged (default: 100)")
         ("vector-size", value<std::size_t>()->default_value(1000000),
             "number of elements to be reduced")
         ;

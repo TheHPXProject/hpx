@@ -11,6 +11,7 @@
 
 #include <hpx/async_colocated/async_colocated_fwd.hpp>
 
+/// \cond NOINTERNAL
 namespace hpx::detail {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -43,3 +44,4 @@ namespace hpx::detail {
         hpx::actions::basic_action<Component, Signature, Derived> /*act*/,
         hpx::id_type const& id, Callback&& cb, Ts&&... vs);
 }    // namespace hpx::detail
+/// \endcond

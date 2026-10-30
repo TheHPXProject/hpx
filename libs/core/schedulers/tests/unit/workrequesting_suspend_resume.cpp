@@ -52,8 +52,12 @@ void busy_task()
 
 std::vector<hpx::future<void>> spawn_on_worker_0(std::size_t count)
 {
-    hpx::execution::parallel_executor exec(
-        hpx::threads::thread_schedule_hint(0));
+    // with run_as_child the waiting parent can run these tasks itself, so
+    // there would be nothing left for the other workers to steal; revisit
+    // once a worker running children inline answers steal requests (#7789)
+    hpx::threads::thread_schedule_hint hint(0);
+    hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+    hpx::execution::parallel_executor exec(hint);
 
     std::vector<hpx::future<void>> fs;
     fs.reserve(count);

@@ -17,6 +17,7 @@
 namespace hpx {
 
     ///////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     namespace detail {
 
         HPX_CXX_EXPORT template <typename Action, typename RemoteResult,
@@ -26,6 +27,7 @@ namespace hpx {
         async_continue_r_cb(
             Cont&& cont, Target const& target, Callback&& cb, Ts&&... vs);
     }    // namespace detail
+    /// \endcond
 
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_EXPORT template <typename Action, typename Cont, typename Callback,

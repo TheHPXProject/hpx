@@ -47,9 +47,8 @@ namespace hpx::experimental {
     /// \param var      [in,out] The life-out value to use for the reduction
     ///                 object. This will hold the reduced value after the
     ///                 algorithm is finished executing.
-    /// \param identity [in] The identity value to use for the reduction
-    ///                 operation. This argument is optional and defaults to a
-    ///                 copy of \a var.
+    /// The optional \a identity value is used for the reduction operation and
+    /// defaults to \c T().
     ///
     /// T shall meet the requirements of \a CopyConstructible and
     /// \a MoveAssignable.

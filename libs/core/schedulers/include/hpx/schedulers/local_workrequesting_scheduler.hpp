@@ -701,7 +701,7 @@ namespace hpx::threads::policies {
             error_code& ec) override
         {
             std::size_t num_thread =
-                data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 data.schedulehint.hint :
                 static_cast<std::size_t>(-1);
 
@@ -1096,7 +1096,7 @@ namespace hpx::threads::policies {
             thread_priority priority = thread_priority::default_) override
         {
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode == thread_schedule_hint_mode::thread)
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
                 num_thread = schedulehint.hint;
             }
@@ -1166,7 +1166,7 @@ namespace hpx::threads::policies {
             thread_priority priority = thread_priority::default_) override
         {
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode == thread_schedule_hint_mode::thread)
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
                 num_thread = schedulehint.hint;
             }
@@ -1706,6 +1706,82 @@ namespace hpx::threads::policies {
             }
         }
 
+        // True while a bound thread created on this worker has not
+        // terminated. It runs only here, so the worker must not leave its
+        // scheduling loop: a thread being woken is marked pending before it
+        // is queued, and in between neither the suspended threads nor the
+        // queue length show it (see scheduling_loop).
+        bool has_live_bound_threads(std::size_t num_thread) const
+        {
+            HPX_ASSERT(num_thread < num_queues_);
+            return data_[num_thread].data_.bound_queue_->get_thread_count() !=
+                0;
+        }
+
+        // Called by the scheduling loop of the last worker to leave during
+        // shutdown while it takes over the work left (see scheduling_loop). A
+        // worker that has left its scheduling loop doesn't answer steal
+        // requests anymore, and nobody but its owner runs a worker's bound
+        // threads: move the work left on its queues to the queues of this
+        // worker. This returns true if any work was moved.
+        bool take_over_work(std::size_t num_thread)
+        {
+            HPX_ASSERT(num_thread < num_queues_);
+
+            auto& d = data_[num_thread].data_;
+            std::size_t added = 0;
+
+            // pending threads, without applying the stealing minimum
+            auto const move_pending = [&added](thread_queue_type* from,
+                                          thread_queue_type* to) {
+                while (true)
+                {
+                    thread_id_ref_type thrd;
+                    if (!from->get_next_thread(thrd, false, true))
+                        return;
+                    to->schedule_thread(HPX_MOVE(thrd), true);
+                    ++added;
+                }
+            };
+
+            for (std::size_t i = 0; i != num_queues_; ++i)
+            {
+                if (i == d.num_thread_ ||
+                    this->get_state(i).load(std::memory_order_relaxed) !=
+                        hpx::state::stopped)
+                {
+                    continue;
+                }
+
+                auto& victim = data_[i].data_;
+
+                if (i < num_high_priority_queues_)
+                {
+                    move_pending(victim.high_priority_queue_,
+                        d.num_thread_ < num_high_priority_queues_ ?
+                            d.high_priority_queue_ :
+                            d.queue_);
+                }
+                move_pending(victim.queue_, d.queue_);
+
+                // staged threads (running == false skips the minimum)
+                d.queue_->wait_or_add_new(false, added, victim.queue_, true);
+
+                // bound threads stay bound, to this worker now
+                d.bound_queue_->wait_or_add_new(
+                    false, added, victim.bound_queue_, true);
+                move_pending(victim.bound_queue_, d.bound_queue_);
+
+                // only the last worker runs the low priority threads
+                if (i == num_queues_ - 1)
+                {
+                    low_priority_queue_.wait_or_add_new(false, added);
+                    move_pending(&low_priority_queue_, d.queue_);
+                }
+            }
+            return added != 0;
+        }
+
         // Try receiving tasks that are sent by another core as a response to
         // one of our steal requests. This returns true if new tasks were
         // received.
@@ -1972,21 +2048,19 @@ namespace hpx::threads::policies {
             curr_queue_.store(0, std::memory_order_release);
         }
 
-        void set_scheduler_mode(scheduler_mode mode,
-            hpx::threads::mask_cref_type pu_mask) noexcept override
+        scheduler_mode adjust_scheduler_mode(
+            scheduler_mode mode) noexcept override
         {
             // We should not disable stealing for this scheduler, as this could
             // lead to deadlocks. Fast idle mode lets idle workers send steal
             // requests immediately.
-            scheduler_base::set_scheduler_mode(mode |
-                    policies::scheduler_mode::fast_idle_mode |
-                    policies::scheduler_mode::enable_stealing |
-                    policies::scheduler_mode::enable_stealing_numa,
-                pu_mask);
+            return mode | policies::scheduler_mode::fast_idle_mode |
+                policies::scheduler_mode::enable_stealing |
+                policies::scheduler_mode::enable_stealing_numa;
         }
 
     protected:
-        std::vector<util::cache_line_data<scheduler_data>> data_;
+        std::vector<util::aligned_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
         // Round-robin counter for threads created without a placement hint.

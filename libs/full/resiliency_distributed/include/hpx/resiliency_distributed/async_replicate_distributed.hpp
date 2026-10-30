@@ -105,7 +105,7 @@ namespace hpx::resiliency::experimental {
     /// validates results with \a pred, then runs valid results through
     /// \a vote.
     ///
-    /// \param tag     CPO tag (async_replicate_vote_validate_t).
+    /// The CPO tag is \c async_replicate_vote_validate_t.
     /// \param ids     Target localities (one invocation per locality).
     /// \param vote    Voting function selecting among valid results.
     /// \param pred    Predicate validating each invocation result.
@@ -132,7 +132,7 @@ namespace hpx::resiliency::experimental {
     /// runs valid results through \a vote. Validation uses the default
     /// exception check.
     ///
-    /// \param tag     CPO tag (async_replicate_vote_t).
+    /// The CPO tag is \c async_replicate_vote_t.
     /// \param ids     Target localities (one invocation per locality).
     /// \param vote    Voting function selecting among valid results.
     /// \param action  Action to invoke on each locality.
@@ -156,7 +156,7 @@ namespace hpx::resiliency::experimental {
     /// Asynchronously launches \a action on each locality in \a ids,
     /// validates results with \a pred. Returns the first valid result.
     ///
-    /// \param tag     CPO tag (async_replicate_validate_t).
+    /// The CPO tag is \c async_replicate_validate_t.
     /// \param ids     Target localities (one invocation per locality).
     /// \param pred    Predicate validating each invocation result.
     /// \param action  Action to invoke on each locality.
@@ -181,7 +181,7 @@ namespace hpx::resiliency::experimental {
     /// Validates by checking for exceptions. Returns the first valid
     /// result.
     ///
-    /// \param tag     CPO tag (async_replicate_t).
+    /// The CPO tag is \c async_replicate_t.
     /// \param ids     Target localities (one invocation per locality).
     /// \param action  Action to invoke on each locality.
     /// \param ts      Arguments forwarded to \a action.
