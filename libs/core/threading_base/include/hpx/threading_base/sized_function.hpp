@@ -28,13 +28,17 @@ namespace hpx::threads {
     {
         F f;
 
+        // constrained, so that the wrapper is invocable exactly as f is
+        // (callers detect which arguments f takes)
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F&, Ts...>)
         decltype(auto) operator()(Ts&&... ts)
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F const&, Ts...>)
         decltype(auto) operator()(Ts&&... ts) const
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
@@ -129,13 +133,17 @@ namespace hpx::threads::detail {
         F f;
         task_size size;
 
+        // constrained, so that the wrapper is invocable exactly as f is
+        // (callers detect which arguments f takes)
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F&, Ts...>)
         decltype(auto) operator()(Ts&&... ts)
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F const&, Ts...>)
         decltype(auto) operator()(Ts&&... ts) const
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
