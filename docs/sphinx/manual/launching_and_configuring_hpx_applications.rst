@@ -547,7 +547,7 @@ default, which stands for the defaults compiled into |hpx|.
        microseconds, up to ``1000000`` (one second). The default is ``2.5``.
    * * ``hpx.task_size_chunk_size.chunks_per_core``
      * The value of this property defines the number of chunks each core gets
-       for load balancing, up to ``1024``. The default is ``8``.
+       for load balancing, from ``1`` up to ``1024``. The default is ``8``.
 
 The ``hpx.components`` configuration section
 ............................................

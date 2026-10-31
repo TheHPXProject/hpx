@@ -97,7 +97,10 @@ namespace {
         }
 
         std::sort(times.begin(), times.end());
-        double const median = times[times.size() / 2];
+        std::size_t const middle = times.size() / 2;
+        double const median = times.size() % 2 != 0 ?
+            times[middle] :
+            (times[middle - 1] + times[middle]) / 2.0;
         std::cout << size << ',' << count << ',' << min_us << ',' << cpc << ','
                   << median << ',' << times.front() << ',' << times.size()
                   << std::endl;

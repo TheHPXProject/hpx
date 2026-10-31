@@ -641,8 +641,8 @@ namespace hpx {
 
         // The defaults of task_size_chunk_size, the compiled ones unless the
         // configuration gives others. A configured value outside of the range
-        // the chunking can handle (a minimal run time of up to one second, up
-        // to 1024 chunks per core) is ignored.
+        // the chunking can handle (a minimal run time of up to one second, 1 to
+        // 1024 chunks per core) is ignored.
         {
             namespace ex = hpx::execution::experimental;
             ex::detail::reset_task_size_chunk_size_defaults();
@@ -665,7 +665,7 @@ namespace hpx {
             std::size_t chunks_per_core = hpx::util::get_entry_as<std::size_t>(
                 rtcfg_, "hpx.task_size_chunk_size.chunks_per_core",
                 defaults.chunks_per_core);
-            if (chunks_per_core > 1024)
+            if (chunks_per_core == 0 || chunks_per_core > 1024)
             {
                 chunks_per_core = defaults.chunks_per_core;
             }

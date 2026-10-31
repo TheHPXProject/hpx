@@ -83,6 +83,7 @@ int main(int argc, char* argv[])
     std::vector<std::vector<std::string>> const out_of_range = {
         {"hpx.task_size_chunk_size.min_chunk_time_us=-1",
             "hpx.task_size_chunk_size.chunks_per_core=1025"},
+        {"hpx.task_size_chunk_size.chunks_per_core=0"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=2000000"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=nan"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=inf"}};
