@@ -34,7 +34,7 @@ using hpx::threads::task_size;
 
 namespace {
 
-    std::array<std::atomic<int>, 4> created_with{};
+    std::array<std::atomic<int>, 5> created_with{};
 
     using base_scheduler =
         hpx::threads::policies::local_priority_queue_scheduler<>;
