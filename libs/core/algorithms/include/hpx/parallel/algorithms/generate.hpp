@@ -205,12 +205,14 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/generate.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/partitioner.hpp>
@@ -249,6 +251,8 @@ namespace hpx::parallel {
             static decltype(auto) parallel(
                 ExPolicy&& policy, Iter first, Sent last, F&& f)
             {
+                // an iteration has the size of a call of the generator
+                auto const size = task_size_of_call<>(f);
                 auto f1 = [policy, f = HPX_FORWARD(F, f)](
                               Iter part_begin, std::size_t part_size) mutable {
                     auto part_end = part_begin;
@@ -258,7 +262,8 @@ namespace hpx::parallel {
 
                 return util::partitioner<ExPolicy, Iter>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
+                    detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     [first, last](auto&&...) {
                         return detail::advance_to_sentinel(first, last);
                     });
@@ -290,6 +295,8 @@ namespace hpx::parallel {
             static decltype(auto) parallel(
                 ExPolicy&& policy, FwdIter first, std::size_t count, F&& f)
             {
+                // an iteration has the size of a call of the generator
+                auto const size = task_size_of_call<>(f);
                 auto f1 = [policy, f = HPX_FORWARD(F, f)](FwdIter part_begin,
                               std::size_t part_size) mutable {
                     return sequential_generate_n(
@@ -297,7 +304,8 @@ namespace hpx::parallel {
                 };
 
                 return util::partitioner<ExPolicy, FwdIter>::call(
-                    HPX_FORWARD(ExPolicy, policy), first, count, HPX_MOVE(f1),
+                    HPX_FORWARD(ExPolicy, policy), first, count,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     [first, count](auto&&) mutable {
                         std::advance(first, count);
                         return first;
