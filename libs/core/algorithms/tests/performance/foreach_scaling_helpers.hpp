@@ -12,6 +12,7 @@
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
 #include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include "worker_timed.hpp"
@@ -160,6 +161,56 @@ void measure_parallel_foreach(
                 data_representation, [](std::size_t) { worker_timed(delay); });
         }
     }
+}
+
+// Calls f with the loop body given the task size that comes closest to the
+// delay of an iteration: nano stands for about 1 ns, small for 100 ns, medium
+// for 10 us and large for 1 ms (see hpx::task_size_duration).
+template <typename F>
+void with_sized_foreach_body(F&& f)
+{
+    auto const body = [](std::size_t) { worker_timed(delay); };
+    if (delay <= 10)
+    {
+        f(hpx::nano_task(body));
+    }
+    else if (delay <= 1000)
+    {
+        f(hpx::small_task(body));
+    }
+    else if (delay <= 100000)
+    {
+        f(hpx::medium_task(body));
+    }
+    else
+    {
+        f(hpx::large_task(body));
+    }
+}
+
+// Runs the loop with the task_size_chunk_size executor parameters, which
+// chunk it based on the task size of the loop body.
+template <typename Executor>
+void measure_parallel_foreach_task_size(
+    std::vector<std::size_t> const& data_representation, Executor&& exec)
+{
+    hpx::execution::experimental::task_size_chunk_size const tscs;
+
+    with_sized_foreach_body([&](auto const& body) {
+        if (disable_stealing)
+        {
+            // disable stealing from inside the algorithm
+            disable_stealing_parameter dsp;
+
+            hpx::ranges::for_each(hpx::execution::par.with(tscs, dsp).on(exec),
+                data_representation, body);
+        }
+        else
+        {
+            hpx::ranges::for_each(hpx::execution::par.with(tscs).on(exec),
+                data_representation, body);
+        }
+    });
 }
 
 template <typename Executor>
