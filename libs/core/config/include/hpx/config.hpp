@@ -111,6 +111,14 @@
 #  define HPX_HAVE_PARCELPORT_MPI_BACKGROUND_THREADS std::size_t(-1)
 #endif
 
+#if !defined(HPX_PARCEL_OPENSHMEM_MTU)
+#  define HPX_PARCEL_OPENSHMEM_MTU 65536
+#endif
+
+#if !defined(HPX_PARCEL_GASNET_MTU)
+#  define HPX_PARCEL_GASNET_MTU 65536
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 /// This defines the number of outgoing (parcel-) connections kept alive (to
 /// each of the other localities). This value can be changed at runtime by
