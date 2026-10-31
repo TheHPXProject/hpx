@@ -98,6 +98,11 @@ namespace hpx::execution_base {
             std::condition_variable suspend_cv_;
             std::condition_variable resume_cv_;
 
+            // Set by a waiter (suspend/sleep_until) when it leaves its wait on its
+            // own (condition became true, or it timed out). A resume()/abort() that
+            // is still waiting for this agent to suspend observes this and gives up
+            // instead of blocking forever. Cleared when a new wait starts.
+            bool wait_over_ = false;
             default_context context_;
         };
 
@@ -127,6 +132,7 @@ namespace hpx::execution_base {
             std::unique_lock<std::mutex> l(mtx_);
             HPX_ASSERT(running_);
 
+            wait_over_ = false;
             running_ = false;
             resume_cv_.notify_all();
 
@@ -146,10 +152,21 @@ namespace hpx::execution_base {
         {
             {
                 std::unique_lock<std::mutex> l(mtx_);
-                while (running_)
+                // Wait until this agent suspended, or left its wait on its own (then
+                // there is nothing to resume). Waiting for the suspension is still
+                // required so a resume() that runs *before* the agent entered its
+                // wait does not lose the wakeup.
+                while (running_ && !wait_over_)
                 {
                     resume_cv_.wait(l);    //-V1089
                 }
+
+                if (wait_over_)
+                {
+                    wait_over_ = false;    // the waiter left on its own
+                    return;
+                }
+
                 running_ = true;
             }
             suspend_cv_.notify_one();
@@ -159,10 +176,17 @@ namespace hpx::execution_base {
         {
             {
                 std::unique_lock<std::mutex> l(mtx_);
-                while (running_)
+                while (running_ && !wait_over_)
                 {
                     resume_cv_.wait(l);    //-V1089
                 }
+
+                if (wait_over_)
+                {
+                    wait_over_ = false;
+                    return;
+                }
+
                 running_ = true;
                 aborted_ = true;
             }
@@ -181,11 +205,26 @@ namespace hpx::execution_base {
 
         threads::thread_restart_state default_agent::sleep_until(
             hpx::chrono::steady_time_point const& sleep_time,
-            hpx::move_only_function<bool()>&& wait_cond, char const* /* desc */)
+            hpx::move_only_function<bool()>&& wait_cond, char const* desc)
         {
             auto const cond = HPX_MOVE(wait_cond);
             auto const deadline = sleep_time.value();
-            while (true)
+
+            // If this wait is left on its own, tell a concurrently waiting
+            // resume()/abort() so it does not block forever.
+            {
+                std::lock_guard<std::mutex> l(mtx_);
+                wait_over_ = false;
+            }
+            auto set_wait_over = hpx::experimental::scope_exit([this] {
+                {
+                    std::lock_guard<std::mutex> l(mtx_);
+                    wait_over_ = true;
+                }
+                resume_cv_.notify_all();
+            });
+
+            for (;;)
             {
                 if (cond && cond())
                 {
@@ -199,14 +238,34 @@ namespace hpx::execution_base {
                 }
 
                 auto const remaining = deadline - now;
-                std::this_thread::sleep_for((std::min) (remaining,
+                auto const chunk = (std::min) (remaining,
                     std::chrono::duration_cast<
                         std::remove_const_t<decltype(remaining)>>(
-                        default_agent_poll_interval)));
+                        default_agent_poll_interval));
+
+                // Sleep one chunk while staying resumable: clear running_ so a
+                // concurrent resume()/abort() can observe the suspension and end the
+                // sleep early, and use a timed wait so cond()/deadline are re-checked
+                // periodically (this is what 9a3312d added, kept intact).
+                {
+                    std::unique_lock<std::mutex> l(mtx_);
+                    HPX_ASSERT(running_);
+                    running_ = false;
+                    resume_cv_.notify_all();    // unblock a waiting resume()
+                    suspend_cv_.wait_for(
+                        l, chunk, [&] { return running_ || aborted_; });
+                    running_ = true;    // reclaim the running state
+                }
+
+                if (aborted_)
+                {
+                    HPX_THROW_EXCEPTION(hpx::error::yield_aborted, desc,
+                        "std::thread({}) aborted (sleep_until returned "
+                        "wait_abort)",
+                        id_);
+                }
             }
 
-            // final check right at/after the deadline, in case wait_cond became
-            // true during the last sleep increment
             if (cond && cond())
             {
                 return threads::thread_restart_state::signaled;
