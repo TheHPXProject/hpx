@@ -12,6 +12,7 @@
 #include <hpx/execution.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/thread.hpp>
 
@@ -22,6 +23,7 @@
 #include <exception>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace ex = hpx::parallel::execution;
@@ -129,17 +131,21 @@ void test_busy_worker()
     std::atomic<bool> started(false);
     std::atomic<bool> release(false);
 
-    // spin without yielding, so the worker can't run anything else
-    hpx::future<void> busy =
-        hpx::async(hpx::execution::experimental::with_hint(hpx::launch::async,
-                       hpx::threads::thread_schedule_hint(
-                           static_cast<std::int16_t>(busy_worker))),
-            [&] {
-                started = true;
-                while (!release.load())
-                {
-                }
-            });
+    // Spin without yielding, so the worker can't run anything else. A hint
+    // alone could let another worker steal the task before it starts, bound
+    // threads are never stolen (launch::task: never run the thread inline).
+    auto const busy_policy =
+        hpx::launch::task_policy(hpx::threads::thread_priority::bound,
+            hpx::threads::thread_stacksize::default_,
+            hpx::threads::thread_schedule_hint(
+                static_cast<std::int16_t>(busy_worker)));
+    hpx::future<void> busy = hpx::async(busy_policy, [&] {
+        HPX_TEST_EQ(hpx::get_worker_thread_num(), busy_worker);
+        started = true;
+        while (!release.load())
+        {
+        }
+    });
     while (!started.load())
     {
         hpx::this_thread::yield();
@@ -151,8 +157,16 @@ void test_busy_worker()
 
     hpx::future<void> bulk =
         ex::bulk_async_execute(exec, [&](std::size_t) { ++calls; }, shape);
-    HPX_TEST(
-        bulk.wait_for(std::chrono::seconds(10)) == hpx::future_status::ready);
+
+    // Poll instead of suspending: a suspended thread may be resumed on the
+    // busy worker, where nothing else runs until it is released.
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!bulk.is_ready() && std::chrono::steady_clock::now() < deadline)
+    {
+        hpx::this_thread::yield();
+    }
+    HPX_TEST(bulk.is_ready());
 
     release = true;
     busy.get();
@@ -170,7 +184,16 @@ int hpx_main()
     // every element throws
     test_exceptions([](std::size_t) { return true; });
 
-    test_busy_worker();
+    // Only schedulers with bound queues that take work from a busy worker. The
+    // local scheduler has no bound queues, it may move the busy task, the
+    // static schedulers don't steal, and the work-requesting schedulers need
+    // the busy worker to answer the steal requests.
+    std::string const scheduler = hpx::get_config_entry("hpx.scheduler", "");
+    if (scheduler.starts_with("local-priority") ||
+        scheduler.starts_with("abp-priority") || scheduler == "shared-priority")
+    {
+        test_busy_worker();
+    }
 
     return hpx::local::finalize();
 }
