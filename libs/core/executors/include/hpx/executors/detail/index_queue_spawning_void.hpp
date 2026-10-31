@@ -224,15 +224,28 @@ namespace hpx::parallel::execution::detail {
                     do_work<queue_end::left>(done);
                 }
             }
+            // The chunks left in the queue are skipped and counted, so every
+            // chunk that doesn't run comes with an exception, which is stored
+            // before finish counts the chunks. A worker that counts none
+            // (copying the function threw, and the other workers took all of
+            // its chunks) ran and skipped nothing: the other workers ran all
+            // chunks, and the operation may already be complete, so it doesn't
+            // report the exception.
             catch (std::bad_alloc const&)
             {
-                state->bad_alloc_thrown = true;
                 skip_own_work(done);
+                if (done != 0)
+                {
+                    state->bad_alloc_thrown = true;
+                }
             }
             catch (...)
             {
-                store_exception(std::current_exception());
                 skip_own_work(done);
+                if (done != 0)
+                {
+                    store_exception(std::current_exception());
+                }
             }
 
             finish(done);

@@ -93,6 +93,43 @@ void test_exceptions(Throws throws)
     HPX_TEST(n >= 1 && n <= num_workers);
 }
 
+// Every element throws, but the first one waits until a second one throws as
+// well, so that at least two workers report an exception. While it waits it
+// yields (for at most ten seconds), so that its worker can run the task of
+// another worker; any other worker that runs a chunk throws as well.
+void test_exceptions_from_two_workers()
+{
+    std::size_t const num_workers = hpx::get_num_worker_threads();
+    if (num_workers < 2)
+        return;
+
+    hpx::execution::parallel_executor exec;
+    std::vector<std::size_t> const shape = make_shape();
+    std::atomic<std::size_t> throwing(0);
+
+    auto f = [&](std::size_t) {
+        if (++throwing == 1)
+        {
+            auto const deadline =
+                std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            while (throwing.load() < 2 &&
+                std::chrono::steady_clock::now() < deadline)
+            {
+                hpx::this_thread::yield();
+            }
+        }
+        throw std::runtime_error("bulk_completion");
+    };
+
+    std::size_t n =
+        count_exceptions([&] { ex::bulk_sync_execute(exec, f, shape); });
+    HPX_TEST(n >= 2 && n <= num_workers);
+
+    throwing = 0;
+    n = count_exceptions([&] { ex::bulk_async_execute(exec, f, shape).get(); });
+    HPX_TEST(n >= 2 && n <= num_workers);
+}
+
 // Without exceptions, every element runs exactly once.
 void test_all_elements_run()
 {
@@ -183,6 +220,8 @@ int hpx_main()
 
     // every element throws
     test_exceptions([](std::size_t) { return true; });
+
+    test_exceptions_from_two_workers();
 
     // Only schedulers with bound queues that take work from a busy worker. The
     // local scheduler has no bound queues, it may move the busy task, the
