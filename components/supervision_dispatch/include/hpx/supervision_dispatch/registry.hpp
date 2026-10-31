@@ -19,6 +19,7 @@
 
 #include <hpx/supervision_dispatch/server/registry.hpp>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -115,6 +116,20 @@ namespace hpx::supervision {
         /// \param f The pending join() future to watch and, on success, undo.
         void leave(hpx::id_type const& peer_locality,
             hpx::future<joined_peer>&& f) const;
+
+        /// Removes a joined peer whose local supervision state has latched a
+        /// terminal event without the peer reporting one, i.e. one that
+        /// failure detection fenced, keeping that state so the peer stays
+        /// fenced. Fire-and-forget: the removal unregisters this registry's
+        /// observers on the peer's locality, which may no longer be
+        /// reachable, so the caller does not wait for it.
+        ///
+        /// \param peer_locality The peer locality to remove.
+        /// \param generation The server::peer_snapshot::generation of the
+        ///        entry to remove; a no-op if \p peer_locality has since been
+        ///        evicted, or left and joined again.
+        void evict_fenced(
+            hpx::id_type const& peer_locality, std::uint64_t generation) const;
 
         /// Register this registry's id with AGAS under a name pinned to the
         /// locality that actually hosts its underlying server component

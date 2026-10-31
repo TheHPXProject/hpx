@@ -87,6 +87,11 @@ namespace hpx::supervision::server {
 
         /// The epoch at which \c peer_locality was joined.
         std::uint64_t join_epoch;
+
+        /// Identifies this particular registry entry. A peer that is left and
+        /// joined again gets a new one, even if its \c join_epoch is the
+        /// same. See registry::evict_fenced().
+        std::uint64_t generation;
     };
 
     class registry : public hpx::components::component_base<registry>
@@ -144,6 +149,28 @@ namespace hpx::supervision::server {
         struct leave_action
           : hpx::actions::make_action_t<decltype(&registry::leave),
                 &registry::leave, leave_action>
+        {
+        };
+        /// \endcond
+
+        /// Removes a joined peer whose local supervision state has latched a
+        /// terminal event without the peer itself reporting one, i.e. one
+        /// that failure detection fenced. The terminal state is left in place
+        /// as a tombstone (see cleanup_peer()), so the peer stays fenced.
+        ///
+        /// \param peer_locality The peer locality to remove.
+        /// \param generation The peer_snapshot::generation of the entry to
+        ///        remove. If \p peer_locality has since been evicted, or left
+        ///        and joined again (which creates a new entry, even if its
+        ///        join epoch is the same), or its local supervision state is
+        ///        no longer terminal, this call is a no-op.
+        void evict_fenced(
+            hpx::id_type const& peer_locality, std::uint64_t generation);
+
+        /// \cond NOINTERNAL
+        struct evict_fenced_action
+          : hpx::actions::make_action_t<decltype(&registry::evict_fenced),
+                &registry::evict_fenced, evict_fenced_action>
         {
         };
         /// \endcond
@@ -258,6 +285,12 @@ namespace hpx::supervision::server {
             /// already tearing down.
             bool evict_pending = false;
 
+            /// Unique for each entry this registry creates, surfaced via
+            /// peer_snapshot::generation. Lets evict_fenced() tell the entry
+            /// it was asked to remove apart from a later one for the same
+            /// peer locality.
+            std::uint64_t generation = 0;
+
             /// The preserve_terminal_state argument evict_peer() was called
             /// with when it set evict_pending above, remembered so that
             /// join()'s deferred cleanup_peer() call (once the join in progress
@@ -271,6 +304,9 @@ namespace hpx::supervision::server {
         hpx::lcos::local::detail::condition_variable cond_;
 
         std::map<hpx::id_type, peer_entry> peers_;
+
+        // the last peer_entry::generation handed out, guarded by mtx_
+        std::uint64_t next_generation_ = 0;
     };
 }    // namespace hpx::supervision::server
 
@@ -282,5 +318,8 @@ HPX_REGISTER_ACTION_DECLARATION(
 HPX_REGISTER_ACTION_DECLARATION(
     hpx::supervision::server::registry::leave_action,
     supervision_dispatch_registry_leave_action)
+HPX_REGISTER_ACTION_DECLARATION(
+    hpx::supervision::server::registry::evict_fenced_action,
+    supervision_dispatch_registry_evict_fenced_action)
 
 #include <hpx/config/warnings_suffix.hpp>

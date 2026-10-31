@@ -94,6 +94,24 @@ namespace {
         return std::nullopt;
     }
 
+    // Polls this locality's registry until `peer_locality` is no longer
+    // listed, or `bound` elapses. Returns whether it was removed within
+    // `bound`.
+    bool wait_until_evicted(hpx::id_type const& peer_locality,
+        std::chrono::milliseconds const bound)
+    {
+        auto const deadline = std::chrono::steady_clock::now() + bound;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (!find_locality_for(peer_locality))
+            {
+                return true;
+            }
+            hpx::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        return !find_locality_for(peer_locality);
+    }
+
 }    // namespace
 
 // ============================================================================
@@ -108,7 +126,8 @@ namespace {
 // observer's local shadow for that peer must report fenced, and a subsequent
 // dispatch_work() against it must fail with hpx::error::target_fenced - proving
 // the *local* shadow was fenced by the detector, without the observer ever
-// contacting the peer's own registry.
+// contacting the peer's own registry. A later sweep then removes the peer from
+// the observer's registry, keeping the fence in place.
 hpx::id_type test_detection_causes_fencing(hpx::id_type const& peer_locality)
 {
     auto const locality = find_locality_for(peer_locality);
@@ -148,6 +167,12 @@ hpx::id_type test_detection_causes_fencing(hpx::id_type const& peer_locality)
         HPX_TEST(hpx::get_error(e) == hpx::error::target_fenced);
     }
     HPX_TEST(caught);
+
+    // A later sweep removes the fenced peer from the registry, so
+    // snapshot_peers() stops listing it, but the fence stays in place.
+    HPX_TEST(wait_until_evicted(peer_locality, std::chrono::seconds(5)));
+    HPX_TEST(hpx::supervision::check_admission(*locality, epoch) ==
+        hpx::supervision::dispatch_outcome::rejected_fenced);
 
     return *locality;
 }
