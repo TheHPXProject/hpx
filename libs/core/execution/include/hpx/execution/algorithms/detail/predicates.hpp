@@ -459,6 +459,20 @@ struct hpx::traits::typed_builtin_operation_operand<
     using type = T;
 };
 
+// compare_to compares its argument with its value, which is as fast as
+// equal_to called with both.
+template <typename Value, typename Arg>
+struct hpx::traits::get_task_size_for<hpx::parallel::detail::compare_to<Value>,
+    Arg>
+{
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::detail::compare_to<Value> const&) noexcept
+    {
+        return get_task_size_for<hpx::parallel::detail::equal_to, Value const&,
+            Arg>::call(hpx::parallel::detail::equal_to{});
+    }
+};
+
 namespace hpx::ranges {
 
     ///////////////////////////////////////////////////////////////////////////

@@ -78,9 +78,11 @@ namespace hpx { namespace experimental {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -306,6 +308,21 @@ namespace hpx::parallel::detail {
         }
     };
 
+    // The size of an iteration of the partitioned extent Extent, which calls
+    // f once for each index of the other extents.
+    template <std::size_t Extent, typename Mapping, typename Fun>
+    [[nodiscard]] constexpr hpx::threads::task_size
+    for_each_index_iteration_size(Mapping const& m, Fun const& f) noexcept
+    {
+        std::size_t calls = 1;
+        for (std::size_t r = 0; r != Mapping::rank(); ++r)
+        {
+            if (r != Extent)
+                calls *= static_cast<std::size_t>(m.extents().extent(r));
+        }
+        return hpx::threads::bulk_task_size(task_size_of_call<>(f), calls);
+    }
+
     ///////////////////////////////////////////////////////////////////////////
     // Algorithm struct - bridges sequential / parallel dispatch via the
     // hpx::parallel::detail::algorithm CRTP base.
@@ -380,6 +397,9 @@ namespace hpx::parallel::detail {
                             hpx::util::counting_iterator<std::size_t>;
                         iter_t first{std::size_t{0}};
 
+                        auto const size =
+                            for_each_index_iteration_size<Mapping::rank() - 1>(
+                                m, f);
                         auto iter_fun = for_each_index_iteration_left<
                             std::decay_t<ExPolicy>, Mapping, std::decay_t<Fun>>{
                             m, HPX_FORWARD(Fun, f)};
@@ -390,14 +410,16 @@ namespace hpx::parallel::detail {
                         {
                             return util::call_with_algorithm_result<ExPolicy>(
                                 HPX_FORWARD(ExPolicy, policy), first, count,
-                                HPX_MOVE(iter_fun),
+                                hpx::threads::detail::with_task_size(
+                                    HPX_MOVE(iter_fun), size),
                                 hpx::util::empty_function{});
                         }
                         else
                         {
                             util::partitioner<ExPolicy>::call(
                                 HPX_FORWARD(ExPolicy, policy), first, count,
-                                HPX_MOVE(iter_fun),
+                                hpx::threads::detail::with_task_size(
+                                    HPX_MOVE(iter_fun), size),
                                 hpx::util::empty_function{});
                             return util::detail::algorithm_result<
                                 ExPolicy>::get();
@@ -421,6 +443,7 @@ namespace hpx::parallel::detail {
                 using iter_t = hpx::util::counting_iterator<std::size_t>;
                 iter_t first{std::size_t{0}};
 
+                auto const size = for_each_index_iteration_size<0>(m, f);
                 auto iter_fun =
                     for_each_index_iteration_right<std::decay_t<ExPolicy>,
                         Mapping, std::decay_t<Fun>>{m, HPX_FORWARD(Fun, f)};
@@ -430,13 +453,17 @@ namespace hpx::parallel::detail {
                 {
                     return util::call_with_algorithm_result<ExPolicy>(
                         HPX_FORWARD(ExPolicy, policy), first, count,
-                        HPX_MOVE(iter_fun), hpx::util::empty_function{});
+                        hpx::threads::detail::with_task_size(
+                            HPX_MOVE(iter_fun), size),
+                        hpx::util::empty_function{});
                 }
                 else
                 {
                     util::partitioner<ExPolicy>::call(
                         HPX_FORWARD(ExPolicy, policy), first, count,
-                        HPX_MOVE(iter_fun), hpx::util::empty_function{});
+                        hpx::threads::detail::with_task_size(
+                            HPX_MOVE(iter_fun), size),
+                        hpx::util::empty_function{});
                     return util::detail::algorithm_result<ExPolicy>::get();
                 }
             }

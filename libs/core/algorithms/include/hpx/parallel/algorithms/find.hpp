@@ -996,12 +996,14 @@ namespace hpx {
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/adapt_placement_mode.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -1070,6 +1072,11 @@ namespace hpx::parallel {
 
                 util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the comparison of an element
+                // with the value
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter, Proj>,
+                        T const&>(hpx::parallel::detail::equal_to{});
                 auto f1 = [val, proj = HPX_FORWARD(Proj, proj), tok](Iter it,
                               std::size_t part_size,
                               std::size_t base_idx) mutable -> void {
@@ -1096,7 +1103,8 @@ namespace hpx::parallel {
 
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
     }    // namespace detail
@@ -1153,6 +1161,10 @@ namespace hpx::parallel {
 
                 util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
                 auto f1 = [f = HPX_FORWARD(F, f),
                               proj = HPX_FORWARD(Proj, proj),
                               tok](Iter it, std::size_t part_size,
@@ -1179,7 +1191,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, Iter, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
     }    // namespace detail
@@ -1236,6 +1249,10 @@ namespace hpx::parallel {
 
                 util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
                 auto f1 = [f = HPX_FORWARD(F, f),
                               proj = HPX_FORWARD(Proj, proj),
                               tok](Iter it, std::size_t part_size,
@@ -1262,7 +1279,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, Iter, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                    HPX_MOVE(f1), HPX_MOVE(f2));
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                    HPX_MOVE(f2));
             }
         };
     }    // namespace detail
@@ -1864,6 +1882,11 @@ namespace hpx::parallel::detail {
                 std::greater<difference_type>>
                 tok(-1);
 
+            // an iteration has the size of the comparison of an element with
+            // the value
+            auto const size =
+                task_size_of_call<task_size_argument_t<Iter, Proj>, T const&>(
+                    hpx::parallel::detail::equal_to{});
             auto f1 = [val, proj = HPX_FORWARD(Proj, proj), tok](Iter it,
                           std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
@@ -1896,7 +1919,8 @@ namespace hpx::parallel::detail {
 
             return partitioner_type::call_with_index(
                 HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                HPX_MOVE(f1), HPX_MOVE(f2));
+                hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                HPX_MOVE(f2));
         }
     };
 
@@ -1952,6 +1976,9 @@ namespace hpx::parallel::detail {
                 std::greater<difference_type>>
                 tok(-1);
 
+            // an iteration has the size of the predicate called with an element
+            auto const size =
+                task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
             auto f1 = [f = HPX_FORWARD(F, f), proj = HPX_FORWARD(Proj, proj),
                           tok](Iter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
@@ -1984,7 +2011,8 @@ namespace hpx::parallel::detail {
 
             return partitioner_type::call_with_index(
                 HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                HPX_MOVE(f1), HPX_MOVE(f2));
+                hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                HPX_MOVE(f2));
         }
     };
 
@@ -2041,6 +2069,9 @@ namespace hpx::parallel::detail {
                 std::greater<difference_type>>
                 tok(-1);
 
+            // an iteration has the size of the predicate called with an element
+            auto const size =
+                task_size_of_call<task_size_argument_t<Iter, Proj>>(f);
             auto f1 = [f = HPX_FORWARD(F, f), proj = HPX_FORWARD(Proj, proj),
                           tok](Iter it, std::size_t part_size,
                           std::size_t base_idx) mutable -> void {
@@ -2073,7 +2104,8 @@ namespace hpx::parallel::detail {
 
             return partitioner_type::call_with_index(
                 HPX_FORWARD(decltype(policy), policy), first, count, 1,
-                HPX_MOVE(f1), HPX_MOVE(f2));
+                hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
+                HPX_MOVE(f2));
         }
     };
 }    // namespace hpx::parallel::detail
