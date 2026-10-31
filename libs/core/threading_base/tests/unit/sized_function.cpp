@@ -14,12 +14,14 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <chrono>
 #include <cstddef>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -478,9 +480,86 @@ void test_composition()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Builtin operations on builtin types are nano tasks.
+template <typename F, typename... Args>
+inline constexpr task_size size_for =
+    hpx::traits::get_task_size_for<F, Args...>::call(std::remove_cvref_t<F>{});
+
+enum class color
+{
+    red
+};
+
+template <typename F>
+inline constexpr bool names_operand = requires {
+    typename hpx::traits::typed_builtin_operation_operand<F>::type;
+};
+
+void test_builtin_operations()
+{
+    // a typed function object names the type of its operands
+    static_assert(size_of<std::less<int>> == task_size::nano);
+    static_assert(size_of<std::plus<double>> == task_size::nano);
+    static_assert(size_of<std::equal_to<color>> == task_size::nano);
+    static_assert(size_of<std::less<int const*>> == task_size::nano);
+    static_assert(size_of<std::less<std::string>> == task_size::unknown);
+    static_assert(
+        size_of<hpx::parallel::detail::min_of<int>> == task_size::nano);
+
+    // a transparent one doesn't, its size depends on the arguments
+    static_assert(!names_operand<std::less<>>);
+    static_assert(names_operand<std::less<int>>);
+    static_assert(size_of<std::less<>> == task_size::unknown);
+    static_assert(size_for<std::less<>> == task_size::unknown);
+    static_assert(
+        size_for<std::less<>, int&, double const&> == task_size::nano);
+    static_assert(size_for<std::plus<>, std::size_t, int> == task_size::nano);
+    static_assert(size_for<std::logical_not<>, bool> == task_size::nano);
+    static_assert(
+        size_for<std::ranges::less, int*, int const*> == task_size::nano);
+    static_assert(
+        size_for<hpx::parallel::detail::less, int, int> == task_size::nano);
+    static_assert(
+        size_for<hpx::ranges::equal_to, color, color> == task_size::nano);
+    static_assert(
+        size_for<std::less<>, std::string const&, std::string const&> ==
+        task_size::unknown);
+    static_assert(
+        size_for<std::less<>, int, std::string> == task_size::unknown);
+
+    // the size of the type wins over the arguments, and a size given to the
+    // function always wins
+    static_assert(size_for<std::less<int>, std::string> == task_size::nano);
+    static_assert(size_for<decltype(small_task(std::less<>{})), int, int> ==
+        task_size::small_);
+    static_assert(size_for<decltype(large_task(std::less<int>{})), int, int> ==
+        task_size::large);
+    static_assert(size_for<std::less<> const&, int, int> == task_size::nano);
+
+    // other functions keep their size, also with arguments
+    auto const lambda = [](int a, int b) { return a < b; };
+    static_assert(
+        hpx::traits::get_task_size_for<decltype(lambda), int, int>::call(
+            lambda) == task_size::unknown);
+
+    // with_task_size_of gives a function the size of a call of another
+    auto const f = [] {};
+    auto const called =
+        hpx::threads::detail::with_task_size_of<int, int>(f, std::less<>{});
+    HPX_TEST(hpx::traits::get_task_size<decltype(called)>::call(called) ==
+        task_size::nano);
+
+    auto const uncalled =
+        hpx::threads::detail::with_task_size_of(f, std::less<>{});
+    HPX_TEST(hpx::traits::get_task_size<decltype(uncalled)>::call(uncalled) ==
+        task_size::unknown);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_trait();
+    test_builtin_operations();
     test_forwarding();
     test_hpx_names();
     test_hint();

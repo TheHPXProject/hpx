@@ -26,7 +26,9 @@
 
 #include <array>
 #include <atomic>
+#include <complex>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -496,6 +498,60 @@ void test_algorithm_sizes()
         [&] {
             hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
                 merged.begin(), less)
+                .get();
+        },
+        task_size::unknown);
+
+    // Builtin operations on builtin types are nano without being given a
+    // size: as for the nano reduction above, 100 chunks of 100 iterations
+    // make a medium task.
+    auto const by_100 =
+        policy.with(hpx::execution::experimental::static_chunk_size(100));
+    check_only_size(
+        [&] {
+            hpx::reduce(by_100, w.begin(), w.end(), 0, std::plus<>()).get();
+        },
+        task_size::medium);
+    check_only_size(
+        [&] {
+            hpx::transform_reduce(by_100, w.begin(), w.end(), w.begin(), 0,
+                std::plus<>(), std::multiplies<>())
+                .get();
+        },
+        task_size::medium);
+
+    // the 16 iterations of a merge with a builtin comparison, given or not,
+    // make a nano task
+    check_only_size(
+        [&] {
+            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
+                merged.begin(), std::less{})
+                .get();
+        },
+        task_size::nano);
+    check_only_size(
+        [&] {
+            hpx::merge(
+                policy, v.begin(), v.end(), v.begin(), v.end(), merged.begin())
+                .get();
+        },
+        task_size::nano);
+
+    // a projection hides the type the comparison is called with
+    check_only_size(
+        [&] {
+            hpx::ranges::merge(
+                policy, v, v, merged.begin(), std::less{}, identity, identity)
+                .get();
+        },
+        task_size::unknown);
+
+    // builtin operations on other types have no size
+    std::vector<std::complex<double>> c(16, 1.0);
+    check_only_size(
+        [&] {
+            hpx::reduce(policy, c.begin(), c.end(), std::complex<double>(),
+                std::plus<>())
                 .get();
         },
         task_size::unknown);

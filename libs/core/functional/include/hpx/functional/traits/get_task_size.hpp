@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <type_traits>
 
@@ -131,4 +132,141 @@ namespace hpx::traits {
         threads::task_size Size = threads::task_size::unknown>
     inline constexpr threads::task_size get_task_size_v =
         get_task_size<F, Size>::value;
+
+    // The size of a call of f with arguments of the types Args. Unless it is
+    // specialized, it is the size of f itself (get_task_size), so that a size
+    // given to f (nano_task(f), with_task_size<Size>(f), ...) always wins.
+    HPX_CXX_CORE_EXPORT template <typename F, typename... Args>
+    struct get_task_size_for
+    {
+        [[nodiscard]] static constexpr threads::task_size call(
+            F const& f) noexcept
+        {
+            return get_task_size<F>::call(f);
+        }
+    };
+
+    // A qualified function has the size of the unqualified one.
+    template <typename F, typename... Args>
+        requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
+    struct get_task_size_for<F, Args...>
+      : get_task_size_for<std::remove_cvref_t<F>, Args...>
+    {
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Function objects of a builtin operation, which runs for about a
+    // nanosecond on builtin types.
+    //
+    // A transparent function object, which doesn't name the type of its
+    // operands (for instance std::less<>), specializes
+    // is_transparent_builtin_operation, its size depends on the arguments it
+    // is called with.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct is_transparent_builtin_operation : std::false_type
+    {
+    };
+
+    // A typed function object, which names the type of its operands (for
+    // instance std::less<int>), specializes typed_builtin_operation_operand,
+    // its size depends on that type.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct typed_builtin_operation_operand
+    {
+    };
+
+    namespace detail {
+
+        // The types builtin operations work on.
+        HPX_CXX_CORE_EXPORT template <typename T>
+        concept builtin_operand = std::is_arithmetic_v<std::decay_t<T>> ||
+            std::is_enum_v<std::decay_t<T>> ||
+            std::is_pointer_v<std::decay_t<T>>;
+
+        HPX_CXX_CORE_EXPORT template <typename F>
+        concept typed_builtin_operation = requires {
+            typename typed_builtin_operation_operand<F>::type;
+        } && builtin_operand<typename typed_builtin_operation_operand<F>::type>;
+    }    // namespace detail
+
+    // A builtin operation on a builtin type is a nano task.
+    template <typename F, threads::task_size Size>
+        requires(detail::typed_builtin_operation<F>)
+    struct get_task_size<F, Size>
+    {
+        static constexpr threads::task_size value = threads::task_size::nano;
+
+        [[nodiscard]] static constexpr threads::task_size call(
+            F const&) noexcept
+        {
+            return value;
+        }
+    };
+
+    // A builtin operation called with builtin types is a nano task. Without
+    // arguments, the size stays unknown.
+    template <typename F, typename... Args>
+        requires(
+            is_transparent_builtin_operation<F>::value && sizeof...(Args) != 0)
+    struct get_task_size_for<F, Args...>
+    {
+        [[nodiscard]] static constexpr threads::task_size call(
+            F const&) noexcept
+        {
+            return (detail::builtin_operand<Args> && ...) ?
+                threads::task_size::nano :
+                threads::task_size::unknown;
+        }
+    };
+
+    // The function objects of the standard library.
+#define HPX_TASK_SIZE_BUILTIN_OPERATION(op)                                    \
+    template <>                                                                \
+    struct is_transparent_builtin_operation<std::op<>> : std::true_type        \
+    {                                                                          \
+    };                                                                         \
+    template <typename T>                                                      \
+        requires(!std::is_void_v<T>)                                           \
+    struct typed_builtin_operation_operand<std::op<T>>                         \
+    {                                                                          \
+        using type = T;                                                        \
+    } /**/
+
+    HPX_TASK_SIZE_BUILTIN_OPERATION(plus);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(minus);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(multiplies);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(divides);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(modulus);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(negate);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(equal_to);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(not_equal_to);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(less);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(greater);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(less_equal);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(greater_equal);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(logical_and);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(logical_or);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(logical_not);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(bit_and);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(bit_or);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(bit_xor);
+    HPX_TASK_SIZE_BUILTIN_OPERATION(bit_not);
+
+#undef HPX_TASK_SIZE_BUILTIN_OPERATION
+
+    // std::ranges has transparent comparisons only.
+#define HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(op)                             \
+    template <>                                                                \
+    struct is_transparent_builtin_operation<std::ranges::op> : std::true_type  \
+    {                                                                          \
+    } /**/
+
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(equal_to);
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(not_equal_to);
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(less);
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(greater);
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(less_equal);
+    HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION(greater_equal);
+
+#undef HPX_TASK_SIZE_BUILTIN_RANGES_OPERATION
 }    // namespace hpx::traits
