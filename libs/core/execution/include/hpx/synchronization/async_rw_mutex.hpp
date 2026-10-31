@@ -58,19 +58,32 @@ namespace hpx::experimental {
             {
                 if (HPX_LIKELY(next_state))
                 {
-                    // The current state has now finished all accesses to the
-                    // wrapped value, so we move the value to the next state.
-                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                    try
+                    if (this->exception)
                     {
-                        next_state->set_value(HPX_MOVE(value.value()));
+                        if (next_state)
+                        {
+                            next_state->exception = this->exception;
+                            next_state->set_error(this->exception);
+                        }
                     }
-                    catch (...)
+                    else
                     {
-                        // Store the exception on the next state so that
-                        // every downstream continuation can forward it
-                        // via set_error rather than silently hanging.
-                        next_state->set_error(std::current_exception());
+                        try
+                        {
+                            if (next_state)
+                            {
+                                next_state->set_value(HPX_MOVE(value.value()));
+                            }
+                        }
+                        catch (...)
+                        {
+                            this->exception = std::current_exception();
+                            if (next_state)
+                            {
+                                next_state->exception = this->exception;
+                                next_state->set_error(this->exception);
+                            }
+                        }
                     }
 
                     for (auto& continuation : continuations)
@@ -571,7 +584,7 @@ namespace hpx::experimental {
                             if (state && state->exception)
                             {
                                 hpx::execution::experimental::set_error(
-                                    HPX_MOVE(r), HPX_MOVE(state->exception));
+                                    HPX_MOVE(r), state->exception);
                                 return;
                             }
                             try
@@ -798,7 +811,7 @@ namespace hpx::experimental {
                             if (state && state->exception)
                             {
                                 hpx::execution::experimental::set_error(
-                                    HPX_MOVE(r), HPX_MOVE(state->exception));
+                                    HPX_MOVE(r), state->exception);
                                 return;
                             }
                             try
