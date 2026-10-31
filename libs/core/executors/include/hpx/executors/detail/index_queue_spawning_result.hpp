@@ -53,19 +53,62 @@ namespace hpx::parallel::execution::detail {
         bool const reverse_placement;
         bool const allow_stealing;
 
+        // Take a chunk from the local queue, or else from the opposite end of
+        // one of the neighboring queues.
+        template <hpx::concurrency::detail::queue_end Which>
+        hpx::optional<std::uint32_t> take_chunk() const
+        {
+            if (auto index =
+                    state->queues[worker_thread].data_.template pop<Which>())
+            {
+                return index;
+            }
+
+            if (allow_stealing)
+            {
+                constexpr auto opposite_end =
+                    hpx::concurrency::detail::opposite_end_v<Which>;
+
+                auto const num_threads = state->num_threads;
+                for (std::uint32_t offset = 1; offset != num_threads; ++offset)
+                {
+                    std::size_t neighbor_thread = worker_thread + offset;
+                    if (neighbor_thread >= num_threads)
+                        neighbor_thread -= num_threads;
+
+                    if (auto index = state->queues[neighbor_thread]
+                            .data_.template pop<opposite_end>())
+                    {
+                        return index;
+                    }
+                }
+            }
+            return {};
+        }
+
         // Perform the work in one element indexed by index. The index
         // represents a range of indices (iterators) in the given shape. Each
         // chunk taken from a queue is counted in done before it runs.
         template <hpx::concurrency::detail::queue_end Which>
         void do_work(std::uint32_t& done) const
         {
-            // A worker that starts after all chunks are done has nothing to do
-            // and doesn't touch the function or its arguments.
+            // A worker that starts after all chunks are done has nothing to do.
             if (state->chunks_remaining.data_.load(std::memory_order_acquire) ==
                 0)
             {
                 return;
             }
+
+            // Take a chunk before copying the function and its arguments: the
+            // operation can't complete before the chunk is counted in finish,
+            // so the copies are made and destroyed while it is still running.
+            // A worker that finds no chunk doesn't touch them.
+            auto const first = take_chunk<Which>();
+            if (!first)
+            {
+                return;
+            }
+            ++done;
 
             // explicitly copy function (object) and arguments
             auto f = state->f;
@@ -75,16 +118,8 @@ namespace hpx::parallel::execution::detail {
             using index_pack_type =
                 hpx::detail::fused_index_pack_t<decltype(ts)>;
 
-            hpx::optional<std::uint32_t> index;
-
-            // Handle local queue first
-            auto& local_queue = state->queues[worker_thread].data_;
-            while ((index = local_queue.template pop<Which>()))
-            {
-                HPX_TRACING_MARK_EVENT("do_work_chunk");
-                ++done;
-
-                auto const i_begin = *index * chunk_size;
+            auto const run_chunk = [&](std::uint32_t const index) {
+                auto const i_begin = index * chunk_size;
                 auto const i_end = (std::min) (i_begin + chunk_size,
                     static_cast<std::uint32_t>(size));
 
@@ -94,6 +129,20 @@ namespace hpx::parallel::execution::detail {
                     results[i] = hpx::execution::experimental::detail::
                         bulk_invoke_helper(index_pack_type{}, f, *it, ts);
                 }
+            };
+
+            HPX_TRACING_MARK_EVENT("do_work_chunk");
+            run_chunk(*first);
+
+            hpx::optional<std::uint32_t> index;
+
+            // Handle local queue first
+            auto& local_queue = state->queues[worker_thread].data_;
+            while ((index = local_queue.template pop<Which>()))
+            {
+                HPX_TRACING_MARK_EVENT("do_work_chunk");
+                ++done;
+                run_chunk(*index);
             }
 
             if (allow_stealing)
@@ -115,20 +164,7 @@ namespace hpx::parallel::execution::detail {
                     {
                         HPX_TRACING_MARK_EVENT("do_work_chunk (stealing)");
                         ++done;
-
-                        auto const i_begin = *index * chunk_size;
-                        auto const i_end = (std::min) (i_begin + chunk_size,
-                            static_cast<std::uint32_t>(size));
-
-                        auto it =
-                            std::next(hpx::util::begin(state->shape), i_begin);
-                        for (std::uint32_t i = i_begin; i != i_end;
-                            (void) ++it, ++i)
-                        {
-                            results[i] = hpx::execution::experimental::detail::
-                                bulk_invoke_helper(
-                                    index_pack_type{}, f, *it, ts);
-                        }
+                        run_chunk(*index);
                     }
                 }
             }
@@ -225,28 +261,15 @@ namespace hpx::parallel::execution::detail {
                     do_work<queue_end::left>(done);
                 }
             }
-            // The chunks left in the queue are skipped and counted, so every
-            // chunk that doesn't run comes with an exception, which is stored
-            // before finish counts the chunks. A worker that counts none
-            // (copying the function threw, and the other workers took all of
-            // its chunks) ran and skipped nothing: the other workers ran all
-            // chunks, and the operation may already be complete, so it doesn't
-            // report the exception.
             catch (std::bad_alloc const&)
             {
+                state->bad_alloc_thrown = true;
                 skip_own_work(done);
-                if (done != 0)
-                {
-                    state->bad_alloc_thrown = true;
-                }
             }
             catch (...)
             {
+                store_exception(std::current_exception());
                 skip_own_work(done);
-                if (done != 0)
-                {
-                    store_exception(std::current_exception());
-                }
             }
 
             finish(done);
