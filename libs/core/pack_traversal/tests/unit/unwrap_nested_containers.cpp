@@ -38,6 +38,15 @@ void test_unwrap_nested_containers()
         HPX_TEST_EQ(res[1], std::string("b"));
     }
 
+    {
+        auto unwrapper = hpx::unwrapping(
+            [](std::vector<std::string> values) { return values; });
+        auto res = unwrapper(std::vector<std::string>{"a", "b"});
+        HPX_TEST_EQ(res.size(), 2u);
+        HPX_TEST_EQ(res[0], std::string("a"));
+        HPX_TEST_EQ(res[1], std::string("b"));
+    }
+
     // Parallel reduce of strings
     {
         std::vector<std::string> s(16, "a");
