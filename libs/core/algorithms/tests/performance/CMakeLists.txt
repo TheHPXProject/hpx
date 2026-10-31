@@ -27,6 +27,7 @@ set(benchmarks
     benchmark_unique_copy
     foreach_report
     foreach_scaling
+    task_size_chunk_size_sweep
     transform_reduce_scaling
 )
 
@@ -98,6 +99,12 @@ set(benchmark_partial_sort_parallel_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 set(benchmark_nth_element_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
 
 set(benchmark_nth_element_parallel_perftest_PARAMETERS THREADS_PER_LOCALITY 4)
+
+# As a test, the sweep runs only short loops, each once after its warm-up
+set(task_size_chunk_size_sweep_PARAMETERS
+    THREADS_PER_LOCALITY 4 ARGS --max_work_us=100 --time_per_case_ms=0
+    --min_reps=1
+)
 
 foreach(benchmark ${benchmarks})
   set(sources ${benchmark}.cpp)

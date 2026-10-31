@@ -982,6 +982,19 @@ if(HPX_WITH_THREAD_STEALING_COUNTS)
 endif()
 
 hpx_option(
+  HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS
+  BOOL
+  "Chunk parallel loops based on the task size of the loop body by default, deriving default_parameters from task_size_chunk_size (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
+  hpx_add_config_define(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+endif()
+
+hpx_option(
   HPX_WITH_COROUTINE_COUNTERS BOOL
   "Enable keeping track of coroutine creation and rebind counts (default: OFF)"
   OFF

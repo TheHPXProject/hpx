@@ -289,6 +289,11 @@ namespace hpx::util {
             "${HPX_THREAD_QUEUE_CACHED_THREADS_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_CACHED_THREADS_COUNT)) "}",
 
+            // empty entries stand for the defaults compiled into the library
+            "[hpx.task_size_chunk_size]",
+            "min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}",
+            "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
+
             "[hpx.commandline]",
             // enable aliasing
             "aliasing = ${HPX_COMMANDLINE_ALIASING:1}",
