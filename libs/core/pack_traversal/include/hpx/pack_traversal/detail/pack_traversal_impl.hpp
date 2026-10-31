@@ -445,6 +445,21 @@ namespace hpx::util::detail {
         using dereferenced_of_t =
             std::conditional_t<std::is_reference_v<T>, std::decay_t<T>, T>;
 
+        /// Deduces the mapped type resulting from applying the mapping M to
+        /// an element of type T, falling back to T if M is not invocable.
+        template <typename M, typename T, typename Enable = void>
+        struct mapped_type_from
+        {
+            using type = T;
+        };
+
+        template <typename M, typename T>
+        struct mapped_type_from<M, T,
+            std::enable_if_t<hpx::is_invocable_v<M, T>>>
+        {
+            using type = hpx::util::invoke_result_t<M, T>;
+        };
+
         /// Returns the type which is resulting if the mapping is applied to an
         /// element in the container.
         ///
@@ -452,12 +467,12 @@ namespace hpx::util::detail {
         /// references we try to construct the container from a copied version.
         template <typename Container, typename Mapping>
         using mapped_type_from_t = dereferenced_of_t<spreading::unpacked_of_t<
-            hpx::util::invoke_result_t<Mapping, element_of_t<Container>>>>;
+            typename mapped_type_from<Mapping, element_of_t<Container>>::type>>;
 
         /// Deduces to a true_type if the mapping maps to zero elements.
         template <typename T, typename M>
         using is_empty_mapped = spreading::is_empty_spread<
-            std::decay_t<hpx::util::invoke_result_t<M, element_of_t<T>>>>;
+            std::decay_t<typename mapped_type_from<M, element_of_t<T>>::type>>;
 
         template <typename T, typename M>
         inline constexpr bool is_empty_mapped_v = is_empty_mapped<T, M>::value;
