@@ -42,6 +42,7 @@ jobs:
               -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=OFF \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
               -DHPX_WITH_CONTRACTS_MODE=OBSERVE \
+              -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON \
               -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
     - name: Build
       shell: bash
