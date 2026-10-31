@@ -7,6 +7,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <iterator>
@@ -27,4 +28,13 @@ namespace hpx::parallel::detail {
     using task_size_argument_t =
         std::conditional_t<std::is_same_v<std::decay_t<Proj>, hpx::identity>,
             std::iter_reference_t<Iter>, unknown_task_size_argument>;
+
+    // The size of a call of f with arguments of the types Args, to be read
+    // before f is moved into the function that calls it.
+    HPX_CXX_CORE_EXPORT template <typename... Args, typename F>
+    [[nodiscard]] constexpr hpx::threads::task_size task_size_of_call(
+        F const& f) noexcept
+    {
+        return hpx::traits::get_task_size_for<F, Args...>::call(f);
+    }
 }    // namespace hpx::parallel::detail
