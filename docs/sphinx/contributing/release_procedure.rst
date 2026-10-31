@@ -55,14 +55,6 @@ are completed to avoid confusion.
      *   Update collaborators
      *   Update grant information
 
-#. This step does not apply to patch releases. For APEX:
-
-   * Change the release branch to be the most current release tag available in
-     the APEX ``git_external`` section in the main ``CMakeLists.txt``.
-     Please contact the maintainers of the respective packages to generate a new
-     release to synchronize with the |hpx| release (`APEX
-     <http://github.com/UO-OACISS/xpress-apex>`_).
-
 #. Make sure ``HPX_VERSION_MAJOR/MINOR/SUBMINOR`` in ``CMakeLists.txt`` contain
    the correct values. Change them if needed.
 

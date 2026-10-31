@@ -84,7 +84,7 @@ authors:
 - given-names: Zahra
   family-names: Khatami
   affiliation: Louisiana State University
-version: 1.11.0
-date-released: 2026-09-30
+version: 2.0.0
+date-released: 2026-10-31
 repository-code: https://github.com/TheHPXProject/hpx
 license: BSL-1.0
