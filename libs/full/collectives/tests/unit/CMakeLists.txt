@@ -106,3 +106,28 @@ foreach(test ${tests})
   )
   add_hpx_unit_test("modules.collectives" ${test} ${${test}_PARAMETERS})
 endforeach()
+
+# Precondition checks (HPX_CONTRACT_ASSERT) need a custom violation handler,
+# which is called in fallback mode only. With HPX_WITH_CONTRACTS=OFF or in
+# IGNORE mode the checks fall back to HPX_ASSERT and the handler is never
+# called.
+if(HPX_WITH_CONTRACTS
+   AND NOT HPX_WITH_CXX26_CONTRACTS
+   AND NOT HPX_WITH_CONTRACTS_MODE STREQUAL "IGNORE"
+)
+  set(contract_tests contracts_fallback_handler contracts_invalid_communicator)
+
+  foreach(test ${contract_tests})
+    source_group("Source Files" FILES ${test}.cpp)
+
+    add_hpx_executable(
+      ${test}_test INTERNAL_FLAGS
+      SOURCES ${test}.cpp
+      EXCLUDE_FROM_ALL
+      HPX_PREFIX ${HPX_BUILD_PREFIX}
+      FOLDER "Tests/Unit/Modules/Full/Collectives"
+    )
+
+    add_hpx_unit_test("modules.collectives" ${test})
+  endforeach()
+endif()

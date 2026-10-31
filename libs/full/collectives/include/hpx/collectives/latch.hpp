@@ -107,6 +107,9 @@ namespace hpx::distributed {
         /// Synchronization: Synchronizes with all calls that block on this
         /// latch and with all is_ready calls on this latch that return true .
         ///
+        /// \note Only n >= 0 is checked here, counter_ lives in the (possibly
+        ///       remote) latch component.
+        ///
         /// \throws Nothing.
         void count_down(std::ptrdiff_t n)
         {
