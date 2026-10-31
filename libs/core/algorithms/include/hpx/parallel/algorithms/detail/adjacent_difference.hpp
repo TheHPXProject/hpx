@@ -40,6 +40,22 @@ namespace hpx::parallel::detail {
             }
             return ++dest;
         }
+
+        template <typename InIter, typename Sent, typename OutIter, typename Op,
+            typename Value>
+        static constexpr inline OutIter invoke_default(InIter first, Sent last,
+            OutIter dest, Op&& op, Value&& previous)
+        {
+            using value_t = typename std::iterator_traits<InIter>::value_type;
+            value_t acc = HPX_FORWARD(Value, previous);
+            while (first != last)
+            {
+                value_t val = *first++;
+                *dest++ = HPX_INVOKE(op, val, HPX_MOVE(acc));
+                acc = HPX_MOVE(val);
+            }
+            return dest;
+        }
     };
 
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
@@ -56,6 +72,16 @@ namespace hpx::parallel::detail {
     {
         return sequential_adjacent_difference_t<ExPolicy>{}(
             first, last, dest, HPX_FORWARD(Op, op));
+    }
+
+    template <typename ExPolicy, typename InIter, typename Sent,
+        typename OutIter, typename Op, typename Value>
+    HPX_HOST_DEVICE HPX_FORCEINLINE constexpr OutIter
+    sequential_adjacent_difference(InIter first, Sent last, OutIter dest,
+        Op&& op, Value&& previous)
+    {
+        return sequential_adjacent_difference_t<ExPolicy>{}(first, last, dest,
+            HPX_FORWARD(Op, op), HPX_FORWARD(Value, previous));
     }
 #endif
 
