@@ -984,6 +984,8 @@ namespace hpx {
     ///
     template <typename InIter, typename F>
     InIter find_last_if_not(InIter first, InIter last, F&& f);
+
+    // clang-format on
 }    // namespace hpx
 
 #else    // DOXYGEN
@@ -1013,7 +1015,6 @@ namespace hpx {
 #include <iterator>
 #include <type_traits>
 #include <utility>
-#include <iterator>
 
 namespace hpx::parallel {
 
@@ -1076,8 +1077,7 @@ namespace hpx::parallel {
                         val, HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, first](
-                              auto&&... data) mutable -> Iter {
+                auto f2 = [tok, first](auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
                     // make sure iterators embedded in the function objects
@@ -1161,8 +1161,7 @@ namespace hpx::parallel {
                         tok, HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, first](
-                              auto&&... data) mutable -> Iter {
+                auto f2 = [tok, first](auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
                     // make sure iterators embedded in the function objects that
@@ -1245,8 +1244,7 @@ namespace hpx::parallel {
                         tok, HPX_FORWARD(F, f), HPX_FORWARD(Proj, proj));
                 };
 
-                auto f2 = [tok, first](
-                              auto&&... data) mutable -> Iter {
+                auto f2 = [tok, first](auto&&... data) mutable -> Iter {
                     static_assert(sizeof...(data) < 2);
 
                     // make sure iterators embedded in the function objects that
@@ -1463,8 +1461,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(Proj1, proj1), HPX_FORWARD(Proj2, proj2));
                 };
 
-                auto f2 = [tok, first](
-                              auto&&... data) mutable -> FwdIter {
+                auto f2 = [tok, first](auto&&... data) mutable -> FwdIter {
                     static_assert(sizeof...(data) < 2);
 
                     // make sure iterators embedded in the function objects that
@@ -1493,7 +1490,8 @@ namespace hpx {
     ///////////////////////////////////////////////////////////////////////////
     // CPO for hpx::find
     HPX_CXX_CORE_EXPORT inline constexpr struct find_t final
-      : hpx::detail::tag_dispatch<find_t, hpx::detail::tag_parallel_algorithm<find_t>>
+      : hpx::detail::tag_dispatch<find_t,
+            hpx::detail::tag_parallel_algorithm<find_t>>
     {
         template <typename InIter,
             typename T = typename std::iterator_traits<InIter>::value_type>
