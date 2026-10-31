@@ -487,7 +487,8 @@ namespace hpx::parallel {
                 }
 
                 // an iteration has the size of the transformation
-                auto f1 = hpx::threads::detail::with_task_size_of(
+                auto f1 = hpx::threads::detail::with_task_size_of<
+                    std::iter_reference_t<Iter>>(
                     [r, conv](Iter part_begin, std::size_t part_size) mutable {
                         auto val = HPX_INVOKE(conv, *part_begin);
                         return detail::sequential_reduce<ExPolicy>(
@@ -557,7 +558,8 @@ namespace hpx::parallel {
 
                 // an iteration has the size of the transformation (op2 is
                 // copied, it must not be moved from before its size is read)
-                auto f1 = hpx::threads::detail::with_task_size_of(
+                auto f1 = hpx::threads::detail::with_task_size_of<
+                    std::iter_reference_t<Iter>, std::iter_reference_t<Iter2>>(
                     [op1, op2](zip_iterator part_begin,
                         std::size_t part_size) mutable -> T {
                         auto iters = part_begin.get_iterator_tuple();

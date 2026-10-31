@@ -419,8 +419,10 @@ namespace hpx::parallel {
                     }
                 }
 
-                // an iteration has the size of the reduction operation
-                auto f1 = hpx::threads::detail::with_task_size_of(
+                // an iteration has the size of the reduction operation, called
+                // with the reduced value and an element
+                auto f1 = hpx::threads::detail::with_task_size_of<T const&,
+                    std::iter_reference_t<FwdIterB>>(
                     [r](FwdIterB part_begin, std::size_t part_size) -> T {
                         T val = *part_begin;
                         return detail::sequential_reduce<ExPolicy>(

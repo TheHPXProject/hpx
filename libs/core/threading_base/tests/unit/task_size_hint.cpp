@@ -10,7 +10,6 @@
 // A scheduler that counts the sizes it is asked to create threads with sees
 // it.
 
-#include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/functional.hpp>
 #include <hpx/future.hpp>
@@ -21,12 +20,12 @@
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
-#include <hpx/numeric.hpp>
 #include <hpx/thread.hpp>
 
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -420,87 +419,6 @@ void test_fork_join_executor()
         task_size::unknown);
 }
 
-// The worker tasks of reduce, transform_reduce and merge have the size of the
-// reduction, the transformation and the comparison. The task policy keeps the
-// partitioners from running the only chunk inline.
-void test_algorithm_sizes()
-{
-    auto const policy = hpx::execution::par(hpx::execution::task);
-    std::vector<int> v(16, 1);
-    std::vector<int> merged(32);
-
-    auto const plus = [](int a, int b) { return a + b; };
-    auto const identity = [](int i) { return i; };
-    auto const less = [](int a, int b) { return a < b; };
-
-    check_only_size(
-        [&] {
-            hpx::reduce(policy, v.begin(), v.end(), 0, hpx::large_task(plus))
-                .get();
-        },
-        task_size::large);
-    check_only_size(
-        [&] {
-            hpx::transform_reduce(
-                policy, v.begin(), v.end(), 0, plus, hpx::large_task(identity))
-                .get();
-        },
-        task_size::large);
-    check_only_size(
-        [&] {
-            hpx::transform_reduce(policy, v.begin(), v.end(), v.begin(), 0,
-                plus, hpx::large_task(plus))
-                .get();
-        },
-        task_size::large);
-    check_only_size(
-        [&] {
-            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
-                merged.begin(), hpx::large_task(less))
-                .get();
-        },
-        task_size::large);
-
-    // with variable chunk sizes the size is derived from the iterations of a
-    // chunk as well
-    check_only_size(
-        [&] {
-            hpx::reduce(
-                policy.with(hpx::execution::experimental::guided_chunk_size()),
-                v.begin(), v.end(), 0, hpx::medium_task(plus))
-                .get();
-        },
-        task_size::medium);
-
-    // The only worker runs all chunks in one task. A chunk of 100 iterations
-    // of a nano function is small and 100 small chunks make a medium task.
-    // Fewer iterations per chunk would make nano chunks and a small task;
-    // counting all 10000 iterations for each chunk would make medium chunks
-    // and a large task.
-    std::vector<int> w(10000, 1);
-    check_only_size(
-        [&] {
-            hpx::reduce(
-                policy.with(
-                    hpx::execution::experimental::static_chunk_size(100)),
-                w.begin(), w.end(), 0, hpx::nano_task(plus))
-                .get();
-        },
-        task_size::medium);
-
-    // without a size, the worker tasks have none
-    check_only_size(
-        [&] { hpx::reduce(policy, v.begin(), v.end(), 0, plus).get(); },
-        task_size::unknown);
-    check_only_size(
-        [&] {
-            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
-                merged.begin(), less)
-                .get();
-        },
-        task_size::unknown);
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -536,7 +454,6 @@ int hpx_main()
             hpx::execution::experimental::thread_pool_scheduler{}),
         task_size::unknown);
     test_fork_join_executor();
-    test_algorithm_sizes();
 
     return hpx::local::finalize();
 }

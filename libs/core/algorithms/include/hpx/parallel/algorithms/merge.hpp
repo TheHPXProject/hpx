@@ -297,6 +297,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/rotate.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/detail/upper_lower_bound.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -867,32 +868,36 @@ namespace hpx::parallel {
             auto params = policy.parameters();
             auto exec = policy.executor();
 
-            // an iteration has the size of the comparison
-            auto f1 = hpx::threads::detail::with_task_size_of(
-                [dest, comp, proj1, proj2, first1, first2, len1, len2, params,
-                    exec](std::size_t idx, std::size_t chunk) {
-                    if (len1 != 0 || len2 != 0)
-                    {
-                        std::size_t N = len1 + len2;
-                        std::size_t k0 = (std::min) (idx * chunk, N);
-                        std::size_t k1 = (std::min) (k0 + chunk, N);
+            auto merge_chunk = [dest, comp, proj1, proj2, first1, first2, len1,
+                                   len2, params,
+                                   exec](std::size_t idx, std::size_t chunk) {
+                if (len1 != 0 || len2 != 0)
+                {
+                    std::size_t N = len1 + len2;
+                    std::size_t k0 = (std::min) (idx * chunk, N);
+                    std::size_t k1 = (std::min) (k0 + chunk, N);
 
-                        auto [a0, b0] = diagonal_intersection(
-                            first1, len1, first2, len2, k0, comp, proj1, proj2);
-                        auto [a1, b1] = diagonal_intersection(
-                            first1, len1, first2, len2, k1, comp, proj1, proj2);
+                    auto [a0, b0] = diagonal_intersection(
+                        first1, len1, first2, len2, k0, comp, proj1, proj2);
+                    auto [a1, b1] = diagonal_intersection(
+                        first1, len1, first2, len2, k1, comp, proj1, proj2);
 
-                        hpx::execution::experimental::mark_partition(
-                            params, exec, idx, partition_phase::start, chunk);
-                        sequential_merge(std::next(first1, a0),
-                            std::next(first1, a1), std::next(first2, b0),
-                            std::next(first2, b1), std::next(dest, k0), comp,
-                            proj1, proj2);
-                        hpx::execution::experimental::mark_partition(
-                            params, exec, idx, partition_phase::end);
-                    }
-                },
-                comp);
+                    hpx::execution::experimental::mark_partition(
+                        params, exec, idx, partition_phase::start, chunk);
+                    sequential_merge(std::next(first1, a0),
+                        std::next(first1, a1), std::next(first2, b0),
+                        std::next(first2, b1), std::next(dest, k0), comp, proj1,
+                        proj2);
+                    hpx::execution::experimental::mark_partition(
+                        params, exec, idx, partition_phase::end);
+                }
+            };
+
+            // an iteration has the size of the comparison of two elements
+            auto f1 = hpx::threads::detail::with_task_size_of<
+                task_size_argument_t<Iter1, Proj1>,
+                task_size_argument_t<Iter2, Proj2>>(
+                HPX_MOVE(merge_chunk), comp);
 
             if (len1 > len2)
             {
