@@ -684,6 +684,13 @@ constructor replace these defaults for one loop, the configuration entries
 many pairs of these values and prints the pair that suits a machine best, in
 the form of these configuration entries.
 
+If |hpx| is configured with ``HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON``, the
+default executor parameters (``default_parameters``, used by ``par`` and by
+the executors unless other parameters are given) are derived from
+``task_size_chunk_size``. A loop whose body has a task size is then chunked as
+described here without passing ``task_size_chunk_size`` explicitly, all other
+loops are chunked as before.
+
 To tune these values for a machine, build and run the benchmark. It is built
 when |hpx| is configured with ``HPX_WITH_TESTS=ON`` and
 ``HPX_WITH_TESTS_BENCHMARKS=ON`` (the default):

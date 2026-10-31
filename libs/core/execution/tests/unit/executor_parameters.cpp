@@ -233,6 +233,38 @@ void test_task_size_chunk_size()
     }
 }
 
+// With HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS the default parameters chunk a
+// loop body that has a task size like task_size_chunk_size, otherwise (and for
+// loop bodies without a size) into 4 chunks per core.
+void test_default_parameters()
+{
+    using namespace std::chrono_literals;
+    using hpx::execution::experimental::default_parameters;
+
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+    static_assert(hpx::execution::experimental::extract_uses_task_size_v<
+        default_parameters>);
+    constexpr std::size_t sized_chunk_size = 32;    // 1000 / (8 * 4)
+#else
+    static_assert(!hpx::execution::experimental::extract_uses_task_size_v<
+        default_parameters>);
+    constexpr std::size_t sized_chunk_size = 63;    // 1000 / (4 * 4)
+#endif
+
+    hpx::execution::parallel_executor exec;
+    default_parameters const params;
+    HPX_TEST_EQ(params.get_chunk_size(exec, 1us, 4, 1000), sized_chunk_size);
+    HPX_TEST_EQ(
+        params.get_chunk_size(exec, hpx::chrono::null_duration, 4, 1000),
+        std::size_t(63));
+
+    // par uses the default parameters
+    std::vector<int> v(10000, 1);
+    int const sum = hpx::transform_reduce(hpx::execution::par, v.begin(),
+        v.end(), 0, std::plus<>(), hpx::small_task([](int i) { return i; }));
+    HPX_TEST_EQ(sum, 10000);
+}
+
 void test_persistent_auto_chunk_size()
 {
     {
@@ -331,6 +363,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_auto_chunk_size();
     test_persistent_auto_chunk_size();
     test_task_size_chunk_size();
+    test_default_parameters();
     test_num_cores();
 
     test_combined_hooks();
