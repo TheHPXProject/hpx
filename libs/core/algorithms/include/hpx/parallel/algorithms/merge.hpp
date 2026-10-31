@@ -297,6 +297,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/rotate.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/detail/upper_lower_bound.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -892,24 +893,11 @@ namespace hpx::parallel {
                 }
             };
 
-            // an iteration has the size of the comparison, of two elements if
-            // they are not projected
-            auto f1 = [&] {
-                if constexpr (std::is_same_v<std::decay_t<Proj1>,
-                                  hpx::identity> &&
-                    std::is_same_v<std::decay_t<Proj2>, hpx::identity>)
-                {
-                    return hpx::threads::detail::with_task_size_of<
-                        std::iter_reference_t<Iter1>,
-                        std::iter_reference_t<Iter2>>(
-                        HPX_MOVE(merge_chunk), comp);
-                }
-                else
-                {
-                    return hpx::threads::detail::with_task_size_of(
-                        HPX_MOVE(merge_chunk), comp);
-                }
-            }();
+            // an iteration has the size of the comparison of two elements
+            auto f1 = hpx::threads::detail::with_task_size_of<
+                task_size_argument_t<Iter1, Proj1>,
+                task_size_argument_t<Iter2, Proj2>>(
+                HPX_MOVE(merge_chunk), comp);
 
             if (len1 > len2)
             {
