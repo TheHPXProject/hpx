@@ -26,6 +26,7 @@
 #include <hpx/modules/compute.hpp>
 #include <hpx/modules/compute_local.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/thread.hpp>
 #include <hpx/version.hpp>
@@ -324,7 +325,23 @@ struct triad_step
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-template <typename Allocator, typename Policy>
+// The function of a kernel, with the nano task size if Sized, so that
+// task_size_chunk_size can chunk the loop.
+template <bool Sized, typename F>
+auto kernel(F f)
+{
+    if constexpr (Sized)
+    {
+        return hpx::nano_task(HPX_MOVE(f));
+    }
+    else
+    {
+        return f;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+template <bool Sized = false, typename Allocator, typename Policy>
 std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
     std::size_t iterations, std::size_t size, Allocator&& alloc,
     Policy&& policy)
@@ -399,15 +416,15 @@ std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
 
         // Scale
         hpx::transform(policy, c.begin(), c.end(), b.begin(),
-            multiply_step<STREAM_TYPE>(scalar));
+            kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
 
         // Add
         hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(), b.end(),
-            c.begin(), add_step<STREAM_TYPE>());
+            c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
 
         // Triad
         hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(), c.end(),
-            a.begin(), triad_step<STREAM_TYPE>(scalar));
+            a.begin(), kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -429,19 +446,19 @@ std::vector<std::vector<double>> run_benchmark(std::size_t warmup_iterations,
         // Scale
         timing[1][iteration] = mysecond();
         hpx::transform(policy, c.begin(), c.end(), b.begin(),
-            multiply_step<STREAM_TYPE>(scalar));
+            kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
         timing[1][iteration] = mysecond() - timing[1][iteration];
 
         // Add
         timing[2][iteration] = mysecond();
         hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(), b.end(),
-            c.begin(), add_step<STREAM_TYPE>());
+            c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
         timing[2][iteration] = mysecond() - timing[2][iteration];
 
         // Triad
         timing[3][iteration] = mysecond();
         hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(), c.end(),
-            a.begin(), triad_step<STREAM_TYPE>(scalar));
+            a.begin(), kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
         timing[3][iteration] = mysecond() - timing[3][iteration];
     }
 
@@ -473,6 +490,28 @@ int hpx_main(hpx::program_options::variables_map& vm)
     HPX_UNUSED(chunk_size);
 
     std::string chunker = vm["chunker"].as<std::string>();
+    if (chunker != "default" && chunker != "task_size")
+    {
+        HPX_THROW_EXCEPTION(hpx::error::commandline_option_error, "hpx_main",
+            "Invalid chunker given, must be default or task_size");
+    }
+
+    // Runs the benchmark with the given policy. With the task_size chunker
+    // the loops are chunked by task_size_chunk_size, based on the task size
+    // of the kernels' functions. Copy has no function, it is chunked as by
+    // default.
+    auto run = [&](auto&& alloc, auto&& policy) {
+        if (chunker == "task_size")
+        {
+            return run_benchmark<true>(warmup_iterations, iterations,
+                vector_size, HPX_FORWARD(decltype(alloc), alloc),
+                policy.with(
+                    hpx::execution::experimental::task_size_chunk_size()));
+        }
+        return run_benchmark<false>(warmup_iterations, iterations, vector_size,
+            HPX_FORWARD(decltype(alloc), alloc),
+            HPX_FORWARD(decltype(policy), policy));
+    };
 
     if (vector_size < 1)
     {
@@ -526,8 +565,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
         if (executor == 0)
         {
             // Default parallel policy with serial allocator.
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::allocator<STREAM_TYPE>{}, hpx::execution::par);
+            timing = run(std::allocator<STREAM_TYPE>{}, hpx::execution::par);
         }
         else if (executor == 1)
         {
@@ -541,8 +579,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
             executor_type exec(numa_nodes);
             auto policy = hpx::execution::par.on(exec);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else if (executor == 2)
         {
@@ -552,8 +589,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 decltype(policy)>
                 alloc(policy);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else if (executor == 3)
         {
@@ -567,8 +603,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 decltype(policy)>
                 alloc(policy);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else if (executor == 4)
         {
@@ -583,8 +618,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 decltype(policy)>
                 alloc(policy);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else if (executor == 5)
         {
@@ -600,8 +634,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 decltype(policy)>
                 alloc(policy);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else if (executor == 6)
         {
@@ -618,8 +651,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 decltype(policy)>
                 alloc(policy);
 
-            timing = run_benchmark<>(warmup_iterations, iterations, vector_size,
-                std::move(alloc), std::move(policy));
+            timing = run(std::move(alloc), std::move(policy));
         }
         else
         {
@@ -751,7 +783,8 @@ int main(int argc, char* argv[])
         (   "chunker",
             hpx::program_options::value<std::string>()->default_value("default"),
             "Which chunker to use for the parallel algorithms. "
-            "possible values: dynamic, auto, guided. (default: default)")
+            "possible values: default, task_size (task_size_chunk_size). "
+            "(default: default)")
         (   "chunk_size",
              hpx::program_options::value<std::size_t>()->default_value(0),
             "size of vector (default: 1024)")

@@ -33,6 +33,7 @@ configure_extra_options+=" -DCMAKE_C_COMPILER=gcc"
 configure_extra_options+=" -DCMAKE_C_FLAGS=-fPIC"
 configure_extra_options+=" -DHPX_WITH_DATAPAR_BACKEND=STD_EXPERIMENTAL_SIMD"
 configure_extra_options+=" -DHPX_LIKWID_WITH_LIKWID=ON"
+configure_extra_options+=" -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON"
 
 # The pwrapi library still needs to be set up properly on rostam
 # configure_extra_options+=" -DHPX_WITH_POWER_COUNTER=ON"

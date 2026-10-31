@@ -71,7 +71,7 @@ namespace hpx::parallel::util::detail {
         else if constexpr (!invokes_testing_function)
         {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
-                policy, first, count, cores);
+                policy, f, first, count, cores);
             std::size_t const iterations =
                 detail::iterations_per_chunk(count, shape);
 
