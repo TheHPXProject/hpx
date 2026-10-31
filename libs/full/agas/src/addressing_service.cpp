@@ -365,15 +365,25 @@ namespace hpx::agas {
             endpoints = locality_ns_->resolve_locality(gid);
             if (endpoints.empty())
             {
-#if defined(HPX_HAVE_NETWORKING)
                 // A locality removed from AGAS is already recorded as
                 // disconnected on every locality, report that instead of a
-                // generic error.
-                bool const was_disconnected =
+                // generic error. The console records it only after it has
+                // unregistered it, but a locality that force_disconnect()
+                // removes is marked as disconnecting before that and stays
+                // in the resolved localities until it is recorded.
+                bool was_disconnected = false;
+                {
+                    std::shared_lock<hpx::shared_mutex> sl(
+                        resolved_localities_mtx_);
+                    auto const dit = resolved_localities_.find(gid);
+                    was_disconnected = dit != resolved_localities_.end() &&
+                        dit->second.state ==
+                            resolved_locality_state::disconnecting;
+                }
+#if defined(HPX_HAVE_NETWORKING)
+                was_disconnected = was_disconnected ||
                     parcelset::locality_was_disconnected(
                         naming::get_locality_id_from_gid(gid));
-#else
-                bool const was_disconnected = false;
 #endif
                 if (was_disconnected)
                 {
