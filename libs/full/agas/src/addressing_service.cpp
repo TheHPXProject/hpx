@@ -442,7 +442,19 @@ namespace hpx::agas {
                 component_ns_->unregister_server_instance(ec);
                 symbol_ns_.unregister_server_instance(ec);
             }
-            remove_resolved_locality(gid);
+
+            // A locality that is being force-disconnected is erased by
+            // remove_from_connection_cache() once its disconnect is recorded,
+            // so that resolve_locality() reports it as disconnected until then.
+            {
+                std::unique_lock<hpx::shared_mutex> l(resolved_localities_mtx_);
+                if (auto const it = resolved_localities_.find(gid);
+                    it != resolved_localities_.end() &&
+                    it->second.state != resolved_locality_state::disconnecting)
+                {
+                    resolved_localities_.erase(it);
+                }
+            }
             return result;
         }
         catch (hpx::exception const& e)
