@@ -115,8 +115,8 @@ namespace {
 
         for (double work_us = 1.0; work_us <= cfg.max_work_us; work_us *= 10)
         {
-            auto const count =
-                static_cast<std::size_t>(work_us / per_iteration_us + 0.5);
+            auto const count = static_cast<std::size_t>(
+                std::llround(work_us / per_iteration_us));
             if (count == 0)
             {
                 continue;
