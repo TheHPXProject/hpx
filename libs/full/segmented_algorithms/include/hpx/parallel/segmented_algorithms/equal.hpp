@@ -10,9 +10,10 @@
 #include <hpx/modules/algorithms.hpp>
 #include <hpx/modules/executors.hpp>
 
-#include <hpx/parallel/segmented_algorithms/detail/dispatch.hpp>
+#include <hpx/parallel/segmented_algorithms/detail/capture_dispatch.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <exception>
 #include <iterator>
 #include <list>
@@ -45,69 +46,65 @@ namespace hpx::parallel::detail {
         typedef typename traits2::segment_iterator segment_iterator2;
         typedef typename traits2::local_iterator local_iterator_type2;
 
+        using value_type1 = typename std::iterator_traits<SegIter1>::value_type;
+        using value_type2 = typename std::iterator_traits<SegIter2>::value_type;
+        constexpr std::size_t max_chunk_size =
+            max_capture_batch_elements<value_type1, value_type2>();
+
         segment_iterator1 sit1 = traits1::segment(first1);
         segment_iterator1 send1 = traits1::segment(last1);
         segment_iterator2 sit2 = traits2::segment(first2);
 
         using result = util::detail::algorithm_result<ExPolicy, bool>;
 
-        bool overall_result = true;
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        auto remaining = detail::distance(first1, last1);
 
-        if (sit1 == send1)
+        while (remaining != 0)
         {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            if (beg1 != end1)
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = traits2::end(sit2);
+
+            auto const count1 = std::distance(beg1, end1);
+            auto const count2 = std::distance(beg2, end2);
+
+            auto const count = (std::min)(
+                static_cast<std::size_t>(count1 < count2 ? count1 : count2),
+                max_chunk_size);
+
+            auto chunk_end1 = std::next(beg1, count);
+
+            if (count != 0 &&
+                !get_capture_result<ExPolicy>(dispatch_comparison_async(
+                    traits1::get_id(sit1), traits2::get_id(sit2), algo,
+                    policy, std::true_type(), beg1, chunk_end1, beg2, pred)))
             {
-                overall_result &= dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2,
-                    HPX_FORWARD(Pred, pred));
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            if (beg1 != end1)
-            {
-                overall_result = dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2, pred);
+                return result::get(false);
             }
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2; sit1 != send1; ++sit1, ++sit2)
+            beg1 = chunk_end1;
+            std::advance(beg2, count);
+            remaining -= count;
+            if (remaining == 0)
             {
-                if (!overall_result)
-                    break;
+                break;
+            }
 
+            if (beg1 == end1)
+            {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
-                beg2 = traits2::begin(sit2);
-
-                if (beg1 != end1)
-                {
-                    overall_result &= dispatch(traits1::get_id(sit1), algo,
-                        policy, std::true_type(), beg1, end1, beg2, pred);
-                }
             }
-
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-            if (beg1 != end1)
+            if (beg2 == end2)
             {
-                overall_result &= dispatch(traits1::get_id(sit1), algo, policy,
-                    std::true_type(), beg1, end1, beg2,
-                    HPX_FORWARD(Pred, pred));
+                ++sit2;
+                beg2 = traits2::begin(sit2);
             }
         }
 
-        return result::get(HPX_MOVE(overall_result));
+        return result::get(true);
     }
 
     // parallel remote implementation
@@ -127,6 +124,11 @@ namespace hpx::parallel::detail {
         typedef typename traits2::segment_iterator segment_iterator2;
         typedef typename traits2::local_iterator local_iterator_type2;
 
+        using value_type1 = typename std::iterator_traits<SegIter1>::value_type;
+        using value_type2 = typename std::iterator_traits<SegIter2>::value_type;
+        constexpr std::size_t max_chunk_size =
+            max_capture_batch_elements<value_type1, value_type2>();
+
         typedef std::integral_constant<bool, !std::forward_iterator<SegIter1>>
             forced_seq;
 
@@ -139,53 +141,46 @@ namespace hpx::parallel::detail {
         std::vector<hpx::shared_future<bool>> segments;
         segments.reserve(detail::distance(sit1, send1));
 
-        if (sit1 == send1)
+        local_iterator_type1 beg1 = traits1::local(first1);
+        local_iterator_type2 beg2 = traits2::local(first2);
+        auto remaining = detail::distance(first1, last1);
+
+        while (remaining != 0)
         {
-            // all elements are on the same partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::local(last1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            if (beg1 != end1)
+            local_iterator_type1 end1 = sit1 == send1 ?
+                traits1::local(last1) : traits1::end(sit1);
+            local_iterator_type2 end2 = traits2::end(sit2);
+            auto const count1 = std::distance(beg1, end1);
+            auto const count2 = std::distance(beg2, end2);
+            auto const count = (std::min)(
+                static_cast<std::size_t>(count1 < count2 ? count1 : count2),
+                max_chunk_size);
+            auto chunk_end1 = std::next(beg1, count);
+
+            if (count != 0)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2,
-                    HPX_FORWARD(Pred, pred)));
-            }
-        }
-        else
-        {
-            // handle the remaining part of the first partition
-            local_iterator_type1 beg1 = traits1::local(first1);
-            local_iterator_type1 end1 = traits1::end(sit1);
-            local_iterator_type2 beg2 = traits2::local(first2);
-            if (beg1 != end1)
-            {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2, pred));
+                segments.push_back(dispatch_comparison_async(
+                    traits1::get_id(sit1), traits2::get_id(sit2), algo,
+                    policy, forced_seq(), beg1, chunk_end1, beg2, pred));
             }
 
-            // handle all of the full partitions
-            for (++sit1, ++sit2; sit1 != send1; ++sit1, ++sit2)
+            beg1 = chunk_end1;
+            std::advance(beg2, count);
+            remaining -= count;
+            if (remaining == 0)
             {
+                break;
+            }
+
+            if (beg1 == end1)
+            {
+                ++sit1;
                 beg1 = traits1::begin(sit1);
-                end1 = traits1::end(sit1);
-                beg2 = traits2::begin(sit2);
-                if (beg1 != end1)
-                {
-                    segments.push_back(dispatch_async(traits1::get_id(sit1),
-                        algo, policy, forced_seq(), beg1, end1, beg2, pred));
-                }
             }
-
-            // handle the beginning of the last partition
-            beg1 = traits1::begin(sit1);
-            end1 = traits1::local(last1);
-            beg2 = traits2::begin(sit2);
-            if (beg1 != end1)
+            if (beg2 == end2)
             {
-                segments.push_back(dispatch_async(traits1::get_id(sit1), algo,
-                    policy, forced_seq(), beg1, end1, beg2,
-                    HPX_FORWARD(Pred, pred)));
+                ++sit2;
+                beg2 = traits2::begin(sit2);
             }
         }
 
