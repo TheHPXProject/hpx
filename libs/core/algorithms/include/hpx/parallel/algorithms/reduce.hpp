@@ -421,11 +421,12 @@ namespace hpx::parallel {
 
                 // an iteration has the size of the reduction operation
                 auto f1 = hpx::threads::detail::with_task_size_of(
-                    r, [r](FwdIterB part_begin, std::size_t part_size) -> T {
+                    [r](FwdIterB part_begin, std::size_t part_size) -> T {
                         T val = *part_begin;
                         return detail::sequential_reduce<ExPolicy>(
                             ++part_begin, --part_size, HPX_MOVE(val), r);
-                    });
+                    },
+                    r);
 
                 return util::partitioner<ExPolicy, T>::call(
                     HPX_FORWARD(ExPolicy, policy), first,

@@ -150,12 +150,14 @@ namespace hpx::threads::detail {
         }
     };
 
-    // Returns f with the size of sized.
-    HPX_CXX_CORE_EXPORT template <typename Sized, typename F>
+    // Returns f with the size of sized. The size is read before f is moved,
+    // so sized may be a part of f.
+    HPX_CXX_CORE_EXPORT template <typename F, typename Sized>
     constexpr size_of_function<std::decay_t<F>> with_task_size_of(
-        Sized const& sized, F&& f)
+        F&& f, Sized const& sized)
     {
-        return {HPX_FORWARD(F, f), traits::get_task_size<Sized>::call(sized)};
+        task_size const size = traits::get_task_size<Sized>::call(sized);
+        return {HPX_FORWARD(F, f), size};
     }
 
     // Store the size of f in the hint of the thread that runs it. Task sizes

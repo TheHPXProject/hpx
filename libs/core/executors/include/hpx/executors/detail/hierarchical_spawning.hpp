@@ -186,7 +186,7 @@ namespace hpx::parallel::execution::detail {
                                 hpx::detail::post_policy_dispatch<Launch>::call(
                                     inner_post_policy, desc, pool,
                                     hpx::threads::detail::with_task_size_of(
-                                        f, wrapped),
+                                        wrapped, f),
                                     *iter, ts...);
                             }
 

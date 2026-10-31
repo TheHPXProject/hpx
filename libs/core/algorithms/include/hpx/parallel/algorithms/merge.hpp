@@ -868,7 +868,7 @@ namespace hpx::parallel {
             auto exec = policy.executor();
 
             // an iteration has the size of the comparison
-            auto f1 = hpx::threads::detail::with_task_size_of(comp,
+            auto f1 = hpx::threads::detail::with_task_size_of(
                 [dest, comp, proj1, proj2, first1, first2, len1, len2, params,
                     exec](std::size_t idx, std::size_t chunk) {
                     if (len1 != 0 || len2 != 0)
@@ -891,7 +891,8 @@ namespace hpx::parallel {
                         hpx::execution::experimental::mark_partition(
                             params, exec, idx, partition_phase::end);
                     }
-                });
+                },
+                comp);
 
             if (len1 > len2)
             {

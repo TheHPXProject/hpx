@@ -366,7 +366,7 @@ void test_type_erased()
 
     // with_task_size_of gives a function the size of another one
     auto const other =
-        hpx::threads::detail::with_task_size_of(f, [] { return 2; });
+        hpx::threads::detail::with_task_size_of([] { return 2; }, f);
     HPX_TEST(size_of_object(other) == task_size::small_);
     HPX_TEST_EQ(other(), 2);
 
