@@ -22,8 +22,12 @@ void test_unwrap_nested_containers()
 {
     // Container of containers without futures
     {
-        auto res = hpx::unwrap(std::vector<std::vector<int>>(2));
+        auto res = hpx::unwrap(std::vector<std::vector<int>>{{1, 2}, {3, 4}});
         HPX_TEST_EQ(res.size(), 2u);
+        HPX_TEST_EQ(res[0][0], 1);
+        HPX_TEST_EQ(res[0][1], 2);
+        HPX_TEST_EQ(res[1][0], 3);
+        HPX_TEST_EQ(res[1][1], 4);
     }
 
     // Container of strings (where string is also a container of char)
@@ -40,6 +44,13 @@ void test_unwrap_nested_containers()
         auto r = hpx::reduce(hpx::execution::par, s.begin(), s.end(),
             std::string(), std::plus<>());
         HPX_TEST_EQ(r, std::string(16, 'a'));
+    }
+
+    {
+        std::vector<std::string> s(16, "a");
+        auto r = hpx::reduce(hpx::execution::par(hpx::execution::task),
+            s.begin(), s.end(), std::string(), std::plus<>());
+        HPX_TEST_EQ(r.get(), std::string(16, 'a'));
     }
 }
 
