@@ -61,3 +61,34 @@ add_hpx_unit_test(
   RUN_SERIAL
   ARGS --hpx:ini=hpx.parcel.zero_copy_receive_optimization!=0
 )
+
+# Checks the ITT parcel markers with the recording collector of the tracing
+# tests, which exists whenever both of these options are on.
+if(HPX_WITH_ITTNOTIFY AND HPX_WITH_PARCEL_PROFILING)
+  add_hpx_executable(
+    itt_parcel_events_test INTERNAL_FLAGS
+    SOURCES itt_parcel_events.cpp
+    EXCLUDE_FROM_ALL
+    HPX_PREFIX ${HPX_BUILD_PREFIX}
+    FOLDER "Tests/Unit/Modules/Full/Parcelset"
+  )
+  target_include_directories(
+    itt_parcel_events_test
+    PRIVATE ${HPX_SOURCE_DIR}/libs/core/tracing/tests/unit
+  )
+  add_dependencies(itt_parcel_events_test hpx_itt_test_collector)
+
+  # The scheduled-marker check needs the large parcels received with zero-copy,
+  # so both zero-copy options are pinned on. With a backtrace taken for every
+  # lock (HPX_WITH_VERIFY_LOCKS_BACKTRACE) the test takes about a minute, hence
+  # the timeout.
+  add_hpx_unit_test(
+    "modules.parcelset" itt_parcel_events
+    --collector=$<TARGET_FILE:hpx_itt_test_collector>
+    LOCALITIES 2
+    THREADS_PER_LOCALITY 2 TIMEOUT 300
+    RUN_SERIAL
+    ARGS --hpx:ini=hpx.parcel.zero_copy_optimization=1
+         --hpx:ini=hpx.parcel.zero_copy_receive_optimization=1
+  )
+endif()

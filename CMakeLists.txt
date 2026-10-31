@@ -1320,7 +1320,9 @@ if(HPX_WITH_NETWORKING)
   endif()
 
   hpx_option(
-    HPX_WITH_PARCEL_PROFILING BOOL "Enable profiling data for parcels"
+    HPX_WITH_PARCEL_PROFILING
+    BOOL
+    "Enable profiling data for parcels. The Tracy and ITTNotify backends emit parcel send, receive and scheduled events from it; APEX receives the send and receive events."
     ${_parcel_profiling_default}
     CATEGORY "Parcelport"
     ADVANCED

@@ -25,8 +25,10 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #if defined(_WIN32)
@@ -40,8 +42,9 @@ namespace {
     std::mutex mtx;
     std::vector<hpx_itt_test::event> events;
 
-    std::size_t record(hpx_itt_test::event_kind kind, __itt_id const& id,
-        char const* name, std::uint64_t value = 0)
+    // Called with mtx held.
+    std::size_t push(hpx_itt_test::event_kind kind, __itt_id const& id,
+        char const* name, std::uint64_t value)
     {
         hpx_itt_test::event e{};
         e.kind = kind;
@@ -53,8 +56,6 @@ namespace {
         {
             std::strncpy(e.name, name, sizeof(e.name) - 1);
         }
-
-        std::lock_guard<std::mutex> l(mtx);
         events.push_back(e);
 
         // Opt-in trace of every recorded call, for diagnosing a failing run.
@@ -69,6 +70,56 @@ namespace {
                 static_cast<unsigned long long>(e.d2), e.name);
         }
         return events.size() - 1;
+    }
+
+    // HPX_ITT_TEST_RECORD=markers keeps only markers and the metadata and
+    // destroy of their ids. Everything is kept otherwise. A slow
+    // multi-locality start-up records millions of task calls from the
+    // background-work loop, which a test of markers never reads.
+    bool markers_only()
+    {
+        static bool const value = [] {
+            char const* mode = std::getenv("HPX_ITT_TEST_RECORD");
+            return mode != nullptr && std::strcmp(mode, "markers") == 0;
+        }();
+        return value;
+    }
+
+    // Ids that carry a marker and are not destroyed yet, guarded by mtx.
+    std::set<std::pair<std::uint64_t, std::uint64_t>> marked;
+
+    std::size_t record(hpx_itt_test::event_kind kind, __itt_id const& id,
+        char const* name, std::uint64_t value = 0)
+    {
+        std::lock_guard<std::mutex> l(mtx);
+        if (!markers_only())
+            return push(kind, id, name, value);
+
+        auto const key = std::make_pair(id.d1, id.d2);
+        switch (kind)
+        {
+        case hpx_itt_test::event_kind::marker:
+            marked.insert(key);
+            return push(kind, id, name, value);
+
+        case hpx_itt_test::event_kind::metadata:
+            if (marked.count(key) == 0)
+                return events.size();
+            return push(kind, id, name, value);
+
+        case hpx_itt_test::event_kind::id_destroy:
+            if (marked.erase(key) == 0)
+                return events.size();
+            return push(kind, id, name, value);
+
+        case hpx_itt_test::event_kind::id_create:
+        case hpx_itt_test::event_kind::task_begin:
+        case hpx_itt_test::event_kind::task_end:
+            return events.size();
+
+        default:
+            return push(kind, id, name, value);
+        }
     }
 
     char const* name_of(__itt_string_handle const* h)

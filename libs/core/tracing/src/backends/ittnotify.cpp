@@ -41,6 +41,17 @@ namespace hpx::tracing {
             util::itt::string_handle thief;
             util::itt::string_handle victim;
             util::itt::string_handle task;
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+            util::itt::string_handle parcel_send;
+            util::itt::string_handle parcel_recv;
+            util::itt::string_handle parcel_scheduled;
+            util::itt::string_handle parcel_id_msb;
+            util::itt::string_handle parcel_id_lsb;
+            util::itt::string_handle size;
+            util::itt::string_handle target_locality;
+            util::itt::string_handle source_locality;
+            util::itt::string_handle source_thread;
+#endif
 
             itt_globals() noexcept
               : domain("hpx")
@@ -54,6 +65,17 @@ namespace hpx::tracing {
               , thief("thief")
               , victim("victim")
               , task("task")
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+              , parcel_send("parcel_send")
+              , parcel_recv("parcel_recv")
+              , parcel_scheduled("parcel_scheduled")
+              , parcel_id_msb("parcel_id_msb")
+              , parcel_id_lsb("parcel_id_lsb")
+              , size("size")
+              , target_locality("target_locality")
+              , source_locality("source_locality")
+              , source_thread("source_thread")
+#endif
             {
             }
         };
@@ -545,6 +567,84 @@ namespace hpx::tracing {
         ::itt_metadata_add(domain, &id, g.victim.handle_, victim_id);
         ::itt_metadata_add(domain, &id, g.task.handle_, task);
         ::itt_id_destroy_value(domain, &id);
+    }
+#endif
+
+#if defined(HPX_HAVE_PARCEL_PROFILING)
+    namespace {
+
+        // A send and its receive happen in different processes, so each
+        // parcel event is a marker on a fresh id, as for a steal, and carries
+        // the parcel id as metadata for pairing the two afterwards.
+        ___itt_id begin_parcel_marker(util::itt::string_handle const& name,
+            std::uint64_t msb, std::uint64_t lsb) noexcept
+        {
+            thread_local std::size_t parcel_count = 0;
+            std::size_t const n = ++parcel_count;
+            ___itt_id id = ::itt_id_value(&parcel_count, n);
+
+            auto const& g = get_itt_globals();
+            auto const* domain = g.domain.domain_;
+            ::itt_id_create(domain, &id);
+            ::itt_marker(domain, &id, name.handle_);
+            ::itt_metadata_add(domain, &id, g.parcel_id_msb.handle_, msb);
+            ::itt_metadata_add(domain, &id, g.parcel_id_lsb.handle_, lsb);
+            return id;
+        }
+
+        void add_locality(___itt_id const& id,
+            util::itt::string_handle const& key,
+            std::uint64_t locality) noexcept
+        {
+            if (locality != detail::invalid_locality)
+            {
+                ::itt_metadata_add(get_itt_globals().domain.domain_, &id,
+                    key.handle_, locality);
+            }
+        }
+    }    // namespace
+
+    void send_parcel(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+        std::uint64_t size, std::uint64_t target_locality_id) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        auto const& g = get_itt_globals();
+        ___itt_id const id =
+            begin_parcel_marker(g.parcel_send, tag_msb, tag_lsb);
+        ::itt_metadata_add(g.domain.domain_, &id, g.size.handle_, size);
+        add_locality(id, g.target_locality, target_locality_id);
+        ::itt_id_destroy_value(g.domain.domain_, &id);
+    }
+
+    void recv_parcel(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+        std::uint64_t source_locality_id) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        auto const& g = get_itt_globals();
+        ___itt_id const id =
+            begin_parcel_marker(g.parcel_recv, tag_msb, tag_lsb);
+        add_locality(id, g.source_locality, source_locality_id);
+        ::itt_id_destroy_value(g.domain.domain_, &id);
+    }
+
+    void parcel_scheduled(std::uint64_t tag_msb, std::uint64_t tag_lsb,
+        std::uint64_t source_locality_id,
+        std::uint64_t source_thread_id) noexcept
+    {
+        if (!use_ittnotify_api)
+            return;
+
+        auto const& g = get_itt_globals();
+        ___itt_id const id =
+            begin_parcel_marker(g.parcel_scheduled, tag_msb, tag_lsb);
+        add_locality(id, g.source_locality, source_locality_id);
+        ::itt_metadata_add(
+            g.domain.domain_, &id, g.source_thread.handle_, source_thread_id);
+        ::itt_id_destroy_value(g.domain.domain_, &id);
     }
 #endif
 
