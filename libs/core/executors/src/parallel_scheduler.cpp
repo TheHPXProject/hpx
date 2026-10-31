@@ -12,6 +12,7 @@
 #include <hpx/executors/parallel_scheduler_backend.hpp>
 #include <hpx/executors/thread_pool_scheduler.hpp>
 #include <hpx/executors/thread_pool_scheduler_bulk.hpp>
+#include <hpx/synchronization/spinlock.hpp>
 #include <hpx/threading_base/thread_pool_base.hpp>
 
 #include <algorithm>
@@ -238,14 +239,13 @@ namespace hpx::execution::experimental {
                 // responsible for calling the completion signal on the proxy.
                 std::atomic<std::size_t> remaining;
 
+                // Protects has_error and first_error against concurrent writes and races.
+                hpx::spinlock mtx;
+
                 // Set to true by the first task that encounters an error.
-                // Written before remaining reaches 0, so the acq_rel fence on
-                // remaining guarantees visibility for the completing task.
                 std::atomic<bool> has_error{false};
 
-                // Stores the first error. Protected by the has_error CAS:
-                // only one thread writes it, and it is read after acquiring
-                // has_error with memory_order_acquire.
+                // Stores the first error. Protected by mtx.
                 std::exception_ptr first_error;
 
                 explicit bulk_sync_state(std::size_t n) noexcept
@@ -256,11 +256,11 @@ namespace hpx::execution::experimental {
                 // Record ep as the first error (thread-safe; first caller wins).
                 void try_set_error(std::exception_ptr ep) noexcept
                 {
-                    bool expected = false;
-                    if (has_error.compare_exchange_strong(
-                            expected, true, std::memory_order_acq_rel))
+                    std::lock_guard<hpx::spinlock> l(mtx);
+                    if (!has_error.load(std::memory_order_relaxed))
                     {
                         first_error = HPX_MOVE(ep);
+                        has_error.store(true, std::memory_order_release);
                     }
                 }
 
@@ -279,9 +279,18 @@ namespace hpx::execution::experimental {
                     parallel_scheduler_bulk_item_receiver_proxy& proxy) noexcept
                 {
                     if (has_error.load(std::memory_order_acquire))
-                        proxy.set_error(HPX_MOVE(first_error));
+                    {
+                        std::exception_ptr ep;
+                        {
+                            std::lock_guard<hpx::spinlock> l(mtx);
+                            ep = HPX_MOVE(first_error);
+                        }
+                        proxy.set_error(HPX_MOVE(ep));
+                    }
                     else
+                    {
                         proxy.set_value();
+                    }
                 }
             };
         };
