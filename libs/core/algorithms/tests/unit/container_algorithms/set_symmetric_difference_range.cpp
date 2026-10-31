@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <iostream>
 #include <iterator>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -528,6 +529,65 @@ void set_symmetric_difference_bad_alloc_test()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_set_symmetric_difference_result_iterators()
+{
+    using namespace hpx::execution;
+
+    std::vector<std::size_t> c1(100), c2(100);
+    std::iota(std::begin(c1), std::end(c1), std::size_t(0));
+    std::iota(std::begin(c2), std::end(c2), std::size_t(0));
+
+    std::vector<std::size_t> c3(2 * c1.size());
+
+    auto result =
+        hpx::ranges::set_symmetric_difference(par, c1, c2, std::begin(c3));
+
+    // the parallel algorithm must report both input ranges as fully
+    // consumed, like std::ranges::set_symmetric_difference does
+    HPX_TEST(result.in1 == std::end(c1));
+    HPX_TEST(result.in2 == std::end(c2));
+    HPX_TEST(result.out == std::begin(c3));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+void test_set_symmetric_difference_values_duplicate_run()
+{
+    using namespace hpx::execution;
+
+    // Regression test: if a whole chunk of the first range consists of a
+    // single repeated value, the elements of the second range that are
+    // smaller than that value must still appear in the result (they used
+    // to be silently dropped by the parallel implementation).
+    auto verify = [](std::vector<std::size_t> const& c1,
+                      std::vector<std::size_t> const& c2) {
+        std::vector<std::size_t> c3(c1.size() + c2.size());
+        std::vector<std::size_t> c4(c1.size() + c2.size());
+
+        auto result =
+            hpx::ranges::set_symmetric_difference(par, c1, c2, std::begin(c3));
+        auto expected = std::set_symmetric_difference(std::begin(c1),
+            std::end(c1), std::begin(c2), std::end(c2), std::begin(c4));
+
+        // verify the produced values and the reported result size
+        HPX_TEST(result.out - std::begin(c3) == expected - std::begin(c4));
+        HPX_TEST(
+            std::equal(std::begin(c3), result.out, std::begin(c4), expected));
+    };
+
+    // the first range is one long duplicate run, the second range holds
+    // only smaller values
+    verify(std::vector<std::size_t>(1000, 5), {1, 2, 3});
+    // small inputs (with enough threads the chunk size degenerates to a
+    // single element)
+    verify({1, 1, 2}, {0, 2, 2});
+    verify({3, 3, 3}, {1, 1, 2, 3, 3});
+    // the second range straddles the repeated value
+    verify(std::vector<std::size_t>(1000, 5), {1, 5, 5, 7, 9});
+    // the second range holds nothing smaller than the repeated value
+    verify(std::vector<std::size_t>(1000, 5), {5, 6, 7});
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = (unsigned int) std::time(nullptr);
@@ -539,6 +599,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
 
     set_symmetric_difference_test1();
     set_symmetric_difference_test2();
+    test_set_symmetric_difference_result_iterators();
+    test_set_symmetric_difference_values_duplicate_run();
     set_symmetric_difference_exception_test();
     set_symmetric_difference_bad_alloc_test();
     return hpx::local::finalize();

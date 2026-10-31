@@ -152,11 +152,31 @@ namespace hpx::parallel::detail {
                 // this partition are equal
                 if (!HPX_INVOKE(f, start_value, end_value))
                 {
-                    return;
+                    if (!first_partition)
+                    {
+                        return;
+                    }
+
+                    // The first partition is special: it is the only one
+                    // whose slice of the second sequence starts at the
+                    // beginning of that sequence. Returning here would
+                    // leave the elements of the second sequence that are
+                    // smaller than start_value to be processed by no
+                    // partition at all (the next partition starts its
+                    // slice of the second sequence at the first element
+                    // not smaller than start_value), silently dropping
+                    // them from the results of set_union and
+                    // set_symmetric_difference. Fall through with an
+                    // empty slice of the first sequence instead, which
+                    // makes the sequential operation below emit exactly
+                    // those elements (and nothing for set_intersection
+                    // and set_difference, as before).
+                    end1 = start1;
                 }
 
                 // move backwards to find the earliest element which is equal to
-                // the last element of the current chunk
+                // the last element of the current chunk (this is a no-op if
+                // the first partition fell through above, as end1 == 0 then)
                 if (end1 != 0)
                 {
                     auto end_value1 = HPX_INVOKE(proj1, first1[end1 - 1]);
@@ -240,6 +260,17 @@ namespace hpx::parallel::detail {
                 {
                     first2_pos = (std::max) (first2_pos, curr_chunk->first2);
                 }
+            }
+
+            // the loop above does not visit the last chunk, account for it
+            // as well
+            if (chunk->first1 != static_cast<std::size_t>(-1))
+            {
+                first1_pos = (std::max) (first1_pos, chunk->first1);
+            }
+            if (chunk->first2 != static_cast<std::size_t>(-1))
+            {
+                first2_pos = (std::max) (first2_pos, chunk->first2);
             }
 
             // finally, copy data to destination
