@@ -189,6 +189,7 @@ The |hpx| configuration section
    trace_depth = ${HPX_TRACE_DEPTH:20}
    handle_signals = ${HPX_HANDLE_SIGNALS:1}
    handle_failed_new = ${HPX_HANDLE_FAILED_NEW:1}
+   use_itt_notify = ${HPX_HAVE_ITTNOTIFY:0}
 
    [hpx.stacks]
    small_size = ${HPX_SMALL_STACK_SIZE:<hpx_small_stack_size>}
@@ -329,6 +330,13 @@ The |hpx| configuration section
        The default is ``1``. Setting this value to ``0`` can be useful in cases
        when generating a core-dump on segmentation faults or similar signals
        is desired.
+   * * ``hpx.use_itt_notify``
+     * This setting defines whether |hpx| sends events to the |ittnotify|
+       at runtime. The default is ``0`` (off), and can be changed with the
+       environment variable ``HPX_HAVE_ITTNOTIFY``. Set it to ``1``, for
+       example with ``--hpx:ini=hpx.use_itt_notify=1``, to record events.
+       Only present when |hpx| was built with
+       :option:`HPX_WITH_ITTNOTIFY`\ ``=ON``. See :ref:`profiling_with_itt`.
    * * ``hpx.stacks.small_size``
      * This is initialized to the small stack size to be used by |hpx| threads.
        Set by default to the value of the compile time preprocessor constant

@@ -70,12 +70,12 @@ custom directory for ``Boost``, specify ``Boost_ROOT=/custom/boost/root``.
 
 .. option:: Amplifier_ROOT:PATH
 
-   Specifies where to look for one of the tools of the Intel Parallel Studio
-   product, either Intel Amplifier or Intel Inspector. This should be
-   set if the CMake variable ``HPX_USE_ITT_NOTIFY`` is set to ``ON``. Enabling
-   ITT support in |hpx| will integrate any application with the mentioned Intel
-   tools, which customizes the generated information for your application and
-   improves the generated diagnostics.
+   Specifies where to look for an installation of the |ittnotify|_ (the
+   ``ittnotify.h`` header and the ``ittnotify`` library). Set this when
+   :option:`HPX_WITH_ITTNOTIFY` is ``ON`` and the library is not installed in
+   a standard location. The name is historical: any installation of the ITT
+   API works, for example a build of the open-source ``ittapi`` project or
+   the copy that ships with |vtune|. See :ref:`profiling_with_itt`.
 
 In addition, some of the examples may need the following variables:
 
