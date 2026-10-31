@@ -17,6 +17,8 @@
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <chrono>
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -26,6 +28,7 @@
 
 using hpx::threads::large_task;
 using hpx::threads::medium_task;
+using hpx::threads::nano_task;
 using hpx::threads::small_task;
 using hpx::threads::task_size;
 using hpx::threads::with_task_size;
@@ -125,6 +128,8 @@ void test_trait()
         task_size::medium);
 
     // the shorthands give the same types as with_task_size
+    static_assert(std::is_same_v<decltype(nano_task(lambda)),
+        decltype(with_task_size<task_size::nano>(lambda))>);
     static_assert(std::is_same_v<decltype(small_task(lambda)),
         decltype(with_task_size<task_size::small_>(lambda))>);
     static_assert(std::is_same_v<decltype(medium_task(lambda)),
@@ -153,6 +158,38 @@ void test_trait()
                       task_size::medium> == task_size::medium);
     static_assert(get_task_size_v<decltype(hpx::annotated_function(lambda)),
                       task_size::medium> == task_size::medium);
+
+    // each size stands for a hundred times the run time of the one below it,
+    // so a hundred nano calls make a small task, a hundred small calls a
+    // medium one and a hundred medium calls a large one
+    using hpx::bulk_task_size;
+    using hpx::task_size_duration;
+    using namespace std::chrono_literals;
+    static_assert(task_size_duration(task_size::unknown) == 0ns);
+    static_assert(task_size_duration(task_size::nano) == 1ns);
+    static_assert(task_size_duration(task_size::small_) == 100ns);
+    static_assert(task_size_duration(task_size::medium) == 10us);
+    static_assert(task_size_duration(task_size::large) == 1ms);
+
+    static_assert(bulk_task_size(task_size::nano, 1) == task_size::nano);
+    static_assert(bulk_task_size(task_size::nano, 99) == task_size::nano);
+    static_assert(bulk_task_size(task_size::nano, 100) == task_size::small_);
+    static_assert(bulk_task_size(task_size::nano, 9999) == task_size::small_);
+    static_assert(bulk_task_size(task_size::nano, 10000) == task_size::medium);
+    static_assert(bulk_task_size(task_size::nano, 1000000) == task_size::large);
+    static_assert(bulk_task_size(task_size::small_, 1) == task_size::small_);
+    static_assert(bulk_task_size(task_size::small_, 99) == task_size::small_);
+    static_assert(bulk_task_size(task_size::small_, 100) == task_size::medium);
+    static_assert(bulk_task_size(task_size::small_, 9999) == task_size::medium);
+    static_assert(bulk_task_size(task_size::small_, 10000) == task_size::large);
+    static_assert(bulk_task_size(task_size::medium, 1) == task_size::medium);
+    static_assert(bulk_task_size(task_size::medium, 99) == task_size::medium);
+    static_assert(bulk_task_size(task_size::medium, 100) == task_size::large);
+    static_assert(
+        bulk_task_size(task_size::medium, std::size_t(-1)) == task_size::large);
+    static_assert(bulk_task_size(task_size::large, 1) == task_size::large);
+    static_assert(
+        bulk_task_size(task_size::unknown, 1000) == task_size::unknown);
 
     // the binders see through to the function they call
     using hpx::placeholders::_1;
@@ -265,11 +302,12 @@ void test_hint()
     HPX_TEST(all.sharing_mode() ==
         hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
-    // a function's size goes into the hint, a function without one leaves it
+    // a function's size replaces the one in the hint, and a function without
+    // one leaves the hint without one
     auto lambda = [] {};
     thread_schedule_hint h(task_size::small_);
     hpx::threads::detail::set_task_size<decltype(lambda)>(h);
-    HPX_TEST(h.task_size() == task_size::small_);
+    HPX_TEST(h.task_size() == task_size::unknown);
     hpx::threads::detail::set_task_size<decltype(large_task(lambda))>(h);
     HPX_TEST(h.task_size() == task_size::large);
 }

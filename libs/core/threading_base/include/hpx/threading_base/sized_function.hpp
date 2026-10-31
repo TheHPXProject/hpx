@@ -51,6 +51,17 @@ namespace hpx::threads {
         return {HPX_FORWARD(F, f)};
     }
 
+    /// \brief Returns a function that is expected to run for about a
+    ///        nanosecond, for instance a loop body comparing or adding
+    ///        builtin types.
+    ///
+    /// \param f Function to wrap
+    HPX_CXX_CORE_EXPORT template <typename F>
+    constexpr sized_function<std::decay_t<F>, task_size::nano> nano_task(F&& f)
+    {
+        return {HPX_FORWARD(F, f)};
+    }
+
     /// \brief Returns a function whose task is expected to run briefly.
     ///
     /// \param f Function to wrap
@@ -86,6 +97,7 @@ namespace hpx {
 
     HPX_CXX_CORE_EXPORT using threads::large_task;
     HPX_CXX_CORE_EXPORT using threads::medium_task;
+    HPX_CXX_CORE_EXPORT using threads::nano_task;
     HPX_CXX_CORE_EXPORT using threads::small_task;
     HPX_CXX_CORE_EXPORT using threads::with_task_size;
 }    // namespace hpx
@@ -102,16 +114,14 @@ struct hpx::traits::get_task_size<hpx::threads::sized_function<F, Size>,
 
 namespace hpx::threads::detail {
 
-    // Store the size of F in the hint of the thread that runs it. If F has no
-    // size, the hint keeps the size it has, for instance from the caller's
-    // launch policy.
+    // Store the size of F in the hint of the thread that runs it. Task sizes
+    // come from functions only: a size the hint got from elsewhere, for
+    // instance from an executor or a launch policy, is replaced, and the size
+    // is unknown if F has none.
     HPX_CXX_CORE_EXPORT template <typename F>
     constexpr void set_task_size(thread_schedule_hint& hint) noexcept
     {
-        if constexpr (traits::get_task_size_v<F> != task_size::unknown)
-        {
-            hint.task_size(traits::get_task_size_v<F>);
-        }
+        hint.task_size(traits::get_task_size_v<F>);
     }
 }    // namespace hpx::threads::detail
 

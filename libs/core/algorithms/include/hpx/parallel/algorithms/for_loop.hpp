@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2016 Thomas Heller
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -736,6 +736,7 @@ namespace hpx { namespace experimental {
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
@@ -1775,6 +1776,15 @@ namespace hpx::experimental {
         }
     } for_loop_n_strided{};
 }    // namespace hpx::experimental
+
+// The size of the loop body passes through the wrapper.
+template <typename ExPolicy, typename F, typename S, typename Tuple,
+    hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::detail::part_iterations<ExPolicy, F, S, Tuple>, Size>
+  : get_task_size<std::decay_t<F>, Size>
+{
+};
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {

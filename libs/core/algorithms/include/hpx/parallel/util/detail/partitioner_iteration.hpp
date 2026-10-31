@@ -100,6 +100,14 @@ namespace hpx::parallel::util::detail {
     };
 }    // namespace hpx::parallel::util::detail
 
+// The size of the loop body passes through the wrapper.
+template <typename Result, typename F, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::util::detail::partitioner_iteration<Result, F>, Size>
+  : get_task_size<std::decay_t<F>, Size>
+{
+};
+
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 #include <hpx/modules/functional.hpp>
 

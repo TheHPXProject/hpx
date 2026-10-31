@@ -6,7 +6,12 @@
 
 set(benchmarks scheduler_latency_report scheduler_throughput_report)
 
-set(scheduler_latency_report_PARAMETERS THREADS_PER_LOCALITY 4)
+# As a test, the latency report runs only one timed step of each case (the
+# rounds of a step wait for each other, which takes long in debug builds); the
+# perftest below runs the default number of steps.
+set(scheduler_latency_report_PARAMETERS THREADS_PER_LOCALITY 4 ARGS
+                                        --test_count=1
+)
 set(scheduler_throughput_report_PARAMETERS THREADS_PER_LOCALITY 4)
 
 # The reports run on 20 cores, where the placement of the scheduler's per-worker

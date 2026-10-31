@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2021 Giannis Gonidelis
 //  Copyright (c) 2022 Bhumit Attarde
 //
@@ -856,6 +856,24 @@ namespace hpx::parallel {
         /// \endcond
     }    // namespace detail
 }    // namespace hpx::parallel
+
+// The size of the loop body passes through the wrapper.
+template <typename ExPolicy, typename F, typename Proj,
+    hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::detail::transform_iteration<ExPolicy, F, Proj>, Size>
+  : get_task_size<std::decay_t<F>, Size>
+{
+};
+
+template <typename ExPolicy, typename F, typename Proj1, typename Proj2,
+    hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::detail::transform_binary_iteration<ExPolicy, F, Proj1,
+        Proj2>,
+    Size> : get_task_size<std::decay_t<F>, Size>
+{
+};
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {

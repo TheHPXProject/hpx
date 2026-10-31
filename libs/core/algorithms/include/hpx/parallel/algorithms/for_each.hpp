@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2023 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -244,6 +244,7 @@ namespace hpx {
 #include <hpx/algorithms/traits/is_value_proxy.hpp>
 #include <hpx/modules/concepts.hpp>
 #include <hpx/modules/executors.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -656,6 +657,15 @@ namespace hpx {
         }
     } for_each_n{};
 }    // namespace hpx
+
+// The size of the loop body passes through the wrapper.
+template <typename ExPolicy, typename F, typename Proj,
+    hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::detail::for_each_iteration<ExPolicy, F, Proj>, Size>
+  : get_task_size<std::decay_t<F>, Size>
+{
+};
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 namespace hpx::traits {
