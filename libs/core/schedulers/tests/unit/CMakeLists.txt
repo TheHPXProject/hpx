@@ -13,6 +13,7 @@ set(tests
     schedule_hint_none_stale_queue_6978
     scheduler_mode_overrides
     shared_priority_queue_external_cleanup
+    steal_pending_early
     steal_staged_early
     thread_queue_get_next_threads
     thread_queue_parameters
@@ -31,10 +32,8 @@ set(queue_length_all_threads_PARAMETERS THREADS_PER_LOCALITY 1)
 # thread, see the test
 set(shared_priority_queue_external_cleanup_PARAMETERS THREADS_PER_LOCALITY 1)
 
-set(steal_staged_early_PARAMETERS
-    THREADS_PER_LOCALITY 4 ARGS --mode=early
-    --hpx:ini=hpx.max_idle_loop_count=1000000000000000
-)
+set(steal_staged_early_PARAMETERS THREADS_PER_LOCALITY 4)
+set(steal_pending_early_PARAMETERS THREADS_PER_LOCALITY 4)
 
 # ##############################################################################
 foreach(test ${tests})
@@ -75,18 +74,18 @@ if(HPX_WITH_WORK_REQUESTING_SCHEDULERS)
   )
 endif()
 
-# the same test after the late staged-steal point and in fast idle mode
-add_hpx_unit_test(
-  "modules.schedulers" steal_staged_early_late
-  EXECUTABLE steal_staged_early
-  PSEUDO_DEPS_NAME steal_staged_early
-  THREADS_PER_LOCALITY 4
-  ARGS --mode=late --hpx:ini=hpx.max_idle_loop_count=1000
-)
+# the same tests in fast idle mode
 add_hpx_unit_test(
   "modules.schedulers" steal_staged_early_fast_idle
   EXECUTABLE steal_staged_early
   PSEUDO_DEPS_NAME steal_staged_early
   THREADS_PER_LOCALITY 4
-  ARGS --mode=fast-idle --hpx:ini=hpx.max_idle_loop_count=1000000000000000
+  ARGS --mode=fast-idle
+)
+add_hpx_unit_test(
+  "modules.schedulers" steal_pending_early_fast_idle
+  EXECUTABLE steal_pending_early
+  PSEUDO_DEPS_NAME steal_pending_early
+  THREADS_PER_LOCALITY 4
+  ARGS --mode=fast-idle
 )

@@ -258,6 +258,9 @@ namespace hpx::util {
             "min_tasks_to_steal_staged = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED)) "}",
+            "min_tasks_to_steal_pending_early = "
+            "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) "}",
             "min_tasks_to_steal_staged_early = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)) "}",

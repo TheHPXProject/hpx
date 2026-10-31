@@ -444,6 +444,7 @@ The ``hpx.thread_queue`` configuration section
    max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:1000}
    min_tasks_to_steal_pending = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING:0}
    min_tasks_to_steal_staged = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:0}
+   min_tasks_to_steal_pending_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:4}
    min_tasks_to_steal_staged_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:10}
    idle_loop_count_steal_staged = ${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:30}
    min_add_new_count = ${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:10}
@@ -471,6 +472,14 @@ The ``hpx.thread_queue`` configuration section
        steal them. The default is to allow stealing always. Values larger than
        ``1`` can leave threads queued behind a long running |hpx| thread
        indefinitely, see :ref:`thread_scheduler_pending_steal`.
+   * * ``hpx.thread_queue.min_tasks_to_steal_pending_early``
+     * The value of this property defines the number of pending |hpx| threads
+       that have to be available before other worker threads are allowed to
+       steal them (local priority queue scheduler only, normal priority
+       threads only, not in fast idle mode). This avoids that all idle worker
+       threads contend on the few threads a worker has just converted. The
+       minimum is ignored for a worker that doesn't get to its few threads.
+       ``0`` turns this off. See :ref:`thread_scheduler_pending_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
@@ -488,12 +497,11 @@ The ``hpx.thread_queue`` configuration section
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
-       them shortly after running out of work, i.e. after
-       ``hpx.thread_queue.idle_loop_count_steal_staged`` iterations (local
-       priority queue scheduler only). Worker threads that have been idle for
-       ``hpx.max_idle_loop_count / 2`` iterations steal staged tasks
-       regardless. Leaving a few staged tasks to the worker thread they were
-       placed on keeps them close to the data in that core's caches.
+       them (local priority queue scheduler only, not in fast idle mode).
+       Leaving a few staged tasks to the worker thread they were placed on
+       keeps them close to the data in that core's caches. The minimum is
+       ignored for a worker that doesn't get to its few staged tasks. See
+       :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see
