@@ -28,13 +28,17 @@ namespace hpx::threads {
     {
         F f;
 
+        // constrained, so that the wrapper is invocable exactly as f is
+        // (callers detect which arguments f takes)
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F&, Ts...>)
         decltype(auto) operator()(Ts&&... ts)
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
         }
 
         template <typename... Ts>
+            requires(hpx::is_invocable_v<F const&, Ts...>)
         decltype(auto) operator()(Ts&&... ts) const
         {
             return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
@@ -110,20 +114,76 @@ struct hpx::traits::get_task_size<hpx::threads::sized_function<F, Size>,
     Default>
 {
     static constexpr threads::task_size value = Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::threads::sized_function<F, Size> const&) noexcept
+    {
+        return Size;
+    }
 };
 
 namespace hpx::threads::detail {
 
-    // Store the size of F in the hint of the thread that runs it. Task sizes
+    // A function that has the size of another function, which may be known
+    // at run time only. A task that runs that other function once can be
+    // given its size this way.
+    HPX_CXX_CORE_EXPORT template <typename F>
+    struct size_of_function
+    {
+        F f;
+        task_size size;
+
+        // constrained, so that the wrapper is invocable exactly as f is
+        // (callers detect which arguments f takes)
+        template <typename... Ts>
+            requires(hpx::is_invocable_v<F&, Ts...>)
+        decltype(auto) operator()(Ts&&... ts)
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
+        }
+
+        template <typename... Ts>
+            requires(hpx::is_invocable_v<F const&, Ts...>)
+        decltype(auto) operator()(Ts&&... ts) const
+        {
+            return HPX_INVOKE(f, HPX_FORWARD(Ts, ts)...);
+        }
+    };
+
+    // Returns f with the size of sized. The size is read before f is moved,
+    // so sized may be a part of f.
+    HPX_CXX_CORE_EXPORT template <typename F, typename Sized>
+    constexpr size_of_function<std::decay_t<F>> with_task_size_of(
+        F&& f, Sized const& sized)
+    {
+        task_size const size = traits::get_task_size<Sized>::call(sized);
+        return {HPX_FORWARD(F, f), size};
+    }
+
+    // Store the size of f in the hint of the thread that runs it. Task sizes
     // come from functions only: a size the hint got from elsewhere, for
     // instance from an executor or a launch policy, is replaced, and the size
-    // is unknown if F has none.
+    // is unknown if f has none.
     HPX_CXX_CORE_EXPORT template <typename F>
-    constexpr void set_task_size(thread_schedule_hint& hint) noexcept
+    constexpr void set_task_size(
+        thread_schedule_hint& hint, F const& f) noexcept
     {
-        hint.task_size(traits::get_task_size_v<F>);
+        hint.task_size(traits::get_task_size<F>::call(f));
     }
 }    // namespace hpx::threads::detail
+
+template <typename F, hpx::threads::task_size Default>
+struct hpx::traits::get_task_size<hpx::threads::detail::size_of_function<F>,
+    Default>
+{
+    static constexpr threads::task_size value = Default;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return f.size != threads::task_size::unknown ? f.size : Default;
+    }
+};
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
 // The wrapped function keeps its address and annotation.
@@ -154,6 +214,39 @@ struct hpx::traits::get_function_annotation_tracing<
 {
     static hpx::tracing::annotation_handle call(
         hpx::threads::sized_function<F, Size> const& f) noexcept
+    {
+        return get_function_annotation_tracing<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_function_address<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static constexpr std::size_t call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_function_address<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_function_annotation<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static constexpr char const* call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
+    {
+        return get_function_annotation<F>::call(f.f);
+    }
+};
+
+template <typename F>
+struct hpx::traits::get_function_annotation_tracing<
+    hpx::threads::detail::size_of_function<F>>
+{
+    static hpx::tracing::annotation_handle call(
+        hpx::threads::detail::size_of_function<F> const& f) noexcept
     {
         return get_function_annotation_tracing<F>::call(f.f);
     }

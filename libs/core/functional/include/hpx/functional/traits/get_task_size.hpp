@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <type_traits>
 
 namespace hpx::threads {
 
@@ -32,7 +33,7 @@ namespace hpx::threads {
 
     /// The run time a task of the given \p size stands for. Each size stands
     /// for a hundred times the run time of the one below it: nano about 1 ns,
-    /// small up to about 100 ns, medium about 10 us, large about 1 ms or more.
+    /// small about 100 ns, medium about 10 us, large about 1 ms or more.
     /// An unknown size gives a duration of zero. Callers should rely on
     /// std::chrono arithmetic only, not on the unit or the count of the
     /// returned duration, which may change once tasks can carry real run
@@ -75,7 +76,7 @@ namespace hpx::threads {
         auto const max_calls = limit / per_call;
         auto const total = calls > static_cast<std::size_t>(max_calls) ?
             limit :
-            per_call * static_cast<decltype(max_calls)>(calls);
+            per_call * static_cast<std::chrono::nanoseconds::rep>(calls);
 
         for (task_size const s :
             {task_size::large, task_size::medium, task_size::small_})
@@ -99,12 +100,31 @@ namespace hpx::traits {
     // By default, we don't know how long the function runs. Size stays
     // unknown for callers; it is an extension point for specializations,
     // which pass it on to the function they wrap.
+    //
+    // value is the size known from the type of F. call(f) returns the size of
+    // the function object f, which can be known only at run time, for
+    // instance for a function stored in an hpx::function. Specializations for
+    // wrappers forward call to the function they wrap, the same way as the
+    // ones of get_function_annotation do.
     HPX_CXX_CORE_EXPORT template <typename F,
         threads::task_size Size = threads::task_size::unknown,
         typename Enable = void>
     struct get_task_size
     {
         static constexpr threads::task_size value = Size;
+
+        [[nodiscard]] static constexpr threads::task_size call(
+            F const& /*f*/) noexcept
+        {
+            return Size;
+        }
+    };
+
+    // A qualified function has the size of the unqualified one.
+    template <typename F, threads::task_size Size>
+        requires(!std::is_same_v<F, std::remove_cvref_t<F>>)
+    struct get_task_size<F, Size> : get_task_size<std::remove_cvref_t<F>, Size>
+    {
     };
 
     HPX_CXX_CORE_EXPORT template <typename F,

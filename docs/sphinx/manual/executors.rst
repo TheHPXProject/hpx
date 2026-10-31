@@ -599,13 +599,16 @@ property of the function a task runs, so it is attached to the function:
 ``hpx::with_task_size<Size>(f)`` and its shorthands ``hpx::nano_task(f)``,
 ``hpx::small_task(f)``, ``hpx::medium_task(f)`` and ``hpx::large_task(f)``
 return a function that carries one of the sizes of
-``hpx::task_size``. ``hpx::traits::get_task_size_v<F>`` reads it,
-and is ``task_size::unknown`` for a function without a size.
+``hpx::task_size``. ``hpx::traits::get_task_size_v<F>`` reads it from
+the type of a function, and is ``task_size::unknown`` for a function without a
+size. ``hpx::traits::get_task_size<F>::call(f)`` reads it from the function
+object ``f``, which also finds the size of a function stored in an
+``hpx::function`` or an ``hpx::move_only_function``, known at run time only.
 
 .. note::
 
    As a rule of thumb, a nano task runs for about a nanosecond, a small task
-   for up to about 100 nanoseconds, a medium task for about 10 microseconds,
+   for about 100 nanoseconds, a medium task for about 10 microseconds,
    and a large task for about a millisecond or more: each size stands for a
    hundred times the run time of the one below it, and
    ``hpx::task_size_duration(size)`` returns it as a ``std::chrono``
@@ -633,20 +636,27 @@ and is ``task_size::unknown`` for a function without a size.
    auto next = r.then(hpx::small_task([](auto&& r) { return r.get() * 2; }));
 
 The size reaches the scheduler with the thread that runs the function:
-``hpx::post``, ``hpx::async``, ``.then()``, dataflow and the ``post``,
+``hpx::post``, ``hpx::async``, ``.then()``, dataflow, ``hpx::thread``,
+``hpx::run_as_hpx_thread`` and the ``post``,
 ``sync_execute``, ``async_execute`` and ``then_execute`` of
 ``hpx::execution::parallel_executor`` (and of the executors built on it)
 store it in the ``thread_schedule_hint`` of the thread they create for the
 function.
 
-Bulk operations generally don't pass sizes on: their tasks run the function
-many times, so the size of one call says little about how long such a task
-runs. The exception is hierarchical spawning
-(``hpx::execution::parallel_executor_spawn_hierarchically``), which creates a
-task for each element: these tasks carry the function's size, and the tasks
-that only spawn them are small. The parallel algorithms pass the size of
-their loop body on to the function they give to the executor, so with
-hierarchical spawning it reaches the tasks running parts of the loop.
+The tasks of bulk operations run the function many times, so their size is
+derived from the function's size with ``hpx::bulk_task_size``:
+``hpx::execution::parallel_executor`` and the bulk operations of
+``hpx::execution::experimental::thread_pool_scheduler`` (which the scheduler
+executors use as well) give each of their worker tasks the size of the share
+of the elements it runs. For ``bulk_chunked``, which passes a range of
+elements to each call, the function's size is still the size of its work for
+one element, not for a whole range. Hierarchical spawning
+(``hpx::execution::parallel_executor_spawn_hierarchically``) creates a task
+for each element instead: these tasks carry the function's size, and the
+tasks that only spawn them are small. The parallel algorithms run their loop
+body in chunks, and the function they give to the executor has the size of
+a chunk, derived from the size of the loop body and the number of iterations
+in a chunk. A loop body without a size gives tasks without a size.
 
 A size given to an executor, a launch policy or a scheduler through their
 ``thread_schedule_hint`` has no effect: the hint of a thread created for a
@@ -663,7 +673,8 @@ Wrappers forward the size of the function they wrap. The ones |hpx| provides
 the parallel algorithms create around their loop bodies, for instance) do. A
 wrapper of your own can do the same by specializing
 ``hpx::traits::get_task_size``, the same way wrappers forward annotations with
-``hpx::traits::get_function_annotation``:
+``hpx::traits::get_function_annotation``. It derives from the specialization
+for the wrapped function, which gives it ``value``, and forwards ``call``:
 
 .. code-block:: c++
 
@@ -683,6 +694,11 @@ wrapper of your own can do the same by specializing
    struct hpx::traits::get_task_size<my_wrapper<F>, Size>
      : hpx::traits::get_task_size<F, Size>
    {
+       static constexpr hpx::task_size call(
+           my_wrapper<F> const& w) noexcept
+       {
+           return hpx::traits::get_task_size<F, Size>::call(w.f);
+       }
    };
 
 .. _parallel_scheduler:

@@ -288,6 +288,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/copy.hpp>
@@ -866,29 +867,32 @@ namespace hpx::parallel {
             auto params = policy.parameters();
             auto exec = policy.executor();
 
-            auto f1 = [dest, comp, proj1, proj2, first1, first2, len1, len2,
-                          params, exec](std::size_t idx, std::size_t chunk) {
-                if (len1 != 0 || len2 != 0)
-                {
-                    std::size_t N = len1 + len2;
-                    std::size_t k0 = (std::min) (idx * chunk, N);
-                    std::size_t k1 = (std::min) (k0 + chunk, N);
+            // an iteration has the size of the comparison
+            auto f1 = hpx::threads::detail::with_task_size_of(
+                [dest, comp, proj1, proj2, first1, first2, len1, len2, params,
+                    exec](std::size_t idx, std::size_t chunk) {
+                    if (len1 != 0 || len2 != 0)
+                    {
+                        std::size_t N = len1 + len2;
+                        std::size_t k0 = (std::min) (idx * chunk, N);
+                        std::size_t k1 = (std::min) (k0 + chunk, N);
 
-                    auto [a0, b0] = diagonal_intersection(
-                        first1, len1, first2, len2, k0, comp, proj1, proj2);
-                    auto [a1, b1] = diagonal_intersection(
-                        first1, len1, first2, len2, k1, comp, proj1, proj2);
+                        auto [a0, b0] = diagonal_intersection(
+                            first1, len1, first2, len2, k0, comp, proj1, proj2);
+                        auto [a1, b1] = diagonal_intersection(
+                            first1, len1, first2, len2, k1, comp, proj1, proj2);
 
-                    hpx::execution::experimental::mark_partition(
-                        params, exec, idx, partition_phase::start, chunk);
-                    sequential_merge(std::next(first1, a0),
-                        std::next(first1, a1), std::next(first2, b0),
-                        std::next(first2, b1), std::next(dest, k0), comp, proj1,
-                        proj2);
-                    hpx::execution::experimental::mark_partition(
-                        params, exec, idx, partition_phase::end);
-                }
-            };
+                        hpx::execution::experimental::mark_partition(
+                            params, exec, idx, partition_phase::start, chunk);
+                        sequential_merge(std::next(first1, a0),
+                            std::next(first1, a1), std::next(first2, b0),
+                            std::next(first2, b1), std::next(dest, k0), comp,
+                            proj1, proj2);
+                        hpx::execution::experimental::mark_partition(
+                            params, exec, idx, partition_phase::end);
+                    }
+                },
+                comp);
 
             if (len1 > len2)
             {

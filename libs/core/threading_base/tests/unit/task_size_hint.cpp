@@ -10,15 +10,19 @@
 // A scheduler that counts the sizes it is asked to create threads with sees
 // it.
 
+#include <hpx/algorithm.hpp>
 #include <hpx/execution.hpp>
 #include <hpx/functional.hpp>
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/schedulers.hpp>
 #include <hpx/modules/testing.hpp>
 #include <hpx/modules/thread_pools.hpp>
+#include <hpx/numeric.hpp>
+#include <hpx/thread.hpp>
 
 #include <array>
 #include <atomic>
@@ -193,6 +197,45 @@ void test_function_sizes()
         },
         1, 0, 0);
 
+    // a type erased function has the size of the function stored in it
+    check_sizes(
+        [] {
+            hpx::move_only_function<int()> f = hpx::large_task(&answer);
+            HPX_TEST_EQ(hpx::async(std::move(f)).get(), 42);
+        },
+        0, 0, 1);
+    check_sizes(
+        [] {
+            hpx::function<int(int)> const f =
+                hpx::small_task([](int i) { return i; });
+            HPX_TEST_EQ(hpx::async(f, 1).get(), 1);
+        },
+        1, 0, 0);
+
+    // hpx::thread
+    check_sizes(
+        [] {
+            hpx::thread t(hpx::medium_task([] {}));
+            t.join();
+        },
+        0, 1, 0);
+    check_sizes(
+        [] {
+            hpx::thread t([] {});
+            t.join();
+        },
+        0, 0, 0);
+
+    // run_as_hpx_thread, which has to be called from an OS thread
+    check_sizes(
+        [] {
+            HPX_TEST_EQ(hpx::run_as_os_thread([] {
+                return hpx::run_as_hpx_thread(hpx::large_task(&answer));
+            }).get(),
+                42);
+        },
+        0, 0, 1);
+
     // a function without a size creates its thread without one
     check_sizes([] { HPX_TEST_EQ(hpx::async(&answer).get(), 42); }, 0, 0, 0);
 }
@@ -267,9 +310,9 @@ void test_executor_sizes()
 // bulk_async_execute, bulk_sync_execute, then_execute and bulk_then_execute,
 // with a large function over 16 elements. The bulk functions return a value if
 // WithResult is set. Each bulk call is expected to create small_ small and
-// large large threads.
+// large large threads, bulk_sync_execute sync_large large threads.
 template <typename Executor, bool WithResult>
-void test_executor_paths(int small_, int large)
+void test_executor_paths(int small_, int large, int sync_large)
 {
     namespace ex = hpx::parallel::execution;
 
@@ -289,7 +332,7 @@ void test_executor_paths(int small_, int large)
             [&] { hpx::wait_all(ex::bulk_async_execute(exec, bulk_f, shape)); },
             small_, 0, large);
         check_sizes([&] { ex::bulk_sync_execute(exec, bulk_f, shape); }, small_,
-            0, large);
+            0, sync_large);
         check_sizes(
             [&] {
                 ex::then_execute(exec, then_f, hpx::make_ready_future()).get();
@@ -316,11 +359,13 @@ void wait_for(T&& t)
 }
 
 // The scheduler based executors run the function inside a task their
-// scheduler creates before it sees the function, so no thread they create
-// has a size. then_execute and bulk_then_execute go through continues_on,
-// which runs inline on an HPX thread, so they create none.
+// scheduler creates before it sees the function, so those threads have no
+// size. then_execute and bulk_then_execute go through continues_on, which
+// runs inline on an HPX thread, so they create none. Only the worker tasks of
+// bulk_async_execute are expected to have a size, bulk_size, derived from the
+// size of the function.
 template <typename Executor>
-void test_scheduler_executor(Executor const& base)
+void test_scheduler_executor(Executor const& base, task_size bulk_size)
 {
     namespace ex = hpx::parallel::execution;
 
@@ -348,7 +393,7 @@ void test_scheduler_executor(Executor const& base)
             task_size::unknown);
         check_only_size(
             [&] { wait_for(ex::bulk_async_execute(exec, bulk_f, 16)); },
-            task_size::unknown);
+            bulk_size);
         check_only_size([&] { ex::bulk_sync_execute(exec, bulk_f, 16); },
             task_size::unknown);
         check_only_size(
@@ -375,6 +420,87 @@ void test_fork_join_executor()
         task_size::unknown);
 }
 
+// The worker tasks of reduce, transform_reduce and merge have the size of the
+// reduction, the transformation and the comparison. The task policy keeps the
+// partitioners from running the only chunk inline.
+void test_algorithm_sizes()
+{
+    auto const policy = hpx::execution::par(hpx::execution::task);
+    std::vector<int> v(16, 1);
+    std::vector<int> merged(32);
+
+    auto const plus = [](int a, int b) { return a + b; };
+    auto const identity = [](int i) { return i; };
+    auto const less = [](int a, int b) { return a < b; };
+
+    check_only_size(
+        [&] {
+            hpx::reduce(policy, v.begin(), v.end(), 0, hpx::large_task(plus))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::transform_reduce(
+                policy, v.begin(), v.end(), 0, plus, hpx::large_task(identity))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::transform_reduce(policy, v.begin(), v.end(), v.begin(), 0,
+                plus, hpx::large_task(plus))
+                .get();
+        },
+        task_size::large);
+    check_only_size(
+        [&] {
+            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
+                merged.begin(), hpx::large_task(less))
+                .get();
+        },
+        task_size::large);
+
+    // with variable chunk sizes the size is derived from the iterations of a
+    // chunk as well
+    check_only_size(
+        [&] {
+            hpx::reduce(
+                policy.with(hpx::execution::experimental::guided_chunk_size()),
+                v.begin(), v.end(), 0, hpx::medium_task(plus))
+                .get();
+        },
+        task_size::medium);
+
+    // The only worker runs all chunks in one task. A chunk of 100 iterations
+    // of a nano function is small and 100 small chunks make a medium task.
+    // Fewer iterations per chunk would make nano chunks and a small task;
+    // counting all 10000 iterations for each chunk would make medium chunks
+    // and a large task.
+    std::vector<int> w(10000, 1);
+    check_only_size(
+        [&] {
+            hpx::reduce(
+                policy.with(
+                    hpx::execution::experimental::static_chunk_size(100)),
+                w.begin(), w.end(), 0, hpx::nano_task(plus))
+                .get();
+        },
+        task_size::medium);
+
+    // without a size, the worker tasks have none
+    check_only_size(
+        [&] { hpx::reduce(policy, v.begin(), v.end(), 0, plus).get(); },
+        task_size::unknown);
+    check_only_size(
+        [&] {
+            hpx::merge(policy, v.begin(), v.end(), v.begin(), v.end(),
+                merged.begin(), less)
+                .get();
+        },
+        task_size::unknown);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
@@ -382,27 +508,35 @@ int hpx_main()
     test_policy_sizes();
     test_executor_sizes();
 
-    // With one worker, parallel_executor runs the only chunk of
-    // bulk_sync_execute inline, and the tasks of its bulk operations, which
-    // run the function many times, have no size.
-    test_executor_paths<hpx::execution::parallel_executor, true>(0, 0);
-    test_executor_paths<hpx::execution::parallel_executor, false>(0, 0);
+    // With one worker, parallel_executor runs the bulk operations in one
+    // task, which calls the large function 16 times and so is large, and runs
+    // bulk_sync_execute inline.
+    test_executor_paths<hpx::execution::parallel_executor, true>(0, 1, 0);
+    test_executor_paths<hpx::execution::parallel_executor, false>(0, 1, 0);
 
     // Hierarchical spawning creates a task for each element, which has the
     // function's size, from a small task. With one worker and 16 elements, a
     // function with a result runs in 16 tasks; without one, the last element
     // runs inline in the small task.
     test_executor_paths<hpx::execution::parallel_executor_spawn_hierarchically,
-        true>(1, 16);
+        true>(1, 16, 16);
     test_executor_paths<hpx::execution::parallel_executor_spawn_hierarchically,
-        false>(1, 15);
+        false>(1, 15, 15);
 
-    test_scheduler_executor(hpx::execution::experimental::scheduler_executor(
-        hpx::execution::experimental::thread_pool_scheduler{}));
+    // scheduler_executor runs its bulk operations through the same tasks as
+    // parallel_executor. explicit_scheduler_executor runs them through the
+    // bulk sender of its scheduler, which with one worker runs the work on
+    // the thread that receives the predecessor's value.
+    test_scheduler_executor(
+        hpx::execution::experimental::scheduler_executor(
+            hpx::execution::experimental::thread_pool_scheduler{}),
+        task_size::large);
     test_scheduler_executor(
         hpx::execution::experimental::explicit_scheduler_executor(
-            hpx::execution::experimental::thread_pool_scheduler{}));
+            hpx::execution::experimental::thread_pool_scheduler{}),
+        task_size::unknown);
     test_fork_join_executor();
+    test_algorithm_sizes();
 
     return hpx::local::finalize();
 }

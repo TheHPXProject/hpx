@@ -138,6 +138,18 @@ void test_trait()
         decltype(with_task_size<task_size::large>(&plain_function))>);
     static_assert(size_of<decltype(small_task(lambda))> == task_size::small_);
 
+    // a qualified function has the size of the unqualified one
+    using large_type = decltype(large);
+    static_assert(size_of<large_type const> == task_size::large);
+    static_assert(size_of<large_type&> == task_size::large);
+    static_assert(size_of<large_type const&> == task_size::large);
+    static_assert(size_of<large_type&&> == task_size::large);
+    static_assert(
+        hpx::traits::get_task_size_v<large_type const&, task_size::small_> ==
+        task_size::large);
+    HPX_TEST(hpx::traits::get_task_size<large_type const>::call(large) ==
+        task_size::large);
+
     // the size is a template argument, so the wrapper is as big as f
     static_assert(sizeof(large) == sizeof(lambda));
 
@@ -306,10 +318,62 @@ void test_hint()
     // one leaves the hint without one
     auto lambda = [] {};
     thread_schedule_hint h(task_size::small_);
-    hpx::threads::detail::set_task_size<decltype(lambda)>(h);
+    hpx::threads::detail::set_task_size(h, lambda);
     HPX_TEST(h.task_size() == task_size::unknown);
-    hpx::threads::detail::set_task_size<decltype(large_task(lambda))>(h);
+    hpx::threads::detail::set_task_size(h, large_task(lambda));
     HPX_TEST(h.task_size() == task_size::large);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+template <typename F>
+task_size size_of_object(F const& f)
+{
+    return hpx::traits::get_task_size<F>::call(f);
+}
+
+void test_type_erased()
+{
+    // a type erased function has the size of the function stored in it, which
+    // is known at run time only
+    hpx::move_only_function<int()> move_only = large_task([] { return 1; });
+    static_assert(size_of<decltype(move_only)> == task_size::unknown);
+    HPX_TEST(size_of_object(move_only) == task_size::large);
+
+    hpx::function<int()> const f = small_task([] { return 1; });
+    HPX_TEST(size_of_object(f) == task_size::small_);
+    HPX_TEST_EQ(f(), 1);
+
+    // a function without a size has none, or the default
+    hpx::function<int()> const plain = [] { return 1; };
+    HPX_TEST(size_of_object(plain) == task_size::unknown);
+    HPX_TEST((hpx::traits::get_task_size<hpx::function<int()>,
+                  task_size::medium>::call(plain) == task_size::medium));
+    HPX_TEST(size_of_object(hpx::function<int()>()) == task_size::unknown);
+
+    // the wrappers see through to it
+    using hpx::placeholders::_1;
+    HPX_TEST(size_of_object(hpx::util::deferred_call(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind_front(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind_back(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::util::one_shot(f)) == task_size::small_);
+    HPX_TEST(
+        size_of_object(hpx::annotated_function(f, "f")) == task_size::small_);
+
+    // so do type erased functions storing a wrapper
+    hpx::function<int()> const bound = hpx::bind_front(f);
+    HPX_TEST(size_of_object(bound) == task_size::small_);
+
+    // with_task_size_of gives a function the size of another one
+    auto const other =
+        hpx::threads::detail::with_task_size_of([] { return 2; }, f);
+    HPX_TEST(size_of_object(other) == task_size::small_);
+    HPX_TEST_EQ(other(), 2);
+
+    // and set_task_size takes the size from the function object
+    hpx::threads::thread_schedule_hint h;
+    hpx::threads::detail::set_task_size(h, f);
+    HPX_TEST(h.task_size() == task_size::small_);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -420,6 +484,7 @@ int hpx_main()
     test_forwarding();
     test_hpx_names();
     test_hint();
+    test_type_erased();
     test_serialization();
     test_launch();
     test_composition();

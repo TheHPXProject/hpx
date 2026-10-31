@@ -678,4 +678,29 @@ namespace hpx::parallel::execution::detail {
     }
 }    // namespace hpx::parallel::execution::detail
 
+// A worker's task runs its share of the elements of the shape, each a call of
+// the bulk function, so its size is derived from the size of that function.
+template <typename SharedState, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::execution::detail::task_function_result<SharedState>, Size>
+{
+    static constexpr threads::task_size value = Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::execution::detail::task_function_result<
+            SharedState> const& f) noexcept
+    {
+        using function_type = std::decay_t<decltype(f.state->f)>;
+
+        std::size_t const num_threads = f.state->num_threads;
+        std::size_t const calls = num_threads == 0 ?
+            f.size :
+            (f.size + num_threads - 1) / num_threads;
+
+        threads::task_size const size = threads::bulk_task_size(
+            get_task_size<function_type>::call(f.state->f), calls);
+        return size == threads::task_size::unknown ? Size : size;
+    }
+};
+
 #include <hpx/config/warnings_suffix.hpp>
