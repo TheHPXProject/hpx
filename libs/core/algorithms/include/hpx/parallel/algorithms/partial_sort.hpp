@@ -424,6 +424,30 @@ namespace hpx::parallel {
             return parallel_partial_sort(HPX_FORWARD(ExPolicy, policy), first,
                 middle, c_last, level - 1, HPX_FORWARD(Comp, comp));
         }
+        HPX_CXX_CORE_EXPORT template <typename Iter, typename Comp>
+        constexpr bool is_partial_sort_complete(
+            Iter first, Iter middle, Iter last, Comp&& comp)
+        {
+            if (!is_sorted_sequential(first, middle, comp))
+            {
+                return false;
+            }
+
+            if (middle == first || middle == last)
+            {
+                return true;
+            }
+
+            auto const& boundary = *(middle - 1);
+            for (auto it = middle; it != last; ++it)
+            {
+                if (HPX_INVOKE(comp, *it, boundary))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         /// \endcond NOINTERNAL
     }    // end namespace detail
 
@@ -447,12 +471,11 @@ namespace hpx::parallel {
         std::int64_t const nmid = middle - first;
         HPX_ASSERT(nmid >= 0 && nmid <= nelem);
 
-        if (nmid > 1024)
+        if (nmid > 1024 &&
+            detail::is_partial_sort_complete(
+                first, middle, first + nelem, comp))
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
-            {
-                return first + nelem;
-            }
+            return first + nelem;
         }
 
         std::uint32_t level = detail::nbits64(nelem) * 2;
@@ -484,12 +507,11 @@ namespace hpx::parallel {
         std::int64_t const nmid = middle - first;
         HPX_ASSERT(nmid >= 0 && nmid <= nelem);
 
-        if (nmid > 1024)
+        if (nmid > 1024 &&
+            detail::is_partial_sort_complete(
+                first, middle, first + nelem, comp))
         {
-            if (detail::is_sorted_sequential(first, middle, comp))
-            {
-                return hpx::make_ready_future(first + nelem);
-            }
+            return hpx::make_ready_future(first + nelem);
         }
 
         std::uint32_t level = parallel::detail::nbits64(nelem) * 2;
