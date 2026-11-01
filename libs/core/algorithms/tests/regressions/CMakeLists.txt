@@ -33,6 +33,7 @@ set(tests
     static_chunker_2282
     transform_inclusive_scan_4786
     transform_inclusive_scan_4787
+    transform_set_intersection_result
     ranges_facilities
 )
 

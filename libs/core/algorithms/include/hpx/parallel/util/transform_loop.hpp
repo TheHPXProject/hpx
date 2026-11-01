@@ -372,13 +372,16 @@ namespace hpx::parallel::util {
                         *dest = HPX_INVOKE(f, *first1, *first2);
                     }
 
+                    // stop where the shorter range ends, as std::ranges does
                     if constexpr (!std::input_iterator<OutIter>)
                     {
-                        return {end1, end2, dest};
+                        return {std::next(start1, len), std::next(start2, len),
+                            dest};
                     }
                     else
                     {
-                        return {end1, end2, std::next(out, len)};
+                        return {std::next(start1, len), std::next(start2, len),
+                            std::next(out, len)};
                     }
                 }
                 else
