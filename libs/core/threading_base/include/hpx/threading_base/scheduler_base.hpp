@@ -256,6 +256,18 @@ namespace hpx::threads::policies {
         void increment_background_thread_count() noexcept;
         void decrement_background_thread_count() noexcept;
 
+        // Count the workers in the scheduling loop. A worker leaves the loop
+        // once its own queues are empty, but HPX threads running on other
+        // workers can still schedule work on them. The last worker to leave
+        // checks all queues: leave_scheduling_loop returns false if work is
+        // left, and the worker has to take it over.
+        // abandon_scheduling_loop is for a worker that exits the loop without
+        // leaving it (on an error): it is no longer counted and checks
+        // nothing.
+        void enter_scheduling_loop() noexcept;
+        [[nodiscard]] bool leave_scheduling_loop();
+        void abandon_scheduling_loop() noexcept;
+
         // Enumerate all matching threads
         virtual bool enumerate_threads(
             hpx::function<bool(thread_id_type)> const& f,
@@ -352,9 +364,26 @@ namespace hpx::threads::policies {
             pu_mutex_type wait_mtx;
             std::condition_variable wait_cond;
             std::atomic<std::uint32_t> wait_count{0};
+            // set when this worker was woken by a notification: it may steal
+            // once without the early minima (only the worker itself reads and
+            // writes it)
+            bool free_pass = false;
         };
         std::vector<util::aligned_line_data<idle_backoff_data>>
             wait_count_data_;
+
+        // may this worker ignore the early stealing minima once?
+        bool has_free_pass(std::size_t num_thread) const noexcept
+        {
+            return wait_count_data_[num_thread].data_.free_pass;
+        }
+        void clear_free_pass(std::size_t num_thread) noexcept
+        {
+            // write only if set: other workers read this cache line
+            bool& free_pass = wait_count_data_[num_thread].data_.free_pass;
+            if (free_pass)
+                free_pass = false;
+        }
 #endif
 
         // support for suspension of pus
@@ -377,6 +406,9 @@ namespace hpx::threads::policies {
         threads::thread_pool_base* parent_pool_;
 
         std::atomic<std::int64_t> background_thread_count_;
+
+        // see leave_scheduling_loop
+        std::atomic<std::int64_t> workers_in_loop_{0};
 
         std::atomic<polling_function_ptr> polling_function_mpi_;
         std::atomic<polling_function_ptr> polling_function_cuda_;

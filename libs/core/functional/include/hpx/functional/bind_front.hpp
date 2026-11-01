@@ -16,6 +16,7 @@
 #include <hpx/functional/one_shot.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/functional/traits/get_task_size.hpp>
 #include <hpx/modules/datastructures.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -152,6 +153,13 @@ namespace hpx::detail {
 #endif
         }
 
+        template <threads::task_size Size = threads::task_size::unknown>
+        [[nodiscard]] constexpr threads::task_size get_task_size()
+            const noexcept
+        {
+            return traits::get_task_size<F, Size>::call(_f);
+        }
+
     private:
         F _f;
         util::member_pack_for<Ts...> _args;
@@ -229,6 +237,22 @@ namespace hpx::traits {
     };
 }    // namespace hpx::traits
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+namespace hpx::traits {
+
+    // a bound function runs as long as the function it calls
+    template <threads::task_size Size, typename F, typename... Ts>
+    struct get_task_size<hpx::detail::bound_front<F, Ts...>, Size>
+      : get_task_size<F, Size>
+    {
+        [[nodiscard]] static constexpr threads::task_size call(
+            hpx::detail::bound_front<F, Ts...> const& f) noexcept
+        {
+            return f.template get_task_size<Size>();
+        }
+    };
+}    // namespace hpx::traits
 
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::serialization {

@@ -164,14 +164,18 @@ namespace hpx::util {
     using cache_line_data = cache_aligned_data<Data>;
 
     ///////////////////////////////////////////////////////////////////////////
-    // Holds data aligned to the cache line size. Unlike cache_line_data, which
-    // only pads, this makes every element of a std::vector start on its own
-    // cache line, so neighboring elements never share one (false sharing).
-    // Over-aligned types need the aligned allocation path, so use this only
-    // for data that is rarely allocated, e.g. the per-worker data of a
-    // scheduler, which is allocated only when the scheduler is created.
+    // Holds data aligned to the destructive interference size
+    // (threads::get_destructive_interference_size(), at least the cache line
+    // size). Unlike cache_line_data, which only pads, this makes every
+    // element of a std::vector start on its own cache line, and keeps it
+    // apart from its neighbors as far as needed to avoid false sharing (on
+    // x86-64 the 128-byte pairs of lines the spatial prefetcher fetches
+    // together). Over-aligned types need the aligned allocation path, so use
+    // this only for data that is rarely allocated, e.g. the per-worker data of
+    // a scheduler, which is allocated only when the scheduler is created.
     HPX_CXX_CORE_EXPORT template <typename T>
-    struct alignas(threads::get_cache_line_size()) aligned_line_data
+    struct alignas(threads::get_destructive_interference_size())
+        aligned_line_data
     {
         // We have an explicit (default) constructor here to avoid for the
         // entire cache-line to be initialized by the compiler.

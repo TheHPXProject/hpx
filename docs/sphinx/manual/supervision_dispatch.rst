@@ -457,6 +457,25 @@ observer-based synchronization described here and the polling-with-timeout
 failure detection described earlier are complementary, not overlapping,
 mechanisms.
 
+The reverse case matters as well: the observers a joining locality
+registered live on the *peer's* locality, so they outlive the joining
+locality if it dies. When the peer next sends a notification to such an
+observer and the send fails with ``hpx::error::locality_was_disconnected``
+(or the joining locality was disconnected from the peer), the observer is
+unregistered on the peer, and the peer's own state is left alone, so it
+keeps admitting dispatch as before. A send that fails with any other error
+(for instance, a refused connection when the peer has to reconnect to the
+dead locality) is still recorded as the peer having failed, and fences it.
+
+The joining locality is not told that its observer was dropped. A single
+failed send is enough to drop it, so this can also happen to a joining
+locality that is still alive, for instance after a connection reset. Its
+shadow of the peer then stops advancing, and its failure detection treats
+that like any other silent peer:
+:hpx:func:`await_terminal() <hpx::supervision::await_terminal>` times out with an unchanged sequence number and the joining locality fences
+its own shadow of the peer. That only changes the joining locality's view;
+the peer's own state, and every other locality's view of it, is unaffected.
+
 Because ``observers_`` is keyed per target and holds a list rather than a
 single callback, this fan-out is genuinely one-to-many: if several
 localities have each independently joined the same peer, a single event

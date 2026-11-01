@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2023 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -160,6 +160,19 @@ struct hpx::traits::get_function_annotation<hpx::detail::annotated_function<F>>
         hpx::detail::annotated_function<F> const& f) noexcept
     {
         return f.get_function_annotation();
+    }
+};
+
+template <typename F, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<hpx::detail::annotated_function<F>, Size>
+  : get_task_size<typename hpx::detail::annotated_function<F>::fun_type, Size>
+{
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::detail::annotated_function<F> const& f) noexcept
+    {
+        return get_task_size<
+            typename hpx::detail::annotated_function<F>::fun_type, Size>::call(f
+                .get_bound_function());
     }
 };
 

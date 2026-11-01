@@ -444,6 +444,7 @@ The ``hpx.thread_queue`` configuration section
    max_thread_count = ${HPX_THREAD_QUEUE_MAX_THREAD_COUNT:1000}
    min_tasks_to_steal_pending = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING:0}
    min_tasks_to_steal_staged = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:0}
+   min_tasks_to_steal_pending_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:4}
    min_tasks_to_steal_staged_early = ${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:10}
    idle_loop_count_steal_staged = ${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:30}
    min_add_new_count = ${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:10}
@@ -471,6 +472,14 @@ The ``hpx.thread_queue`` configuration section
        steal them. The default is to allow stealing always. Values larger than
        ``1`` can leave threads queued behind a long running |hpx| thread
        indefinitely, see :ref:`thread_scheduler_pending_steal`.
+   * * ``hpx.thread_queue.min_tasks_to_steal_pending_early``
+     * The value of this property defines the number of pending |hpx| threads
+       that have to be available before other worker threads are allowed to
+       steal them (local priority queue scheduler only, normal priority
+       threads only, not in fast idle mode). This avoids that all idle worker
+       threads contend on the few threads a worker has just converted. The
+       minimum is ignored for a worker that doesn't get to its few threads.
+       ``0`` turns this off. See :ref:`thread_scheduler_pending_steal`.
    * * ``hpx.thread_queue.min_tasks_to_steal_staged``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
@@ -488,12 +497,11 @@ The ``hpx.thread_queue`` configuration section
    * * ``hpx.thread_queue.min_tasks_to_steal_staged_early``
      * The value of this property defines the number of staged |hpx| tasks that
        need to be available before other worker threads are allowed to steal
-       them shortly after running out of work, i.e. after
-       ``hpx.thread_queue.idle_loop_count_steal_staged`` iterations (local
-       priority queue scheduler only). Worker threads that have been idle for
-       ``hpx.max_idle_loop_count / 2`` iterations steal staged tasks
-       regardless. Leaving a few staged tasks to the worker thread they were
-       placed on keeps them close to the data in that core's caches.
+       them (local priority queue scheduler only, not in fast idle mode).
+       Leaving a few staged tasks to the worker thread they were placed on
+       keeps them close to the data in that core's caches. The minimum is
+       ignored for a worker that doesn't get to its few staged tasks. See
+       :ref:`thread_scheduler_staged_steal`.
    * * ``hpx.thread_queue.min_add_new_count``
      * The value of this property defines the minimal number of staged tasks
        converted into |hpx| threads at a time, see
@@ -520,6 +528,34 @@ The ``hpx.thread_queue`` configuration section
    * * ``hpx.thread_queue.cached_threads_count``
      * The value of this property defines the maximal number of cleaned up
        |hpx| thread objects each queue keeps for reuse per stack size.
+
+The ``hpx.task_size_chunk_size`` configuration section
+......................................................
+
+The entries of this section replace the defaults of the executor parameters
+``hpx::execution::experimental::task_size_chunk_size``, see
+:ref:`task_sizes`, for instance with the values the benchmark
+``task_size_chunk_size_sweep_test`` prints for a machine. They are empty by
+default, which stands for the defaults compiled into |hpx|.
+
+.. code-block:: ini
+
+   [hpx.task_size_chunk_size]
+   min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}
+   chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}
+
+.. _ini_hpx_task_size_chunk_size:
+
+.. list-table::
+
+   * * Property
+     * Description
+   * * ``hpx.task_size_chunk_size.min_chunk_time_us``
+     * The value of this property defines the minimal run time of a chunk, in
+       microseconds, up to ``1000000`` (one second). The default is ``2.5``.
+   * * ``hpx.task_size_chunk_size.chunks_per_core``
+     * The value of this property defines the number of chunks each core gets
+       for load balancing, from ``1`` up to ``1024``. The default is ``8``.
 
 The ``hpx.components`` configuration section
 ............................................

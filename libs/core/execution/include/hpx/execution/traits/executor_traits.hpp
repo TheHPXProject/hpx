@@ -31,6 +31,7 @@ namespace hpx::execution {
         HPX_CXX_CORE_EXPORT struct guided_chunk_size;
         HPX_CXX_CORE_EXPORT struct persistent_auto_chunk_size;
         HPX_CXX_CORE_EXPORT struct static_chunk_size;
+        HPX_CXX_CORE_EXPORT struct task_size_chunk_size;
         HPX_CXX_CORE_EXPORT struct num_cores;
     }    // namespace experimental
 

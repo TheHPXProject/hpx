@@ -71,6 +71,35 @@ namespace hpx::threads::policies {
                 mode & ~scheduler_mode::enable_stealing_numa);
         }
 
+        // This scheduler never takes work from the queue of another worker. A
+        // worker that is exiting leaves its scheduling loop once its own
+        // queue is empty, so work posted to it afterwards would never run.
+        // Post such work to the calling worker instead: it is still in its
+        // loop (it runs the calling HPX thread) and runs its own queue before
+        // it leaves.
+        void create_thread(thread_init_data& data, thread_id_ref_type* id,
+            error_code& ec) override
+        {
+            data.schedulehint = redirect_if_exiting(data.schedulehint);
+            base_type::create_thread(data, id, ec);
+        }
+
+        void schedule_thread(threads::thread_id_ref_type thrd,
+            threads::thread_schedule_hint schedulehint, bool allow_fallback,
+            thread_priority priority = thread_priority::default_) override
+        {
+            base_type::schedule_thread(HPX_MOVE(thrd),
+                redirect_if_exiting(schedulehint), allow_fallback, priority);
+        }
+
+        void schedule_thread_last(threads::thread_id_ref_type thrd,
+            threads::thread_schedule_hint schedulehint, bool allow_fallback,
+            thread_priority priority = thread_priority::default_) override
+        {
+            base_type::schedule_thread_last(HPX_MOVE(thrd),
+                redirect_if_exiting(schedulehint), allow_fallback, priority);
+        }
+
         // Return the next thread to be executed, return false if none is
         // available
         bool get_next_thread(std::size_t num_thread, bool,
@@ -143,6 +172,48 @@ namespace hpx::threads::policies {
 #endif
 
             return result;
+        }
+
+    private:
+        // see create_thread
+        threads::thread_schedule_hint redirect_if_exiting(
+            threads::thread_schedule_hint schedulehint)
+        {
+            // only a worker of this pool can take the work
+            auto const* pool = this->get_parent_pool();
+            if (pool == nullptr ||
+                threads::detail::get_thread_pool_num_tss() !=
+                    pool->get_pool_index())
+            {
+                return schedulehint;
+            }
+
+            std::size_t const self =
+                threads::detail::get_local_thread_num_tss();
+            std::size_t const queue_size = this->queues_.size();
+            if (self >= queue_size)
+                return schedulehint;
+
+            // pick the target the way local_queue_scheduler does, so that a
+            // round-robin choice is checked as well
+            std::size_t target =
+                schedulehint.mode() == thread_schedule_hint_mode::thread ?
+                static_cast<std::size_t>(schedulehint.hint) :
+                static_cast<std::size_t>(-1);
+            if (target == static_cast<std::size_t>(-1))
+                target = this->curr_queue_++ % queue_size;
+            else
+                target %= queue_size;
+
+            if (target != self &&
+                this->get_state(target).load(std::memory_order_relaxed) >=
+                    hpx::state::stopping)
+            {
+                target = self;
+            }
+            schedulehint.mode(thread_schedule_hint_mode::thread);
+            schedulehint.hint = static_cast<std::int16_t>(target);
+            return schedulehint;
         }
     };
 }    // namespace hpx::threads::policies

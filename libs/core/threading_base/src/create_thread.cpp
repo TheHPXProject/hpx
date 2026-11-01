@@ -116,7 +116,7 @@ namespace hpx::threads::detail {
 #endif
             ;
 
-        scheduler->do_some_work(data.schedulehint.mode ==
+        scheduler->do_some_work(data.schedulehint.mode() ==
                     hpx::threads::thread_schedule_hint_mode::numa ?
                 static_cast<std::size_t>(-1) :
                 data.schedulehint.hint);

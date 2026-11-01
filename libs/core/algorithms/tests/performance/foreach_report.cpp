@@ -114,6 +114,37 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 [&]() { measure_parallel_foreach(data_representation, exec); });
         }
 
+        // the same loops chunked by task_size_chunk_size, based on the task
+        // size of the loop body
+        {
+            hpx::execution::experimental::scheduler_executor<
+                hpx::execution::experimental::thread_pool_scheduler>
+                exec;
+            hpx::util::perftests_report(
+                "for_each", "scheduler_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::parallel_executor exec;
+            hpx::util::perftests_report(
+                "for_each", "parallel_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::experimental::fork_join_executor exec;
+            hpx::util::perftests_report(
+                "for_each", "fork_join_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
         hpx::util::perftests_print_times();
     }
 

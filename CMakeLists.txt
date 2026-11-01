@@ -64,7 +64,7 @@ string(TIMESTAMP HPX_COPYRIGHT_YEAR "%Y")
 set(HPX_VERSION_MAJOR 2)
 set(HPX_VERSION_MINOR 0)
 set(HPX_VERSION_SUBMINOR 0)
-set(HPX_VERSION_DATE 20250630)
+set(HPX_VERSION_DATE 20261031)
 set(HPX_VERSION_TAG "")
 
 set(HPX_VERSION
@@ -979,6 +979,19 @@ hpx_option(
 
 if(HPX_WITH_THREAD_STEALING_COUNTS)
   hpx_add_config_define(HPX_HAVE_THREAD_STEALING_COUNTS)
+endif()
+
+hpx_option(
+  HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS
+  BOOL
+  "Chunk parallel loops based on the task size of the loop body by default, deriving default_parameters from task_size_chunk_size (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
+  hpx_add_config_define(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
 endif()
 
 hpx_option(
@@ -1923,9 +1936,9 @@ hpx_option(
 
 # Check if the selected compiler versions are supposed to work with our codebase
 if(CMAKE_COMPILER_IS_GNUCXX AND HPX_WITH_GCC_VERSION_CHECK)
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.0)
     hpx_error(
-      "GCC 7.0 or higher is required. Specify HPX_WITH_GCC_VERSION_CHECK=OFF to ignore this error."
+      "GCC 12.0 or higher is required (found ${CMAKE_CXX_COMPILER_VERSION}). Specify -DHPX_WITH_GCC_VERSION_CHECK=OFF to remove this check at your own risk."
     )
   endif()
 endif()
@@ -2005,6 +2018,18 @@ target_architecture(__target_arch)
 
 include(CacheLineSize)
 cache_line_size(__cache_line_size)
+
+hpx_option(
+  HPX_WITH_DESTRUCTIVE_INTERFERENCE_SIZE
+  STRING
+  "Minimal distance in bytes between data written by different cores, to avoid false sharing (empty: chosen by the target architecture, 128 on x86-64 and ARM64) (default: \"\")"
+  ""
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+destructive_interference_size(
+  ${__cache_line_size} __destructive_interference_size
+)
 
 # ##############################################################################
 # Set configuration option to use Boost.Context or not. This depends on the
@@ -2499,6 +2524,11 @@ else()
   endif()
 endif()
 hpx_info("Cacheline size detected: ${__cache_line_size}")
+if(__destructive_interference_size)
+  hpx_info(
+    "Destructive interference size set to: ${__destructive_interference_size}"
+  )
+endif()
 
 # store target architecture for later use
 set(HPX_WITH_TARGET_ARCHITECTURE

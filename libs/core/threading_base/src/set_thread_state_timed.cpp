@@ -1,4 +1,5 @@
 //  Copyright (c) 2007-2024 Hartmut Kaiser
+//  Copyright (c) 2026 Anshuman Agrawal
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -8,6 +9,7 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/threading_base/create_thread.hpp>
@@ -22,14 +24,34 @@
 #include <winsock2.h>
 #endif
 #include <asio/basic_waitable_timer.hpp>
+#include <asio/error.hpp>
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <system_error>
 #include <utility>
 
 namespace hpx::threads::detail {
+
+    // Who is responsible for resuming the wake_timer thread: the timer handler
+    // or, if the timer was aborted first, the at_timer thread itself.
+    enum class wake_state : std::uint8_t
+    {
+        unclaimed,
+        claimed,
+        scheduled
+    };
+
+    ///////////////////////////////////////////////////////////////////////////
+    /// State shared between an at_timer thread, the wake_timer thread it
+    /// creates, and the timer handler that resumes the wake_timer thread.
+    struct timer_state
+    {
+        std::atomic<bool> triggered{false};
+        std::atomic<wake_state> wake{wake_state::unclaimed};
+    };
 
     ///////////////////////////////////////////////////////////////////////////
     /// This thread function is used by the at_timer thread below to trigger
@@ -37,8 +59,7 @@ namespace hpx::threads::detail {
     thread_result_type wake_timer_thread(thread_id_ref_type const& thrd,
         thread_schedule_state /*newstate*/,
         thread_restart_state /*newstate_ex*/, thread_priority /*priority*/,
-        thread_id_type timer_id,
-        std::shared_ptr<std::atomic<bool>> const& triggered,
+        thread_id_type timer_id, std::shared_ptr<timer_state> const& state,
         bool retry_on_active, thread_restart_state my_statex)
     {
         if (HPX_UNLIKELY(!thrd))
@@ -58,7 +79,7 @@ namespace hpx::threads::detail {
         HPX_ASSERT(my_statex == thread_restart_state::abort ||
             my_statex == thread_restart_state::timeout);
 
-        if (!triggered->load())
+        if (!state->triggered.load())
         {
             error_code ec(throwmode::lightweight);    // do not throw
             set_thread_state(timer_id, thread_schedule_state::pending,
@@ -88,15 +109,17 @@ namespace hpx::threads::detail {
         // allowing the deadline_timer to go out of scope gracefully
         thread_id_ref_type const self_id = get_self_id();    // keep alive
 
-        std::shared_ptr<std::atomic<bool>> triggered(
-            std::make_shared<std::atomic<bool>>(false));
+        std::shared_ptr<timer_state> state(std::make_shared<timer_state>());
 
         thread_init_data data(
             hpx::bind_front(&wake_timer_thread, thrd, newstate, newstate_ex,
-                priority, self_id.noref(), triggered, retry_on_active),
+                priority, self_id.noref(), state, retry_on_active),
             "wake_timer", priority, thread_schedule_hint(),
             thread_stacksize::small_, thread_schedule_state::suspended, true);
 
+        // at_timer holds its own reference to the wake_timer thread: the
+        // handler's copy below may already be destroyed when the abort path
+        // resumes it.
         thread_id_ref_type wake_id = invalid_thread_id;
         create_thread(scheduler, data, wake_id);
 
@@ -107,21 +130,31 @@ namespace hpx::threads::detail {
         deadline_timer t(get_default_timer_service(), abs_time);
 
         // let the timer invoke the set_state on the new (suspended) thread
-        t.async_wait([wake_id = HPX_MOVE(wake_id), priority, retry_on_active](
+        t.async_wait([wake_id, state, priority, retry_on_active](
                          std::error_code const& ec) {
-            if (ec == std::make_error_code(std::errc::operation_canceled))
+            // Cancellation is handled by at_timer, which makes wake_timer
+            // pending itself before canceling the timer below.
+            if (ec == ::asio::error::operation_aborted)
             {
-                set_thread_state(wake_id.noref(),
-                    thread_schedule_state::pending, thread_restart_state::abort,
-                    priority, thread_schedule_hint(), retry_on_active, throws);
+                return;
             }
-            else
+
+            wake_state expected = wake_state::unclaimed;
+            if (!state->wake.compare_exchange_strong(
+                    expected, wake_state::claimed))
             {
-                set_thread_state(wake_id.noref(),
-                    thread_schedule_state::pending,
-                    thread_restart_state::timeout, priority,
-                    thread_schedule_hint(), retry_on_active, throws);
+                return;
             }
+
+            // Release at_timer even if scheduling below throws; wake_timer is
+            // then left suspended, but at_timer does not wait for it forever.
+            auto on_exit = hpx::experimental::scope_exit(
+                [&state] { state->wake.store(wake_state::scheduled); });
+
+            error_code ec2(throwmode::lightweight);    // do not throw
+            set_thread_state(wake_id.noref(), thread_schedule_state::pending,
+                thread_restart_state::timeout, priority, thread_schedule_hint(),
+                retry_on_active, ec2);
         });
 
         if (started != nullptr)
@@ -158,9 +191,30 @@ namespace hpx::threads::detail {
 
         if (thread_restart_state::timeout != statex)    //-V601
         {
-            triggered->store(true);
+            state->triggered.store(true);
 
-            // wake_timer_thread has not been executed yet, cancel timer
+            // Resume the wake_timer thread from here instead of leaving it to
+            // the timer's cancel handler, which during shutdown may run after
+            // all worker threads have exited. If the handler claimed it first,
+            // wait until it has actually made the wake_timer thread pending.
+            wake_state expected = wake_state::unclaimed;
+            if (state->wake.compare_exchange_strong(
+                    expected, wake_state::claimed))
+            {
+                error_code ec(throwmode::lightweight);    // do not throw
+                set_thread_state(wake_id.noref(),
+                    thread_schedule_state::pending, thread_restart_state::abort,
+                    priority, thread_schedule_hint(), retry_on_active, ec);
+                state->wake.store(wake_state::scheduled);
+            }
+            else
+            {
+                hpx::util::yield_while(
+                    [&] { return state->wake.load() != wake_state::scheduled; },
+                    "at_timer");
+            }
+
+            // wake_timer is pending by now, so the cancel handler is a no-op
             t.cancel();
         }
         else

@@ -8,8 +8,10 @@
 #include <hpx/assert.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/format.hpp>
+#include <hpx/modules/functional.hpp>
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/lock_registration.hpp>
+#include <hpx/modules/runtime_local.hpp>
 #include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -889,7 +891,40 @@ namespace hpx::supervision::server {
             std::exception_ptr ep;
             hpx::detail::try_catch_exception_ptr(
                 [&]() { keep_registered = f.get(); },
-                [&](std::exception_ptr const& e) { ep = e; });
+                [&](std::exception_ptr const& e) {
+                    // If the observer's locality went away (e.g. it was
+                    // killed), the delivery failed because of the observer,
+                    // not because of target. Drop the observer instead of
+                    // reporting the failure: the caller would record it as
+                    // target having failed, fencing a healthy target. Any
+                    // other failure (e.g. the callback threw) is reported as
+                    // before.
+                    //
+                    // A remote observer's callback runs on the observer's
+                    // locality, so an exception it throws carries that
+                    // locality's id, even if it is locality_was_disconnected
+                    // (say, from a remote call the callback made itself).
+                    // Only a failure raised here can come from sending to the
+                    // observer. A local observer cannot become unreachable.
+                    std::uint32_t const here = agas::get_locality_id();
+                    std::uint32_t const agent_locality =
+                        naming::get_locality_id_from_gid(agent.get_gid());
+                    bool const send_failed = hpx::get_error(e) ==
+                            hpx::error::locality_was_disconnected &&
+                        hpx::get_error_locality_id(e) == here;
+
+                    if (agent_locality != here &&
+                        (send_failed ||
+                            parcelset::locality_was_disconnected(
+                                agent_locality)))
+                    {
+                        keep_registered = false;
+                    }
+                    else
+                    {
+                        ep = e;
+                    }
+                });
 
             bool deactivated = false;
 
@@ -1404,9 +1439,28 @@ namespace hpx::supervision::server {
 
         return hpx::detail::try_catch_exception_ptr(
             [&]() {
+                // Once tidy() has started (and while the runtime is shutting
+                // down), a remote agent's locality may be gone already and its
+                // reply may never arrive. Drop a remote agent instead of
+                // blocking shutdown on it. A remote agent on a locality that is
+                // still alive also stops receiving notifications, including the
+                // last_observer_unregistered ones for the targets tidy()
+                // removes: they are dropped once teardown has started, so
+                // nothing should rely on them at shutdown. A local agent is
+                // always waited for: it cannot become unreachable, and its
+                // callback has to complete before
+                // deliver_activity_notification() returns.
+                std::uint32_t const agent_locality =
+                    naming::get_locality_id_from_gid(agent.get_gid());
+                bool const remote = agent_locality != agas::get_locality_id();
+                bool const unreachable =
+                    parcelset::locality_was_disconnected(agent_locality) ||
+                    (remote &&
+                        (tearing_down_.load(std::memory_order_acquire) ||
+                            hpx::is_stopped_or_shutting_down()));
+
                 bool erase_agent = true;
-                if (!parcelset::locality_was_disconnected(
-                        naming::get_locality_id_from_gid(agent.get_gid())))
+                if (!unreachable)
                 {
                     using action_type =
                         activity_agent_component::invoke_if_active_action;
@@ -1414,7 +1468,26 @@ namespace hpx::supervision::server {
                         hpx::async(hpx::launch::task, action_type(), agent,
                             HPX_MOVE(notification));
 
-                    erase_agent = !keep_registered.get();
+                    // wait in slices, so that a reply that never comes (the
+                    // agent's locality left) doesn't block teardown. Only a
+                    // remote agent can become unreachable; a local callback
+                    // must still complete before this returns, as promised by
+                    // deliver_activity_notification().
+                    while (keep_registered.wait_for(std::chrono::milliseconds(
+                               100)) != hpx::future_status::ready)
+                    {
+                        if (parcelset::locality_was_disconnected(
+                                agent_locality) ||
+                            (remote &&
+                                (tearing_down_.load(
+                                     std::memory_order_acquire) ||
+                                    hpx::is_stopped_or_shutting_down())))
+                        {
+                            break;    // drop the agent, see above
+                        }
+                    }
+                    erase_agent =
+                        !keep_registered.is_ready() || !keep_registered.get();
                 }
 
                 if (erase_agent)
@@ -1762,8 +1835,21 @@ namespace hpx::supervision::server {
     // activity-observer notifications, agent/state cleanup) rather than
     // duplicating that logic here. If both maps are empty at snapshot time,
     // this is a no-op.
+    //
+    // This is meant for teardown of this locality's supervision state at
+    // shutdown. pre_main() registers tidy_supervision() as a pre-shutdown
+    // function so that every locality runs it when the application is actually
+    // going away; post_main() is not usable for this, as it also runs on worker
+    // localities right after their empty hpx_main returns.
+    //
+    // Once called, tearing_down_ stays set: remote activity agents are no
+    // longer waited for or notified, even if tidy() was called while the
+    // runtime was still running (as tests do). Keeping the flag set also means
+    // repeated or overlapping calls need no special handling.
     void supervision_manager::tidy()
     {
+        tearing_down_.store(true, std::memory_order_release);
+
         std::vector<hpx::id_type> targets;
 
         {

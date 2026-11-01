@@ -290,7 +290,7 @@ namespace hpx::threads::policies {
             auto msg = spq_deb.declare_variable<char const*>(nullptr);
 
             using threads::thread_schedule_hint_mode;
-            switch (data.schedulehint.mode)
+            switch (data.schedulehint.mode())
             {
             case thread_schedule_hint_mode::none:
             {
@@ -397,7 +397,7 @@ namespace hpx::threads::policies {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "shared_priority_queue_scheduler::create_thread",
                     "Invalid schedule hint mode: {}",
-                    static_cast<std::size_t>(data.schedulehint.mode));
+                    static_cast<std::size_t>(data.schedulehint.mode()));
             }
 
             // we do not allow threads created on other queues to 'run now'
@@ -585,7 +585,86 @@ namespace hpx::threads::policies {
             return false;
         }
 
+        // True while a bound thread created on this worker has not
+        // terminated. It runs only here, so the worker must not leave its
+        // scheduling loop: a thread being woken is marked pending before it
+        // is queued, and in between neither the suspended threads nor the
+        // queue length show it (see scheduling_loop).
+        bool has_live_bound_threads(std::size_t num_thread)
+        {
+            HPX_ASSERT(num_thread < num_workers_);
+            return numa_holder_[d_lookup_[num_thread]]
+                       .thread_queue(q_lookup_[num_thread])
+                       ->get_live_bound_thread_count() != 0;
+        }
+
+        // Called by the scheduling loop of the last worker to leave during
+        // shutdown while it takes over the work left (see scheduling_loop).
+        // Stealing never takes bound threads, only their owner runs them: move
+        // the bound threads left on the queues of workers that have left their
+        // scheduling loop to the bound queue of this worker. This returns true
+        // if any work was moved.
+        bool take_over_work(std::size_t num_thread)
+        {
+            HPX_ASSERT(num_thread < num_workers_);
+
+            auto const bound_queue = [this](std::size_t i) {
+                return numa_holder_[d_lookup_[i]]
+                    .thread_queue(q_lookup_[i])
+                    ->bp_queue_;
+            };
+
+            thread_queue_type* this_queue = bound_queue(num_thread);
+            std::size_t added = 0;
+            for (std::size_t i = 0; i != num_workers_; ++i)
+            {
+                if (i == num_thread ||
+                    this->get_state(i).load(std::memory_order_relaxed) !=
+                        hpx::state::stopped)
+                {
+                    continue;
+                }
+
+                // staged threads
+                thread_queue_type* q = bound_queue(i);
+                std::size_t n = 0;
+                do
+                {
+                    n = this_queue->add_new(32, q, true);
+                    added += n;
+                } while (n != 0);
+
+                // pending threads
+                while (true)
+                {
+                    threads::thread_id_ref_type thrd;
+                    if (!q->get_next_thread(thrd, false, false))
+                        break;
+                    this_queue->schedule_work(HPX_MOVE(thrd), true);
+                    ++added;
+                }
+            }
+            return added != 0;
+        }
+
         // Return the next thread to be executed, return false if none available
+        //
+        // Note: this scheduler ignores the running and enable_stealing
+        // arguments (here and in wait_or_add_new) and steals as the scheduler
+        // mode says, also while the pool is stopping. That is what lets it
+        // shut down cleanly when work is posted to the queue of a worker that
+        // has already left its scheduling loop: the remaining workers keep
+        // stealing and run it (except for bound threads, which are never
+        // stolen, see take_over_work). The other schedulers stop stealing once
+        // running is false and rely on the last worker to leave taking the
+        // work over (see scheduling_loop and leave_scheduling_loop). If this
+        // scheduler starts to honor running or enable_stealing, it has to
+        // handle that shutdown case differently: the last worker taking over
+        // calls it with running and enable_stealing set to true, and it has to
+        // reach the work on the queues of workers that have left then, or
+        // move it in take_over_work (see scheduling_loop and
+        // local_workrequesting_scheduler). The test shutdown_left_work checks
+        // this case.
         bool get_next_thread(std::size_t thread_num, bool running,
             threads::thread_id_ref_type& thrd, bool enable_stealing)
         {
@@ -723,7 +802,7 @@ namespace hpx::threads::policies {
 
             using threads::thread_schedule_hint_mode;
 
-            switch (schedulehint.mode)
+            switch (schedulehint.mode())
             {
             case thread_schedule_hint_mode::none:
             {
@@ -819,7 +898,7 @@ namespace hpx::threads::policies {
                 HPX_THROW_EXCEPTION(hpx::error::bad_parameter,
                     "shared_priority_queue_scheduler::schedule_thread",
                     "Invalid schedule hint mode: {}",
-                    static_cast<std::size_t>(schedulehint.mode));
+                    static_cast<std::size_t>(schedulehint.mode()));
             }
 
             spq_deb.debug(debug::str<>("thread scheduled"), msg, "Thread",
@@ -857,15 +936,31 @@ namespace hpx::threads::policies {
                           .queue_index_;
 
             std::size_t this_thread = local_thread_number();
-            HPX_ASSERT(this_thread < num_workers_);
 
-            auto d2 = d_lookup_[this_thread];
-            auto q2 = q_lookup_[this_thread];
-            bool xthread = ((q1 != q2) || (d1 != d2));
-            spq_deb.debug(debug::str<>("destroy_thread"), "xthread", xthread,
-                "task owned by", "D", debug::dec<2>(d1), "Q", debug::dec<3>(q1),
-                "this thread", "D", debug::dec<2>(d2), "Q", debug::dec<3>(q2),
-                debug::threadinfo<threads::thread_data*>(thrd));
+            // A thread outside of this pool (an external thread, the main thread
+            // or a worker of another pool) dropped the last reference:
+            // let the owning worker clean up the task.
+            bool const is_external = this_thread >= num_workers_;
+            bool const xthread = is_external || q_lookup_[this_thread] != q1 ||
+                d_lookup_[this_thread] != d1;
+
+            if (is_external)
+            {
+                spq_deb.debug(debug::str<>("destroy_thread"), "xthread",
+                    xthread, "task owned by", "D", debug::dec<2>(d1), "Q",
+                    debug::dec<3>(q1), "this thread", "external",
+                    debug::threadinfo<threads::thread_data*>(thrd));
+            }
+            else
+            {
+                auto d2 = d_lookup_[this_thread];
+                auto q2 = q_lookup_[this_thread];
+                spq_deb.debug(debug::str<>("destroy_thread"), "xthread",
+                    xthread, "task owned by", "D", debug::dec<2>(d1), "Q",
+                    debug::dec<3>(q1), "this thread", "D", debug::dec<2>(d2),
+                    "Q", debug::dec<3>(q2),
+                    debug::threadinfo<threads::thread_data*>(thrd));
+            }
 
             // the cleanup of a task should be done by the original owner of the
             // task, so return it to the queue it came from before it was stolen
