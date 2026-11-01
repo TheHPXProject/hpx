@@ -443,6 +443,15 @@ peer's eviction from ``peers_``. Once evicted, the peer no longer appears in
 unregistered on the peer's locality so nothing is left listening for further
 events from a peer that has already reached a terminal state.
 
+A peer fenced by failure detection never reports a terminal event of its
+own, so no callback schedules its eviction. The failure-detection loop does
+it instead: its next sweep finds the peer's shadow already terminal and
+evicts the peer the same way, so it no longer appears in
+:hpx:func:`registry::snapshot_peers() <hpx::supervision::registry::snapshot_peers>` either. In both cases the terminal shadow is
+kept, so dispatch to the evicted peer stays fenced until it is joined again.
+The failure-detection loop does not wait for the eviction to unregister the
+observers on the peer's locality, since that locality may be gone.
+
 What this does and does not cover
 ---------------------------------
 
