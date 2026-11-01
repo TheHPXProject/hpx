@@ -16,6 +16,7 @@ set(actions_base_headers
     hpx/actions_base/actions_base_support.hpp
     hpx/actions_base/action_priority.hpp
     hpx/actions_base/action_stacksize.hpp
+    hpx/actions_base/action_task_size.hpp
     hpx/actions_base/basic_action.hpp
     hpx/actions_base/basic_action_fwd.hpp
     hpx/actions_base/component_action.hpp
@@ -37,6 +38,7 @@ set(actions_base_headers
     hpx/actions_base/traits/action_schedule_thread.hpp
     hpx/actions_base/traits/action_select_direct_execution.hpp
     hpx/actions_base/traits/action_stacksize.hpp
+    hpx/actions_base/traits/action_task_size.hpp
     hpx/actions_base/traits/action_trigger_continuation_fwd.hpp
     hpx/actions_base/traits/action_was_object_migrated.hpp
     hpx/actions_base/traits/extract_action.hpp
