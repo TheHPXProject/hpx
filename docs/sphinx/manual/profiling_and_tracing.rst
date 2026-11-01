@@ -126,6 +126,9 @@ version.
    $ cmake -B capture/build -S capture -DCMAKE_BUILD_TYPE=Release
    $ cmake --build capture/build --config Release --parallel
 
+If you set ``HPX_WITH_TRACY_TAG`` to another tag, clone that tag instead, so
+the profiler and |hpx| use the same Tracy version.
+
 This builds ``tracy-profiler``, the graphical viewer, and ``tracy-capture`` and
 ``tracy-capture-daemon``, two command line tools that record traces to files.
 The configure step downloads further libraries, so it needs network access and
@@ -234,13 +237,18 @@ example ``idle_callback`` and ``do_some_work`` in the scheduler,
 executors, and ``send_parcel`` / ``recv_parcel`` / ``parcel_scheduled`` in the
 parcel layer.
 
+The zones that |hpx| opens do not record call stacks. For task zones the call
+stack would show the same scheduler frames for every task. Messages do record
+call stacks (see `Messages`_).
+
 Task fibers
 ~~~~~~~~~~~
 
-Each task also runs on a fiber row, named ``<description>_<id>``, where the id
-is the address of the |hpx| thread. You can follow a task on its fiber row when
-it moves from one worker to another. The color of a zone on a fiber row depends
-on the worker it ran on, so a change of color means that the task moved.
+Each task, except stackless (``nostack``) tasks, also runs on a fiber row,
+named ``<description>_<id>``, where the id is the address of the |hpx| thread.
+You can follow a task on its fiber row when it moves from one worker to
+another. The color of a zone on a fiber row depends on the worker it ran on, so
+a change of color means that the task moved.
 
 |hpx| reuses thread objects. A later task that reuses the same thread object
 appears on the same fiber row, so a fiber row can show more than one task under
