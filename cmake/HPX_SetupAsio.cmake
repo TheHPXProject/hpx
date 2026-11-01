@@ -47,7 +47,6 @@ elseif(NOT TARGET Asio::asio AND NOT HPX_FIND_PACKAGE)
   )
 
   fetchcontent_makeavailable(asio)
-  set(Asio_ROOT ${asio_SOURCE_DIR})
 
   add_library(asio INTERFACE)
 
@@ -57,9 +56,9 @@ elseif(NOT TARGET Asio::asio AND NOT HPX_FIND_PACKAGE)
   )
 
   # starting v1.37.0 ASIO has changed its directory structure
-  set(asio_base_directory ${Asio_ROOT}/asio/include)
+  set(asio_base_directory ${asio_SOURCE_DIR}/asio/include)
   if(VERSION VERSION_GREATER "1.36.0")
-    set(asio_base_directory ${Asio_ROOT}/include)
+    set(asio_base_directory ${asio_SOURCE_DIR}/include)
   endif()
 
   target_include_directories(
