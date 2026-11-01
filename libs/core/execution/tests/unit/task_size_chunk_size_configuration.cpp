@@ -26,6 +26,7 @@ int hpx_main_configured()
     auto const defaults = ex::detail::get_task_size_chunk_size_defaults();
     HPX_TEST(defaults.min_chunk_time == 20us);
     HPX_TEST_EQ(defaults.chunks_per_core, 2u);
+    HPX_TEST_EQ(defaults.copy_bytes_per_ns, 32u);
 
     hpx::execution::parallel_executor exec;
     std::size_t const available = ex::processing_units_count(exec);
@@ -59,6 +60,7 @@ int hpx_main_compiled()
     auto const defaults = ex::detail::get_task_size_chunk_size_defaults();
     HPX_TEST(defaults.min_chunk_time == 2500ns);
     HPX_TEST_EQ(defaults.chunks_per_core, 8u);
+    HPX_TEST_EQ(defaults.copy_bytes_per_ns, 16u);
 
     return hpx::local::finalize();
 }
@@ -68,7 +70,8 @@ int main(int argc, char* argv[])
     {
         hpx::local::init_params init_args;
         init_args.cfg = {"hpx.task_size_chunk_size.min_chunk_time_us=20",
-            "hpx.task_size_chunk_size.chunks_per_core=2"};
+            "hpx.task_size_chunk_size.chunks_per_core=2",
+            "hpx.task_size_chunk_size.copy_bytes_per_ns=32"};
 
         HPX_TEST_EQ_MSG(
             hpx::local::init(hpx_main_configured, argc, argv, init_args), 0,
@@ -84,6 +87,8 @@ int main(int argc, char* argv[])
         {"hpx.task_size_chunk_size.min_chunk_time_us=-1",
             "hpx.task_size_chunk_size.chunks_per_core=1025"},
         {"hpx.task_size_chunk_size.chunks_per_core=0"},
+        {"hpx.task_size_chunk_size.copy_bytes_per_ns=0"},
+        {"hpx.task_size_chunk_size.copy_bytes_per_ns=4097"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=2000000"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=nan"},
         {"hpx.task_size_chunk_size.min_chunk_time_us=inf"}};
