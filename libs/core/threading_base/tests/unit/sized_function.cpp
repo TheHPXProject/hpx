@@ -14,10 +14,14 @@
 #include <hpx/future.hpp>
 #include <hpx/init.hpp>
 #include <hpx/latch.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/serialization.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <chrono>
+#include <cstddef>
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -26,6 +30,7 @@
 
 using hpx::threads::large_task;
 using hpx::threads::medium_task;
+using hpx::threads::nano_task;
 using hpx::threads::small_task;
 using hpx::threads::task_size;
 using hpx::threads::with_task_size;
@@ -125,6 +130,8 @@ void test_trait()
         task_size::medium);
 
     // the shorthands give the same types as with_task_size
+    static_assert(std::is_same_v<decltype(nano_task(lambda)),
+        decltype(with_task_size<task_size::nano>(lambda))>);
     static_assert(std::is_same_v<decltype(small_task(lambda)),
         decltype(with_task_size<task_size::small_>(lambda))>);
     static_assert(std::is_same_v<decltype(medium_task(lambda)),
@@ -132,6 +139,18 @@ void test_trait()
     static_assert(std::is_same_v<decltype(large_task(&plain_function)),
         decltype(with_task_size<task_size::large>(&plain_function))>);
     static_assert(size_of<decltype(small_task(lambda))> == task_size::small_);
+
+    // a qualified function has the size of the unqualified one
+    using large_type = decltype(large);
+    static_assert(size_of<large_type const> == task_size::large);
+    static_assert(size_of<large_type&> == task_size::large);
+    static_assert(size_of<large_type const&> == task_size::large);
+    static_assert(size_of<large_type&&> == task_size::large);
+    static_assert(
+        hpx::traits::get_task_size_v<large_type const&, task_size::small_> ==
+        task_size::large);
+    HPX_TEST(hpx::traits::get_task_size<large_type const>::call(large) ==
+        task_size::large);
 
     // the size is a template argument, so the wrapper is as big as f
     static_assert(sizeof(large) == sizeof(lambda));
@@ -153,6 +172,38 @@ void test_trait()
                       task_size::medium> == task_size::medium);
     static_assert(get_task_size_v<decltype(hpx::annotated_function(lambda)),
                       task_size::medium> == task_size::medium);
+
+    // each size stands for a hundred times the run time of the one below it,
+    // so a hundred nano calls make a small task, a hundred small calls a
+    // medium one and a hundred medium calls a large one
+    using hpx::bulk_task_size;
+    using hpx::task_size_duration;
+    using namespace std::chrono_literals;
+    static_assert(task_size_duration(task_size::unknown) == 0ns);
+    static_assert(task_size_duration(task_size::nano) == 1ns);
+    static_assert(task_size_duration(task_size::small_) == 100ns);
+    static_assert(task_size_duration(task_size::medium) == 10us);
+    static_assert(task_size_duration(task_size::large) == 1ms);
+
+    static_assert(bulk_task_size(task_size::nano, 1) == task_size::nano);
+    static_assert(bulk_task_size(task_size::nano, 99) == task_size::nano);
+    static_assert(bulk_task_size(task_size::nano, 100) == task_size::small_);
+    static_assert(bulk_task_size(task_size::nano, 9999) == task_size::small_);
+    static_assert(bulk_task_size(task_size::nano, 10000) == task_size::medium);
+    static_assert(bulk_task_size(task_size::nano, 1000000) == task_size::large);
+    static_assert(bulk_task_size(task_size::small_, 1) == task_size::small_);
+    static_assert(bulk_task_size(task_size::small_, 99) == task_size::small_);
+    static_assert(bulk_task_size(task_size::small_, 100) == task_size::medium);
+    static_assert(bulk_task_size(task_size::small_, 9999) == task_size::medium);
+    static_assert(bulk_task_size(task_size::small_, 10000) == task_size::large);
+    static_assert(bulk_task_size(task_size::medium, 1) == task_size::medium);
+    static_assert(bulk_task_size(task_size::medium, 99) == task_size::medium);
+    static_assert(bulk_task_size(task_size::medium, 100) == task_size::large);
+    static_assert(
+        bulk_task_size(task_size::medium, std::size_t(-1)) == task_size::large);
+    static_assert(bulk_task_size(task_size::large, 1) == task_size::large);
+    static_assert(
+        bulk_task_size(task_size::unknown, 1000) == task_size::unknown);
 
     // the binders see through to the function they call
     using hpx::placeholders::_1;
@@ -265,13 +316,66 @@ void test_hint()
     HPX_TEST(all.sharing_mode() ==
         hpx::threads::thread_sharing_hint::do_not_combine_tasks);
 
-    // a function's size goes into the hint, a function without one leaves it
+    // a function's size replaces the one in the hint, and a function without
+    // one leaves the hint without one
     auto lambda = [] {};
     thread_schedule_hint h(task_size::small_);
-    hpx::threads::detail::set_task_size<decltype(lambda)>(h);
-    HPX_TEST(h.task_size() == task_size::small_);
-    hpx::threads::detail::set_task_size<decltype(large_task(lambda))>(h);
+    hpx::threads::detail::set_task_size(h, lambda);
+    HPX_TEST(h.task_size() == task_size::unknown);
+    hpx::threads::detail::set_task_size(h, large_task(lambda));
     HPX_TEST(h.task_size() == task_size::large);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+template <typename F>
+task_size size_of_object(F const& f)
+{
+    return hpx::traits::get_task_size<F>::call(f);
+}
+
+void test_type_erased()
+{
+    // a type erased function has the size of the function stored in it, which
+    // is known at run time only
+    hpx::move_only_function<int()> move_only = large_task([] { return 1; });
+    static_assert(size_of<decltype(move_only)> == task_size::unknown);
+    HPX_TEST(size_of_object(move_only) == task_size::large);
+
+    hpx::function<int()> const f = small_task([] { return 1; });
+    HPX_TEST(size_of_object(f) == task_size::small_);
+    HPX_TEST_EQ(f(), 1);
+
+    // a function without a size has none, or the default
+    hpx::function<int()> const plain = [] { return 1; };
+    HPX_TEST(size_of_object(plain) == task_size::unknown);
+    HPX_TEST((hpx::traits::get_task_size<hpx::function<int()>,
+                  task_size::medium>::call(plain) == task_size::medium));
+    HPX_TEST(size_of_object(hpx::function<int()>()) == task_size::unknown);
+
+    // the wrappers see through to it
+    using hpx::placeholders::_1;
+    HPX_TEST(size_of_object(hpx::util::deferred_call(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind_front(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::bind_back(f)) == task_size::small_);
+    HPX_TEST(size_of_object(hpx::util::one_shot(f)) == task_size::small_);
+    HPX_TEST(
+        size_of_object(hpx::annotated_function(f, "f")) == task_size::small_);
+
+    // so do type erased functions storing a wrapper
+    hpx::function<int()> const bound = hpx::bind_front(f);
+    HPX_TEST(size_of_object(bound) == task_size::small_);
+
+    // with_task_size_of gives a function the size of another one
+    auto const other =
+        hpx::threads::detail::with_task_size_of([] { return 2; }, f);
+    HPX_TEST(size_of_object(other) == task_size::small_);
+    HPX_TEST_EQ(other(), 2);
+
+    // and set_task_size takes the size from the function object
+    hpx::threads::thread_schedule_hint h;
+    hpx::threads::detail::set_task_size(h, f);
+    HPX_TEST(h.task_size() == task_size::small_);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -376,12 +480,90 @@ void test_composition()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Builtin operations on builtin types are nano tasks.
+template <typename F, typename... Args>
+inline constexpr task_size size_for =
+    hpx::traits::get_task_size_for<F, Args...>::call(std::remove_cvref_t<F>{});
+
+enum class color
+{
+    red
+};
+
+template <typename F>
+inline constexpr bool names_operand = requires {
+    typename hpx::traits::typed_builtin_operation_operand<F>::type;
+};
+
+void test_builtin_operations()
+{
+    // a typed function object names the type of its operands
+    static_assert(size_of<std::less<int>> == task_size::nano);
+    static_assert(size_of<std::plus<double>> == task_size::nano);
+    static_assert(size_of<std::equal_to<color>> == task_size::nano);
+    static_assert(size_of<std::less<int const*>> == task_size::nano);
+    static_assert(size_of<std::less<std::string>> == task_size::unknown);
+    static_assert(
+        size_of<hpx::parallel::detail::min_of<int>> == task_size::nano);
+
+    // a transparent one doesn't, its size depends on the arguments
+    static_assert(!names_operand<std::less<>>);
+    static_assert(names_operand<std::less<int>>);
+    static_assert(size_of<std::less<>> == task_size::unknown);
+    static_assert(size_for<std::less<>> == task_size::unknown);
+    static_assert(
+        size_for<std::less<>, int&, double const&> == task_size::nano);
+    static_assert(size_for<std::plus<>, std::size_t, int> == task_size::nano);
+    static_assert(size_for<std::logical_not<>, bool> == task_size::nano);
+    static_assert(
+        size_for<std::ranges::less, int*, int const*> == task_size::nano);
+    static_assert(
+        size_for<hpx::parallel::detail::less, int, int> == task_size::nano);
+    static_assert(
+        size_for<hpx::ranges::equal_to, color, color> == task_size::nano);
+    static_assert(
+        size_for<std::less<>, std::string const&, std::string const&> ==
+        task_size::unknown);
+    static_assert(
+        size_for<std::less<>, int, std::string> == task_size::unknown);
+
+    // the size of the type wins over the arguments, and a size given to the
+    // function always wins
+    static_assert(size_for<std::less<int>, std::string> == task_size::nano);
+    static_assert(size_for<decltype(small_task(std::less<>{})), int, int> ==
+        task_size::small_);
+    static_assert(size_for<decltype(large_task(std::less<int>{})), int, int> ==
+        task_size::large);
+    static_assert(size_for<std::less<> const&, int, int> == task_size::nano);
+
+    // other functions keep their size, also with arguments
+    auto const lambda = [](int a, int b) { return a < b; };
+    static_assert(
+        hpx::traits::get_task_size_for<decltype(lambda), int, int>::call(
+            lambda) == task_size::unknown);
+
+    // with_task_size_of gives a function the size of a call of another
+    auto const f = [] {};
+    auto const called =
+        hpx::threads::detail::with_task_size_of<int, int>(f, std::less<>{});
+    HPX_TEST(hpx::traits::get_task_size<decltype(called)>::call(called) ==
+        task_size::nano);
+
+    auto const uncalled =
+        hpx::threads::detail::with_task_size_of(f, std::less<>{});
+    HPX_TEST(hpx::traits::get_task_size<decltype(uncalled)>::call(uncalled) ==
+        task_size::unknown);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int hpx_main()
 {
     test_trait();
+    test_builtin_operations();
     test_forwarding();
     test_hpx_names();
     test_hint();
+    test_type_erased();
     test_serialization();
     test_launch();
     test_composition();

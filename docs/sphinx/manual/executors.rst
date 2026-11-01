@@ -543,6 +543,7 @@ a given parallel algorithm or execution policy.
 * `is_never_blocking_one_way_executor` indicates whether the executor can schedule tasks in a fire-and-forget style without blocking.
 * `is_one_way_executor` indicates support for one-way execution (tasks can be scheduled but no result is returned).
 * `is_two_way_executor` indicates support for two-way execution (tasks return a result or a future).
+
 In all cases, the custom executor inherits the capabilities of the base executor, so it integrates seamlessly with |hpx| algorithms.
 
 This design ensures that `simple_annotating_executor` can be used anywhere its underlying executor could be used, while still
@@ -585,11 +586,178 @@ We then use hpx::for_each with a parallel execution policy and attach our custom
 * hpx::execution::par.on(exec) attaches our custom executor to the algorithm.
 * for_each internally partitions the work across threads and schedules each task using `bulk_async_execute`.
 * Each task is annotated with "for_each_task", visible in debuggers and profilers.
-* The results of the parallel computation are stored in the data vector, demonstrating that the algorithm
-  executed successfully in parallel.
+* The results of the parallel computation are stored in the data vector, demonstrating that the algorithm executed successfully in parallel.
 
 This pattern is especially useful in larger applications with many tasks, as annotations make it much easier
 to trace and debug the execution of parallel algorithms.
+
+.. _task_sizes:
+
+Task sizes
+==========
+
+A task can tell the scheduler how long it is expected to run. The size is a
+property of the function a task runs, so it is attached to the function:
+``hpx::with_task_size<Size>(f)`` and its shorthands ``hpx::nano_task(f)``,
+``hpx::small_task(f)``, ``hpx::medium_task(f)`` and ``hpx::large_task(f)``
+return a function that carries one of the sizes of
+``hpx::task_size``. ``hpx::traits::get_task_size_v<F>`` reads it from
+the type of a function, and is ``task_size::unknown`` for a function without a
+size. ``hpx::traits::get_task_size<F>::call(f)`` reads it from the function
+object ``f``, which also finds the size of a function stored in an
+``hpx::function`` or an ``hpx::move_only_function``, known at run time only.
+
+.. note::
+
+   As a rule of thumb, a nano task runs for about a nanosecond, a small task
+   for about 100 nanoseconds, a medium task for about 10 microseconds,
+   and a large task for about a millisecond or more: each size stands for a
+   hundred times the run time of the one below it, and
+   ``hpx::task_size_duration(size)`` returns it as a ``std::chrono``
+   duration. Nano is mostly meant for loop bodies, for instance comparing or
+   adding builtin types; a task that runs only one of them is never worth a
+   thread of its own. A task that calls
+   a function many times has a size that follows from the function's size, a
+   hundred nano calls make a small task, a hundred small calls a medium one
+   and a hundred medium calls a large one;
+   ``hpx::bulk_task_size(size, calls)`` computes it. The sizes stand for these
+   run times so that the scheduler can make use of them: a size that only
+   ordered tasks relative to each other could not be compared with anything
+   the scheduler knows, while a known run time can be compared with its own
+   costs, for instance the cost of stealing a task (on the order of a
+   microsecond) or of waking a worker. This allows decisions like not
+   stealing small tasks, or waking a worker only for a large task or for a
+   backlog of smaller ones.
+
+.. code-block:: c++
+
+   // a long running task
+   hpx::future<double> r = hpx::async(hpx::large_task(&simulate), input);
+
+   // a short continuation
+   auto next = r.then(hpx::small_task([](auto&& r) { return r.get() * 2; }));
+
+The size reaches the scheduler with the thread that runs the function:
+``hpx::post``, ``hpx::async``, ``.then()``, dataflow, ``hpx::thread``,
+``hpx::run_as_hpx_thread`` and the ``post``,
+``sync_execute``, ``async_execute`` and ``then_execute`` of
+``hpx::execution::parallel_executor`` (and of the executors built on it)
+store it in the ``thread_schedule_hint`` of the thread they create for the
+function.
+
+The tasks of bulk operations run the function many times, so their size is
+derived from the function's size with ``hpx::bulk_task_size``:
+``hpx::execution::parallel_executor`` and the bulk operations of
+``hpx::execution::experimental::thread_pool_scheduler`` (which the scheduler
+executors use as well) give each of their worker tasks the size of the share
+of the elements it runs. For ``bulk_chunked``, which passes a range of
+elements to each call, the function's size is still the size of its work for
+one element, not for a whole range. Hierarchical spawning
+(``hpx::execution::parallel_executor_spawn_hierarchically``) creates a task
+for each element instead: these tasks carry the function's size, and the
+tasks that only spawn them are small. The parallel algorithms run their loop
+body in chunks, and the function they give to the executor has the size of
+a chunk, derived from the size of the loop body and the number of iterations
+in a chunk. A loop body without a size gives tasks without a size.
+
+The size of the loop body can also decide how a parallel algorithm divides
+its iterations: with the executor parameters
+``hpx::execution::experimental::task_size_chunk_size``, the run time of one
+iteration is the one the loop body's size stands for, and the loop runs on as
+many cores, in as many chunks, as that run time is worth. A short loop of
+nano or small iterations then runs as a single chunk on the calling thread
+instead of being spread over all cores:
+
+.. code-block:: c++
+
+   hpx::for_each(hpx::execution::par.with(
+                     hpx::execution::experimental::task_size_chunk_size()),
+       v.begin(), v.end(), hpx::nano_task([](int& i) { ++i; }));
+
+By default, ``task_size_chunk_size`` makes chunks of at least 2.5
+microseconds and gives each core 8 of them. Values given to its
+constructor replace these defaults for one loop, the configuration entries
+``hpx.task_size_chunk_size.min_chunk_time_us`` and
+``hpx.task_size_chunk_size.chunks_per_core`` replace them for all loops (see
+:ref:`ini_hpx_task_size_chunk_size`). The benchmark
+``task_size_chunk_size_sweep_test`` measures loops of different sizes with
+many pairs of these values and prints the pair that suits a machine best, in
+the form of these configuration entries.
+
+If |hpx| is configured with ``HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON``, the
+default executor parameters (``default_parameters``, used by ``par`` and by
+the executors unless other parameters are given) are derived from
+``task_size_chunk_size``. A loop whose body has a task size is then chunked as
+described here without passing ``task_size_chunk_size`` explicitly, all other
+loops are chunked as before.
+
+To tune these values for a machine, build and run the benchmark. It is built
+when |hpx| is configured with ``HPX_WITH_TESTS=ON`` and
+``HPX_WITH_TESTS_BENCHMARKS=ON`` (the default):
+
+.. code-block:: shell-session
+
+   $ cmake --build . --target task_size_chunk_size_sweep_test
+   $ ./bin/task_size_chunk_size_sweep_test
+
+It uses all cores by default, as ``--hpx:threads`` does, and takes about half
+a minute. It prints a line of comma separated values for each loop and pair of
+values, then a summary for each pair, and ends with the two configuration
+entries of the pair closest to the best values for each loop, for instance:
+
+.. code-block:: ini
+
+   hpx.task_size_chunk_size.min_chunk_time_us=2.5
+   hpx.task_size_chunk_size.chunks_per_core=8
+
+These lines can be added to an ini file (see :ref:`ini_format`), or passed
+with ``--hpx:ini``. ``--max_work_us`` limits the longest loop (in
+microseconds of work, 10000 by default), ``--time_per_case_ms`` the time each
+loop is repeated for (300 by default), and ``--min_reps`` and ``--max_reps``
+the number of repetitions of each loop (5 and 300).
+
+A size given to an executor, a launch policy or a scheduler through their
+``thread_schedule_hint`` has no effect: the hint of a thread created for a
+function always gets that function's size, which is ``task_size::unknown`` if
+the function has none. The exceptions are
+``hpx::execution::experimental::scheduler_executor`` and
+``hpx::execution::experimental::explicit_scheduler_executor``: they create
+their threads through a scheduler before they see the function, so these
+threads have ``task_size::unknown`` even if the function has a size.
+
+Wrappers forward the size of the function they wrap. The ones |hpx| provides
+(``hpx::bind``, ``hpx::bind_front``, ``hpx::bind_back``,
+``hpx::util::deferred_call``, ``hpx::annotated_function`` and the wrappers
+the parallel algorithms create around their loop bodies, for instance) do. A
+wrapper of your own can do the same by specializing
+``hpx::traits::get_task_size``, the same way wrappers forward annotations with
+``hpx::traits::get_function_annotation``. It derives from the specialization
+for the wrapped function, which gives it ``value``, and forwards ``call``:
+
+.. code-block:: c++
+
+   template <typename F>
+   struct my_wrapper
+   {
+       F f;
+
+       template <typename... Ts>
+       decltype(auto) operator()(Ts&&... ts)
+       {
+           return f(std::forward<Ts>(ts)...);
+       }
+   };
+
+   template <typename F, hpx::task_size Size>
+   struct hpx::traits::get_task_size<my_wrapper<F>, Size>
+     : hpx::traits::get_task_size<F, Size>
+   {
+       static constexpr hpx::task_size call(
+           my_wrapper<F> const& w) noexcept
+       {
+           return hpx::traits::get_task_size<F, Size>::call(w.f);
+       }
+   };
 
 .. _parallel_scheduler:
 

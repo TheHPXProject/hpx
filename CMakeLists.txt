@@ -64,7 +64,7 @@ string(TIMESTAMP HPX_COPYRIGHT_YEAR "%Y")
 set(HPX_VERSION_MAJOR 2)
 set(HPX_VERSION_MINOR 0)
 set(HPX_VERSION_SUBMINOR 0)
-set(HPX_VERSION_DATE 20250630)
+set(HPX_VERSION_DATE 20261031)
 set(HPX_VERSION_TAG "")
 
 set(HPX_VERSION
@@ -979,6 +979,19 @@ hpx_option(
 
 if(HPX_WITH_THREAD_STEALING_COUNTS)
   hpx_add_config_define(HPX_HAVE_THREAD_STEALING_COUNTS)
+endif()
+
+hpx_option(
+  HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS
+  BOOL
+  "Chunk parallel loops based on the task size of the loop body by default, deriving default_parameters from task_size_chunk_size (default: OFF)"
+  OFF
+  CATEGORY "Thread Manager"
+  ADVANCED
+)
+
+if(HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS)
+  hpx_add_config_define(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
 endif()
 
 hpx_option(

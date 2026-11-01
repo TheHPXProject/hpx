@@ -891,7 +891,40 @@ namespace hpx::supervision::server {
             std::exception_ptr ep;
             hpx::detail::try_catch_exception_ptr(
                 [&]() { keep_registered = f.get(); },
-                [&](std::exception_ptr const& e) { ep = e; });
+                [&](std::exception_ptr const& e) {
+                    // If the observer's locality went away (e.g. it was
+                    // killed), the delivery failed because of the observer,
+                    // not because of target. Drop the observer instead of
+                    // reporting the failure: the caller would record it as
+                    // target having failed, fencing a healthy target. Any
+                    // other failure (e.g. the callback threw) is reported as
+                    // before.
+                    //
+                    // A remote observer's callback runs on the observer's
+                    // locality, so an exception it throws carries that
+                    // locality's id, even if it is locality_was_disconnected
+                    // (say, from a remote call the callback made itself).
+                    // Only a failure raised here can come from sending to the
+                    // observer. A local observer cannot become unreachable.
+                    std::uint32_t const here = agas::get_locality_id();
+                    std::uint32_t const agent_locality =
+                        naming::get_locality_id_from_gid(agent.get_gid());
+                    bool const send_failed = hpx::get_error(e) ==
+                            hpx::error::locality_was_disconnected &&
+                        hpx::get_error_locality_id(e) == here;
+
+                    if (agent_locality != here &&
+                        (send_failed ||
+                            parcelset::locality_was_disconnected(
+                                agent_locality)))
+                    {
+                        keep_registered = false;
+                    }
+                    else
+                    {
+                        ep = e;
+                    }
+                });
 
             bool deactivated = false;
 

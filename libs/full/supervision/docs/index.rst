@@ -89,6 +89,24 @@ Registering observers
     at registration time) whose epoch matches; by default the observer
     receives notifications for every epoch.
 
+    If ``callback`` lives on a locality other than the one tracking
+    ``target``, and sending a notification to it fails with
+    ``hpx::error::locality_was_disconnected`` (for instance, because that
+    locality was killed), the observer is unregistered. Such a failure does
+    not change the lifecycle state recorded for ``target``, and so does not
+    fence dispatch to it. Any other failure to deliver a notification,
+    including an exception thrown by ``callback`` itself, is recorded as
+    ``target`` having failed; the observer stays registered.
+
+    A failed send is told apart from an exception thrown by ``callback`` by
+    the locality the error was raised on: an exception thrown by a remote
+    callback carries the callback's locality. The one case this cannot tell
+    apart is a callback that rethrows a
+    ``hpx::error::locality_was_disconnected`` error raised on the locality
+    tracking ``target`` (for instance, from a call it made back to that
+    locality). That is taken for a failed send, and the observer is
+    unregistered although it is still reachable.
+
 .. _supervision_unregister_observer:
 
 Unregistering observers
