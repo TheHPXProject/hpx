@@ -21,7 +21,7 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <iosfwd>
+#include <ios>
 #include <iterator>
 #include <ranges>
 #include <type_traits>

@@ -20,7 +20,7 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <type_traits>
 

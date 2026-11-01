@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <ios>
 
 #include <hpx/config/warnings_prefix.hpp>
 

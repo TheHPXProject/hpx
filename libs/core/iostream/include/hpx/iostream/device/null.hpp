@@ -18,7 +18,7 @@
 #include <hpx/iostream/categories.hpp>
 #include <hpx/iostream/positioning.hpp>
 
-#include <iosfwd>
+#include <ios>
 
 namespace hpx::iostream {
 

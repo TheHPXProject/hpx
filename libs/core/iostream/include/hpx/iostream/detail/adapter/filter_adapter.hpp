@@ -23,7 +23,7 @@
 #include <hpx/iostream/traits.hpp>
 
 #include <concepts>
-#include <iosfwd>
+#include <ios>
 #include <type_traits>
 
 namespace hpx::iostream::detail {

@@ -16,7 +16,7 @@
 #include <hpx/iostream/traits.hpp>
 #include <hpx/iostream/write.hpp>
 
-#include <iosfwd>
+#include <ios>
 
 namespace hpx::iostream {
 

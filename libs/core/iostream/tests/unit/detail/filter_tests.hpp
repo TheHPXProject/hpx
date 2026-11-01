@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <ios>
 #include <iterator>
 #include <random>
 #include <string>

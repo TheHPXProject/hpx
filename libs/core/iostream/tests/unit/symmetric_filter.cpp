@@ -14,6 +14,7 @@
 #include <hpx/modules/testing.hpp>
 
 #include <cstddef>
+#include <ios>
 
 #include "detail/closable.hpp"
 #include "detail/constants.hpp"

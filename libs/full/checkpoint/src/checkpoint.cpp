@@ -12,7 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iosfwd>
+#include <ios>
 
 namespace hpx::util {
 
