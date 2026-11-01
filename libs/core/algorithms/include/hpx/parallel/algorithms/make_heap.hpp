@@ -210,7 +210,7 @@ namespace hpx {
 #include <hpx/parallel/util/detail/sender_util.hpp>
 
 #include <algorithm>
-#include <cmath>
+#include <bit>
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -418,15 +418,7 @@ namespace hpx::parallel {
                                     parent level of start
                         */
                         std::size_t end_exclusive = static_cast<std::size_t>(
-                            std::pow(2, std::floor(std::log2(start))));
-                        if (end_exclusive >= 2)
-                        {
-                            end_exclusive -= static_cast<std::size_t>(2);
-                        }
-                        else
-                        {
-                            end_exclusive = static_cast<std::size_t>(0);
-                        }
+                            std::bit_floor(start + 1)) - 2;
                         std::size_t level_items = start - end_exclusive;
 
                         // If we can't at least run two chunks in parallel,
