@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -570,7 +570,7 @@ namespace hpx::threads {
         std::uint8_t mode_bits : 2;
 
         /// The expected run time of the task (task_size).
-        std::uint8_t task_size_bits : 2;
+        std::uint8_t task_size_bits : 3;
 
         /// The mode of the desired thread placement.
         std::uint8_t placement_mode_bits : 5;

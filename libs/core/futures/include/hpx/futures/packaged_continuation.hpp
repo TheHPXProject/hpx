@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -250,7 +250,7 @@ namespace hpx::lcos::detail {
                     this_->template run_impl<Unwrap>(HPX_MOVE(f));
                 },
                 desc, this->runs_child_,
-                traits::get_task_size_v<std::decay_t<F>>);
+                traits::get_task_size<std::decay_t<F>>::call(f_));
         }
 
     public:

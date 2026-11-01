@@ -34,13 +34,27 @@ void test_sync()
         hpx::this_thread::get_id());
 }
 
+// With run_as_child, get() runs a task that no other worker has picked up yet
+// on the waiting thread itself. Disable it where a test checks that the task
+// ran on a new thread.
+template <typename Executor>
+decltype(auto) disable_run_as_child(Executor&& exec)
+{
+    auto hint = hpx::execution::experimental::get_hint(exec);
+    hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
+
+    return hpx::experimental::prefer(hpx::execution::experimental::with_hint,
+        HPX_FORWARD(Executor, exec), hint);
+}
+
 void test_async()
 {
     using executor = hpx::execution::parallel_executor;
 
     executor exec;
-    HPX_TEST(hpx::parallel::execution::async_execute(exec, &test, 42).get() !=
-        hpx::this_thread::get_id());
+    HPX_TEST(hpx::parallel::execution::async_execute(
+                 disable_run_as_child(exec), &test, 42)
+                 .get() != hpx::this_thread::get_id());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,20 +75,9 @@ void test_then()
     hpx::future<void> f = hpx::make_ready_future();
 
     executor exec;
-    HPX_TEST(
-        hpx::parallel::execution::then_execute(exec, &test_f, std::move(f), 42)
-            .get() != hpx::this_thread::get_id());
-}
-
-///////////////////////////////////////////////////////////////////////////////
-template <typename Executor>
-decltype(auto) disable_run_as_child(Executor&& exec)
-{
-    auto hint = hpx::execution::experimental::get_hint(exec);
-    hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
-
-    return hpx::experimental::prefer(hpx::execution::experimental::with_hint,
-        HPX_FORWARD(Executor, exec), hint);
+    HPX_TEST(hpx::parallel::execution::then_execute(
+                 disable_run_as_child(exec), &test_f, std::move(f), 42)
+                 .get() != hpx::this_thread::get_id());
 }
 
 std::atomic<int> count_inline(0);

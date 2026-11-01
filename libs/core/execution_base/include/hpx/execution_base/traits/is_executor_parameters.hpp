@@ -106,6 +106,35 @@ namespace hpx::execution::experimental {
         extract_invokes_testing_function<Parameters>::value;
 
     ///////////////////////////////////////////////////////////////////////////
+    // If a parameters type exposes an embedded type 'uses_task_size' it is
+    // assumed that the parameters object takes the run time of one iteration
+    // from the task size of the loop body (via measure_iteration), without
+    // invoking it.
+    HPX_CXX_CORE_EXPORT template <typename Parameters, typename Enable = void>
+    struct extract_uses_task_size : std::false_type
+    {
+    };
+
+#if !defined(DOXYGEN)
+    // doxygen gets confused by the following construct
+    template <typename Parameters>
+    struct extract_uses_task_size<Parameters,
+        std::void_t<typename Parameters::uses_task_size>> : std::true_type
+    {
+    };
+#endif
+
+    template <typename Parameters>
+    struct extract_uses_task_size<::std::reference_wrapper<Parameters>>
+      : extract_uses_task_size<Parameters>
+    {
+    };
+
+    HPX_CXX_CORE_EXPORT template <typename Parameters>
+    inline constexpr bool extract_uses_task_size_v =
+        extract_uses_task_size<Parameters>::value;
+
+    ///////////////////////////////////////////////////////////////////////////
     namespace detail {
 
         /// \cond NOINTERNAL

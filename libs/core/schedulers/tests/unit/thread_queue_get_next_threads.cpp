@@ -23,28 +23,22 @@
 #include <string>
 #include <vector>
 
-int hpx_main()
+// use the queue type of the scheduler running this test, so that threads
+// released below are handed back to their queue through it
+using queue_type =
+    hpx::threads::policies::local_priority_queue_scheduler<>::thread_queue_type;
+
+constexpr std::size_t num_threads = 16;
+constexpr std::size_t max_items = 5;
+
+int hpx_main(queue_type& queue)
 {
-    // use the queue type of the scheduler running this test, so that threads
-    // released below are handed back to their queue through it
-    using queue_type = hpx::threads::policies::
-        local_priority_queue_scheduler<>::thread_queue_type;
-
     auto* scheduler = hpx::threads::get_self_id_data()->get_scheduler_base();
-
-    constexpr std::size_t num_threads = 16;
-    constexpr std::size_t max_items = 5;
 
     // all threads have to run before they can be destroyed
     hpx::latch done(static_cast<std::ptrdiff_t>(num_threads + 1));
 
     {
-        // stealing is allowed only while all threads are pending
-        hpx::threads::policies::thread_queue_init_parameters const parameters(
-            HPX_THREAD_QUEUE_MAX_THREAD_COUNT,
-            static_cast<std::int64_t>(num_threads));
-        queue_type queue(parameters);
-
         for (std::size_t i = 0; i != num_threads; ++i)
         {
             hpx::threads::thread_init_data data(
@@ -104,14 +98,6 @@ int hpx_main()
         taken.clear();
         rest.clear();
         done.arrive_and_wait();
-
-        // wait for all threads to have terminated and recycle them before the
-        // queue goes away
-        while (queue.get_thread_count() != 0)
-        {
-            hpx::this_thread::yield();
-        }
-        queue.cleanup_terminated(true);
     }
 
     return hpx::local::finalize();
@@ -127,9 +113,23 @@ int main(int, char* argv[])
     hpx::local::init_params init_args;
     init_args.cfg = cfg;
 
-    HPX_TEST_EQ(hpx::local::init(hpx_main, static_cast<int>(av.size()),
-                    av.data(), init_args),
+    // stealing is allowed only while all threads are pending
+    hpx::threads::policies::thread_queue_init_parameters const parameters(
+        HPX_THREAD_QUEUE_MAX_THREAD_COUNT,
+        static_cast<std::int64_t>(num_threads));
+
+    // the queue has to outlive the runtime: a worker hands a terminated thread
+    // back to the queue and may still access it after the thread count has
+    // dropped to zero
+    queue_type queue(parameters);
+
+    HPX_TEST_EQ(hpx::local::init([&] { return hpx_main(queue); },
+                    static_cast<int>(av.size()), av.data(), init_args),
         0);
+
+    // all threads have terminated, no worker accesses the queue anymore
+    HPX_TEST_EQ(queue.get_thread_count(), std::int64_t(0));
+    HPX_TEST(queue.cleanup_terminated(true));
 
     return hpx::util::report_errors();
 }

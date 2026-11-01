@@ -53,11 +53,63 @@ namespace hpx::parallel::execution::detail {
         bool const reverse_placement;
         bool const allow_stealing;
 
-        // Perform the work in one element indexed by index. The index
-        // represents a range of indices (iterators) in the given shape.
+        // Take a chunk from the local queue, or else from the opposite end of
+        // one of the neighboring queues.
         template <hpx::concurrency::detail::queue_end Which>
-        void do_work() const
+        hpx::optional<std::uint32_t> take_chunk() const
         {
+            if (auto index =
+                    state->queues[worker_thread].data_.template pop<Which>())
+            {
+                return index;
+            }
+
+            if (allow_stealing)
+            {
+                constexpr auto opposite_end =
+                    hpx::concurrency::detail::opposite_end_v<Which>;
+
+                auto const num_threads = state->num_threads;
+                for (std::uint32_t offset = 1; offset != num_threads; ++offset)
+                {
+                    std::size_t neighbor_thread = worker_thread + offset;
+                    if (neighbor_thread >= num_threads)
+                        neighbor_thread -= num_threads;
+
+                    if (auto index = state->queues[neighbor_thread]
+                            .data_.template pop<opposite_end>())
+                    {
+                        return index;
+                    }
+                }
+            }
+            return {};
+        }
+
+        // Perform the work in one element indexed by index. The index
+        // represents a range of indices (iterators) in the given shape. Each
+        // chunk taken from a queue is counted in done before it runs.
+        template <hpx::concurrency::detail::queue_end Which>
+        void do_work(std::uint32_t& done) const
+        {
+            // A worker that starts after all chunks are done has nothing to do.
+            if (state->chunks_remaining.data_.load(std::memory_order_acquire) ==
+                0)
+            {
+                return;
+            }
+
+            // Take a chunk before copying the function and its arguments: the
+            // operation can't complete before the chunk is counted in finish,
+            // so the copies are made and destroyed while it is still running.
+            // A worker that finds no chunk doesn't touch them.
+            auto const first = take_chunk<Which>();
+            if (!first)
+            {
+                return;
+            }
+            ++done;
+
             // explicitly copy function (object) and arguments
             auto f = state->f;
             auto ts = state->ts;
@@ -65,15 +117,8 @@ namespace hpx::parallel::execution::detail {
             using index_pack_type =
                 hpx::detail::fused_index_pack_t<decltype(ts)>;
 
-            hpx::optional<std::uint32_t> index;
-
-            // Handle local queue first
-            auto& local_queue = state->queues[worker_thread].data_;
-            while ((index = local_queue.template pop<Which>()))
-            {
-                HPX_TRACING_MARK_EVENT("do_work_chunk");
-
-                auto const i_begin = *index * chunk_size;
+            auto const run_chunk = [&](std::uint32_t const index) {
+                auto const i_begin = index * chunk_size;
                 auto const i_end = (std::min) (i_begin + chunk_size,
                     static_cast<std::uint32_t>(size));
 
@@ -83,6 +128,20 @@ namespace hpx::parallel::execution::detail {
                     hpx::execution::experimental::detail::bulk_invoke_helper(
                         index_pack_type{}, f, *it, ts);
                 }
+            };
+
+            HPX_TRACING_MARK_EVENT("do_work_chunk");
+            run_chunk(*first);
+
+            hpx::optional<std::uint32_t> index;
+
+            // Handle local queue first
+            auto& local_queue = state->queues[worker_thread].data_;
+            while ((index = local_queue.template pop<Which>()))
+            {
+                HPX_TRACING_MARK_EVENT("do_work_chunk");
+                ++done;
+                run_chunk(*index);
             }
 
             if (allow_stealing)
@@ -103,20 +162,8 @@ namespace hpx::parallel::execution::detail {
                         (index = neighbor_queue.template pop<opposite_end>()))
                     {
                         HPX_TRACING_MARK_EVENT("do_work_chunk (stealing)");
-
-                        auto const i_begin = *index * chunk_size;
-                        auto const i_end = (std::min) (i_begin + chunk_size,
-                            static_cast<std::uint32_t>(size));
-
-                        auto it =
-                            std::next(hpx::util::begin(state->shape), i_begin);
-                        for (std::uint32_t i = i_begin; i != i_end;
-                            (void) ++it, ++i)
-                        {
-                            hpx::execution::experimental::detail::
-                                bulk_invoke_helper(
-                                    index_pack_type{}, f, *it, ts);
-                        }
+                        ++done;
+                        run_chunk(*index);
                     }
                 }
             }
@@ -132,18 +179,32 @@ namespace hpx::parallel::execution::detail {
             state->exceptions.add(HPX_MOVE(e));
         }
 
-        // Finish the work for one worker thread. If this is not the last worker
-        // thread to finish, it will only decrement the counter. If it is the
-        // last thread it will call set_exception if there is an exception.
-        // Otherwise, it will call set_value on the shared state.
-        void finish() const noexcept
+        // After an exception, the chunks left in the worker's own queue are
+        // not run, only counted in done. The other workers go on with their
+        // chunks and may store exceptions of their own.
+        template <hpx::concurrency::detail::queue_end Which>
+        void skip_work(std::uint32_t& done) const noexcept
+        {
+            auto& local_queue = state->queues[worker_thread].data_;
+            while (local_queue.template pop<Which>())
+            {
+                ++done;
+            }
+        }
+
+        // Finish the work for one worker thread, which has taken done chunks.
+        // The operation completes once all of its chunks are done, so it
+        // doesn't wait for a worker thread that started only after the other
+        // workers took all of its chunks: that thread finds nothing to do. The
+        // worker that finishes the last chunks calls set_exception if there is
+        // an exception, otherwise set_value on the shared state.
+        void finish(std::uint32_t const done) const noexcept
         {
             HPX_TRACING_MARK_EVENT("finish");
 
-            std::uint32_t const prev_value =
-                state->tasks_remaining.data_.fetch_sub(
-                    1, std::memory_order_acq_rel);
-            if (prev_value == 1)
+            if (done != 0 &&
+                state->chunks_remaining.data_.fetch_sub(
+                    done, std::memory_order_acq_rel) == done)
             {
                 if (state->bad_alloc_thrown.load(std::memory_order_relaxed))
                 {
@@ -183,29 +244,48 @@ namespace hpx::parallel::execution::detail {
         // on the shared state.
         void operator()() const noexcept
         {
+            using hpx::concurrency::detail::queue_end;
+
+            std::uint32_t done = 0;
             try
             {
                 // Execute task function
                 if (reverse_placement)
                 {
                     // schedule chunks from the end, if needed
-                    do_work<hpx::concurrency::detail::queue_end::right>();
+                    do_work<queue_end::right>(done);
                 }
                 else
                 {
-                    do_work<hpx::concurrency::detail::queue_end::left>();
+                    do_work<queue_end::left>(done);
                 }
             }
             catch (std::bad_alloc const&)
             {
                 state->bad_alloc_thrown = true;
+                skip_own_work(done);
             }
             catch (...)
             {
                 store_exception(std::current_exception());
+                skip_own_work(done);
             }
 
-            finish();
+            finish(done);
+        }
+
+    private:
+        void skip_own_work(std::uint32_t& done) const noexcept
+        {
+            using hpx::concurrency::detail::queue_end;
+            if (reverse_placement)
+            {
+                skip_work<queue_end::right>(done);
+            }
+            else
+            {
+                skip_work<queue_end::left>(done);
+            }
         }
     };
 
@@ -358,9 +438,8 @@ namespace hpx::parallel::execution::detail {
             std::uint32_t const worker_thread = task_f.worker_thread;
             if (queues[worker_thread].data_.empty())
             {
-                // If the queue is empty we don't spawn a task. We only signal
-                // that this "task" is ready.
-                task_f.finish();
+                // If the queue is empty we don't spawn a task: it has no chunks
+                // to count.
                 return;
             }
 
@@ -408,7 +487,6 @@ namespace hpx::parallel::execution::detail {
           , pu_mask(mask)
           , queues(num_threads)
         {
-            tasks_remaining.data_.store(num_threads, std::memory_order_relaxed);
             HPX_ASSERT(hpx::threads::count(pu_mask) == available_threads);
         }
 
@@ -424,13 +502,13 @@ namespace hpx::parallel::execution::detail {
             std::uint32_t chunk_size = get_chunk_size(size);
             std::uint32_t const num_chunks =
                 (size + chunk_size - 1) / chunk_size;
+            chunks_remaining.data_.store(num_chunks, std::memory_order_relaxed);
 
             // launch only as many tasks as we have chunks
             std::uint32_t const num_pus = num_threads;
             if (num_chunks < static_cast<std::uint32_t>(num_threads))
             {
                 num_threads = num_chunks;
-                tasks_remaining.data_ = num_chunks;
                 pu_mask = limit_mask(pu_mask, num_chunks);
 
                 available_threads = (std::min) (available_threads, num_threads);
@@ -565,9 +643,8 @@ namespace hpx::parallel::execution::detail {
 
                     if (queues[local_worker_thread].data_.empty())
                     {
-                        // If the queue is empty we don't execute the task. We
-                        // only signal that this "task" is ready.
-                        f.finish();
+                        // If the queue is empty we don't execute the task: it
+                        // has no chunks to count.
                         return;
                     }
 
@@ -597,7 +674,7 @@ namespace hpx::parallel::execution::detail {
             hpx::concurrency::detail::non_contiguous_index_queue<>>>
             queues;
         hpx::util::cache_aligned_data<std::atomic<std::uint32_t>>
-            tasks_remaining;
+            chunks_remaining;
 
         std::atomic<bool> bad_alloc_thrown{false};
         hpx::exception_list exceptions;
@@ -663,5 +740,30 @@ namespace hpx::parallel::execution::detail {
             HPX_MOVE(p));
     }
 }    // namespace hpx::parallel::execution::detail
+
+// A worker's task runs its share of the elements of the shape, each a call of
+// the bulk function, so its size is derived from the size of that function.
+template <typename SharedState, hpx::threads::task_size Size>
+struct hpx::traits::get_task_size<
+    hpx::parallel::execution::detail::task_function<SharedState>, Size>
+{
+    static constexpr threads::task_size value = Size;
+
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::execution::detail::task_function<SharedState> const&
+            f) noexcept
+    {
+        using function_type = std::decay_t<decltype(f.state->f)>;
+
+        std::size_t const num_threads = f.state->num_threads;
+        std::size_t const calls = num_threads == 0 ?
+            f.size :
+            (f.size + num_threads - 1) / num_threads;
+
+        threads::task_size const size = threads::bulk_task_size(
+            get_task_size<function_type>::call(f.state->f), calls);
+        return size == threads::task_size::unknown ? Size : size;
+    }
+};
 
 #include <hpx/config/warnings_suffix.hpp>

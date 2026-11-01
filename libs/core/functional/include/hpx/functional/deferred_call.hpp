@@ -128,6 +128,13 @@ namespace hpx::util {
 #endif
             }
 
+            template <threads::task_size Size = threads::task_size::unknown>
+            [[nodiscard]] constexpr threads::task_size get_task_size()
+                const noexcept
+            {
+                return traits::get_task_size<F, Size>::call(_f);
+            }
+
         private:
             F _f;
             util::member_pack_for<Ts...> _args;
@@ -207,6 +214,11 @@ namespace hpx::traits {
     struct get_task_size<util::detail::deferred<F, Ts...>, Size>
       : get_task_size<F, Size>
     {
+        [[nodiscard]] static constexpr threads::task_size call(
+            util::detail::deferred<F, Ts...> const& f) noexcept
+        {
+            return f.template get_task_size<Size>();
+        }
     };
 }    // namespace hpx::traits
 

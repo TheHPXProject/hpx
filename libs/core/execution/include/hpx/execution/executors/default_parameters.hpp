@@ -11,6 +11,9 @@
 #include <hpx/config.hpp>
 #include <hpx/assert.hpp>
 #include <hpx/execution/executors/execution_parameters_fwd.hpp>
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+#include <hpx/execution/executors/task_size_chunk_size.hpp>
+#endif
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/timing.hpp>
 
@@ -27,7 +30,16 @@ namespace hpx::execution::experimental {
     /// \note This executor parameters type is equivalent to OpenMP's STATIC
     ///       scheduling directive.
     ///
+    /// \note If HPX was configured with HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS,
+    ///       this type is derived from \a task_size_chunk_size: a loop body
+    ///       that has a task size (see \a hpx::task_size) is chunked based on
+    ///       it, all others as described above.
+    ///
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+    HPX_CXX_CORE_EXPORT struct default_parameters : task_size_chunk_size
+#else
     HPX_CXX_CORE_EXPORT struct default_parameters
+#endif
     {
         /// Construct a \a default_parameters executor parameters object
         ///
@@ -35,18 +47,31 @@ namespace hpx::execution::experimental {
         ///       the number of available cores and the overall number of loop
         ///       iterations to schedule.
         ///
-        default_parameters() = default;
+        constexpr default_parameters() noexcept = default;
 
         /// \cond NOINTERNAL
         template <typename Executor>
         std::size_t get_chunk_size(Executor&& exec,
-            hpx::chrono::steady_duration const&, std::size_t const cores,
-            std::size_t const num_iterations) const
+            [[maybe_unused]] hpx::chrono::steady_duration const&
+                iteration_duration,
+            std::size_t const cores, std::size_t const num_iterations) const
         {
             // Make sure the internal round-robin counter of the executor is
             // reset
             hpx::execution::experimental::reset_thread_distribution(
-                *this, HPX_FORWARD(Executor, exec));
+                *this, exec);
+
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+            // the chunk size based on the task size of the loop body, 0 if it
+            // has none
+            if (std::size_t const chunk_size =
+                    task_size_chunk_size::get_chunk_size(
+                        exec, iteration_duration, cores, num_iterations);
+                chunk_size != 0)
+            {
+                return chunk_size;
+            }
+#endif
 
             if (cores == 1)
             {

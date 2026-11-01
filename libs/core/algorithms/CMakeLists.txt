@@ -47,6 +47,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/set_operation.hpp
     hpx/parallel/algorithms/detail/spin_sort.hpp
     hpx/parallel/algorithms/detail/tag_dispatch.hpp
+    hpx/parallel/algorithms/detail/task_size_argument.hpp
     hpx/parallel/algorithms/detail/transfer.hpp
     hpx/parallel/algorithms/detail/upper_lower_bound.hpp
     hpx/parallel/algorithms/ends_with.hpp
@@ -299,6 +300,7 @@ add_hpx_module(
     hpx_synchronization
     hpx_tag_invoke
     hpx_threading_base
+    hpx_timing
     hpx_tracing
     hpx_type_support
     hpx_util

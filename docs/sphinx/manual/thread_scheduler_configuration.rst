@@ -81,7 +81,8 @@ In each iteration of its scheduling loop, a worker thread tries, in this order:
 #. the pending queues of other workers (stealing pending threads), if stealing
    is enabled (see :ref:`thread_scheduler_pending_steal`). Workers that have a
    high priority queue try each victim's high priority queue before its normal
-   queue.
+   queue. A worker only steals normal priority threads from workers that have
+   several of them, unless their owner doesn't get to them.
 #. the low priority queue (shared by all worker threads of the pool).
 
 If none of these yields an |hpx| thread, the iteration is empty: the idle loop
@@ -100,22 +101,24 @@ phases (default values in parentheses):
    * * Empty iterations
      * What the worker thread does
    * * from the first one
-     * Steals pending threads from any worker that has at least
-       ``hpx.thread_queue.min_tasks_to_steal_pending`` (0) of them.
+     * Steals pending threads, but only from workers that have at least
+       ``hpx.thread_queue.min_tasks_to_steal_pending_early`` (4) of them, or
+       that don't get to the few they have (see
+       :ref:`thread_scheduler_pending_steal`).
    * * after ``hpx.thread_queue.idle_loop_count_steal_staged`` (30)
      * Also steals staged tasks, but only from workers that have at least
-       ``hpx.thread_queue.min_tasks_to_steal_staged_early`` (10) of them.
-   * * after ``hpx.max_idle_loop_count / 2`` (100000)
-     * Steals staged tasks from any worker that has at least
-       ``hpx.thread_queue.min_tasks_to_steal_staged`` (0) of them.
+       ``hpx.thread_queue.min_tasks_to_steal_staged_early`` (10) of them, or
+       that don't get to the few they have (see
+       :ref:`thread_scheduler_staged_steal`).
    * * after ``hpx.max_idle_loop_count`` (200000)
      * Goes to sleep for a while (idle backoff, see
        :ref:`thread_scheduler_idle_backoff`), then starts counting again.
 
 Fast idle mode (see :ref:`thread_scheduler_modes`, always on for the
 work-requesting schedulers) shortens this: a worker steals staged tasks from the
-first empty iteration, and ``hpx.thread_queue.min_tasks_to_steal_staged_early``
-does not apply (``hpx.thread_queue.min_tasks_to_steal_pending`` and
+first empty iteration, and ``hpx.thread_queue.min_tasks_to_steal_pending_early``
+and ``hpx.thread_queue.min_tasks_to_steal_staged_early`` do not apply
+(``hpx.thread_queue.min_tasks_to_steal_pending`` and
 ``hpx.thread_queue.min_tasks_to_steal_staged`` still do). The idle loop count
 grows by ``hpx.max_idle_loop_count / 1024`` with each iteration that did not
 find work to steal, so a worker thread goes to sleep after about 1024 such
@@ -130,13 +133,32 @@ idle, a worker thread also does background work, such as polling the network
 Stealing pending threads
 ========================
 
-Settings: ``hpx.thread_queue.min_tasks_to_steal_pending``.
+Settings: ``hpx.thread_queue.min_tasks_to_steal_pending``,
+``hpx.thread_queue.min_tasks_to_steal_pending_early``.
 
 A worker steals one pending thread at a time from another worker's queue.
 ``hpx.thread_queue.min_tasks_to_steal_pending`` is the minimum number of
 pending threads a victim must have; the default (``0``) allows stealing from
 any worker that has a pending thread. The work-requesting schedulers apply the
 same minimum when they answer a steal request.
+
+When a worker converts a batch of staged tasks, all workers that are idle at
+that moment find the new pending threads and pop them one by one from the same
+queue. This contention can slow all of them down so much that they go idle
+together again, convert the next batch together, and so on, in lock step. With
+the local priority queue scheduler, a worker therefore steals pending threads
+only from workers that have at least
+``hpx.thread_queue.min_tasks_to_steal_pending_early`` (4) of them. This only
+applies to the normal queues, not to high priority threads, and not in fast
+idle mode. Set ``hpx.thread_queue.min_tasks_to_steal_pending_early=0`` to turn
+this off.
+
+The threads queued behind a long running |hpx| thread still have to be
+stolen. A worker that finds a victim's queue short but not empty 16 times in a
+row ignores the minimum for that victim: its owner evidently doesn't get to
+these threads (finding the queue empty starts over). A worker that was just
+woken up because new work arrived (see :ref:`thread_scheduler_idle_backoff`)
+ignores the minimum for its first steal.
 
 .. note::
 
@@ -162,16 +184,20 @@ Staged tasks are cheaper to steal than pending threads and they take load off
 the victim's pending queue.
 
 With the local priority queue scheduler, a worker starts stealing staged tasks
-after ``hpx.thread_queue.idle_loop_count_steal_staged`` (30) empty iterations.
-Until it has been idle for ``hpx.max_idle_loop_count / 2`` iterations, it only
-steals from workers that have at least
-``hpx.thread_queue.min_tasks_to_steal_staged_early`` (10) staged tasks. A
-worker with only a few staged tasks will convert them soon itself, and leaving
-them there keeps them on the worker they were placed on, close to the data in
-its caches. After ``hpx.max_idle_loop_count / 2`` iterations, it steals from
-any worker that has at least ``hpx.thread_queue.min_tasks_to_steal_staged``
-(0) of them. The local and shared priority schedulers steal staged tasks right
-away; the work-requesting schedulers do not steal staged tasks (see
+after ``hpx.thread_queue.idle_loop_count_steal_staged`` (30) empty iterations
+(at most ``hpx.max_idle_loop_count / 2``). It only steals from workers that
+have at least ``hpx.thread_queue.min_tasks_to_steal_staged_early`` (10) staged
+tasks. A worker with only a few staged tasks will convert them soon itself, and
+leaving them there keeps them on the worker they were placed on, close to the
+data in its caches. If it doesn't get to them, they are stolen anyway: all
+thieves count how often they find a victim's few staged tasks in a row (16
+looks divided by the number of staged tasks are needed, finding none starts
+over), and the thief that completes the count steals a single task, ignoring
+the minimum. A worker that was just woken up because new work arrived (see
+:ref:`thread_scheduler_idle_backoff`) ignores the minimum for its first steal.
+``hpx.thread_queue.min_tasks_to_steal_staged`` (0) always applies. The local
+and shared priority schedulers steal staged tasks right away; the
+work-requesting schedulers do not steal staged tasks (see
 :ref:`thread_scheduler_matrix`).
 
 ``hpx.thread_queue.min_tasks_to_steal_staged`` only applies to stealing; a
@@ -213,16 +239,18 @@ worker thread sleeps until new work arrives for it, but at most for
 2\ :sup:`n` microseconds, where n counts the number of times it went to sleep
 since it last found work or was woken up by new work, and never longer than ``hpx.max_idle_backoff_time``
 (1000 microseconds). Afterwards it starts counting empty iterations from zero
-again. Creating new work wakes a sleeping worker thread. This requires
-``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF=ON`` (the default) and the
-``enable_idle_backoff`` scheduler mode (on by default).
+again. This requires ``HPX_WITH_THREAD_MANAGER_IDLE_BACKOFF=ON`` (the default)
+and the ``enable_idle_backoff`` scheduler mode (on by default).
 
-``hpx.max_idle_loop_count`` also determines when the staged task stealing
-restrictions are lifted (after half of it, see
-:ref:`thread_scheduler_staged_steal`). Lowering it makes idle worker threads go
-to sleep sooner, which saves energy and leaves the processing units to other
-processes, but it also makes them steal staged tasks from any worker sooner
-and wake up later when new work arrives.
+Creating new work wakes the sleeping worker threads. A worker thread woken this
+way may steal once without the early minima (see
+:ref:`thread_scheduler_pending_steal` and :ref:`thread_scheduler_staged_steal`),
+so that it finds the new work even if it was placed on a worker that has a few
+tasks only.
+
+Lowering ``hpx.max_idle_loop_count`` makes idle worker threads go to sleep
+sooner, which saves energy and leaves the processing units to other processes,
+but it also makes them wake up later when new work arrives.
 
 .. _thread_scheduler_background_work:
 
@@ -332,7 +360,7 @@ these modes has no effect there.
        they exit.
    * * ``fast_idle_mode`` (``0x8``)
      * off (always on for the work-requesting schedulers)
-     * Idle workers steal staged tasks right away, without the early minimum,
+     * Idle workers steal staged tasks right away, without the early minima,
        and go to sleep sooner (see :ref:`thread_scheduler_find_work`).
    * * ``enable_elasticity`` (``0x10``)
      * off
@@ -379,6 +407,12 @@ Which scheduler uses which setting
      * yes
      * yes
      * no (no stealing)
+     * no
+   * * ``min_tasks_to_steal_pending_early``
+     * yes
+     * no
+     * no
+     * no
      * no
    * * ``min_tasks_to_steal_staged``
      * yes
@@ -427,18 +461,21 @@ Which scheduler uses which setting
 Dependencies between settings
 =============================
 
-* ``hpx.thread_queue.idle_loop_count_steal_staged`` takes effect only if it is
-  smaller than ``hpx.max_idle_loop_count / 2``. If it is not,
-  ``hpx.thread_queue.min_tasks_to_steal_staged_early`` has no effect either.
+* ``hpx.thread_queue.idle_loop_count_steal_staged`` is limited to
+  ``hpx.max_idle_loop_count / 2``.
 * ``hpx.thread_queue.min_tasks_to_steal_staged_early`` and
-  ``hpx.thread_queue.min_tasks_to_steal_staged`` both apply until
-  ``hpx.max_idle_loop_count / 2`` empty iterations; the larger of the two
-  counts. Afterwards only ``min_tasks_to_steal_staged`` applies.
+  ``hpx.thread_queue.min_tasks_to_steal_staged`` both apply; the larger of the
+  two counts. When the thieves find that a victim doesn't get to its few
+  staged tasks, or a worker was just woken up, only
+  ``min_tasks_to_steal_staged`` applies.
+* Likewise, ``hpx.thread_queue.min_tasks_to_steal_pending_early`` and
+  ``hpx.thread_queue.min_tasks_to_steal_pending`` both apply, and only the
+  former is lifted for a victim that doesn't get to its few pending threads.
 * Fast idle mode lifts all the early stealing restrictions and makes workers
   reach ``hpx.max_idle_loop_count`` (and go to sleep) after about 1024 empty
   iterations.
-* ``hpx.max_idle_loop_count`` determines both when stealing restrictions end
-  (half of it) and when worker threads go to sleep.
+* ``hpx.max_idle_loop_count`` determines when worker threads go to sleep, and
+  limits ``hpx.thread_queue.idle_loop_count_steal_staged``.
 * The conversion batch size is limited by ``hpx.thread_queue.max_thread_count``
   as well as by ``min_add_new_count`` and ``max_add_new_count``;
   ``min_add_new_count`` is limited to ``max_add_new_count``.
@@ -462,15 +499,17 @@ was built with ``HPX_WITH_THREAD_STEALING_COUNTS=ON``,
      * Settings to look at
    * * Many short tasks created on a few worker threads, the other workers are
        idle or the throughput varies a lot between runs.
-     * ``idle_loop_count_steal_staged``, ``max_add_new_count`` (larger
-       batches per steal).
+     * ``min_tasks_to_steal_pending_early`` (contention on the creating
+       worker's queue), ``idle_loop_count_steal_staged``, ``max_add_new_count``
+       (larger batches per steal).
    * * Work placed on specific worker threads (for instance with an executor
        that uses thread placement hints) ends up on other workers, cache
        locality suffers.
      * ``min_tasks_to_steal_staged_early`` (raise it),
        ``idle_loop_count_steal_staged`` (raise it).
    * * Threads woken up while one worker runs a long task are delayed.
-     * ``min_tasks_to_steal_pending`` (keep it at 0).
+     * ``min_tasks_to_steal_pending`` (keep it at 0),
+       ``min_tasks_to_steal_pending_early`` (lower it).
    * * Idle worker threads use too much CPU time.
      * ``hpx.max_idle_loop_count`` (lower it), ``hpx.max_idle_backoff_time``
        (raise it), fast idle mode.
