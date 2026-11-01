@@ -166,8 +166,10 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/mismatch.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -267,6 +269,11 @@ namespace hpx::parallel {
                 std::size_t count = (std::min) (count1, count2);
                 hpx::parallel::util::cancellation_token<std::size_t> tok(count);
 
+                // an iteration has the size of the comparison of two elements
+                // (it makes two, one in each order)
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter1, Proj1>,
+                        task_size_argument_t<FwdIter2, Proj2>>(pred);
                 auto f1 = [tok, pred, proj1, proj2](zip_iterator it,
                               std::size_t part_count,
                               std::size_t base_idx) mutable -> void {
@@ -313,7 +320,8 @@ namespace hpx::parallel {
                     util::partitioner<policy_type, bool, void>;
                 return partitioner_type::call_with_index(
                     HPX_FORWARD(decltype(policy), policy),
-                    zip_iterator(first1, first2), count, 1, HPX_MOVE(f1),
+                    zip_iterator(first1, first2), count, 1,
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
         };
