@@ -190,6 +190,12 @@ namespace hpx::parallel {
                     if (!HPX_INVOKE(pred_projected, *first))
                         break;
                 }
+
+                if (first != last)
+                {
+                    ++first;
+                }
+
                 for (; first != last; ++first)
                 {
                     if (HPX_INVOKE(pred_projected, *first))
