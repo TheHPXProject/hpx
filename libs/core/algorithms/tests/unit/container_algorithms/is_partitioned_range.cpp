@@ -404,6 +404,17 @@ void test_is_partitioned_sentinel()
     bool result5_par = hpx::ranges::is_partitioned(
         hpx::execution::par, v2, [](int n) { return n % 2 == 0; });
     HPX_TEST(!result5_par);
+
+    std::vector<int> c3 = {2, 1, -1, 4};
+    auto v3 = c3 | std::views::take_while([](int n) { return n > 0; });
+
+    bool result6 =
+        hpx::ranges::is_partitioned(v3, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result6);
+
+    bool result6_par = hpx::ranges::is_partitioned(
+        hpx::execution::par, v3, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result6_par);
 }
 
 int hpx_main(hpx::program_options::variables_map& vm)
