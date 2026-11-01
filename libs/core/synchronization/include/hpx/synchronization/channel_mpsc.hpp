@@ -16,8 +16,10 @@
 #include <hpx/synchronization/channel_spsc.hpp>
 #include <hpx/synchronization/spinlock.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
@@ -236,76 +238,76 @@ namespace hpx::lcos::local {
     template <typename T, typename Mutex>
     class base_channel_mpsc<T, Mutex, channel_mode::dont_support_close>
     {
+        static_assert(std::is_nothrow_move_assignable_v<T>,
+            "base_channel_mpsc in dont_support_close mode requires nothrow "
+            "move-assignable types");
+
     private:
-        using mutex_type = Mutex;
-
-        [[nodiscard]] HPX_FORCEINLINE bool is_full(
-            std::size_t tail) const noexcept
+        struct cell_type
         {
-            std::size_t next_tail = tail + 1;
-            if (next_tail >= size_)
-            {
-                next_tail = 0;
-            }
-            return next_tail == head_.data_.load(std::memory_order_acquire);
-        }
+            std::atomic<std::size_t> sequence_;
+            T data_;
+        };
 
-        [[nodiscard]] HPX_FORCEINLINE bool is_empty(
-            std::size_t head) const noexcept
+        static constexpr std::size_t round_up_power_of_two(
+            std::size_t v) noexcept
         {
-            if (head == tail_cached_.data_) [[unlikely]]
+            if (v == 0)
             {
-                tail_cached_.data_ =
-                    tail_.data_.tail_.load(std::memory_order_acquire);
-                if (head == tail_cached_.data_)
-                {
-                    return true;
-                }
+                return 1;
             }
-            return false;
+            --v;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v |= v >> 32;
+            return ++v;
         }
 
     public:
         explicit base_channel_mpsc(std::size_t size)
-          : size_(size + 1)
-          , buffer_(new T[size + 1])
         {
             HPX_ASSERT(size != 0);
-
+            std::size_t const capacity =
+                (std::max) (std::size_t(8), round_up_power_of_two(size + 1));
+            buffer_mask_ = capacity - 1;
+            buffer_ = std::make_unique<cell_type[]>(capacity);
+            for (std::size_t i = 0; i != capacity; ++i)
+            {
+                buffer_[i].sequence_.store(i, std::memory_order_relaxed);
+            }
             head_.data_.store(0, std::memory_order_relaxed);
-            tail_.data_.tail_.store(0, std::memory_order_relaxed);
-            tail_cached_.data_ = 0;
+            tail_.data_.store(0, std::memory_order_relaxed);
         }
 
         base_channel_mpsc(base_channel_mpsc const& rhs) = delete;
         base_channel_mpsc& operator=(base_channel_mpsc const& rhs) = delete;
 
         base_channel_mpsc(base_channel_mpsc&& rhs) noexcept
-          : size_(rhs.size_)
+          : buffer_mask_(rhs.buffer_mask_)
           , buffer_(HPX_MOVE(rhs.buffer_))
         {
-            head_.data_.store(rhs.head_.data_.load(std::memory_order_acquire),
+            head_.data_.store(rhs.head_.data_.load(std::memory_order_relaxed),
                 std::memory_order_relaxed);
-            tail_.data_.tail_.store(
-                rhs.tail_.data_.tail_.load(std::memory_order_acquire),
+            tail_.data_.store(rhs.tail_.data_.load(std::memory_order_relaxed),
                 std::memory_order_relaxed);
-
-            tail_cached_.data_ = rhs.tail_cached_.data_;
         }
 
         base_channel_mpsc& operator=(base_channel_mpsc&& rhs) noexcept
         {
-            head_.data_.store(rhs.head_.data_.load(std::memory_order_acquire),
-                std::memory_order_relaxed);
-            tail_.data_.tail_.store(
-                rhs.tail_.data_.tail_.load(std::memory_order_acquire),
-                std::memory_order_relaxed);
-
-            tail_cached_.data_ = rhs.tail_cached_.data_;
-
-            size_ = rhs.size_;
-            buffer_ = HPX_MOVE(rhs.buffer_);
-
+            if (this != &rhs)
+            {
+                buffer_mask_ = rhs.buffer_mask_;
+                buffer_ = HPX_MOVE(rhs.buffer_);
+                head_.data_.store(
+                    rhs.head_.data_.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
+                tail_.data_.store(
+                    rhs.tail_.data_.load(std::memory_order_relaxed),
+                    std::memory_order_relaxed);
+            }
             return *this;
         }
 
@@ -313,82 +315,83 @@ namespace hpx::lcos::local {
 
         [[nodiscard]] bool is_empty() const noexcept
         {
-            return is_empty(head_.data_.load(std::memory_order_relaxed));
+            std::size_t const pos = head_.data_.load(std::memory_order_relaxed);
+            cell_type const& cell = buffer_[pos & buffer_mask_];
+            std::size_t const seq =
+                cell.sequence_.load(std::memory_order_acquire);
+            return static_cast<std::intptr_t>(seq) -
+                static_cast<std::intptr_t>(pos + 1) !=
+                0;
         }
 
         bool get(T* val = nullptr) const noexcept
         {
-            std::size_t head = head_.data_.load(std::memory_order_relaxed);
+            std::size_t const pos = head_.data_.load(std::memory_order_relaxed);
+            cell_type& cell = buffer_[pos & buffer_mask_];
+            std::size_t const seq =
+                cell.sequence_.load(std::memory_order_acquire);
+            std::intptr_t const dif = static_cast<std::intptr_t>(seq) -
+                static_cast<std::intptr_t>(pos + 1);
 
-            if (is_empty(head))
+            if (dif == 0)
             {
-                return false;
-            }
+                if (val == nullptr)
+                {
+                    return true;
+                }
 
-            if (val == nullptr)
-            {
+                head_.data_.store(pos + 1, std::memory_order_relaxed);
+                *val = HPX_MOVE(cell.data_);
+                cell.sequence_.store(
+                    pos + buffer_mask_ + 1, std::memory_order_release);
                 return true;
             }
-
-            *val = HPX_MOVE(buffer_[head]);
-            if (++head >= size_)
-            {
-                head = 0;
-            }
-            head_.data_.store(head, std::memory_order_release);
-
-            return true;
+            return false;
         }
 
-        // clang-format off
-        bool set(T&& t) noexcept(
-            noexcept(std::declval<std::unique_lock<mutex_type>&>().lock()) &&
-            noexcept(std::declval<std::unique_lock<mutex_type>&>().unlock()))
-        // clang-format on
+        bool set(T&& t) noexcept
         {
-            std::unique_lock<mutex_type> l(tail_.data_.mtx_);
-
-            std::size_t tail =
-                tail_.data_.tail_.load(std::memory_order_acquire);
-
-            if (is_full(tail))
+            std::size_t pos = tail_.data_.load(std::memory_order_relaxed);
+            for (;;)
             {
-                return false;
-            }
+                cell_type& cell = buffer_[pos & buffer_mask_];
+                std::size_t const seq =
+                    cell.sequence_.load(std::memory_order_acquire);
+                std::intptr_t const dif = static_cast<std::intptr_t>(seq) -
+                    static_cast<std::intptr_t>(pos);
 
-            buffer_[tail] = HPX_MOVE(t);
-            if (++tail >= size_)
-            {
-                tail = 0;
+                if (dif == 0)
+                {
+                    if (tail_.data_.compare_exchange_weak(
+                            pos, pos + 1, std::memory_order_relaxed))
+                    {
+                        cell.data_ = HPX_MOVE(t);
+                        cell.sequence_.store(
+                            pos + 1, std::memory_order_release);
+                        return true;
+                    }
+                }
+                else if (dif < 0)
+                {
+                    return false;
+                }
+                else
+                {
+                    pos = tail_.data_.load(std::memory_order_relaxed);
+                }
             }
-            tail_.data_.tail_.store(tail, std::memory_order_release);
-
-            return true;
         }
 
         [[nodiscard]] constexpr std::size_t capacity() const noexcept
         {
-            return size_ - 1;
+            return buffer_mask_ + 1;
         }
 
     private:
-        struct tail_data
-        {
-            mutex_type mtx_;
-            std::atomic<std::size_t> tail_;
-        };
-
-        // keep the head, tail cache, and the mutex with the tail pointer
-        // each on separate cache lines
         mutable hpx::util::cache_aligned_data<std::atomic<std::size_t>> head_;
-        mutable hpx::util::cache_aligned_data<std::size_t> tail_cached_;
-        hpx::util::cache_aligned_data<tail_data> tail_;
-
-        // a channel of size n can buffer n-1 items
-        std::size_t size_;
-
-        // channel buffer
-        std::unique_ptr<T[]> buffer_;
+        mutable hpx::util::cache_aligned_data<std::atomic<std::size_t>> tail_;
+        std::size_t buffer_mask_ = 0;
+        std::unique_ptr<cell_type[]> buffer_;
     };
 
     ////////////////////////////////////////////////////////////////////////////
