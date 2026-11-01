@@ -543,6 +543,7 @@ default, which stands for the defaults compiled into |hpx|.
    [hpx.task_size_chunk_size]
    min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}
    chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}
+   copy_bytes_per_ns = ${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}
 
 .. _ini_hpx_task_size_chunk_size:
 
@@ -556,6 +557,12 @@ default, which stands for the defaults compiled into |hpx|.
    * * ``hpx.task_size_chunk_size.chunks_per_core``
      * The value of this property defines the number of chunks each core gets
        for load balancing, from ``1`` up to ``1024``. The default is ``8``.
+   * * ``hpx.task_size_chunk_size.copy_bytes_per_ns``
+     * The value of this property defines the number of bytes a core copies in
+       a nanosecond, from ``1`` up to ``4096``. The algorithms that copy or
+       move trivially copyable elements without calling a function derive the
+       task size of a chunk from it. The default is ``16``, about the rate for
+       data that is not in the caches.
 
 The ``hpx.components`` configuration section
 ............................................
