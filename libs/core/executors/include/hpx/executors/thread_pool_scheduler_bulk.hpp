@@ -426,12 +426,20 @@ namespace hpx::execution::experimental::detail {
 
         // Store an exception and mark that an exception was thrown in the
         // operation state. This function assumes that there is a current
-        // exception.
+        // exception. Storing allocates: if that fails, the operation reports
+        // bad_alloc instead.
         template <typename Exception>
-        void store_exception(Exception e) const
+        void store_exception(Exception e) const noexcept
         {
-            // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-            op_state->exceptions.add(HPX_MOVE(e));
+            try
+            {
+                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                op_state->exceptions.add(HPX_MOVE(e));
+            }
+            catch (...)
+            {
+                op_state->bad_alloc_thrown = true;
+            }
         }
 
         // After an exception, the chunks left in the worker's own queue are
