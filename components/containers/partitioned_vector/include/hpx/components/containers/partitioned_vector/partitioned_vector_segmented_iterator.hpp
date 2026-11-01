@@ -7,7 +7,7 @@
 
 #pragma once
 
-/// \file hpx/components/partitioned_vector/partitioned_vector_segmented_iterator.hpp
+/// \file partitioned_vector_segmented_iterator.hpp
 /// \brief This file contains the implementation of iterators for hpx::partitioned_vector.
 
 // The idea for these iterators is taken from
@@ -47,6 +47,9 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Copies retain the partition, so indexing can return its reference.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;
@@ -96,6 +99,9 @@ namespace hpx::segmented {
         using base_iterator = BaseIter;
 
     public:
+        // Copies retain the partition, so indexing can return its reference.
+        using use_brackets_proxy = std::false_type;
+
         using local_iterator = segmented::const_local_vector_iterator<T, Data>;
         using local_const_iterator =
             segmented::const_local_vector_iterator<T, Data>;

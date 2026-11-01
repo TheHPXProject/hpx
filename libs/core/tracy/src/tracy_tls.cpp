@@ -120,12 +120,10 @@ namespace hpx::tracy {
         HPX_CORE_EXPORT region_data start_region(char const* new_region,
             std::size_t const thread_num, std::size_t const phase) noexcept
         {
-#if defined(HPX_HAVE_STACKTRACES)
-            TracyCZoneCS(ctx, static_cast<std::uint32_t>(thread_num),
-                HPX_HAVE_THREAD_BACKTRACE_DEPTH, 1);
-#else
+            // No callstack: scheduler-dispatch frames are uniform across
+            // tasks and Tracy would resolve them via DbgHelp on every
+            // dispatch. Task identity is on Name and Value below.
             TracyCZoneC(ctx, static_cast<std::uint32_t>(thread_num), 1);
-#endif
             TracyCZoneName(ctx, new_region, std::strlen(new_region));
             TracyCZoneValue(ctx, static_cast<std::uint32_t>(phase));
 

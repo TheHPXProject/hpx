@@ -1,0 +1,91 @@
+# Copyright (c) 2026 The STE||AR Group
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# Installs the dependencies listed in .github/vcpkg/vcpkg.json with vcpkg at
+# the manifest's baseline. vcpkg is set up in C:/projects/vcpkg and the
+# packages are installed into C:/projects/vcpkg/installed, so that a project
+# configured with
+#   -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake'
+# and without a vcpkg.json of its own finds them (classic mode). The built
+# packages are kept in the GitHub Actions cache, so only the first run after a
+# change of the manifest or of the compiler builds them.
+
+name: 'Set up vcpkg'
+description: 'Install the Windows CI dependencies with vcpkg, cached'
+
+inputs:
+  triplet:
+    description: 'vcpkg triplet to install'
+    required: false
+    default: 'x64-windows'
+
+runs:
+  using: "composite"
+  steps:
+    # vcpkg's package hashes include the compiler, so each runner image and
+    # Visual Studio version gets a cache of its own
+    - name: Set the vcpkg binary cache directory and key
+      id: setup
+      shell: pwsh
+      run: |
+        $cache = "${{ runner.temp }}\vcpkg-binary-cache"
+        New-Item -ItemType Directory -Force $cache | Out-Null
+        "VCPKG_DEFAULT_BINARY_CACHE=$cache" >> $env:GITHUB_ENV
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = (& $vswhere -latest -property installationVersion).Split('.')[0]
+        $hash = "${{ hashFiles('.github/vcpkg/vcpkg.json') }}"
+        $prefix = "vcpkg-$env:ImageOS-vs$vs-${{ inputs.triplet }}"
+        "path=$cache" >> $env:GITHUB_OUTPUT
+        "prefix=$prefix-" >> $env:GITHUB_OUTPUT
+        "key=$prefix-$hash" >> $env:GITHUB_OUTPUT
+
+    - name: Restore the vcpkg binary cache
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.setup.outputs.path }}
+        # cache keys can't be overwritten, so each save gets the run's id and
+        # the restore takes the latest one for the manifest
+        key: ${{ steps.setup.outputs.key }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ steps.setup.outputs.key }}-
+          ${{ steps.setup.outputs.prefix }}
+
+    - name: Check out and bootstrap vcpkg
+      shell: pwsh
+      run: |
+        $baseline = (Get-Content .github/vcpkg/vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+        git init -q C:\projects\vcpkg
+        git -C C:\projects\vcpkg fetch -q --depth 1 https://github.com/microsoft/vcpkg.git $baseline
+        git -C C:\projects\vcpkg checkout -q FETCH_HEAD
+        C:\projects\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+    - name: Install the dependencies
+      id: install
+      shell: pwsh
+      run: |
+        $cache = "${{ steps.setup.outputs.path }}"
+        $before = @(Get-ChildItem -Recurse -File $cache).Count
+        C:\projects\vcpkg\vcpkg.exe install `
+          --x-manifest-root=.github/vcpkg `
+          --x-install-root=C:\projects\vcpkg\installed `
+          --triplet ${{ inputs.triplet }}
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if (@(Get-ChildItem -Recurse -File $cache).Count -ne $before) {
+          # keep only the packages of this run, the others were built for an
+          # older manifest or compiler
+          $abis = Select-String -Path C:\projects\vcpkg\installed\vcpkg\status `
+            -Pattern '^Abi: (\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value }
+          Get-ChildItem -Recurse -File $cache |
+            Where-Object { $abis -notcontains $_.BaseName } | Remove-Item
+          "save=true" >> $env:GITHUB_OUTPUT
+        }
+
+    - name: Save the vcpkg binary cache
+      if: steps.install.outputs.save == 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ steps.setup.outputs.path }}
+        key: ${{ steps.setup.outputs.key }}-${{ github.run_id }}

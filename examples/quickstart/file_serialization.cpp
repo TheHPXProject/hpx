@@ -29,7 +29,7 @@ struct file_wrapper
 
         std::fstream::pos_type fsize = stream_.tellg();
         stream_.seekg(0, std::ios::end);
-        data_.resize(stream_.tellg() - fsize);
+        data_.resize(static_cast<std::size_t>(stream_.tellg() - fsize));
         stream_.seekg(fsize, std::ios::beg);
 
         if (mode & std::ios_base::in)

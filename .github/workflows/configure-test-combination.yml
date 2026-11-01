@@ -82,6 +82,23 @@ jobs:
               -DHPX_WITH_EXAMPLES=On
           rm -rf *
 
+      # Modules built as OBJECT libraries (the default for generators other
+      # than Ninja) together with MPI link flags, as reported by the compiler
+      # wrappers of e.g. EasyBuild or Spack installs (see #7826)
+      - name: Running CMake with MPI link flags and Unix Makefiles
+        working-directory: build
+        run: |
+          cmake \
+              .. \
+              -G "Unix Makefiles" \
+              -DHPX_WITH_MALLOC=system \
+              -DHPX_WITH_FETCH_ASIO=Off \
+              -DHPX_WITH_PARCELPORT_MPI=On \
+              -DHPX_WITH_TESTS=Off \
+              -DHPX_WITH_EXAMPLES=Off \
+              "-DMPI_CXX_LINK_FLAGS=-Wl,-rpath -Wl,/usr/lib/x86_64-linux-gnu/openmpi/lib -Wl,--enable-new-dtags"
+          rm -rf *
+
       - name: Running CMake with invalid tracing combination (should fail)
         working-directory: build
         run: |
@@ -92,8 +109,7 @@ jobs:
               -DHPX_WITH_FETCH_ASIO=Off \
               -DHPX_WITH_APEX=On \
               -DHPX_WITH_FETCH_APEX=ON \
-              -DHPX_WITH_TRACY=On \
-              -DHPX_WITH_FETCH_TRACY=ON; then
+              -DHPX_WITH_TRACY=On; then
             echo "CMake succeeded when it should have failed!"
             exit 1
           fi

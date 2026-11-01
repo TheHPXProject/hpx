@@ -307,6 +307,11 @@ health and performance of distributed |hpx| applications. Inspired by tools like
 ``htop`` and ``btop``, it provides a high-level overview of system utilization,
 network flow, and internal runtime metrics.
 
+.. note::
+
+   ``hpx-top.py`` is experimental. It may continue to evolve or be removed in
+   a future release.
+
 .. figure:: ../_static/images/hpx_top.png
    :alt: HPX-Top Dashboard Screenshot
    :align: center
@@ -331,7 +336,9 @@ Usage
 
 HPX-Top is implemented as a Python script that acts as a wrapper around your |hpx|
 application. It automatically configures the necessary performance counters and
-output formats.
+output formats. The script is installed into the ``bin`` directory of the
+|hpx| installation alongside ``hpxrun.py``; the examples below use the path
+inside the source tree.
 
 The tool requires the ``rich`` Python library for rendering the terminal UI:
 
@@ -370,6 +377,11 @@ performance dashboard designed to identify performance anomalies in real-time.
 While ``hpx-top`` provides a broad system overview, ``hpx_stat_viewer`` focuses on
 deep-dive analysis of specific metrics with built-in heuristic alerting.
 
+.. note::
+
+   ``hpx_stat_viewer.py`` is experimental. It may continue to evolve or be
+   removed in a future release.
+
 .. figure:: ../_static/images/hpx_stat_viewer.png
    :alt: HPX Smart Telemetry Dashboard Screenshot
    :align: center
@@ -382,7 +394,7 @@ Features
 
 * **Heuristic Anomaly Detection**: Uses an Exponential Moving Average (EMA) to
   monitor counter trends. It automatically flags sudden spikes (+150%) or drops
-  (-60%) with prominent visual alerts like ``[⚡ SPIKE]`` and ``[⚠️ DROP]``.
+  (-60%) with visual alerts marked ``SPIKE`` and ``DROP``.
 * **Live History Sparklines**: Displays 10-tick historical trend graphs next to
   every metric, helping developers distinguish between momentary noise and
   persistent bottlenecks.
@@ -396,7 +408,9 @@ Usage
 
 ``hpx_stat_viewer.py`` reads HPX counter data from standard input in ``csv-short``
 transient format. This allows it to be used for both live monitoring and
-post-mortem analysis of log files.
+post-mortem analysis of log files. Like ``hpx-top.py``, it is installed into the
+``bin`` directory of the |hpx| installation; the examples below use the path
+inside the source tree.
 
 To monitor a live application with smart filtering:
 
@@ -416,8 +430,7 @@ Technical Details
 
 The dashboard implements a thread-safe parser that handles HPX's CSV-short format.
 The anomaly detection engine uses a smoothing factor of 0.4 for its EMA calculations,
-balancing responsiveness with stability. It is officially integrated into the HPX installation
-rules under the ``tools`` component.
+balancing responsiveness with stability.
 
 A simple example
 ----------------
@@ -3619,15 +3632,24 @@ Tracy integration
 per-thread zone tracking, message logs, and fiber support. Enable it with
 :option:`HPX_WITH_TRACY`\ ``=ON`` during |cmake|_ configuration.
 
-Tracy can be supplied via a system install (point ``Tracy_ROOT`` at the install
-tree) or fetched by CMake at configure time by adding
-``HPX_WITH_FETCH_TRACY=ON``. The version fetched is pinned by
-``HPX_WITH_TRACY_TAG``, which defaults to ``v0.14.1``. When Tracy is
-fetched, |hpx| forces ``TRACY_ENABLE``, ``TRACY_ON_DEMAND`` and
-``TRACY_FIBERS`` on the built client. A system-supplied Tracy must have
-been built with the same three options; Tracy 0.14 mangles its exported
-profiler symbol based on the active define set, so a mismatch fails at
-link time rather than producing a silent inconsistency at runtime.
+Tracy is fetched by CMake at configure time from
+`github.com/wolfpld/tracy <https://github.com/wolfpld/tracy>`_. The version
+is pinned by ``HPX_WITH_TRACY_TAG`` (defaults to ``v0.14.1``). |hpx| forces
+``TRACY_ENABLE``, ``TRACY_ON_DEMAND``, ``TRACY_FIBERS`` and ``TRACY_STATIC``
+on the built client so the profiler is always active on-demand, fibers are
+tracked, and TracyClient stays a static library that links cleanly into
+``hpx_tracy`` regardless of ``BUILD_SHARED_LIBS``. For offline builds
+without GitHub access, point ``FETCHCONTENT_SOURCE_DIR_TRACY`` at a local
+Tracy source tree and CMake's FetchContent will use it in place of the
+download.
+
+On Windows, |hpx| additionally sets ``TRACY_DBGHELP_LOCK=HpxDbgHelp`` on
+the built Tracy client so DbgHelp calls from Tracy and from |hpx|'s own
+symbol lookup share a single mutex (DbgHelp is single-threaded per MSDN).
+
+Scheduler zones no longer carry callstacks. The captured frames were the
+scheduler-dispatch path itself, identical for every task, and the zone
+name and phase already identify the work.
 
 To profile a distributed run, additionally enable
 :option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
@@ -3641,9 +3663,11 @@ when only a subset of the timeline is being investigated:
 :option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
 one off compiles the wrapper for that class to a no-op, so the runtime
 connection check and the event body do not run (argument evaluation at each
-call site is unchanged). These gates affect the Tracy backend, which is the
-only backend that emits these classes today; the APEX, ITT-Notify and empty
-backends already treat all three as no-ops.
+call site is unchanged). The lifecycle and work-stealing gates affect the
+Tracy and ITT-Notify backends; the causal gate affects the Tracy backend
+only. On ITT-Notify builds these events are only emitted when ITT-Notify is
+enabled at runtime with ``--hpx:ini=hpx.use_itt_notify=1``. The APEX and
+empty backends already treat all three as no-ops.
 
 :option:`HPX_WITH_TRACING_SAMPLE_RATE` sets the initial 1-in-N sampling
 rate for the per-task lifecycle events instead of gating them off

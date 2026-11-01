@@ -15,7 +15,7 @@ import time
 from pyutils import env, log
 
 
-async def _run_async(command, log_output, **kwargs):
+async def _run_async(command, log_output, timeout=None, **kwargs):
     process = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
@@ -32,12 +32,20 @@ async def _run_async(command, log_output, **kwargs):
         buffer.seek(0)
         return buffer.read()
 
-    returncode, stdout, stderr = await asyncio.gather(
-        process.wait(), read_output(process.stdout),
-        read_output(process.stderr))
+    commstr = ' '.join(f'"{c}"' for c in command)
+
+    # A command that hangs would otherwise block its caller forever
+    try:
+        returncode, stdout, stderr = await asyncio.wait_for(
+            asyncio.gather(process.wait(), read_output(process.stdout),
+                           read_output(process.stderr)), timeout)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        log.error(f'{commstr} did not finish within {timeout}s')
+        raise RuntimeError(f'{commstr} did not finish within {timeout}s')
 
     if returncode != 0:
-        commstr = ' '.join(f'"{c}"' for c in command)
         log.error(
             f'{commstr} finished with exit code {returncode} and message',
             stderr)
@@ -46,23 +54,24 @@ async def _run_async(command, log_output, **kwargs):
     return stdout
 
 
-def run(command, log_output=None, **kwargs):
+def run(command, log_output=None, timeout=None, **kwargs):
     if not command:
         raise ValueError('No command provided')
     if log_output is None:
         log_output = log.debug
 
-    log.info('Invoking', ' '.join(f'"{c}"' for c in command))
+    log.debug('Invoking', ' '.join(f'"{c}"' for c in command))
     start = time.time()
 
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
-    output = loop.run_until_complete(_run_async(command, log_output, **kwargs))
+    output = loop.run_until_complete(
+        _run_async(command, log_output, timeout, **kwargs))
 
     end = time.time()
-    log.info(f'{command[0]} finished in {end - start:.2f}s')
+    log.debug(f'{command[0]} finished in {end - start:.2f}s')
     return output
 
 

@@ -210,7 +210,12 @@ namespace std {
     {
     };
 
-    HPX_CXX_CORE_EXPORT using hpx::std_adl_barrier::get;
+    // Inject hpx::adl_barrier::get rather than hpx::std_adl_barrier::get:
+    // adl_barrier::get deduces a plain Tuple type, whereas
+    // std_adl_barrier::get deduces a pack against the hpx::tuple<Ts...>
+    // pattern. Merged into the overload set of std::get for std::pair, the
+    // latter makes MSVC fail on types derived from std::pair (see #4371).
+    HPX_CXX_CORE_EXPORT using hpx::adl_barrier::get;
 
     // Specialize basic_common_reference for hpx::tuple so that types like
     // zip_iterator can satisfy std::indirectly_readable (which requires

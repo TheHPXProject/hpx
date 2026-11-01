@@ -8,6 +8,12 @@
 // hpxinspect:nodeprecatedinclude:boost/chrono/chrono.hpp
 // hpxinspect:nodeprecatedname:boost::chrono
 
+/// \file steady_clock.hpp
+/// \page hpx::chrono::steady_time_point
+/// \page hpx::chrono::steady_duration
+/// \page hpx::chrono::null_duration
+/// \headerfile hpx/chrono.hpp
+
 #pragma once
 
 #include <hpx/config.hpp>

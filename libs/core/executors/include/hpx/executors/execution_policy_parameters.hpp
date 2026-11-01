@@ -5,7 +5,7 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-/// \file hpx/execution/execution_policy_parameters.hpp
+/// \file execution_policy_parameters.hpp
 ///
 /// Policy forwarding for executor-parameter CPOs now lives on the CPOs
 /// themselves (see execution_parameters_fwd.hpp, e.g. processing_units_count_t

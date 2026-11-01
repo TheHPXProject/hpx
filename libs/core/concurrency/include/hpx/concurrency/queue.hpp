@@ -32,7 +32,7 @@ namespace hpx::lockfree {
      *  returned to the OS before the queue is destroyed.
      *
      *  \b Policies:
-     *  - \ref hpx::lockfree::fixed_sized, defaults to \c
+     *  - \c hpx::lockfree::fixed_sized, defaults to \c
      *    hpx::lockfree::fixed_sized<false> \n Can be used to completely
      *    disable dynamic memory allocations during push in order to ensure
      *    lockfree behavior. \n If the data structure is configured as
@@ -43,11 +43,11 @@ namespace hpx::lockfree {
      *    compare-and-exchange instructions, this is the best way to achieve
      *    lock-freedom.
      *
-     *  - \ref hpx::lockfree::capacity, optional \n If this template argument
+     *  - \c hpx::lockfree::capacity, optional \n If this template argument
      *    is passed to the options, the size of the queue is set at
      *    compile-time.\n This option implies \c fixed_sized<true>
      *
-     *  - \ref hpx::lockfree::allocator, defaults to \c
+     *  - \c hpx::lockfree::allocator, defaults to \c
      *    hpx::lockfree::allocator<std::allocator<void>> \n Specifies the
      *    allocator that is used for the internal freelist
      *

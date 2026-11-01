@@ -29,6 +29,7 @@ set(threading_base_headers
     hpx/threading_base/set_thread_affinity.hpp
     hpx/threading_base/set_thread_state.hpp
     hpx/threading_base/set_thread_state_timed.hpp
+    hpx/threading_base/sized_function.hpp
     hpx/threading_base/thread_data.hpp
     hpx/threading_base/thread_data_stackful.hpp
     hpx/threading_base/thread_data_stackless.hpp

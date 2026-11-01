@@ -288,6 +288,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/copy.hpp>
@@ -296,6 +297,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/rotate.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/algorithms/detail/upper_lower_bound.hpp>
 #include <hpx/parallel/util/compare_projected.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
@@ -866,8 +868,9 @@ namespace hpx::parallel {
             auto params = policy.parameters();
             auto exec = policy.executor();
 
-            auto f1 = [dest, comp, proj1, proj2, first1, first2, len1, len2,
-                          params, exec](std::size_t idx, std::size_t chunk) {
+            auto merge_chunk = [dest, comp, proj1, proj2, first1, first2, len1,
+                                   len2, params,
+                                   exec](std::size_t idx, std::size_t chunk) {
                 if (len1 != 0 || len2 != 0)
                 {
                     std::size_t N = len1 + len2;
@@ -890,30 +893,26 @@ namespace hpx::parallel {
                 }
             };
 
-            if (len1 > len2)
-            {
-                auto f2 = [first2, len1, len2, dest](Iter1 l1) {
-                    return result_type{l1, std::next(first2, len2),
-                        std::next(dest, len1 + len2)};
-                };
+            // an iteration has the size of the comparison of two elements
+            auto f1 = hpx::threads::detail::with_task_size_of<
+                task_size_argument_t<Iter1, Proj1>,
+                task_size_argument_t<Iter2, Proj2>>(
+                HPX_MOVE(merge_chunk), comp);
 
-                auto chunks = get_diagonal_index(len1 + len2);
-
-                return util::foreach_partitioner<std::decay_t<ExPolicy>>::call(
-                    HPX_FORWARD(ExPolicy, policy), first1, len1, HPX_MOVE(f1),
-                    HPX_MOVE(f2), HPX_MOVE(chunks));
-            }
-
-            auto f2 = [first1, len1, len2, dest](Iter2 l2) {
-                return result_type{
-                    std::next(first1, len1), l2, std::next(dest, len1 + len2)};
+            auto f2 = [end1, end2, len1, len2, dest](auto&&) {
+                return result_type{end1, end2, std::next(dest, len1 + len2)};
             };
 
-            auto chunks = get_diagonal_index(len1 + len2);
+            // The partitioner runs over all output elements (the chunks only
+            // use their index, the diagonal index finds where they start in
+            // both inputs), so that the executor parameters see the whole
+            // work of the merge.
+            std::size_t const len = len1 + len2;
+            hpx::util::counting_iterator<std::size_t> first(std::size_t{0});
 
             return util::foreach_partitioner<std::decay_t<ExPolicy>>::call(
-                HPX_FORWARD(ExPolicy, policy), first2, len2, HPX_MOVE(f1),
-                HPX_MOVE(f2), HPX_MOVE(chunks));
+                HPX_FORWARD(ExPolicy, policy), first, len, HPX_MOVE(f1),
+                HPX_MOVE(f2), get_diagonal_index(len));
         }
 
         ///////////////////////////////////////////////////////////////////////

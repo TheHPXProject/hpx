@@ -11,6 +11,7 @@ if(HPX_WITH_NETWORKING)
       barrier_hang
       broadcast_unwrap_future_2885
       broadcast_wait_for_2822
+      channel_communicator_6881
       collectives_bool_5940
       exclusive_scan_6636
       multiple_gather_ops_2001
@@ -28,6 +29,9 @@ if(HPX_WITH_NETWORKING)
   set(exclusive_scan_6636_PARAMETERS LOCALITIES 2)
   set(multiple_gather_ops_2001_PARAMETERS LOCALITIES 2)
   set(reduce_vector_bool_2001_PARAMETERS LOCALITIES 2)
+  set(channel_communicator_6881_PARAMETERS LOCALITIES 3 THREADS_PER_LOCALITY 2
+                                           TIMEOUT 60
+  )
 
   foreach(test ${tests})
     set(sources ${test}.cpp)

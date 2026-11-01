@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <mutex>
 #include <type_traits>
 #include <utility>
 
@@ -117,6 +118,7 @@ namespace hpx::lcos::local {
                         policy.set_hint(hint);
                     }
                 }
+                threads::detail::set_task_size(hint, f_);
 
                 hpx::intrusive_ptr<base_type> this_(this);
                 if (policy == launch::fork)
@@ -127,9 +129,10 @@ namespace hpx::lcos::local {
                         threads::thread_description(f_, annotation),
                         policy.priority(),
                         threads::thread_schedule_hint(
-                            hpx::threads::thread_schedule_hint_mode::thread,
                             static_cast<std::int16_t>(get_worker_thread_num()),
-                            hint.placement_mode(), hint.runs_as_child_mode()),
+                            hint.placement_mode(), hint.runs_as_child_mode(),
+                            hpx::threads::thread_sharing_hint::none,
+                            hint.task_size()),
                         policy.stacksize(),
                         threads::thread_schedule_state::pending_do_not_schedule,
                         true);
@@ -139,9 +142,16 @@ namespace hpx::lcos::local {
                     {
                         HPX_ASSERT(
                             this->runs_child_ == threads::invalid_thread_id);
-                        threads::register_thread(
-                            data, pool, this->runs_child_, ec);
-                        return this->runs_child_;
+
+                        // a thread waiting on the future may read runs_child_
+                        // in execute_thread, so publish it under the lock
+                        threads::thread_id_ref_type tid;
+                        threads::register_thread(data, pool, tid, ec);
+                        {
+                            std::unique_lock l(this->mtx_);
+                            this->runs_child_ = tid;
+                        }
+                        return tid;
                     }
 
                     return threads::register_thread(data, pool, ec);
@@ -155,26 +165,36 @@ namespace hpx::lcos::local {
                         threads::make_thread_function_nullary(
                             &base_type::run_impl, std::move(this_)),
                         threads::thread_description(f_, annotation),
-                        policy.priority(), policy.hint(), policy.stacksize(),
+                        policy.priority(), hint, policy.stacksize(),
                         threads::thread_schedule_state::suspended, true);
 
                     HPX_ASSERT(this->runs_child_ == threads::invalid_thread_id);
-                    threads::register_thread(data, pool, this->runs_child_, ec);
 
-                    // now run the thread
-                    threads::set_thread_state(this->runs_child_.noref(),
+                    // publish runs_child_ under the lock as above; once the
+                    // thread is pending, another worker may run it to its end
+                    // and reset runs_child_ in set_value, so keep using tid
+                    threads::thread_id_ref_type tid;
+                    threads::register_thread(data, pool, tid, ec);
+                    {
+                        std::unique_lock l(this->mtx_);
+                        this->runs_child_ = tid;
+                    }
+
+                    // now run the thread, queued on the worker the scheduler
+                    // picked when creating it
+                    threads::detail::set_thread_state(tid.noref(),
                         threads::thread_schedule_state::pending,
                         threads::thread_restart_state::signaled,
-                        policy.priority(), true, ec);
+                        policy.priority(), data.schedulehint, true, ec);
 
-                    return this->runs_child_;
+                    return tid;
                 }
 
                 threads::thread_init_data data(
                     threads::make_thread_function_nullary(
                         &base_type::run_impl, HPX_MOVE(this_)),
                     threads::thread_description(f_, annotation),
-                    policy.priority(), policy.hint(), policy.stacksize(),
+                    policy.priority(), hint, policy.stacksize(),
                     threads::thread_schedule_state::pending);
 
                 return threads::register_work(data, pool, ec);

@@ -4,12 +4,12 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-set(tests static_linker)
+set(tests sandbox)
 
-set(static_linker_FLAGS NOLIBS DEPENDENCIES hpx_core)
+set(sandbox_FLAGS DEPENDENCIES HPX::wrap_main)
 
 foreach(test ${tests})
-  set(sources ${test}_test.cpp)
+  set(sources ${test}.cpp)
 
   source_group("Source Files" FILES ${sources})
 
@@ -23,5 +23,4 @@ foreach(test ${tests})
   )
 
   add_hpx_unit_test("modules.include_local" ${test} ${${test}_PARAMETERS})
-
 endforeach()

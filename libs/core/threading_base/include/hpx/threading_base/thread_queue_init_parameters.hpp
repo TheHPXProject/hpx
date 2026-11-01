@@ -35,22 +35,34 @@ namespace hpx::threads::policies {
                 HPX_THREAD_QUEUE_MAX_DELETE_COUNT),
             std::int64_t max_terminated_threads = static_cast<std::int64_t>(
                 HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS),
-            std::uint64_t init_threads_count = static_cast<std::uint64_t>(
+            std::size_t init_threads_count = static_cast<std::size_t>(
                 HPX_THREAD_QUEUE_INIT_THREADS_COUNT),
-            std::uint64_t cached_threads_count = static_cast<std::uint64_t>(
+            std::size_t cached_threads_count = static_cast<std::size_t>(
                 HPX_THREAD_QUEUE_CACHED_THREADS_COUNT),
             double max_idle_backoff_time = static_cast<double>(
                 HPX_IDLE_BACKOFF_TIME_MAX),
             std::ptrdiff_t small_stacksize = HPX_SMALL_STACK_SIZE,
             std::ptrdiff_t medium_stacksize = HPX_MEDIUM_STACK_SIZE,
             std::ptrdiff_t large_stacksize = HPX_LARGE_STACK_SIZE,
-            std::ptrdiff_t huge_stacksize = HPX_HUGE_STACK_SIZE) noexcept
+            std::ptrdiff_t huge_stacksize = HPX_HUGE_STACK_SIZE,
+            std::int64_t min_tasks_to_steal_staged_early =
+                static_cast<std::int64_t>(
+                    HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY),
+            std::int64_t idle_loop_count_steal_staged =
+                static_cast<std::int64_t>(HPX_IDLE_LOOP_COUNT_STEAL_STAGED),
+            std::int64_t min_tasks_to_steal_pending_early =
+                static_cast<std::int64_t>(
+                    HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) noexcept
           : max_thread_count_(max_thread_count)
           , min_tasks_to_steal_pending_(min_tasks_to_steal_pending)
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
-          , min_add_new_count_(min_add_new_count)
+          , min_add_new_count_(min_add_new_count < max_add_new_count ?
+                    min_add_new_count :
+                    max_add_new_count)
           , max_add_new_count_(max_add_new_count)
-          , min_delete_count_(min_delete_count)
+          , min_delete_count_(min_delete_count < max_delete_count ?
+                    min_delete_count :
+                    max_delete_count)
           , max_delete_count_(max_delete_count)
           , max_terminated_threads_(max_terminated_threads)
           , init_threads_count_(init_threads_count)
@@ -61,6 +73,9 @@ namespace hpx::threads::policies {
           , large_stacksize_(large_stacksize)
           , huge_stacksize_(huge_stacksize)
           , nostack_stacksize_((std::numeric_limits<std::ptrdiff_t>::max)())
+          , min_tasks_to_steal_staged_early_(min_tasks_to_steal_staged_early)
+          , idle_loop_count_steal_staged_(idle_loop_count_steal_staged)
+          , min_tasks_to_steal_pending_early_(min_tasks_to_steal_pending_early)
         {
         }
 
@@ -72,13 +87,30 @@ namespace hpx::threads::policies {
         std::int64_t min_delete_count_;
         std::int64_t max_delete_count_;
         std::int64_t max_terminated_threads_;
-        std::uint64_t init_threads_count_;
-        std::uint64_t cached_threads_count_;
+        std::size_t init_threads_count_;
+        std::size_t cached_threads_count_;
         double max_idle_backoff_time_;
         std::ptrdiff_t const small_stacksize_;
         std::ptrdiff_t const medium_stacksize_;
         std::ptrdiff_t const large_stacksize_;
         std::ptrdiff_t const huge_stacksize_;
         std::ptrdiff_t const nostack_stacksize_;
+
+        // used by the local priority queue scheduler: staged tasks are stolen
+        // after idle_loop_count_steal_staged_ empty scheduling loop iterations
+        // already, but only from queues holding at least
+        // min_tasks_to_steal_staged_early_ of them, unless the thieves found
+        // a victim's queue short but not empty often enough in a row (see
+        // HPX_IDLE_LOOP_COUNT_STEAL_STAGED and
+        // HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)
+        std::int64_t min_tasks_to_steal_staged_early_;
+        std::int64_t idle_loop_count_steal_staged_;
+
+        // used by the local priority queue scheduler: a worker steals pending
+        // tasks only from queues holding at least
+        // min_tasks_to_steal_pending_early_ of them, unless it found a
+        // victim's queue short but not empty often enough in a row (see
+        // HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)
+        std::int64_t min_tasks_to_steal_pending_early_;
     };
 }    // namespace hpx::threads::policies

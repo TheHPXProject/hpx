@@ -1,0 +1,31 @@
+Work around nvcc naming inline_scheduler's private sender in a static_assert.
+
+nvcc 12.9 expands schedule_result_t<inline_scheduler> to the private __sender
+type in its generated host code, which GCC 12 then rejects. Check the sender's
+environment type directly under nvcc; get_env() returns __inline_attrs. Other
+compilers retain the assertion through schedule_result_t.
+
+Keep this separate from the original nvcc patch so an existing FetchContent
+checkout with those workarounds already applied can acquire this fix too.
+
+Copyright (c) 2026 Anshuman Agrawal
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+diff --git a/include/stdexec/__detail/__inline_scheduler.hpp b/include/stdexec/__detail/__inline_scheduler.hpp
+--- a/include/stdexec/__detail/__inline_scheduler.hpp
++++ b/include/stdexec/__detail/__inline_scheduler.hpp
+@@ -93,7 +93,11 @@ namespace STDEXEC
+     constexpr auto operator==(inline_scheduler const &) const noexcept -> bool = default;
+   };
+ 
++#if STDEXEC_NVCC()
++  static_assert(__completes_inline<set_value_t, __inline_attrs>);
++#else
+   static_assert(__completes_inline<set_value_t, env_of_t<schedule_result_t<inline_scheduler>>>);
++#endif
+ }  // namespace STDEXEC
+ 
+ #  include "__epilogue.hpp"

@@ -1,5 +1,5 @@
 //  Copyright (c) 2014 Grant Mercer
-//  Copyright (c) 2020 Hartmut Kaiser
+//  Copyright (c) 2020-2026 Hartmut Kaiser
 //  Copyright (c) 2021 Srinivas Yadav
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -26,6 +26,18 @@ void test_generate()
 
     test_generate_async(simd(task), IteratorTag());
     test_generate_async(par_simd(task), IteratorTag());
+
+    test_generate(fixed_size_simd<1>, IteratorTag());
+    test_generate(par_fixed_size_simd<1>, IteratorTag());
+
+    test_generate_async(fixed_size_simd<1>(task), IteratorTag());
+    test_generate_async(par_fixed_size_simd<1>(task), IteratorTag());
+
+    test_generate(fixed_size_simd<2>, IteratorTag());
+    test_generate(par_fixed_size_simd<2>, IteratorTag());
+
+    test_generate_async(fixed_size_simd<2>(task), IteratorTag());
+    test_generate_async(par_fixed_size_simd<2>(task), IteratorTag());
 }
 
 void generate_test()
@@ -36,8 +48,8 @@ void generate_test()
 
 int hpx_main(hpx::program_options::variables_map& vm)
 {
-    unsigned int seed = (unsigned int) std::time(nullptr);
-    if (vm.count("seed"))
+    unsigned int seed = static_cast<unsigned int>(std::time(nullptr));
+    if (vm.contains("seed"))
         seed = vm["seed"].as<unsigned int>();
 
     std::cout << "using seed: " << seed << std::endl;

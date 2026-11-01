@@ -1,5 +1,6 @@
 //  Copyright (c) 2019-2026 Hartmut Kaiser
 //  Copyright (c) 2025 Lukas Zeil
+//  Copyright (c) 2026 Alexander Strack
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -603,9 +604,10 @@ namespace hpx::collectives {
                 return hpx::make_exceptional_future<std::decay_t<T>>(error);
             }
 
-            if (auto const error = validate_hierarchical_root_caller(this_site,
-                    "hpx::collectives::reduce_here (hierarchical)",
-                    "reduce_here"))
+            if (auto const error =
+                    validate_hierarchical_root_caller(communicators, this_site,
+                        "hpx::collectives::reduce_here (hierarchical)",
+                        "reduce_here"))
             {
                 return hpx::make_exceptional_future<std::decay_t<T>>(error);
             }
@@ -627,12 +629,12 @@ namespace hpx::collectives {
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 result = reduce_here(communicators.get(i), HPX_MOVE(result), op,
-                    this_site_arg(0), run_gen, run_step)
+                    communicators.site(i), run_gen, run_step)
                              .get();
             }
 
             return reduce_here(communicators.get(0), HPX_MOVE(result),
-                HPX_FORWARD(F, op), this_site_arg(0), run_gen, run_step);
+                HPX_FORWARD(F, op), communicators.site(0), run_gen, run_step);
         }
     }    // namespace detail
 
@@ -795,7 +797,8 @@ namespace hpx::collectives {
             }
 
             if (auto const error = validate_hierarchical_non_root_caller(
-                    this_site, "hpx::collectives::reduce_there (hierarchical)",
+                    communicators, this_site,
+                    "hpx::collectives::reduce_there (hierarchical)",
                     "reduce_here"))
             {
                 return hpx::make_exceptional_future<void>(error);
@@ -819,7 +822,7 @@ namespace hpx::collectives {
             for (std::size_t i = communicators.size() - 1; i != 0; --i)
             {
                 result = reduce_here(communicators.get(i), HPX_MOVE(result), op,
-                    this_site_arg(0), run_gen, run_step)
+                    communicators.site(i), run_gen, run_step)
                              .get();
             }
 

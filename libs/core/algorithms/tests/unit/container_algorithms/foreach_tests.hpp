@@ -394,7 +394,8 @@ void test_for_each_sender_bulk(
         *tt::sync_wait(
             ex::just(rng, f) | ex::let_value([](auto&& rng, auto&& f) {
                 auto begin_it = rng.begin();
-                return ex::bulk(ex::just(), rng.size(),
+                return ex::bulk(ex::just(),
+                           std::distance(rng.begin(), rng.end()),
                            [begin_it, f = HPX_FORWARD(decltype(f), f)](
                                std::size_t i) mutable {
                                auto it = begin_it;
@@ -437,7 +438,8 @@ void test_for_each_exception_sender(
         auto result = tt::sync_wait(
             ex::just(rng, f) | ex::let_value([](auto&& rng, auto&& f) {
                 auto begin_it = rng.begin();
-                return ex::bulk(ex::just(), rng.size(),
+                return ex::bulk(ex::just(),
+                    std::distance(rng.begin(), rng.end()),
                     [begin_it, f = HPX_FORWARD(decltype(f), f)](
                         std::size_t i) mutable {
                         auto it = begin_it;
@@ -496,7 +498,8 @@ void test_for_each_bad_alloc_sender(
         tt::sync_wait(
             ex::just(rng, f) | ex::let_value([](auto&& rng, auto&& f) {
                 auto begin_it = rng.begin();
-                return ex::bulk(ex::just(), rng.size(),
+                return ex::bulk(ex::just(),
+                    std::distance(rng.begin(), rng.end()),
                     [begin_it, f = HPX_FORWARD(decltype(f), f)](
                         std::size_t i) mutable {
                         auto it = begin_it;

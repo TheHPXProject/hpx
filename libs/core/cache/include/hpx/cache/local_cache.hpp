@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -185,11 +185,11 @@ namespace hpx::util::cache {
         ///             the new maximum size.
         bool reserve(size_type max_size)
         {
-            // we need to shrink the cache if the new max size if smaller than
-            // the old one
+            // we need to shrink the cache if it currently holds more than
+            // the new max size
             bool retval = true;
-            if (max_size && max_size < max_size_ &&
-                !free_space(static_cast<long>(max_size_ - max_size)))
+            if (max_size && max_size < current_size_ &&
+                !free_space(current_size_ - max_size))
             {
                 retval = false;    // not able to shrink cache
             }
@@ -219,10 +219,10 @@ namespace hpx::util::cache {
         ///////////////////////////////////////////////////////////////////////
         /// \brief Get a specific entry identified by the given key.
         ///
-        /// \param k      [in] The key for the entry which should be retrieved
+        /// \param[in] k The key for the entry which should be retrieved
         ///               from the cache.
-        /// \param realkey[out] Return the full real key found in the cache
-        /// \param val    [out] If the entry indexed by the key is found in the
+        /// \param[out] realkey Return the full real key found in the cache
+        /// \param[out] val If the entry indexed by the key is found in the
         ///               cache this value on successful return will be a copy
         ///               of the corresponding entry.
         ///
@@ -420,8 +420,7 @@ namespace hpx::util::cache {
             // make sure cache doesn't get too large
             size_type entry_size = e.get_size();
             if (0 != max_size_ && current_size_ + entry_size > max_size_ &&
-                !free_space(
-                    static_cast<long>(current_size_ - max_size_ + entry_size)))
+                !free_space(current_size_ - max_size_ + entry_size))
             {
                 return false;
             }
@@ -580,6 +579,10 @@ namespace hpx::util::cache {
         ///               cache entry, while the other overload replaces the
         ///               cached value only, leaving the cache entry properties
         ///               untouched.
+        /// \note         If the new entry is larger than the one it replaces,
+        ///               other entries may be evicted to keep the cache within
+        ///               its capacity. An entry larger than the capacity of
+        ///               the cache is rejected and the existing entry is kept.
         ///
         /// \returns      This function returns \a true if the entry has been
         ///               successfully updated, otherwise it returns \a false.
@@ -611,16 +614,48 @@ namespace hpx::util::cache {
             if (!insert_policy_(e) || !e.insert())
                 return false;    // entry doesn't want to be inserted
 
-            // update cache entry
-            (*it).second = HPX_FORWARD(Entry_, e);
+            // an entry larger than the whole cache can never be stored
+            size_type const old_size = (*it).second.get_size();
+            size_type const new_size = e.get_size();
+            if (0 != max_size_ && new_size > max_size_)
+                return false;
 
-            // touch the entry
-            if ((*it).second.touch())
+            // make sure cache doesn't get too large, evicting only other
+            // entries, as insert does
+            if (0 != max_size_ &&
+                current_size_ - old_size + new_size > max_size_)
             {
-                // reorder heap based on the changed entry attributes
+                // take the entry out of the heap while making room
+                entry_heap_.erase(
+                    std::find(entry_heap_.begin(), entry_heap_.end(), it));
                 std::make_heap(
                     entry_heap_.begin(), entry_heap_.end(), update_policy_);
+                current_size_ -= old_size;
+
+                bool const freed =
+                    free_space(current_size_ + new_size - max_size_);
+
+                entry_heap_.push_back(it);
+                current_size_ += old_size;
+
+                if (!freed)
+                {
+                    // keep the old entry
+                    std::push_heap(
+                        entry_heap_.begin(), entry_heap_.end(), update_policy_);
+                    return false;
+                }
             }
+
+            // update cache entry
+            (*it).second = HPX_FORWARD(Entry_, e);
+            current_size_ = current_size_ - old_size + new_size;
+
+            // touch the entry, then reorder the heap, as the new entry might
+            // compare differently from the one it replaced
+            (*it).second.touch();
+            std::make_heap(
+                entry_heap_.begin(), entry_heap_.end(), update_policy_);
 
             // update statistics
             statistics_.got_hit();
@@ -740,15 +775,15 @@ namespace hpx::util::cache {
 
     protected:
         ///////////////////////////////////////////////////////////////////////
-        // Free some space in the cache
-        bool free_space(long num_free)
+        // Free at least num_free of the cache's size by evicting entries
+        bool free_space(size_type num_free)
         {
             if (entry_heap_.empty())
                 return false;
 
             bool is_heap = true;
             for (heap_iterator it = entry_heap_.begin();
-                num_free > 0 && it != entry_heap_.end();
+                num_free != 0 && it != entry_heap_.end();
                 /**/)
             {
                 iterator sit = *it;
@@ -764,10 +799,12 @@ namespace hpx::util::cache {
                     {
                         // if we're at the top of the list, just pop the item
                         // this doesn't disturb the heap property of the heap
-                        ++it;
                         std::pop_heap(entry_heap_.begin(), entry_heap_.end(),
                             update_policy_);
                         entry_heap_.pop_back();
+                        // pop_heap moved the next candidate to the front,
+                        // so look at it next
+                        it = entry_heap_.begin();
                     }
                     else
                     {
@@ -779,7 +816,7 @@ namespace hpx::util::cache {
 
                     // remove the cache entry
                     store_.erase(sit);
-                    num_free -= static_cast<long>(entry_size);
+                    num_free -= (std::min) (num_free, entry_size);
                     current_size_ -= entry_size;
 
                     // update statistics
@@ -794,7 +831,7 @@ namespace hpx::util::cache {
                     entry_heap_.begin(), entry_heap_.end(), update_policy_);
             }
 
-            return num_free <= 0;
+            return num_free == 0;
         }
 
     private:

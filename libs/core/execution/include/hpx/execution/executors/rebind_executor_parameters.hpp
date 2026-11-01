@@ -45,6 +45,17 @@ namespace hpx::execution::experimental {
             using invokes_testing_function = void;
         };
 
+        HPX_CXX_CORE_EXPORT template <bool UsesTaskSize = false>
+        struct wrapped_params_uses_task_size
+        {
+        };
+
+        template <>
+        struct wrapped_params_uses_task_size<true>
+        {
+            using uses_task_size = void;
+        };
+
         HPX_CXX_CORE_EXPORT template <typename Wrapped, typename Wrapping>
         struct wrapped_params_properties
           : wrapped_params_has_variable_chunk_size<
@@ -53,6 +64,8 @@ namespace hpx::execution::experimental {
           , wrapped_params_invokes_testing_function<
                 extract_invokes_testing_function_v<Wrapped> ||
                 extract_invokes_testing_function_v<Wrapping>>
+          , wrapped_params_uses_task_size<extract_uses_task_size_v<Wrapped> ||
+                extract_uses_task_size_v<Wrapping>>
         {
         };
 

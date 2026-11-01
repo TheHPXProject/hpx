@@ -18,7 +18,7 @@ set(hpx_wrap_SOURCES
     ""
     CACHE INTERNAL "Sources for libhpx_wrap." FORCE
 )
-list(APPEND hpx_wrap_SOURCES hpx_wrap.cpp hpx_main.cpp)
+list(APPEND hpx_wrap_SOURCES hpx_wrap.cpp hpx_main.cpp hpx_main_impl.cpp)
 
 # make source groups
 set(hpx_wrap_SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -44,12 +44,9 @@ add_library(
 )
 
 set_target_properties(hpx_wrap PROPERTIES POSITION_INDEPENDENT_CODE ON)
-if(HPX_WITH_DISTRIBUTED_RUNTIME)
-  target_link_libraries(hpx_wrap PRIVATE hpx_full)
-  target_link_libraries(hpx_wrap PRIVATE hpx_init)
-else()
-  target_link_libraries(hpx_wrap PRIVATE hpx_core)
-endif()
+# hpx_main_impl.cpp needs hpx_init's headers in local-only builds as well
+target_link_libraries(hpx_wrap PRIVATE hpx_full)
+target_link_libraries(hpx_wrap PRIVATE hpx_init)
 target_link_libraries(hpx_wrap PRIVATE hpx_private_flags)
 target_compile_definitions(hpx_wrap PRIVATE HPX_LIBRARY_EXPORTS)
 target_include_directories(

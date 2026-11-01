@@ -485,10 +485,39 @@ namespace hpx::program_options::detail {
                     if (!followed_option.empty())
                     {
                         original_token_for_exceptions = other_tokens[0];
-                        if (m_desc->find_nothrow(other_tokens[0],
+
+                        option_description const* followed_desc =
+                            m_desc->find_nothrow(other_tokens[0],
                                 is_style_active(allow_guessing),
                                 is_style_active(long_case_insensitive),
-                                is_style_active(short_case_insensitive)))
+                                is_style_active(short_case_insensitive));
+
+                        // Additional/style parsers may transform an input token
+                        // into a known option key without preserving an original
+                        // token. Check that parsed key as a fallback. Do not do
+                        // this for regular long options, whose existing
+                        // value-consumption semantics must remain unchanged.
+                        if (followed_desc == nullptr)
+                        {
+                            for (option const& followed : followed_option)
+                            {
+                                if (followed.original_tokens.empty() &&
+                                    !followed.string_key.empty())
+                                {
+                                    followed_desc = m_desc->find_nothrow(
+                                        followed.string_key,
+                                        is_style_active(allow_guessing),
+                                        is_style_active(long_case_insensitive),
+                                        is_style_active(
+                                            short_case_insensitive));
+
+                                    if (followed_desc != nullptr)
+                                        break;
+                                }
+                            }
+                        }
+
+                        if (followed_desc != nullptr)
                         {
                             throw invalid_command_line_syntax(
                                 invalid_command_line_syntax::missing_parameter);

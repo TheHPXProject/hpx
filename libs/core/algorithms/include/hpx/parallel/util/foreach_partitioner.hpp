@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <exception>
+#include <iterator>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -33,11 +34,13 @@
 ///////////////////////////////////////////////////////////////////////////////
 namespace hpx::parallel::util::detail {
 
-    HPX_CXX_CORE_EXPORT template <typename Result, typename ExPolicy,
+    HPX_CXX_CORE_EXPORT template <typename ChunkResult, typename ExPolicy,
         typename FwdIter, typename F, typename ReShape>
     auto foreach_partition(ExPolicy policy, FwdIter first, std::size_t count,
         F&& f, ReShape&& reshape)
     {
+        using Result = partitioner_result_t<ChunkResult>;
+
         // estimate a chunk size based on number of cores used
         using parameters_type =
             hpx::execution::experimental::extract_executor_parameters_t<
@@ -58,15 +61,19 @@ namespace hpx::parallel::util::detail {
 
             auto&& shape = detail::get_bulk_iteration_shape_idx_variable(
                 policy, first, count, cores);
+            std::size_t const iterations =
+                detail::iterations_per_chunk(count, shape);
 
             return execution::bulk_async_execute(policy.executor(),
-                partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
                 reshape(HPX_MOVE(shape)));
         }
         else if constexpr (!invokes_testing_function)
         {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
-                policy, first, count, cores);
+                policy, f, first, count, cores);
+            std::size_t const iterations =
+                detail::iterations_per_chunk(count, shape);
 
             using executor_type = decltype(policy.executor());
             auto&& reshaped = reshape(HPX_MOVE(shape), cores);
@@ -80,10 +87,14 @@ namespace hpx::parallel::util::detail {
                 if constexpr (std::is_void_v<Result> &&
                     hpx::traits::is_one_way_executor_v<executor_type>)
                 {
-                    if (cores == 1 && std::size(reshaped) == 1)
+                    auto const shape_begin = std::begin(reshaped);
+                    auto const shape_end = std::end(reshaped);
+                    if (cores == 1 && shape_begin != shape_end &&
+                        std::next(shape_begin) == shape_end)
                     {
                         return execution::sync_execute(policy.executor(),
-                            partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                            partitioner_iteration<Result, F>{
+                                HPX_FORWARD(F, f), iterations},
                             *std::begin(HPX_MOVE(reshaped)));
                     }
                 }
@@ -92,7 +103,8 @@ namespace hpx::parallel::util::detail {
                                   executor_type>)
                 {
                     return execution::bulk_sync_execute(policy.executor(),
-                        partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                        partitioner_iteration<Result, F>{
+                            HPX_FORWARD(F, f), iterations},
                         HPX_MOVE(reshaped));
                 }
                 else
@@ -101,7 +113,8 @@ namespace hpx::parallel::util::detail {
                     // above optimizations.
                     auto&& items =
                         execution::bulk_async_execute(policy.executor(),
-                            partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                            partitioner_iteration<Result, F>{
+                                HPX_FORWARD(F, f), iterations},
                             HPX_MOVE(reshaped));
                     if (hpx::wait_all_nothrow(items))
                     {
@@ -115,7 +128,8 @@ namespace hpx::parallel::util::detail {
             else
             {
                 return execution::bulk_async_execute(policy.executor(),
-                    partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                    partitioner_iteration<Result, F>{
+                        HPX_FORWARD(F, f), iterations},
                     HPX_MOVE(reshaped));
             }
         }
@@ -124,9 +138,11 @@ namespace hpx::parallel::util::detail {
             std::vector<hpx::future<Result>> inititems;
             auto&& shape = detail::get_bulk_iteration_shape_idx(
                 policy, inititems, f, first, count, cores);
+            std::size_t const iterations =
+                detail::iterations_per_chunk(count, shape);
 
             auto&& workitems = execution::bulk_async_execute(policy.executor(),
-                partitioner_iteration<Result, F>{HPX_FORWARD(F, f)},
+                partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
                 reshape(HPX_MOVE(shape)));
 
             return std::make_pair(HPX_MOVE(inititems), HPX_MOVE(workitems));

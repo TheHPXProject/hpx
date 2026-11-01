@@ -45,7 +45,7 @@ namespace hpx::util {
     ///////////////////////////////////////////////////////////////////////////
     HPX_CXX_CORE_EXPORT template <template <typename, typename> class Stack,
         typename Allocator = std::allocator<char>,
-        std::size_t DefaultCapacity = 100>
+        std::size_t DefaultCapacity = 1000>
     struct thread_local_caching_allocator
     {
         HPX_NO_UNIQUE_ADDRESS Allocator alloc;

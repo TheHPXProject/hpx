@@ -12,6 +12,7 @@
 #include <hpx/modules/execution.hpp>
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/datapar/iterator_helpers.hpp>
 #include <hpx/parallel/util/loop.hpp>
 
@@ -30,13 +31,14 @@ namespace hpx::parallel::util {
         ///////////////////////////////////////////////////////////////////////
         // Helper class to repeatedly call a function starting from a given
         // iterator position.
-        HPX_CXX_CORE_EXPORT template <typename Iterator, bool IsConst = false>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N,
+            bool IsConst = false>
         struct datapar_loop
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename Begin, typename End, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Begin call(
@@ -47,51 +49,50 @@ namespace hpx::parallel::util {
                 constexpr bool datapar_compatible =
                     iterator_datapar_compatible_v<Begin>;
 
-                if constexpr (is_contiguous && datapar_compatible)
+                if constexpr (is_contiguous && datapar_compatible && N != 1)
                 {
-                    while (!is_data_aligned(first) && first != last)
+                    while (first != last && !is_pack_aligned<V>(first))
                     {
-                        datapar_loop_step<Begin, IsConst>::call1(f, first);
+                        datapar_loop_step<Begin, N, IsConst>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    End lastV = first;
 
-                    End const lastV = last - size + 1;
+                    // at least `size` elements remain
+                    if (static_cast<std::size_t>(last - first) >= size)
+                    {
+                        lastV = last - (size - 1);
+                    }
+
                     while (first < lastV)
                     {
-                        datapar_loop_step<Begin, IsConst>::callv(f, first);
+                        datapar_loop_step<Begin, N, IsConst>::callv(f, first);
                     }
-
-                    while (first != last)
-                    {
-                        datapar_loop_step<Begin, IsConst>::call1(f, first);
-                    }
-                    return first;
                 }
-                else if constexpr (datapar_compatible)
+                else if constexpr (datapar_compatible && N != 1)
                 {
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    End lastV = first;
 
-                    End const lastV = last - size + 1;
+                    // at least `size` elements remain
+                    if (static_cast<std::size_t>(last - first) >= size)
+                    {
+                        lastV = last - (size - 1);
+                    }
+
                     while (first < lastV)
                     {
-                        datapar_loop_step<Begin, IsConst>::calls(f, first);
+                        datapar_loop_step<Begin, N, IsConst>::calls(f, first);
                     }
+                }
 
-                    while (first != last)
-                    {
-                        datapar_loop_step<Begin, IsConst>::call1(f, first);
-                    }
-                    return first;
-                }
-                else
+                while (first != last)
                 {
-                    while (first != last)
-                    {
-                        datapar_loop_step<Begin, IsConst>::call1(f, first);
-                    }
-                    return first;
+                    datapar_loop_step<Begin, N, IsConst>::call1(f, first);
                 }
+
+                return first;
             }
 
             template <typename Begin, typename End, typename CancelToken,
@@ -110,44 +111,59 @@ namespace hpx::parallel::util {
         ///////////////////////////////////////////////////////////////////////
         // Helper class to repeatedly call a function starting from a given
         // iterator position till the predicate returns true.
-        HPX_CXX_CORE_EXPORT template <typename Iterator>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N>
         struct datapar_loop_pred
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename Begin, typename End, typename Pred>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Begin call(
                 Begin first, End last, Pred&& pred)
             {
-                while (!is_data_aligned(first) && first != last)
+                constexpr bool datapar_compatible =
+                    iterator_datapar_compatible_v<Begin>;
+
+                if constexpr (datapar_compatible && N != 1)
                 {
-                    if (datapar_loop_pred_step<Begin>::call1(pred, first) != -1)
-                        return first;
-                    ++first;
-                }
-
-                constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                End const lastV = last - size + 1;
-
-                while (first < lastV)
-                {
-                    int offset =
-                        datapar_loop_pred_step<Begin>::callv(pred, first);
-                    if (offset != -1)
+                    while (first != last && !is_pack_aligned<V>(first))
                     {
-                        std::advance(first, offset);
-                        return first;
+                        if (datapar_loop_pred_step<Begin, N>::call1(
+                                pred, first) != -1)
+                        {
+                            return first;
+                        }
+                        ++first;
                     }
-                    std::advance(first, size);
+
+                    constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    End lastV = first;
+
+                    // at least `size` elements remain
+                    if (static_cast<std::size_t>(last - first) >= size)
+                    {
+                        lastV = last - (size - 1);
+                    }
+
+                    while (first < lastV)
+                    {
+                        int offset = datapar_loop_pred_step<Begin, N>::callv(
+                            pred, first);
+                        if (offset != -1)
+                        {
+                            std::advance(first, offset);
+                            return first;
+                        }
+                        std::advance(first, size);
+                    }
                 }
 
                 while (first != last)
                 {
-                    if (datapar_loop_pred_step<Begin>::call1(pred, first) != -1)
+                    if (datapar_loop_pred_step<Begin, N>::call1(pred, first) !=
+                        -1)
                         return first;
                     ++first;
                 }
@@ -157,13 +173,13 @@ namespace hpx::parallel::util {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iterator>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N>
         struct datapar_loop_ind
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename Begin, typename End, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Begin call(
@@ -174,92 +190,109 @@ namespace hpx::parallel::util {
                 constexpr bool datapar_compatible =
                     iterator_datapar_compatible_v<Begin>;
 
-                if constexpr (is_contiguous && datapar_compatible)
+                if constexpr (is_contiguous && datapar_compatible && N != 1)
                 {
-                    while (!is_data_aligned(first) && first != last)
+                    while (first != last && !is_pack_aligned<V>(first))
                     {
-                        datapar_loop_step_ind<Begin>::call1(f, first);
+                        datapar_loop_step_ind<Begin, N>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    End lastV = first;
 
-                    End const lastV = last - size + 1;
+                    // at least `size` elements remain
+                    if (static_cast<std::size_t>(last - first) >= size)
+                    {
+                        lastV = last - (size - 1);
+                    }
+
                     while (first < lastV)
                     {
-                        datapar_loop_step_ind<Begin>::callv(f, first);
+                        datapar_loop_step_ind<Begin, N>::callv(f, first);
                     }
-
-                    while (first != last)
-                    {
-                        datapar_loop_step_ind<Begin>::call1(f, first);
-                    }
-
-                    return first;
                 }
-                else if constexpr (datapar_compatible)
+                else if constexpr (datapar_compatible && N != 1)
                 {
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    End lastV = first;
 
-                    End const lastV = last - size + 1;
+                    // at least `size` elements remain
+                    if (static_cast<std::size_t>(last - first) >= size)
+                    {
+                        lastV = last - (size - 1);
+                    }
+
                     while (first < lastV)
                     {
-                        datapar_loop_step_ind<Begin>::calls(f, first);
+                        datapar_loop_step_ind<Begin, N>::calls(f, first);
                     }
-
-                    while (first != last)
-                    {
-                        datapar_loop_step_ind<Begin>::call1(f, first);
-                    }
-
-                    return first;
                 }
-                else
+
+                while (first != last)
                 {
-                    while (first != last)
-                    {
-                        datapar_loop_step_ind<Begin>::call1(f, first);
-                    }
-                    return first;
+                    datapar_loop_step_ind<Begin, N>::call1(f, first);
                 }
+
+                return first;
             }
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT struct datapar_loop2
+        HPX_CXX_CORE_EXPORT template <std::size_t N>
+        struct datapar_loop2
         {
             template <typename InIter1, typename InIter2, typename F>
-            HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr std::enable_if_t<
-                iterators_datapar_compatible_v<InIter1, InIter2> &&
+                requires(iterators_datapar_compatible_v<InIter1, InIter2> &&
                     iterator_datapar_compatible_v<InIter1> &&
-                    iterator_datapar_compatible_v<InIter2>,
-                std::pair<InIter1, InIter2>>
-            call(InIter1 it1, InIter1 last1, InIter2 it2, F&& f)
+                    iterator_datapar_compatible_v<InIter2>)
+            HPX_HOST_DEVICE
+                HPX_FORCEINLINE static constexpr std::pair<InIter1, InIter2>
+                call(InIter1 it1, InIter1 last1, InIter2 it2, F&& f)
             {
-                using iterator_type = std::decay_t<InIter1>;
-                using value_type =
-                    std::iterator_traits<iterator_type>::value_type;
+                constexpr bool datapar_compatible =
+                    iterator_datapar_compatible_v<InIter1> &&
+                    iterator_datapar_compatible_v<InIter2>;
 
-                using V = traits::vector_pack_type_t<value_type>;
-
-                while ((!is_data_aligned(it1) || !is_data_aligned(it2)) &&
-                    it1 != last1)
+                if constexpr (datapar_compatible && N != 1)
                 {
-                    datapar_loop_step2_ind<InIter1, InIter2>::call1(
-                        f, it1, it2);
-                }
+                    using iterator_type = std::decay_t<InIter1>;
+                    using value_type =
+                        std::iterator_traits<iterator_type>::value_type;
 
-                constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    using V = traits::vector_pack_type_t<value_type, N>;
+                    using value_type2 =
+                        std::iterator_traits<std::decay_t<InIter2>>::value_type;
+                    using V2 = traits::vector_pack_type_t<value_type2, N>;
 
-                InIter1 const last1V = last1 - size + 1;
-                while (it1 < last1V)
-                {
-                    datapar_loop_step2_ind<InIter1, InIter2>::callv(
-                        f, it1, it2);
+                    constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    static_assert(size == traits::vector_pack_size_v<V2>,
+                        "both input packs must have the same lane count");
+
+                    while (it1 != last1 && !is_pack_aligned<V>(it1))
+                    {
+                        datapar_loop_step2_ind<InIter1, InIter2, N>::call1(
+                            f, it1, it2);
+                    }
+
+                    // one-time check: vectorize only if it2 is also aligned now
+                    if (is_pack_aligned<V2>(it2))
+                    {
+                        // empty vector range by default
+                        InIter1 last1V = it1;
+                        if (static_cast<std::size_t>(last1 - it1) >= size)
+                            last1V = last1 - (size - 1);
+
+                        while (it1 < last1V)
+                        {
+                            datapar_loop_step2_ind<InIter1, InIter2, N>::callv(
+                                f, it1, it2);
+                        }
+                    }
                 }
 
                 while (it1 != last1)
                 {
-                    datapar_loop_step2_ind<InIter1, InIter2>::call1(
+                    datapar_loop_step2_ind<InIter1, InIter2, N>::call1(
                         f, it1, it2);
                 }
 
@@ -268,18 +301,18 @@ namespace hpx::parallel::util {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iterator, bool IsConst = false,
-            typename Enable = void>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N,
+            bool IsConst = false, typename Enable = void>
         struct datapar_loop_n;
 
-        template <typename Iterator, bool IsConst>
-        struct datapar_loop_n<Iterator, IsConst,
+        template <typename Iterator, std::size_t N, bool IsConst>
+        struct datapar_loop_n<Iterator, N, IsConst,
             std::enable_if_t<hpx::traits::is_iterator_v<Iterator>>>
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename InIter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr InIter call(
@@ -290,64 +323,36 @@ namespace hpx::parallel::util {
                 constexpr bool datapar_compatible =
                     iterator_datapar_compatible_v<InIter>;
 
-                if constexpr (is_contiguous && datapar_compatible)
+                std::size_t len = count;
+                if constexpr (is_contiguous && datapar_compatible && N != 1)
                 {
-                    std::size_t len = count;
-
-                    // clang-format off
-                    for (/* */; !detail::is_data_aligned(first) && len != 0;
+                    for (/* */; len != 0 && !detail::is_pack_aligned<V>(first);
                         --len)
                     {
-                        datapar_loop_step<InIter, IsConst>::call1(f, first);
+                        datapar_loop_step<InIter, N, IsConst>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                    for (auto len_v =
-                             static_cast<std::int64_t>(len - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), len -= size)
+                    for (/* */; len >= size; len -= size)
                     {
-                        datapar_loop_step<InIter, IsConst>::callv(f, first);
+                        datapar_loop_step<InIter, N, IsConst>::callv(f, first);
                     }
-                    // clang-format on
-
-                    for (/* */; len != 0; --len)
-                    {
-                        datapar_loop_step<InIter, IsConst>::call1(f, first);
-                    }
-
-                    return first;
                 }
-                else if constexpr (datapar_compatible)
+                else if constexpr (datapar_compatible && N != 1)
                 {
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                    // clang-format off
-                    for (auto len_v =
-                             static_cast<std::int64_t>(count - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), count -= size)
+                    for (/* */; len >= size; len -= size)
                     {
-                        datapar_loop_step<InIter, IsConst>::calls(f, first);
+                        datapar_loop_step<InIter, N, IsConst>::calls(f, first);
                     }
-                    // clang-format on
-
-                    for (/* */; count != 0; --count)
-                    {
-                        datapar_loop_step<InIter, IsConst>::call1(f, first);
-                    }
-
-                    return first;
                 }
-                else
+
+                for (/* */; len != 0; --len)
                 {
-                    for (/* */; count != 0; --count)
-                    {
-                        datapar_loop_step<InIter, IsConst>::call1(f, first);
-                    }
-                    return first;
+                    datapar_loop_step<InIter, N, IsConst>::call1(f, first);
                 }
+
+                return first;
             }
 
             template <typename InIter, typename CancelToken, typename F>
@@ -362,32 +367,34 @@ namespace hpx::parallel::util {
             }
         };
 
-        template <typename I, bool IsConst>
-        struct datapar_loop_n<I, IsConst,
+        template <typename I, std::size_t N, bool IsConst>
+        struct datapar_loop_n<I, N, IsConst,
             std::enable_if_t<std::is_integral_v<I>>>
         {
-            using V = traits::vector_pack_type_t<I>;
+            using V = traits::vector_pack_type_t<I, N>;
 
             template <typename Iter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Iter call(
                 Iter first, std::size_t const count, F&& f)
             {
-                std::size_t len = count;
-                constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                constexpr bool datapar_compatible =
+                    iterator_datapar_compatible_v<Iter>;
 
-                // clang-format off
-                for (auto len_v = static_cast<std::int64_t>(len - size + 1);
-                    len_v > 0;
-                    len_v -= static_cast<std::int64_t>(size), len -= size)
+                std::size_t len = count;
+                if constexpr (datapar_compatible && N != 1)
                 {
-                    datapar_loop_step<I, true>::callv(f, first);
+                    constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    for (/* */; len >= size; len -= size)
+                    {
+                        datapar_loop_step<I, N, true>::callv(f, first);
+                    }
                 }
-                // clang-format on
 
                 for (/* */; len != 0; --len)
                 {
-                    datapar_loop_step<I, true>::call1(f, first);
+                    datapar_loop_step<I, N, true>::call1(f, first);
                 }
+
                 return first;
             }
 
@@ -404,13 +411,13 @@ namespace hpx::parallel::util {
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iterator>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N>
         struct datapar_loop_n_ind
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename InIter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr InIter call(
@@ -421,106 +428,82 @@ namespace hpx::parallel::util {
                 constexpr bool datapar_compatible =
                     iterator_datapar_compatible_v<InIter>;
 
-                if constexpr (is_contiguous && datapar_compatible)
+                std::size_t len = count;
+                if constexpr (is_contiguous && datapar_compatible && N != 1)
                 {
-                    std::size_t len = count;
-
-                    // clang-format off
-                    for (/* */; !detail::is_data_aligned(first) && len != 0;
+                    for (/* */; len != 0 && !detail::is_pack_aligned<V>(first);
                         --len)
                     {
-                        datapar_loop_step_ind<InIter>::call1(f, first);
+                        datapar_loop_step_ind<InIter, N>::call1(f, first);
                     }
 
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                    for (auto len_v =
-                             static_cast<std::int64_t>(len - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), len -= size)
+                    for (/* */; len >= size; len -= size)
                     {
-                        datapar_loop_step_ind<InIter>::callv(f, first);
+                        datapar_loop_step_ind<InIter, N>::callv(f, first);
                     }
-                    // clang-format on
-
-                    for (/* */; len != 0; --len)
-                    {
-                        datapar_loop_step_ind<InIter>::call1(f, first);
-                    }
-                    return first;
                 }
-                else if constexpr (datapar_compatible)
+                else if constexpr (datapar_compatible && N != 1)
                 {
                     constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                    // clang-format off
-                    for (auto len_v =
-                             static_cast<std::int64_t>(count - size + 1);
-                        len_v > 0;
-                        len_v -= static_cast<std::int64_t>(size), count -= size)
+                    for (/* */; len >= size; len -= size)
                     {
-                        datapar_loop_step_ind<InIter>::calls(f, first);
+                        datapar_loop_step_ind<InIter, N>::calls(f, first);
                     }
-                    // clang-format on
-
-                    for (/* */; count != 0; --count)
-                    {
-                        datapar_loop_step_ind<InIter>::call1(f, first);
-                    }
-                    return first;
                 }
-                else
+
+                for (/* */; len != 0; --len)
                 {
-                    for (/* */; count != 0; --count)
-                    {
-                        datapar_loop_step_ind<InIter>::call1(f, first);
-                    }
-                    return first;
+                    datapar_loop_step_ind<InIter, N>::call1(f, first);
                 }
+
+                return first;
             }
         };
 
         ///////////////////////////////////////////////////////////////////////
-        HPX_CXX_CORE_EXPORT template <typename Iterator>
+        HPX_CXX_CORE_EXPORT template <typename Iterator, std::size_t N>
         struct datapar_loop_idx_n
         {
             using iterator_type = std::decay_t<Iterator>;
             using value_type = std::iterator_traits<iterator_type>::value_type;
 
-            using V = traits::vector_pack_type_t<value_type>;
+            using V = traits::vector_pack_type_t<value_type, N>;
 
             template <typename Iter, typename F>
             HPX_HOST_DEVICE HPX_FORCEINLINE static constexpr Iter call(
                 std::size_t base_idx, Iter it, std::size_t const count, F&& f)
             {
+                constexpr bool datapar_compatible =
+                    iterator_datapar_compatible_v<Iter>;
+
                 std::size_t len = count;
-
-                for (/* */; !detail::is_data_aligned(it) && len != 0; --len)
+                if constexpr (datapar_compatible && N != 1)
                 {
-                    datapar_loop_idx_step<Iter>::call1(f, it, base_idx);
-                    ++it;
-                    ++base_idx;
-                }
+                    for (/* */; len != 0 && !detail::is_pack_aligned<V>(it);
+                        --len)
+                    {
+                        datapar_loop_idx_step<Iter, N>::call1(f, it, base_idx);
+                        ++it;
+                        ++base_idx;
+                    }
 
-                constexpr std::size_t size = traits::vector_pack_size_v<V>;
-
-                // clang-format off
-                for (auto len_v = static_cast<std::int64_t>(len - size + 1);
-                    len_v > 0;
-                    len_v -= static_cast<std::int64_t>(size), len -= size)
-                {
-                    datapar_loop_idx_step<Iter>::callv(f, it, base_idx);
-                    std::advance(it, size);
-                    base_idx += size;
+                    constexpr std::size_t size = traits::vector_pack_size_v<V>;
+                    for (/* */; len >= size; len -= size)
+                    {
+                        datapar_loop_idx_step<Iter, N>::callv(f, it, base_idx);
+                        std::advance(it, size);
+                        base_idx += size;
+                    }
                 }
-                // clang-format on
 
                 for (/* */; len != 0; --len)
                 {
-                    datapar_loop_idx_step<Iter>::call1(f, it, base_idx);
+                    datapar_loop_idx_step<Iter, N>::call1(f, it, base_idx);
                     ++it;
                     ++base_idx;
                 }
+
                 return it;
             }
 
@@ -544,7 +527,10 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE constexpr Begin hpx_invoke(
         hpx::parallel::util::loop_t, ExPolicy&&, Begin begin, End end, F&& f)
     {
-        return detail::datapar_loop<Begin>::call(begin, end, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return detail::datapar_loop<Begin, num_lanes>::call(
+            begin, end, HPX_FORWARD(F, f));
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Begin,
@@ -554,7 +540,9 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_t, ExPolicy&&, Begin begin, End end,
         CancelToken& tok, F&& f)
     {
-        return detail::datapar_loop<Begin>::call(
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return detail::datapar_loop<Begin, num_lanes>::call(
             begin, end, tok, HPX_FORWARD(F, f));
     }
 
@@ -565,7 +553,9 @@ namespace hpx::parallel::util {
         hpx::parallel::util::const_loop_t, ExPolicy&&, Begin begin, End end,
         F&& f)
     {
-        return detail::datapar_loop<Begin, true>::call(
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return detail::datapar_loop<Begin, num_lanes, true>::call(
             begin, end, HPX_FORWARD(F, f));
     }
 
@@ -576,7 +566,9 @@ namespace hpx::parallel::util {
         hpx::parallel::util::const_loop_t, ExPolicy&&, Begin begin, End end,
         CancelToken& tok, F&& f)
     {
-        return detail::datapar_loop<Begin, true>::call(
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return detail::datapar_loop<Begin, num_lanes, true>::call(
             begin, end, tok, HPX_FORWARD(F, f));
     }
 
@@ -593,8 +585,10 @@ namespace hpx::parallel::util {
 
         if constexpr (datapar_compatible)
         {
-            return hpx::parallel::util::detail::datapar_loop_pred<Begin>::call(
-                first, end, HPX_FORWARD(Pred, pred));
+            constexpr std::size_t num_lanes = hpx::execution::policy_traits<
+                std::decay_t<ExPolicy>>::num_lanes;
+            return hpx::parallel::util::detail::datapar_loop_pred<Begin,
+                num_lanes>::call(first, end, HPX_FORWARD(Pred, pred));
         }
         else
         {
@@ -614,7 +608,9 @@ namespace hpx::parallel::util {
     HPX_HOST_DEVICE HPX_FORCEINLINE Begin hpx_invoke(
         hpx::parallel::util::loop_ind_t<ExPolicy>, Begin begin, End end, F&& f)
     {
-        return detail::datapar_loop_ind<Begin>::call(
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return detail::datapar_loop_ind<Begin, num_lanes>::call(
             begin, end, HPX_FORWARD(F, f));
     }
 
@@ -629,7 +625,9 @@ namespace hpx::parallel::util {
         if constexpr (detail::iterator_datapar_compatible_v<Iter1> &&
             detail::iterator_datapar_compatible_v<Iter2>)
         {
-            return detail::datapar_loop2::call(
+            constexpr std::size_t num_lanes = hpx::execution::policy_traits<
+                std::decay_t<ExPolicy>>::num_lanes;
+            return detail::datapar_loop2<num_lanes>::call(
                 first1, last1, first2, HPX_FORWARD(F, f));
         }
         else
@@ -650,8 +648,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_n_t<ExPolicy>, Iter it, std::size_t count,
         F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_n<Iter>::call(
-            it, count, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_n<Iter,
+            num_lanes>::call(it, count, HPX_FORWARD(F, f));
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
@@ -661,8 +661,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_n_t<ExPolicy>, Iter it, std::size_t count,
         CancelToken& tok, F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_n<Iter>::call(
-            it, count, tok, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_n<Iter,
+            num_lanes>::call(it, count, tok, HPX_FORWARD(F, f));
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter, typename F>
@@ -671,8 +673,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::const_loop_n_t<ExPolicy>, Iter it,
         std::size_t count, F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_n<Iter, true>::call(
-            it, count, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_n<Iter, num_lanes,
+            true>::call(it, count, HPX_FORWARD(F, f));
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
@@ -682,8 +686,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::const_loop_n_t<ExPolicy>, Iter it,
         std::size_t count, CancelToken& tok, F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_n<Iter, true>::call(
-            it, count, tok, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_n<Iter, num_lanes,
+            true>::call(it, count, tok, HPX_FORWARD(F, f));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -693,8 +699,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_n_ind_t<ExPolicy>, Iter it, std::size_t count,
         F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_n_ind<Iter>::call(
-            it, count, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_n_ind<Iter,
+            num_lanes>::call(it, count, HPX_FORWARD(F, f));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -704,8 +712,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_idx_n_t<ExPolicy>, std::size_t base_idx,
         Iter it, std::size_t count, F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_idx_n<Iter>::call(
-            base_idx, it, count, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_idx_n<Iter,
+            num_lanes>::call(base_idx, it, count, HPX_FORWARD(F, f));
     }
 
     HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename Iter,
@@ -715,8 +725,10 @@ namespace hpx::parallel::util {
         hpx::parallel::util::loop_idx_n_t<ExPolicy>, std::size_t base_idx,
         Iter it, std::size_t count, CancelToken& tok, F&& f)
     {
-        return hpx::parallel::util::detail::datapar_loop_idx_n<Iter>::call(
-            base_idx, it, count, tok, HPX_FORWARD(F, f));
+        constexpr std::size_t num_lanes =
+            hpx::execution::policy_traits<std::decay_t<ExPolicy>>::num_lanes;
+        return hpx::parallel::util::detail::datapar_loop_idx_n<Iter,
+            num_lanes>::call(base_idx, it, count, tok, HPX_FORWARD(F, f));
     }
 }    // namespace hpx::parallel::util
 

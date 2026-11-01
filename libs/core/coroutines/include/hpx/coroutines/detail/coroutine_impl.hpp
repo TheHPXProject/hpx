@@ -120,7 +120,7 @@ namespace hpx::threads::coroutines::detail {
             this->super_type::init();
         }
 
-        void reset(bool direct_execution)
+        void reset()
         {
             // First reset the function and arguments
             m_result =
@@ -128,10 +128,9 @@ namespace hpx::threads::coroutines::detail {
             m_arg = nullptr;
             m_fun.reset();
 
-            // Then reset the id and stack as they may be used by the
-            // destructors of the thread function above
+            // Then reset the id as it may be used by the destructors of the
+            // thread function above. The caller recycles the stack after exit.
             this->super_type::reset();
-            this->reset_stack(direct_execution);
         }
 
         void rebind(functor_type&& f, thread_id_type id)

@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Thomas Heller
-//  Copyright (c) 2013-2025 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2019 Agustin Berge
 //  Copyright (c) 2017 Google
 //
@@ -16,6 +16,7 @@
 #include <hpx/functional/detail/vtable/vtable.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/functional/traits/get_task_size.hpp>
 #include <hpx/functional/traits/is_invocable.hpp>
 #include <hpx/modules/tracing.hpp>
 
@@ -73,6 +74,7 @@ namespace hpx::util::detail {
         [[nodiscard]] char const* get_function_annotation() const;
         [[nodiscard]] hpx::tracing::annotation_handle
         get_function_annotation_tracing() const;
+        [[nodiscard]] threads::task_size get_task_size() const noexcept;
 
     protected:
         vtable const* vptr;
@@ -249,6 +251,7 @@ namespace hpx::util::detail {
         using base_type::get_function_address;
         using base_type::get_function_annotation;
         using base_type::get_function_annotation_tracing;
+        using base_type::get_task_size;
 
     private:
         [[nodiscard]] static constexpr vtable const* get_empty_vtable() noexcept

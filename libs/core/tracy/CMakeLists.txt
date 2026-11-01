@@ -20,6 +20,14 @@ set(tracy_headers hpx/tracy/tracy.hpp hpx/tracy/tracy_lock.hpp
 
 set(tracy_sources tracy.cpp tracy_init.cpp tracy_lock.cpp tracy_tls.cpp)
 
+# hpx_debugging carries the extern-C DbgHelp lock wrappers Tracy's
+# TRACY_DBGHELP_LOCK expansion references (see HPX_SetupTracy.cmake); the
+# symbols only exist on Windows, so the dep is only needed there.
+set(additional_dependencies "")
+if(WIN32)
+  set(additional_dependencies hpx_debugging)
+endif()
+
 include(HPX_AddModule)
 add_hpx_module(
   core tracy
@@ -27,7 +35,14 @@ add_hpx_module(
   GLOBAL_HEADER_MODULE_GEN ON
   SOURCES ${tracy_sources}
   HEADERS ${tracy_headers}
-  MODULE_DEPENDENCIES hpx_config
-  DEPENDENCIES tracy::tracy
+  MODULE_DEPENDENCIES hpx_config ${additional_dependencies}
   CMAKE_SUBDIRS tests
 )
+
+# Shared builds absorb TracyClient into hpx_core, so keep the target out of the
+# export. Static builds still need it at link time.
+if(HPX_WITH_STATIC_LINKING)
+  target_link_libraries(hpx_tracy PUBLIC tracy::tracy)
+else()
+  target_link_libraries(hpx_tracy PUBLIC $<BUILD_INTERFACE:tracy::tracy>)
+endif()

@@ -24,6 +24,7 @@
 #include <hpx/modules/compute.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/thread.hpp>
 #include <hpx/version.hpp>
@@ -366,12 +367,32 @@ struct triad_step
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-template <typename Allocator, typename Policy>
+// The function of a kernel, with the nano task size if Sized, so that
+// task_size_chunk_size can chunk the loop.
+template <bool Sized, typename F>
+auto kernel(F f)
+{
+    if constexpr (Sized)
+    {
+        return hpx::nano_task(HPX_MOVE(f));
+    }
+    else
+    {
+        return f;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+template <bool Sized = false, typename Allocator, typename Policy>
 auto run_benchmark(std::size_t warmup_iterations, std::size_t iterations,
     std::size_t size, Allocator&& alloc, Policy&& policy, std::size_t executor)
 {
     std::string exec_name = get_executor_name(executor);
     std::string alloc_name = get_allocator_name(executor);
+    if constexpr (Sized)
+    {
+        alloc_name += "_task_size";
+    }
     // Allocate our data
     using vector_type = hpx::compute::vector<STREAM_TYPE, Allocator>;
 
@@ -394,15 +415,15 @@ auto run_benchmark(std::size_t warmup_iterations, std::size_t iterations,
 
         // Scale
         hpx::transform(policy, c.begin(), c.end(), b.begin(),
-            multiply_step<STREAM_TYPE>(scalar));
+            kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
 
         // Add
         hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(), b.end(),
-            c.begin(), add_step<STREAM_TYPE>());
+            c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
 
         // Triad
         hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(), c.end(),
-            a.begin(), triad_step<STREAM_TYPE>(scalar));
+            a.begin(), kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -419,19 +440,20 @@ auto run_benchmark(std::size_t warmup_iterations, std::size_t iterations,
     hpx::util::perftests_report("Stream benchmark - Scale",
         exec_name + "_" + alloc_name, iterations, [&]() -> void {
             hpx::transform(policy, c.begin(), c.end(), b.begin(),
-                multiply_step<STREAM_TYPE>(scalar));
+                kernel<Sized>(multiply_step<STREAM_TYPE>(scalar)));
         });
     // Add
     hpx::util::perftests_report("Stream benchmark - Add",
         exec_name + "_" + alloc_name, iterations, [&]() -> void {
             hpx::ranges::transform(policy, a.begin(), a.end(), b.begin(),
-                b.end(), c.begin(), add_step<STREAM_TYPE>());
+                b.end(), c.begin(), kernel<Sized>(add_step<STREAM_TYPE>()));
         });
     // Triad
     hpx::util::perftests_report("Stream benchmark - Triad",
         exec_name + "_" + alloc_name, iterations, [&]() -> void {
             hpx::ranges::transform(policy, b.begin(), b.end(), c.begin(),
-                c.end(), a.begin(), triad_step<STREAM_TYPE>(scalar));
+                c.end(), a.begin(),
+                kernel<Sized>(triad_step<STREAM_TYPE>(scalar)));
         });
 
     // TODO: adapt the check result to work with the new version
@@ -443,10 +465,10 @@ auto run_benchmark(std::size_t warmup_iterations, std::size_t iterations,
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     std::size_t vector_size = vm["vector_size"].as<std::size_t>();
-    std::size_t iterations = vm["iterations"].as<std::size_t>();
+    std::size_t iterations = vm["test_count"].as<std::size_t>();
     std::size_t warmup_iterations = vm["warmup_iterations"].as<std::size_t>();
     std::size_t chunk_size = vm["chunk_size"].as<std::size_t>();
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "stream_report");
     std::size_t executor;
     header = vm.count("header") > 0;
 
@@ -507,6 +529,51 @@ int hpx_main(hpx::program_options::variables_map& vm)
             run_benchmark<>(warmup_iterations, iterations, vector_size,
                 std::move(alloc), std::move(policy), executor);
         }
+
+        // The same executors with task_size_chunk_size, which chunks the
+        // loops based on the task size of the kernels' functions. Copy has
+        // no function, it is chunked as by default.
+        hpx::execution::experimental::task_size_chunk_size const tscs;
+
+        {
+            executor = 2;
+            auto policy = hpx::execution::par;
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<true>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), policy.with(tscs), executor);
+        }
+
+        {
+            executor = 3;
+            using executor_type =
+                hpx::execution::experimental::fork_join_executor;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<true>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), policy.with(tscs), executor);
+        }
+
+        {
+            executor = 4;
+            using executor_type =
+                hpx::execution::experimental::scheduler_executor<
+                    hpx::execution::experimental::thread_pool_scheduler>;
+            executor_type exec;
+            auto policy = hpx::execution::par.on(exec);
+            hpx::compute::host::detail::policy_allocator<STREAM_TYPE,
+                decltype(policy)>
+                alloc(policy);
+
+            run_benchmark<true>(warmup_iterations, iterations, vector_size,
+                std::move(alloc), policy.with(tscs), executor);
+        }
     }
 
     hpx::util::perftests_print_times();
@@ -527,9 +594,9 @@ int main(int argc, char* argv[])
         (   "vector_size",
             hpx::program_options::value<std::size_t>()->default_value(1024),
             "size of vector (default: 1024)")
-        (   "iterations",
-            hpx::program_options::value<std::size_t>()->default_value(10),
-            "number of iterations to repeat each test. (default: 10)")
+        (   "test_count",
+            hpx::program_options::value<std::size_t>()->default_value(1000),
+            "number of iterations to repeat each test. (default: 1000)")
         (   "warmup_iterations",
             hpx::program_options::value<std::size_t>()->default_value(1),
             "number of warmup iterations to perform before timing. (default: 1)")

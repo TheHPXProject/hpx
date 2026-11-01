@@ -28,11 +28,13 @@ set(execution_headers
     hpx/execution/detail/future_exec.hpp
     hpx/execution/detail/post_policy_dispatch.hpp
     hpx/execution/detail/sync_launch_policy_dispatch.hpp
+    hpx/execution/detail/task_size_chunk_size_defaults.hpp
     hpx/execution/execution.hpp
     hpx/execution/executor_parameters.hpp
     hpx/execution/executors/adaptive_static_chunk_size.hpp
     hpx/execution/executors/auto_chunk_size.hpp
     hpx/execution/executors/collect_chunking_parameters.hpp
+    hpx/execution/executors/create_rebound_policy.hpp
     hpx/execution/executors/default_parameters.hpp
     hpx/execution/executors/dynamic_chunk_size.hpp
     hpx/execution/executors/execution.hpp
@@ -47,7 +49,9 @@ set(execution_headers
     hpx/execution/executors/polymorphic_executor.hpp
     hpx/execution/executors/rebind_executor.hpp
     hpx/execution/executors/rebind_executor_parameters.hpp
+    hpx/execution/executors/rebind_policy.hpp
     hpx/execution/executors/static_chunk_size.hpp
+    hpx/execution/executors/task_size_chunk_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_alignment_size.hpp
     hpx/execution/traits/detail/eve/vector_pack_all_any_none.hpp
     hpx/execution/traits/detail/eve/vector_pack_conditionals.hpp
@@ -80,6 +84,7 @@ set(execution_headers
     hpx/execution/traits/executor_traits.hpp
     hpx/execution/traits/future_then_result_exec.hpp
     hpx/execution/traits/is_execution_policy.hpp
+    hpx/execution/traits/policy_traits.hpp
     hpx/execution/traits/vector_pack_alignment_size.hpp
     hpx/execution/traits/vector_pack_all_any_none.hpp
     hpx/execution/traits/vector_pack_conditionals.hpp
@@ -92,8 +97,9 @@ set(execution_headers
     hpx/synchronization/async_rw_mutex.hpp
 )
 
-set(execution_sources execution_parameter_callbacks.cpp
-                      polymorphic_executor.cpp run_loop.cpp
+set(execution_sources
+    execution_parameter_callbacks.cpp polymorphic_executor.cpp run_loop.cpp
+    task_size_chunk_size_defaults.cpp
 )
 
 # cmake-format: off

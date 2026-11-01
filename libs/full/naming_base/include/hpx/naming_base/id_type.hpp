@@ -4,6 +4,10 @@
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
 //  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
+/// \file id_type.hpp
+/// \page hpx::id_type
+/// \headerfile hpx/modules/naming_base.hpp
+
 #pragma once
 
 #include <hpx/config.hpp>

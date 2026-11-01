@@ -28,6 +28,7 @@
 #endif
 
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -163,7 +164,7 @@ namespace hpx::util {
             "affinity = core",
             "pu_step = 1",
             "pu_offset = 0",
-            "numa_sensitive = 0",
+            "numa_sensitive = 1",
             "loopback_network = 0",
             "max_background_threads = "
             "${HPX_MAX_BACKGROUND_THREADS:$[hpx.os_threads]}",
@@ -230,6 +231,8 @@ namespace hpx::util {
 #if defined(__linux) || defined(linux) || defined(__linux__) ||                \
     defined(__FreeBSD__)
             "use_guard_pages = ${HPX_USE_GUARD_PAGES:1}",
+            // 0: never, 1: MADV_FREE when available (default), 2: DONTNEED
+            "unbind_on_reset = ${HPX_STACKS_UNBIND_ON_RESET:1}",
 #endif
 
             "[hpx.threadpools]",
@@ -255,6 +258,15 @@ namespace hpx::util {
             "min_tasks_to_steal_staged = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED)) "}",
+            "min_tasks_to_steal_pending_early = "
+            "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) "}",
+            "min_tasks_to_steal_staged_early = "
+            "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)) "}",
+            "idle_loop_count_steal_staged = "
+            "${HPX_IDLE_LOOP_COUNT_STEAL_STAGED:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_IDLE_LOOP_COUNT_STEAL_STAGED)) "}",
             "min_add_new_count = "
             "${HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_ADD_NEW_COUNT)) "}",
@@ -266,7 +278,7 @@ namespace hpx::util {
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_DELETE_COUNT)) "}",
             "max_delete_count = "
             "${HPX_THREAD_QUEUE_MAX_DELETE_COUNT:" HPX_PP_STRINGIZE(
-                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_THREAD_COUNT)) "}",
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_DELETE_COUNT)) "}",
             "max_terminated_threads = "
             "${HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MAX_TERMINATED_THREADS)) "}",
@@ -276,6 +288,11 @@ namespace hpx::util {
             "cached_threads_count = "
             "${HPX_THREAD_QUEUE_CACHED_THREADS_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_CACHED_THREADS_COUNT)) "}",
+
+            // empty entries stand for the defaults compiled into the library
+            "[hpx.task_size_chunk_size]",
+            "min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}",
+            "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
 
             "[hpx.commandline]",
             // enable aliasing
@@ -1141,9 +1158,16 @@ namespace hpx::util {
             std::string const entry =
                 sec->get_entry(entryname, defaultvaluestr);
             char* endptr = nullptr;
-            std::ptrdiff_t const val =
+            errno = 0;
+            long long const parsed =
                 std::strtoll(entry.c_str(), &endptr, /*base:*/ 0);
-            return endptr != entry.c_str() ? val : defaultvalue;
+            if (endptr == entry.c_str() || errno == ERANGE)
+                return defaultvalue;
+
+            // a stack size that does not fit is no more usable than one that
+            // did not parse
+            std::ptrdiff_t const val = static_cast<std::ptrdiff_t>(parsed);
+            return val == parsed ? val : defaultvalue;
         }
         return defaultvalue;
     }
@@ -1159,6 +1183,22 @@ namespace hpx::util {
                 0;
         }
         return true;    // default is true
+    }
+
+    int runtime_configuration::stack_unbind_on_reset() const
+    {
+        if (util::section const* sec = get_section("hpx.stacks");
+            nullptr != sec)
+        {
+            int const mode =
+                hpx::util::get_entry_as<int>(*sec, "unbind_on_reset", 1);
+            if (mode < 0 || mode > 2)
+            {
+                return 1;
+            }
+            return mode;
+        }
+        return 1;    // default: MADV_FREE / keep-resident
     }
 #endif
 

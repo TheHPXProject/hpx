@@ -53,3 +53,4 @@ namespace hpx {
         boost::system::error_code _compat;
     };
 }    // namespace hpx
+/// \endcond

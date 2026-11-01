@@ -54,14 +54,20 @@ This preset enables:
 
 * ``HPX_WITH_STATIC_LINKING=ON`` — bundles everything into the ``.a`` archives
   that CE links against.
+* ``HPX_WITH_DISTRIBUTED_RUNTIME=OFF`` — local-only runtime. Compiler Explorer
+  cannot launch a second locality, so the distributed runtime is omitted from
+  this build.
 * ``HPX_WITH_NETWORKING=OFF`` — disables the parcelset so |hpx| never attempts
   to open a network socket.
 * ``HPX_WITH_FETCH_ASIO=ON`` — downloads Asio via FetchContent, removing the
   need for a system-level Asio installation.
+* ``HPX_WITH_FETCH_HWLOC=ON`` — fetches hwloc via FetchContent so the CE
+  install does not depend on a system hwloc package.
 * ``HPX_WITH_MALLOC=system`` — uses the system allocator; avoids a jemalloc or
   tcmalloc dependency.
 * ``HPX_WITH_TESTS=OFF``, ``HPX_WITH_EXAMPLES=OFF``,
-  ``HPX_WITH_DOCUMENTATION=OFF`` — skips everything that CE does not need.
+  ``HPX_WITH_DOCUMENTATION=OFF``, ``HPX_WITH_TOOLS=OFF`` — skips everything
+  that CE does not need.
 
 The preset produces four static libraries under ``build/godbolt-minimal/lib/``:
 
@@ -87,7 +93,13 @@ Linking without CMake
 ======================
 
 CE's backend compiles user code with a raw ``g++`` or ``clang++`` invocation.
-The complete set of flags needed is:
+A static |hpx| install ships one archive per module (``libhpx_logging.a``,
+``libhpx_include_local.a``, and so on) in addition to ``libhpx_wrap.a``,
+``libhpx_init.a``, ``libhpx.a``, and ``libhpx_core.a``. Those module objects
+are not merged into ``libhpx_core.a``, so linking only the four umbrella
+libraries leaves symbols such as ``detect_environment()`` undefined. Group
+every ``libhpx_*.a`` archive, then add Boost, hwloc, and the usual system
+libraries:
 
 .. code-block:: shell-session
 
@@ -97,15 +109,16 @@ The complete set of flags needed is:
        -L/path/to/hpx/lib                                      \
        -DHPX_APPLICATION_EXPORTS                               \
        -Wl,-wrap=main                                          \
-       -lhpx_wrap -lhpx_init -lhpx -lhpx_core                 \
+       -Wl,--start-group /path/to/hpx/lib/libhpx_*.a           \
+       -Wl,--end-group                                         \
        -lpthread -ldl -lrt
 
 Two details here are easy to get wrong:
 
-**Library link order.** The order ``hpx_wrap → hpx_init → hpx → hpx_core``
-must be preserved. Reversing it produces undefined-reference errors because
-``hpx_wrap`` depends on symbols in ``hpx_init``, which depends on the full
-runtime in ``hpx``, which in turn depends on the core library.
+**Library link order.** Put ``-Wl,-wrap=main`` and the ``libhpx_*.a`` group
+on the link line together. ``--start-group`` / ``--end-group`` is required
+because the module archives have circular references. Linking only
+``-lhpx_wrap -lhpx_init -lhpx -lhpx_core`` is not enough.
 
 **The** ``-Wl,-wrap=main`` **flag.** Including ``hpx/hpx_main.hpp`` (see
 :ref:`minimal`) works by re-routing control through |hpx|'s own entry point
@@ -121,6 +134,78 @@ mechanism.
    ``-DHPX_APPLICATION_EXPORTS`` must be passed as a preprocessor definition
    when compiling application code against the static libraries. Omitting it
    causes link failures related to |hpx|'s symbol visibility macros.
+
+.. _using_hpx_ce_linking_msvc:
+
+Linking without CMake on Windows (MSVC)
+---------------------------------------
+
+``-Wl,-wrap=main`` is a GNU ld option and has no MSVC equivalent. On Windows,
+``hpx/hpx_main.hpp`` instead redefines ``main`` as ``hpx_startup::user_main``.
+The real ``main`` that starts the |hpx| runtime comes from the header itself in
+a static build and from ``hpx_init.lib`` otherwise, and ``hpx_wrap.lib`` makes
+the runtime run ``hpx_startup::user_main`` as its first |hpx| thread. A raw
+``cl.exe`` build therefore needs no wrap option, only ``hpx_wrap.lib`` on the
+link line. From a Developer PowerShell for Visual Studio:
+
+.. code-block:: powershell
+
+   PS> $hpx = 'C:\path\to\hpx'
+   PS> $boost = 'C:\path\to\boost'
+   PS> cl /std:c++20 /O2 /EHsc /MD /GR /bigobj /permissive- `
+         /Zc:__cplusplus /Zc:preprocessor /Zc:inline /Zc:throwingNew `
+         /Zc:rvalueCast /Zc:strictStrings `
+         /DHPX_APPLICATION_EXPORTS /I "$hpx\include" /I "$boost\include" `
+         /I "$hpx\hwloc_installed\include" `
+         my_program.cpp `
+         /link /LIBPATH:"$hpx\lib" /LIBPATH:"$hpx\hwloc_installed\lib" `
+         hpx_wrap.lib hpx_init.lib libhwloc.dll.a psapi.lib shlwapi.lib `
+         dbghelp.lib
+
+The |hpx| module libraries (``hpx_core.lib`` and ``hpx.lib``, or one ``.lib``
+per module when |hpx| is built with
+``HPX_WITH_MODULES_AS_STATIC_LIBRARIES=ON``) do not have to be listed: with
+MSVC the installed headers name them through ``#pragma comment(lib, ...)``,
+so ``/LIBPATH:`` to the install's ``lib`` directory is enough. Define
+``HPX_NO_AUTOLINK`` to turn this off and list the libraries yourself.
+``hpx_wrap.lib`` and ``hpx_init.lib`` are not auto-linked and have to be
+passed explicitly, as do hwloc and the Windows libraries ``psapi.lib``,
+``shlwapi.lib``, and ``dbghelp.lib`` (needed for the stack traces that
+``HPX_WITH_STACKTRACES`` enables by default). No ``--start-group`` equivalent
+is needed: ``link.exe`` searches every library on the command line until all
+symbols are resolved.
+
+The ``/Zc:`` options, ``/bigobj``, and ``/permissive-`` are the options the
+``HPX::hpx`` CMake target passes on to its consumers. ``hwloc_installed`` is
+where the install puts the prebuilt hwloc that ``HPX_WITH_FETCH_HWLOC=ON``
+downloads, and ``libhwloc.dll.a`` is its import library; point the ``/I`` and
+``/LIBPATH:`` options at your own hwloc otherwise. Put the hwloc DLL (also
+installed into ``$hpx\bin``) next to the executable or on ``PATH`` before
+running it.
+
+A godbolt-minimal build uses Boost as a header-only dependency, so only the
+Boost include path is needed. Configurations with
+``HPX_WITH_GENERIC_CONTEXT_COROUTINES=ON`` also link the Boost ``context``,
+``thread``, and ``chrono`` libraries; add those to the ``/link`` part together
+with a ``/LIBPATH:`` for them.
+
+To build a program that does not include ``hpx/hpx_main.hpp`` itself, add
+``/FIhpx/hpx_main.hpp`` to the compile options above. This is what
+``HPX::auto_wrap_main`` does on MSVC: ``/FI`` force-includes the header into
+every source file, which is the same as including it at the top of each one.
+When compiling more than one source file this way against a static |hpx|, also
+pass ``/DHPX_AUTO_WRAP_MAIN_FORCE_INCLUDE`` so the default ``main`` comes from
+``hpx_wrap.lib`` once instead of from the header in every source file, and add
+``/SUBSYSTEM:CONSOLE`` to the ``/link`` part. No object file defines ``main``
+then, and without ``/SUBSYSTEM`` the linker can't pick an entry point and fails
+with ``LNK1561``. CMake passes ``/SUBSYSTEM:CONSOLE`` for console executables
+on its own.
+
+Prefer ``HPX::hpx`` plus ``HPX::wrap_main`` or ``HPX::auto_wrap_main`` from
+CMake where possible, since they supply these options and the module libraries
+automatically. Compiler Explorer's execution sandbox runs Linux, so the
+Windows path matters for MSVC compile-only sessions and for local
+godbolt-minimal builds on Windows.
 
 .. _using_hpx_ce_writing_code:
 
@@ -166,8 +251,11 @@ API function directly:
 The ``hpx/experimental/sandbox.hpp`` header
 ============================================
 
-|hpx| ships a header-only toolkit at ``hpx/experimental/sandbox.hpp`` designed
-specifically for code running in constrained environments. It provides:
+|hpx| ships ``hpx/experimental/sandbox.hpp`` for code running in constrained
+environments. Timing helpers (``measure``, ``benchmark``) are header-only.
+``detect_environment()`` and the ``print()`` members are compiled into
+``libhpx_core`` and are available in local-only builds, including
+``godbolt-minimal``. It provides:
 
 * **Environment introspection** — ``hpx::experimental::sandbox::detect_environment()``
   returns an ``environment_info`` struct describing the number of physical cores,
@@ -244,11 +332,9 @@ efficiency, and a verdict (``Excellent scaling``, ``Good scaling``,
 Known limitations in sandboxed environments
 =============================================
 
-* **Single locality only.** The distributed runtime can be compiled in
-  (``HPX_WITH_DISTRIBUTED_RUNTIME=ON``) and actions on locality 0 work
-  normally, but there is no way to launch a second locality from within CE's
-  sandbox. Code that calls ``hpx::find_all_localities()`` or
-  ``hpx::get_num_localities()`` will always see exactly one locality.
+* **Single locality only.** ``godbolt-minimal`` sets
+  ``HPX_WITH_DISTRIBUTED_RUNTIME=OFF``. There is no second locality inside CE's
+  sandbox, and distributed APIs are not part of this build.
 
 * **Networking is disabled.** ``HPX_WITH_NETWORKING=OFF`` means all
   parcelport-dependent functionality (remote actions, distributed data
@@ -265,3 +351,7 @@ Known limitations in sandboxed environments
   On macOS the linker uses ``-Wl,-e,_initialize_main`` instead. CE runs Linux
   containers, so this only matters when building the CE integration locally on
   macOS for testing.
+
+* **Windows does not use** ``-Wl,-wrap=main``. ``HPX_WITH_DYNAMIC_HPX_MAIN``
+  is unavailable on Windows, so ``hpx/hpx_main.hpp`` uses the ``main``
+  macro instead. Link ``HPX::wrap_main`` without a GNU wrap flag.

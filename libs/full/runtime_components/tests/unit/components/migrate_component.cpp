@@ -14,11 +14,16 @@
 #include <hpx/include/runtime.hpp>
 #include <hpx/include/serialization.hpp>
 #include <hpx/iostream.hpp>
+#include <hpx/modules/actions_base.hpp>
+#include <hpx/modules/components_base.hpp>
+#include <hpx/modules/naming_base.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -110,6 +115,12 @@ struct test_server
         return data_;
     }
 
+    [[nodiscard]] std::uintptr_t get_lva() const
+    {
+        HPX_TEST_NEQ(pin_count(), static_cast<std::uint32_t>(0));
+        return reinterpret_cast<std::uintptr_t>(this);
+    }
+
     [[nodiscard]] hpx::future<int> lazy_get_data() const
     {
         HPX_TEST_NEQ(pin_count(), static_cast<std::uint32_t>(0));
@@ -174,6 +185,7 @@ struct test_server
         test_server, lazy_busy_work, lazy_busy_work_action)
 
     HPX_DEFINE_COMPONENT_ACTION(test_server, get_data, get_data_action)
+    HPX_DEFINE_COMPONENT_ACTION(test_server, get_lva, get_lva_action)
     HPX_DEFINE_COMPONENT_ACTION(
         test_server, lazy_get_data, lazy_get_data_action)
     HPX_DEFINE_COMPONENT_ACTION(
@@ -209,6 +221,10 @@ HPX_REGISTER_ACTION(lazy_busy_work_action)
 using get_data_action = test_server::get_data_action;
 HPX_REGISTER_ACTION_DECLARATION(get_data_action)
 HPX_REGISTER_ACTION(get_data_action)
+
+using get_lva_action = test_server::get_lva_action;
+HPX_REGISTER_ACTION_DECLARATION(get_lva_action)
+HPX_REGISTER_ACTION(get_lva_action)
 
 using lazy_get_data_action = test_server::lazy_get_data_action;
 HPX_REGISTER_ACTION_DECLARATION(lazy_get_data_action)
@@ -252,6 +268,11 @@ struct test_client : hpx::components::client_base<test_client, test_server>
         return get_data_action()(this->get_id());
     }
 
+    [[nodiscard]] std::uintptr_t get_lva() const
+    {
+        return get_lva_action()(this->get_id());
+    }
+
     [[nodiscard]] int lazy_get_data() const
     {
         return lazy_get_data_action()(this->get_id()).get();
@@ -262,6 +283,127 @@ struct test_client : hpx::components::client_base<test_client, test_server>
         return lazy_get_client_action()(this->get_id(), there);
     }
 };
+
+///////////////////////////////////////////////////////////////////////////////
+void test_last_unpin_keeps_migration_state_alive()
+{
+    auto component = std::make_unique<test_server>(42);
+    hpx::id_type const id = component->get_unmanaged_id();
+
+    // Two pins make migration wait for the last unpin.
+    HPX_TEST(component->pin());
+    HPX_TEST(component->pin());
+    hpx::future<void> migration_ready = component->mark_as_migrated(id);
+    HPX_TEST(!migration_ready.is_ready());
+    component->unpin();
+
+    bool destroyed = false;
+    hpx::future<void> completion =
+        migration_ready.then(hpx::launch::sync, [&](hpx::future<void>&& ready) {
+            ready.get();
+            component->mark_as_migrated();
+            component.reset();
+            destroyed = true;
+        });
+
+    // Completing migration can destroy the old instance before unpin returns.
+    // Its remaining cleanup must use independently retained state.
+    component->unpin();
+    completion.get();
+    HPX_TEST(destroyed);
+    HPX_TEST(!component);
+
+    // This test controls the component lifetime without sending it elsewhere.
+    hpx::agas::unmark_as_migrated(id.get_gid(), [] {});
+    hpx::agas::unbind(hpx::launch::sync, id.get_gid(), 1);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+bool test_migrate_component_rejects_stale_lva(
+    hpx::id_type const& source, hpx::id_type const& target)
+{
+    try
+    {
+        HPX_TEST_EQ(source, hpx::find_here());
+
+        test_client const component = hpx::new_<test_client>(source, 42);
+
+        // This action records the original LVA while the component is pinned.
+        std::uintptr_t const old_lva = component.get_lva();
+
+        test_client const remote(hpx::components::migrate(component, target));
+        HPX_TEST_EQ(remote.call(), target);
+
+        {
+            auto const moved_away_state =
+                hpx::traits::action_was_object_migrated<get_data_action>::call(
+                    component.get_id().get_gid(),
+                    reinterpret_cast<hpx::naming::address_type>(old_lva));
+
+            HPX_TEST(moved_away_state.first);
+            HPX_TEST(!moved_away_state.second);
+
+            bool called = false;
+            auto const legacy_state = hpx::agas::was_object_migrated(
+                component.get_id().get_gid(), [&called] {
+                    called = true;
+                    return hpx::components::pinned_ptr();
+                });
+            HPX_TEST(legacy_state.first);
+            HPX_TEST(!called);
+        }
+
+        // The configured component allocator does not guarantee reuse of the
+        // original LVA. Keep another same-type object alive and use its LVA as
+        // a deterministic stand-in for a stale LVA reused by another object.
+        test_client const occupier = hpx::new_<test_client>(source, 84);
+        std::uintptr_t const stale_lva = occupier.get_lva();
+
+        test_client const returned(hpx::components::migrate(remote, source));
+        HPX_TEST_EQ(returned.call(), source);
+        std::uintptr_t const current_lva = returned.get_lva();
+
+        HPX_TEST_NEQ(old_lva, static_cast<std::uintptr_t>(0));
+        HPX_TEST_NEQ(stale_lva, static_cast<std::uintptr_t>(0));
+        HPX_TEST_NEQ(current_lva, stale_lva);
+
+        {
+            auto const current_state =
+                hpx::traits::action_was_object_migrated<get_data_action>::call(
+                    component.get_id().get_gid(),
+                    reinterpret_cast<hpx::naming::address_type>(current_lva));
+
+            HPX_TEST(!current_state.first);
+            HPX_TEST(current_state.second);
+        }
+
+        auto const migration_state =
+            hpx::traits::action_was_object_migrated<get_data_action>::call(
+                component.get_id().get_gid(),
+                reinterpret_cast<hpx::naming::address_type>(stale_lva));
+
+        HPX_TEST(migration_state.first);
+        HPX_TEST(!migration_state.second);
+        HPX_TEST_EQ(returned.get_data(), 42);
+        HPX_TEST_EQ(occupier.get_data(), 84);
+
+        bool called = false;
+        auto const legacy_state = hpx::agas::was_object_migrated(
+            component.get_id().get_gid(), [&called] {
+                called = true;
+                return hpx::components::pinned_ptr();
+            });
+        HPX_TEST(!legacy_state.first);
+        HPX_TEST(called);
+    }
+    catch (hpx::exception const& e)
+    {
+        hpx::cout << hpx::get_error_what(e) << std::endl;
+        return false;
+    }
+
+    return true;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 bool test_migrate_component(
@@ -849,7 +991,17 @@ bool test_migrate_lazy_busy_component_client2(
 ///////////////////////////////////////////////////////////////////////////////
 int main()
 {
+    test_last_unpin_keeps_migration_state_alive();
+
     std::vector<hpx::id_type> const localities = hpx::find_all_localities();
+
+    auto const remote = std::find_if(localities.begin(), localities.end(),
+        [](hpx::id_type const& id) { return id != hpx::find_here(); });
+    if (remote != localities.end())
+    {
+        HPX_TEST(test_migrate_component_rejects_stale_lva(
+            hpx::find_here(), *remote));
+    }
 
     for (hpx::id_type const& id : localities)
     {

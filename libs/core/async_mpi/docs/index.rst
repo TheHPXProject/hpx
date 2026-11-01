@@ -105,5 +105,52 @@ Note that the |hpx| mpi futurization wrapper should work with *any* asynchronous
 - internally these two parameters will be substituted by the executor and future data
 parameters that are supplied by template instantiations inside the ``hpx::mpi`` code.
 
+Initializing and finalizing MPI
+===============================
+
+MPI futures only become ready while MPI request polling is enabled. Enable it
+for the scope in which they are used, either with an
+``hpx::mpi::experimental::enable_user_polling`` object or with
+``hpx::mpi::experimental::init`` and ``hpx::mpi::experimental::finalize``.
+
+MPI itself is finalized by whoever initialized it, and |hpx| follows this rule:
+
+* If the application calls ``MPI_Init`` (or ``MPI_Init_thread``) before
+  starting the |hpx| runtime, |hpx| uses MPI as is and never finalizes it.
+  MPI remains usable after the runtime has stopped, and the application
+  calls ``MPI_Finalize`` itself. The MPI parcelport requires
+  ``MPI_THREAD_MULTIPLE`` (or ``MPI_THREAD_SERIALIZED`` if
+  ``hpx.parcel.mpi.multithreaded=0``), and
+  ``hpx::mpi::experimental::init(true)`` requires ``MPI_THREAD_MULTIPLE``.
+* If |hpx| initializes MPI, it also finalizes it. This is the case for the
+  MPI parcelport, which initializes MPI while the runtime starts, and for
+  ``hpx::mpi::experimental::init(true)``, which initializes MPI if it is not
+  initialized yet and finalizes it in ``hpx::mpi::experimental::finalize``.
+* ``hpx::mpi::experimental::enable_user_polling`` neither initializes nor
+  finalizes MPI.
+
+.. code-block:: c++
+
+    int main(int argc, char* argv[])
+    {
+        // the application owns MPI
+        int provided = 0;
+        MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+
+        int result = hpx::init(argc, argv);
+
+        // MPI can still be used here
+        MPI_Finalize();
+        return result;
+    }
+
+.. warning::
+   If |hpx| has initialized MPI, the application must not call ``MPI_Init``
+   or ``MPI_Finalize``. Initializing MPI twice is erroneous, and finalizing
+   MPI while the runtime still uses it makes the application hang or abort.
+   Use ``MPI_Initialized`` to check whether MPI is initialized already.
+   MPI cannot be used after the runtime has stopped in this case, so
+   initialize MPI in the application if it is needed beyond that.
+
 See the :ref:`API reference <modules_mpi_api>` of this module for more
 details.

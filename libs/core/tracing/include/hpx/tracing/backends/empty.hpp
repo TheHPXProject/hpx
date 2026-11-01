@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace hpx::tracing {
 
@@ -86,6 +87,7 @@ namespace hpx::tracing {
     };
 
     ////////////////////////////////////////////////////////////////////////////
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] lock_context
     {
         constexpr explicit lock_context(
@@ -110,6 +112,7 @@ namespace hpx::tracing {
 
         constexpr void after_unlock() const noexcept {}
     };
+    /// \endcond
 
     ////////////////////////////////////////////////////////////////////////////
     namespace detail {
@@ -157,6 +160,7 @@ namespace hpx::tracing {
     {
     }
 
+    /// \cond NOINTERNAL
     HPX_CXX_CORE_EXPORT struct [[maybe_unused]] scoped_task_timer
     {
         constexpr explicit scoped_task_timer(task_timer_data) noexcept {}
@@ -173,6 +177,7 @@ namespace hpx::tracing {
             }
         }
     };
+    /// \endcond
 
     HPX_CXX_CORE_EXPORT constexpr void task_staged(
         char const*, void const* = nullptr) noexcept
@@ -255,8 +260,8 @@ namespace hpx::tracing {
 
     HPX_CXX_CORE_EXPORT constexpr void os_thread_sleep(std::size_t) noexcept {}
 
-    HPX_CXX_CORE_EXPORT constexpr void tracing_init(
-        char const*, int, char**, std::uint32_t = 0, std::uint32_t = 1) noexcept
+    HPX_CXX_CORE_EXPORT constexpr void tracing_init(char const*, int, char**,
+        std::uint32_t = 0, std::uint32_t = 1, std::string_view = {}) noexcept
     {
     }
 

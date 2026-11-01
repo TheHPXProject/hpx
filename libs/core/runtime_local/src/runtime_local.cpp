@@ -14,6 +14,7 @@
 #include <hpx/modules/coroutines.hpp>
 #include <hpx/modules/debugging.hpp>
 #include <hpx/modules/errors.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/format.hpp>
 #include <hpx/modules/functional.hpp>
@@ -45,6 +46,7 @@
 #include <hpx/version.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <csignal>
 #include <cstddef>
@@ -256,6 +258,8 @@ namespace hpx {
         void on_abort(int) noexcept
         {
             exit_called = true;
+            // Avoid re-entering this handler when abort raises SIGABRT again.
+            std::signal(SIGABRT, SIG_DFL);
             std::abort();
         }
     }    // namespace detail
@@ -634,6 +638,44 @@ namespace hpx {
 
         runtime_ = this;
         runtime_uptime() = hpx::chrono::high_resolution_clock::now();
+
+        // The defaults of task_size_chunk_size, the compiled ones unless the
+        // configuration gives others. A configured value outside of the range
+        // the chunking can handle (a minimal run time of up to one second, 1 to
+        // 1024 chunks per core) is ignored.
+        {
+            namespace ex = hpx::execution::experimental;
+            ex::detail::reset_task_size_chunk_size_defaults();
+            auto const defaults =
+                ex::detail::get_task_size_chunk_size_defaults();
+            double const default_min_chunk_time_us =
+                std::chrono::duration<double, std::micro>(
+                    defaults.min_chunk_time)
+                    .count();
+
+            double min_chunk_time_us = hpx::util::get_entry_as<double>(rtcfg_,
+                "hpx.task_size_chunk_size.min_chunk_time_us",
+                default_min_chunk_time_us);
+            // this also rejects NaN
+            if (!(min_chunk_time_us >= 0.0 && min_chunk_time_us <= 1e6))
+            {
+                min_chunk_time_us = default_min_chunk_time_us;
+            }
+
+            std::size_t chunks_per_core = hpx::util::get_entry_as<std::size_t>(
+                rtcfg_, "hpx.task_size_chunk_size.chunks_per_core",
+                defaults.chunks_per_core);
+            if (chunks_per_core == 0 || chunks_per_core > 1024)
+            {
+                chunks_per_core = defaults.chunks_per_core;
+            }
+
+            ex::detail::set_task_size_chunk_size_defaults(
+                {std::chrono::duration_cast<std::chrono::nanoseconds>(
+                     std::chrono::duration<double, std::micro>(
+                         min_chunk_time_us)),
+                    chunks_per_core});
+        }
 
 #if defined(HPX_HAVE_TRACY)
         // Apply the runtime override for the 1-in-N task-sampling rate.
@@ -1030,13 +1072,15 @@ namespace hpx {
 
     bool is_scheduler_numa_sensitive()
     {
-        if (get_runtime_ptr() != nullptr)
+        runtime const* rt = get_runtime_ptr();
+        if (rt == nullptr || rt->get_state() < hpx::state::initialized)
         {
             HPX_THROW_EXCEPTION(hpx::error::invalid_status,
                 "hpx::is_scheduler_numa_sensitive",
                 "the runtime system has not been initialized yet");
         }
-        return static_cast<std::size_t>(-1) != get_worker_thread_num();
+        return hpx::util::get_entry_as<std::size_t>(
+                   rt->get_config(), "hpx.numa_sensitive", 1) != 0;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1510,8 +1554,10 @@ namespace hpx {
         _isatty(0);
 #endif
 
-        // initialize instrumentation system
-        hpx::tracing::tracing_init(nullptr, 0, nullptr);
+        // initialize instrumentation system; pass build metadata so a
+        // capture can be correlated with the HPX build that produced it
+        auto const version_info = hpx::complete_version();
+        hpx::tracing::tracing_init(nullptr, 0, nullptr, 0, 1, version_info);
 
         LRT_(info).format("cmd_line: {}", get_config().get_cmd_line());
 

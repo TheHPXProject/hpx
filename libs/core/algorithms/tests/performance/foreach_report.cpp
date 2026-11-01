@@ -41,7 +41,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     disable_stealing = vm.count("disable_stealing");
     fast_idle_mode = vm.count("fast_idle_mode");
 
-    hpx::util::perftests_init(vm);
+    hpx::util::perftests_init(vm, "foreach_report");
 
     // verify that input is within domain of program
     if (test_count == 0 || test_count < 0)
@@ -105,6 +105,46 @@ int hpx_main(hpx::program_options::variables_map& vm)
                 [&]() { measure_parallel_foreach(data_representation, exec); });
         }
 
+        {
+            hpx::execution::experimental::fork_join_executor exec(
+                hpx::threads::thread_priority::bound,
+                hpx::threads::thread_stacksize::nostack);
+            hpx::util::perftests_report("for_each",
+                "fork_join_executor_nostack", test_count,
+                [&]() { measure_parallel_foreach(data_representation, exec); });
+        }
+
+        // the same loops chunked by task_size_chunk_size, based on the task
+        // size of the loop body
+        {
+            hpx::execution::experimental::scheduler_executor<
+                hpx::execution::experimental::thread_pool_scheduler>
+                exec;
+            hpx::util::perftests_report(
+                "for_each", "scheduler_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::parallel_executor exec;
+            hpx::util::perftests_report(
+                "for_each", "parallel_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
+        {
+            hpx::execution::experimental::fork_join_executor exec;
+            hpx::util::perftests_report(
+                "for_each", "fork_join_executor_task_size", test_count, [&]() {
+                    measure_parallel_foreach_task_size(
+                        data_representation, exec);
+                });
+        }
+
         hpx::util::perftests_print_times();
     }
 
@@ -125,7 +165,7 @@ int main(int argc, char* argv[])
         ("work_delay", value<int>()->default_value(1),
             "loop delay per element in nanoseconds")
         ("test_count", value<int>()->default_value(100),
-            "number of tests to be averaged")
+            "number of tests to be averaged (default: 100)")
         ("chunk_size", value<int>()->default_value(0),
             "number of iterations to combine while parallelization")
         ("disable_stealing", "disable thread stealing")

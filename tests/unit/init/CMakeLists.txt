@@ -7,13 +7,15 @@
 
 set(tests manage_runtime)
 
-if((NOT MSVC) AND HPX_WITH_DISTRIBUTED_RUNTIME)
+if(HPX_WITH_DISTRIBUTED_RUNTIME)
   set(tests ${tests} auto_wrap_main)
+  # a second source file makes sure main() isn't defined more than once
+  set(auto_wrap_main_SOURCES auto_wrap_main_helper.cpp)
   set(auto_wrap_main_FLAGS NOLIBS DEPENDENCIES HPX::hpx HPX::auto_wrap_main)
 endif()
 
 foreach(test ${tests})
-  set(sources ${test}.cpp)
+  set(sources ${test}.cpp ${${test}_SOURCES})
 
   source_group("Source Files" FILES ${sources})
 

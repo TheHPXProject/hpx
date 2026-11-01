@@ -1,5 +1,5 @@
 //----------------------------------------------------------------------------
-/// \file test_partial_sort_copy.cpp
+/// \file partial_sort_copy.cpp
 /// \brief Test program of the partial_sort_copy function
 ///
 //  Copyright (c) 2020 Francisco Jose Tapia (fjtapia@gmail.com )

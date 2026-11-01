@@ -21,7 +21,7 @@ void test_policy(Launch policy)
     HPX_TEST(policy.priority() == hpx::threads::thread_priority::default_);
     HPX_TEST(policy.stacksize() == hpx::threads::thread_stacksize::default_);
     HPX_TEST(
-        policy.hint().mode == hpx::threads::thread_schedule_hint_mode::none);
+        policy.hint().mode() == hpx::threads::thread_schedule_hint_mode::none);
     HPX_TEST_EQ(policy.hint().hint, std::int16_t(-1));
 
     policy.set_priority(hpx::threads::thread_priority::normal);
@@ -42,13 +42,19 @@ void test_policy(Launch policy)
 
     hpx::threads::thread_schedule_hint hint(0);
     policy.set_hint(hint);
-    HPX_TEST(policy.hint().mode == hint.mode);
+    HPX_TEST(policy.hint().mode() == hint.mode());
     HPX_TEST_EQ(policy.hint().hint, hint.hint);
 
     hpx::threads::thread_schedule_hint hint1(1);
     auto p2 = hpx::execution::experimental::with_hint(policy, hint1);
-    HPX_TEST(hpx::execution::experimental::get_hint(p2).mode == hint1.mode);
+    HPX_TEST(hpx::execution::experimental::get_hint(p2).mode() == hint1.mode());
     HPX_TEST(hpx::execution::experimental::get_hint(p2).hint == hint1.hint);
+
+    HPX_TEST(policy.hint().task_size() == hpx::threads::task_size::unknown);
+    auto p3 = hpx::execution::experimental::with_hint(policy,
+        hpx::threads::thread_schedule_hint(hpx::threads::task_size::large));
+    HPX_TEST(hpx::execution::experimental::get_hint(p3).task_size() ==
+        hpx::threads::task_size::large);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -107,9 +113,10 @@ void test_serialization(Policy const& p)
     HPX_TEST_EQ(static_cast<int>(p1.policy()), static_cast<int>(p.policy()));
     HPX_TEST(p1.priority() == p.priority());
     HPX_TEST(p1.stacksize() == p.stacksize());
-    HPX_TEST(p1.hint().mode == p.hint().mode);
+    HPX_TEST(p1.hint().mode() == p.hint().mode());
     HPX_TEST_EQ(p1.hint().hint, p.hint().hint);
     HPX_TEST(p1.hint().runs_as_child_mode() == p.hint().runs_as_child_mode());
+    HPX_TEST(p1.hint().task_size() == p.hint().task_size());
 }
 
 int main()
@@ -121,6 +128,7 @@ int main()
     static_assert(sizeof(hpx::launch::fork_policy) <= sizeof(std::int64_t));
     static_assert(sizeof(hpx::launch::apply_policy) <= sizeof(std::int64_t));
     static_assert(sizeof(hpx::launch) <= sizeof(std::int64_t));
+    static_assert(sizeof(hpx::threads::thread_schedule_hint) == 4);
 
     test_policy(hpx::launch::async);
     test_policy(hpx::launch::task);
@@ -159,6 +167,14 @@ int main()
         t.set_stacksize(hpx::threads::thread_stacksize::medium);
         t.set_hint(hpx::threads::thread_schedule_hint(3));
         test_serialization(t);
+
+        a.set_hint(hpx::threads::thread_schedule_hint(
+            hpx::threads::thread_schedule_hint_mode::numa, 2,
+            hpx::threads::thread_placement_hint::depth_first,
+            hpx::threads::thread_execution_hint::run_as_child,
+            hpx::threads::thread_sharing_hint::do_not_combine_tasks,
+            hpx::threads::task_size::medium));
+        test_serialization(a);
     }
 
     return 0;

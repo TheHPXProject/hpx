@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Thomas Heller
-//  Copyright (c) 2013-2022 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2019 Agustin Berge
 //  Copyright (c) 2017 Google
 //
@@ -153,5 +153,13 @@ namespace hpx::util::detail {
         static auto sh = hpx::tracing::create_annotation_handle("function");
         return sh;
 #endif
+    }
+
+    threads::task_size function_base::get_task_size() const noexcept
+    {
+        // an empty function has no size
+        if (empty())
+            return threads::task_size::unknown;
+        return vptr->get_task_size(object);
     }
 }    // namespace hpx::util::detail

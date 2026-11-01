@@ -43,6 +43,12 @@ else()
   include(HPX_SetupStdexec)
 endif()
 
+# Shared builds keep Tracy inside hpx_core, so only static builds need
+# the Tracy targets to link.
+if(HPX_WITH_TRACY AND HPX_WITH_STATIC_LINKING)
+  include("${CMAKE_CURRENT_LIST_DIR}/HPXTracyTarget.cmake")
+endif()
+
 # NLohnmann JSON can be installed by HPX or externally installed. In the first
 # case we use exported targets, in the second we find JSON again using
 # find_package.

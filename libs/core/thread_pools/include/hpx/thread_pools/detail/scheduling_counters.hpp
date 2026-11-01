@@ -16,7 +16,7 @@ namespace hpx::threads::detail {
     ///////////////////////////////////////////////////////////////////////////
 #if defined(HPX_HAVE_BACKGROUND_THREAD_COUNTERS) &&                            \
     defined(HPX_HAVE_THREAD_IDLE_RATES)
-    struct scheduling_counters
+    HPX_CXX_CORE_EXPORT struct scheduling_counters
     {
         scheduling_counters(std::int64_t& executed_threads,
             std::int64_t& executed_thread_phases, std::int64_t& tfunc_time,
@@ -50,7 +50,7 @@ namespace hpx::threads::detail {
         bool& is_active_;
     };
 #else
-    struct scheduling_counters
+    HPX_CXX_CORE_EXPORT struct scheduling_counters
     {
         scheduling_counters(std::int64_t& executed_threads,
             std::int64_t& executed_thread_phases, std::int64_t& tfunc_time,

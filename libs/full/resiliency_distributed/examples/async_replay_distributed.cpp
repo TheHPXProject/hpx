@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -29,7 +30,7 @@
 int universal_ans(std::vector<hpx::id_type> f_locales, std::size_t size)
 {
     // Pretending to do some useful work
-    std::size_t start = hpx::chrono::high_resolution_clock::now();
+    std::uint64_t start = hpx::chrono::high_resolution_clock::now();
 
     while ((hpx::chrono::high_resolution_clock::now() - start) < (size * 100))
     {

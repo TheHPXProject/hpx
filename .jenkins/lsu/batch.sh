@@ -39,6 +39,7 @@ ctest \
     ${ctest_extra_args} \
     --output-on-failure \
     -S ${src_dir}/.jenkins/lsu/ctest.cmake \
+    -DCTEST_CONFIGURATION_TYPE="${build_type}" \
     -DCTEST_CONFIGURE_EXTRA_OPTIONS="${configure_extra_options}" \
     -DCTEST_BUILD_CONFIGURATION_NAME="${configuration_name_with_build_type}" \
     -DCTEST_SOURCE_DIRECTORY="${src_dir}" \
@@ -66,8 +67,15 @@ if [[ -f ${build_dir}/Testing/TAG ]]; then
     fi
 
     if [[ -f "${build_dir}/Testing/${tag}/Test.xml" ]]; then
-        test_errors=$(grep -E '<Test Status="(failed|notrun)"' \
+        # CTest records a test that skipped itself through SKIP_RETURN_CODE
+        # or SKIP_REGULAR_EXPRESSION as not run, the same as a test whose
+        # executable is missing. Only the latter is an error.
+        test_errors=$(grep -o -E '<Test Status="(failed|notrun)"' \
             "${build_dir}/Testing/${tag}/Test.xml" | wc -l)
+        skip_marker='SKIP_RETURN_CODE=[0-9]+|SKIP_REGULAR_EXPRESSION_MATCHED'
+        skipped_tests=$(grep -o -E "<Value>(${skip_marker})</Value>" \
+            "${build_dir}/Testing/${tag}/Test.xml" | wc -l)
+        test_errors=$((test_errors - skipped_tests))
     fi
 fi
 if [[ ${ctest_exit_code} -ne 0 ]]; then

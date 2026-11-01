@@ -26,6 +26,7 @@ namespace hpx::util::cache::entries {
     class entry
     {
     public:
+        /// The type of value stored in this cache entry.
         using value_type = Value;
 
         // NOLINTBEGIN(bugprone-crtp-constructor-accessibility)
@@ -116,6 +117,9 @@ namespace hpx::util::cache::entries {
             return value_;
         }
 
+        /// \brief Returns a const reference to the stored value.
+        ///
+        /// \note This function is part of the CacheEntry concept.
         [[nodiscard]] constexpr value_type const& get() const noexcept
         {
             return value_;

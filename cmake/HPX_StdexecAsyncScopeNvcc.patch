@@ -1,0 +1,45 @@
+Work around nvcc rejecting exec::async_scope::on_empty().
+
+on_empty() is a non-template constexpr member with a deduced return type
+whose body calls just(). nvcc 12.9 hands it to the gcc 12 host compiler in a
+form where just() is a void expression, so every translation unit compiled by
+nvcc that includes exec/async_scope.hpp fails, whether or not on_empty() is
+used. Under nvcc, make on_empty() a member template so its body is only
+instantiated when it is called; callers keep writing scope.on_empty().
+Other compilers are unchanged.
+
+Keep this separate from the other nvcc patches so an existing FetchContent
+checkout with those workarounds already applied can acquire this fix too.
+
+See TheHPXProject/hpx#7676 and NVIDIA/stdexec#2304.
+
+Copyright (c) 2026 Rohan Pattanayak
+
+SPDX-License-Identifier: BSL-1.0
+Distributed under the Boost Software License, Version 1.0. (See accompanying
+file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+diff --git a/include/exec/async_scope.hpp b/include/exec/async_scope.hpp
+--- a/include/exec/async_scope.hpp
++++ b/include/exec/async_scope.hpp
+@@ -819,11 +819,20 @@ namespace experimental::execution
+                                                             static_cast<_Constrained&&>(__c)};
+       }
+ 
++#if STDEXEC_NVCC()
++      template <class _Just = just_t>
++      [[nodiscard]]
++      constexpr auto on_empty() const
++      {
++        return when_empty(_Just{}());
++      }
++#else
+       [[nodiscard]]
+       constexpr auto on_empty() const
+       {
+         return when_empty(just());
+       }
++#endif
+ 
+       template <sender _Constrained>
+       [[nodiscard]]

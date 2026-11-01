@@ -316,6 +316,96 @@ for all the future or shared_future arguments to be ready before executing the c
 ``hpx::split_future()`` function is used to split a future of a tuple into a tuple of futures. The last
 line retrieves the value of the second future in the tuple using ``hpx::get()`` and prints it to the console.
 
+Common pitfalls with futures
+............................
+
+A few behaviors of :hpx:class:`hpx::future`, :hpx:func:`hpx::async`, and the
+future combinators can be surprising when first using |hpx|:
+
+* The callable passed to the ``then()`` member function is invoked with the
+  predecessor future, not with the unwrapped value. In the common form it
+  takes the future (by value or as an rvalue reference) and can call
+  ``get()`` on it::
+
+      hpx::future<int> f = hpx::async([] { return 41; });
+      hpx::future<int> g = f.then([](hpx::future<int>&& fu) {
+          return fu.get() + 1;  // g.get() == 42
+      });
+
+  A continuation that takes the unwrapped value directly does not compile;
+  the |hpx| diagnostics mention ``continuation_not_callable`` in that case.
+  ``then()`` returns a new future of the callable's return type, so
+  continuations can be chained. If you prefer a continuation that is invoked
+  after its dependencies are ready and receives their values,
+  ``hpx::dataflow()`` can be more convenient.
+
+* ``hpx::when_all(f1, f2)`` combines several futures into a single future
+  holding a tuple of futures, here
+  ``hpx::future<hpx::tuple<hpx::future<int>, hpx::future<double>>>``.
+  Like any other future, that outer future is what a continuation attached
+  with ``then()`` receives. The tuple it yields still contains futures, so
+  the inner values have to be unwrapped as well::
+
+      hpx::future<int> f1 = hpx::async([] { return 41; });
+      hpx::future<double> f2 = hpx::async([] { return 1.5; });
+
+      hpx::future<hpx::tuple<hpx::future<int>, hpx::future<double>>> all =
+          hpx::when_all(f1, f2);
+
+      hpx::future<double> sum = all.then([](auto&& fut) {
+          auto tup = fut.get();               // the tuple of futures
+          int i = hpx::get<0>(tup).get();     // unwrap the inner futures
+          double d = hpx::get<1>(tup).get();
+          return i + d;                       // sum.get() == 42.5
+      });
+
+  ``hpx::split_future()`` takes care of the unpacking step: give it the
+  outer future and it returns the tuple of inner futures, ready to be
+  waited on individually.
+
+* Arguments passed normally to :hpx:func:`hpx::async` have value semantics.
+  A callable that requires a non-const reference to an argument cannot be
+  used with that argument passed normally::
+
+      int x = 5;
+      // Does not compile:
+      auto f = hpx::async([](int& v) {
+          ++v;
+          return v;
+      }, x);
+
+  If the callable only needs a value, pass the argument normally. The
+  asynchronous operation works with its own copy, so changes to it do not
+  affect the original object::
+
+      int y = 5;
+      auto f = hpx::async([](int v) {
+          ++v;
+          return v;
+      }, y);
+      // f.get() == 6, y == 5
+
+  If the callable needs to access the original object through a non-const
+  reference, explicitly pass a reference using ``std::ref()``::
+
+      int x = 5;
+      auto f = hpx::async([](int& v) {
+          ++v;
+          return v;
+      }, std::ref(x));
+      // f.get() == 6, x == 6
+
+  In this case, the asynchronous operation accesses ``x`` directly rather
+  than a copy. The caller must ensure that ``x`` remains alive for the
+  duration of the asynchronous operation and must synchronize concurrent
+  accesses to it. For example, wait for the returned future before accessing
+  ``x`` again, or protect accesses with a synchronization primitive such as
+  :hpx:class:`hpx::mutex`.
+
+  ``const`` references can be used when the callable only needs read access
+  to the argument. When possible, prefer returning the result instead of
+  modifying an argument.
+
 .. _extend_futures:
 
 Extended facilities for futures
@@ -451,14 +541,8 @@ launch policy ``hpx::launch::sync`` can be used to make
 :hpx:member:`hpx::lcos::local::channel::get` block until a value is set and
 return the value directly.
 
-A channel component is created on one :term:`locality` and can be sent to
-another :term:`locality` using an action. This example also demonstrates how a
-channel can be used as a range of values:
-
-.. literalinclude:: ../../examples/quickstart/channel_docs.cpp
-   :language: c++
-   :start-after: //[channel
-   :end-before: //]
+Channels can also be used across localities as channel components. See
+:ref:`distributed_channels` for how to create and register them.
 
 
 .. _task_block:
@@ -1260,3 +1344,11 @@ parameter types will naturally specialize all operations for maximum efficiency.
   parameter defines the minimum block size. The default minimal chunk size is 1.
   This executor parameter type is equivalent to OpenMP's GUIDED scheduling
   directive.
+* :hpx:class:`hpx::execution::experimental::task_size_chunk_size`: The run
+  time of one loop iteration is taken from the task size of the loop body
+  (see :ref:`task_sizes`), nothing is measured. The loop runs on as many
+  cores as can be given a number of chunks (8 by default) of at least a
+  minimal run time each (2.5 microseconds by default), at least on one; a
+  loop that ends up as a single chunk on a single core runs on the calling
+  thread. A loop body without a size is chunked as with the default executor
+  parameters.

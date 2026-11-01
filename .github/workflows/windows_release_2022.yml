@@ -4,7 +4,7 @@
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-name: Windows CI (Release, VS2022 toolset)
+name: Windows CI (Release, VS2022 toolset, mimalloc)
 
 on: [pull_request]
 
@@ -18,20 +18,28 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - uses: lukka/get-cmake@v4.4.2
+    - uses: lukka/get-cmake@v4.4.4
 
     - name: Install dependencies
+      uses: ./.github/actions/setup-vcpkg
+    # this job builds HPX with mimalloc, which .github/vcpkg/vcpkg.json does
+    # not list, use the runner's vcpkg for it
+    - name: Install mimalloc
       run: |
-        md C:\projects
-        $client = new-object System.Net.WebClient
-        $client.DownloadFile("https://rostam.cct.lsu.edu/download/builder/vcpkg-export-hpx-dependencies-2026.7z","C:\projects\vcpkg-export-hpx-dependencies.7z")
-        7z x C:\projects\vcpkg-export-hpx-dependencies.7z -y -oC:\projects\vcpkg
+        & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install mimalloc:x64-windows
+        # make mimalloc.dll (and mimalloc-redirect.dll) visible to all later
+        # steps
+        "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" |
+          Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     - name: Configure
       shell: bash
       run: |
+          mimalloc_root=$(cygpath -m "$VCPKG_INSTALLATION_ROOT/installed/x64-windows")
           cmake . -Bbuild -G'Visual Studio 17 2022' \
               -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_TOOLCHAIN_FILE='C:/projects/vcpkg/scripts/buildsystems/vcpkg.cmake' \
+              -DHPX_WITH_MALLOC=mimalloc \
+              -Dmimalloc_DIR="${mimalloc_root}/share/mimalloc" \
               -DHPX_WITH_FETCH_ASIO=ON \
               -DHPX_WITH_EXAMPLES=ON \
               -DHPX_WITH_TESTS=ON \
@@ -41,6 +49,7 @@ jobs:
               -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+              -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON \
               -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
     - name: Build
       shell: bash
@@ -48,6 +57,22 @@ jobs:
           cmake --build build --config Release \
           --target ALL_BUILD \
           -- -maxcpucount:2 -verbosity:minimal -nologo
+          cmake --build build --config Release \
+          --target chunk_size_iterator_test chunk_size_idx_iterator_test \
+          -- -maxcpucount:2 -verbosity:minimal -nologo
+    # HPX_WITH_MALLOC used to be silently ignored on MSVC (the allocator was
+    # not linked), make sure the HPX core library really uses mimalloc
+    - name: Check that HPX uses mimalloc
+      run: |
+        $vs = "${env:ProgramFiles}\Microsoft Visual Studio\2022\*"
+        $dumpbin = Get-ChildItem `
+          "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" |
+          Select-Object -First 1
+        $deps = & $dumpbin.FullName /dependents build\Release\bin\hpx_core.dll
+        if (-not ($deps -match '^\s*mimalloc\.dll\s*$')) {
+          $deps
+          throw "hpx_core.dll does not import mimalloc"
+        }
     - name: Install
       shell: bash
       run: |
@@ -60,5 +85,5 @@ jobs:
           ctest `
           --output-on-failure `
             --build-config Release `
-            --tests-regex tests.examples `
+            --tests-regex 'tests\.examples|tests\.unit\.modules\.algorithms\.detail\.chunk_size_(idx_)?iterator' `
             --exclude-regex $exclude_regex
