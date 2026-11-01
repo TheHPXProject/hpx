@@ -15,6 +15,7 @@
 #include <hpx/modules/logging.hpp>
 #include <hpx/modules/synchronization.hpp>
 #include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/topology.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -349,7 +350,13 @@ namespace hpx::threads::policies {
           , affinity_data_(init.affinity_data_)
           , num_queues_(init.num_queues_)
           , num_high_priority_queues_(init.num_high_priority_queues_)
+          , thread_numa_domain_(init.num_queues_)
         {
+            for (auto& domain : thread_numa_domain_)
+            {
+                domain.store(unknown_numa_domain, std::memory_order_relaxed);
+            }
+
             HPX_ASSERT(init.num_queues_ != 0);
             HPX_ASSERT(num_high_priority_queues_ != 0);
             HPX_ASSERT(num_high_priority_queues_ <= num_queues_);
@@ -700,10 +707,21 @@ namespace hpx::threads::policies {
         void create_thread(thread_init_data& data, thread_id_ref_type* id,
             error_code& ec) override
         {
-            std::size_t num_thread =
-                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
-                data.schedulehint.hint :
-                static_cast<std::size_t>(-1);
+            auto num_thread = static_cast<std::size_t>(-1);
+            if (data.schedulehint.mode() == thread_schedule_hint_mode::thread)
+            {
+                num_thread = data.schedulehint.hint;
+            }
+            else if (data.schedulehint.mode() ==
+                thread_schedule_hint_mode::numa)
+            {
+                // Route to a worker thread on the requested NUMA domain. This
+                // yields -1 (i.e. round-robin below) if the domain has no
+                // (known) workers.
+                HPX_ASSERT(data.schedulehint.hint >= 0);
+                num_thread = select_worker_in_numa_domain(
+                    static_cast<std::size_t>(data.schedulehint.hint));
+            }
 
             if (static_cast<std::size_t>(-1) == num_thread)
             {
@@ -1100,6 +1118,18 @@ namespace hpx::threads::policies {
             {
                 num_thread = schedulehint.hint;
             }
+            else if (schedulehint.mode() == thread_schedule_hint_mode::numa)
+            {
+                // Route to a worker thread on the requested NUMA domain, fall
+                // back to round-robin if the domain has no (known) workers.
+                HPX_ASSERT(schedulehint.hint >= 0);
+                num_thread = select_worker_in_numa_domain(
+                    static_cast<std::size_t>(schedulehint.hint));
+                if (static_cast<std::size_t>(-1) == num_thread)
+                {
+                    allow_fallback = false;
+                }
+            }
             else
             {
                 allow_fallback = false;
@@ -1169,6 +1199,18 @@ namespace hpx::threads::policies {
             if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
                 num_thread = schedulehint.hint;
+            }
+            else if (schedulehint.mode() == thread_schedule_hint_mode::numa)
+            {
+                // Route to a worker thread on the requested NUMA domain, fall
+                // back to round-robin if the domain has no (known) workers.
+                HPX_ASSERT(schedulehint.hint >= 0);
+                num_thread = select_worker_in_numa_domain(
+                    static_cast<std::size_t>(schedulehint.hint));
+                if (static_cast<std::size_t>(-1) == num_thread)
+                {
+                    allow_fallback = false;
+                }
             }
             else
             {
@@ -1999,6 +2041,21 @@ namespace hpx::threads::policies {
             resize(d.victims_, num_queues_);
             reset(d.victims_);
             set(d.victims_, num_thread);
+
+            // Record the NUMA domain this worker runs on, so that NUMA
+            // scheduling hints can be routed to it (see
+            // select_worker_in_numa_domain).
+            std::size_t const global_thread_num =
+                this->local_to_global_thread_index(num_thread);
+            if (global_thread_num < affinity_data_.get_num_threads())
+            {
+                auto const& topo = create_topology();
+                std::size_t const num_pu =
+                    affinity_data_.get_pu_num(global_thread_num);
+                thread_numa_domain_[num_thread].store(
+                    topo.get_numa_node_number(num_pu),
+                    std::memory_order_release);
+            }
         }
 
         void on_stop_thread(std::size_t num_thread) override
@@ -2060,6 +2117,38 @@ namespace hpx::threads::policies {
         }
 
     protected:
+        // Marks a worker whose NUMA domain has not been recorded (yet).
+        static constexpr std::size_t unknown_numa_domain =
+            static_cast<std::size_t>(-1);
+
+        // Select a worker thread running on the given NUMA domain (indices
+        // larger than the number of NUMA domains wrap around). Successive
+        // calls are spread over the workers of that domain in a round-robin
+        // fashion. Returns -1 if no worker of the domain is known, in which
+        // case the caller falls back to the default (round-robin) placement.
+        std::size_t select_worker_in_numa_domain(std::size_t domain)
+        {
+            std::size_t num_nodes =
+                create_topology().get_number_of_numa_nodes();
+            if (num_nodes == 0)
+            {
+                num_nodes = 1;
+            }
+            std::size_t const requested_domain = domain % num_nodes;
+
+            std::size_t const start = curr_queue_++ % num_queues_;
+            for (std::size_t i = 0; i != num_queues_; ++i)
+            {
+                std::size_t const idx = (start + i) % num_queues_;
+                if (thread_numa_domain_[idx].load(std::memory_order_acquire) ==
+                    requested_domain)
+                {
+                    return idx;
+                }
+            }
+            return static_cast<std::size_t>(-1);
+        }
+
         std::vector<util::aligned_line_data<scheduler_data>> data_;
         thread_queue_type low_priority_queue_;
 
@@ -2071,7 +2160,15 @@ namespace hpx::threads::policies {
         detail::affinity_data const& affinity_data_;
         std::size_t const num_queues_;
         std::size_t const num_high_priority_queues_;
+
+        // NUMA domain of each worker thread (indexed by local thread number),
+        // unknown_numa_domain until the worker has been started. Written once
+        // by each worker in on_start_thread(), read by the spawning threads
+        // when routing NUMA scheduling hints.
+        std::vector<std::atomic<std::size_t>> thread_numa_domain_;
     };
 }    // namespace hpx::threads::policies
 
 #include <hpx/config/warnings_suffix.hpp>
+
+
