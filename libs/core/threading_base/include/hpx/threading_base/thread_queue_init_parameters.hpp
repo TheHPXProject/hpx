@@ -49,8 +49,10 @@ namespace hpx::threads::policies {
                 static_cast<std::int64_t>(
                     HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY),
             std::int64_t idle_loop_count_steal_staged =
+                static_cast<std::int64_t>(HPX_IDLE_LOOP_COUNT_STEAL_STAGED),
+            std::int64_t min_tasks_to_steal_pending_early =
                 static_cast<std::int64_t>(
-                    HPX_IDLE_LOOP_COUNT_STEAL_STAGED)) noexcept
+                    HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) noexcept
           : max_thread_count_(max_thread_count)
           , min_tasks_to_steal_pending_(min_tasks_to_steal_pending)
           , min_tasks_to_steal_staged_(min_tasks_to_steal_staged)
@@ -73,6 +75,7 @@ namespace hpx::threads::policies {
           , nostack_stacksize_((std::numeric_limits<std::ptrdiff_t>::max)())
           , min_tasks_to_steal_staged_early_(min_tasks_to_steal_staged_early)
           , idle_loop_count_steal_staged_(idle_loop_count_steal_staged)
+          , min_tasks_to_steal_pending_early_(min_tasks_to_steal_pending_early)
         {
         }
 
@@ -96,10 +99,18 @@ namespace hpx::threads::policies {
         // used by the local priority queue scheduler: staged tasks are stolen
         // after idle_loop_count_steal_staged_ empty scheduling loop iterations
         // already, but only from queues holding at least
-        // min_tasks_to_steal_staged_early_ of them until max_idle_loop_count / 2
-        // iterations (see HPX_IDLE_LOOP_COUNT_STEAL_STAGED and
+        // min_tasks_to_steal_staged_early_ of them, unless the thieves found
+        // a victim's queue short but not empty often enough in a row (see
+        // HPX_IDLE_LOOP_COUNT_STEAL_STAGED and
         // HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)
         std::int64_t min_tasks_to_steal_staged_early_;
         std::int64_t idle_loop_count_steal_staged_;
+
+        // used by the local priority queue scheduler: a worker steals pending
+        // tasks only from queues holding at least
+        // min_tasks_to_steal_pending_early_ of them, unless it found a
+        // victim's queue short but not empty often enough in a row (see
+        // HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)
+        std::int64_t min_tasks_to_steal_pending_early_;
     };
 }    // namespace hpx::threads::policies

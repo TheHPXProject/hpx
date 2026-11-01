@@ -22,10 +22,13 @@ namespace hpx::agas {
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     timeout.value());
 
-            agas_rpc_timeout_ms.store(
-                static_cast<std::uint64_t>(timeout_ms.count()),
-                std::memory_order_relaxed);
-            return true;
+            if (timeout_ms.count() != 0)
+            {
+                agas_rpc_timeout_ms.store(
+                    static_cast<std::uint64_t>(timeout_ms.count()),
+                    std::memory_order_relaxed);
+                return true;
+            }
         }
         return false;
     }

@@ -65,6 +65,11 @@ struct hpx::traits::get_task_size<
     hpx::lcos::detail::dataflow_finalization<Frame>, Size>
   : get_task_size<std::decay_t<typename Frame::function_type>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::lcos::detail::dataflow_finalization<Frame> const& f) noexcept
+    {
+        return f.template get_task_size<Size>();
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -82,6 +87,15 @@ namespace hpx::lcos::detail {
         void operator()(Futures&& futures) const
         {
             return this_->execute(HPX_FORWARD(Futures, futures));
+        }
+
+        template <threads::task_size Size = threads::task_size::unknown>
+        [[nodiscard]] constexpr threads::task_size get_task_size()
+            const noexcept
+        {
+            using function_type = std::decay_t<typename Frame::function_type>;
+            return traits::get_task_size<function_type, Size>::call(
+                this_->func_);
         }
 
         // keep the dataflow frame alive with this pointer reference

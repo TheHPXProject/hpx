@@ -7,9 +7,9 @@
 
 .. _examples_termination_detection:
 
-====================
+=====================
 Termination detection
-====================
+=====================
 
 This example demonstrates how to use |hpx|'s termination detection API to
 ensure all asynchronous work has completed before shutting down the runtime.
@@ -67,8 +67,8 @@ The simplest form waits indefinitely for all local threads to complete:
 
 .. literalinclude:: ../../examples/quickstart/termination_detection.cpp
    :language: c++
-   :start-after: // Example 1: Basic usage
-   :end-before: // Example 2: Timeout
+   :start-after: // Example 1: Basic usage - Wait for all local threads to complete
+   :end-before: // Example 2: Wait with timeout
 
 This is useful when you want to ensure all work is done before shutting down,
 and you don't have time constraints.
@@ -80,8 +80,8 @@ You can specify a maximum duration to wait:
 
 .. literalinclude:: ../../examples/quickstart/termination_detection.cpp
    :language: c++
-   :start-after: // Example 2: Timeout
-   :end-before: // Example 3: Deadline
+   :start-after: // Example 2: Wait with timeout
+   :end-before: // Example 3: Wait with deadline
 
 The function returns ``true`` if all threads completed within the timeout, or
 ``false`` if the timeout elapsed. This is useful when you want to give tasks a
@@ -94,8 +94,8 @@ Similar to timeout, but you specify an absolute time point:
 
 .. literalinclude:: ../../examples/quickstart/termination_detection.cpp
    :language: c++
-   :start-after: // Example 3: Deadline
-   :end-before: // Example 4: Cancellation
+   :start-after: // Example 3: Wait with deadline
+   :end-before: // Example 4: Wait with cancellation support
 
 This is useful when you have a specific deadline by which all work must be
 completed.
@@ -107,7 +107,7 @@ The most flexible form supports cancellation tokens:
 
 .. literalinclude:: ../../examples/quickstart/termination_detection.cpp
    :language: c++
-   :start-after: // Example 4: Cancellation
+   :start-after: // Example 4: Wait with cancellation support
    :end-before: //]
 
 This allows external control over the wait operation. You can request

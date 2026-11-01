@@ -365,9 +365,38 @@ namespace hpx::agas {
             endpoints = locality_ns_->resolve_locality(gid);
             if (endpoints.empty())
             {
-                HPX_THROWS_IF(ec, hpx::error::bad_parameter,
-                    "addressing_service::resolve_locality",
-                    "couldn't resolve the given target locality ({})", gid);
+                // A locality removed from AGAS is already recorded as
+                // disconnected on every locality, report that instead of a
+                // generic error. The console records it only after it has
+                // unregistered it, but a locality that force_disconnect()
+                // removes is marked as disconnecting before that and stays
+                // in the resolved localities until it is recorded.
+                bool was_disconnected = false;
+                {
+                    std::shared_lock<hpx::shared_mutex> sl(
+                        resolved_localities_mtx_);
+                    auto const dit = resolved_localities_.find(gid);
+                    was_disconnected = dit != resolved_localities_.end() &&
+                        dit->second.state ==
+                            resolved_locality_state::disconnecting;
+                }
+#if defined(HPX_HAVE_NETWORKING)
+                was_disconnected = was_disconnected ||
+                    parcelset::locality_was_disconnected(
+                        naming::get_locality_id_from_gid(gid));
+#endif
+                if (was_disconnected)
+                {
+                    HPX_THROWS_IF(ec, hpx::error::locality_was_disconnected,
+                        "addressing_service::resolve_locality",
+                        "the given target locality ({}) was disconnected", gid);
+                }
+                else
+                {
+                    HPX_THROWS_IF(ec, hpx::error::bad_parameter,
+                        "addressing_service::resolve_locality",
+                        "couldn't resolve the given target locality ({})", gid);
+                }
 
                 static parcelset::endpoints_type const empty_endpoints;
                 return empty_endpoints;
@@ -413,7 +442,19 @@ namespace hpx::agas {
                 component_ns_->unregister_server_instance(ec);
                 symbol_ns_.unregister_server_instance(ec);
             }
-            remove_resolved_locality(gid);
+
+            // A locality that is being force-disconnected is erased by
+            // remove_from_connection_cache() once its disconnect is recorded,
+            // so that resolve_locality() reports it as disconnected until then.
+            {
+                std::unique_lock<hpx::shared_mutex> l(resolved_localities_mtx_);
+                if (auto const it = resolved_localities_.find(gid);
+                    it != resolved_localities_.end() &&
+                    it->second.state != resolved_locality_state::disconnecting)
+                {
+                    resolved_localities_.erase(it);
+                }
+            }
             return result;
         }
         catch (hpx::exception const& e)
@@ -2237,6 +2278,34 @@ namespace hpx::agas {
     }
 #endif
 
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+    namespace {
+
+        // pre_shutdown is set on the runtime only, the thread pools keep
+        // running until they are stopped
+        bool shutdown_has_started() noexcept
+        {
+            runtime const* rt = get_runtime_ptr();
+            return hpx::is_stopped_or_shutting_down() ||
+                (rt != nullptr && rt->get_state() >= hpx::state::pre_shutdown);
+        }
+
+        // A locality removed from AGAS (e.g. by force_disconnect()) is
+        // reported as locality_was_disconnected by resolve_locality(), nobody
+        // is left to take its credits. On a locality other than the console
+        // the same resolution asks the console and waits at most the AGAS RPC
+        // timeout, so once shutdown has started (including pre-shutdown) a
+        // future_wait_timed_out is dropped as well.
+        bool ignore_decrement_credit_error(hpx::exception const& e) noexcept
+        {
+            auto const err = hpx::get_error(e);
+            return err == hpx::error::locality_was_disconnected ||
+                (err == hpx::error::future_wait_timed_out &&
+                    shutdown_has_started());
+        }
+    }    // namespace
+#endif
+
     // 26110: Caller failing to hold lock 'l' before calling function
 #if defined(HPX_MSVC)
 #pragma warning(push)
@@ -2305,8 +2374,7 @@ namespace hpx::agas {
                         hpx::post(action, it->first, HPX_MOVE(it->second));
                     },
                     [&](hpx::exception const& e) {
-                        if (auto const err = hpx::get_error(e);
-                            err != hpx::error::locality_was_disconnected)
+                        if (!ignore_decrement_credit_error(e))
                         {
                             throw e;
                         }
@@ -2390,8 +2458,7 @@ namespace hpx::agas {
                     f = hpx::async(action, it->first, HPX_MOVE(it->second));
                 },
                 [&](hpx::exception const& e) {
-                    if (auto const err = hpx::get_error(e);
-                        err != hpx::error::locality_was_disconnected)
+                    if (!ignore_decrement_credit_error(e))
                     {
                         throw e;
                     }
@@ -2437,8 +2504,12 @@ namespace hpx::agas {
                 hpx::detail::try_catch_exception_ptr<hpx::exception>(
                     [&]() { result.get(); },
                     [&](hpx::exception const& e) {
+#if !defined(HPX_COMPUTE_DEVICE_CODE)
+                        if (!ignore_decrement_credit_error(e))
+#else
                         if (hpx::get_error(e) !=
                             hpx::error::locality_was_disconnected)
+#endif
                         {
                             HPX_RETHROWS_IF(ec, e,
                                 "addressing_service::send_refcnt_requests_"

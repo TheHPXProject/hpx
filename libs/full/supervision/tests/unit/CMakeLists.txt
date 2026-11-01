@@ -12,6 +12,7 @@ set(tests
     supervision_check_admission
     supervision_observer_disconnected
     supervision_remove_target
+    supervision_tidy_remote_shutdown
     supervision_tidy_teardown
 )
 
@@ -24,6 +25,9 @@ set(supervision_observer_disconnected_PARAMETERS LOCALITIES 2
                                                  THREADS_PER_LOCALITY 4
 )
 set(supervision_remove_target_PARAMETERS THREADS_PER_LOCALITY 4)
+set(supervision_tidy_remote_shutdown_PARAMETERS
+    LOCALITIES 2 THREADS_PER_LOCALITY 4 TIMEOUT 120
+)
 set(supervision_tidy_teardown_PARAMETERS THREADS_PER_LOCALITY 4)
 
 if(HPX_WITH_NETWORKING AND HPX_WITH_PARCELPORT_TCP)

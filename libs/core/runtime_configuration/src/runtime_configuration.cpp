@@ -258,6 +258,9 @@ namespace hpx::util {
             "min_tasks_to_steal_staged = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED)) "}",
+            "min_tasks_to_steal_pending_early = "
+            "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY:" HPX_PP_STRINGIZE(
+                HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_PENDING_EARLY)) "}",
             "min_tasks_to_steal_staged_early = "
             "${HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_MIN_TASKS_TO_STEAL_STAGED_EARLY)) "}",
@@ -285,6 +288,11 @@ namespace hpx::util {
             "cached_threads_count = "
             "${HPX_THREAD_QUEUE_CACHED_THREADS_COUNT:" HPX_PP_STRINGIZE(
                 HPX_PP_EXPAND(HPX_THREAD_QUEUE_CACHED_THREADS_COUNT)) "}",
+
+            // empty entries stand for the defaults compiled into the library
+            "[hpx.task_size_chunk_size]",
+            "min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}",
+            "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
 
             "[hpx.commandline]",
             // enable aliasing

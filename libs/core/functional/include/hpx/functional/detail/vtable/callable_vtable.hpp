@@ -1,5 +1,5 @@
 //  Copyright (c) 2011 Thomas Heller
-//  Copyright (c) 2013-2023 Hartmut Kaiser
+//  Copyright (c) 2013-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -14,6 +14,7 @@
 #include <hpx/functional/invoke.hpp>
 #include <hpx/functional/traits/get_function_address.hpp>
 #include <hpx/functional/traits/get_function_annotation.hpp>
+#include <hpx/functional/traits/get_task_size.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -54,6 +55,13 @@ namespace hpx::util::detail {
 #endif
 
         template <typename T>
+        HPX_FORCEINLINE static threads::task_size _get_task_size(void* f)
+        {
+            return traits::get_task_size<T>::call(vtable::get<T>(f));
+        }
+        threads::task_size (*get_task_size)(void*) = nullptr;
+
+        template <typename T>
         explicit constexpr callable_info_vtable(construct_vtable<T>) noexcept
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
           : get_function_address(
@@ -62,6 +70,9 @@ namespace hpx::util::detail {
                 &callable_info_vtable::_get_function_annotation<T>)
           , get_function_annotation_tracing(
                 &callable_info_vtable::_get_function_annotation_tracing<T>)
+          , get_task_size(&callable_info_vtable::_get_task_size<T>)
+#else
+          : get_task_size(&callable_info_vtable::_get_task_size<T>)
 #endif
         {
         }
