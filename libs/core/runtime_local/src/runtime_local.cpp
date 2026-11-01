@@ -642,7 +642,8 @@ namespace hpx {
         // The defaults of task_size_chunk_size, the compiled ones unless the
         // configuration gives others. A configured value outside of the range
         // the chunking can handle (a minimal run time of up to one second, 1 to
-        // 1024 chunks per core) is ignored.
+        // 1024 chunks per core, 1 to 4096 bytes copied per nanosecond) is
+        // ignored.
         {
             namespace ex = hpx::execution::experimental;
             ex::detail::reset_task_size_chunk_size_defaults();
@@ -670,11 +671,20 @@ namespace hpx {
                 chunks_per_core = defaults.chunks_per_core;
             }
 
+            std::size_t copy_bytes_per_ns =
+                hpx::util::get_entry_as<std::size_t>(rtcfg_,
+                    "hpx.task_size_chunk_size.copy_bytes_per_ns",
+                    defaults.copy_bytes_per_ns);
+            if (copy_bytes_per_ns == 0 || copy_bytes_per_ns > 4096)
+            {
+                copy_bytes_per_ns = defaults.copy_bytes_per_ns;
+            }
+
             ex::detail::set_task_size_chunk_size_defaults(
                 {std::chrono::duration_cast<std::chrono::nanoseconds>(
                      std::chrono::duration<double, std::micro>(
                          min_chunk_time_us)),
-                    chunks_per_core});
+                    chunks_per_core, copy_bytes_per_ns});
         }
 
 #if defined(HPX_HAVE_TRACY)

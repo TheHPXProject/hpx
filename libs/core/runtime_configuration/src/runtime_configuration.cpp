@@ -293,6 +293,8 @@ namespace hpx::util {
             "[hpx.task_size_chunk_size]",
             "min_chunk_time_us = ${HPX_TASK_SIZE_CHUNK_SIZE_MIN_CHUNK_TIME_US}",
             "chunks_per_core = ${HPX_TASK_SIZE_CHUNK_SIZE_CHUNKS_PER_CORE}",
+            "copy_bytes_per_ns = "
+            "${HPX_TASK_SIZE_CHUNK_SIZE_COPY_BYTES_PER_NS}",
 
             "[hpx.commandline]",
             // enable aliasing

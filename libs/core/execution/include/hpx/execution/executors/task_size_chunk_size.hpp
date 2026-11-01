@@ -100,11 +100,11 @@ namespace hpx::execution::experimental {
                 hpx::execution::experimental::processing_units_count(
                     exec, iteration_duration, count);
 
-            auto const per_iteration = iteration_duration.value();
-            if (per_iteration == per_iteration.zero())
+            if (!iteration_duration)
             {
                 return available_pus;
             }
+            auto const per_iteration = iteration_duration.value();
 
             // the iterations one core needs, computed without multiplying by
             // count, which could overflow
@@ -125,11 +125,11 @@ namespace hpx::execution::experimental {
             hpx::chrono::steady_duration const& iteration_duration,
             std::size_t const cores, std::size_t const count) const noexcept
         {
-            auto const per_iteration = iteration_duration.value();
-            if (per_iteration == per_iteration.zero() || count == 0)
+            if (!iteration_duration || count == 0)
             {
                 return 0;    // use the default
             }
+            auto const per_iteration = iteration_duration.value();
 
             // a single core runs the whole loop as one chunk, on the calling
             // thread
