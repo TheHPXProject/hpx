@@ -641,7 +641,7 @@ namespace hpx::parallel::execution::detail {
             // its reference when it is destroyed.
             HPX_ASSERT(this->count_ == 1);
             this->count_.store(
-                static_cast<long>(1 + num_threads), std::memory_order_release);
+                static_cast<long>(num_threads) + 1, std::memory_order_release);
             std::uint32_t adopted = 0;
 
             try
