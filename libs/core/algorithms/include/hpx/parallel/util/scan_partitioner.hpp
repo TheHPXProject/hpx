@@ -14,6 +14,8 @@
 #include <hpx/modules/async_combinators.hpp>
 #include <hpx/modules/errors.hpp>
 #include <hpx/modules/execution.hpp>
+#include <hpx/modules/functional.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/scoped_executor_parameters.hpp>
@@ -36,6 +38,17 @@ namespace hpx::parallel::util {
 
     ///////////////////////////////////////////////////////////////////////////
     namespace detail {
+
+        // The task that runs a chunk of count iterations of f, which has the
+        // size of one iteration, has the size of count calls of it. A function
+        // without a size gives a task without one.
+        HPX_CXX_CORE_EXPORT template <typename F>
+        [[nodiscard]] auto sized_chunk(F const& f, std::size_t const count)
+        {
+            return hpx::threads::detail::with_task_size(f,
+                hpx::threads::bulk_task_size(
+                    hpx::traits::get_task_size<F>::call(f), count));
+        }
 
         ///////////////////////////////////////////////////////////////////////
         // The static partitioner simply spawns one chunk of iterations for
@@ -107,9 +120,9 @@ namespace hpx::parallel::util {
                         workitems.reserve(size + 2);
                         finalitems.reserve(size + 1);
 
-                        finalitems.push_back(
-                            execution::async_execute(policy.executor(), f3,
-                                first_, count_ - count, workitems[0].get()));
+                        finalitems.push_back(execution::async_execute(
+                            policy.executor(), sized_chunk(f3, count_ - count),
+                            first_, count_ - count, workitems[0].get()));
 
                         workitems[1] = make_ready_future(HPX_INVOKE(
                             f2, workitems[0].get(), workitems[1].get()));
@@ -125,7 +138,8 @@ namespace hpx::parallel::util {
                     for (auto const& elem : shape)
                     {
                         auto curr = execution::async_execute(policy.executor(),
-                            f1, hpx::get<0>(elem), hpx::get<1>(elem))
+                            sized_chunk(f1, hpx::get<1>(elem)),
+                            hpx::get<0>(elem), hpx::get<1>(elem))
                                         .share();
 
                         workitems.push_back(HPX_MOVE(curr));
@@ -151,9 +165,11 @@ namespace hpx::parallel::util {
                     std::size_t i = 0;
                     for (auto const& elem : shape)
                     {
-                        finalitems.push_back(execution::async_execute(
-                            policy.executor(), f3, hpx::get<0>(elem),
-                            hpx::get<1>(elem), f2results[i]));
+                        finalitems.push_back(
+                            execution::async_execute(policy.executor(),
+                                sized_chunk(f3, hpx::get<1>(elem)),
+                                hpx::get<0>(elem), hpx::get<1>(elem),
+                                f2results[i]));
                         i++;
                     }
 
