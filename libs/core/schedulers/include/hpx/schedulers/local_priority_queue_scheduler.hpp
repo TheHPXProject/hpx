@@ -36,6 +36,169 @@
 #include <hpx/config/warnings_prefix.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
+// How the local priority queue scheduler schedules HPX threads
+//
+// This is an overview of the decisions this scheduler makes, where they are
+// made, and which parameters control them. Defaults are given in parentheses;
+// the parameters can be changed at runtime with the hpx.thread_queue.*
+// settings (see thread_queue_init_parameters and hpx/config.hpp).
+//
+// 1. Queues
+//
+//    Every worker thread (OS thread) owns
+//    - a normal queue (queue_) for threads of normal and default priority,
+//    - a bound queue (bound_queue_) for threads that have to run on this
+//      worker (thread_priority::bound), which is never stolen from,
+//    - a high priority queue (high_priority_queue_), but only the first
+//      num_high_priority_queues_ workers do (all of them by default).
+//    One low priority queue (low_priority_queue_) is shared by all workers.
+//
+//    Each of these is a thread_queue with two stages:
+//    - staged tasks (new_tasks_): the description of a thread that has not
+//      been created yet (thread_init_data). Queuing a task is cheap, it needs
+//      neither a thread object nor a stack.
+//    - pending threads (work_items_): thread objects with a stack, ready to
+//      run.
+//    A worker converts staged tasks into pending threads (see 4) in batches
+//    of min_add_new_count to max_add_new_count tasks (10 and 10), as long as
+//    the queue holds fewer than max_thread_count threads (1000). A worker
+//    without pending threads converts min_add_new_count tasks beyond that
+//    limit, and raises it. Terminated threads are recycled with their stacks.
+//
+//    The pending queue is a lock-free FIFO by default (lockfree_fifo), the
+//    owner and the thieves pop from the same end. Other variants of this
+//    scheduler use a LIFO (local-priority-lifo) or a queue with separate ends
+//    for the owner and the thieves (abp-priority-fifo, abp-priority-lifo).
+//
+// 2. Placement of new and rescheduled threads (create_thread,
+//    schedule_thread, schedule_thread_last)
+//
+//    The worker is chosen from the schedule hint:
+//    - hint mode thread: the given worker (modulo the number of workers),
+//    - hint mode numa: the next worker in round-robin order on the given NUMA
+//      domain (create_thread only, schedule_thread ignores NUMA hints),
+//    - no hint: the next worker in round-robin order (curr_queue_).
+//    With elasticity enabled, select_active_pu moves the thread to a worker
+//    that is not suspended.
+//
+//    The priority selects the queue of that worker:
+//    - high, high_recursive and boost: the high priority queue of worker
+//      number modulo num_high_priority_queues_. A new boosted thread gets
+//      normal priority after its first run.
+//    - normal and default: the normal queue.
+//    - bound: the bound queue. initially_bound uses the bound queue for the
+//      first run only, the thread has normal priority afterwards.
+//    - low: the shared low priority queue.
+//
+//    A new thread is queued as a staged task, unless it has to exist right
+//    away (run_now, e.g. because the caller needs its id or it starts
+//    suspended), then it is created and queued as a pending thread. A thread
+//    that was resumed or that yielded is queued as a pending thread.
+//    schedule_thread_last queues a thread that yielded at the end its owner
+//    pops last, so that the other pending threads run first (the FIFO queues
+//    do that for every thread anyway).
+//
+//    After queuing a new or resumed thread, do_some_work wakes up the workers
+//    that are backing off (see 6).
+//
+// 3. Where a worker looks for a thread to run (get_next_thread)
+//
+//    a. Its own high priority queue (if it has one), its bound queue, and its
+//       normal queue. If one of these has no pending threads but staged
+//       tasks, the search stops there: the scheduling loop then converts them
+//       (see 4) instead of taking work from others while it has its own.
+//    b. The pending threads of other workers (attempt_stealing_pending), if
+//       stealing is enabled, in the order of its victims (see 5). A worker
+//       with a high priority queue tries the high priority queue of a victim
+//       before its normal queue.
+//       Pending threads are stolen only from a victim that has at least
+//       min_tasks_to_steal_pending_early of them (4). Otherwise all idle
+//       workers pop the few threads a worker has just converted one by one,
+//       contending on its queue, and then go idle together again. The
+//       minimum is lifted
+//       - for a victim whose short but non-empty pending queue this thief
+//         found steal_looks (16) times in a row: its owner is busy and
+//         doesn't get to it (see victim_min_tasks),
+//       - once after the worker was woken up by a notification (free pass),
+//       - in fast idle mode.
+//       min_tasks_to_steal_pending (0) is a minimum that always applies.
+//    c. The pending threads of the shared low priority queue.
+//
+// 4. Converting staged tasks (wait_or_add_new)
+//
+//    The scheduling loop calls wait_or_add_new when get_next_thread found
+//    nothing, and before it requeues a thread that yielded. The worker
+//    converts
+//    a. the staged tasks of its own high priority, bound and normal queues,
+//       without a minimum,
+//    b. the staged tasks of other workers (attempt_stealing), if stealing
+//       staged tasks is enabled, in the order of its victims (see 5). The
+//       stolen tasks become pending threads in the thief's own queue, their
+//       thread objects and stacks are taken from the thief's queue.
+//       Stealing staged tasks is enabled after idle_loop_count_steal_staged
+//       (30) consecutive iterations of the scheduling loop without work (but
+//       at most max_idle_loop_count / 2), and right away in fast idle mode.
+//       Staged tasks are stolen only from a victim that has at least
+//       min_tasks_to_steal_staged_early of them (10): a worker with fewer
+//       converts them soon itself, and stealing them would move them away
+//       from the worker they were placed on (and from the data in its
+//       caches). The minimum is lifted
+//       - for a victim whose short but non-empty staged queue all thieves
+//         together found often enough in a row (steal_looks divided by its
+//         length). Only the thief that resets the count ignores the minimum,
+//         and it takes a single task.
+//       - once after the worker was woken up by a notification (free pass),
+//       - in fast idle mode.
+//       min_tasks_to_steal_staged (0) is a minimum that always applies.
+//    c. the staged tasks of the shared low priority queue, on the last
+//       worker only.
+//
+// 5. Victims (on_start_thread)
+//
+//    When it starts, each worker computes the list of workers it steals from,
+//    ordered by distance:
+//    - the workers on the same core (hyperthreads),
+//    - the workers on the same NUMA domain,
+//    - the workers on other NUMA domains, in order of increasing NUMA
+//      distance, if enable_stealing_numa is set. Which of them are included
+//      depends on numa_sensitive_ (see get_numa_stealing_domains): all of
+//      them, only the nearest domains for a worker on the boundary of its
+//      domain, or none.
+//    Within each group, the workers are ordered by the distance of their
+//    numbers, alternating between lower and higher numbers. Each attempt to
+//    steal starts one victim further in this list (victim_offset_), so that
+//    the thieves spread over their victims.
+//
+// 6. Idling
+//
+//    The scheduling loop counts its consecutive iterations without work
+//    (idle_loop_count). After max_idle_loop_count (200000) of them it calls
+//    idle_callback, which, if idle backoff is enabled, sleeps for an
+//    exponentially growing period of up to max_idle_backoff_time (1000 us).
+//    do_some_work wakes up the workers that are backing off when new work is
+//    queued. A worker woken up by such a notification gets a free pass: it
+//    may steal once without the early minima of 3 and 4, as the work it was
+//    woken up for may be on a short queue. In fast idle mode, iterations that
+//    find nothing to steal count more, so that an idle worker backs off
+//    sooner.
+//
+// 7. Shutdown
+//
+//    A worker leaves its scheduling loop only once its queues are empty and
+//    none of its bound threads is alive (has_live_bound_threads), as those
+//    can run nowhere else. The last worker to leave takes over the work left
+//    on the queues of the workers that have left (take_over_work): stealing
+//    can't reach all of it (bound threads, victims limited to some NUMA
+//    domains, and low priority tasks converted by the last worker only).
+//
+// 8. Memory layout
+//
+//    The members are grouped by who writes them, so that the frequent writes
+//    of one worker don't invalidate data that the others read (see the
+//    comment at the members).
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
 namespace hpx::threads::policies {
 
     ///////////////////////////////////////////////////////////////////////////
@@ -53,8 +216,9 @@ namespace hpx::threads::policies {
     /// from. Additionally, it maintains separate queues: several for high
     /// priority threads and one for low priority threads. High priority threads
     /// are executed by the first N OS threads before any other work is
-    /// executed. Low priority threads are executed by the last OS thread
-    /// whenever no other work is available.
+    /// executed. Low priority threads are created by the last OS thread and
+    /// executed by any OS thread that has no other work. See the overview at
+    /// the top of this file.
     HPX_CXX_CORE_EXPORT template <typename Mutex = std::mutex,
         typename PendingQueuing = lockfree_fifo,
         typename StagedQueuing = concurrentqueue_fifo,
