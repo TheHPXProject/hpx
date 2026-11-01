@@ -16,11 +16,12 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using hpx::threads::policies::scheduler_mode;
 constexpr auto flag = scheduler_mode::enable_elasticity;
-constexpr auto flag2 = scheduler_mode::fast_idle_mode;
+constexpr auto flag2 = scheduler_mode::assign_work_thread_parent;
 
 int hpx_main()
 {
@@ -144,12 +145,48 @@ int hpx_main()
     return hpx::local::finalize();
 }
 
+namespace {
+
+    std::vector<char*> remove_threads_option(int argc, char* argv[])
+    {
+        std::vector<char*> result;
+        result.reserve(static_cast<std::size_t>(argc) + 1);
+        result.push_back(argv[0]);
+
+        for (int i = 1; i != argc; ++i)
+        {
+            std::string_view const arg(argv[i]);
+            if (arg == "--hpx:threads" || arg == "-t")
+            {
+                if (i + 1 != argc)
+                {
+                    ++i;
+                }
+                continue;
+            }
+
+            if (arg.starts_with("--hpx:threads="))
+            {
+                continue;
+            }
+
+            result.push_back(argv[i]);
+        }
+
+        result.push_back(nullptr);
+        return result;
+    }
+}    // namespace
+
 int main(int argc, char* argv[])
 {
     if (hpx::threads::hardware_concurrency() < 4)
     {
         return hpx::util::report_errors();
     }
+
+    auto sanitized_argv = remove_threads_option(argc, argv);
+    int sanitized_argc = static_cast<int>(sanitized_argv.size()) - 1;
 
     hpx::local::init_params init_args;
     init_args.cfg = {"hpx.os_threads=4"};
@@ -173,6 +210,8 @@ int main(int argc, char* argv[])
         }
     };
 
-    HPX_TEST_EQ(hpx::local::init(hpx_main, argc, argv, init_args), 0);
+    HPX_TEST_EQ(hpx::local::init(
+                    hpx_main, sanitized_argc, sanitized_argv.data(), init_args),
+        0);
     return hpx::util::report_errors();
 }
