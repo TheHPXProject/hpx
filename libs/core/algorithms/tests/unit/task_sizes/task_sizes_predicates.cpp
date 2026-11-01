@@ -22,8 +22,13 @@ using task_size_checks::check_only_size;
 // The worker tasks of the algorithms that call a predicate about once per
 // element have the size of the predicate called with an element. The only
 // worker runs all chunks in one task: a chunk of 100 iterations of a nano
-// predicate is small and 100 small chunks make a medium task. The task policy
-// keeps the partitioners from running the only chunk inline.
+// predicate is small and 100 small chunks make a medium task.
+//
+// The sizes are counted when the scheduler creates a thread (see
+// task_size_checks.hpp). The task policy makes the algorithms asynchronous,
+// they return a future: with a synchronous policy, the executor would run the
+// queue of the calling thread inline instead of creating a thread for it, and
+// with a single worker that is the only queue, so no thread would be counted.
 void test_predicate_sizes()
 {
     auto const by_100 =
