@@ -464,12 +464,14 @@ namespace hpx {
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/synchronization.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/advance_to_sentinel.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
@@ -1499,6 +1501,12 @@ namespace hpx::parallel {
                     hpx::tuple<FwdIter1, FwdIter2, FwdIter3>,
                     output_iterator_offset>;
 
+                // an iteration of step 1 has the size of the predicate called
+                // with an element, step 3 only copies the elements
+                auto const size1 =
+                    task_size_of_call<task_size_argument_t<FwdIter1, Proj>>(
+                        pred);
+
                 // Note: replacing the invoke() with HPX_INVOKE()
                 // below makes gcc generate errors
                 auto f1 = [pred = HPX_FORWARD(Pred, pred),
@@ -1570,7 +1578,7 @@ namespace hpx::parallel {
                     HPX_FORWARD(ExPolicy, policy),
                     zip_iterator(first, flags.get()), count, init,
                     // step 1 performs first part of scan algorithm
-                    HPX_MOVE(f1),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size1),
                     // step 2 propagates the partition results from left
                     // to right
                     HPX_MOVE(f2),
