@@ -16,6 +16,8 @@
 
 #include "detail/filters.hpp"    // Must come before operations.hpp for VC6.
 
+#include <ios>
+
 using namespace std;
 using namespace hpx::iostream;
 using namespace hpx::iostream::test;

@@ -21,6 +21,7 @@
 #include <hpx/iostream/traits.hpp>
 
 #include <functional>
+#include <ios>
 #include <memory>
 #include <string>
 #include <type_traits>

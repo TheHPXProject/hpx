@@ -17,6 +17,7 @@
 #include "detail/verification.hpp"
 
 #include <cstdio>
+#include <ios>
 #include <memory>
 
 using namespace std;
