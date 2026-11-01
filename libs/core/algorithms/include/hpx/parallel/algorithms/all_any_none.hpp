@@ -331,11 +331,13 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/find.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/cancellation_token.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -395,6 +397,11 @@ namespace hpx::parallel {
                 using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
+
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,
@@ -419,7 +426,8 @@ namespace hpx::parallel {
                 return util::partitioner<policy_type, bool,
                     intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
                                                      policy),
-                    first, detail::distance(first, last), HPX_MOVE(f1),
+                    first, detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
         };
@@ -469,6 +477,11 @@ namespace hpx::parallel {
                 using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
+
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,
@@ -493,7 +506,8 @@ namespace hpx::parallel {
                 return util::partitioner<policy_type, bool,
                     intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
                                                      policy),
-                    first, detail::distance(first, last), HPX_MOVE(f1),
+                    first, detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
         };
@@ -542,6 +556,11 @@ namespace hpx::parallel {
                 using intermediate_result_t = std::uint8_t;
 
                 util::cancellation_token<> tok;
+
+                // an iteration has the size of the predicate called with an
+                // element
+                auto const size =
+                    task_size_of_call<task_size_argument_t<FwdIter, Proj>>(op);
                 auto f1 = [op = HPX_FORWARD(F, op), tok,
                               proj = HPX_FORWARD(Proj, proj)](
                               FwdIter part_begin,
@@ -566,7 +585,8 @@ namespace hpx::parallel {
                 return util::partitioner<policy_type, bool,
                     intermediate_result_t>::call(HPX_FORWARD(decltype(policy),
                                                      policy),
-                    first, detail::distance(first, last), HPX_MOVE(f1),
+                    first, detail::distance(first, last),
+                    hpx::threads::detail::with_task_size(HPX_MOVE(f1), size),
                     HPX_MOVE(f2));
             }
         };

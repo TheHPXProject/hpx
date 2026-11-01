@@ -209,10 +209,12 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
 #include <hpx/parallel/util/loop.hpp>
@@ -338,13 +340,17 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the comparison of an element
                 auto f1 =
                     count_iteration<ExPolicy, detail::compare_to<T>, Proj>(
                         detail::compare_to<T>(value), HPX_FORWARD(Proj, proj));
 
                 return util::partitioner<ExPolicy, difference_type>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
+                    detail::distance(first, last),
+                    hpx::threads::detail::with_task_size_of<
+                        task_size_argument_t<IterB, Proj>>(
+                        HPX_MOVE(f1), f1.op_),
                     hpx::unwrapping([](auto&& results, auto&&...) {
                         return util::accumulate_n(hpx::util::begin(results),
                             hpx::util::size(results), difference_type(0),
@@ -404,12 +410,17 @@ namespace hpx::parallel {
                     }
                 }
 
+                // an iteration has the size of the predicate called with an
+                // element
                 auto f1 = count_iteration<ExPolicy, Pred, Proj>(
                     op, HPX_FORWARD(Proj, proj));
 
                 return util::partitioner<ExPolicy, difference_type>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
-                    detail::distance(first, last), HPX_MOVE(f1),
+                    detail::distance(first, last),
+                    hpx::threads::detail::with_task_size_of<
+                        task_size_argument_t<IterB, Proj>>(
+                        HPX_MOVE(f1), f1.op_),
                     hpx::unwrapping([](auto&& results, auto&&...) {
                         return util::accumulate_n(hpx::util::begin(results),
                             hpx::util::size(results), difference_type(0),
