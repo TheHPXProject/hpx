@@ -19,7 +19,9 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/memory.hpp>
 #include <hpx/modules/resource_partitioner.hpp>
+#include <hpx/modules/thread_support.hpp>
 #include <hpx/modules/threading_base.hpp>
 #include <hpx/modules/topology.hpp>
 #include <hpx/modules/type_support.hpp>
@@ -153,14 +155,91 @@ namespace hpx::execution::experimental::detail {
         return mask;
     }
 
+    // The part of a bulk operation that its worker tasks touch before they
+    // have taken a chunk: the index queues and the number of chunks not done
+    // yet. The operation completes once all of its chunks are done, and its
+    // operation state may be destroyed right after that, while a worker task
+    // that started late is still running. The tasks therefore share this
+    // block, and touch the operation state only after they have taken a chunk.
+    HPX_CXX_CORE_EXPORT struct bulk_work
+    {
+        explicit bulk_work(std::size_t const num_queues)
+          : queues(num_queues)
+        {
+        }
+
+        std::atomic<std::uint32_t>& chunks_remaining() noexcept
+        {
+            return counters_.data_.chunks_remaining;
+        }
+
+        // Set the number of references while the operation state holds the
+        // only one, so that the worker tasks can adopt theirs without
+        // touching the counters again.
+        void set_references(std::size_t const count) noexcept
+        {
+            counters_.data_.references.store(
+                static_cast<long>(count), std::memory_order_release);
+        }
+
+        // Adopt one of the references set by set_references.
+        hpx::intrusive_ptr<bulk_work> adopt_reference() noexcept
+        {
+            return hpx::intrusive_ptr<bulk_work>(this, false);
+        }
+
+    private:
+        // The two counters that every worker task changes: the chunks not
+        // done yet and the references to this block. They share a cache line,
+        // which the padding keeps apart from the members below, which the
+        // tasks only read.
+        struct counters
+        {
+            std::atomic<std::uint32_t> chunks_remaining{0};
+            hpx::util::atomic_count references{1};
+        };
+        hpx::util::cache_aligned_data<counters> counters_;
+
+    public:
+        std::vector<hpx::util::cache_aligned_data<
+            hpx::concurrency::detail::non_contiguous_index_queue<>>>
+            queues;
+        std::uint32_t num_worker_threads = 0;
+        bool reverse_placement = false;
+        bool allow_stealing = false;
+
+    private:
+        friend void intrusive_ptr_add_ref(bulk_work* p) noexcept
+        {
+            p->counters_.data_.references.increment();
+        }
+
+        friend void intrusive_ptr_release(bulk_work* p) noexcept
+        {
+            if (p->counters_.data_.references.decrement() == 0)
+            {
+                // The thread that decrements the reference count to zero must
+                // perform an acquire to ensure that it doesn't start
+                // destructing the object until all previous writes have
+                // drained.
+                std::atomic_thread_fence(std::memory_order_acquire);
+
+                delete p;
+            }
+        }
+    };
+
     HPX_CXX_CORE_EXPORT template <typename OperationState>
     struct task_function;
 
-    HPX_CXX_CORE_EXPORT template <typename OperationState>
+    HPX_CXX_CORE_EXPORT template <typename OperationState,
+        hpx::concurrency::detail::queue_end Which>
     struct set_value_loop_visitor
     {
         OperationState* const op_state;
         task_function<OperationState> const* const task_f;
+        std::uint32_t const first_chunk;
+        std::uint32_t& done;
 
         [[noreturn]] void operator()(hpx::monostate) const noexcept
         {
@@ -202,59 +281,50 @@ namespace hpx::execution::experimental::detail {
             }
         }
 
-        template <hpx::concurrency::detail::queue_end Which, typename Ts>
-        void do_work(Ts& ts) const
+    public:
+        // Visit the values sent from the predecessor sender. This function
+        // runs the chunk the worker has already taken, then all chunks in the
+        // queue owned by worker_thread. It then tries to steal chunks from
+        // neighboring threads. Each chunk is counted in done before it runs.
+        //
+        template <typename Ts>
+            requires(!std::same_as<std::decay_t<Ts>, hpx::monostate>)
+        void operator()(Ts& ts) const
         {
-            auto worker_thread = task_f->worker_thread;
-            auto& local_queue = op_state->queues[worker_thread].data_;
+            do_work_chunk(ts, first_chunk);
+
+            bulk_work& work = *task_f->work;
+            auto const worker_thread = task_f->worker_thread;
+            auto& local_queue = work.queues[worker_thread].data_;
 
             // Handle local queue first
             hpx::optional<std::uint32_t> index;
             while ((index = local_queue.template pop<Which>()))
             {
+                ++done;
                 do_work_chunk(ts, *index);
             }
 
-            if (op_state->allow_stealing)
+            if (work.allow_stealing)
             {
                 // Then steal from the opposite end of the neighboring queues
                 static constexpr auto opposite_end =
                     hpx::concurrency::detail::opposite_end_v<Which>;
 
                 for (std::uint32_t offset = 1;
-                    offset != op_state->num_worker_threads; ++offset)
+                    offset != work.num_worker_threads; ++offset)
                 {
                     std::size_t neighbor_thread =
-                        (worker_thread + offset) % op_state->num_worker_threads;
-                    auto& neighbor_queue =
-                        op_state->queues[neighbor_thread].data_;
+                        (worker_thread + offset) % work.num_worker_threads;
+                    auto& neighbor_queue = work.queues[neighbor_thread].data_;
 
                     while (
                         (index = neighbor_queue.template pop<opposite_end>()))
                     {
+                        ++done;
                         do_work_chunk(ts, *index);
                     }
                 }
-            }
-        }
-
-    public:
-        // Visit the values sent from the predecessor sender. This function
-        // first tries to handle all chunks in the queue owned by worker_thread.
-        // It then tries to steal chunks from neighboring threads.
-        //
-        template <typename Ts>
-            requires(!std::same_as<std::decay_t<Ts>, hpx::monostate>)
-        void operator()(Ts& ts) const
-        {
-            // schedule chunks from the end, if needed
-            if (op_state->reverse_placement)
-            {
-                do_work<hpx::concurrency::detail::queue_end::right>(ts);
-            }
-            else
-            {
-                do_work<hpx::concurrency::detail::queue_end::left>(ts);
             }
         }
     };
@@ -289,13 +359,68 @@ namespace hpx::execution::experimental::detail {
     struct task_function
     {
         OperationState* const op_state;
+        // not const, so that the task can be moved without touching the
+        // reference count
+        hpx::intrusive_ptr<bulk_work> work;
         std::uint32_t const worker_thread;
 
-        // Visit the values sent by the predecessor sender.
-        void do_work() const
+        // Take a chunk from the local queue, or else from the opposite end of
+        // one of the neighboring queues.
+        template <hpx::concurrency::detail::queue_end Which>
+        hpx::optional<std::uint32_t> take_chunk() const
         {
-            auto visitor =
-                set_value_loop_visitor<OperationState>{op_state, this};
+            if (auto index =
+                    work->queues[worker_thread].data_.template pop<Which>())
+            {
+                return index;
+            }
+
+            if (work->allow_stealing)
+            {
+                constexpr auto opposite_end =
+                    hpx::concurrency::detail::opposite_end_v<Which>;
+
+                auto const num_threads = work->num_worker_threads;
+                for (std::uint32_t offset = 1; offset != num_threads; ++offset)
+                {
+                    std::size_t neighbor_thread = worker_thread + offset;
+                    if (neighbor_thread >= num_threads)
+                        neighbor_thread -= num_threads;
+
+                    if (auto index = work->queues[neighbor_thread]
+                            .data_.template pop<opposite_end>())
+                    {
+                        return index;
+                    }
+                }
+            }
+            return {};
+        }
+
+        // Visit the values sent by the predecessor sender. Each chunk taken
+        // from a queue is counted in done before it runs.
+        template <hpx::concurrency::detail::queue_end Which>
+        void do_work(std::uint32_t& done) const
+        {
+            // A worker that starts after all chunks are done has nothing to do.
+            if (work->chunks_remaining().load(std::memory_order_acquire) == 0)
+            {
+                return;
+            }
+
+            // Take a chunk before touching the operation state: the operation
+            // can't complete before the chunk is counted in finish, so the
+            // operation state is alive while the chunks run. A worker that
+            // finds no chunk doesn't touch it.
+            auto const first = take_chunk<Which>();
+            if (!first)
+            {
+                return;
+            }
+            ++done;
+
+            auto visitor = set_value_loop_visitor<OperationState, Which>{
+                op_state, this, *first, done};
             hpx::visit(HPX_MOVE(visitor), op_state->ts);
         }
 
@@ -309,14 +434,77 @@ namespace hpx::execution::experimental::detail {
             op_state->exceptions.add(HPX_MOVE(e));
         }
 
-        // Finish the work for one worker thread. If this is not the last worker
-        // thread to finish, it will only decrement the counter. If it is the
-        // last thread it will call set_error if there is an exception.
-        // Otherwise, it will call set_value on the connected receiver.
-        void finish() const
+        // After an exception, the chunks left in the worker's own queue are
+        // not run, only counted in done. The other workers go on with their
+        // chunks and may store exceptions of their own.
+        template <hpx::concurrency::detail::queue_end Which>
+        void skip_work(std::uint32_t& done) const noexcept
         {
-            if (op_state->tasks_remaining.data_.fetch_sub(
-                    1, std::memory_order_acq_rel) == 1)
+            auto& local_queue = work->queues[worker_thread].data_;
+            while (local_queue.template pop<Which>())
+            {
+                ++done;
+            }
+        }
+
+        void skip_own_work(std::uint32_t& done) const noexcept
+        {
+            using hpx::concurrency::detail::queue_end;
+            if (work->reverse_placement)
+            {
+                skip_work<queue_end::right>(done);
+            }
+            else
+            {
+                skip_work<queue_end::left>(done);
+            }
+        }
+
+        // Do the work of one worker thread, adding the chunks it takes to
+        // done. An exception can only come from a chunk, so done is not zero
+        // when one is stored.
+        void run(std::uint32_t& done) const
+        {
+            using hpx::concurrency::detail::queue_end;
+            try
+            {
+                // schedule chunks from the end, if needed
+                if (work->reverse_placement)
+                {
+                    do_work<queue_end::right>(done);
+                }
+                else
+                {
+                    do_work<queue_end::left>(done);
+                }
+            }
+            catch (std::bad_alloc const&)
+            {
+                HPX_ASSERT(done != 0);
+                op_state->bad_alloc_thrown = true;
+                skip_own_work(done);
+            }
+            catch (...)
+            {
+                HPX_ASSERT(done != 0);
+                store_exception(std::current_exception());
+                skip_own_work(done);
+            }
+        }
+
+        // Finish the work for one worker thread, which has taken done chunks.
+        // The operation completes once all of its chunks are done, so it
+        // doesn't wait for a worker thread that started only after the other
+        // workers took all of its chunks: that thread finds nothing to do. The
+        // worker that finishes the last chunks calls set_error if there is an
+        // exception, otherwise set_value on the connected receiver. The other
+        // workers must not touch the operation state after counting their
+        // chunks, as it may be destroyed as soon as the receiver completes.
+        void finish(std::uint32_t const done) const
+        {
+            if (done != 0 &&
+                work->chunks_remaining().fetch_sub(
+                    done, std::memory_order_acq_rel) == done)
             {
                 if (op_state->bad_alloc_thrown.load(std::memory_order_relaxed))
                 {
@@ -348,24 +536,14 @@ namespace hpx::execution::experimental::detail {
         }
 
         // Entry point for the worker thread. It will attempt to do its local
-        // work, catch any exceptions, and then call set_value or set_error on
-        // the connected receiver.
+        // work, catch any exceptions, and then count its chunks, calling
+        // set_value or set_error on the connected receiver if they were the
+        // last ones.
         void operator()() const
         {
-            try
-            {
-                do_work();
-            }
-            catch (std::bad_alloc const&)
-            {
-                op_state->bad_alloc_thrown = true;
-            }
-            catch (...)
-            {
-                store_exception(std::current_exception());
-            }
-
-            finish();
+            std::uint32_t done = 0;
+            run(done);
+            finish(done);
         }
     };
 
@@ -405,7 +583,7 @@ namespace hpx::execution::experimental::detail {
         void init_queue_depth_first(std::size_t const worker_thread,
             std::size_t const size, std::size_t num_threads) noexcept
         {
-            auto& queue = op_state->queues[worker_thread].data_;
+            auto& queue = op_state->work->queues[worker_thread].data_;
             auto const part_begin = (worker_thread * size) / num_threads;
             auto const part_end = ((worker_thread + 1) * size) / num_threads;
 
@@ -422,7 +600,7 @@ namespace hpx::execution::experimental::detail {
         void init_queue_breadth_first(std::size_t const worker_thread,
             std::size_t const size, std::size_t num_threads) noexcept
         {
-            auto& queue = op_state->queues[worker_thread].data_;
+            auto& queue = op_state->work->queues[worker_thread].data_;
             auto const num_steps = size / num_threads + 1;
             auto const part_begin = worker_thread;
             auto part_end = (std::min) (size + num_threads - 1,
@@ -450,12 +628,11 @@ namespace hpx::execution::experimental::detail {
         void do_work_task(Task&& task_f) const
         {
             std::uint32_t const worker_thread = task_f.worker_thread;
-            auto& queue = op_state->queues[worker_thread].data_;
+            auto& queue = op_state->work->queues[worker_thread].data_;
             if (queue.empty())
             {
-                // If the queue is empty we don't spawn a task. We only signal
-                // that this "task" is ready.
-                task_f.finish();
+                // If the queue is empty we don't spawn a task: it has no chunks
+                // to count.
                 return;
             }
 
@@ -480,9 +657,10 @@ namespace hpx::execution::experimental::detail {
 
         // Do the work on the worker thread that called set_value from the
         // predecessor sender. This thread participates in the work and does not
-        // need a new task since it already runs on a task.
+        // need a new task since it already runs on a task. The chunks it takes
+        // are added to done, and counted by the caller.
         template <typename Task>
-        void do_work_local(Task&& task_f) const
+        void do_work_local(Task const& task_f, std::uint32_t& done) const
         {
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
             if (char const* scheduler_annotation =
@@ -490,13 +668,13 @@ namespace hpx::execution::experimental::detail {
                         op_state->scheduler))
             {
                 hpx::scoped_annotation ann(scheduler_annotation);
-                task_f();
+                task_f.run(done);
             }
             else
 #endif
             {
                 hpx::scoped_annotation ann(op_state->f);
-                task_f();
+                task_f.run(done);
             }
         }
 
@@ -562,22 +740,33 @@ namespace hpx::execution::experimental::detail {
             if constexpr (!OperationState::is_parallel)
             {
                 // Sequential: force single task execution
-                op_state->tasks_remaining.data_.store(
-                    1, std::memory_order_relaxed);
                 op_state->pu_mask = detail::limit_mask(op_state->pu_mask, 1);
             }
             else if (num_chunks <
                 static_cast<std::uint32_t>(op_state->num_worker_threads))
             {
                 op_state->num_worker_threads = num_chunks;
-                op_state->tasks_remaining.data_.store(
-                    num_chunks, std::memory_order_relaxed);
                 op_state->pu_mask =
                     detail::limit_mask(op_state->pu_mask, num_chunks);
             }
 
             op_state->size = size;
             op_state->chunk_size = chunk_size;
+
+            // The operation completes once all chunks are done. This thread
+            // holds one more count until it has spawned the worker tasks and
+            // done its own share, as it uses the operation state until then.
+            bulk_work& work = *op_state->work;
+            work.num_worker_threads =
+                static_cast<std::uint32_t>(op_state->num_worker_threads);
+            work.chunks_remaining().store(
+                num_chunks + 1, std::memory_order_relaxed);
+
+            // One reference for the operation state and one for the task of
+            // each worker thread, this one included. The tasks adopt them, so
+            // that spawning a task doesn't touch the counters while the
+            // spawned tasks use them.
+            work.set_references(1 + op_state->num_worker_threads);
 
             HPX_ASSERT(hpx::threads::count(op_state->pu_mask) ==
                 op_state->num_worker_threads);
@@ -629,11 +818,82 @@ namespace hpx::execution::experimental::detail {
                     rp.get_pu_num(local_worker_thread + op_state->first_thread);
             }
 
-            op_state->reverse_placement =
+            work.reverse_placement =
                 hint.placement_mode() == placement::depth_first_reverse ||
                 hint.placement_mode() == placement::breadth_first_reverse;
-            op_state->allow_stealing =
+            work.allow_stealing =
                 !hpx::threads::do_not_share_function(hint.sharing_mode());
+
+            // The chunks this thread takes or skips, plus the count it holds.
+            std::uint32_t done = 1;
+
+            // The references adopted by the worker tasks, this thread's included.
+            std::size_t adopted = 0;
+
+            try
+            {
+                spawn_tasks(worker_thread, local_worker_thread, main_thread_ok,
+                    main_pu_num, num_pus, adopted);
+            }
+            catch (...)
+            {
+                // The workers from worker_thread on got no task (including the
+                // local thread, if it wasn't numbered yet). Count the chunks of
+                // their queues as skipped, so the operation completes with the
+                // exception once the spawned tasks are done.
+                store_current_exception();
+                for (std::uint32_t w = worker_thread;
+                    w != op_state->num_worker_threads; ++w)
+                {
+                    auto& queue = work.queues[w].data_;
+                    while (queue.template pop<
+                        hpx::concurrency::detail::queue_end::left>())
+                    {
+                        ++done;
+                    }
+                }
+            }
+
+            // Handle the queue for the local thread.
+            task_function<OperationState> const local_task{
+                op_state, work.adopt_reference(), local_worker_thread};
+            ++adopted;
+
+            // Correct the references if not every worker thread got a task:
+            // after an exception, the ones not adopted are returned, and if
+            // this thread had no queue of its own, it takes one more.
+            for (; adopted < op_state->num_worker_threads; ++adopted)
+            {
+                intrusive_ptr_release(&work);
+            }
+            if (adopted > op_state->num_worker_threads)
+            {
+                intrusive_ptr_add_ref(&work);
+            }
+            if (main_thread_ok)
+            {
+                try
+                {
+                    do_work_local(local_task, done);
+                }
+                catch (...)
+                {
+                    // only setting up the annotation can throw here
+                    store_current_exception();
+                    local_task.skip_own_work(done);
+                }
+            }
+            local_task.finish(done);
+        }
+
+        // Spawn the worker tasks for all queues except the one of the local
+        // thread, numbering the workers from worker_thread on.
+        void spawn_tasks(std::uint32_t& worker_thread,
+            std::uint32_t& local_worker_thread, bool& main_thread_ok,
+            std::size_t& main_pu_num, std::size_t const num_pus,
+            std::size_t& adopted) const
+        {
+            auto const& rp = hpx::resource::get_partitioner();
 
             for (std::uint32_t pu = 0;
                 worker_thread != op_state->num_worker_threads && pu != num_pus;
@@ -666,9 +926,11 @@ namespace hpx::execution::experimental::detail {
                     continue;
                 }
 
-                // Schedule task for this worker thread
-                do_work_task(
-                    task_function<OperationState>{op_state, worker_thread});
+                // Schedule task for this worker thread. If it isn't spawned,
+                // destroying it returns its reference.
+                ++adopted;
+                do_work_task(task_function<OperationState>{op_state,
+                    op_state->work->adopt_reference(), worker_thread});
 
                 ++worker_thread;
             }
@@ -676,12 +938,29 @@ namespace hpx::execution::experimental::detail {
             // there have to be as many HPX threads as there are set bits in
             // the PU-mask
             HPX_ASSERT(worker_thread == op_state->num_worker_threads);
+        }
 
-            // Handle the queue for the local thread.
-            if (main_thread_ok)
+        // Store the current exception in the operation state.
+        void store_current_exception() const noexcept
+        {
+            try
             {
-                do_work_local(task_function<OperationState>{
-                    this->op_state, local_worker_thread});
+                throw;
+            }
+            catch (std::bad_alloc const&)
+            {
+                op_state->bad_alloc_thrown = true;
+            }
+            catch (...)
+            {
+                try
+                {
+                    op_state->exceptions.add(std::current_exception());
+                }
+                catch (...)
+                {
+                    op_state->bad_alloc_thrown = true;
+                }
             }
         }
 
@@ -881,19 +1160,14 @@ namespace hpx::execution::experimental::detail {
             std::size_t num_worker_threads;
             std::size_t size = 0;
             std::uint32_t chunk_size = 0;
-            bool reverse_placement = false;
-            bool allow_stealing = false;
             hpx::threads::mask_type pu_mask;
 
-            std::vector<hpx::util::cache_aligned_data<
-                hpx::concurrency::detail::non_contiguous_index_queue<>>>
-                queues;
+            // shared with the worker tasks, which may outlive this
+            hpx::intrusive_ptr<bulk_work> work;
 
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Shape> shape;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<F> f;
             HPX_NO_UNIQUE_ADDRESS std::decay_t<Receiver> receiver;
-            hpx::util::cache_aligned_data<std::atomic<std::size_t>>
-                tasks_remaining;
 
             using value_types = value_types_of_t<Sender,
                 hpx::execution::experimental::empty_env, decayed_tuple,
@@ -918,13 +1192,11 @@ namespace hpx::execution::experimental::detail {
                     hpx::execution::experimental::null_parameters,
                     hpx::chrono::null_duration, 0))
               , pu_mask(HPX_MOVE(pumask))
-              , queues(num_worker_threads)
+              , work(new bulk_work(num_worker_threads), false)
               , shape(HPX_FORWARD(Shape_, shape))
               , f(HPX_FORWARD(F_, f))
               , receiver(HPX_FORWARD(Receiver_, receiver))
             {
-                tasks_remaining.data_.store(
-                    num_worker_threads, std::memory_order_relaxed);
                 HPX_ASSERT(hpx::threads::count(pu_mask) == num_worker_threads);
             }
 
