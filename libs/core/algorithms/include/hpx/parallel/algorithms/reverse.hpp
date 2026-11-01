@@ -194,6 +194,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/ranges_facilities.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
@@ -246,14 +247,16 @@ namespace hpx::parallel {
                 {
                     return util::detail::convert_to_result(
                         for_each_n<hpx::util::counting_iterator<std::size_t>>()
-                            .call(
-                                HPX_FORWARD(ExPolicy, policy),
+                            .call(HPX_FORWARD(ExPolicy, policy),
                                 hpx::util::counting_iterator<std::size_t>(0),
                                 size / 2,
-                                [first, last2](std::size_t i) -> void {
-                                    std::ranges::iter_swap(
-                                        first + i, last2 - 1 - i);
-                                },
+                                hpx::threads::detail::with_task_size(
+                                    [first, last2](std::size_t i) -> void {
+                                        std::ranges::iter_swap(
+                                            first + i, last2 - 1 - i);
+                                    },
+                                    util::detail::element_operation_size<
+                                        BidirIter>()),
                                 hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });
                 }
@@ -271,10 +274,13 @@ namespace hpx::parallel {
                             hpx::util::zip_iterator(
                                 first, destination_iterator(last2)),
                             size / 2,
-                            [](reference t) -> void {
-                                using hpx::get;
-                                std::ranges::swap(get<0>(t), get<1>(t));
-                            },
+                            hpx::threads::detail::with_task_size(
+                                [](reference t) -> void {
+                                    using hpx::get;
+                                    std::ranges::swap(get<0>(t), get<1>(t));
+                                },
+                                util::detail::element_operation_size<
+                                    BidirIter>()),
                             hpx::identity_v),
                         [last2](auto) -> BidirIter { return last2; });
                 }

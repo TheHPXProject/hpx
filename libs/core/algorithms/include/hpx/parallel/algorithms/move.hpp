@@ -111,6 +111,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/transfer.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 #include <hpx/parallel/util/transfer.hpp>
@@ -128,6 +129,25 @@ namespace hpx::parallel {
     // move
     namespace detail {
         /// \cond NOINTERNAL
+
+        // The loop body of move, which moves a chunk of elements.
+        HPX_CXX_CORE_EXPORT struct move_iteration
+        {
+            template <typename Iter>
+            HPX_HOST_DEVICE HPX_FORCEINLINE constexpr void operator()(
+                Iter part_begin, std::size_t part_size, std::size_t) const
+            {
+                auto iters = part_begin.get_iterator_tuple();
+                util::move_n(hpx::get<0>(iters), part_size, hpx::get<1>(iters));
+            }
+        };
+
+        // The pointer category util::move_n uses to move elements from InIter
+        // to OutIter.
+        HPX_CXX_CORE_EXPORT template <typename InIter, typename OutIter>
+        using move_category_t =
+            hpx::traits::pointer_move_category_t<std::decay_t<InIter>,
+                std::decay_t<OutIter>>;
 
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct move_pair : public algorithm<move_pair<IterPair>, IterPair>
@@ -169,12 +189,11 @@ namespace hpx::parallel {
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, dest),
                         detail::distance(first, last),
-                        [](zip_iterator part_begin, std::size_t part_size,
-                            std::size_t) {
-                            auto iters = part_begin.get_iterator_tuple();
-                            util::move_n(hpx::get<0>(iters), part_size,
-                                hpx::get<1>(iters));
-                        },
+                        hpx::threads::detail::with_task_size(move_iteration(),
+                            util::detail::get_transfer_task_size<
+                                move_category_t<FwdIter1, FwdIter2>, FwdIter1,
+                                FwdIter2>()
+                                .size),
                         [](zip_iterator&& last) -> zip_iterator {
                             return HPX_MOVE(last);
                         }));
@@ -248,5 +267,22 @@ namespace hpx {
         }
     } move{};
 }    // namespace hpx
+
+// A call of the loop body of move moves as many elements in the time of its
+// size as memmove does (see transfer_elements_per_call).
+template <typename ExPolicy, typename InIter, typename OutIter>
+struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
+    hpx::util::zip_iterator<InIter, OutIter>,
+    hpx::parallel::detail::move_iteration>
+{
+    [[nodiscard]] static std::size_t call(
+        hpx::parallel::detail::move_iteration const&,
+        hpx::threads::task_size const size) noexcept
+    {
+        return transfer_elements_per_call<ExPolicy,
+            hpx::parallel::detail::move_category_t<InIter, OutIter>, InIter,
+            OutIter, hpx::util::zip_iterator<InIter, OutIter>>(size);
+    }
+};
 
 #endif    // DOXYGEN

@@ -324,6 +324,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/detail/transfer.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/foreach_partitioner.hpp>
 #include <hpx/parallel/util/loop.hpp>
 #include <hpx/parallel/util/result_types.hpp>
@@ -361,6 +362,20 @@ namespace hpx::parallel {
                     get<0>(iters), part_size, get<1>(iters));
             }
         };
+
+        // The loop body of copy and copy_n with the size of copying an
+        // element from InIter to OutIter (see get_transfer_task_size).
+        HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename InIter,
+            typename OutIter>
+        auto sized_copy_iteration()
+        {
+            return hpx::threads::detail::with_task_size(
+                copy_iteration<ExPolicy>(),
+                util::detail::get_transfer_task_size<
+                    util::detail::pointer_category_t<InIter, OutIter>, InIter,
+                    OutIter>()
+                    .size);
+        }
 
         HPX_CXX_CORE_EXPORT template <typename IterPair>
         struct copy : public algorithm<copy<IterPair>, IterPair>
@@ -417,7 +432,7 @@ namespace hpx::parallel {
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, dest),
                         detail::distance(first, last),
-                        copy_iteration<ExPolicy>(),
+                        sized_copy_iteration<ExPolicy, FwdIter1, FwdIter2>(),
                         [](zip_iterator&& zlast) -> zip_iterator {
                             using hpx::get;
                             auto iters = zlast.get_iterator_tuple();
@@ -496,12 +511,7 @@ namespace hpx::parallel {
                     util::foreach_partitioner<ExPolicy>::call(
                         HPX_FORWARD(ExPolicy, policy),
                         zip_iterator(first, dest), count,
-                        [](zip_iterator part_begin, std::size_t part_size,
-                            std::size_t) {
-                            auto iters = part_begin.get_iterator_tuple();
-                            util::copy_n<ExPolicy>(hpx::get<0>(iters),
-                                part_size, hpx::get<1>(iters));
-                        },
+                        sized_copy_iteration<ExPolicy, FwdIter1, FwdIter2>(),
                         [](zip_iterator&& last) -> zip_iterator {
                             auto iters = last.get_iterator_tuple();
                             util::copy_synchronize(
@@ -838,5 +848,23 @@ namespace hpx {
         }
     } copy_if{};
 }    // namespace hpx
+
+// A call of the loop body of copy and copy_n copies as many elements in the
+// time of its size as the policy or memmove does (see
+// transfer_elements_per_call).
+template <typename ExPolicy, typename InIter, typename OutIter, typename P>
+struct hpx::parallel::util::detail::elements_per_call<ExPolicy,
+    hpx::util::zip_iterator<InIter, OutIter>,
+    hpx::parallel::detail::copy_iteration<P>>
+{
+    [[nodiscard]] static std::size_t call(
+        hpx::parallel::detail::copy_iteration<P> const&,
+        hpx::threads::task_size const size) noexcept
+    {
+        return transfer_elements_per_call<ExPolicy,
+            pointer_category_t<InIter, OutIter>, InIter, OutIter,
+            hpx::util::zip_iterator<InIter, OutIter>>(size);
+    }
+};
 
 #endif    // DOXYGEN

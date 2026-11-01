@@ -38,8 +38,10 @@ namespace hpx::parallel::util::detail {
     {
         std::decay_t<F> f_;
 
-        // the number of loop iterations a call runs, from which its task size
-        // is derived
+        // the number of times a call runs the loop body, from which its task
+        // size is derived: the number of loop iterations, or of groups of
+        // them for a loop body that handles several elements in the time its
+        // task size stands for (see iterations_per_chunk)
         std::size_t iterations_ = 1;
 
         // Overload for tuple-like types - unpack using index_pack
@@ -105,13 +107,19 @@ namespace hpx::parallel::util::detail {
     };
 
     // The loop iterations of a partitioning are split evenly into the chunks of
-    // its shape, each a call of the function.
+    // its shape, each a call of the function. A loop body that handles
+    // elements loop iterations in the time its task size stands for (see
+    // elements_per_task_size) runs once per group of them.
     HPX_CXX_CORE_EXPORT template <typename Shape>
     [[nodiscard]] constexpr std::size_t iterations_per_chunk(
-        std::size_t const count, Shape const& shape)
+        std::size_t const count, Shape const& shape,
+        std::size_t const elements = 1)
     {
         std::size_t const chunks = hpx::util::size(shape);
-        return chunks == 0 ? count : (count + chunks - 1) / chunks;
+        std::size_t const iterations =
+            chunks == 0 ? count : (count + chunks - 1) / chunks;
+        return elements <= 1 ? iterations :
+                               (iterations + elements - 1) / elements;
     }
 }    // namespace hpx::parallel::util::detail
 

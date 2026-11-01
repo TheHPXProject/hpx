@@ -168,6 +168,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -185,7 +186,7 @@ namespace hpx::parallel {
         HPX_CXX_CORE_EXPORT template <typename T>
         struct fill_iteration
         {
-            std::decay_t<T> val_;
+            std::decay_t<T const&> val_;
 
             template <typename U>
             HPX_HOST_DEVICE void operator()(U&& u) const
@@ -230,7 +231,9 @@ namespace hpx::parallel {
 
                 return for_each_n<FwdIter>().call(HPX_FORWARD(ExPolicy, policy),
                     first, detail::distance(first, last),
-                    fill_iteration<T>{val}, hpx::identity_v);
+                    hpx::threads::detail::with_task_size(fill_iteration<T>{val},
+                        util::detail::element_operation_size<FwdIter>()),
+                    hpx::identity_v);
             }
         };
         /// \endcond
@@ -263,7 +266,10 @@ namespace hpx::parallel {
             {
                 return for_each_n<FwdIter_>().call(
                     HPX_FORWARD(ExPolicy, policy), first, count,
-                    [val](auto&& v) -> void { v = val; }, hpx::identity_v);
+                    hpx::threads::detail::with_task_size(
+                        [val](auto&& v) -> void { v = val; },
+                        util::detail::element_operation_size<FwdIter_>()),
+                    hpx::identity_v);
             }
         };
         /// \endcond

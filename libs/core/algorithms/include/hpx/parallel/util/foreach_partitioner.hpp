@@ -17,6 +17,7 @@
 #include <hpx/modules/execution_base.hpp>
 #include <hpx/modules/pack_traversal.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
+#include <hpx/parallel/util/detail/elements_per_task_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/partitioner_iteration.hpp>
 #include <hpx/parallel/util/detail/scoped_executor_parameters.hpp>
@@ -41,6 +42,11 @@ namespace hpx::parallel::util::detail {
     {
         using Result = partitioner_result_t<ChunkResult>;
 
+        // the loop body handles this many elements in the time its task
+        // size stands for (read before f is moved)
+        std::size_t const elements =
+            detail::elements_per_task_size<ExPolicy, FwdIter>(f);
+
         // estimate a chunk size based on number of cores used
         using parameters_type =
             hpx::execution::experimental::extract_executor_parameters_t<
@@ -62,7 +68,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx_variable(
                 policy, first, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             return execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
@@ -73,7 +79,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
                 policy, f, first, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             using executor_type = decltype(policy.executor());
             auto&& reshaped = reshape(HPX_MOVE(shape), cores);
@@ -139,7 +145,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
                 policy, inititems, f, first, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             auto&& workitems = execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
