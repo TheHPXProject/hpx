@@ -13,6 +13,7 @@
 #include <hpx/modules/iostream.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <ios>
 #include <span>
 #include <stdexcept>
 #include <type_traits>

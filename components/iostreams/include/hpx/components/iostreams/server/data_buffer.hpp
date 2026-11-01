@@ -13,7 +13,7 @@
 #include <hpx/components/iostreams/export_definitions.hpp>
 #include <hpx/components/iostreams/write_functions.hpp>
 
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <mutex>
 #include <utility>

@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <iosfwd>
+#include <ios>
 #include <limits>
 #include <memory>
 #include <string>

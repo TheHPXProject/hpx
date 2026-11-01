@@ -17,7 +17,7 @@
 #include <hpx/iostream/read.hpp>
 #include <hpx/iostream/traits.hpp>
 
-#include <iosfwd>
+#include <ios>
 #include <memory>
 #include <type_traits>
 #include <utility>
