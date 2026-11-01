@@ -21,6 +21,7 @@
 #include <hpx/modules/type_support.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/chunk_size.hpp>
+#include <hpx/parallel/util/detail/elements_per_task_size.hpp>
 #include <hpx/parallel/util/detail/handle_local_exceptions.hpp>
 #include <hpx/parallel/util/detail/partitioner_iteration.hpp>
 #include <hpx/parallel/util/detail/scoped_executor_parameters.hpp>
@@ -42,6 +43,11 @@ namespace hpx::parallel::util::detail {
     auto partition(ExPolicy policy, IterOrR it_or_r, std::size_t count, F&& f)
     {
         using Result = partitioner_result_t<ChunkResult>;
+
+        // the loop body handles this many elements in the time its task
+        // size stands for (read before f is moved)
+        std::size_t const elements =
+            detail::elements_per_task_size<ExPolicy, IterOrR>(f);
 
         // estimate a chunk size based on number of cores used
         using parameters_type =
@@ -66,7 +72,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_variable(
                 policy, it_or_r, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(total, shape);
+                detail::iterations_per_chunk(total, shape, elements);
 
             return execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
@@ -77,7 +83,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape(
                 policy, f, it_or_r, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             using executor_type = decltype(policy.executor());
 
@@ -143,7 +149,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape(
                 policy, inititems, f, it_or_r, count, cores);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             auto&& workitems = execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
@@ -159,6 +165,11 @@ namespace hpx::parallel::util::detail {
         ExPolicy policy, FwdIter first, std::size_t count, Stride stride, F&& f)
     {
         using Result = partitioner_result_t<ChunkResult>;
+
+        // the loop body handles this many elements in the time its task
+        // size stands for (read before f is moved)
+        std::size_t const elements =
+            detail::elements_per_task_size<ExPolicy, FwdIter>(f);
 
         // estimate a chunk size based on number of cores used
         using parameters_type =
@@ -181,7 +192,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx_variable(
                 policy, first, count, cores, stride);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             return execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
@@ -192,7 +203,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
                 policy, f, first, count, cores, stride);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             using executor_type = decltype(policy.executor());
 
@@ -258,7 +269,7 @@ namespace hpx::parallel::util::detail {
             auto&& shape = detail::get_bulk_iteration_shape_idx(
                 policy, inititems, f, first, count, cores, stride);
             std::size_t const iterations =
-                detail::iterations_per_chunk(count, shape);
+                detail::iterations_per_chunk(count, shape, elements);
 
             auto&& workitems = execution::bulk_async_execute(policy.executor(),
                 partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
@@ -276,6 +287,11 @@ namespace hpx::parallel::util::detail {
         std::vector<std::size_t> const& chunk_sizes, Data&& data, F&& f)
     {
         using Result = partitioner_result_t<ChunkResult>;
+
+        // the loop body handles this many elements in the time its task
+        // size stands for (read before f is moved)
+        std::size_t const elements =
+            detail::elements_per_task_size<ExPolicy, FwdIter>(f);
 
         HPX_ASSERT(hpx::util::size(data) >= hpx::util::size(chunk_sizes));
 
@@ -307,7 +323,7 @@ namespace hpx::parallel::util::detail {
         HPX_ASSERT(chunk_size_it == chunk_sizes.end());
 
         std::size_t const iterations =
-            detail::iterations_per_chunk(total, shape);
+            detail::iterations_per_chunk(total, shape, elements);
 
         return execution::bulk_async_execute(policy.executor(),
             partitioner_iteration<Result, F>{HPX_FORWARD(F, f), iterations},
