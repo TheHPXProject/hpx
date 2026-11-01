@@ -380,8 +380,11 @@ namespace hpx::when_all_vector_detail {
 
             void finish() noexcept
             {
-                if (--predecessors_remaining == 0)
+                if (predecessors_remaining.fetch_sub(
+                        1, std::memory_order_release) == 1)
                 {
+                    std::atomic_thread_fence(std::memory_order_acquire);
+
                     if (!set_stopped_error_called.load(
                             std::memory_order_acquire))
                     {
