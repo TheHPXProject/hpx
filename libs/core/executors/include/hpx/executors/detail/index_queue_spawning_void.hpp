@@ -46,7 +46,9 @@ namespace hpx::parallel::execution::detail {
     template <typename SharedState>
     struct task_function
     {
-        hpx::intrusive_ptr<SharedState> const state;
+        // not const, so that the task is moved, not copied, when it is
+        // handed to the new thread
+        hpx::intrusive_ptr<SharedState> state;
         std::size_t const size;
         std::uint32_t const chunk_size;
         std::uint32_t const worker_thread;
@@ -171,12 +173,20 @@ namespace hpx::parallel::execution::detail {
 
         // Store an exception and mark that an exception was thrown in the
         // operation state. This function assumes that there is a current
-        // exception.
+        // exception. Storing allocates: if that fails, the operation reports
+        // bad_alloc instead.
         template <typename Exception>
-        void store_exception(Exception e) const
+        void store_exception(Exception e) const noexcept
         {
-            // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
-            state->exceptions.add(HPX_MOVE(e));
+            try
+            {
+                // NOLINTNEXTLINE(bugprone-throw-keyword-missing)
+                state->exceptions.add(HPX_MOVE(e));
+            }
+            catch (...)
+            {
+                state->bad_alloc_thrown = true;
+            }
         }
 
         // After an exception, the chunks left in the worker's own queue are
@@ -193,41 +203,11 @@ namespace hpx::parallel::execution::detail {
         }
 
         // Finish the work for one worker thread, which has taken done chunks.
-        // The operation completes once all of its chunks are done, so it
-        // doesn't wait for a worker thread that started only after the other
-        // workers took all of its chunks: that thread finds nothing to do. The
-        // worker that finishes the last chunks calls set_exception if there is
-        // an exception, otherwise set_value on the shared state.
         void finish(std::uint32_t const done) const noexcept
         {
             HPX_TRACING_MARK_EVENT("finish");
 
-            if (done != 0 &&
-                state->chunks_remaining.data_.fetch_sub(
-                    done, std::memory_order_acq_rel) == done)
-            {
-                if (state->bad_alloc_thrown.load(std::memory_order_relaxed))
-                {
-                    try
-                    {
-                        throw std::bad_alloc();
-                    }
-                    catch (...)
-                    {
-                        state->set_exception(std::current_exception());
-                    }
-                }
-                else if (state->exceptions.size() != 0)
-                {
-                    state->set_exception(
-                        hpx::detail::construct_lightweight_exception(
-                            HPX_MOVE(state->exceptions)));
-                }
-                else
-                {
-                    state->set_data(hpx::util::unused);
-                }
-            }
+            state->finish_chunks(done);
 
             // tell the scheduler that this task has finished running
             auto const* thread_data =
@@ -490,6 +470,88 @@ namespace hpx::parallel::execution::detail {
             HPX_ASSERT(hpx::threads::count(pu_mask) == available_threads);
         }
 
+        // Count done chunks as finished. The operation completes once all of
+        // its chunks are done, so it doesn't wait for a worker thread that
+        // started only after the other workers took all of its chunks: that
+        // thread finds nothing to do. The caller that finishes the last chunks
+        // calls set_exception if there is an exception, otherwise set_value.
+        void finish_chunks(std::uint32_t const done) noexcept
+        {
+            if (done == 0 ||
+                chunks_remaining.data_.fetch_sub(
+                    done, std::memory_order_acq_rel) != done)
+            {
+                return;
+            }
+
+            if (bad_alloc_thrown.load(std::memory_order_relaxed))
+            {
+                try
+                {
+                    throw std::bad_alloc();
+                }
+                catch (...)
+                {
+                    this->set_exception(std::current_exception());
+                }
+            }
+            else if (exceptions.size() != 0)
+            {
+                this->set_exception(
+                    hpx::detail::construct_lightweight_exception(
+                        HPX_MOVE(exceptions)));
+            }
+            else
+            {
+                this->set_data(hpx::util::unused);
+            }
+        }
+
+    private:
+        // Store the current exception, which was thrown while spawning a task.
+        void store_current_exception() noexcept
+        {
+            try
+            {
+                throw;
+            }
+            catch (std::bad_alloc const&)
+            {
+                bad_alloc_thrown = true;
+            }
+            catch (...)
+            {
+                try
+                {
+                    exceptions.add(std::current_exception());
+                }
+                catch (...)
+                {
+                    bad_alloc_thrown = true;
+                }
+            }
+        }
+
+        // Take the chunks of the queues of the given worker threads, which
+        // have no task, and count them as done.
+        void skip_queues(
+            std::uint32_t worker_thread, std::uint32_t const end) noexcept
+        {
+            using hpx::concurrency::detail::queue_end;
+
+            std::uint32_t skipped = 0;
+            for (; worker_thread != end; ++worker_thread)
+            {
+                auto& queue = queues[worker_thread].data_;
+                while (queue.template pop<queue_end::left>())
+                {
+                    ++skipped;
+                }
+            }
+            finish_chunks(skipped);
+        }
+
+    public:
         void execute(hpx::threads::thread_description const& desc,
             threads::thread_pool_base* pool)
         {
@@ -502,7 +564,10 @@ namespace hpx::parallel::execution::detail {
             std::uint32_t chunk_size = get_chunk_size(size);
             std::uint32_t const num_chunks =
                 (size + chunk_size - 1) / chunk_size;
-            chunks_remaining.data_.store(num_chunks, std::memory_order_relaxed);
+            // This thread holds one more chunk until it can no longer store an
+            // exception, so that the operation can't complete before.
+            chunks_remaining.data_.store(
+                num_chunks + 1, std::memory_order_relaxed);
 
             // launch only as many tasks as we have chunks
             std::uint32_t const num_pus = num_threads;
@@ -581,84 +646,124 @@ namespace hpx::parallel::execution::detail {
             bool const allow_stealing =
                 !hpx::threads::do_not_share_function(hint.sharing_mode());
 
-            for (std::uint32_t pu = 0;
-                worker_thread != num_threads && pu != num_pus; ++pu)
+            // Each worker thread gets a task, which adopts one of the
+            // references set here. The caller holds the only other reference.
+            // A task that isn't spawned because its queue is empty releases
+            // its reference when it is destroyed.
+            HPX_ASSERT(this->count_ == 1);
+            this->count_.store(
+                static_cast<long>(num_threads) + 1, std::memory_order_release);
+            std::uint32_t adopted = 0;
+
+            try
             {
-                std::size_t const pu_num = rp.get_pu_num(
-                    wrapped_pu_num(pu, needs_wraparound) + first_thread);
-
-                // The queue for the local thread is handled later inline.
-                if (!main_thread_ok && pu == local_worker_thread &&
-                    allow_stealing)
+                for (std::uint32_t pu = 0;
+                    worker_thread != num_threads && pu != num_pus; ++pu)
                 {
-                    // The initializing thread is expected to participate in
-                    // evaluating parallel regions, but only if stealing is
-                    // allowed.
-                    HPX_ASSERT(hpx::threads::test(pu_mask, pu_num));
-                    main_thread_ok = true;
-                    local_worker_thread = worker_thread++;
-                    main_pu_num = rp.get_pu_num(
-                        wrapped_pu_num(local_worker_thread, needs_wraparound) +
-                        first_thread);
-                    continue;
+                    std::size_t const pu_num = rp.get_pu_num(
+                        wrapped_pu_num(pu, needs_wraparound) + first_thread);
+
+                    // The queue for the local thread is handled later inline.
+                    if (!main_thread_ok && pu == local_worker_thread &&
+                        allow_stealing)
+                    {
+                        // The initializing thread is expected to participate
+                        // in evaluating parallel regions, but only if
+                        // stealing is allowed.
+                        HPX_ASSERT(hpx::threads::test(pu_mask, pu_num));
+                        main_thread_ok = true;
+                        local_worker_thread = worker_thread++;
+                        main_pu_num =
+                            rp.get_pu_num(wrapped_pu_num(local_worker_thread,
+                                              needs_wraparound) +
+                                first_thread);
+                        continue;
+                    }
+
+                    // don't double-book the core that runs the main thread
+                    if (main_thread_ok && main_pu_num == pu_num)
+                    {
+                        continue;
+                    }
+
+                    // create an HPX thread only for cores in the given PU-mask
+                    if (!hpx::threads::test(pu_mask, pu_num))
+                    {
+                        continue;
+                    }
+
+                    // Schedule task for this worker thread
+                    ++adopted;
+                    do_work_task(post_policy, desc, pool, needs_wraparound,
+                        task_function<index_queue_bulk_state>{
+                            hpx::intrusive_ptr<index_queue_bulk_state>(
+                                this, false),
+                            size, chunk_size, worker_thread, reverse_placement,
+                            allow_stealing});
+
+                    ++worker_thread;
                 }
 
-                // don't double-book the core that runs the main thread
-                if (main_thread_ok && main_pu_num == pu_num)
-                {
-                    continue;
-                }
-
-                // create an HPX thread only for cores in the given PU-mask
-                if (!hpx::threads::test(pu_mask, pu_num))
-                {
-                    continue;
-                }
-
-                // Schedule task for this worker thread
-                do_work_task(post_policy, desc, pool, needs_wraparound,
-                    task_function<index_queue_bulk_state>{
-                        hpx::intrusive_ptr<index_queue_bulk_state>(this), size,
-                        chunk_size, worker_thread, reverse_placement,
-                        allow_stealing});
-
-                ++worker_thread;
+                // there have to be as many HPX threads as there are set bits
+                // in the PU-mask
+                HPX_ASSERT(worker_thread == num_threads);
+            }
+            catch (...)
+            {
+                // The tasks already spawned run, and the caller waits for
+                // them. The chunks of the queues without a task are counted as
+                // done, so that the operation completes. The local queue, if
+                // it has been assigned, is not one of them.
+                store_current_exception();
+                skip_queues(worker_thread, num_threads);
             }
 
-            // there have to be as many HPX threads as there are set bits in
-            // the PU-mask
-            HPX_ASSERT(worker_thread == num_threads);
+            // Release the references of the tasks that were not created.
+            if (main_thread_ok)
+            {
+                ++adopted;
+            }
+            if (adopted != num_threads)
+            {
+                this->count_ -= static_cast<long>(num_threads - adopted);
+            }
 
             // the main thread should have been associated with a queue
             if (main_thread_ok)
             {
                 // Handle the queue for the local thread.
-                hpx::intrusive_ptr<index_queue_bulk_state> this_(this);
+                task_function<index_queue_bulk_state> local_task{
+                    hpx::intrusive_ptr<index_queue_bulk_state>(this, false),
+                    size, chunk_size, local_worker_thread, reverse_placement,
+                    allow_stealing};
+
                 if constexpr (Sync)
                 {
-                    // execute directly, if non-async
-                    task_function<index_queue_bulk_state> f{HPX_MOVE(this_),
-                        size, chunk_size, local_worker_thread,
-                        reverse_placement, allow_stealing};
-
-                    if (queues[local_worker_thread].data_.empty())
+                    // execute directly, if non-async. If the queue is empty we
+                    // don't execute the task: it has no chunks to count.
+                    if (!queues[local_worker_thread].data_.empty())
                     {
-                        // If the queue is empty we don't execute the task: it
-                        // has no chunks to count.
-                        return;
+                        local_task();
                     }
-
-                    f();
                 }
                 else
                 {
-                    do_work_task(prepare_launch_policy(true), desc, pool,
-                        needs_wraparound,
-                        task_function<index_queue_bulk_state>{HPX_MOVE(this_),
-                            size, chunk_size, local_worker_thread,
-                            reverse_placement, allow_stealing});
+                    try
+                    {
+                        do_work_task(prepare_launch_policy(true), desc, pool,
+                            needs_wraparound, HPX_MOVE(local_task));
+                    }
+                    catch (...)
+                    {
+                        store_current_exception();
+                        skip_queues(
+                            local_worker_thread, local_worker_thread + 1);
+                    }
                 }
             }
+
+            // release the chunk this thread holds
+            finish_chunks(1);
         }
 
         std::uint32_t first_thread;
