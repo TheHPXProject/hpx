@@ -344,6 +344,14 @@ namespace hpx::threads::policies {
             return true;
         }
 
+        // Called by a thread running on the given worker before it runs
+        // another task directly (see thread_execution_hint::run_as_child), as
+        // the worker doesn't get back to its scheduling loop in the meantime.
+        // Only schedulers that rely on steal requests need to do anything.
+        virtual void handle_steal_requests(std::size_t /*num_thread*/) noexcept
+        {
+        }
+
     protected:
         // allow derived schedulers to start stealing staged tasks earlier than
         // after max_idle_loop_count / 2 empty scheduling loop iterations
