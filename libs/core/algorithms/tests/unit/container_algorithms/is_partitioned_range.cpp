@@ -14,6 +14,7 @@
 #include <iostream>
 #include <iterator>
 #include <random>
+#include <ranges>
 #include <string>
 #include <vector>
 
@@ -358,6 +359,64 @@ void partitioned_bad_alloc_test()
     test_partitioned_bad_alloc<std::forward_iterator_tag>();
 }
 
+void test_is_partitioned_sentinel()
+{
+    std::vector<int> c1 = {2, 4, 6, 1, 3};
+    auto v1 = c1 | std::views::take_while([](int n) { return n > 0; });
+
+    bool result1 =
+        hpx::ranges::is_partitioned(v1, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result1);
+
+    bool result2 = hpx::ranges::is_partitioned(
+        hpx::execution::seq, v1, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result2);
+
+    bool result3 = hpx::ranges::is_partitioned(
+        v1.begin(), v1.end(), [](int n) { return n % 2 == 0; });
+    HPX_TEST(result3);
+
+    bool result4 = hpx::ranges::is_partitioned(hpx::execution::seq, v1.begin(),
+        v1.end(), [](int n) { return n % 2 == 0; });
+    HPX_TEST(result4);
+
+    bool result_par = hpx::ranges::is_partitioned(
+        hpx::execution::par, v1, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result_par);
+
+    bool result_task = hpx::ranges::is_partitioned(
+        hpx::execution::par(hpx::execution::task), v1, [](int n) {
+            return n % 2 == 0;
+        }).get();
+    HPX_TEST(result_task);
+
+    bool result_par_iter = hpx::ranges::is_partitioned(hpx::execution::par,
+        v1.begin(), v1.end(), [](int n) { return n % 2 == 0; });
+    HPX_TEST(result_par_iter);
+
+    std::vector<int> c2 = {2, 1, 4, 6, 3};
+    auto v2 = c2 | std::views::take_while([](int n) { return n > 0; });
+
+    bool result5 =
+        hpx::ranges::is_partitioned(v2, [](int n) { return n % 2 == 0; });
+    HPX_TEST(!result5);
+
+    bool result5_par = hpx::ranges::is_partitioned(
+        hpx::execution::par, v2, [](int n) { return n % 2 == 0; });
+    HPX_TEST(!result5_par);
+
+    std::vector<int> c3 = {2, 1, -1, 4};
+    auto v3 = c3 | std::views::take_while([](int n) { return n > 0; });
+
+    bool result6 =
+        hpx::ranges::is_partitioned(v3, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result6);
+
+    bool result6_par = hpx::ranges::is_partitioned(
+        hpx::execution::par, v3, [](int n) { return n % 2 == 0; });
+    HPX_TEST(result6_par);
+}
+
 int hpx_main(hpx::program_options::variables_map& vm)
 {
     unsigned int seed = static_cast<unsigned int>(std::time(nullptr));
@@ -367,6 +426,7 @@ int hpx_main(hpx::program_options::variables_map& vm)
     std::cout << "using seed: " << seed << std::endl;
     std::srand(seed);
 
+    test_is_partitioned_sentinel();
     partitioned_test1();
     partitioned_test2();
     partitioned_test3();
