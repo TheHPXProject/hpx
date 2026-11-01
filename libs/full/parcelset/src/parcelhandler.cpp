@@ -810,22 +810,31 @@ namespace hpx::parcelset {
             LPT_(debug).format("parcelhandler::put_parcel_impl: reschedule: {}",
                 p.parcel_id());
 
-            {
-                // reschedule request as an HPX thread to avoid hangs
-                void (parcelhandler::*put_parcel_ptr)(
-                    parcel, write_handler_type) = &parcelhandler::put_parcel;
+            // reschedule request as an HPX thread to avoid hangs
+            parcel hold_p = p;
+            write_handler_type hold_f = f;
 
-                threads::thread_init_data data(
-                    threads::make_thread_function_nullary(
-                        put_parcel_ptr, this, HPX_MOVE(p), HPX_MOVE(f)),
-                    "parcelhandler::put_parcel",
-                    threads::thread_priority::boost,
-                    threads::thread_schedule_hint(),
-                    threads::thread_stacksize::medium,
-                    threads::thread_schedule_state::pending, true);
-                threads::register_thread(data);
-                return;
-            }
+            threads::thread_init_data data(
+                threads::make_thread_function_nullary(
+                    [this, p = HPX_MOVE(p), f = HPX_MOVE(f),
+                        hold_p = HPX_MOVE(hold_p),
+                        hold_f = HPX_MOVE(hold_f)]() mutable {
+                        hpx::detail::try_catch_exception_ptr(
+                            [&]() {
+                                this->put_parcel(HPX_MOVE(p), HPX_MOVE(f));
+                            },
+                            [&](std::exception_ptr const& ep) {
+                                error_code const ec = make_error_code(
+                                    get_error(ep), throwmode::rethrow);
+                                hold_f(ec, hold_p);
+                            });
+                    }),
+                "parcelhandler::put_parcel", threads::thread_priority::boost,
+                threads::thread_schedule_hint(),
+                threads::thread_stacksize::medium,
+                threads::thread_schedule_state::pending, true);
+            threads::register_thread(data);
+            return;
         }
 
         // properly initialize parcel
@@ -999,12 +1008,30 @@ namespace hpx::parcelset {
                 parcels.size());
 
             // reschedule request as an HPX thread to avoid hangs
-            void (parcelhandler::*put_parcels_ptr)(std::vector<parcel>,
-                std::vector<write_handler_type>) = &parcelhandler::put_parcels;
+            std::vector<parcel> hold_parcels = parcels;
+            std::vector<write_handler_type> hold_handlers = handlers;
 
             threads::thread_init_data data(
-                threads::make_thread_function_nullary(put_parcels_ptr, this,
-                    HPX_MOVE(parcels), HPX_MOVE(handlers)),
+                threads::make_thread_function_nullary(
+                    [this, parcels = HPX_MOVE(parcels),
+                        handlers = HPX_MOVE(handlers),
+                        hold_parcels = HPX_MOVE(hold_parcels),
+                        hold_handlers = HPX_MOVE(hold_handlers)]() mutable {
+                        hpx::detail::try_catch_exception_ptr(
+                            [&]() {
+                                this->put_parcels(
+                                    HPX_MOVE(parcels), HPX_MOVE(handlers));
+                            },
+                            [&](std::exception_ptr const& ep) {
+                                error_code const ec = make_error_code(
+                                    get_error(ep), throwmode::rethrow);
+                                for (std::size_t i = 0;
+                                    i != hold_parcels.size(); ++i)
+                                {
+                                    hold_handlers[i](ec, hold_parcels[i]);
+                                }
+                            });
+                    }),
                 "parcelhandler::put_parcels", threads::thread_priority::boost,
                 threads::thread_schedule_hint(),
                 threads::thread_stacksize::medium,
