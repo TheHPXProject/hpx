@@ -119,6 +119,7 @@ namespace hpx {
 #include <hpx/parallel/algorithms/for_each.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
+#include <hpx/parallel/util/detail/transfer_task_size.hpp>
 #include <hpx/parallel/util/result_types.hpp>
 #include <hpx/parallel/util/zip_iterator.hpp>
 
@@ -146,10 +147,12 @@ namespace hpx::parallel {
 
             return get_iter_in_in_result(for_each_n<zip_iterator>().call(
                 HPX_FORWARD(ExPolicy, policy), zip_iterator(first1, first2), n,
-                [](reference t) -> void {
-                    using hpx::get;
-                    std::ranges::swap(get<0>(t), get<1>(t));
-                },
+                hpx::threads::detail::with_task_size(
+                    [](reference t) -> void {
+                        using hpx::get;
+                        std::ranges::swap(get<0>(t), get<1>(t));
+                    },
+                    util::detail::element_operation_size<FwdIter1, FwdIter2>()),
                 hpx::identity_v));
         }
 

@@ -186,6 +186,7 @@ set(algorithms_headers
     hpx/parallel/task_block.hpp
     hpx/parallel/task_group.hpp
     hpx/parallel/unseq.hpp
+    hpx/parallel/unseq/elements_per_call.hpp
     hpx/parallel/unseq/loop.hpp
     hpx/parallel/unseq/reduce.hpp
     hpx/parallel/unseq/reduce_helpers.hpp
@@ -200,6 +201,7 @@ set(algorithms_headers
     hpx/parallel/util/detail/chunk_size.hpp
     hpx/parallel/util/detail/chunk_size_iterator.hpp
     hpx/parallel/util/detail/clear_container.hpp
+    hpx/parallel/util/detail/elements_per_task_size.hpp
     hpx/parallel/util/detail/handle_exception_termination_handler.hpp
     hpx/parallel/util/detail/handle_local_exceptions.hpp
     hpx/parallel/util/detail/handle_remote_exceptions.hpp
@@ -207,6 +209,7 @@ set(algorithms_headers
     hpx/parallel/util/detail/scoped_executor_parameters.hpp
     hpx/parallel/util/detail/sender_util.hpp
     hpx/parallel/util/detail/select_partitioner.hpp
+    hpx/parallel/util/detail/transfer_task_size.hpp
     hpx/parallel/util/foreach_partitioner.hpp
     hpx/parallel/util/invoke_projected.hpp
     hpx/parallel/util/loop.hpp
@@ -233,6 +236,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar.hpp
       hpx/parallel/datapar/adjacent_difference.hpp
       hpx/parallel/datapar/adjacent_find.hpp
+      hpx/parallel/datapar/elements_per_call.hpp
       hpx/parallel/datapar/equal.hpp
       hpx/parallel/datapar/fill.hpp
       hpx/parallel/datapar/find.hpp
