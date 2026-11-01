@@ -48,6 +48,8 @@ if(HPX_WITH_DATAPAR)
       transform_datapar
       transform_reduce_datapar
       transform_reduce_binary_datapar
+      unique_datapar
+      unique_copy_datapar
   )
 endif()
 

@@ -49,6 +49,7 @@ set(algorithms_headers
     hpx/parallel/algorithms/detail/tag_dispatch.hpp
     hpx/parallel/algorithms/detail/task_size_argument.hpp
     hpx/parallel/algorithms/detail/transfer.hpp
+    hpx/parallel/algorithms/detail/unique.hpp
     hpx/parallel/algorithms/detail/upper_lower_bound.hpp
     hpx/parallel/algorithms/ends_with.hpp
     hpx/parallel/algorithms/equal.hpp
@@ -246,6 +247,7 @@ if(HPX_WITH_DATAPAR)
       hpx/parallel/datapar/search.hpp
       hpx/parallel/datapar/transfer.hpp
       hpx/parallel/datapar/transform_loop.hpp
+      hpx/parallel/datapar/unique.hpp
       hpx/parallel/datapar/zip_iterator.hpp
   )
 endif()
