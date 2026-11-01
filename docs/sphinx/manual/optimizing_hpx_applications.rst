@@ -3612,77 +3612,9 @@ system and application performance.
 APEX integration
 ================
 
-|hpx| provides integration with |apex|_, which is a framework for application
-profiling using task timers and various performance counters :footcite:t:`2015:apex`.
-It can be added as a ``git`` submodule by turning on the option :option:`HPX_WITH_APEX:BOOL`
-during |cmake|_ configuration. |tau|_ is an optional dependency when using |apex|.
-
-To build |hpx| with |apex|_, add :option:`HPX_WITH_APEX`\ ``=ON``, and,
-optionally, ``Tau_ROOT=$PATH_TO_TAU`` to your |cmake|_ configuration. In
-addition, you can override the tag used for |apex|_ with the
-:option:`HPX_WITH_APEX_TAG` option. Please see the |apex_hpx_doc|_ for detailed
-instructions on using |apex|_ with |hpx|.
-
-.. _optimizing_with_tracy:
+The |apex|_ integration is described in :ref:`profiling_with_apex`.
 
 Tracy integration
 =================
 
-|hpx| provides integration with the |tracy|_ profiler, which offers
-per-thread zone tracking, message logs, and fiber support. Enable it with
-:option:`HPX_WITH_TRACY`\ ``=ON`` during |cmake|_ configuration.
-
-Tracy is fetched by CMake at configure time from
-`github.com/wolfpld/tracy <https://github.com/wolfpld/tracy>`_. The version
-is pinned by ``HPX_WITH_TRACY_TAG`` (defaults to ``v0.14.1``). |hpx| forces
-``TRACY_ENABLE``, ``TRACY_ON_DEMAND``, ``TRACY_FIBERS`` and ``TRACY_STATIC``
-on the built client so the profiler is always active on-demand, fibers are
-tracked, and TracyClient stays a static library that links cleanly into
-``hpx_tracy`` regardless of ``BUILD_SHARED_LIBS``. For offline builds
-without GitHub access, point ``FETCHCONTENT_SOURCE_DIR_TRACY`` at a local
-Tracy source tree and CMake's FetchContent will use it in place of the
-download.
-
-On Windows, |hpx| additionally sets ``TRACY_DBGHELP_LOCK=HpxDbgHelp`` on
-the built Tracy client so DbgHelp calls from Tracy and from |hpx|'s own
-symbol lookup share a single mutex (DbgHelp is single-threaded per MSDN).
-
-Scheduler zones no longer carry callstacks. The captured frames were the
-scheduler-dispatch path itself, identical for every task, and the zone
-name and phase already identify the work.
-
-To profile a distributed run, additionally enable
-:option:`HPX_WITH_PARCEL_PROFILING`\ ``=ON`` so per-parcel identifiers are
-carried on the wire and the ``send_parcel`` / ``recv_parcel`` /
-``parcel_scheduled`` events can be correlated across localities by parcel id.
-
-Event classes can be compiled out individually to reduce the tracing cost
-when only a subset of the timeline is being investigated:
-:option:`HPX_WITH_TRACING_LIFECYCLE_EVENTS`,
-:option:`HPX_WITH_TRACING_CAUSAL_EVENTS`, and
-:option:`HPX_WITH_TRACING_WORK_STEALING_EVENTS`. All three default to ``ON``; turning
-one off compiles the wrapper for that class to a no-op, so the runtime
-connection check and the event body do not run (argument evaluation at each
-call site is unchanged). The lifecycle and work-stealing gates affect the
-Tracy and ITT-Notify backends; the causal gate affects the Tracy backend
-only. On ITT-Notify builds these events are only emitted when ITT-Notify is
-enabled at runtime with ``--hpx:ini=hpx.use_itt_notify=1``. The APEX and
-empty backends already treat all three as no-ops.
-
-:option:`HPX_WITH_TRACING_SAMPLE_RATE` sets the initial 1-in-N sampling
-rate for the per-task lifecycle events instead of gating them off
-entirely. The rate can be overridden at runtime via the
-``hpx.tracing.sample_rate`` INI entry (for example
-``--hpx:ini=hpx.tracing.sample_rate=10``); values below 1 are clamped to
-1. Causal events are not sampled and continue to fire every time.
-``task_staged`` is also unconditional because it fires before per-task
-state exists to consult.
-
-Start ``tracy-profiler`` (or ``tracy-capture`` for headless capture) before
-or during the run. Tracy discovers instrumented processes via UDP broadcast
-on the local network; no port configuration is required for the common case.
-
-References
-==========
-
-.. footbibliography::
+The |tracy|_ integration is described in :ref:`optimizing_with_tracy`.
