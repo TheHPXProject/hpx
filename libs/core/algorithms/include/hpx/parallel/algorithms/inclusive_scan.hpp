@@ -427,9 +427,11 @@ namespace hpx {
 #include <hpx/modules/executors.hpp>
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/advance_and_get_distance.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/tag_dispatch.hpp>
+#include <hpx/parallel/algorithms/detail/task_size_argument.hpp>
 #include <hpx/parallel/util/detail/algorithm_result.hpp>
 #include <hpx/parallel/util/detail/clear_container.hpp>
 #include <hpx/parallel/util/detail/sender_util.hpp>
@@ -564,6 +566,29 @@ namespace hpx::parallel {
                 // same partitions the first step operated on.
 
                 using hpx::get;
+                using hpx::threads::detail::with_task_size;
+
+                // an iteration of steps 1 and 3 has the size of op called with
+                // the result so far and an element
+                auto const size1 = task_size_of_iteration<T const&,
+                    task_size_argument_t<FwdIter1>>(op, first);
+                auto const size3 = task_size_of_iteration<T const&,
+                    task_size_argument_t<FwdIter2>>(op, dest);
+
+                // step 1 performs first part of scan algorithm
+                auto f1 = [op, last](zip_iterator part_begin,
+                              std::size_t part_size) -> T {
+                    T part_init = get<0>(*part_begin);
+                    get<1>(*part_begin++) = part_init;
+
+                    auto iters = part_begin.get_iterator_tuple();
+                    if (get<0>(iters) != last)
+                    {
+                        return sequential_inclusive_scan_n(get<0>(iters),
+                            part_size - 1, get<1>(iters), part_init, op);
+                    }
+                    return part_init;
+                };
 
                 auto f3 = [op](zip_iterator part_begin, std::size_t part_size,
                               T val) mutable -> void {
@@ -577,39 +602,25 @@ namespace hpx::parallel {
                 };
 
                 return util::scan_partitioner<ExPolicy,
-                    util::in_out_result<FwdIter1, FwdIter2>, T>::
-                    call(
-                        HPX_FORWARD(ExPolicy, policy),
-                        zip_iterator(first, dest), count, init,
-                        // step 1 performs first part of scan algorithm
-                        [op, last](zip_iterator part_begin,
-                            std::size_t part_size) -> T {
-                            T part_init = get<0>(*part_begin);
-                            get<1>(*part_begin++) = part_init;
-
-                            auto iters = part_begin.get_iterator_tuple();
-                            if (get<0>(iters) != last)
-                            {
-                                return sequential_inclusive_scan_n(
-                                    get<0>(iters), part_size - 1, get<1>(iters),
-                                    part_init, op);
-                            }
-                            return part_init;
-                        },
-                        // step 2 propagates the partition results from left
-                        // to right
-                        op,
-                        // step 3 runs final accumulation on each partition
-                        HPX_MOVE(f3),
-                        // step 4 use this return value
-                        [last_iter, final_dest](std::vector<T>&&,
-                            std::vector<hpx::future<void>>&& data) {
-                            // make sure iterators embedded in function object that is
-                            // attached to futures are invalidated
-                            util::detail::clear_container(data);
-                            return util::in_out_result<FwdIter1, FwdIter2>{
-                                last_iter, final_dest};
-                        });
+                    util::in_out_result<FwdIter1, FwdIter2>,
+                    T>::call(HPX_FORWARD(ExPolicy, policy),
+                    zip_iterator(first, dest), count, init,
+                    // step 1 performs first part of scan algorithm
+                    with_task_size(HPX_MOVE(f1), size1),
+                    // step 2 propagates the partition results from left
+                    // to right
+                    op,
+                    // step 3 runs final accumulation on each partition
+                    with_task_size(HPX_MOVE(f3), size3),
+                    // step 4 use this return value
+                    [last_iter, final_dest](std::vector<T>&&,
+                        std::vector<hpx::future<void>>&& data) {
+                        // make sure iterators embedded in function object that is
+                        // attached to futures are invalidated
+                        util::detail::clear_container(data);
+                        return util::in_out_result<FwdIter1, FwdIter2>{
+                            last_iter, final_dest};
+                    });
             }
 
             template <typename ExPolicy, typename FwdIter1, typename Sent,
@@ -743,13 +754,10 @@ namespace hpx {
                 "Requires at least output iterator.");
 
             using result_type = parallel::util::in_out_result<InIter, OutIter>;
-            using value_type =
-                typename std::iterator_traits<InIter>::value_type;
 
             return parallel::util::get_second_element(
                 parallel::detail::inclusive_scan<result_type>().call(
-                    hpx::execution::seq, first, last, dest,
-                    std::plus<value_type>()));
+                    hpx::execution::seq, first, last, dest, std::plus<>()));
         }
 
         template <typename ExPolicy, typename FwdIter1, typename FwdIter2>
@@ -768,15 +776,13 @@ namespace hpx {
             static_assert(std::forward_iterator<FwdIter2>,
                 "Requires at least forward iterator.");
 
-            using value_type =
-                typename std::iterator_traits<FwdIter1>::value_type;
             using result_type =
                 parallel::util::in_out_result<FwdIter1, FwdIter2>;
 
             return parallel::util::get_second_element(
                 parallel::detail::inclusive_scan<result_type>().call(
                     HPX_FORWARD(ExPolicy, policy), first, last, dest,
-                    std::plus<value_type>()));
+                    std::plus<>()));
         }
 
         template <typename InIter, typename OutIter, typename Op>
