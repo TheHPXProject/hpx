@@ -158,7 +158,7 @@ namespace hpx::threads::policies {
 
             // core number this task data originated from
             std::uint16_t num_thread_;
-            hpx::detail::small_vector<thread_id_ref_type, 1> tasks_;
+            hpx::detail::small_vector<thread_id_ref_type, 32> tasks_;
         };
 
         using workrequesting_task_channel =
@@ -697,6 +697,48 @@ namespace hpx::threads::policies {
         ///////////////////////////////////////////////////////////////////////
         // create a new thread and schedule it if the initial state is equal to
         // pending
+        void serve_steal_requests_while_spawning(std::size_t num_thread)
+        {
+            if (num_thread >= num_queues_ ||
+                hpx::threads::detail::get_local_thread_num_tss() !=
+                    num_thread ||
+                parent_pool_ == nullptr ||
+                hpx::threads::detail::get_thread_pool_num_tss() !=
+                    parent_pool_->get_pool_id().index())
+            {
+                return;
+            }
+
+            auto& d = data_[num_thread].data_;
+            if (d.requests_->is_empty() ||
+                !has_scheduler_mode(
+                    policies::scheduler_mode::enable_stealing, num_thread))
+            {
+                return;
+            }
+
+            if (d.queue_->get_staged_queue_length(std::memory_order_relaxed) !=
+                0)
+            {
+                std::size_t added = 0;
+                d.queue_->wait_or_add_new(true, added, false);
+            }
+
+            if (hpx::threads::detail::get_local_thread_num_tss() != num_thread)
+            {
+                return;
+            }
+
+            steal_request req;
+            while (try_receiving_steal_request(d, req))
+            {
+                if (!handle_steal_request(d, req))
+                {
+                    break;
+                }
+            }
+        }
+
         void create_thread(thread_init_data& data, thread_id_ref_type* id,
             error_code& ec) override
         {
@@ -758,6 +800,14 @@ namespace hpx::threads::policies {
             case thread_priority::normal:
                 HPX_ASSERT(num_thread < num_queues_);
                 data_[num_thread].data_.queue_->create_thread(data, id, ec);
+                {
+                    thread_local std::size_t spawn_count = 0;
+                    if (HPX_UNLIKELY((++spawn_count & 15) == 0))
+                    {
+                        serve_steal_requests_while_spawning(
+                            hpx::threads::detail::get_local_thread_num_tss());
+                    }
+                }
                 break;
 
             case thread_priority::unknown:
@@ -847,20 +897,20 @@ namespace hpx::threads::policies {
             return false;
         }
 
-        // decline_or_forward_one_steal_requests is only called when a worker
+        // decline_or_forward_all_steal_requests is called when a worker
         // has nothing else to do but to relay steal requests, which means the
         // worker is idle.
-        void decline_or_forward_one_steal_requests(scheduler_data& d) noexcept
+        void decline_or_forward_all_steal_requests(scheduler_data& d) noexcept
         {
-            if (!d.requests_->is_empty())
+            steal_request req;
+            while (try_receiving_steal_request(d, req))
             {
-                steal_request req;
-                if (try_receiving_steal_request(d, req))
-                {
 #if defined(HPX_HAVE_WORKREQUESTING_STEAL_STATISTICS)
-                    ++d.steal_requests_received_;
+                ++d.steal_requests_received_;
 #endif
-                    decline_or_forward_steal_request(d, req);
+                if (decline_or_forward_steal_request(d, req))
+                {
+                    break;
                 }
             }
         }
@@ -887,16 +937,37 @@ namespace hpx::threads::policies {
             // what's requested, either one task or half of the available tasks.
             // As with the other schedulers, nothing is stolen while there are
             // fewer pending tasks than min_tasks_to_steal_pending.
-            std::int64_t const pending_count =
+            std::int64_t pending_count =
                 d.queue_->get_pending_queue_length(std::memory_order_relaxed);
+
+            if ((pending_count <= 0 ||
+                    pending_count <
+                        thread_queue_init_.min_tasks_to_steal_pending_) &&
+                d.queue_->get_staged_queue_length(std::memory_order_relaxed) !=
+                    0)
+            {
+                std::size_t added = 0;
+                d.queue_->wait_or_add_new(true, added, false);
+                pending_count = d.queue_->get_pending_queue_length(
+                    std::memory_order_relaxed);
+            }
 
             std::size_t max_num_to_steal = 0;
             if (pending_count >= thread_queue_init_.min_tasks_to_steal_pending_)
             {
                 // the pending queue length is never negative
+                std::size_t half = static_cast<std::size_t>(pending_count / 2);
+                if (half == 0)
+                {
+                    half = 1;
+                }
+                // Cap steal batches at 32 so:
+                // 1) Up to 32 tasks transferred with ZERO heap allocation
+                // 2) The victim is not stalled copying thousands of items
+                // 3) Work remains for other thieves to steal concurrently
                 max_num_to_steal = req.stealhalf_ ?
-                    static_cast<std::size_t>(pending_count / 2) :
-                    1;
+                    (std::min) (std::size_t(32), half) :
+                    (std::min) (std::size_t(8), half);
             }
 
             // The requesting core may be stopping or suspended, in which case
@@ -1063,7 +1134,7 @@ namespace hpx::threads::policies {
                     }
                     else
                     {
-                        decline_or_forward_one_steal_requests(d);
+                        decline_or_forward_all_steal_requests(d);
                     }
                 }
 
@@ -1639,7 +1710,45 @@ namespace hpx::threads::policies {
                 else
 #endif
                 {
-                    victim = random_victim(d.num_thread_, req);
+                    // Search for victims with work, starting at a random offset to prevent
+                    // all idle thieves from hammering the same victim's channel.
+                    victim = static_cast<std::size_t>(-1);
+                    std::mt19937& gen = data_[d.num_thread_].data_.gen_;
+                    std::uniform_int_distribution<std::size_t> uniform(
+                        0, num_queues_ - 1);
+                    std::size_t const start = uniform(gen);
+
+                    for (std::size_t offset = 0; offset != num_queues_;
+                        ++offset)
+                    {
+                        std::size_t const i = (start + offset) % num_queues_;
+                        if (i != req.num_thread_ && !test(req.victims_, i))
+                        {
+                            auto* q = data_[i].data_.queue_;
+                            if (q &&
+                                (q->get_pending_queue_length(
+                                     std::memory_order_relaxed) > 0 ||
+                                    q->get_staged_queue_length(
+                                        std::memory_order_relaxed) > 0))
+                            {
+                                victim = i;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (victim == static_cast<std::size_t>(-1))
+                    {
+                        if (d.num_thread_ != req.num_thread_)
+                        {
+                            // A forwarding victim found no work anywhere: return directly to thief
+                            victim = req.num_thread_;
+                        }
+                        else
+                        {
+                            victim = random_victim(d.num_thread_, req);
+                        }
+                    }
                 }
             }
 
@@ -1892,7 +2001,7 @@ namespace hpx::threads::policies {
                     return false;
                 }
 
-                decline_or_forward_one_steal_requests(d);
+                decline_or_forward_all_steal_requests(d);
                 return true;
             }
 
@@ -1917,6 +2026,17 @@ namespace hpx::threads::policies {
             {
                 send_steal_request(d);
                 HPX_ASSERT(d.requested_ != 0);
+
+                // Adaptive spin: give victim a brief window (~100-200ns) to fulfill
+                // before falling through to thread manager idle backoff
+                for (int spin = 0; spin != 32; ++spin)
+                {
+                    if (!d.tasks_->is_empty())
+                    {
+                        break;
+                    }
+                    HPX_SMT_PAUSE;
+                }
             }
 
             if (!d.tasks_->is_empty() &&
@@ -1929,7 +2049,7 @@ namespace hpx::threads::policies {
             // pending steal requests, if there are any
             if (HPX_UNLIKELY(!d.requests_->is_empty()))
             {
-                decline_or_forward_one_steal_requests(d);
+                decline_or_forward_all_steal_requests(d);
             }
 
 #ifdef HPX_HAVE_THREAD_MINIMAL_DEADLOCK_DETECTION
