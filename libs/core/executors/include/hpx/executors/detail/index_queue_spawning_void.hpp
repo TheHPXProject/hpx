@@ -564,7 +564,10 @@ namespace hpx::parallel::execution::detail {
             std::uint32_t chunk_size = get_chunk_size(size);
             std::uint32_t const num_chunks =
                 (size + chunk_size - 1) / chunk_size;
-            chunks_remaining.data_.store(num_chunks, std::memory_order_relaxed);
+            // This thread holds one more chunk until it can no longer store an
+            // exception, so that the operation can't complete before.
+            chunks_remaining.data_.store(
+                num_chunks + 1, std::memory_order_relaxed);
 
             // launch only as many tasks as we have chunks
             std::uint32_t const num_pus = num_threads;
@@ -736,15 +739,12 @@ namespace hpx::parallel::execution::detail {
 
                 if constexpr (Sync)
                 {
-                    // execute directly, if non-async
-                    if (queues[local_worker_thread].data_.empty())
+                    // execute directly, if non-async. If the queue is empty we
+                    // don't execute the task: it has no chunks to count.
+                    if (!queues[local_worker_thread].data_.empty())
                     {
-                        // If the queue is empty we don't execute the task: it
-                        // has no chunks to count.
-                        return;
+                        local_task();
                     }
-
-                    local_task();
                 }
                 else
                 {
@@ -761,6 +761,9 @@ namespace hpx::parallel::execution::detail {
                     }
                 }
             }
+
+            // release the chunk this thread holds
+            finish_chunks(1);
         }
 
         std::uint32_t first_thread;
