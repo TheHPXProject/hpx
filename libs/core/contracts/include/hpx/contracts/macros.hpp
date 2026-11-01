@@ -14,17 +14,20 @@
 ///
 /// ## API Reference:
 /// - **HPX_PRE(condition)**: Precondition contracts (declaration specifier in
-///   C++26; no-op in fallback mode)
+///   C++26; no-op in fallback mode or if contracts are disabled)
 /// - **HPX_POST(condition)**: Postcondition contracts (declaration specifier
-///   in C++26; no-op in fallback mode)
-/// - **HPX_CONTRACT_ASSERT(condition)**: Contract assertions (always active;
-///   dispatches on HPX_WITH_CONTRACTS_MODE in fallback mode)
+///   in C++26; no-op in fallback mode or if contracts are disabled)
+/// - **HPX_CONTRACT_ASSERT(condition)**: Contract assertions (dispatches on
+///   HPX_WITH_CONTRACTS_MODE in fallback mode; falls back to HPX_ASSERT if
+///   contracts are disabled)
 ///
 /// ## Configuration:
+/// Contracts are disabled by default (HPX_WITH_CONTRACTS=OFF).
 /// Enable native contracts with:
-///     `cmake -DHPX_WITH_CONTRACTS=ON -DCMAKE_CXX_STANDARD=26`
+///     `cmake -DHPX_WITH_CONTRACTS=ON -DHPX_WITH_CXX_STANDARD=26`
 /// Set fallback mode with:
-///     `cmake -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE`
+///     `cmake -DHPX_WITH_CONTRACTS=ON
+///         -DHPX_WITH_CONTRACTS_MODE=ENFORCE|QUICK_ENFORCE|OBSERVE|IGNORE`
 
 // Don't report missing #include for HPX_ASSERT macro
 // hpxinspect:noinclude:HPX_ASSERT
@@ -35,7 +38,14 @@
 #include <hpx/contracts/config/defines.hpp>
 #include <hpx/assertion/macros.hpp>
 
-#if defined(HPX_HAVE_CXX26_CONTRACTS)
+#if !defined(HPX_HAVE_CONTRACTS)
+
+// Contracts disabled, even if native contracts are available
+#define HPX_PRE(x)
+#define HPX_POST(x)
+#define HPX_CONTRACT_ASSERT(x) HPX_ASSERT(x)
+
+#elif defined(HPX_HAVE_CXX26_CONTRACTS)
 
 // Native C++26 contracts mode
 #define HPX_PRE(x) pre(x)
@@ -97,4 +107,4 @@
 
 #endif    // HPX_HAVE_CONTRACTS_MODE
 
-#endif    // HPX_HAVE_CXX26_CONTRACTS
+#endif    // HPX_HAVE_CONTRACTS
