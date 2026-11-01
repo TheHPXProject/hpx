@@ -108,6 +108,7 @@ libraries:
        -isystem /path/to/boost/include                         \
        -L/path/to/hpx/lib                                      \
        -DHPX_APPLICATION_EXPORTS                               \
+       -DHPX_HAVE_WRAP_MAIN_CONFIGURED                         \
        -Wl,-wrap=main                                          \
        -Wl,--start-group /path/to/hpx/lib/libhpx_*.a           \
        -Wl,--end-group                                         \
@@ -127,7 +128,9 @@ linker's ``--wrap`` option; the flag must therefore appear on the *linker*
 command line, not merely in the compile flags. Without it, the |hpx| runtime is
 never initialised and all API calls crash at startup. See
 :ref:`hpx_main_implementation_linux` for a detailed explanation of the
-mechanism.
+mechanism. In raw compiler/linker invocations without CMake, pass
+``-DHPX_HAVE_WRAP_MAIN_CONFIGURED`` alongside it during compilation to suppress
+the compile-time diagnostic emitted by ``hpx/hpx_main.hpp``.
 
 .. important::
 

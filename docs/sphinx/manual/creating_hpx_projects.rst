@@ -497,7 +497,7 @@ Add the following code:
 
    CXX=(CXX)  # Add your favourite compiler here or let makefile choose default.
 
-   CXXFLAGS=-O3 -std=c++17
+   CXXFLAGS=-O3 -std=c++17 -DHPX_HAVE_WRAP_MAIN_CONFIGURED
 
    Boost_ROOT=/path/to/boost
    Hwloc_ROOT=/path/to/hwloc
@@ -519,6 +519,8 @@ Add the following code:
 .. important::
 
    ``LINK_FLAGS`` should be left empty if HPX_WITH_HPX_MAIN is set to OFF.
+   Similarly, ``-DHPX_HAVE_WRAP_MAIN_CONFIGURED`` in ``CXXFLAGS`` is only
+   needed when linking with ``libhpx_wrap.a -Wl,-wrap=main`` on Linux.
    Boost in the above example is build with ``--layout=tagged``. Actual Boost
    flags may vary on your build of Boost.
 
@@ -569,7 +571,7 @@ Now, in the directory, create a Makefile. Add the following code:
 
    CXX=(CXX)  # Add your favourite compiler here or let makefile choose default.
 
-   CXXFLAGS=-O3 -std=c++17
+   CXXFLAGS=-O3 -std=c++17 -DHPX_HAVE_WRAP_MAIN_CONFIGURED
 
    Boost_ROOT=/path/to/boost
    Hwloc_ROOT=/path/to/hwloc

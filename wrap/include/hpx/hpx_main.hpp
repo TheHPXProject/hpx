@@ -25,7 +25,8 @@
 //
 // Actionable remedies (pick one):
 //   CMake  -- add target_link_libraries(<target> PRIVATE HPX::wrap_main)
-//   Manual -- pass -Wl,--wrap=main to the linker explicitly
+//   Manual -- pass -Wl,--wrap=main to the linker explicitly AND define
+//             -DHPX_HAVE_WRAP_MAIN_CONFIGURED during compilation
 //
 // This check is intentionally limited to Linux because the --wrap linker
 // mechanism is only used on Linux.
@@ -35,7 +36,8 @@
 #warning "HPX wrap-main check: you included hpx/hpx_main.hpp but the "             \
     "--wrap=main linker flag has not been applied. Add "                       \
     "target_link_libraries(<target> PRIVATE HPX::wrap_main) to your "         \
-    "CMakeLists.txt, or pass -Wl,--wrap=main to the linker manually. "        \
+    "CMakeLists.txt, or pass -Wl,--wrap=main to the linker AND define "        \
+    "-DHPX_HAVE_WRAP_MAIN_CONFIGURED during compilation. "                    \
     "Without this flag the HPX runtime will not be initialised correctly."
 #endif
 
