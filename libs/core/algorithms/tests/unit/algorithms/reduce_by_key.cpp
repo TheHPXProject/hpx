@@ -567,11 +567,42 @@ void test_reduce_by_key_all_unique()
     HPX_TEST(keys_match);
 }
 
+void test_reduce_by_key_custom_comparator()
+{
+    using namespace hpx::execution;
+
+    // keys are equivalent if they share the same tens digit
+    auto same_tens = [](int a, int b) { return a / 10 == b / 10; };
+
+    std::vector<int> keys = {11, 12, 13, 21, 22};
+    std::vector<int> values = {1, 2, 4, 8, 16};
+
+    {
+        std::vector<int> out_k(5, 0), out_v(5, 0);
+        auto r = hpx::experimental::reduce_by_key(seq, keys.begin(), keys.end(),
+            values.begin(), out_k.begin(), out_v.begin(), same_tens);
+
+        HPX_TEST_EQ(std::distance(out_v.begin(), r.out), std::ptrdiff_t(2));
+        HPX_TEST_EQ(out_v[0], 7);
+        HPX_TEST_EQ(out_v[1], 24);
+    }
+    {
+        std::vector<int> out_k(5, 0), out_v(5, 0);
+        auto r = hpx::experimental::reduce_by_key(par, keys.begin(), keys.end(),
+            values.begin(), out_k.begin(), out_v.begin(), same_tens);
+
+        HPX_TEST_EQ(std::distance(out_v.begin(), r.out), std::ptrdiff_t(2));
+        HPX_TEST_EQ(out_v[0], 7);
+        HPX_TEST_EQ(out_v[1], 24);
+    }
+}
+
 void reduce_by_key_edge_case_test()
 {
     test_reduce_by_key_empty();
     test_reduce_by_key_single_group();
     test_reduce_by_key_all_unique();
+    test_reduce_by_key_custom_comparator();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

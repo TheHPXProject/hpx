@@ -372,7 +372,7 @@ namespace hpx::parallel::detail {
                 element_type elem_n = *std::prev(key_last);
                 element_type elemn = *std::prev(std::prev(key_last));
                 key_state.back() =
-                    reduce_key_series_states(elem_n != elemn, true);
+                    reduce_key_series_states(!comp(elem_n, elemn), true);
             }
         }
         {
