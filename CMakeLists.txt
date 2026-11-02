@@ -62,10 +62,10 @@ string(TIMESTAMP HPX_COPYRIGHT_YEAR "%Y")
 # Build all of HPX
 # ##############################################################################
 set(HPX_VERSION_MAJOR 2)
-set(HPX_VERSION_MINOR 0)
+set(HPX_VERSION_MINOR 1)
 set(HPX_VERSION_SUBMINOR 0)
 set(HPX_VERSION_DATE 20261031)
-set(HPX_VERSION_TAG "")
+set(HPX_VERSION_TAG "-trunk")
 
 set(HPX_VERSION
     "${HPX_VERSION_MAJOR}.${HPX_VERSION_MINOR}.${HPX_VERSION_SUBMINOR}"
