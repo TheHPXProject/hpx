@@ -18,7 +18,7 @@
 #include <hpx/iostream/traits.hpp>
 #include <hpx/modules/type_support.hpp>
 
-#include <iosfwd>
+#include <ios>
 #include <string>
 #include <type_traits>
 
