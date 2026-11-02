@@ -43,8 +43,8 @@
 //
 // Explicit non-goals, deferred to Task 4c:
 //   - No full-queue-drain detection across *all* worker slots.
-//   - No error handling for spawn_worker() itself throwing (e.g. process launch
-//     failure) -- this is assumed to succeed throughout.
+//   - No error handling for a failed process launch in spawn_worker(); only an
+//     aborting worker that exits during startup is purged and retried.
 //
 // Shutdown-signal convention introduced here: there is no supervision_dispatch
 // primitive that lets one peer forcibly latch a terminal event for another
@@ -97,6 +97,10 @@ namespace {
     // dropped instead of requeued (see the catch block below).
     constexpr int max_task_retries = 3;
 
+    // Number of times spawn_worker() launches a worker that exits during
+    // startup (an aborting worker can) before giving up.
+    constexpr int max_spawn_attempts = 3;
+
     // See the shutdown-signal convention paragraph in the file comment above.
     constexpr char const* shutdown_sentinel_message =
         "__worker_slot_shutdown__";
@@ -145,8 +149,9 @@ namespace {
         worker_variant variant;
 
         // Keeps the spawned child process handle alive for the lifetime of this
-        // slot; never waited on explicitly - the worker exits on its own
-        // (idle-timeout or root-fencing), not because root asks it to.
+        // slot. The worker exits on its own (idle-timeout or root-fencing), not
+        // because root asks it to; root waits for that exit before shutting
+        // down.
         hpx::components::process::child child;
     };
 
@@ -162,6 +167,30 @@ namespace {
         int retries = 0;
     };
 
+    // The aborting worker exits without disconnecting. Wait for its process to
+    // be gone and purge its locality via force_disconnect(), as the protocol
+    // requires; otherwise root's shutdown would wait for it forever.
+    void purge_exited_worker(
+        hpx::components::process::child& c, hpx::id_type const& locality)
+    {
+        c.wait_for_exit(hpx::launch::sync);
+
+        if (hpx::parcelset::locality_was_disconnected(
+                hpx::naming::get_locality_id_from_id(locality)))
+        {
+            return;
+        }
+
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        if (hpx::force_disconnect(locality, ec) != 0 || ec)
+        {
+            hpx::util::format_to(std::cerr,
+                "{}: late_component_launcher: force_disconnect failed for "
+                "exited worker {}\n",
+                hpx::find_here(), locality);
+        }
+    }
+
     // Launches one late_component_worker, late_component_failing_worker, or
     // late_component_aborting_worker process (depending on \p variant), waits
     // for it to connect back as a new locality and join \p handle, creates a
@@ -170,10 +199,12 @@ namespace {
     // component instance, and join epoch - never a reused one, which is
     // exactly what a post-fencing respawn (see run_launcher() below) needs.
     //
-    // Assumes success throughout (see the "Explicit non-goals" paragraph in the
-    // file comment above): a process launch failure here is not handled and
-    // simply propagates out of this function.
-    worker_slot spawn_worker(
+    // Returns std::nullopt if an aborting worker exits before it joined or
+    // while its component is created; spawn_worker() then tries again. A
+    // process launch failure is not handled (see the "Explicit non-goals"
+    // paragraph in the file comment above) and simply propagates out of this
+    // function.
+    std::optional<worker_slot> try_spawn_worker(
         hpx::supervision::registry const& handle, worker_variant const variant)
     {
         namespace process = hpx::components::process;
@@ -197,6 +228,14 @@ namespace {
 
         std::vector<std::string> args;
         args.emplace_back("--hpx:threads=1");
+
+        // Root waits for the normal workers to exit before shutting down, so
+        // keep their lifetime short. Only late_component_worker defines this
+        // option.
+        if (variant == worker_variant::normal)
+        {
+            args.emplace_back("--idle-timeout=10000");
+        }
 
         std::vector<hpx::id_type> const localities_before =
             hpx::find_remote_localities();
@@ -238,6 +277,14 @@ namespace {
             });
         if (it == peers.end())
         {
+            // An aborting worker may already have crashed before root got to
+            // see it join.
+            if (variant == worker_variant::aborting)
+            {
+                purge_exited_worker(c, new_locality);
+                return std::nullopt;
+            }
+
             HPX_THROW_EXCEPTION(hpx::error::invalid_status, "spawn_worker",
                 "the spawned worker did not join within the discovery "
                 "timeout");
@@ -248,12 +295,37 @@ namespace {
         // component_worker.cpp's run_root_role().
         auto component = hpx::new_<late_component::test_client>(new_locality);
 
-        hpx::id_type const component_id = component.get_id();
+        // An aborting worker may crash at any time, also while root creates
+        // its component.
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::id_type const component_id = component.get_id(
+            variant == worker_variant::aborting ? ec : hpx::throws);
+        if (ec)
+        {
+            purge_exited_worker(c, new_locality);
+            return std::nullopt;
+        }
+
         return worker_slot{.peer = *it,
             .component = std::move(component),
             .component_id = component_id,
             .variant = variant,
             .child = std::move(c)};
+    }
+
+    worker_slot spawn_worker(
+        hpx::supervision::registry const& handle, worker_variant const variant)
+    {
+        for (int attempt = 0; attempt != max_spawn_attempts; ++attempt)
+        {
+            if (auto slot = try_spawn_worker(handle, variant))
+            {
+                return HPX_MOVE(*slot);
+            }
+        }
+
+        HPX_THROW_EXCEPTION(hpx::error::invalid_status, "spawn_worker",
+            "the spawned worker kept exiting during startup");
     }
 
     // ========================================================================
@@ -271,6 +343,10 @@ namespace {
         // the slot's variant available before nulling it) still knows which
         // variant to relaunch instead of defaulting to worker_variant::normal.
         std::vector<worker_variant> slot_variants;
+
+        // Workers that leave on their own, root waits for them to exit
+        // before shutting down (see the end of this function).
+        std::vector<hpx::components::process::child> departed;
 
         // Seed three workers -- one normal, one that departs mid-epoch without
         // finalize() (see late_component_failing_worker.cpp), and one that
@@ -335,15 +411,18 @@ namespace {
                     // is still reachable.
                     hpx::id_type const fenced_locality =
                         worker_slots[current.worker_slot_index]->peer.locality;
+                    hpx::components::process::child fenced_child = HPX_MOVE(
+                        worker_slots[current.worker_slot_index]->child);
 
                     worker_slots[current.worker_slot_index] = std::nullopt;
 
-                    // A clean hpx::disconnect() has already purged the locality
-                    // by the time dispatch reports locality_was_disconnected. A
-                    // fenced worker still needs force_disconnect() before it
+                    // A clean hpx::disconnect() has already purged the
+                    // locality. A fenced worker, or one that went away without
+                    // disconnecting, still needs force_disconnect() before it
                     // can be replaced.
                     if (locality_was_disconnected)
                     {
+                        departed.push_back(HPX_MOVE(fenced_child));
                         hpx::util::format_to(std::cerr,
                             "{}: late_component_launcher: worker at slot {} "
                             "already disconnected\n",
@@ -357,9 +436,19 @@ namespace {
                             "force_disconnect\n",
                             hpx::find_here(), current.worker_slot_index);
 
+                        // An aborting worker's locality is purged only once
+                        // its process is gone.
                         hpx::error_code ec(hpx::throwmode::lightweight);
-                        int const disconnect_result =
-                            hpx::force_disconnect(fenced_locality, ec);
+                        int disconnect_result = 0;
+                        if (variant == worker_variant::aborting)
+                        {
+                            purge_exited_worker(fenced_child, fenced_locality);
+                        }
+                        else
+                        {
+                            disconnect_result =
+                                hpx::force_disconnect(fenced_locality, ec);
+                        }
 
                         if (disconnect_result != 0 || ec)
                         {
@@ -433,8 +522,14 @@ namespace {
                             throw e;
                         }
 
+                        // The parcel layer reports a worker that died
+                        // without disconnecting as disconnected too, so check
+                        // whether it was actually purged.
                         locality_is_fenced(
-                            err == hpx::error::locality_was_disconnected);
+                            hpx::parcelset::locality_was_disconnected(
+                                hpx::naming::get_locality_id_from_id(
+                                    worker_slots[current.worker_slot_index]
+                                        ->peer.locality)));
                         return true;
                     },
                     [](std::exception_ptr const& ep) {
@@ -458,18 +553,34 @@ namespace {
                 });
             if (!any_remaining)
             {
-                worker_slot const& slot =
-                    *worker_slots[current.worker_slot_index];
+                worker_slot& slot = *worker_slots[current.worker_slot_index];
 
-                // See the shutdown-signal convention paragraph in the file
-                // comment above: bypasses dispatch_work() on purpose, exactly
-                // as component_worker.cpp's get_work_count() verification call
-                // does, since this is a root-local bookkeeping signal, not
-                // fenced work.
-                slot.component.set_message(shutdown_sentinel_message);
+                if (slot.variant == worker_variant::aborting)
+                {
+                    // The aborting worker never waits for the shutdown signal,
+                    // it crashes on its own.
+                    purge_exited_worker(slot.child, slot.peer.locality);
+                }
+                else
+                {
+                    // See the shutdown-signal convention paragraph in the file
+                    // comment above: bypasses dispatch_work() on purpose,
+                    // exactly as component_worker.cpp's get_work_count()
+                    // verification call does, since this is a root-local
+                    // bookkeeping signal, not fenced work.
+                    slot.component.set_message(shutdown_sentinel_message);
+                    departed.push_back(HPX_MOVE(slot.child));
+                }
 
                 worker_slots[current.worker_slot_index] = std::nullopt;
             }
+        }
+
+        // A worker still disconnecting while root runs its shutdown would
+        // never answer root's shutdown request, so let them all exit first.
+        for (hpx::components::process::child& c : departed)
+        {
+            c.wait_for_exit(hpx::launch::sync);
         }
     }
 }    // namespace

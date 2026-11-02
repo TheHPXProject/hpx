@@ -426,6 +426,7 @@ namespace hpx {
 #include <hpx/modules/functional.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/pack_traversal.hpp>
+#include <hpx/modules/threading_base.hpp>
 #include <hpx/parallel/algorithms/detail/dispatch.hpp>
 #include <hpx/parallel/algorithms/detail/distance.hpp>
 #include <hpx/parallel/algorithms/detail/reduce.hpp>
@@ -485,12 +486,15 @@ namespace hpx::parallel {
                     }
                 }
 
-                auto f1 = [r, conv](
-                              Iter part_begin, std::size_t part_size) mutable {
-                    auto val = HPX_INVOKE(conv, *part_begin);
-                    return detail::sequential_reduce<ExPolicy>(
-                        ++part_begin, --part_size, HPX_MOVE(val), r, conv);
-                };
+                // an iteration has the size of the transformation
+                auto f1 = hpx::threads::detail::with_task_size_of<
+                    std::iter_reference_t<Iter>>(
+                    [r, conv](Iter part_begin, std::size_t part_size) mutable {
+                        auto val = HPX_INVOKE(conv, *part_begin);
+                        return detail::sequential_reduce<ExPolicy>(
+                            ++part_begin, --part_size, HPX_MOVE(val), r, conv);
+                    },
+                    conv);
 
                 return util::partitioner<ExPolicy, T>::call(
                     HPX_FORWARD(ExPolicy, policy), first,
@@ -552,24 +556,28 @@ namespace hpx::parallel {
 
                 difference_type count = detail::distance(first1, last1);
 
-                auto f1 = [op1, op2 = HPX_FORWARD(Op2, op2)](
-                              zip_iterator part_begin,
-                              std::size_t part_size) mutable -> T {
-                    auto iters = part_begin.get_iterator_tuple();
-                    Iter it1 = hpx::get<0>(iters);
-                    Iter2 it2 = hpx::get<1>(iters);
+                // an iteration has the size of the transformation (op2 is
+                // copied, it must not be moved from before its size is read)
+                auto f1 = hpx::threads::detail::with_task_size_of<
+                    std::iter_reference_t<Iter>, std::iter_reference_t<Iter2>>(
+                    [op1, op2](zip_iterator part_begin,
+                        std::size_t part_size) mutable -> T {
+                        auto iters = part_begin.get_iterator_tuple();
+                        Iter it1 = hpx::get<0>(iters);
+                        Iter2 it2 = hpx::get<1>(iters);
 
-                    Iter last = it1;
-                    std::advance(last, part_size);
+                        Iter last = it1;
+                        std::advance(last, part_size);
 
-                    auto&& r = HPX_INVOKE(op2, *it1, *it2);
-                    ++it1;
-                    ++it2;
+                        auto&& r = HPX_INVOKE(op2, *it1, *it2);
+                        ++it1;
+                        ++it2;
 
-                    return detail::sequential_reduce<ExPolicy>(it1, last, it2,
-                        HPX_MOVE(r), HPX_FORWARD(Op1, op1),
-                        HPX_FORWARD(Op2, op2));
-                };
+                        return detail::sequential_reduce<ExPolicy>(it1, last,
+                            it2, HPX_MOVE(r), HPX_FORWARD(Op1, op1),
+                            HPX_FORWARD(Op2, op2));
+                    },
+                    op2);
 
                 return util::partitioner<ExPolicy, T>::call(
                     HPX_FORWARD(ExPolicy, policy), zip_iterator(first1, first2),

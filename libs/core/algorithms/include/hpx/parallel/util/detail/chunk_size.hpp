@@ -16,6 +16,8 @@
 #include <hpx/modules/futures.hpp>
 #include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/properties.hpp>
+#include <hpx/modules/threading_base.hpp>
+#include <hpx/modules/timing.hpp>
 #include <hpx/parallel/util/detail/chunk_size_iterator.hpp>
 
 #include <algorithm>
@@ -206,10 +208,37 @@ namespace hpx::parallel::util::detail {
         }
     }
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename IterOrR,
-        typename Stride = std::size_t>
+    // The run time of one iteration of f for parameters that take it from the
+    // task size of the loop body (extract_uses_task_size_v), without running
+    // f; null_duration for all others.
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F>
+    hpx::chrono::steady_duration get_iteration_duration(
+        ExPolicy& policy, F const& f, std::size_t const count)
+    {
+        using parameters_type =
+            hpx::execution::experimental::extract_executor_parameters_t<
+                std::decay_t<ExPolicy>>;
+        if constexpr (hpx::execution::experimental::extract_uses_task_size_v<
+                          parameters_type>)
+        {
+            // the parameters object doesn't invoke the test function
+            constexpr auto no_test = [](std::size_t) -> std::size_t {
+                return 0;
+            };
+            return hpx::execution::experimental::measure_iteration(
+                policy.parameters(), policy.executor(),
+                hpx::threads::detail::with_task_size_of(no_test, f), count);
+        }
+        else
+        {
+            return hpx::chrono::null_duration;
+        }
+    }
+
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
+        typename IterOrR, typename Stride = std::size_t>
     hpx::util::iterator_range<chunk_size_iterator<IterOrR>>
-    get_bulk_iteration_shape(ExPolicy& policy, IterOrR& it_or_r,
+    get_bulk_iteration_shape(ExPolicy& policy, F const& f, IterOrR& it_or_r,
         std::size_t& count, std::size_t& cores, Stride s = Stride(1))
     {
         if (count == 0)
@@ -219,9 +248,11 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
+        auto const iteration_duration =
+            get_iteration_duration(policy, f, count);
+
         cores = hpx::execution::experimental::processing_units_count(
-            policy.parameters(), policy.executor(), hpx::chrono::null_duration,
-            count);
+            policy.parameters(), policy.executor(), iteration_duration, count);
 
         std::size_t max_chunks =
             hpx::execution::experimental::maximal_number_of_chunks(
@@ -229,7 +260,7 @@ namespace hpx::parallel::util::detail {
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
-                policy.executor(), hpx::chrono::null_duration, cores, count);
+                policy.executor(), iteration_duration, cores, count);
 
         // make sure, chunk size and max_chunks are consistent
         adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
@@ -297,8 +328,10 @@ namespace hpx::parallel::util::detail {
 
         // note: running the test function will modify 'count'
         auto iteration_duration =
-            hpx::execution::experimental::measure_iteration(
-                policy.parameters(), policy.executor(), test_function, count);
+            hpx::execution::experimental::measure_iteration(policy.parameters(),
+                policy.executor(),
+                hpx::threads::detail::with_task_size_of(test_function, f1),
+                count);
 
         cores = hpx::execution::experimental::processing_units_count(
             policy.parameters(), policy.executor(), iteration_duration, count);
@@ -456,11 +489,11 @@ namespace hpx::parallel::util::detail {
         workitems.push_back(hpx::make_ready_future());
     }
 
-    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename FwdIter,
-        typename Stride = std::size_t>
+    HPX_CXX_CORE_EXPORT template <typename ExPolicy, typename F,
+        typename FwdIter, typename Stride = std::size_t>
     hpx::util::iterator_range<
         parallel::util::detail::chunk_size_idx_iterator<FwdIter>>
-    get_bulk_iteration_shape_idx(ExPolicy& policy, FwdIter begin,
+    get_bulk_iteration_shape_idx(ExPolicy& policy, F const& f, FwdIter begin,
         std::size_t count, std::size_t& cores, Stride s = Stride(1))
     {
         using iterator =
@@ -473,9 +506,11 @@ namespace hpx::parallel::util::detail {
             return hpx::util::iterator_range(it, it);
         }
 
+        auto const iteration_duration =
+            get_iteration_duration(policy, f, count);
+
         cores = hpx::execution::experimental::processing_units_count(
-            policy.parameters(), policy.executor(), hpx::chrono::null_duration,
-            count);
+            policy.parameters(), policy.executor(), iteration_duration, count);
 
         std::size_t max_chunks =
             hpx::execution::experimental::maximal_number_of_chunks(
@@ -486,7 +521,7 @@ namespace hpx::parallel::util::detail {
 
         std::size_t chunk_size =
             hpx::execution::experimental::get_chunk_size(policy.parameters(),
-                policy.executor(), hpx::chrono::null_duration, cores, count);
+                policy.executor(), iteration_duration, cores, count);
 
         // make sure, chunk size and max_chunks are consistent
         adjust_chunk_size_and_max_chunks(cores, count, max_chunks, chunk_size);
@@ -561,8 +596,10 @@ namespace hpx::parallel::util::detail {
 
         // note: running the test function will modify 'count'
         auto iteration_duration =
-            hpx::execution::experimental::measure_iteration(
-                policy.parameters(), policy.executor(), test_function, count);
+            hpx::execution::experimental::measure_iteration(policy.parameters(),
+                policy.executor(),
+                hpx::threads::detail::with_task_size_of(test_function, f1),
+                count);
 
         cores = hpx::execution::experimental::processing_units_count(
             policy.parameters(), policy.executor(), iteration_duration, count);
