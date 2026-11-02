@@ -665,6 +665,12 @@ struct hpx::traits::get_task_size<
     hpx::parallel::detail::for_each_iteration<ExPolicy, F, Proj>, Size>
   : get_task_size<std::decay_t<F>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::detail::for_each_iteration<ExPolicy, F, Proj> const&
+            f) noexcept
+    {
+        return get_task_size<std::decay_t<F>, Size>::call(f.f_);
+    }
 };
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)

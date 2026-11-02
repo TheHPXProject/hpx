@@ -1,4 +1,4 @@
-//  Copyright (c) 2017-2025 Hartmut Kaiser
+//  Copyright (c) 2017-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -92,7 +92,7 @@ namespace hpx::detail {
             // run_as_child doesn't make sense if we _post_ a task
             auto hint = policy.hint();
             hint.runs_as_child_mode(hpx::threads::thread_execution_hint::none);
-            threads::detail::set_task_size<std::decay_t<F>>(hint);
+            threads::detail::set_task_size(hint, f);
 
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(
@@ -122,7 +122,7 @@ namespace hpx::detail {
             threads::thread_pool_base* pool, F&& f, Ts&&... ts)
         {
             auto hint = policy.hint();
-            threads::detail::set_task_size<std::decay_t<F>>(hint);
+            threads::detail::set_task_size(hint, f);
 
             threads::thread_init_data data(
                 threads::make_thread_function_nullary(

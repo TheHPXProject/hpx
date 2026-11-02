@@ -9,6 +9,7 @@
 #include <hpx/config.hpp>
 #include <hpx/datastructures/traits/is_tuple_like.hpp>
 #include <hpx/modules/functional.hpp>
+#include <hpx/modules/iterator_support.hpp>
 #include <hpx/modules/tracing.hpp>
 #include <hpx/modules/type_support.hpp>
 
@@ -36,6 +37,10 @@ namespace hpx::parallel::util::detail {
     struct partitioner_iteration
     {
         std::decay_t<F> f_;
+
+        // the number of loop iterations a call runs, from which its task size
+        // is derived
+        std::size_t iterations_ = 1;
 
         // Overload for tuple-like types - unpack using index_pack
         template <typename T>
@@ -95,17 +100,36 @@ namespace hpx::parallel::util::detail {
         template <typename Archive>
         void serialize(Archive& ar, unsigned)
         {
-            ar & f_;
+            ar & f_ & iterations_;
         }
     };
+
+    // The loop iterations of a partitioning are split evenly into the chunks of
+    // its shape, each a call of the function.
+    HPX_CXX_CORE_EXPORT template <typename Shape>
+    [[nodiscard]] constexpr std::size_t iterations_per_chunk(
+        std::size_t const count, Shape const& shape)
+    {
+        std::size_t const chunks = hpx::util::size(shape);
+        return chunks == 0 ? count : (count + chunks - 1) / chunks;
+    }
 }    // namespace hpx::parallel::util::detail
 
-// The size of the loop body passes through the wrapper.
+// A call of the wrapper runs a chunk of loop iterations, so its size is derived
+// from the size of the loop body.
 template <typename Result, typename F, hpx::threads::task_size Size>
 struct hpx::traits::get_task_size<
     hpx::parallel::util::detail::partitioner_iteration<Result, F>, Size>
   : get_task_size<std::decay_t<F>, Size>
 {
+    [[nodiscard]] static constexpr threads::task_size call(
+        hpx::parallel::util::detail::partitioner_iteration<Result, F> const&
+            f) noexcept
+    {
+        threads::task_size const size = threads::bulk_task_size(
+            get_task_size<std::decay_t<F>>::call(f.f_), f.iterations_);
+        return size == threads::task_size::unknown ? Size : size;
+    }
 };
 
 #if defined(HPX_HAVE_THREAD_DESCRIPTION)
