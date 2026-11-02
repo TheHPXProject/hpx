@@ -197,7 +197,7 @@ namespace hpx::threads::policies {
             // pick the target the way local_queue_scheduler does, so that a
             // round-robin choice is checked as well
             std::size_t target =
-                schedulehint.mode == thread_schedule_hint_mode::thread ?
+                schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 static_cast<std::size_t>(schedulehint.hint) :
                 static_cast<std::size_t>(-1);
             if (target == static_cast<std::size_t>(-1))
@@ -211,7 +211,7 @@ namespace hpx::threads::policies {
             {
                 target = self;
             }
-            schedulehint.mode = thread_schedule_hint_mode::thread;
+            schedulehint.mode(thread_schedule_hint_mode::thread);
             schedulehint.hint = static_cast<std::int16_t>(target);
             return schedulehint;
         }

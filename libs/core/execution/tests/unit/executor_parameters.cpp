@@ -1,4 +1,4 @@
-//  Copyright (c) 2015-2024 Hartmut Kaiser
+//  Copyright (c) 2015-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,8 +7,13 @@
 #include <hpx/execution.hpp>
 #include <hpx/init.hpp>
 #include <hpx/modules/testing.hpp>
+#include <hpx/modules/threading_base.hpp>
+#include <hpx/numeric.hpp>
+#include <hpx/thread.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -122,6 +127,144 @@ void test_auto_chunk_size()
     }
 }
 
+void test_task_size_chunk_size()
+{
+    using namespace std::chrono_literals;
+    using hpx::execution::experimental::task_size_chunk_size;
+
+    // loop bodies without a size are chunked as with the default parameters
+    {
+        task_size_chunk_size tscs;
+        parameters_test(tscs);
+    }
+
+    hpx::execution::parallel_executor exec;
+    task_size_chunk_size const tscs(100us, 4);
+    auto const body = [](std::size_t) -> std::size_t { return 0; };
+
+    // the run time of one iteration is the one the size stands for, unknown
+    // without a size
+    HPX_TEST(tscs.measure_iteration(exec, hpx::small_task(body), 100).value() ==
+        hpx::task_size_duration(hpx::task_size::small_));
+    HPX_TEST(tscs.measure_iteration(exec, body, 100).value() ==
+        hpx::chrono::null_duration.value());
+
+    std::size_t const available =
+        hpx::execution::experimental::processing_units_count(exec);
+
+    // 1000 iterations of 100 ns are 100 us of work, less than 4 chunks of
+    // 100 us: one core, one chunk
+    HPX_TEST_EQ(tscs.processing_units_count(exec, 100ns, 1000), 1u);
+    HPX_TEST_EQ(tscs.get_chunk_size(exec, 100ns, 1, 1000), 1000u);
+
+    // 10000 iterations of 100 us: all cores, 4 chunks each
+    HPX_TEST_EQ(tscs.processing_units_count(exec, 100us, 10000), available);
+    HPX_TEST_EQ(tscs.get_chunk_size(exec, 100us, 4, 10000), 625u);
+
+    // chunks are not shorter than 100 us (10 iterations of 10 us)
+    HPX_TEST_EQ(tscs.get_chunk_size(exec, 10us, 4, 100), 10u);
+
+    // without a run time the default parameters apply
+    HPX_TEST_EQ(
+        tscs.processing_units_count(exec, hpx::chrono::null_duration, 1000),
+        available);
+    HPX_TEST_EQ(
+        tscs.get_chunk_size(exec, hpx::chrono::null_duration, 4, 1000), 0u);
+
+    // a loop of a few nano iterations runs on the calling thread
+    {
+        std::vector<int> v(100);
+        auto const caller = hpx::this_thread::get_id();
+        bool all_on_caller = true;
+        hpx::for_each(hpx::execution::par.with(tscs), v.begin(), v.end(),
+            hpx::nano_task([&](int& i) {
+                i = 1;
+                if (hpx::this_thread::get_id() != caller)
+                    all_on_caller = false;
+            }));
+        HPX_TEST(all_on_caller);
+        HPX_TEST(std::all_of(v.begin(), v.end(), [](int i) { return i == 1; }));
+    }
+
+    // the transformation of transform_reduce gives the size of an iteration
+    {
+        std::vector<int> v(100, 1);
+        auto const caller = hpx::this_thread::get_id();
+        bool all_on_caller = true;
+        int const sum = hpx::transform_reduce(hpx::execution::par.with(tscs),
+            v.begin(), v.end(), 0, std::plus<>(), hpx::nano_task([&](int i) {
+                if (hpx::this_thread::get_id() != caller)
+                    all_on_caller = false;
+                return i;
+            }));
+        HPX_TEST(all_on_caller);
+        HPX_TEST_EQ(sum, 100);
+    }
+
+    // 10000 small iterations are about 1 ms of work, which runs in several
+    // chunks on several cores (if there are), all through bulk_async_execute
+    {
+        HPX_TEST_EQ(tscs.processing_units_count(exec, 100ns, 10000),
+            (std::min) (std::size_t(2), available));
+
+        std::vector<int> v(10000, 1);
+        int const sum = hpx::transform_reduce(hpx::execution::par.with(tscs),
+            v.begin(), v.end(), 0, std::plus<>(),
+            hpx::small_task([](int i) { return i; }));
+        HPX_TEST_EQ(sum, 10000);
+
+        task_size_chunk_size const defaults;
+        int const reduced = hpx::reduce(hpx::execution::par.with(defaults),
+            v.begin(), v.end(), 0, hpx::small_task(std::plus<>()));
+        HPX_TEST_EQ(reduced, 10000);
+
+        int const transformed = hpx::transform_reduce(
+            hpx::execution::par.with(defaults), v.begin(), v.end(), 0,
+            std::plus<>(), hpx::small_task([](int i) { return i; }));
+        HPX_TEST_EQ(transformed, 10000);
+    }
+
+    // by default, a core needs 8 chunks of 2.5 us: 100 iterations of 100 ns
+    // are one chunk on one core
+    {
+        task_size_chunk_size const defaults;
+        HPX_TEST_EQ(defaults.processing_units_count(exec, 100ns, 100), 1u);
+        HPX_TEST_EQ(defaults.get_chunk_size(exec, 100ns, 1, 100), 100u);
+    }
+}
+
+// With HPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS the default parameters chunk a
+// loop body that has a task size like task_size_chunk_size, otherwise (and for
+// loop bodies without a size) into 4 chunks per core.
+void test_default_parameters()
+{
+    using namespace std::chrono_literals;
+    using hpx::execution::experimental::default_parameters;
+
+#if defined(HPX_HAVE_TASK_SIZE_DEFAULT_PARAMETERS)
+    static_assert(hpx::execution::experimental::extract_uses_task_size_v<
+        default_parameters>);
+    constexpr std::size_t sized_chunk_size = 32;    // 1000 / (8 * 4)
+#else
+    static_assert(!hpx::execution::experimental::extract_uses_task_size_v<
+        default_parameters>);
+    constexpr std::size_t sized_chunk_size = 63;    // 1000 / (4 * 4)
+#endif
+
+    hpx::execution::parallel_executor exec;
+    default_parameters const params;
+    HPX_TEST_EQ(params.get_chunk_size(exec, 1us, 4, 1000), sized_chunk_size);
+    HPX_TEST_EQ(
+        params.get_chunk_size(exec, hpx::chrono::null_duration, 4, 1000),
+        std::size_t(63));
+
+    // par uses the default parameters
+    std::vector<int> v(10000, 1);
+    int const sum = hpx::transform_reduce(hpx::execution::par, v.begin(),
+        v.end(), 0, std::plus<>(), hpx::small_task([](int i) { return i; }));
+    HPX_TEST_EQ(sum, 10000);
+}
+
 void test_persistent_auto_chunk_size()
 {
     {
@@ -219,6 +362,8 @@ int hpx_main(hpx::program_options::variables_map& vm)
     test_guided_chunk_size();
     test_auto_chunk_size();
     test_persistent_auto_chunk_size();
+    test_task_size_chunk_size();
+    test_default_parameters();
     test_num_cores();
 
     test_combined_hooks();

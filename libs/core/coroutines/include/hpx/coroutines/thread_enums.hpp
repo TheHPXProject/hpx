@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 #include <hpx/coroutines/config/defines.hpp>
 #include <hpx/coroutines/detail/combined_tagged_state.hpp>
+#include <hpx/modules/functional.hpp>
 
 #include <cstdint>
 #include <iosfwd>
@@ -378,7 +379,11 @@ namespace hpx::threads {
     {
         /// Construct a default hint with mode thread_schedule_hint_mode::none.
         constexpr thread_schedule_hint() noexcept
-          : placement_mode_bits(
+          : mode_bits(
+                static_cast<std::uint8_t>(thread_schedule_hint_mode::none))
+          , task_size_bits(
+                static_cast<std::uint8_t>(threads::task_size::unknown))
+          , placement_mode_bits(
                 static_cast<std::int8_t>(thread_placement_hint::none))
           , sharing_mode_bits(
                 static_cast<std::int8_t>(thread_sharing_hint::none))
@@ -392,10 +397,13 @@ namespace hpx::threads {
         constexpr explicit thread_schedule_hint(std::int16_t const thread_hint,
             thread_placement_hint placement = thread_placement_hint::none,
             thread_execution_hint runs_as_child = default_runs_as_child_hint,
-            thread_sharing_hint sharing = thread_sharing_hint::none) noexcept
+            thread_sharing_hint sharing = thread_sharing_hint::none,
+            threads::task_size size = threads::task_size::unknown) noexcept
           : hint(thread_hint)
-          , mode(thread_hint >= 0 ? thread_schedule_hint_mode::thread :
-                                    thread_schedule_hint_mode::none)
+          , mode_bits(static_cast<std::uint8_t>(thread_hint >= 0 ?
+                    thread_schedule_hint_mode::thread :
+                    thread_schedule_hint_mode::none))
+          , task_size_bits(static_cast<std::uint8_t>(size))
           , placement_mode_bits(static_cast<std::int8_t>(placement))
           , sharing_mode_bits(static_cast<std::int8_t>(sharing))
           , runs_as_child_mode_bits(static_cast<std::int8_t>(runs_as_child))
@@ -408,9 +416,11 @@ namespace hpx::threads {
             std::int16_t const hint,
             thread_placement_hint placement = thread_placement_hint::none,
             thread_execution_hint runs_as_child = default_runs_as_child_hint,
-            thread_sharing_hint sharing = thread_sharing_hint::none) noexcept
+            thread_sharing_hint sharing = thread_sharing_hint::none,
+            threads::task_size size = threads::task_size::unknown) noexcept
           : hint(hint)
-          , mode(mode)
+          , mode_bits(static_cast<std::uint8_t>(mode))
+          , task_size_bits(static_cast<std::uint8_t>(size))
           , placement_mode_bits(static_cast<std::int8_t>(placement))
           , sharing_mode_bits(static_cast<std::int8_t>(sharing))
           , runs_as_child_mode_bits(static_cast<std::int8_t>(runs_as_child))
@@ -420,7 +430,11 @@ namespace hpx::threads {
         /// Construct a hint with the given placement hint.
         explicit constexpr thread_schedule_hint(
             thread_placement_hint placement) noexcept
-          : placement_mode_bits(static_cast<std::int8_t>(placement))
+          : mode_bits(
+                static_cast<std::uint8_t>(thread_schedule_hint_mode::none))
+          , task_size_bits(
+                static_cast<std::uint8_t>(threads::task_size::unknown))
+          , placement_mode_bits(static_cast<std::int8_t>(placement))
           , sharing_mode_bits(
                 static_cast<std::int8_t>(thread_sharing_hint::none))
           , runs_as_child_mode_bits(
@@ -431,7 +445,11 @@ namespace hpx::threads {
         /// Construct a hint with the given execution hint.
         explicit constexpr thread_schedule_hint(
             thread_execution_hint runs_as_child) noexcept
-          : placement_mode_bits(
+          : mode_bits(
+                static_cast<std::uint8_t>(thread_schedule_hint_mode::none))
+          , task_size_bits(
+                static_cast<std::uint8_t>(threads::task_size::unknown))
+          , placement_mode_bits(
                 static_cast<std::int8_t>(thread_placement_hint::none))
           , sharing_mode_bits(
                 static_cast<std::int8_t>(thread_sharing_hint::none))
@@ -442,9 +460,28 @@ namespace hpx::threads {
         /// Construct a hint with the given sharing hint.
         explicit constexpr thread_schedule_hint(
             thread_sharing_hint sharing) noexcept
-          : placement_mode_bits(
+          : mode_bits(
+                static_cast<std::uint8_t>(thread_schedule_hint_mode::none))
+          , task_size_bits(
+                static_cast<std::uint8_t>(threads::task_size::unknown))
+          , placement_mode_bits(
                 static_cast<std::int8_t>(thread_placement_hint::none))
           , sharing_mode_bits(static_cast<std::int8_t>(sharing))
+          , runs_as_child_mode_bits(
+                static_cast<std::int8_t>(default_runs_as_child_hint))
+        {
+        }
+
+        /// Construct a hint with the given task size.
+        explicit constexpr thread_schedule_hint(
+            threads::task_size size) noexcept
+          : mode_bits(
+                static_cast<std::uint8_t>(thread_schedule_hint_mode::none))
+          , task_size_bits(static_cast<std::uint8_t>(size))
+          , placement_mode_bits(
+                static_cast<std::int8_t>(thread_placement_hint::none))
+          , sharing_mode_bits(
+                static_cast<std::int8_t>(thread_sharing_hint::none))
           , runs_as_child_mode_bits(
                 static_cast<std::int8_t>(default_runs_as_child_hint))
         {
@@ -454,7 +491,8 @@ namespace hpx::threads {
         constexpr bool operator==(
             thread_schedule_hint const& rhs) const noexcept
         {
-            return mode == rhs.mode && hint == rhs.hint &&
+            return mode() == rhs.mode() && hint == rhs.hint &&
+                task_size() == rhs.task_size() &&
                 placement_mode() == rhs.placement_mode() &&
                 sharing_mode() == rhs.sharing_mode() &&
                 runs_as_child_mode() == rhs.runs_as_child_mode();
@@ -469,6 +507,24 @@ namespace hpx::threads {
 
         // gcc V9 requires to store the bits as integers instead of directly
         // storing the enums
+        [[nodiscard]] constexpr thread_schedule_hint_mode mode() const noexcept
+        {
+            return static_cast<thread_schedule_hint_mode>(mode_bits);
+        }
+        constexpr void mode(thread_schedule_hint_mode bits) noexcept
+        {
+            mode_bits = static_cast<std::uint8_t>(bits);
+        }
+
+        [[nodiscard]] constexpr threads::task_size task_size() const noexcept
+        {
+            return static_cast<threads::task_size>(task_size_bits);
+        }
+        constexpr void task_size(threads::task_size bits) noexcept
+        {
+            task_size_bits = static_cast<std::uint8_t>(bits);
+        }
+
         [[nodiscard]] constexpr thread_placement_hint placement_mode()
             const noexcept
         {
@@ -501,7 +557,7 @@ namespace hpx::threads {
 
         constexpr void schedule_hint(std::int16_t core) noexcept
         {
-            mode = thread_schedule_hint_mode::thread;
+            mode(thread_schedule_hint_mode::thread);
             hint = core;
         }
 
@@ -509,8 +565,12 @@ namespace hpx::threads {
         /// depends on the given mode.
         std::int16_t hint = -1;
 
-        /// The mode of the scheduling hint.
-        thread_schedule_hint_mode mode = thread_schedule_hint_mode::none;
+        /// The mode of the scheduling hint (thread_schedule_hint_mode needs
+        /// only 2 bits).
+        std::uint8_t mode_bits : 2;
+
+        /// The expected run time of the task (task_size).
+        std::uint8_t task_size_bits : 3;
 
         /// The mode of the desired thread placement.
         std::uint8_t placement_mode_bits : 5;
@@ -522,4 +582,7 @@ namespace hpx::threads {
         /// current thread
         std::uint8_t runs_as_child_mode_bits : 1;
     };
+
+    // The hint is passed and stored by value everywhere, keep it small.
+    static_assert(sizeof(thread_schedule_hint) == 4);
 }    // namespace hpx::threads

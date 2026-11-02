@@ -458,8 +458,10 @@ namespace hpx::supervision {
     ///          otherwise (i.e., `false` will unregister the observer and no
     ///          further callbacks will be invoked for the given observer).
     ///
-    /// \note Any exception thrown from the callback is logged and does not
-    ///       affect observer registration.
+    /// \note An exception thrown from the callback does not unregister the
+    ///       observer, but it is recorded as the observed target having
+    ///       failed: the target's lifecycle state becomes \c event::failed,
+    ///       with \c ec set from the exception (see \a register_observer()).
     /// \note The callback must not block indefinitely; local observers are
     ///       invoked synchronously from within the call that publishes the
     ///       event.
@@ -501,9 +503,26 @@ namespace hpx::supervision {
     ///                 asynchronously via a dedicated parcel, with retry
     ///                 semantics (e.g., 3 attempts over 500 ms before
     ///                 logging failure).
-    /// \note           The callback must not throw; exceptions thrown from
-    ///                 it are logged and do not affect the observer
-    ///                 registration.
+    /// \note           The callback must not throw. An exception thrown from
+    ///                 it does not unregister the observer, but it is
+    ///                 recorded as \a target having failed (see below).
+    /// \note           If \a locality differs from the locality the callback
+    ///                 lives on, and sending a notification to the callback
+    ///                 fails with \c hpx::error::locality_was_disconnected
+    ///                 (e.g. its locality was killed), the observer is
+    ///                 unregistered. Such a failure does not change the
+    ///                 lifecycle state recorded for \a target. Any other
+    ///                 delivery failure, including an exception thrown by
+    ///                 the callback itself, is recorded as \a target having
+    ///                 failed.
+    /// \note           A failed send is told apart from an exception thrown
+    ///                 by the callback by the locality the error was raised
+    ///                 on. A callback that rethrows a
+    ///                 \c hpx::error::locality_was_disconnected error raised
+    ///                 on \a locality (e.g. by a call it made back to
+    ///                 \a locality) is therefore taken for a failed send, and
+    ///                 the observer is unregistered although it is still
+    ///                 reachable.
     HPX_CXX_EXPORT HPX_EXPORT hpx::future<hpx::id_type> register_observer(
         hpx::id_type const& locality, hpx::id_type const& target,
         lifecycle_callback const& callback,
@@ -572,9 +591,10 @@ namespace hpx::supervision {
     ///
     /// \note           The callback is invoked synchronously from within
     ///                 the publish call (best effort; the callback must
-    ///                 not block indefinitely) and must not throw;
-    ///                 exceptions thrown from it are logged and do not
-    ///                 affect the observer registration.
+    ///                 not block indefinitely) and must not throw. An
+    ///                 exception thrown from it does not unregister the
+    ///                 observer, but it is recorded as \a target having
+    ///                 failed.
     HPX_CXX_EXPORT HPX_EXPORT hpx::id_type register_observer(
         hpx::id_type const& target, lifecycle_callback const& callback,
         std::optional<std::uint64_t> epoch_filter = std::nullopt,

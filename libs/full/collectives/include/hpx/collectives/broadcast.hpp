@@ -78,37 +78,6 @@ namespace hpx { namespace collectives {
         T&& local_result, this_site_arg this_site = this_site_arg(),
         generation_arg generation = generation_arg());
 
-    /// Broadcast a value to different call sites
-    ///
-    /// This function sends a set of values to all call sites operating on
-    /// the given base name.
-    ///
-    /// \param  comm        A communicator object returned from \a create_communicator
-    /// \param  local_result A value to transmit to all
-    ///                     participating sites from this call site.
-    /// \param  generation  The generational counter identifying the sequence
-    ///                     number of the broadcast operation performed on the
-    ///                     given base name. This is optional and needs to be
-    ///                     supplied only if the broadcast operation on the
-    ///                     given base name has to be performed more than once.
-    ///                     The generation number (if given) must be a positive
-    ///                     number greater than zero.
-    /// \param this_site    The sequence number of this invocation (usually
-    ///                     the locality id). This value is optional and
-    ///                     defaults to whatever hpx::get_locality_id() returns.
-    ///
-    /// \note       The generation values from corresponding \a broadcast_to and
-    ///             \a broadcast_from have to match.
-    ///
-    /// \returns    This function returns a future holding the value that was
-    ///             sent to all participating sites. It will become
-    ///             ready once the broadcast operation has been completed.
-    ///
-    template <typename T>
-    hpx::future<T> broadcast_to(communicator comm,
-        generation_arg generation,
-        T&& local_result, this_site_arg this_site = this_site_arg());
-
     /// Receive a value that was broadcast to different call sites
     ///
     /// This function sends a set of values to all call sites operating on

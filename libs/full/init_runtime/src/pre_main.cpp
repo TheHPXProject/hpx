@@ -57,6 +57,21 @@ namespace hpx::detail {
                 ec.get_message());
         }
     }
+
+    // post_main() runs on worker localities as soon as their (empty) hpx_main
+    // returns, which is long before the application shuts down. Tidy up here
+    // instead, at pre-shutdown, when every locality is actually going away.
+    static void tidy_supervision()
+    {
+        hpx::error_code ec(hpx::throwmode::lightweight);
+        hpx::supervision::get_supervision_manager().tidy(ec);
+        if (ec)
+        {
+            LRT_(warning).format(
+                "pre-shutdown: failed to tidy supervision state: {}",
+                ec.get_message());
+        }
+    }
 #endif
 
     ///////////////////////////////////////////////////////////////////////////
@@ -121,6 +136,10 @@ namespace hpx::detail {
         // Invalidate any still pending await_terminal() waiters while the
         // runtime is active, their continuations may need to spawn threads.
         register_pre_shutdown_function(&cancel_supervision_waiters);
+
+        // Tidy supervision state on every locality at actual shutdown; see
+        // tidy_supervision() for why post_main() is not the right place.
+        register_pre_shutdown_function(&tidy_supervision);
 #endif
 
         using components::stubs::runtime_support;
@@ -276,10 +295,6 @@ namespace hpx::detail {
 
     void post_main()
     {
-#if defined(HPX_HAVE_SUPERVISION)
-        hpx::error_code ec;    // swallow exceptions
-        hpx::supervision::get_supervision_manager().tidy(ec);
-#endif
 #if !defined(HPX_COMPUTE_DEVICE_CODE)
         // destroy predefined communicators
         hpx::collectives::detail::reset_global_communicator();

@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //  Copyright (c) 2014-2015 Agustin Berge
 //
 //  SPDX-License-Identifier: BSL-1.0
@@ -242,11 +242,15 @@ namespace hpx::lcos::detail {
 
             hpx::intrusive_ptr<continuation> this_(this);
             hpx::threads::thread_description desc(f_, "async");
+
+            // The thread runs a lambda around f_, which hides the size of f_,
+            // so pass that size along with the description.
             spawner(
                 [this_ = HPX_MOVE(this_), f = HPX_MOVE(f)]() mutable -> void {
                     this_->template run_impl<Unwrap>(HPX_MOVE(f));
                 },
-                desc, this->runs_child_);
+                desc, this->runs_child_,
+                traits::get_task_size<std::decay_t<F>>::call(f_));
         }
 
     public:

@@ -298,7 +298,7 @@ namespace hpx::threads::policies {
             error_code& ec) override
         {
             std::size_t num_thread =
-                data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 data.schedulehint.hint :
                 static_cast<std::size_t>(-1);
 
@@ -444,7 +444,7 @@ namespace hpx::threads::policies {
         {
             // NOTE: This scheduler ignores NUMA hints.
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode ==
+            if (schedulehint.mode() ==
                 thread_schedule_hint_mode::thread)    //-V1051
             {
                 num_thread = schedulehint.hint;
@@ -487,7 +487,7 @@ namespace hpx::threads::policies {
         {
             // NOTE: This scheduler ignores NUMA hints.
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode ==
+            if (schedulehint.mode() ==
                 thread_schedule_hint_mode::thread)    //-V1051
             {
                 num_thread = schedulehint.hint;

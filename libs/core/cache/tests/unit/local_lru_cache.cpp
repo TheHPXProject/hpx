@@ -1,4 +1,4 @@
-//  Copyright (c) 2008-2025 Hartmut Kaiser
+//  Copyright (c) 2008-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -7,6 +7,8 @@
 #include <hpx/modules/cache.hpp>
 #include <hpx/modules/testing.hpp>
 
+#include <cstddef>
+#include <functional>
 #include <string>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -354,6 +356,276 @@ void test_lru_insert_oversize_entry()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+void test_update_entry_size()
+{
+    using entry_type = hpx::util::cache::entries::size_entry<int>;
+    using cache_type = hpx::util::cache::local_cache<int, entry_type>;
+
+    // replacing an entry accounts for the size of the new entry
+    {
+        cache_type c(10);
+
+        HPX_TEST(c.insert(0, entry_type(0, 1)));
+        HPX_TEST(c.insert(1, entry_type(1, 2)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(3), c.size());
+
+        // grow key 0 from size 1 to size 4
+        HPX_TEST(c.update(0, entry_type(10, 4)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(6), c.size());
+
+        // shrink key 1 from size 2 to size 1
+        HPX_TEST(c.update(1, entry_type(11, 1)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(5), c.size());
+
+        // erasing everything brings the size back to zero, this used to
+        // underflow and make every following insert fail
+        c.erase();
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(0), c.size());
+        HPX_TEST(c.insert(2, entry_type(2, 1)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(1), c.size());
+    }
+
+    // growing an entry beyond the capacity evicts other entries
+    {
+        cache_type c(3);
+
+        HPX_TEST(c.insert(0, entry_type(0, 1)));
+        HPX_TEST(c.insert(1, entry_type(1, 1)));
+        HPX_TEST(c.insert(2, entry_type(2, 1)));
+
+        // grow key 0 to size 2, one of the other entries has to go
+        HPX_TEST(c.update(0, entry_type(10, 2)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(3), c.size());
+        HPX_TEST(c.holds_key(0));
+        HPX_TEST(c.holds_key(1) != c.holds_key(2));
+
+        int value = 0;
+        HPX_TEST(c.get_entry(0, value));
+        HPX_TEST_EQ(10, value);
+    }
+
+    // an entry larger than the whole cache is rejected and the old entry is
+    // kept
+    {
+        cache_type c(3);
+
+        HPX_TEST(c.insert(0, entry_type(0, 1)));
+        HPX_TEST(!c.update(0, entry_type(10, 5)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(1), c.size());
+
+        int value = -1;
+        HPX_TEST(c.get_entry(0, value));
+        HPX_TEST_EQ(0, value);
+    }
+
+    // the updated entry is not evicted to make room for itself, even if it
+    // becomes the first candidate for eviction
+    {
+        cache_type c(5);
+
+        HPX_TEST(c.insert(0, entry_type(0, 1)));
+        HPX_TEST(c.insert(1, entry_type(1, 2)));
+
+        // size_entry evicts bigger entries first, key 0 becomes the biggest
+        // entry with the update, so only key 1 can make room
+        HPX_TEST(c.update(0, entry_type(10, 4)));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(4), c.size());
+        HPX_TEST(c.holds_key(0));
+        HPX_TEST(!c.holds_key(1));
+
+        int value = 0;
+        HPX_TEST(c.get_entry(0, value));
+        HPX_TEST_EQ(10, value);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// an entry which can refuse to be removed from the cache
+struct pinned_entry : hpx::util::cache::entries::size_entry<int>
+{
+    pinned_entry() = default;
+
+    pinned_entry(int value, std::size_t size, bool removable = true)
+      : hpx::util::cache::entries::size_entry<int>(value, size)
+      , removable_(removable)
+    {
+    }
+
+    [[nodiscard]] bool remove() const noexcept
+    {
+        return removable_;
+    }
+
+    bool removable_ = true;
+};
+
+void test_update_entry_size_no_room()
+{
+    using cache_type = hpx::util::cache::local_cache<int, pinned_entry>;
+
+    // if the other entries can't make room, the update fails and the old
+    // entry is kept
+    cache_type c(3);
+
+    HPX_TEST(c.insert(0, pinned_entry(0, 1)));
+    HPX_TEST(c.insert(1, pinned_entry(1, 2, false)));
+
+    HPX_TEST(!c.update(0, pinned_entry(10, 2)));
+    HPX_TEST_EQ(static_cast<cache_type::size_type>(3), c.size());
+    HPX_TEST(c.holds_key(1));
+
+    int value = -1;
+    HPX_TEST(c.get_entry(0, value));
+    HPX_TEST_EQ(0, value);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// sizes to free beyond 2 GiB, which don't fit into a 32-bit long (as on 64-bit
+// Windows)
+void test_lru_free_large_sizes()
+{
+    using entry_type = hpx::util::cache::entries::size_entry<int>;
+    using cache_type = hpx::util::cache::local_cache<int, entry_type>;
+
+    if constexpr (sizeof(std::size_t) >= 8)
+    {
+        constexpr std::size_t gib = std::size_t(1) << 30;
+
+        // insert has to free 2 GiB
+        {
+            cache_type c(4 * gib);
+
+            HPX_TEST(c.insert(0, entry_type(0, 3 * gib)));
+            HPX_TEST(c.insert(1, entry_type(1, 3 * gib)));
+            HPX_TEST_EQ(3 * gib, c.size());
+            HPX_TEST(!c.holds_key(0));
+            HPX_TEST(c.holds_key(1));
+        }
+
+        // update has to free 2 GiB
+        {
+            cache_type c(4 * gib);
+
+            HPX_TEST(c.insert(0, entry_type(0, 3 * gib)));
+            HPX_TEST(c.insert(1, entry_type(1, gib)));
+            HPX_TEST(c.update(1, entry_type(11, 3 * gib)));
+            HPX_TEST_EQ(3 * gib, c.size());
+            HPX_TEST(!c.holds_key(0));
+            HPX_TEST(c.holds_key(1));
+        }
+
+        // reserve has to free 3 GiB, which takes both entries whichever is
+        // evicted first
+        {
+            cache_type c(4 * gib);
+
+            HPX_TEST(c.insert(0, entry_type(0, 2 * gib)));
+            HPX_TEST(c.insert(1, entry_type(1, 2 * gib)));
+            HPX_TEST(c.reserve(gib));
+            HPX_TEST_EQ(static_cast<cache_type::size_type>(0), c.size());
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// the entry types discard first the entries their documentation names
+void test_entry_eviction_order()
+{
+    // size_entry discards the biggest entries first
+    {
+        using entry_type = hpx::util::cache::entries::size_entry<int>;
+        using cache_type = hpx::util::cache::local_cache<int, entry_type>;
+
+        cache_type c(10);
+
+        HPX_TEST(c.insert(0, entry_type(0, 2)));
+        HPX_TEST(c.insert(1, entry_type(1, 5)));
+        HPX_TEST(c.insert(2, entry_type(2, 3)));
+
+        // shrinking to 5 has to free 5, the biggest entry is enough
+        HPX_TEST(c.reserve(5));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(5), c.size());
+        HPX_TEST(c.holds_key(0));
+        HPX_TEST(!c.holds_key(1));
+        HPX_TEST(c.holds_key(2));
+    }
+
+    // with std::greater, size_entry discards the smallest entries first
+    {
+        using entry_type = hpx::util::cache::entries::size_entry<int>;
+        using cache_type = hpx::util::cache::local_cache<int, entry_type,
+            std::greater<entry_type>>;
+
+        cache_type c(10);
+
+        HPX_TEST(c.insert(0, entry_type(0, 2)));
+        HPX_TEST(c.insert(1, entry_type(1, 5)));
+        HPX_TEST(c.insert(2, entry_type(2, 3)));
+
+        // shrinking to 8 has to free 2, the smallest entry is enough
+        HPX_TEST(c.reserve(8));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(8), c.size());
+        HPX_TEST(!c.holds_key(0));
+        HPX_TEST(c.holds_key(1));
+        HPX_TEST(c.holds_key(2));
+    }
+
+    // lfu_entry discards the least frequently used entries first
+    {
+        using entry_type = hpx::util::cache::entries::lfu_entry<int>;
+        using cache_type = hpx::util::cache::local_cache<int, entry_type>;
+
+        cache_type c(3);
+
+        HPX_TEST(c.insert(0, 0));
+        HPX_TEST(c.insert(1, 1));
+        HPX_TEST(c.insert(2, 2));
+
+        // key 0 is used most often, key 2 not at all
+        int value = 0;
+        for (int i = 0; i != 3; ++i)
+        {
+            HPX_TEST(c.get_entry(0, value));
+        }
+        HPX_TEST(c.get_entry(1, value));
+
+        HPX_TEST(c.reserve(2));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(2), c.size());
+        HPX_TEST(c.holds_key(0));
+        HPX_TEST(c.holds_key(1));
+        HPX_TEST(!c.holds_key(2));
+    }
+
+    // with std::greater, lfu_entry discards the most frequently used entries
+    // first
+    {
+        using entry_type = hpx::util::cache::entries::lfu_entry<int>;
+        using cache_type = hpx::util::cache::local_cache<int, entry_type,
+            std::greater<entry_type>>;
+
+        cache_type c(3);
+
+        HPX_TEST(c.insert(0, 0));
+        HPX_TEST(c.insert(1, 1));
+        HPX_TEST(c.insert(2, 2));
+
+        // key 0 is used most often, key 2 not at all
+        int value = 0;
+        for (int i = 0; i != 3; ++i)
+        {
+            HPX_TEST(c.get_entry(0, value));
+        }
+        HPX_TEST(c.get_entry(1, value));
+
+        HPX_TEST(c.reserve(2));
+        HPX_TEST_EQ(static_cast<cache_type::size_type>(2), c.size());
+        HPX_TEST(!c.holds_key(0));
+        HPX_TEST(c.holds_key(1));
+        HPX_TEST(c.holds_key(2));
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 int main()
 {
     test_lru_insert();
@@ -364,6 +636,10 @@ int main()
     test_lru_reserve();
     test_lru_free_space_order();
     test_lru_insert_oversize_entry();
+    test_update_entry_size();
+    test_update_entry_size_no_room();
+    test_lru_free_large_sizes();
+    test_entry_eviction_order();
 
     return hpx::util::report_errors();
 }

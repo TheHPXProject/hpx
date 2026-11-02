@@ -20,6 +20,7 @@
 
 #include <hpx/supervision/supervision_api.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -213,6 +214,10 @@ namespace hpx::supervision::server {
         /// reports an error and never fires any notification of its own for the
         /// "nothing to do" case. Local-only: unlike remove_target(), this is
         /// not exposed as a remote action.
+        ///
+        /// \note This is meant for teardown of this locality's supervision
+        ///       state at shutdown. After tidy() has been called, remote
+        ///       activity agents are no longer waited for or notified.
         void tidy();
 
         /// \brief Invalidates every pending await_terminal() waiter.
@@ -330,6 +335,13 @@ namespace hpx::supervision::server {
     protected:
         hpx::future<void> fire_events(hpx::id_type const& target,
             lifecycle_event_notification const& notification);
+
+        // Delivers `notification` to the single per-target observer `agent`,
+        // if it is still registered. If sending to a remote observer fails
+        // with locality_was_disconnected, or its locality was disconnected,
+        // the observer is unregistered and the returned future does not
+        // become exceptional. Any other failure (e.g. the callback threw,
+        // whatever the error) does, so the caller can record_error() it.
         hpx::future<void> fire_event(hpx::id_type const& target,
             hpx::id_type const& agent,
             lifecycle_event_notification notification);
@@ -362,6 +374,9 @@ namespace hpx::supervision::server {
         hpx::future<void> fire_activity_event(
             hpx::id_type const& agent, activity_notification notification);
 
+        // Records `target` as failed because delivering the notification with
+        // `expected_sequence_number` to one of its observers failed. Not
+        // called for an observer whose locality went away, see fire_event().
         void record_error(hpx::id_type const& target,
             std::uint64_t expected_sequence_number, hpx::error_code const& ec);
 
@@ -527,6 +542,10 @@ namespace hpx::supervision::server {
         hpx::spinlock sweep_timer_mtx_;
 
         mutable std::string instance_name_;
+
+        // Set once tidy() starts (it is only used for shutdown teardown);
+        // see fire_activity_event().
+        std::atomic<bool> tearing_down_{false};
 
         // registered events: targets -> states
         std::map<hpx::id_type, lifecycle_state> states_;

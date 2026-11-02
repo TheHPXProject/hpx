@@ -701,7 +701,7 @@ namespace hpx::threads::policies {
             error_code& ec) override
         {
             std::size_t num_thread =
-                data.schedulehint.mode == thread_schedule_hint_mode::thread ?
+                data.schedulehint.mode() == thread_schedule_hint_mode::thread ?
                 data.schedulehint.hint :
                 static_cast<std::size_t>(-1);
 
@@ -1096,7 +1096,7 @@ namespace hpx::threads::policies {
             thread_priority priority = thread_priority::default_) override
         {
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode == thread_schedule_hint_mode::thread)
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
                 num_thread = schedulehint.hint;
             }
@@ -1166,7 +1166,7 @@ namespace hpx::threads::policies {
             thread_priority priority = thread_priority::default_) override
         {
             auto num_thread = static_cast<std::size_t>(-1);
-            if (schedulehint.mode == thread_schedule_hint_mode::thread)
+            if (schedulehint.mode() == thread_schedule_hint_mode::thread)
             {
                 num_thread = schedulehint.hint;
             }

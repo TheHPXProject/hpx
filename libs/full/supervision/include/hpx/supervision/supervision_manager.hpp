@@ -116,6 +116,10 @@ namespace hpx::supervision {
         /// of them. Local-only: unlike remove_target(), this is not exposed
         /// as a remote action. A no-op if nothing is currently tracked.
         ///
+        /// \note This is meant for teardown of this locality's supervision
+        ///       state at shutdown. After tidy() has been called, remote
+        ///       activity agents are no longer waited for or notified.
+        ///
         /// \param ec Error code receiving the operation result.
         void tidy(hpx::error_code& ec = throws) const;
 

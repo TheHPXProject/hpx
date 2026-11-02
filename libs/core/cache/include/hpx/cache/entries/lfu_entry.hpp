@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -84,7 +84,7 @@ namespace hpx::util::cache::entries {
         ///        another entry if it has been accessed less frequently (LFU).
         friend auto operator<(lfu_entry const& lhs, lfu_entry const& rhs)
         {
-            return lhs.get_access_count() < rhs.get_access_count();
+            return rhs.get_access_count() < lhs.get_access_count();
         }
         friend auto operator>(lfu_entry const& lhs, lfu_entry const& rhs)
         {

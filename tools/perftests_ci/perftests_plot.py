@@ -185,21 +185,48 @@ def plot_report(result_path, reference_path, output_prefix):
 
             # A few outliers would stretch the axis (and the density estimate)
             # so far that both distributions end up in a single bar, so plot
-            # only the central part of each series
+            # only the central part of each series: without the lowest and
+            # highest 1%, and without the values further than 3 interquartile
+            # ranges from the quartiles (more than 1% of the values of a
+            # series with stalls, such as the latency reports). The legend
+            # says how many values are left out.
             unit, factor = time_unit(median2 if test2 is not None else median1)
 
-            def central(series):
+            def central(series, label):
                 series = np.asarray(series)
-                low, high = np.percentile(series, [1, 99])
-                return series[(series >= low) & (series <= high)] * factor
+                low, q1, q3, high = np.percentile(series, [1, 25, 75, 99])
+                low = max(low, q1 - 3 * (q3 - q1))
+                high = min(high, q3 + 3 * (q3 - q1))
+                values = series[(series >= low) & (series <= high)]
+                # a series of two values has both outside the percentiles
+                if len(values) == 0:
+                    values = series
+                values = values * factor
+                outside = len(series) - len(values)
+                if outside:
+                    label = f"{label} ({outside} of {len(series)} not shown)"
+                return values, label
 
-            current = central(test1["series"])
-            plotted = [(current, "C1", "current")]
+            current, label = central(test1["series"], "current")
+            plotted = [(current, "C1", label)]
             if test2 is not None:
-                baseline = central(test2["series"])
-                plotted.insert(0, (baseline, "C0", "baseline"))
-            bins = np.histogram_bin_edges(
-                np.concatenate([values for values, _, _ in plotted]), "auto")
+                baseline, label = central(test2["series"], "baseline")
+                plotted.insert(0, (baseline, "C0", label))
+            # Common bins as narrow as the narrower of the bins each series
+            # would get on its own, so that a series isn't a single bar if it
+            # lies far from the other one. A constant series gets bins of
+            # width 1 (numpy widens its range to that), so only the other
+            # series count; if all are constant, the bins span all values.
+            low = min(values.min() for values, _, _ in plotted)
+            high = max(values.max() for values, _, _ in plotted)
+            widths = [np.diff(np.histogram_bin_edges(values, "auto"))[0]
+                for values, _, _ in plotted if values.max() > values.min()]
+            if high > low and widths:
+                count = int(np.ceil((high - low) / min(widths)))
+                bins = np.linspace(low, high, max(1, min(count, 500)) + 1)
+            else:
+                bins = np.histogram_bin_edges(
+                    np.concatenate([values for values, _, _ in plotted]), "auto")
             # densities, as the baseline and the current run may have a
             # different number of values; the density estimate covers only
             # the plotted values (cut=0), instead of extending beyond them

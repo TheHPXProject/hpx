@@ -314,8 +314,11 @@ namespace hpx::threads::detail {
 
     private:
         // store data for the various thread-specific counters together to
-        // reduce false sharing
-        struct scheduling_counter_data
+        // reduce false sharing; each worker writes its own element in the
+        // scheduling loop, so the elements are aligned to the destructive
+        // interference size
+        struct alignas(threads::get_destructive_interference_size())
+            scheduling_counter_data
         {
             // count number of executed HPX-threads and thread phases
             // (invocations)

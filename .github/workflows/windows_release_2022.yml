@@ -49,6 +49,7 @@ jobs:
               -DHPX_WITH_DEPRECATION_WARNINGS=OFF \
               -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=2 \
               -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=On \
+              -DHPX_WITH_TASK_SIZE_DEFAULT_PARAMETERS=ON \
               -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double
     - name: Build
       shell: bash
