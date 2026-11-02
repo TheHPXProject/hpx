@@ -1,4 +1,4 @@
-//  Copyright (c) 2007-2025 Hartmut Kaiser
+//  Copyright (c) 2007-2026 Hartmut Kaiser
 //
 //  SPDX-License-Identifier: BSL-1.0
 //  Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -165,11 +165,15 @@ namespace hpx {
     {
         HPX_ASSERT(pool);
 
+        // the thread has the size of the function it runs
+        threads::thread_schedule_hint hint;
+        threads::detail::set_task_size(hint, func);
+
         threads::thread_init_data data(
             util::one_shot(
                 hpx::bind(&thread::thread_function_nullary, HPX_MOVE(func))),
             "thread::thread_function_nullary",
-            threads::thread_priority::default_, threads::thread_schedule_hint(),
+            threads::thread_priority::default_, hint,
             threads::thread_stacksize::default_,
             threads::thread_schedule_state::pending, true);
 

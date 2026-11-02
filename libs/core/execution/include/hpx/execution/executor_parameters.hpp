@@ -15,3 +15,4 @@
 #include <hpx/execution/executors/num_cores.hpp>
 #include <hpx/execution/executors/persistent_auto_chunk_size.hpp>
 #include <hpx/execution/executors/static_chunk_size.hpp>
+#include <hpx/execution/executors/task_size_chunk_size.hpp>
