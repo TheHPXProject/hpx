@@ -241,6 +241,21 @@ void test_non_default_constructible()
     }
 }
 
+void test_load_empty_into_non_empty()
+{
+    std::vector<char> buffer;
+    {
+        hpx::serialization::output_archive oarchive(buffer);
+        std::list<int> const empty;
+        oarchive << empty;
+    }
+
+    hpx::serialization::input_archive iarchive(buffer);
+    std::list<int> target = {1, 2, 3};
+    iarchive >> target;
+    HPX_TEST(target.empty());
+}
+
 int main()
 {
     test_bool();
@@ -278,6 +293,7 @@ int main()
     test<double>(-100, 100);
 
     test_non_default_constructible();
+    test_load_empty_into_non_empty();
 
     return hpx::util::report_errors();
 }

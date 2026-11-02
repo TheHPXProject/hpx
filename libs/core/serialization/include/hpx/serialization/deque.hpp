@@ -23,8 +23,6 @@ namespace hpx::serialization {
         // normal load ...
         std::uint64_t size;
         ar >> size;    //-V128
-        if (size == 0)
-            return;
 
         detail::load_collection(ar, d, detail::to_size(size));
     }
