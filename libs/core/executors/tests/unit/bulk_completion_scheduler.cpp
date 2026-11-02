@@ -199,7 +199,7 @@ void test_busy_worker()
     // its operation state are gone.
     release = true;
     busy.get();
-    hpx::this_thread::sleep_for(std::chrono::milliseconds(100));
+    HPX_TEST(hpx::local::termination_detection(std::chrono::seconds(10)));
     HPX_TEST_EQ(calls.load(), num_elements);
 }
 
