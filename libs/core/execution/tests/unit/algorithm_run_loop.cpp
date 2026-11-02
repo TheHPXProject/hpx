@@ -50,6 +50,7 @@
 #include <exception>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_set>
@@ -2124,6 +2125,60 @@ void test_completion_domain()
     loop.run();
 }
 
+void test_empty_destruction()
+{
+    {
+        hpx::execution::experimental::run_loop loop;
+        // Destructor should run cleanly without std::terminate
+    }
+}
+
+struct throwing_connect_sender
+{
+    using is_sender = void;
+    using sender_concept = hpx::execution::experimental::sender_t;
+
+    template <typename R>
+    struct operation_state
+    {
+        void start() & noexcept {}
+    };
+
+    template <typename R>
+    operation_state<R> connect(R&&)
+    {
+        throw std::runtime_error("connect failed");
+    }
+
+    template <typename Self, typename... Env>
+    static consteval auto get_completion_signatures() noexcept
+        -> hpx::execution::experimental::completion_signatures<
+            hpx::execution::experimental::set_value_t()>
+    {
+        return {};
+    }
+};
+
+void test_throwing_connect()
+{
+    bool caught_exception = false;
+    try
+    {
+        hpx::this_thread::experimental::sync_wait(throwing_connect_sender{});
+        HPX_TEST(false);
+    }
+    catch (std::runtime_error const& e)
+    {
+        caught_exception = true;
+        HPX_TEST_EQ(std::string(e.what()), std::string("connect failed"));
+    }
+    catch (...)
+    {
+        HPX_TEST(false);
+    }
+    HPX_TEST(caught_exception);
+}
+
 void do_run_test(void (*func)(), char const* func_name)
 {
     std::cout << func_name << "\n";
@@ -2164,6 +2219,8 @@ int hpx_main()
 
     RUN_TEST(test_completion_scheduler);
     RUN_TEST(test_completion_domain);
+    RUN_TEST(test_empty_destruction);
+    RUN_TEST(test_throwing_connect);
 
     return hpx::local::finalize();
 }
